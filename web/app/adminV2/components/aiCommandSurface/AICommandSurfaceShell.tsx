@@ -551,11 +551,6 @@ export default function AICommandSurfaceShell() {
       const uiPhase: "draft" | "workspace" | "reminder" = isReminderIntent ? "reminder" : messageIntent ? "draft" : "workspace";
       setThread((prev) => {
         let next = appendThreadTurn(prev, {
-          kind: "target_confirmed",
-          candidate,
-          intent,
-        });
-        next = appendThreadTurn(next, {
           kind: "assistant_notice",
           text: taskAssistFollowUpNoticeText(candidate, locationLabel, intent),
         });
@@ -670,13 +665,15 @@ export default function AICommandSurfaceShell() {
           );
           return;
         }
-        setThread((prev) =>
-          appendThreadTurn(prev, {
-            kind: "candidate_results",
-            candidates: list,
-            intent,
-          })
-        );
+        const intro =
+          list.length > 1 ?
+            `I found ${list.length} matching records. Which one?`
+          : "Confirm who you mean.";
+        setThread((prev) => {
+          let next = appendThreadTurn(prev, { kind: "assistant_notice", text: intro });
+          next = appendThreadTurn(next, { kind: "candidate_results", candidates: list, intent });
+          return next;
+        });
       } catch {
         setThread((prev) =>
           appendThreadTurn(prev, {

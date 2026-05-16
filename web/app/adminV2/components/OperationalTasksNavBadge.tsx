@@ -1,0 +1,94 @@
+"use client";
+
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { ListTodo } from "lucide-react";
+
+import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
+import {
+    ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH,
+} from "@/lib/adminV2/opportunityDrawerTaskEvents";
+import { fetchOperationalTasksSummary, readJson } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
+import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
+import { neutral } from "@/styles/tokens/colors";
+
+type TaskCounts = { open: number; due_soon: number; overdue: number };
+
+/**
+ * In-app task visibility (V1): badge + link to My tasks.
+ * Future: email digest, SMS/Slack, push — not implemented here.
+ */
+export default function OperationalTasksNavBadge({
+    tabStyle,
+}: {
+    tabStyle: (active: boolean) => CSSProperties;
+}) {
+    const enabled = isTaskAssistV1UiEnabled();
+    const [counts, setCounts] = useState<TaskCounts | null>(null);
+
+    const load = useCallback(async () => {
+        if (!enabled) return;
+        try {
+            const res = await fetchOperationalTasksSummary();
+            const json = await readJson<{
+                ok?: boolean;
+                counts?: TaskCounts;
+            }>(res);
+            if (res.ok && json.ok && json.counts) {
+                setCounts(json.counts);
+            }
+        } catch {
+            /* non-fatal */
+        }
+    }, [enabled]);
+
+    useEffect(() => {
+        if (!enabled) return;
+        void load();
+        const id = window.setInterval(() => void load(), 120_000);
+        const onRefresh = () => void load();
+        window.addEventListener(ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH, onRefresh);
+        return () => {
+            window.clearInterval(id);
+            window.removeEventListener(ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH, onRefresh);
+        };
+    }, [enabled, load]);
+
+    if (!enabled) return null;
+
+    const alertCount = (counts?.overdue ?? 0) + (counts?.due_soon ?? 0);
+    const open = counts?.open ?? 0;
+    const title =
+        alertCount > 0 ?
+            `My tasks — ${alertCount} due soon or overdue (${open} open)`
+        :   `My tasks — ${open} open`;
+
+    return (
+        <AdminV2NavLink
+            href="/adminV2/tasks"
+            active={false}
+            className="relative inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium leading-none"
+            style={tabStyle(false)}
+            title={title}
+            data-adminv2-operational-tasks-nav="true"
+        >
+            <ListTodo className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden strokeWidth={2} />
+            Tasks
+            {alertCount > 0 ? (
+                <span
+                    className="ml-0.5 inline-flex min-w-[1.1rem] items-center justify-center rounded-full bg-amber-400/95 px-1 text-[9px] font-bold text-alloy-midnight"
+                    data-adminv2-operational-tasks-badge="true"
+                >
+                    {alertCount > 99 ? "99+" : alertCount}
+                </span>
+            ) : open > 0 ? (
+                <span
+                    className="ml-0.5 inline-flex min-w-[1.1rem] items-center justify-center rounded-full px-1 text-[9px] font-semibold"
+                    style={{ backgroundColor: "rgba(255,255,255,0.22)", color: neutral.surface }}
+                    data-adminv2-operational-tasks-open-count="true"
+                >
+                    {open > 99 ? "99+" : open}
+                </span>
+            ) : null}
+        </AdminV2NavLink>
+    );
+}

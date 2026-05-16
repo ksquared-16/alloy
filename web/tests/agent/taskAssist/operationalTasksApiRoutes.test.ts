@@ -9,11 +9,22 @@ const userId = "22222222-2222-4222-8222-222222222222";
 const oppId = "33333333-3333-4333-8333-333333333333";
 const taskId = "66666666-6666-4666-8666-666666666666";
 
-const { mockGetAdminContextCached, mockAssertRowOrg, mockCreate, mockList, mockComplete, mockCancel } = vi.hoisted(() => ({
+const {
+    mockGetAdminContextCached,
+    mockAssertRowOrg,
+    mockCreate,
+    mockList,
+    mockListWorkspace,
+    mockSummarize,
+    mockComplete,
+    mockCancel,
+} = vi.hoisted(() => ({
     mockGetAdminContextCached: vi.fn(),
     mockAssertRowOrg: vi.fn(),
     mockCreate: vi.fn(),
     mockList: vi.fn(),
+    mockListWorkspace: vi.fn(),
+    mockSummarize: vi.fn(),
     mockComplete: vi.fn(),
     mockCancel: vi.fn(),
 }));
@@ -38,6 +49,8 @@ vi.mock("@/lib/admin/operationalTasksService", async () => {
         ...actual,
         createOperationalTask: (...args: unknown[]) => mockCreate(...args),
         listOperationalTasksForEntity: (...args: unknown[]) => mockList(...args),
+        listOperationalTasksForWorkspace: (...args: unknown[]) => mockListWorkspace(...args),
+        summarizeOperationalTaskCounts: (...args: unknown[]) => mockSummarize(...args),
         completeOperationalTask: (...args: unknown[]) => mockComplete(...args),
         cancelOperationalTask: (...args: unknown[]) => mockCancel(...args),
     };
@@ -55,6 +68,26 @@ describe("operational-tasks admin routes", () => {
 
     afterEach(() => {
         vi.clearAllMocks();
+    });
+
+    it("GET workspace scope lists tasks", async () => {
+        mockListWorkspace.mockResolvedValue({ ok: true, rows: [{ id: taskId, status: "open", title: "Follow up" }] });
+        const req = new NextRequest("http://localhost/api/admin/operational-tasks?scope=workspace&filter=open");
+        const res = await getTasks(req);
+        expect(res.status).toBe(200);
+        const j = (await res.json()) as { ok?: boolean; tasks?: unknown[] };
+        expect(j.tasks).toHaveLength(1);
+        expect(mockListWorkspace).toHaveBeenCalledOnce();
+    });
+
+    it("GET workspace summary returns counts", async () => {
+        mockSummarize.mockResolvedValue({ ok: true, open: 3, due_soon: 1, overdue: 2 });
+        const req = new NextRequest("http://localhost/api/admin/operational-tasks?scope=workspace&summary=true");
+        const res = await getTasks(req);
+        expect(res.status).toBe(200);
+        const j = (await res.json()) as { ok?: boolean; counts?: { open: number } };
+        expect(j.counts?.open).toBe(3);
+        expect(mockSummarize).toHaveBeenCalledOnce();
     });
 
     it("GET lists tasks", async () => {

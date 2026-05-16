@@ -1,27 +1,13 @@
 import type { TaskAssistCommandBootstrap, TaskAssistCommandIntent } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
 import { buildTaskAssistCommandBootstrap } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
-import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
+import {
+    taskAssistFollowUpNoticeText,
+    taskAssistReminderCreatedNotice,
+} from "@/lib/agent/taskAssist/taskAssistOrchestratorCopy";
 
 export type TaskAssistCompactAction = "draft_message" | "send_now" | "schedule_later" | "create_reminder";
 
-export function taskAssistFollowUpNoticeText(
-    candidate: TaskAssistEntitySearchCandidate,
-    locationLabel?: string | null,
-    intent?: TaskAssistCommandIntent | null
-): string {
-    const loc = locationLabel?.trim() || candidate.disambiguation?.location_name?.trim() || null;
-    const atLoc = loc ? ` at ${loc}` : "";
-    const label = candidate.label?.trim() || "this record";
-    if (intent?.intent_type === "create_reminder") {
-        const when = intent.timing_hint_text?.trim();
-        const whenPart = when ? ` for ${when}` : "";
-        return `I found ${label}${atLoc}. I can create a follow-up reminder${whenPart}. Review and create reminder.`;
-    }
-    if (intent?.intent_type === "schedule_message") {
-        return `I found ${label}${atLoc}. I drafted a message for review — choose a send time before anything goes out.`;
-    }
-    return `I found ${label}${atLoc}. I drafted a message for review — confirm before anything sends.`;
-}
+export { taskAssistFollowUpNoticeText, taskAssistReminderCreatedNotice };
 
 export function bootstrapForTaskAssistCompactAction(
     intent: TaskAssistCommandIntent | null,

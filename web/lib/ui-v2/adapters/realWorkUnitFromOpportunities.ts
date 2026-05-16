@@ -38,6 +38,7 @@ function defaultOpportunityQueueItemVm(row: WorkspaceOpportunityQueueRuntime["it
             : undefined;
 
     const reasonLabel = (row as { _attention_reason_label?: string | null })._attention_reason_label?.trim() || null;
+    const locationLabel = (row as { _location_label?: string | null })._location_label?.trim() || null;
 
     const nextStep = row._lifecycle_next_step?.title?.trim() || "";
     const wfAt = (row as { last_activity_at?: string | null }).last_activity_at;
@@ -100,6 +101,7 @@ function defaultOpportunityQueueItemVm(row: WorkspaceOpportunityQueueRuntime["it
         title,
         valueLabel: value,
         metaLines: [
+            ...(locationLabel ? [{ label: "Location", value: locationLabel }] : []),
             ...(statusLabel ? [{ label: "Status", value: statusLabel }] : []),
             ...(nextStep ? [{ label: "Next step", value: nextStep }] : []),
             ...(reasonLabel ? [{ label: "Reason", value: reasonLabel }] : []),

@@ -43,7 +43,10 @@ describe("AICommandSurfaceShell Interaction Layer V1", () => {
         expect(threadSrc).toContain('uiPhase === "reminder"');
         expect(threadSrc).toContain("TaskAssistCompactReminderCard");
         expect(threadSrc).toContain("TaskAssistCompactDraftCard");
-        expect(threadSrc).toContain("I found these matching records.");
+        expect(threadSrc).not.toContain("I found these matching records.");
+        expect(threadSrc).not.toContain("Next:");
+        expect(threadSrc).toContain('case "target_confirmed"');
+        expect(threadSrc).toContain("return null");
         expect(threadSrc).toContain("autoPropose");
     });
 
@@ -70,6 +73,8 @@ describe("AICommandSurfaceShell Interaction Layer V1", () => {
         expect(shellSrc).toContain("taskAssistFollowUpNoticeText");
         expect(shellSrc).toContain('isReminderIntent ? "reminder"');
         expect(shellSrc).toContain("dedupeTaskAssistEntitySearchCandidates");
+        expect(shellSrc).toContain("I found");
+        expect(shellSrc).toContain("Which one?");
     });
 
     it("exports stable focus event name for GlobalAssistantContext", () => {

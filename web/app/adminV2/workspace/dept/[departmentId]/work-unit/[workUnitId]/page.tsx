@@ -771,12 +771,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
             return;
         }
         try {
-            const res = await fetch(
-                `/api/admin/workspace-kpi-placements?surface=work_unit&department_id=${encodeURIComponent(
-                    departmentId
-                )}&work_unit_id=${encodeURIComponent(workUnitId)}`,
-                { ...(init ?? {}), cache: "no-store" }
-            );
+            const kpiBase = `/api/admin/workspace-kpi-placements?surface=work_unit&department_id=${encodeURIComponent(
+                departmentId
+            )}&work_unit_id=${encodeURIComponent(workUnitId)}`;
+            const res = await fetch(appendWorkspaceSiteToUrl(kpiBase, selectedSiteId), { ...(init ?? {}), cache: "no-store" });
             if (!res.ok) {
                 setWuPlacementRows([]);
                 setWuScopeHasPlacements(false);
@@ -792,7 +790,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             setWuPlacementRows([]);
             setWuScopeHasPlacements(false);
         }
-    }, [departmentId, workUnitId]);
+    }, [departmentId, workUnitId, selectedSiteId]);
 
     const requestWorkUnitDeferredSupplement = useCallback(() => {
         if (workUnitDeferredScheduledRef.current) return;
@@ -1425,10 +1423,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 let oqRuntime: WorkspaceOpportunityQueueRuntime | null = null;
                 if (!usedNewQueueApi && shouldFallbackToLegacy) {
                     try {
-                        const oqRes = await fetch(
-                            `/api/admin/work-units/${encodeURIComponent(workUnitId)}/${isAttention ? "opportunity-attention-queue" : "opportunity-queue"}`,
-                            init
-                        );
+                        const oqBase = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/${isAttention ? "opportunity-attention-queue" : "opportunity-queue"}`;
+                        const oqRes = await fetch(appendWorkspaceSiteToUrl(oqBase, selectedSiteId), init);
                         const oqJson = (await oqRes.json().catch(() => ({}))) as {
                             error?: string;
                             total?: number;
@@ -1520,7 +1516,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     useEffect(() => {
         if (!workUnitId || !selectedQueueKey || loading || !workUnit) return;
         void fetchQueueItems(workUnitId, selectedQueueKey, null);
-    }, [fetchQueueItems, selectedQueueKey, workUnitId, workUnit, loading, unmappedOnly]);
+    }, [fetchQueueItems, selectedQueueKey, workUnitId, workUnit, loading, unmappedOnly, selectedSiteId]);
 
     useEffect(() => {
         if (typeof window === "undefined") return;
@@ -2092,7 +2088,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
                 const want = (f: QueueUiRowPreviewField) => isRowPreviewFieldEnabled(previewFields, f);
 
+                const locationLabel =
+                    typeof r?._location_label === "string" && r._location_label.trim() ? r._location_label.trim() : "";
                 const basicSubtitleParts: string[] = [];
+                if (locationLabel) basicSubtitleParts.push(locationLabel);
                 if (want("status") && statusLabel) basicSubtitleParts.push(`Status: ${statusLabel}`);
                 if (want("primary_contact") && contactName) basicSubtitleParts.push(contactName);
                 if ((want("phone") && phone) || (want("email") && email)) {
@@ -2162,6 +2161,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                               : programDeduped
                                           : null,
                                       roomContext: null,
+                                      locationContext: locationLabel || null,
                                       attentionReason: attentionReason || null,
                                       operationalNextHint: attnPres.nextHintLine,
                                       familyNote: note || null,

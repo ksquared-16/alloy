@@ -10,6 +10,7 @@ import {
 import type { TaskAssistCommandBootstrap } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
 import { timingHintToDatetimeLocal } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
 import { formatTaskAssistClientError } from "@/lib/agent/taskAssist/taskAssistClientErrorMessages";
+import { taskAssistReminderCreatedNotice } from "@/lib/agent/taskAssist/taskAssistOrchestratorCopy";
 import { buildOperationalTaskBody, createOperationalTask, readJson } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
 import { computeReminderSubmitDisabled, minDatetimeLocalValue } from "@/components/admin/taskAssist/TaskAssistOpportunityWorkspace";
@@ -85,9 +86,7 @@ export default function TaskAssistCompactReminderCard({
                 message?: string | null;
             }>(res);
             if (!res.ok || !json.ok) throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
-            setSuccess(
-                "Saved to operational_tasks as a follow-up reminder. This is not a scheduled message — nothing sends automatically."
-            );
+            setSuccess(taskAssistReminderCreatedNotice(title));
             if (json.task) {
                 setLastCreated({
                     id: String(json.task.id),
@@ -140,9 +139,7 @@ export default function TaskAssistCompactReminderCard({
         <div className="space-y-2" data-task-assist-compact-reminder="true">
             <p className="text-[10px] text-alloy-midnight/60">{targetSummary}</p>
             <p className="text-[11px] font-semibold text-alloy-midnight/85">Reminder / follow-up task</p>
-            <p className="text-[10px] text-alloy-midnight/55">
-                Creates an operational task only — no SMS, email, or send step.
-            </p>
+            <p className="text-[10px] text-alloy-midnight/55">Operational task only — nothing sends automatically.</p>
             {success ? (
                 <p className="text-[11px] font-medium text-emerald-800/90" data-task-assist-compact-reminder-success="true">
                     {success}

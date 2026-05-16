@@ -5,7 +5,10 @@ import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import {
     createOperationalTask,
     listOperationalTasksForEntity,
+    listOperationalTasksForWorkspace,
+    summarizeOperationalTaskCounts,
     validateOperationalTaskCreateBody,
+    type OperationalTaskWorkspaceFilter,
 } from "@/lib/admin/operationalTasksService";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
@@ -23,6 +26,36 @@ export async function GET(request: NextRequest) {
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
     const url = new URL(request.url);
+    const scope = (url.searchParams.get("scope") ?? "").trim().toLowerCase();
+    const summaryOnly = url.searchParams.get("summary") === "true";
+
+    const supabase = createAdminClient();
+
+    if (scope === "workspace") {
+        if (summaryOnly) {
+            const counts = await summarizeOperationalTaskCounts({ supabase, orgId: ctx.orgId });
+            if (!counts.ok) {
+                return NextResponse.json({ ok: false, error: counts.error, message: counts.message }, { status: 500 });
+            }
+            return NextResponse.json({ ok: true, counts });
+        }
+        const filterRaw = (url.searchParams.get("filter") ?? "open").trim().toLowerCase();
+        const allowed: OperationalTaskWorkspaceFilter[] = ["open", "due_today", "overdue", "completed", "all"];
+        const filter = (allowed.includes(filterRaw as OperationalTaskWorkspaceFilter) ?
+            filterRaw
+        :   "open") as OperationalTaskWorkspaceFilter;
+        const listed = await listOperationalTasksForWorkspace({
+            supabase,
+            orgId: ctx.orgId,
+            userId: ctx.userId,
+            filter,
+        });
+        if (!listed.ok) {
+            return NextResponse.json({ ok: false, error: listed.error, message: listed.message }, { status: 500 });
+        }
+        return NextResponse.json({ ok: true, tasks: listed.rows });
+    }
+
     const entityType = (url.searchParams.get("entity_type") ?? "").trim().toLowerCase();
     const entityId = (url.searchParams.get("entity_id") ?? "").trim();
     if (entityType !== "opportunities") {
@@ -32,7 +65,6 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ ok: false, error: "ENTITY_ID_INVALID", message: "entity_id must be a UUID." }, { status: 400 });
     }
 
-    const supabase = createAdminClient();
     if (!(await assertRowOrg(supabase, "opportunities", entityId, ctx.orgId)).ok) {
         return NextResponse.json({ ok: false, error: "NOT_FOUND", message: "Opportunity not found." }, { status: 404 });
     }

@@ -174,6 +174,93 @@ export async function listOperationalTasksForEntity(params: {
     return { ok: true, rows: (data ?? []).map((r) => mapTaskRow(r as Record<string, unknown>)) };
 }
 
+export type OperationalTaskWorkspaceFilter = "open" | "due_today" | "overdue" | "completed" | "all";
+
+function startOfLocalDay(d: Date): Date {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+}
+
+function endOfLocalDay(d: Date): Date {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+}
+
+/** Org-scoped operational tasks for workspace task view (opportunities entity type). */
+export async function listOperationalTasksForWorkspace(params: {
+    supabase: SupabaseClient;
+    orgId: string;
+    userId: string;
+    filter: OperationalTaskWorkspaceFilter;
+    limit?: number;
+}): Promise<{ ok: true; rows: OperationalTaskRow[] } | { ok: false; error: string; message: string }> {
+    const limit = Math.min(Math.max(params.limit ?? 100, 1), 200);
+    let q = params.supabase
+        .from("operational_tasks")
+        .select("*")
+        .eq("org_id", params.orgId)
+        .eq("entity_type", "opportunities")
+        .order("due_at", { ascending: true })
+        .limit(limit);
+
+    if (params.filter === "completed") {
+        q = q.in("status", ["completed", "canceled"]);
+    } else if (params.filter !== "all") {
+        q = q.eq("status", "open");
+    }
+
+    const { data, error } = await q;
+    if (error) {
+        console.error("[listOperationalTasksForWorkspace]", error);
+        return { ok: false, error: "DB_LIST_FAILED", message: error.message };
+    }
+
+    let rows = (data ?? []).map((r) => mapTaskRow(r as Record<string, unknown>));
+    const now = new Date();
+    const dayStart = startOfLocalDay(now);
+    const dayEnd = endOfLocalDay(now);
+
+    if (params.filter === "due_today") {
+        rows = rows.filter((r) => {
+            const t = Date.parse(r.due_at);
+            return !Number.isNaN(t) && t >= dayStart.getTime() && t <= dayEnd.getTime();
+        });
+    } else if (params.filter === "overdue") {
+        rows = rows.filter((r) => {
+            const t = Date.parse(r.due_at);
+            return !Number.isNaN(t) && t < now.getTime();
+        });
+    }
+
+    return { ok: true, rows };
+}
+
+export async function summarizeOperationalTaskCounts(params: {
+    supabase: SupabaseClient;
+    orgId: string;
+}): Promise<
+    | { ok: true; open: number; due_soon: number; overdue: number }
+    | { ok: false; error: string; message: string }
+> {
+    const listed = await listOperationalTasksForWorkspace({
+        supabase: params.supabase,
+        orgId: params.orgId,
+        userId: "",
+        filter: "open",
+        limit: 200,
+    });
+    if (!listed.ok) return listed;
+    const now = Date.now();
+    const soonCutoff = now + 24 * 60 * 60 * 1000;
+    let due_soon = 0;
+    let overdue = 0;
+    for (const r of listed.rows) {
+        const t = Date.parse(r.due_at);
+        if (Number.isNaN(t)) continue;
+        if (t < now) overdue += 1;
+        else if (t <= soonCutoff) due_soon += 1;
+    }
+    return { ok: true, open: listed.rows.length, due_soon, overdue };
+}
+
 async function getOperationalTaskById(params: {
     supabase: SupabaseClient;
     orgId: string;

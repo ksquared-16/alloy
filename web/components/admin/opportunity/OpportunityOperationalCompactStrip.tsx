@@ -1,7 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
+import OperationalTaskDetailPopover, {
+    type OperationalTaskDetail,
+} from "@/components/admin/opportunity/OperationalTaskDetailPopover";
 import {
     ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS,
     ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH,
@@ -12,7 +16,6 @@ import { formatTaskAssistClientError } from "@/lib/agent/taskAssist/taskAssistCl
 import {
     fetchCommunicationScheduledSends,
     fetchOperationalTasks,
-    patchOperationalTaskStatus,
     readJson,
 } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
@@ -22,6 +25,12 @@ type OperationalTaskRow = {
     title: string;
     due_at: string;
     status: string;
+    source: string;
+    description?: string | null;
+    created_at?: string;
+    created_by?: string;
+    entity_id?: string;
+    entity_type?: string;
 };
 
 type ScheduledSendRow = {
@@ -60,22 +69,22 @@ const CHIP =
 export type OpportunityOperationalCompactStripProps = {
     opportunityId: string;
     overviewData?: Record<string, unknown> | null;
+    entityLabel?: string | null;
 };
 
-/**
- * Lightweight operational status chips beside opportunity header actions (tasks, scheduled sends, record follow-up).
- */
 export default function OpportunityOperationalCompactStrip({
     opportunityId,
     overviewData = null,
+    entityLabel = null,
 }: OpportunityOperationalCompactStripProps) {
     const v11 = isTaskAssistV1UiEnabled();
+    const adminDrawer = useAdminDrawerOptional();
     const [tasks, setTasks] = useState<OperationalTaskRow[]>([]);
     const [scheduledSends, setScheduledSends] = useState<ScheduledSendRow[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
-    const [actionId, setActionId] = useState<string | null>(null);
+    const [popoverTaskId, setPopoverTaskId] = useState<string | null>(null);
+    const chipRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
     const load = useCallback(async () => {
         if (!v11 || !opportunityId) return;
@@ -125,6 +134,28 @@ export default function OpportunityOperationalCompactStrip({
         return !Number.isNaN(t);
     }, [nextFollowUpIso, openTasks.length]);
 
+    const popoverTask = useMemo(
+        () => openTasks.find((t) => t.id === popoverTaskId) ?? null,
+        [openTasks, popoverTaskId]
+    );
+
+    const popoverDetail: OperationalTaskDetail | null = useMemo(() => {
+        if (!popoverTask) return null;
+        return {
+            id: popoverTask.id,
+            title: popoverTask.title,
+            description: popoverTask.description ?? null,
+            due_at: popoverTask.due_at,
+            status: popoverTask.status,
+            source: popoverTask.source,
+            entity_id: opportunityId,
+            entity_type: "opportunities",
+            created_at: popoverTask.created_at,
+            created_by: popoverTask.created_by,
+            entity_label: entityLabel,
+        };
+    }, [popoverTask, opportunityId, entityLabel]);
+
     useEffect(() => {
         void load();
     }, [load]);
@@ -144,49 +175,45 @@ export default function OpportunityOperationalCompactStrip({
             const d = (ev as CustomEvent<OpportunityFocusOperationalTasksDetail>).detail;
             if (!d || d.opportunity_id !== opportunityId) return;
             const taskId = d.task_id?.trim() || null;
-            setFocusedTaskId(taskId);
+            if (taskId) setPopoverTaskId(taskId);
         };
         window.addEventListener(ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS, onFocus as EventListener);
         return () => window.removeEventListener(ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS, onFocus as EventListener);
     }, [opportunityId]);
 
     useEffect(() => {
-        if (!focusedTaskId) return;
+        if (!popoverTaskId) return;
         requestAnimationFrame(() => {
-            document
-                .querySelector(`[data-operational-task-chip="${focusedTaskId}"]`)
-                ?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+            chipRefs.current.get(popoverTaskId)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
         });
-    }, [focusedTaskId, openTasks]);
+    }, [popoverTaskId, openTasks]);
 
-    const onCompleteTask = useCallback(
-        async (id: string) => {
-            if (!v11) return;
-            setActionId(id);
-            setError(null);
-            try {
-                const res = await patchOperationalTaskStatus(id, "completed");
-                const json = await readJson<{ ok?: boolean; error?: string; message?: string }>(res);
-                if (!res.ok || !json.ok) throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
-                setFocusedTaskId(null);
-                await load();
-            } catch (e: unknown) {
-                setError(formatTaskAssistClientError((e as Error).message));
-            } finally {
-                setActionId(null);
-            }
-        },
-        [load, v11]
-    );
+    const onViewTaskFromPopover = useCallback(() => {
+        if (!popoverTaskId || typeof window === "undefined") return;
+        window.dispatchEvent(
+            new CustomEvent(ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS, {
+                detail: { opportunity_id: opportunityId, task_id: popoverTaskId },
+            })
+        );
+        if (adminDrawer) {
+            adminDrawer.openDrawer({ type: "opportunities", id: opportunityId, opportunityWorkspaceContext: null });
+        }
+    }, [adminDrawer, opportunityId, popoverTaskId]);
 
     if (!v11) return null;
 
     const hasChips = openTasks.length > 0 || pendingSends.length > 0 || showNextFollowUp;
     if (!hasChips && !loading && !error) return null;
 
+    const popoverAnchorRef = useRef<HTMLButtonElement | null>(null);
+    useEffect(() => {
+        popoverAnchorRef.current =
+            popoverTaskId ? chipRefs.current.get(popoverTaskId) ?? null : null;
+    }, [popoverTaskId, openTasks]);
+
     return (
         <div
-            className="flex w-full min-w-0 max-w-[min(100%,28rem)] flex-col items-end gap-1"
+            className="relative flex w-full min-w-0 max-w-[min(100%,28rem)] flex-col items-end gap-1"
             data-admin-opportunity-operational-strip="true"
         >
             {error ? (
@@ -208,26 +235,39 @@ export default function OpportunityOperationalCompactStrip({
                     </span>
                 ) : null}
                 {openTasks.map((t) => {
-                    const focused = focusedTaskId === t.id;
+                    const selected = popoverTaskId === t.id;
                     return (
-                        <button
-                            key={t.id}
-                            type="button"
-                            data-operational-task-chip={t.id}
-                            disabled={actionId === t.id}
-                            onClick={() => setFocusedTaskId((prev) => (prev === t.id ? null : t.id))}
-                            className={`${CHIP} cursor-pointer text-left ${
-                                focused ?
-                                    "border-alloy-blue/45 bg-alloy-blue/10 text-alloy-midnight/90 ring-2 ring-alloy-blue/25"
-                                :   "border-sky-200/80 bg-sky-50/90 text-sky-950/90 hover:border-sky-300/90"
-                            } disabled:opacity-50`}
-                        >
-                            <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide text-sky-800/70">
-                                Task
-                            </span>
-                            <span className="truncate font-semibold">{t.title}</span>
-                            <span className="shrink-0 text-sky-900/65">· {shortWhen(t.due_at)}</span>
-                        </button>
+                        <div key={t.id} className="relative">
+                            <button
+                                type="button"
+                                ref={(el) => {
+                                    if (el) chipRefs.current.set(t.id, el);
+                                    else chipRefs.current.delete(t.id);
+                                }}
+                                data-operational-task-chip={t.id}
+                                onClick={() => setPopoverTaskId((prev) => (prev === t.id ? null : t.id))}
+                                className={`${CHIP} cursor-pointer text-left ${
+                                    selected ?
+                                        "border-alloy-blue/45 bg-alloy-blue/10 text-alloy-midnight/90 ring-2 ring-alloy-blue/25"
+                                    :   "border-sky-200/80 bg-sky-50/90 text-sky-950/90 hover:border-sky-300/90"
+                                }`}
+                            >
+                                <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide text-sky-800/70">
+                                    Task
+                                </span>
+                                <span className="truncate font-semibold">{t.title}</span>
+                                <span className="shrink-0 text-sky-900/65">· {shortWhen(t.due_at)}</span>
+                            </button>
+                            {selected && popoverDetail ? (
+                                <OperationalTaskDetailPopover
+                                    task={popoverDetail}
+                                    anchorRef={popoverAnchorRef}
+                                    onClose={() => setPopoverTaskId(null)}
+                                    onUpdated={() => void load()}
+                                    onViewTask={onViewTaskFromPopover}
+                                />
+                            ) : null}
+                        </div>
                     );
                 })}
                 {pendingSends.map((s) => (
@@ -244,25 +284,6 @@ export default function OpportunityOperationalCompactStrip({
                     </span>
                 ))}
             </div>
-            {focusedTaskId && openTasks.some((t) => t.id === focusedTaskId) ? (
-                <div className="flex flex-wrap justify-end gap-1">
-                    <button
-                        type="button"
-                        disabled={actionId === focusedTaskId}
-                        className="rounded-md border border-alloy-stone/30 bg-white px-2 py-0.5 text-[10px] font-semibold text-alloy-midnight/85 hover:bg-alloy-stone/[0.06] disabled:opacity-45"
-                        onClick={() => void onCompleteTask(focusedTaskId)}
-                    >
-                        {actionId === focusedTaskId ? "Updating…" : "Mark complete"}
-                    </button>
-                    <button
-                        type="button"
-                        className="rounded-md px-2 py-0.5 text-[10px] font-semibold text-alloy-midnight/55 hover:text-alloy-midnight/80"
-                        onClick={() => setFocusedTaskId(null)}
-                    >
-                        Dismiss
-                    </button>
-                </div>
-            ) : null}
         </div>
     );
 }

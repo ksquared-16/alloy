@@ -46,6 +46,7 @@ describe("routeCommandSurface", () => {
         expect(r.route).toBe("workflow_assist");
         expect(r.workflowAssistReadIntent?.sub_intent).toBe("workflow_summary");
         expect(WORKFLOW_ASSIST_NOTICE_TEXT).toContain("Workflow Assist");
+        expect(WORKFLOW_ASSIST_NOTICE_TEXT).toContain("coming next");
     });
 
     it("routes failed-workflow phrase to workflow_assist failed_runs intent", () => {

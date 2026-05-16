@@ -392,6 +392,30 @@ export default function TaskAssistCompactDraftCard({
 
             <p className="text-[10px] text-alloy-midnight/60">{targetSummary}</p>
 
+            {isScheduleIntent && finalBody.trim() ? (
+                <div
+                    className="rounded-md border border-alloy-stone/20 bg-alloy-stone/[0.04] p-2 text-[11px]"
+                    data-task-assist-schedule-preview="true"
+                >
+                    <p className="font-semibold text-alloy-midnight/80">Proposed message</p>
+                    <p className="mt-1 whitespace-pre-wrap text-alloy-midnight/75">{finalBody.trim()}</p>
+                    {scheduledForLocal.trim() ? (
+                        <p className="mt-2 text-alloy-midnight/65">
+                            Scheduled for{" "}
+                            {new Date(scheduledForLocal).toLocaleString(undefined, {
+                                weekday: "short",
+                                month: "short",
+                                day: "numeric",
+                                hour: "numeric",
+                                minute: "2-digit",
+                            })}
+                        </p>
+                    ) : (
+                        <p className="mt-2 font-medium text-amber-900/85">Pick a send time before scheduling.</p>
+                    )}
+                </div>
+            ) : null}
+
             <div className="flex gap-3 text-[11px]">
                 <label className="inline-flex items-center gap-1 cursor-pointer">
                     <input

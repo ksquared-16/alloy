@@ -46,6 +46,26 @@ export function operationalTasksListUrl(entityId: string): string {
     return `${OPERATIONAL_TASKS_URL}?entity_type=opportunities&entity_id=${encodeURIComponent(entityId)}`;
 }
 
+export type OperationalTaskWorkspaceFilter = "open" | "due_today" | "overdue" | "completed" | "all";
+
+export function operationalTasksWorkspaceUrl(filter: OperationalTaskWorkspaceFilter = "open"): string {
+    return `${OPERATIONAL_TASKS_URL}?scope=workspace&filter=${encodeURIComponent(filter)}`;
+}
+
+export function operationalTasksSummaryUrl(): string {
+    return `${OPERATIONAL_TASKS_URL}?scope=workspace&summary=true`;
+}
+
+export async function fetchWorkspaceOperationalTasks(
+    filter: OperationalTaskWorkspaceFilter = "open"
+): Promise<Response> {
+    return fetch(operationalTasksWorkspaceUrl(filter), { credentials: "include" });
+}
+
+export async function fetchOperationalTasksSummary(): Promise<Response> {
+    return fetch(operationalTasksSummaryUrl(), { credentials: "include" });
+}
+
 export function buildPersistProposalBody(proposal: TaskAssistSuggestionV1): { payload: TaskAssistSuggestionV1; expires_at: null } {
     return { payload: proposal, expires_at: null };
 }

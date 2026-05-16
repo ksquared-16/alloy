@@ -3,11 +3,14 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import { validateSelectLikeConfig } from "@/lib/fields/fieldDefinitionConfig";
+import { mergeFieldDefinitionPoliciesFromBody } from "@/lib/fields/fieldDefinitionPolicyWrite";
 
 const ALLOWED_PATCH_KEYS = [
     "label",
     "description",
     "is_required",
+    "requirement_policy",
+    "interaction_policy",
     "is_active",
     "is_visible_in_form",
     "is_visible_in_drawer",
@@ -84,7 +87,7 @@ export async function PATCH(
     const supabase = createAdminClient();
     const { data: existing, error: fetchErr } = await supabase
         .from("field_definitions")
-        .select("id, org_id, is_system, field_type, config")
+        .select("id, org_id, is_system, field_type, config, is_required, requirement_policy, interaction_policy")
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
@@ -150,6 +153,25 @@ export async function PATCH(
         if (!cfgCheck.ok) {
             return NextResponse.json({ error: cfgCheck.error }, { status: 400 });
         }
+    }
+
+    const policyMerge = mergeFieldDefinitionPoliciesFromBody(
+        {
+            is_required: body.is_required as boolean | undefined,
+            requirement_policy: body.requirement_policy,
+            interaction_policy: body.interaction_policy,
+        },
+        { existing_is_required: Boolean((existing as { is_required?: boolean }).is_required) }
+    );
+    if (!policyMerge.ok) {
+        return NextResponse.json({ error: policyMerge.error }, { status: 400 });
+    }
+    if (policyMerge.requirement_policy !== undefined) {
+        updates.requirement_policy = policyMerge.requirement_policy;
+        updates.is_required = policyMerge.is_required;
+    }
+    if (policyMerge.interaction_policy !== undefined) {
+        updates.interaction_policy = policyMerge.interaction_policy;
     }
 
     if (Object.keys(updates).length === 0) {

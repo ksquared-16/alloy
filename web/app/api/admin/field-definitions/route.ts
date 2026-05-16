@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { ADMIN_FIELD_TYPES } from "@/lib/fields/adminFieldTypeList";
 import { validateSelectLikeConfig } from "@/lib/fields/fieldDefinitionConfig";
+import { mergeFieldDefinitionPoliciesFromBody } from "@/lib/fields/fieldDefinitionPolicyWrite";
 
 const ALLOWED_ENTITY_TYPES = ["person", "customer", "job", "opportunity", "vendor", "schedule", "location"] as const;
 
@@ -137,6 +138,15 @@ export async function POST(request: NextRequest) {
 
     const is_visible_in_public_booking = !!body.is_visible_in_public_booking;
 
+    const policyMerge = mergeFieldDefinitionPoliciesFromBody({
+        is_required,
+        requirement_policy: body.requirement_policy,
+        interaction_policy: body.interaction_policy,
+    });
+    if (!policyMerge.ok) {
+        return NextResponse.json({ error: policyMerge.error }, { status: 400 });
+    }
+
     const supabase = createAdminClient();
 
     const { data: existing } = await supabase
@@ -176,6 +186,15 @@ export async function POST(request: NextRequest) {
         help_text,
         config,
         is_visible_in_public_booking,
+        ...(policyMerge.requirement_policy !== undefined
+            ? {
+                  requirement_policy: policyMerge.requirement_policy,
+                  is_required: policyMerge.is_required,
+              }
+            : {}),
+        ...(policyMerge.interaction_policy !== undefined
+            ? { interaction_policy: policyMerge.interaction_policy }
+            : {}),
     };
 
     const { data: created, error } = await supabase

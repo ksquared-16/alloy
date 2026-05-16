@@ -5416,6 +5416,7 @@ export default function AdminEntityDrawer() {
                   {drawer.id && drawer.id !== "new" && isTaskAssistV1UiEnabled() ? (
                       <OpportunityOperationalCompactStrip
                           opportunityId={drawer.id}
+                          entityLabel={entityDataMatchesDrawer(data, drawer.id) ? String((data as { name?: string }).name ?? "").trim() || null : null}
                           overviewData={
                               entityDataMatchesDrawer(data, drawer.id) ?
                                   (data as Record<string, unknown>)

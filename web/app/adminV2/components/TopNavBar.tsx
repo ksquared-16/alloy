@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabaseClient";
 import { palette, neutral, derived } from "@/styles/tokens/colors";
 import { markWorkUnitNavigationStart } from "@/lib/perf/markWorkUnitNavigationStart";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
+import OperationalTasksNavBadge from "@/app/adminV2/components/OperationalTasksNavBadge";
 import QuickMessageModal from "@/app/adminV2/components/QuickMessageModal";
 import { MessageSquare } from "lucide-react";
 
@@ -189,6 +190,7 @@ export default function TopNavBar() {
         >
           Queue
         </AdminV2NavLink>
+        <OperationalTasksNavBadge tabStyle={secondaryTabStyle} />
         <button
           type="button"
           onClick={() => setQuickMessageOpen(true)}

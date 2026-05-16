@@ -25,9 +25,7 @@ describe("taskAssistFollowUpNoticeText", () => {
             warnings: [],
             workflow_blocked: false,
         });
-        expect(text).toContain("follow-up reminder");
-        expect(text).toContain("for tomorrow");
-        expect(text).toContain("Review and create reminder.");
+        expect(text).toMatch(/follow-up reminder ready/i);
         expect(text).not.toMatch(/drafted a message/i);
     });
 
@@ -42,7 +40,7 @@ describe("taskAssistFollowUpNoticeText", () => {
             warnings: [],
             workflow_blocked: false,
         });
-        expect(text).toContain("drafted a message");
-        expect(text).toMatch(/send time|before anything goes out/i);
+        expect(text).toMatch(/message draft ready/i);
+        expect(text).toMatch(/scheduled for|send time|before anything goes out/i);
     });
 });

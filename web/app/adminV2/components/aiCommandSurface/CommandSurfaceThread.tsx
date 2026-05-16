@@ -8,7 +8,10 @@ import TaskAssistOpportunityWorkspace from "@/components/admin/taskAssist/TaskAs
 import { WorkflowAssistProposalActionCard } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistProposalActionCard";
 import { WorkflowAssistReadThreadCard } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistReadThreadCard";
 import { badgeLabel } from "@/lib/adminV2/aiCommandSurface/aiCommandSurfaceModel";
-import { WORKFLOW_ASSIST_NOTICE_TEXT } from "@/lib/adminV2/aiCommandSurface/commandSurfaceRouter";
+import {
+    WORKFLOW_ASSIST_AUTOMATIONS_HREF,
+    WORKFLOW_ASSIST_NOTICE_TEXT,
+} from "@/lib/adminV2/aiCommandSurface/commandSurfaceRouter";
 import type { CommandSurfaceThreadTurn } from "@/lib/adminV2/aiCommandSurface/commandSurfaceThreadTypes";
 import type { TaskAssistCommandIntent } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
 import { formatCandidateDebugLine } from "@/lib/agent/taskAssist/taskAssistEntitySearchDisambiguation";
@@ -140,9 +143,15 @@ export default function CommandSurfaceThread({
                     case "workflow_notice":
                         return (
                             <AssistantBubble key={turn.id}>
-                                <span className="font-semibold" data-command-surface-workflow-notice="true">
-                                    {WORKFLOW_ASSIST_NOTICE_TEXT}
-                                </span>
+                                <div className="space-y-1.5" data-command-surface-workflow-notice="true">
+                                    <p className="text-[12px] leading-snug">{WORKFLOW_ASSIST_NOTICE_TEXT}</p>
+                                    <a
+                                        href={WORKFLOW_ASSIST_AUTOMATIONS_HREF}
+                                        className="inline-block text-[11px] font-semibold text-alloy-blue hover:underline"
+                                    >
+                                        Open Automations
+                                    </a>
+                                </div>
                             </AssistantBubble>
                         );
                     case "error":
@@ -157,18 +166,6 @@ export default function CommandSurfaceThread({
                         return (
                             <AssistantBubble key={turn.id}>
                                 <div className="space-y-1.5" data-command-surface-candidate-results="true">
-                                    <div className="text-[11px] font-semibold" style={{ color: CMD.textLabel }}>
-                                        {turn.candidates.length === 1 ?
-                                            "Confirm who you mean"
-                                        :   "I found these matching records."}
-                                    </div>
-                                    {intentSummary(turn.intent) ? (
-                                        <div className="text-[10px]" style={{ color: CMD.textSupporting }}>
-                                            {turn.intent?.intent_type === "create_reminder" ?
-                                                `Next: ${intentSummary(turn.intent)} — review below.`
-                                            :   `Next: ${intentSummary(turn.intent)} — confirm before any send.`}
-                                        </div>
-                                    ) : null}
                                     <ul className="space-y-1">
                                         {turn.candidates.map((c) => (
                                             <li key={c.entity_id}>
@@ -219,19 +216,7 @@ export default function CommandSurfaceThread({
                             </AssistantBubble>
                         );
                     case "target_confirmed":
-                        return (
-                            <AssistantBubble key={turn.id}>
-                                <div data-command-surface-target-confirmed="true">
-                                    <span className="text-[11px] font-semibold">Target: </span>
-                                    <span>{turn.candidate.label}</span>
-                                    {intentSummary(turn.intent) ? (
-                                        <div className="mt-0.5 text-[10px]" style={{ color: CMD.textSupporting }}>
-                                            {intentSummary(turn.intent)}
-                                        </div>
-                                    ) : null}
-                                </div>
-                            </AssistantBubble>
-                        );
+                        return null;
                     case "action_card":
                         if (turn.card.type === "workflow_assist_proposal") {
                             return (

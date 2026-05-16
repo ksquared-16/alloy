@@ -33,66 +33,18 @@ const SMS_RE = /\b(text|sms)\b/i;
 const EMAIL_RE = /\bemail\b/i;
 
 const TIMING_RE =
-    /\b(tomorrow|next\s+week|later|tonight|this\s+evening|schedule(?:d)?|send\s+later|at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\b/i;
+    /\b(tomorrow|next\s+week|later|tonight|this\s+evening|schedule(?:d)?|send\s+later|(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)(?:\s+at)?|at\s+\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)?|\d{1,2}\s*(?:a\.?m\.?|p\.?m\.?))\b/i;
 
 /** Legacy fallback when slot extract yields no entity fragment. */
 const SEARCH_STOP =
     /\b(about|regarding|that|missing|forms|tomorrow|next\s+week|later|tonight|at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?|please|thanks)\b/gi;
 
-function pad(n: number): string {
-    return String(n).padStart(2, "0");
-}
-
-/** True when the hint includes an explicit clock time (e.g. "at 3pm"), not just "tomorrow". */
-export function timingHintHasExplicitClock(hint: string | null | undefined): boolean {
-    if (!hint?.trim()) return false;
-    return /\bat\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b/i.test(hint.trim());
-}
-
-/** True for coarse calendar phrases without a clock (e.g. "tomorrow", "next week"). */
-export function timingHintIsDateGranularOnly(hint: string | null | undefined): boolean {
-    if (!hint?.trim()) return false;
-    const h = hint.trim().toLowerCase();
-    if (timingHintHasExplicitClock(hint)) return false;
-    return /\b(tomorrow|next\s+week)\b/i.test(h);
-}
-
-/** Best-effort `datetime-local` value from a timing hint (operator can edit). */
-export function timingHintToDatetimeLocal(hint: string | null | undefined): string | null {
-    if (!hint?.trim()) return null;
-    const h = hint.trim().toLowerCase();
-    const now = new Date();
-    const d = new Date(now);
-
-    const atMatch = h.match(/\bat\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i);
-    let hour = 9;
-    let minute = 0;
-    if (atMatch) {
-        hour = Number(atMatch[1]);
-        minute = atMatch[2] ? Number(atMatch[2]) : 0;
-        const ap = atMatch[3]?.toLowerCase();
-        if (ap === "pm" && hour < 12) hour += 12;
-        if (ap === "am" && hour === 12) hour = 0;
-        if (!ap && hour <= 7) hour += 12;
-    }
-
-    if (h.includes("tomorrow")) {
-        d.setDate(d.getDate() + 1);
-    } else if (h.includes("next week")) {
-        d.setDate(d.getDate() + 7);
-    } else if (h.includes("later") || h.includes("tonight") || h.includes("this evening")) {
-        d.setHours(d.getHours() + 2);
-        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    } else if (!atMatch && !h.includes("tomorrow") && !h.includes("next week")) {
-        return null;
-    }
-
-    d.setHours(hour, minute, 0, 0);
-    if (d.getTime() <= now.getTime() && !h.includes("tomorrow") && !h.includes("next week")) {
-        d.setDate(d.getDate() + 1);
-    }
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
+export {
+    formatResolvedTimingLabel,
+    timingHintHasExplicitClock,
+    timingHintIsDateGranularOnly,
+    timingHintToDatetimeLocal,
+} from "@/lib/agent/taskAssist/taskAssistTimingResolve";
 
 function extractTimingHint(raw: string): string | null {
     const m = raw.match(TIMING_RE);

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
+import { parseFieldSectionConfig } from "@/lib/fields/sectionManagement";
 
 const ALLOWED_ENTITY_TYPES = ["person", "customer", "job", "opportunity", "vendor", "schedule", "location"] as const;
 const SECTION_KEY_REGEX = /^[a-z0-9_]{2,64}$/;
@@ -75,6 +76,16 @@ export async function POST(request: NextRequest) {
     const label = typeof body.label === "string" ? body.label.trim() || section_key : section_key;
     const description = typeof body.description === "string" ? body.description.trim() || null : null;
     const sort_order = typeof body.sort_order === "number" && !Number.isNaN(body.sort_order) ? body.sort_order : 100;
+    const is_archived = body.is_archived === true;
+
+    let section_config: Record<string, unknown> = {};
+    if (body.section_config !== undefined) {
+        const parsed = parseFieldSectionConfig(body.section_config);
+        if (!parsed.ok) {
+            return NextResponse.json({ error: parsed.error }, { status: 400 });
+        }
+        section_config = parsed.value;
+    }
 
     const supabase = createAdminClient();
     const { data: created, error } = await supabase
@@ -86,6 +97,8 @@ export async function POST(request: NextRequest) {
             label,
             description,
             sort_order,
+            is_archived,
+            section_config,
         })
         .select()
         .single();

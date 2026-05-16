@@ -33,7 +33,8 @@ export type CommandSurfaceRouteResult = {
 };
 
 export const WORKFLOW_ASSIST_NOTICE_TEXT =
-    "That sounds like Workflow Assist. Workflow Assist is coming next — it will handle automation rules and workflow configuration with your approval. For one-off actions today, rephrase without automation rules (e.g. text a family, schedule an email, or set a reminder).";
+    "That's a workflow configuration request. Workflow Assist is coming next — read-only for now.";
+export const WORKFLOW_ASSIST_AUTOMATIONS_HREF = "/adminV2/workflows";
 
 const CLARIFY_DEFAULT =
     "Tell me what you'd like to do — for example, text a family, schedule an email, adjust the job overview layout, or set a reminder.";
