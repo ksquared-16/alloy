@@ -35,6 +35,7 @@ import type { ConfigurationProposalV1 } from "@/lib/agent/configLayoutAssist/con
 import type { ConfigLayoutAssistTraceV1 } from "@/lib/agent/configLayoutAssist/configLayoutAssistTypes";
 import {
   buildWorkflowAssistCreateProposeFromIntent,
+  parseDaysBeforeTour,
   type WorkflowAssistCreateIntentV1,
   type WorkflowAssistCreateProposeBuildV1,
 } from "@/lib/agent/workflowAssist/workflowAssistCreateFromCommandV1";
@@ -1201,7 +1202,12 @@ export default function AICommandSurfaceShell() {
     async (
       body: WorkflowAssistProposeRequestV1,
       createInterpreted?: WorkflowAssistCreateProposeBuildV1["interpreted"],
-      scopeLabels?: WorkflowAssistCreateProposeBuildV1["scope_labels"]
+      scopeLabels?: WorkflowAssistCreateProposeBuildV1["scope_labels"],
+      enrich?: {
+        source_command?: string;
+        template_id?: WorkflowAssistCreateIntentV1["template_id"];
+        lead_days_before_tour?: number | null;
+      }
     ) => {
       const res = await fetch("/api/admin/ai/workflow-assist/propose", {
         method: "POST",
@@ -1210,6 +1216,20 @@ export default function AICommandSurfaceShell() {
         body: JSON.stringify({
           ...body,
           ...(scopeLabels ? { scope_labels: scopeLabels } : {}),
+          ...(enrich?.source_command ? { source_command: enrich.source_command } : {}),
+          ...(enrich?.template_id ? { template_id: enrich.template_id } : {}),
+          ...(enrich?.lead_days_before_tour != null ?
+            { lead_days_before_tour: enrich.lead_days_before_tour }
+          : {}),
+          ...(createInterpreted ?
+            {
+              interpreted: {
+                trigger_label: createInterpreted.trigger_label,
+                actions_label: createInterpreted.actions_label,
+                unknowns: createInterpreted.unknowns,
+              },
+            }
+          : {}),
         }),
       });
       const j = (await res.json()) as {
@@ -1255,7 +1275,11 @@ export default function AICommandSurfaceShell() {
           work_unit_name: ws?.work_unit_name ?? null,
         },
       });
-      await proposeWorkflowAssistBody(built.request, built.interpreted, built.scope_labels);
+      await proposeWorkflowAssistBody(built.request, built.interpreted, built.scope_labels, {
+        source_command: submitted,
+        template_id: createIntent.template_id,
+        lead_days_before_tour: parseDaysBeforeTour(submitted),
+      });
     },
     [globalAssistant?.workspaceScope, proposeWorkflowAssistBody]
   );

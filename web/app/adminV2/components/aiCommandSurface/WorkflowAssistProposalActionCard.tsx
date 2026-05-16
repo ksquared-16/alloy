@@ -7,8 +7,10 @@ import { dispatchWorkflowAutomationRefresh } from "@/lib/adminV2/aiCommandSurfac
 import type { WorkflowAssistCreateProposeBuildV1 } from "@/lib/agent/workflowAssist/workflowAssistCreateFromCommandV1";
 import type { WorkflowAssistSuggestionV1 } from "@/lib/agent/workflowAssist/workflowAssistProposalV1";
 import { WORKFLOW_ASSIST_PORTAL_MUTATION_BLOCKED_USER_MESSAGE } from "@/lib/agent/workflowAssist/workflowAssistReadV1";
+import { WorkflowAssistProposalReviewPanel } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistProposalReviewPanel";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { brand, derived, neutral, semantic } from "@/styles/tokens/colors";
+import Link from "next/link";
 
 const CMD = {
     textBody: neutral.textPrimary,
@@ -93,6 +95,7 @@ export function WorkflowAssistProposalActionCard({
 
     const isCreate = suggestion.proposal_kind === "create_workflow";
     const editReview = suggestion.edit_review ?? [];
+    const draftReview = suggestion.draft_review ?? null;
 
     return (
         <div className="space-y-2" data-command-surface-workflow-assist-proposal-card="true">
@@ -107,53 +110,24 @@ export function WorkflowAssistProposalActionCard({
                     Admin approval required
                 </span>
             </div>
-            {isCreate ?
-                <div className="flex flex-wrap gap-1.5" data-command-surface-workflow-assist-create-guardrails="true">
-                    <span
-                        className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
-                        style={{ backgroundColor: "rgba(39, 63, 82, 0.08)", color: CMD.textLabel }}
-                    >
-                        Disabled draft
-                    </span>
-                    <span
-                        className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
-                        style={{ backgroundColor: "rgba(0, 162, 131, 0.1)", color: brand.secondary }}
-                    >
-                        Template starter
-                    </span>
-                </div>
+            {draftReview ?
+                <WorkflowAssistProposalReviewPanel review={draftReview} />
             : null}
-            <p className="text-[11px] font-semibold" style={{ color: CMD.textBody }}>
+            {!draftReview ?
+                <p className="text-[11px] font-semibold" style={{ color: CMD.textBody }}>
                 {createInterpreted?.headline ??
                     (isCreate ?
                         `Create disabled workflow: ${suggestion.draft_row?.name ?? "—"}`
                     : suggestion.proposal_kind === "pause_workflow" ?
                         `Disable workflow ${suggestion.target_workflow_id ?? ""}`
                     :   `Edit workflow ${suggestion.target_workflow_id ?? ""}`)}
-            </p>
-            {isCreate ?
-                <>
-                    <p className="text-[10px] font-semibold" style={{ color: CMD.textLabel }}>
-                        Scope: {suggestion.scope_display?.label ?? createInterpreted?.scope_label ?? "Org-wide"}
-                    </p>
-                    {createInterpreted ?
-                        <dl className="grid gap-1 text-[10px]" style={{ color: CMD.textSupporting }}>
-                            <ProposalDetailRow label="Trigger" value={createInterpreted.trigger_label} />
-                            <ProposalDetailRow label="Actions" value={createInterpreted.actions_label} />
-                        </dl>
-                    : null}
-                    <p className="text-[10px] leading-snug" style={{ color: CMD.textSupporting }}>
-                        Review in Automations before enabling. Trigger: {suggestion.draft_row?.event_type ?? "—"} /{" "}
-                        {suggestion.draft_row?.entity_type ?? "—"}. Not production-ready.
-                    </p>
-                    {createInterpreted?.unknowns.length ?
-                        <ul className="list-disc pl-4 text-[10px]" style={{ color: CMD.textLabel }}>
-                            {createInterpreted.unknowns.map((u, i) => (
-                                <li key={i}>{u}</li>
-                            ))}
-                        </ul>
-                    : null}
-                </>
+                </p>
+            : null}
+            {isCreate && !draftReview && createInterpreted ?
+                <dl className="grid gap-1 text-[10px]" style={{ color: CMD.textSupporting }}>
+                    <ProposalDetailRow label="Trigger" value={createInterpreted.trigger_label} />
+                    <ProposalDetailRow label="Actions" value={createInterpreted.actions_label} />
+                </dl>
             : null}
             {editReview.length ?
                 <dl
@@ -212,7 +186,13 @@ export function WorkflowAssistProposalActionCard({
             : null}
             {done?.ok ?
                 <p className="text-[11px]" style={{ color: brand.secondary }} data-command-surface-workflow-assist-apply-success>
-                    Applied · workflow id {(done as { workflow_id?: string }).workflow_id}
+                    Applied · workflow id {(done as { workflow_id?: string }).workflow_id}.{" "}
+                    <Link
+                        href={`/adminV2/workflows?workflow=${encodeURIComponent((done as { workflow_id?: string }).workflow_id ?? "")}`}
+                        className="font-semibold underline-offset-2 hover:underline"
+                    >
+                        Open in Automations
+                    </Link>
                 </p>
             : null}
         </div>

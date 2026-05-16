@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { requireAdmin } from "@/lib/adminAuth";
+import type { WorkflowAssistCreateTemplateIdV1 } from "@/lib/agent/workflowAssist/workflowAssistCreateFromCommandV1";
+import { enrichWorkflowAssistCreateSuggestionV1 } from "@/lib/agent/workflowAssist/workflowAssistEnrichCreateProposalV1";
 import {
     buildWorkflowAssistSuggestionV1,
     parseWorkflowAssistProposeRequest,
@@ -153,13 +155,67 @@ export async function POST(request: NextRequest) {
         }
     }
 
-    const suggestion = buildWorkflowAssistSuggestionV1({
+    let suggestion = buildWorkflowAssistSuggestionV1({
         orgId: ctx.orgId,
         actorUserId: ctx.userId,
         parsed: parsed.value,
         scope_labels,
         edit_before,
     });
+
+    if (parsed.value.proposal_kind === "create_workflow") {
+        const bodyRec = body != null && typeof body === "object" && !Array.isArray(body) ? (body as Record<string, unknown>) : {};
+        const source_command = typeof bodyRec.source_command === "string" ? bodyRec.source_command.trim().slice(0, 500) : "";
+        const templateRaw = bodyRec.template_id;
+        const template_id: WorkflowAssistCreateTemplateIdV1 =
+            templateRaw === "tour_reminder" || templateRaw === "enrollment_when_move" || templateRaw === "generic_stub" ?
+                templateRaw
+            :   ((suggestion.draft_row?.metadata as { workflow_assist?: { template_id?: string } } | undefined)
+                    ?.workflow_assist?.template_id === "tour_reminder" ?
+                    "tour_reminder"
+                :   (suggestion.draft_row?.metadata as { workflow_assist?: { template_id?: string } } | undefined)
+                        ?.workflow_assist?.template_id === "enrollment_when_move" ?
+                    "enrollment_when_move"
+                :   "generic_stub");
+        const leadRaw = bodyRec.lead_days_before_tour;
+        const lead_days_before_tour =
+            typeof leadRaw === "number" && Number.isFinite(leadRaw) ? Math.min(30, Math.max(1, Math.floor(leadRaw))) : null;
+        const interpreted = bodyRec.interpreted;
+        const interpretedShape =
+            interpreted != null && typeof interpreted === "object" && !Array.isArray(interpreted) ?
+                {
+                    trigger_label:
+                        typeof (interpreted as { trigger_label?: unknown }).trigger_label === "string" ?
+                            (interpreted as { trigger_label: string }).trigger_label
+                        :   undefined,
+                    actions_label:
+                        typeof (interpreted as { actions_label?: unknown }).actions_label === "string" ?
+                            (interpreted as { actions_label: string }).actions_label
+                        :   undefined,
+                    unknowns:
+                        Array.isArray((interpreted as { unknowns?: unknown }).unknowns) ?
+                            (interpreted as { unknowns: unknown[] }).unknowns.filter((u): u is string => typeof u === "string")
+                        :   [],
+                }
+            :   undefined;
+
+        suggestion = enrichWorkflowAssistCreateSuggestionV1({
+            suggestion,
+            template_id,
+            source_command,
+            lead_days_before_tour,
+            scope_label: suggestion.scope_display?.label ?? null,
+            interpreted: interpretedShape?.trigger_label ?
+                {
+                    trigger_label: interpretedShape.trigger_label,
+                    actions_label: interpretedShape.actions_label ?? "Review actions in Automations",
+                    unknowns: interpretedShape.unknowns ?? [],
+                }
+            :   undefined,
+            org_metadata,
+            enrichment_enabled: true,
+        });
+    }
 
     return NextResponse.json({ ok: true, suggestion });
 }

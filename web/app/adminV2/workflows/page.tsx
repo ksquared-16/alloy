@@ -175,6 +175,7 @@ export default function AdminV2WorkflowsPage() {
     const router = useRouter();
     const viewerTz = useAdminViewerTimezone();
     const highlightRunId = (searchParams?.get("run") ?? "").trim();
+    const highlightWorkflowId = (searchParams?.get("workflow") ?? "").trim();
 
     const [kpis, setKpis] = useState<WorkflowKpis>(DEFAULT_KPIS);
     const [kpisLoading, setKpisLoading] = useState(false);
@@ -218,6 +219,9 @@ export default function AdminV2WorkflowsPage() {
                 const list = Array.isArray(j?.workflows) ? (j.workflows as WorkflowSummaryRow[]) : [];
                 setWorkflows(list);
                 setSelectedWorkflowId((prev) => {
+                    if (highlightWorkflowId && list.some((w) => w.id === highlightWorkflowId)) {
+                        return highlightWorkflowId;
+                    }
                     if (prev) return prev;
                     if (!list.length) return null;
                     return list.find((w) => (w.entity_type ?? "").toLowerCase() === "opportunity")?.id ?? list[0]?.id ?? null;
@@ -232,7 +236,14 @@ export default function AdminV2WorkflowsPage() {
         return () => {
             cancelled = true;
         };
-    }, [init]);
+    }, [init, highlightWorkflowId]);
+
+    useEffect(() => {
+        if (!highlightWorkflowId || !workflows?.length) return;
+        if (workflows.some((w) => w.id === highlightWorkflowId)) {
+            setSelectedWorkflowId(highlightWorkflowId);
+        }
+    }, [highlightWorkflowId, workflows]);
 
     useEffect(() => {
         let cancelled = false;
@@ -351,8 +362,12 @@ export default function AdminV2WorkflowsPage() {
                     setRunDetailError(typeof rj?.error === "string" ? rj.error : "Failed to load run");
                     return;
                 }
-                setRunDetail((rj as { run?: WorkflowRunDetail }).run ?? null);
+                const run = (rj as { run?: WorkflowRunDetail }).run ?? null;
+                setRunDetail(run);
                 setRunActionRuns((aj as { action_runs?: WorkflowActionRunRow[] }).action_runs ?? []);
+                if (run?.workflow_id) {
+                    setSelectedWorkflowId(run.workflow_id);
+                }
             })
             .catch((e) => {
                 if (!cancelled) setRunDetailError(e instanceof Error ? e.message : "Failed to load run");

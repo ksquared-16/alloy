@@ -22,6 +22,20 @@ export type WorkflowAssistWorkflowMetadataV1 = {
         source?: string;
         template_id?: string;
         draft_actions?: WorkflowAssistDraftActionScaffoldV1[];
+        /** Advisory enrichment snapshot for Explain / operational trace (not workflow execution truth). */
+        enrichment_v1?: {
+            generated_at_iso: string;
+            enrichment_source: string;
+            message_provenance: string;
+            normalized_event_type: string;
+            normalized_channel: string | null;
+            advisory_only: true;
+        };
+        message_preview?: {
+            body: string;
+            provenance: string;
+            needs_review: boolean;
+        };
     };
 };
 

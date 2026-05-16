@@ -25,7 +25,7 @@ const TOUR_RE = /\btours?\b/i;
 const REMIND_RE = /\b(remind(?:er)?|reminder|notify|notification|send\s+a\s+reminder)\b/i;
 const WHEN_MOVE_RE = /\bwhen\b.+\b(move|transition|set\s+status|ready\s+to)\b/i;
 
-function parseDaysBeforeTour(text: string): number | null {
+export function parseDaysBeforeTour(text: string): number | null {
     const m = text.match(/\b(\d{1,2})\s+days?\s+before\b/i);
     if (m?.[1]) {
         const n = Number.parseInt(m[1], 10);

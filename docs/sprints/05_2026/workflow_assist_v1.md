@@ -56,7 +56,7 @@
 | **Failed runs list** | Client filters last-100 runs; KPI line approximate. |
 | **`WORKFLOW_ASSIST_NOTICE_TEXT`** | Still used for legacy `workflow_notice` copy only. |
 | **Durable `workflow_assist_proposals`** | **Not implemented** — ephemeral suggestion JSON + client-held card (same pattern as early Task Assist). |
-| **LLM** | **Not implemented** for Workflow Assist; propose is fully deterministic. |
+| **LLM** | **AI draft enrichment V1 shipped (stub advisory)** — live OpenAI invocation deferred; create propose uses stub enrichment + deterministic normalization. |
 | **Bulk pause / tag mute** | **Not implemented** — only single-workflow pause proposal. |
 | **Edit from UI** | Read cards surface **pause** and **create template** only; arbitrary **edit_workflow** is API-ready (propose + apply covered by tests) but not exposed as buttons yet. |
 | **Stabilization (role UX + guardrails)** | **Shipped:** **`GET /api/admin/ai/workflow-assist/capabilities`** (`can_propose_and_apply_workflow_assist` = compatibility **`admin`**); Orchestrator hides propose CTAs for ops and disables Apply unless admin; create proposal card stresses **disabled draft / template starter / review in Automations**; deterministic create template description warns placeholders are generic. |
@@ -473,6 +473,41 @@ Proposal cards show **`edit_review`** rows (current vs proposed) loaded from DB 
 
 - FK `department_id` / `work_unit_id` on `workflows` (Phase 2).
 - Timed reminder / real `create_message` actions; LLM generation; auto-enable; autonomous execution; broad workflow editor.
+
+---
+
+## 17. AI draft enrichment V1 (shipped)
+
+### Doctrine
+
+User intent → **stub/AI advisory enrichment** → **deterministic normalization** → human review → apply → **disabled** workflow draft. AI never becomes workflow execution truth.
+
+### Enrichment pipeline
+
+- `buildStubWorkflowAssistDraftEnrichmentRaw` — bounded raw enrichment (no network in default path).
+- `resolveWorkflowAssistMessagePreview` — provenance order: **org template** (`metadata.workflow_assist_message_templates`) → **workflow template** → **AI-generated** → **fallback scaffold**.
+- `enrichWorkflowAssistCreateSuggestionV1` — attaches `draft_review` on suggestion + `metadata.workflow_assist.enrichment_v1` snapshot for Explain/trace.
+- `POST …/workflow-assist/propose` accepts `source_command`, `template_id`, `lead_days_before_tour`, `interpreted` for create proposals.
+
+### Normalization (authoritative)
+
+- Event types limited to allowlist (`opportunity_schedule_tour_followup`, `opportunity_status_changed`, `entity_status_changed`).
+- Channels: `sms` | `email` | `in_app` only.
+- `enabled` remains **false**; unsupported AI fields recorded in `rejected_fields` and downgraded.
+
+### Proposal UX
+
+- `WorkflowAssistProposalReviewPanel` — summary, trigger/timing, conditions, action preview, message preview, AI warnings, review checklist.
+- Provenance chips: org template / AI-generated / fallback / needs review.
+
+### Navigation
+
+- Automations page honors `?workflow=` (Explain links) and `?run=` (run detail).
+- Post-apply link: `/adminV2/workflows?workflow={id}`.
+
+### Deferred
+
+- Live OpenAI enrichment invocation (stub v1 only); replay/simulation; durable proposal store.
 
 ---
 

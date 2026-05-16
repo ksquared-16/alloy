@@ -4,6 +4,7 @@
 
 import { createHash } from "node:crypto";
 
+import type { WorkflowAssistDraftReviewV1 } from "@/lib/agent/workflowAssist/workflowAssistDraftEnrichmentV1";
 import {
     buildWorkflowAssistScopeDisplay,
     buildWorkflowMetadataWithScope,
@@ -81,6 +82,8 @@ export type WorkflowAssistSuggestionV1 = {
     scope_display?: WorkflowAssistScopeDisplayV1 | null;
     /** Current vs proposed values for edit/pause review cards. */
     edit_review?: WorkflowAssistEditReviewRowV1[] | null;
+    /** Advisory create draft review (AI-assisted enrichment + normalization). */
+    draft_review?: WorkflowAssistDraftReviewV1 | null;
     reasoning: { summary: string; warnings: string[] };
     approval_required: true;
 };
