@@ -2,6 +2,7 @@
 
 import React, { type CSSProperties, isValidElement, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { shouldCloseAdminV2DrawerOnOutsideTarget } from "@/lib/adminV2/drawerOutsideClick";
 import { neutral, derived, palette } from "@/styles/tokens/colors";
 
 /**
@@ -108,6 +109,17 @@ export default function Drawer({
         window.addEventListener("keydown", onKeyDown);
         return () => window.removeEventListener("keydown", onKeyDown);
     }, [isOpen, onClose]);
+
+    /** Admin V2: dim stays pointer-events-none; close on outside mousedown (command bar excluded). */
+    useEffect(() => {
+        if (!isOpen || variant !== "adminV2") return;
+        const onMouseDown = (e: MouseEvent) => {
+            if (!shouldCloseAdminV2DrawerOnOutsideTarget(e.target)) return;
+            onClose();
+        };
+        document.addEventListener("mousedown", onMouseDown);
+        return () => document.removeEventListener("mousedown", onMouseDown);
+    }, [isOpen, onClose, variant]);
 
     if (!isOpen) return null;
 

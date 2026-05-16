@@ -8141,8 +8141,10 @@ export default function AdminEntityDrawer() {
     const opportunityWorkflowHeaderChromePending =
         drawer.type === "opportunities" &&
         opportunityInquiryWorkflowDrawerShell &&
-        !opportunityDrawerQueueBootstrap &&
-        (drawerGateLoading || opportunityRecordChromePending || opportunityResolvedHeaderLoading);
+        !!drawer.id &&
+        drawer.id !== "new" &&
+        !(overviewData && (overviewData as { _create?: boolean })._create) &&
+        !opportunityDrawerShellSettled;
 
     const headerSubtitleForDrawer =
         opportunityWorkflowHeaderChromePending ? (
@@ -8178,7 +8180,11 @@ export default function AdminEntityDrawer() {
         drawer.type === "opportunities" && opportunityInquiryWorkflowDrawerShell;
 
     const opportunityHeaderActionsPending =
-        drawer.type === "opportunities" && isOpportunityExistingView && opportunityResolvedHeaderLoading;
+        drawer.type === "opportunities" &&
+        isOpportunityExistingView &&
+        !!drawer.id &&
+        drawer.id !== "new" &&
+        !opportunityDrawerShellSettled;
 
     const headerActionsForDrawer = workflowOpportunityUsesTitleRailActions
         ? undefined

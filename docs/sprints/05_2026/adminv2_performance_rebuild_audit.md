@@ -279,3 +279,43 @@ Do **not** reintroduce blindly:
 - [ ] Drawer open: sidebar/settings links still clickable; close drawer; navigate away — page clicks work.
 - [ ] Communications / Notes tabs lazy-load without breaking overview.
 - [ ] Site filter change: dept summary counts refresh (no stale session numbers on first paint).
+
+---
+
+## Drawer + Loading Coherence Fix Pass
+
+### Issues addressed
+
+| Issue | Fix |
+|-------|-----|
+| Drawer backdrop blocked command bar / shell | Dim layer stays `pointer-events-none`; outside **mousedown** on `Drawer` (adminV2 only) closes drawer while ignoring drawer panel + AI command bar/surface |
+| Dept paired skeleton row mismatch (4 vs 3) | Shared `DEPT_PAIRED_OPER_QUEUE_SKELETON_ROW_COUNT = 5` for both throughput and Needs Attention panels |
+| Work-unit KPI / queue picker visual noise | Grouped `KpiStripSkeleton` until placements **and** queue summaries settle; queue tab count badges use pulse bars instead of per-pill spinners |
+| Fragmented opportunity drawer header load | Workflow subtitle, timeline, title-rail actions, and secondary header actions stay in skeleton until `opportunityDrawerShellSettled` (tab strip gate skeleton unchanged) |
+
+### Files changed
+
+- `web/lib/adminV2/drawerOutsideClick.ts` (new)
+- `web/components/admin/Drawer.tsx`
+- `web/components/admin/AdminEntityDrawer.tsx`
+- `web/components/admin/workspace/DepartmentPairedOperQueuesSkeleton.tsx`
+- `web/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx`
+- `web/tests/admin/adminV2DrawerLoadingCoherence.test.ts` (new)
+- `docs/sprints/05_2026/adminv2_performance_rebuild_audit.md`
+
+### Navigation contracts preserved
+
+- No change to hard/soft nav matrix, work-unit tab local state, URL sync, or `AdminV2NavLink` implementation.
+- Drawer backdrop z-index and shell chrome `z-[100]` unchanged.
+- No full-screen clickable overlay; outside dismiss is document mousedown only with explicit ignore selectors.
+
+### Remaining deferred polish
+
+- Communications/Notes section still lazy-load with local loading UI inside the hydrated drawer body.
+- Command-surface thread panel has its own loading states (not part of record drawer gate).
+- Server-side combined workspace rollup endpoint (unchanged from Pass 1).
+
+### Tests run
+
+- `cd web && npx tsc --noEmit`
+- `cd web && npx vitest run tests/admin/adminV2NavigationContracts.test.ts tests/admin/adminV2QueueRowClick.test.ts tests/admin/adminV2WorkUnitLaneLocalState.test.ts tests/admin/opportunityDrawerQueuePreviewSeed.test.ts tests/admin/workUnitQueueCompactRowSkeleton.test.ts tests/admin/adminV2DrawerLoadingCoherence.test.ts`

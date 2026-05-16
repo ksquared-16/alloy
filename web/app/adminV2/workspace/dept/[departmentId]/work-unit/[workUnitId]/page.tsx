@@ -1663,8 +1663,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 "inline-flex shrink-0 items-start gap-1.5 rounded-full border px-2 py-0.5 text-left text-[11px] font-semibold leading-snug transition-colors";
             const countBadgePending = (
                 <span
-                    className="inline-flex h-3.5 w-3.5 shrink-0 rounded-full border-2 border-alloy-forge/20 border-t-alloy-blue/75 animate-spin"
-                    aria-label="Loading queue count"
+                    className="inline-block h-3 w-5 shrink-0 rounded skeleton-pulse bg-alloy-stone/14"
+                    aria-hidden
                 />
             );
             const multiSectionPh = placeholdersForPicker.length > 1;
@@ -2982,7 +2982,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
     const effectiveModel = mergedWorkspaceModel;
 
-    const workUnitKpiStripPlaceholder = !suppressWorkUnitKpiStrip && wuPlacementRows === undefined;
+    const workUnitKpiMetricsPending =
+        !suppressWorkUnitKpiStrip &&
+        (wuPlacementRows === undefined ||
+            (wuPlacementRows !== undefined && queueSummaries === null && !queueSummariesError));
+    const workUnitKpiStripPlaceholder = workUnitKpiMetricsPending;
 
     /** Shell + header render after WU + dept; queue summaries and rows stay in-lane (Phase 3.1). */
     const workUnitShellReady = Boolean(workUnit) && Boolean(dept) && !error;
