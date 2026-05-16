@@ -1,7 +1,9 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 
+import { buildConfigProposalReviewHref } from "@/lib/agent/configLayoutAssist/configLayoutAssistEntityResolve";
+import { configLayoutAssistProposalStatusCopy } from "@/lib/agent/configLayoutAssist/configLayoutAssistProposalCopy";
 import type { ConfigurationProposalV1 } from "@/lib/agent/configLayoutAssist/configurationProposalV1";
 import type { ConfigLayoutAssistTraceV1 } from "@/lib/agent/configLayoutAssist/configLayoutAssistTypes";
 import { brand, derived, neutral } from "@/styles/tokens/colors";
@@ -21,16 +23,16 @@ export function ConfigLayoutAssistProposalThreadCard({
     trace: ConfigLayoutAssistTraceV1;
     persistedProposalId: string | null;
 }) {
-    const reviewHref = persistedProposalId
-        ? `/adminV2/settings/config-proposals?id=${encodeURIComponent(persistedProposalId)}`
-        : "/adminV2/settings/config-proposals";
+    const router = useRouter();
+    const reviewHref = buildConfigProposalReviewHref(persistedProposalId);
+    const statusCopy = configLayoutAssistProposalStatusCopy(proposal);
 
     const mutatingCount = proposal.proposed_operations.filter(
         (o) => o.kind !== "data_quality_recommendation"
     ).length;
 
     return (
-        <div>
+        <div data-command-surface-config-layout-assist-card="true">
             <p className="text-[13px] font-semibold" style={{ color: CMD.textBody }}>
                 Configuration proposal (review required)
             </p>
@@ -70,15 +72,17 @@ export function ConfigLayoutAssistProposalThreadCard({
                 className="mt-2 rounded border px-2 py-1 text-[10px]"
                 style={{ borderColor: derived.border, color: CMD.textSupporting }}
             >
-                Recommendation only — approve and apply in Settings. No automatic changes.
+                {statusCopy}
             </p>
-            <Link
-                href={reviewHref}
-                className="mt-2 inline-flex text-[12px] font-semibold underline"
+            <button
+                type="button"
+                className="mt-2 inline-flex text-left text-[12px] font-semibold underline"
                 style={{ color: brand.secondary }}
+                data-command-surface-config-assist-review-proposal="true"
+                onClick={() => router.push(reviewHref)}
             >
                 Review proposal →
-            </Link>
+            </button>
         </div>
     );
 }

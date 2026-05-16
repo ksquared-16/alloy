@@ -15,5 +15,7 @@ export * from "./configurationProposalAccess";
 export * from "./configurationProposalStore";
 export * from "./configurationProposalApiHelpers";
 export * from "./configLayoutAssistIntent";
+export * from "./configLayoutAssistEntityResolve";
+export * from "./configLayoutAssistProposalCopy";
 export * from "./configLayoutAssistPropose";
 export * from "./configLayoutAssistTypes";

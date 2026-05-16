@@ -48,7 +48,15 @@ function riskForOperationKind(kind: ConfigurationOperationKindV1, op: Configurat
 
 function riskForRequirementOrInteraction(op: ConfigurationOperationV1): ConfigurationProposalRiskLevelV1 {
     const after = op.after ?? {};
-    const mode = String(after.requirement_mode ?? after.interaction_mode ?? after.mode ?? "").toLowerCase();
+    const interaction = after.interaction_policy;
+    const interactionMode =
+        interaction != null && typeof interaction === "object" && !Array.isArray(interaction)
+            ? String((interaction as Record<string, unknown>).editability_mode ?? "")
+            : "";
+    const mode = String(
+        interactionMode || after.requirement_mode || after.interaction_mode || after.mode || ""
+    ).toLowerCase();
+    if (mode === "editable_through_related_record") return "medium";
     if (mode === "required" || after.is_required === true) return "medium";
     return "low";
 }

@@ -46,6 +46,11 @@ describe("routeCommandSurface", () => {
         expect(r.route).toBe("config_layout_assist");
     });
 
+    it("routes create field for inquiries to config_layout_assist", () => {
+        const r = routeCommandSurface("Create Preferred Start Date for inquiries");
+        expect(r.route).toBe("config_layout_assist");
+    });
+
     it("routes layout integrity question to config_layout_assist", () => {
         const r = routeCommandSurface("Show layouts with inconsistencies");
         expect(r.route).toBe("config_layout_assist");

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import type { ConfigurationProposalV1 } from "@/lib/agent/configLayoutAssist/configurationProposalV1";
 import type { ConfigLayoutAssistCapabilitiesV1 } from "@/lib/agent/configLayoutAssist/configLayoutAssistTypes";
@@ -34,6 +35,7 @@ const STATE_LABEL: Record<string, string> = {
 };
 
 export default function ConfigLayoutProposalsClient({ initialId }: { initialId?: string }) {
+    const searchParams = useSearchParams();
     const [list, setList] = useState<ProposalListItem[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(initialId ?? null);
     const [detail, setDetail] = useState<ProposalRecord | null>(null);
@@ -71,6 +73,13 @@ export default function ConfigLayoutProposalsClient({ initialId }: { initialId?:
             })
             .catch(() => undefined);
     }, [loadList]);
+
+    useEffect(() => {
+        const fromUrl = searchParams.get("proposalId") ?? searchParams.get("id");
+        if (fromUrl?.trim()) {
+            setSelectedId(fromUrl.trim());
+        }
+    }, [searchParams]);
 
     useEffect(() => {
         if (selectedId) void loadDetail(selectedId);

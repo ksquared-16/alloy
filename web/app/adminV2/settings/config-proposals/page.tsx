@@ -5,10 +5,15 @@ export const dynamic = "force-dynamic";
 export default async function ConfigLayoutProposalsPage({
     searchParams,
 }: {
-    searchParams: Promise<{ id?: string }>;
+    searchParams: Promise<{ id?: string; proposalId?: string }>;
 }) {
     const sp = await searchParams;
-    const initialId = typeof sp.id === "string" ? sp.id : undefined;
+    const initialId =
+        typeof sp.proposalId === "string"
+            ? sp.proposalId
+            : typeof sp.id === "string"
+              ? sp.id
+              : undefined;
     return (
         <div className="w-full max-w-5xl space-y-4 pb-4">
             <header>

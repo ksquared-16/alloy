@@ -3,11 +3,21 @@ import { randomUUID } from "crypto";
 import { fetchEffectiveRecordDrawerLayout } from "@/lib/admin/effectiveRecordDrawerLayout";
 import { validateLayoutIntegrityNow } from "@/lib/config/layoutIntegrityValidator";
 import type { LayoutIntegrityFieldInput } from "@/lib/config/layoutIntegrityValidator";
-import { resolveFieldEditability, resolveFieldInteractionPolicy } from "@/lib/fields/fieldInteractionPolicy";
+import {
+    personFieldOnOpportunityInteractionPolicy,
+    resolveFieldEditability,
+    resolveFieldInteractionPolicy,
+} from "@/lib/fields/fieldInteractionPolicy";
+import { resolveEntityLabelsForOrg } from "@/lib/admin/entityLabelsResolve";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
+    buildEntityResolveContext,
+    type ConfigLayoutAssistEntityResolveContext,
+} from "./configLayoutAssistEntityResolve";
+import {
     parseConfigLayoutAssistIntent,
+    slugFieldKey,
     type ConfigLayoutAssistIntentV1,
 } from "./configLayoutAssistIntent";
 import type { ConfigLayoutAssistTraceV1 } from "./configLayoutAssistTypes";
@@ -26,7 +36,19 @@ export type BuildConfigLayoutProposalInput = {
     userId: string;
     supabase?: SupabaseClient;
     default_entity_type?: string;
+    entityResolve?: ConfigLayoutAssistEntityResolveContext;
 };
+
+const PERSON_MIRROR_FIELDS_ON_OPPORTUNITY = new Set(["first_name", "last_name", "email", "phone"]);
+
+export async function loadConfigLayoutAssistEntityResolveContext(
+    supabase: SupabaseClient,
+    orgId: string,
+    defaultEntityType?: string
+): Promise<ConfigLayoutAssistEntityResolveContext> {
+    const labels = await resolveEntityLabelsForOrg(supabase, orgId);
+    return buildEntityResolveContext(labels.effective, defaultEntityType ?? "opportunity");
+}
 
 function newOp(
     partial: Omit<ConfigurationOperationV1, "operation_id" | "rationale" | "required_permissions"> & {
@@ -214,12 +236,60 @@ async function buildExplainOperations(
 /**
  * Deterministic proposal generation (no LLM). Does not apply or auto-approve.
  */
+function buildSetFieldInteractionOperation(intent: ConfigLayoutAssistIntentV1): ConfigurationOperationV1 | null {
+    const fieldKey = intent.field_key;
+    if (!fieldKey) return null;
+
+    const label = intent.field_label ?? fieldKey;
+    const entityLabel = intent.entity_display_label;
+
+    if (intent.entity_type === "opportunity" && PERSON_MIRROR_FIELDS_ON_OPPORTUNITY.has(fieldKey)) {
+        const interaction_policy = personFieldOnOpportunityInteractionPolicy(fieldKey);
+        return newOp({
+            kind: "set_field_interaction",
+            entity_type: intent.entity_type,
+            field_key: fieldKey,
+            before: null,
+            after: { interaction_policy },
+            rationale: [
+                `"${label}" on ${entityLabel} is owned by the linked Person record.`,
+                `Editing from the ${entityLabel} record updates person.${fieldKey} (write target: person.${fieldKey}).`,
+            ],
+        });
+    }
+
+    return newOp({
+        kind: "set_field_interaction",
+        entity_type: intent.entity_type,
+        field_key: fieldKey,
+        before: null,
+        after: {
+            interaction_policy: {
+                version: 1,
+                editability_mode: "editable",
+            },
+        },
+        rationale: [`Set ${fieldKey} to editable on ${entityLabel} (admin form/drawer).`],
+    });
+}
+
 export async function buildDeterministicConfigurationProposal(
     input: BuildConfigLayoutProposalInput
 ): Promise<{ proposal: ConfigurationProposalV1; trace: ConfigLayoutAssistTraceV1 }> {
     const command = input.command.trim();
+    const entityResolve =
+        input.entityResolve ??
+        (input.supabase
+            ? await loadConfigLayoutAssistEntityResolveContext(
+                  input.supabase,
+                  input.orgId,
+                  input.default_entity_type
+              )
+            : buildEntityResolveContext([], input.default_entity_type));
+
     const intent = parseConfigLayoutAssistIntent(command, {
         default_entity_type: input.default_entity_type,
+        entityResolve,
     });
 
     const traceSteps: string[] = [`Parsed intent: ${intent.kind}`, intent.summary];
@@ -232,32 +302,37 @@ export async function buildDeterministicConfigurationProposal(
         const ops = await buildDataQualityProposal(input.supabase, input.orgId, intent.entity_type, intent);
         operations.push(...ops);
         traceSteps.push(`Layout integrity scan returned ${ops.length} recommendation(s).`);
-        rationale = [`Scanned ${intent.entity_type} configuration for integrity issues.`];
+        rationale = [`Scanned ${intent.entity_display_label} configuration for integrity issues.`];
     } else if (intent.kind === "explain_field" && input.supabase) {
         category = "interaction";
         const explained = await buildExplainOperations(input.supabase, input.orgId, intent);
         operations.push(...explained.operations);
         rationale = explained.rationale;
         traceSteps.push("Resolved field interaction policy for explainability.");
-    } else if (intent.kind === "create_field" && intent.field_key) {
+    } else if (intent.kind === "create_field") {
         category = "field";
-        const label = intent.field_label ?? intent.field_key;
-        operations.push(
-            newOp({
-                kind: "create_field",
-                entity_type: intent.entity_type,
-                field_key: intent.field_key,
-                before: null,
-                after: {
-                    field_key: intent.field_key,
-                    field_type: inferFieldType(label),
-                    label,
-                    section_key: "custom",
-                    is_visible_in_drawer: true,
-                },
-                rationale: [`Create custom field "${label}" (${intent.field_key}).`],
-            })
-        );
+        const label = intent.field_label?.trim();
+        const field_key = intent.field_key ?? (label ? slugFieldKey(label) : null);
+        if (label && field_key) {
+            operations.push(
+                newOp({
+                    kind: "create_field",
+                    entity_type: intent.entity_type,
+                    field_key,
+                    before: null,
+                    after: {
+                        field_key,
+                        field_type: inferFieldType(label),
+                        label,
+                        section_key: "custom",
+                        is_visible_in_drawer: true,
+                    },
+                    rationale: [
+                        `Create custom field "${label}" (${field_key}) on ${intent.entity_display_label}.`,
+                    ],
+                })
+            );
+        }
     } else if (intent.kind === "expose_field" && intent.field_key) {
         category = "layout";
         let before: Record<string, unknown> | null = null;
@@ -281,7 +356,7 @@ export async function buildDeterministicConfigurationProposal(
                 surface: intent.surface ?? "drawer_body",
                 before,
                 after: { is_visible_in_drawer: true, surface: intent.surface ?? "drawer_body" },
-                rationale: [`Expose ${intent.field_key} on ${intent.entity_type} drawer surfaces.`],
+                rationale: [`Expose ${intent.field_key} on ${intent.entity_display_label} drawer surfaces.`],
             })
         );
     } else if (intent.kind === "hide_field" && intent.field_key) {
@@ -293,26 +368,16 @@ export async function buildDeterministicConfigurationProposal(
                 field_key: intent.field_key,
                 before: { is_visible_in_drawer: true },
                 after: { is_visible_in_drawer: false },
-                rationale: [`Hide ${intent.field_key} from ${intent.entity_type} drawer.`],
+                rationale: [`Hide ${intent.field_key} from ${intent.entity_display_label} drawer.`],
             })
         );
-    } else if (intent.kind === "set_field_interaction" && intent.field_key) {
+    } else if (intent.kind === "set_field_interaction") {
         category = "interaction";
-        operations.push(
-            newOp({
-                kind: "set_field_interaction",
-                entity_type: intent.entity_type,
-                field_key: intent.field_key,
-                before: null,
-                after: {
-                    interaction_policy: {
-                        version: 1,
-                        editability_mode: "editable",
-                    },
-                },
-                rationale: [`Set ${intent.field_key} to editable on ${intent.entity_type} (admin form/drawer).`],
-            })
-        );
+        const op = buildSetFieldInteractionOperation(intent);
+        if (op) {
+            operations.push(op);
+            rationale = [...rationale, ...op.rationale];
+        }
     }
 
     const proposed_operations = ensureOperationPermissions(operations);
@@ -333,7 +398,11 @@ export async function buildDeterministicConfigurationProposal(
         permission_requirements: [],
         proposed_operations,
         apply_mode,
-        metadata: { agent: CONFIGURATION_LAYOUT_ASSIST_AGENT_KEY, intent_kind: intent.kind },
+        metadata: {
+            agent: CONFIGURATION_LAYOUT_ASSIST_AGENT_KEY,
+            intent_kind: intent.kind,
+            entity_display_label: intent.entity_display_label,
+        },
         generated_by: CONFIGURATION_LAYOUT_ASSIST_AGENT_KEY,
         created_at: new Date().toISOString(),
         created_by: input.userId,

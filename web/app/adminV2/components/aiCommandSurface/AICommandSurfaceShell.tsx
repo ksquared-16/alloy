@@ -76,6 +76,7 @@ import type {
   CommandSurfaceThreadTurn,
 } from "@/lib/adminV2/aiCommandSurface/commandSurfaceThreadTypes";
 import CommandSurfaceThread from "@/app/adminV2/components/aiCommandSurface/CommandSurfaceThread";
+import { shouldForceCommandSurfaceScrollToBottom } from "@/lib/adminV2/aiCommandSurface/commandSurfaceThreadScroll";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
 import { formatTaskAssistEntitySearchNoMatchMessage } from "@/lib/agent/taskAssist/taskAssistEntitySearchVariants";
 import { taskAssistFollowUpNoticeText } from "@/lib/agent/taskAssist/taskAssistCompactActionCard";
@@ -1424,14 +1425,12 @@ export default function AICommandSurfaceShell() {
     const el = threadScrollRef.current;
     if (!el || !threadExpanded) return;
     const last = thread.turns[thread.turns.length - 1];
-    const force =
-        last?.kind === "user_message" ||
-        last?.kind === "action_card" ||
-        last?.kind === "task_clarification" ||
-        last?.kind === "fuzzy_entity_suggestion";
-    if (!force && userScrolledUpRef.current) return;
-    requestAnimationFrame(() => {
+    if (!shouldForceCommandSurfaceScrollToBottom(last, userScrolledUpRef.current)) return;
+    const scrollToBottom = () => {
       el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    };
+    requestAnimationFrame(() => {
+      requestAnimationFrame(scrollToBottom);
     });
   }, [thread.turns, threadExpanded, busy]);
 
