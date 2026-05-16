@@ -38,6 +38,12 @@ Use these meanings in code review and prompts.
 | **Communication message (canonical)** | Row in **`communication_messages`**: inbound/outbound message in a thread; outbound enqueue sets `status: queued` and may emit **`message_queued`**. |
 | **Legacy message / outbox** | **`public.messages`**, **`messages_outbox`** — still produced by workflow **`send_message`** paths; distinguish from canonical **`communication_*`** tables. |
 | **Config** | Org or global settings that steer labels, statuses, layouts, and queue shape — within platform validation. |
+| **Orchestrator** | AdminV2 bottom command bar agent — parses intent, routes to specialists; **does not** execute side effects. |
+| **Task Assist** | Specialist agent for one-off comms drafts, scheduled sends, and operational tasks — **propose → human approve → apply** via canonical APIs. |
+| **Workflow Assist** | Specialist for workflow read/explain and gated propose/apply over existing workflow CRUD — default path **deterministic** (no LLM on apply). |
+| **Config / Layout Assist** | Specialist for audited configuration proposals (`ConfigurationProposalV1`) — lifecycle on **`config_layout_assist_proposals`**. |
+| **Placement priority** | Opt-in waitlist ordering layer (`placement_priority_v1` metadata) producing queue **`_placement_priority`** previews — not global waitlist truth. |
+| **AI policy** | Org setting in **`org_settings.metadata.ai_policy`** — feature allow list, provider (`stub` / `openai`), logging mode; complements RBAC permission keys. |
 
 ## Source of truth / key files
 

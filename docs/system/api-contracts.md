@@ -22,7 +22,13 @@ High-level map of **server boundaries** for admin, public booking, and action li
 | Webhooks (delivery / lifecycle) | `POST /api/webhooks/twilio/sms-status`, `POST /api/webhooks/resend` | Twilio status callback (signed), Resend lifecycle (Svix); public routes, provider-authenticated |
 | Message dequeue (worker) | Python **`POST /internal/messages/process`** (`backend/`, `x-cron-token`) | Drains **`public.messages`** (legacy SMS) **and** **`communication_messages`** (canonical SMS/email); Next may wake worker via **`INTERNAL_MESSAGES_PROCESS_URL`** after enqueue (see `web/lib/workflowRun.ts` helpers) |
 | Inbound SMS (ingest) | Python backend route (e.g. **`backend/app/routes/sms_inbound.py`**) | Persists inbound into canonical store **person-first**; not a Next `web/app/api` handler |
-| Admin agent (AI) | `web/app/api/admin/agent/**` | Versioned agent routes; env-gated (e.g. `AGENT_V2_FIELD_VISIBILITY_ENABLED`) |
+| Admin agent (config commits) | `web/app/api/admin/agent/**` | Queue/layout/field-visibility propose+apply; env-gated (e.g. `AGENT_V2_FIELD_VISIBILITY_ENABLED`) |
+| AI — attention enrich | `POST /api/admin/ai/enrich-attention-suggestion` | Org `ai_policy` + RBAC; stub/OpenAI paths |
+| AI — Task Assist | `web/app/api/admin/ai/task-assist/**` | Propose/apply, proposals, entity-search; opportunities-first |
+| AI — Workflow Assist | `web/app/api/admin/ai/workflow-assist/**` | Propose/apply/explain/capabilities; admin-gated mutations |
+| AI — Config/Layout Assist | `web/app/api/admin/ai/config-layout-assist/**`, `web/app/api/admin/config-layout-assist/proposals/**` | Proposal lifecycle + partial apply |
+| Scheduled sends | `web/app/api/admin/communication-scheduled-sends/**` | Task Assist V1.1; `process-due` worker |
+| Operational tasks | `web/app/api/admin/operational-tasks/**` | Task Assist reminders |
 | Booking v2 | `web/app/api/book-v2/*` | Quote, confirm, specialty flows |
 | Jobs patch | `web/app/api/admin/jobs/[id]/route.ts` | Includes workflow triggers for actions |
 | Users & Roles (Settings) | `GET /api/admin/settings/users-roles/members` | Org **`admin`** or **`settings.users_roles`**; returns members + `departments` + **`site_locations`** (`location_type = site` only) |

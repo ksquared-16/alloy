@@ -17,6 +17,9 @@ Config surfaces include (non-exhaustive):
 - **Record / drawer layouts** — org overrides in **`record_drawer_layouts`**, templates in **`record_layouts`** (`web/app/api/admin/record-layouts/route.ts`).
 - **Person / role type** metadata for dropdowns (`web/lib/admin/personTypeSettings.ts`).
 - **Queue UI** presentation hints (`web/lib/ui-v2/queueUiConfig.ts`).
+- **Placement priority (waitlist lanes)** — subtree **`placement_priority_v1`** on **`work_units.metadata`** (and optional department defaults): enable flag, preset **`profile_id`**, lane filter, evaluation cap, display flags, rule order — validated on PATCH; drives queue preview ordering only when enabled (**opt-in**). Settings UI: **`/adminV2/settings/placement-priority`**.
+- **Field / section policies (layout assist foundation)** — **`field_definitions.requirement_policy`**, **`interaction_policy`**; **`field_section_definitions.section_config`**, **`is_archived`** — migration **`20260523120000_field_policy_and_section_v1.sql`**; app derives legacy behavior when null.
+- **Config/Layout Assist proposals** — **`config_layout_assist_proposals`** durable lifecycle (`draft` → … → `applied`); propose via Orchestrator + admin APIs; apply **partially implemented** — see **`docs/product/ai-system.md`**, sprint **`configuration_layout_assist_v1.md`**.
 
 ## How it works
 

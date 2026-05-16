@@ -37,13 +37,14 @@ All authoritative reads must come from:
 
 Workspace navigation context for queues: **`docs/system/workspace-system.md`**.
 
-For **opportunity** queues, **`QueueService.enrichOpportunityRows`** may attach person/contact/customer/member data and, where implemented, **read active `tour_bookings`** to improve tour-related preview fields — while **filters** may still use **`metadata.tour_date`** for historical compatibility. None of that makes the queue row authoritative: **Queue → select entity → entity GET → act** remains mandatory (see **`docs/sprints/05_2026/tour_scheduling_v1.md`** §12).
+For **opportunity** queues, **`QueueService.enrichOpportunityRows`** may attach person/contact/customer/member data, **read active `tour_bookings`** for tour preview fields, **`_placement_priority`** when placement is enabled (opt-in), and **`_operational_summary_preview`** for lane hints — while **filters** may still use **`metadata.tour_date`** for historical compatibility. None of that makes the queue row authoritative: **Queue → select entity → entity GET → act** remains mandatory (see **`docs/sprints/05_2026/tour_scheduling_v1.md`** §12).
 
 ## Current state
 
 - **`GET /api/admin/entity/[type]/[id]`** is the generic drawer loader for many entity types.
 - **Jobs** use the **record resolution system (RRS)** via `resolveJobRecord` (`web/lib/rrs/entities/job.ts`) with **`surface`** query param (`resolveRecordSurfaceParam`).
 - **Opportunities** are resolved in **`respondOpportunityEntityGet`** (`web/lib/admin/opportunityEntityRecord.ts`), wired from the same entity GET route as other types — not RRS. Surfaces include `drawer_visible` (fast shell), `drawer_initial`, and `full`. **Lifecycle and “priced” rules** use the same effective quote as `_quote_total_display` via **`effectiveOpportunityQuoteDollars`** (`web/lib/admin/opportunityLifecyclePresentation.ts`), including **`drawer_visible` + `full` parity** (both load opportunity **`fetchEffectiveStatusDefinitions`** for lifecycle metadata). **RRS parity with jobs** for opportunities remains a separate product question — see `docs/product/crm-system.md` and `docs/execution/roadmap-and-gaps.md`.
+- **Opportunity AI attach bundles (May 2026):** Entity GET may include **`_operational_attention`**, **`_attention_suggestion`**, and **`_operational_summary`** (deterministic; enrich route is separate explicit POST). Drawer chrome uses **`OperationalAttentionHeaderStrip`** — **Enhance draft** does not persist or send. See **`docs/product/ai-system.md`**.
 - For **jobs** (RRS), responses may include **`_rrs`** metadata and a **flat** shape suitable for the drawer and overview layout.
 - Other types may still be “select * + hydration” in the same route; check the branch for the type.
 

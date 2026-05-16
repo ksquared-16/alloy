@@ -13,8 +13,9 @@ The bottom **command bar** is the **Orchestrator Agent** surface — not Task As
 | **Orchestrator** | Owns **`AICommandSurfaceShell`**, **`routeCommandSurface`** (`commandSurfaceRouter.ts`), slot extract, entity-search orchestration, thread + action-card shell | **Yes** (Interaction Layer V1) |
 | **Task Assist (Agent #2)** | One-off operational actions: draft SMS/email, scheduled sends, reminders/tasks, proposal lifecycle — **human approval required** | **Yes** — routed destination; UI in action cards + **`TaskAssistOpportunityWorkspace`**; APIs under **`/api/admin/ai/task-assist/**`**, **`communication-scheduled-sends`**, **`operational-tasks`** |
 | **Workflow Assist (Agent #3)** | Workflow configuration, oversight summaries, deterministic **propose** + admin-only **apply** over existing workflow CRUD — **no LLM** in default path; human approval before apply | **Yes (narrow)** — workflow-like NL → **`workflow_assist`** route → read **`workflow_assist_read`** cards and/or **create** commands → **`workflow_assist_proposal`** (disabled draft templates: tour reminder, when/move stub) → **`POST …/workflow-assist/propose`** / **`apply`**; Explain v1 + optional name lookup via Task Assist entity search |
+| **Config / Layout Assist** | Audited **`ConfigurationProposalV1`** for field/section/drawer/queue changes — propose via Orchestrator; lifecycle on **`config_layout_assist_proposals`** | **Partially implemented** — **`POST …/config-layout-assist/propose`**, proposal GET/state routes, **partial** apply catalog; permissions **`config_assist.review`** / **`config_assist.apply`** (seed **`20260523150000`**) |
 
-**Also routed (non-agent product):** **Job overview layout** commands use the same Orchestrator input → layout preview/apply card (`job_layout` route) — distinct from Task Assist and Workflow Assist.
+**Also routed (non-agent product):** **Job overview layout** commands use the same Orchestrator input → layout preview/apply card (`job_layout` route) — distinct from Task Assist, Workflow Assist, and Config/Layout Assist.
 
 **Implementation names:** Product language uses **Orchestrator** for the command bar. Code may retain **`commandSurface*`**, **`TaskAssist*`**, and **`routeCommandSurface`** — those modules implement Orchestrator routing and Task Assist execution respectively.
 
@@ -85,6 +86,7 @@ Definitions use **`SET search_path TO 'public'`** in live exports — keep align
 | **AI enrichment foundation (Phase 1–2)** | **`web/lib/ai/**`**, **`openAiModelCapabilities.ts`** (model sampling rules), **`enrichAttentionSuggestionRouteValidation.ts`**, **`supabase/migrations/20260520100000_ai_enrichment_permission_keys_seed.sql`** (`ai.enrichment.use`), **`POST /api/admin/ai/enrich-attention-suggestion`**, **`_operational_summary`** attach; tests **`web/tests/ai/**`**; **`docs/sprints/05_2026/ai_enrichment_and_agent_actions_v1.md`**. |
 | **Orchestrator (command bar)** | **`web/lib/adminV2/aiCommandSurface/commandSurfaceRouter.ts`** (`routeCommandSurface`), **`commandSurfaceSlotExtract.ts`**, **`commandSurfaceThreadState.ts`**, **`CommandSurfaceThread.tsx`**, **`AICommandSurfaceShell.tsx`**, **`adminV2CommandBarEvents.ts`**, **`GlobalAssistantContext.tsx`**; tests **`web/tests/adminV2/commandSurface*.test.ts`**; **`docs/sprints/05_2026/agent_interaction_layer_v1.md`**. |
 | **Task Assist V1 + V1.1 (Agent #2)** | V1/V1.1 admin routes; **`web/lib/agent/taskAssist/**`**; **`TaskAssistOpportunityWorkspace.tsx`**, **`TaskAssistOpportunityLauncher.tsx`**; **`taskAssistV1UiGate.ts`**; tests **`web/tests/agent/taskAssist/**`**; **`docs/sprints/05_2026/task_assist_v1.md`**, **`task_assist_v1_1.md`**. |
+| **Config / Layout Assist** | **`web/lib/agent/configLayoutAssist/**`**; **`config_layout_assist_proposals`**; **`web/app/api/admin/ai/config-layout-assist/**`**, **`web/app/api/admin/config-layout-assist/proposals/**`**; **`docs/sprints/05_2026/configuration_layout_assist_v1.md`**. |
 | Perf/debug globals | `web/lib/perf/alloyPerfGlobal.ts` |
 
 ## Guardrails
@@ -98,7 +100,8 @@ Definitions use **`SET search_path TO 'public'`** in live exports — keep align
 ## Known gaps / risks
 
 - Model provider(s), logging/redaction policy, and kill switches **beyond** the `AGENT_V2_*` env pattern — partially addressed by **`web/lib/ai`** (metadata policy + redaction + **stub** and **gated OpenAI-compatible** enrichment + telemetry). Live traffic remains **opt-in** per org policy + env + RBAC.
-- **Partially implemented:** Broad “AI command center” product may be **mostly UI/mock** in places — inspect `adminV2` components before treating as production automation.
+- **Partially implemented:** **Config/Layout Assist** apply catalog — not all proposal categories executable yet (`configuration_layout_assist_v1.md`).
+- **Not implemented:** Autonomous agents (enrollment, subsidy ops, director assistant, monitoring) — roadmap only in **`docs/execution/roadmap-and-gaps.md`**.
 
 ## Manual staging validation checklist
 
