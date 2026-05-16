@@ -2,11 +2,10 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import { appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClient";
-import { adminV2HardNavigate } from "@/lib/adminV2/shellNavigation";
+import { adminV2CommitNavigation } from "@/lib/adminV2/shellNavigation";
 import { logAdminV2NavDebug } from "@/lib/debug/adminV2NavDebug";
 import {
     WorkspacePairedOperPanel,
@@ -133,7 +132,6 @@ function DeptOperConsoleQueueRow(props: {
     attentionBucketKey?: string;
 }) {
     const { href, title, label, iconKey, total, countsDeferred, variant, attentionBucketKey } = props;
-    const router = useRouter();
     const adminDrawer = useAdminDrawerOptional();
     const tier =
         variant === "attention"
@@ -146,18 +144,17 @@ function DeptOperConsoleQueueRow(props: {
             : "adminv2-ws-dept-oper-icon-well";
     const totalShown = countsDeferred ? null : total;
     return (
-        <Link
+        <a
             href={href}
-            prefetch={false}
             onClick={(e) => {
                 if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
                 logAdminV2NavDebug({
                     event: "deptQueueCardClick",
                     clickedHref: href,
-                    routerAction: "router.push",
+                    routerAction: "location.assign",
                 });
                 e.preventDefault();
-                adminV2HardNavigate(router, href, { closeDrawer: adminDrawer?.closeDrawer });
+                adminV2CommitNavigation(href, { closeDrawer: adminDrawer?.closeDrawer });
             }}
             className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-dept-oper-queue-link relative z-[1] cursor-pointer pointer-events-auto ${tier} no-underline text-inherit hover:opacity-[0.98]`}
             data-ws-wu-urgency={urgency}
@@ -183,7 +180,7 @@ function DeptOperConsoleQueueRow(props: {
             <div className="adminv2-ws-wu-queue-card-compact-aside shrink-0 self-center">
                 <span className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open">Open</span>
             </div>
-        </Link>
+        </a>
     );
 }
 

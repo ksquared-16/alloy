@@ -16,17 +16,17 @@ describe("AdminV2 shell navigation helpers", () => {
         expect(src).not.toMatch(/\bpreventDefault\s*\(/);
     });
 
-    it("dept queue row uses adminV2HardNavigate with router.push", () => {
+    it("dept queue row uses adminV2CommitNavigation", () => {
         const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
         expect(src).toContain("function DeptOperConsoleQueueRow");
-        expect(src).toMatch(/DeptOperConsoleQueueRow[\s\S]*?adminV2HardNavigate\(router, href/);
+        expect(src).toMatch(/DeptOperConsoleQueueRow[\s\S]*?adminV2CommitNavigation\(href/);
     });
 
-    it("sidebar shell links close drawer via adminV2BeforeRouteNavigation", () => {
+    it("sidebar uses AdminV2NavLink without duplicate navigation handlers", () => {
         const src = read("app/adminV2/components/Sidebar.tsx");
-        expect(src).toContain("adminV2BeforeRouteNavigation");
-        expect(src).toMatch(/onShellNavigate[\s\S]*?adminV2BeforeRouteNavigation/);
-        expect(src).not.toContain("markWorkUnitNavigationStart");
+        expect(src).toContain("AdminV2NavLink");
+        expect(src).not.toContain("onShellNavigate");
+        expect(src).not.toMatch(/\brouter\.push\s*\(/);
     });
 });
 
@@ -69,18 +69,19 @@ describe("Work-unit queue tab shallow routing", () => {
         expect(src).toContain('aria-current="page"');
     });
 
-    it("AdminV2NavLink uses explicit router.push for cross-route clicks", () => {
+    it("AdminV2NavLink commits navigation via location.assign", () => {
         const src = read("app/adminV2/components/navigation/AdminV2NavLink.tsx");
-        expect(src).toContain("isCurrentRoute");
-        expect(src).toContain("router.push(hrefStr)");
-        expect(src).not.toContain('return (\n            <span');
+        expect(src).toContain("adminV2CommitNavigation");
+        expect(src).not.toMatch(/\brouter\.push\s*\(/);
         expect(src).not.toMatch(/\buseLinkStatus\s*\(/);
+        expect(src).not.toMatch(/\bfrom \"next\/link\"/);
     });
 
-    it("shell navigation closes drawer synchronously (no microtask defer)", () => {
+    it("shell navigation uses location.assign (no router.push)", () => {
         const src = read("lib/adminV2/shellNavigation.ts");
+        expect(src).toContain("window.location.assign");
         expect(src).not.toContain("queueMicrotask");
-        expect(src).toContain("adminV2HardNavigate");
+        expect(src).not.toMatch(/\brouter\.push\s*\(/);
     });
 });
 

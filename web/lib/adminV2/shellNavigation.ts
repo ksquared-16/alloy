@@ -1,21 +1,30 @@
 import { markWorkUnitNavigationStart } from "@/lib/perf/markWorkUnitNavigationStart";
 
 /**
- * Run before shell / dept drill-in navigation. Never calls preventDefault —
- * callers use explicit router.push after this returns.
+ * Run before shell / dept drill-in navigation.
  */
 export function adminV2BeforeRouteNavigation(opts?: { closeDrawer?: () => void }): void {
     markWorkUnitNavigationStart();
-    /** Close synchronously so fixed drawer layers cannot intercept the next paint. */
     opts?.closeDrawer?.();
 }
 
-/** Preferred drill-in path when Next `<Link>` soft navigation is cancelled by in-flight RSC work. */
-export function adminV2HardNavigate(
-    router: { push: (href: string) => void },
-    href: string,
-    opts?: { closeDrawer?: () => void }
-): void {
+/**
+ * Guaranteed navigation — full document load. Use when App Router soft navigations
+ * are cancelled by in-flight RSC work (Vercel logs show `---` on GET).
+ */
+export function adminV2CommitNavigation(href: string, opts?: { closeDrawer?: () => void }): void {
+    if (typeof window === "undefined") return;
+    const target = href.trim();
+    if (!target) return;
     adminV2BeforeRouteNavigation(opts);
-    router.push(href);
+    const current = `${window.location.pathname}${window.location.search}`;
+    const next = target.startsWith("http")
+        ? target
+        : target.startsWith("/")
+          ? target
+          : `/${target}`;
+    if (!target.startsWith("http") && current === next.split("#")[0]) {
+        return;
+    }
+    window.location.assign(next);
 }

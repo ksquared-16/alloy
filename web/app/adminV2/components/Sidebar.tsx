@@ -7,8 +7,6 @@ import { neutral, brand } from "@/styles/tokens/colors";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
-import { adminV2BeforeRouteNavigation } from "@/lib/adminV2/shellNavigation";
-import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 
 const WORKSPACE = "/adminV2/workspace";
 const SETTINGS_HREF = "/adminV2/settings";
@@ -41,11 +39,7 @@ export default function Sidebar({
     onToggle: () => void;
 }) {
     const pathname = usePathname();
-    const adminDrawer = useAdminDrawerOptional();
     const path = useMemo(() => normalizeAdminPath(pathname), [pathname]);
-    const onShellNavigate = () => {
-        adminV2BeforeRouteNavigation({ closeDrawer: adminDrawer?.closeDrawer });
-    };
     const { departmentId, workUnitId } = parseWorkspaceRoute(path);
     const onWorkspace = path === WORKSPACE || path.startsWith(`${WORKSPACE}/`);
     const onSettings = path.startsWith(SETTINGS_HREF);
@@ -149,9 +143,6 @@ export default function Sidebar({
                                 active={Boolean(departmentId && !workUnitId)}
                                 className="adminv2-sidebar-rail-link"
                                 style={{ color: brand.primary }}
-                                onClick={() =>
-                                    adminV2BeforeRouteNavigation({ closeDrawer: adminDrawer?.closeDrawer })
-                                }
                             >
                                 <Building2 size={20} strokeWidth={1.75} />
                             </AdminV2NavLink>
@@ -164,9 +155,6 @@ export default function Sidebar({
                                 active
                                 className="adminv2-sidebar-rail-link"
                                 style={{ color: brand.primary }}
-                                onClick={() =>
-                                    adminV2BeforeRouteNavigation({ closeDrawer: adminDrawer?.closeDrawer })
-                                }
                             >
                                 <Boxes size={20} strokeWidth={1.75} />
                             </AdminV2NavLink>
@@ -190,7 +178,6 @@ export default function Sidebar({
                             active={onSettings}
                             className="adminv2-sidebar-rail-link"
                             style={{ color: brand.primary }}
-                            onClick={onShellNavigate}
                         >
                             <Settings size={20} strokeWidth={1.75} />
                         </AdminV2NavLink>
@@ -248,9 +235,6 @@ export default function Sidebar({
                                             className="rounded-md px-2 py-1.5 font-medium hover:bg-alloy-stone/10"
                                             style={{ color: brand.primary }}
                                             title={name}
-                                            onClick={() =>
-                                    adminV2BeforeRouteNavigation({ closeDrawer: adminDrawer?.closeDrawer })
-                                }
                                         >
                                             <span className="inline-flex items-center gap-2">
                                                 <Building2 size={16} strokeWidth={1.75} />
@@ -271,11 +255,6 @@ export default function Sidebar({
                                                             className="rounded-md px-2 py-1.5 font-medium hover:bg-alloy-stone/10"
                                                             style={{ color: brand.primary }}
                                                             title={wuName}
-                                                            onClick={() =>
-                                                                adminV2BeforeRouteNavigation({
-                                                                    closeDrawer: adminDrawer?.closeDrawer,
-                                                                })
-                                                            }
                                                         >
                                                             <span className="inline-flex items-center gap-2">
                                                                 <Boxes size={15} strokeWidth={1.75} />
@@ -298,7 +277,6 @@ export default function Sidebar({
                             active={onSettings}
                             className="rounded-md px-2 py-1.5 font-medium hover:bg-alloy-stone/10"
                             style={{ color: brand.primary }}
-                            onClick={onShellNavigate}
                         >
                             <span className="inline-flex items-center gap-2">
                                 <Settings size={16} strokeWidth={1.75} />

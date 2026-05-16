@@ -187,7 +187,6 @@ export default function TopNavBar() {
           <AdminV2NavLink
             href={queueHref}
             active={false}
-            prefetch={false}
             className="px-2 py-1 rounded text-xs font-medium"
             style={tabStyle(false)}
             title="Workspace queue context"

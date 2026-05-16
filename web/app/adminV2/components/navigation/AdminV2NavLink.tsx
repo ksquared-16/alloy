@@ -1,10 +1,8 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { type ComponentProps, type MouseEvent, type ReactNode } from "react";
-import { adminV2BeforeRouteNavigation } from "@/lib/adminV2/shellNavigation";
-import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
+import { usePathname } from "next/navigation";
+import { type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import { adminV2CommitNavigation } from "@/lib/adminV2/shellNavigation";
 import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 
 function normalizeNavPath(path: string): string {
@@ -12,64 +10,37 @@ function normalizeNavPath(path: string): string {
     return path;
 }
 
-function hrefPathOnly(href: ComponentProps<typeof Link>["href"]): string | null {
-    if (typeof href === "string") return href;
-    if (href && typeof href === "object") {
-        const p = (href as { pathname?: string | null }).pathname;
-        if (typeof p === "string") return p;
-    }
-    return null;
-}
-
-function hrefString(href: ComponentProps<typeof Link>["href"]): string | null {
-    if (typeof href === "string") return href;
-    if (href && typeof href === "object") {
-        const pathname = (href as { pathname?: string | null }).pathname ?? "";
-        const search =
-            typeof (href as { search?: string | null }).search === "string"
-                ? (href as { search: string }).search
-                : "";
-        if (!pathname) return null;
-        return search ? `${pathname}${search.startsWith("?") ? search : `?${search}`}` : pathname;
-    }
-    return null;
-}
-
-type NextLinkProps = ComponentProps<typeof Link>;
-
-export type AdminV2NavLinkProps = NextLinkProps & {
+export type AdminV2NavLinkProps = {
+    href: string;
+    children: ReactNode;
+    className?: string;
+    style?: CSSProperties;
+    title?: string;
     /** Marks the current route (or section) for persistent highlight. */
     active?: boolean;
+    "aria-label"?: string;
+    onClick?: (e: MouseEvent<HTMLAnchorElement>) => void;
 };
 
 /**
- * AdminV2 shell navigation — uses explicit `router.push` on primary click so route changes
- * commit reliably (avoids soft-nav cancellation when workspace RSC work is in flight).
- * Middle-click / modified clicks still use native Link behavior.
+ * Shell navigation — `adminV2CommitNavigation` (full document load).
+ * Avoids dead UI from cancelled `router.push` / soft `<Link>` transitions during heavy RSC work.
  */
 export function AdminV2NavLink({
     className,
     active,
     children,
-    prefetch,
-    onClick,
     href,
-    ...rest
+    style,
+    title,
+    onClick,
+    "aria-label": ariaLabel,
 }: AdminV2NavLinkProps) {
     const pathname = usePathname();
-    const router = useRouter();
     const adminDrawer = useAdminDrawerOptional();
-    const hrefStr = hrefString(href);
-    const hrefPath = hrefStr?.split(/[?#]/)[0] ?? hrefPathOnly(href);
-    const isCurrentRoute =
-        hrefPath != null && normalizeNavPath(pathname) === normalizeNavPath(hrefPath);
+    const hrefPath = href.split(/[?#]/)[0] ?? href;
+    const isCurrentRoute = normalizeNavPath(pathname) === normalizeNavPath(hrefPath);
     const isHighlighted = Boolean(active || isCurrentRoute);
-    const resolvedPrefetch =
-        prefetch !== undefined
-            ? prefetch
-            : hrefStr != null && shouldDisableAdminV2LinkPrefetch(hrefStr)
-              ? false
-              : undefined;
     const merged = [
         "adminv2-nav-link",
         isHighlighted ? "adminv2-nav-link--active" : "",
@@ -82,26 +53,21 @@ export function AdminV2NavLink({
         onClick?.(e);
         if (e.defaultPrevented) return;
         if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-        if (!hrefStr) return;
-        if (isCurrentRoute && !hrefStr.includes("?")) {
-            e.preventDefault();
-            return;
-        }
         e.preventDefault();
-        adminV2BeforeRouteNavigation({ closeDrawer: adminDrawer?.closeDrawer });
-        router.push(hrefStr);
+        adminV2CommitNavigation(href, { closeDrawer: adminDrawer?.closeDrawer });
     };
 
     return (
-        <Link
-            {...rest}
+        <a
             href={href}
-            prefetch={resolvedPrefetch === undefined ? false : resolvedPrefetch}
             className={merged}
+            style={style}
+            title={title}
+            aria-label={ariaLabel}
             aria-current={isHighlighted ? "page" : undefined}
             onClick={handleClick}
         >
             <span className="adminv2-nav-link__inner">{children}</span>
-        </Link>
+        </a>
     );
 }
