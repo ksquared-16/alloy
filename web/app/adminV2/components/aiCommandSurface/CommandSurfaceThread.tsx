@@ -15,6 +15,7 @@ import {
     WORKFLOW_ASSIST_NOTICE_TEXT,
 } from "@/lib/adminV2/aiCommandSurface/commandSurfaceRouter";
 import type { CommandSurfaceThreadTurn } from "@/lib/adminV2/aiCommandSurface/commandSurfaceThreadTypes";
+import type { ConfigProposalReviewDebugLog } from "@/lib/agent/configLayoutAssist/configLayoutAssistReviewNavigation";
 import type { TaskAssistClarificationKind } from "@/lib/agent/taskAssist/taskAssistClarification";
 import type { TaskAssistCommandIntent } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
 import { formatCandidateDebugLine } from "@/lib/agent/taskAssist/taskAssistEntitySearchDisambiguation";
@@ -116,7 +117,8 @@ export type CommandSurfaceThreadProps = {
         intent: TaskAssistCommandIntent | null
     ) => void;
     /** Navigate to Settings config proposals review (command surface footer). */
-    onReviewConfigProposal?: (proposalId: string) => void;
+    onReviewConfigProposal: (proposalId: string) => void;
+    debugReviewNavigation?: ConfigProposalReviewDebugLog;
 };
 
 export default function CommandSurfaceThread({
@@ -133,6 +135,7 @@ export default function CommandSurfaceThread({
     onClarificationChip,
     onConfirmFuzzySuggestion,
     onReviewConfigProposal,
+    debugReviewNavigation,
 }: CommandSurfaceThreadProps) {
     const showSearchDebug = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
 
@@ -307,7 +310,8 @@ export default function CommandSurfaceThread({
                                         proposal={turn.card.proposal}
                                         trace={turn.card.trace}
                                         persistedProposalId={turn.card.persistedProposalId}
-                                        onReviewProposal={onReviewConfigProposal}
+                                        onReviewConfigProposal={onReviewConfigProposal}
+                                        debugReviewNavigation={debugReviewNavigation}
                                     />
                                 </AssistantBubble>
                             );

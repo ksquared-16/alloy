@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { buildConfigProposalReviewHref } from "@/lib/agent/configLayoutAssist/configLayoutAssistEntityResolve";
 import {
+    configProposalReviewHrefForId,
+    createConfigProposalReviewClickHandler,
     handleConfigProposalReviewClick,
     readConfigProposalIdFromSearchParams,
     resolveConfigProposalReviewId,
@@ -34,6 +36,37 @@ describe("configLayoutAssistReviewNavigation", () => {
         ).toBeNull();
     });
 
+    it("configProposalReviewHrefForId builds settings deep link", () => {
+        expect(configProposalReviewHrefForId(PROPOSAL_ID)).toBe(buildConfigProposalReviewHref(PROPOSAL_ID));
+        expect(configProposalReviewHrefForId(PROPOSAL_ID)).toContain(`proposalId=${PROPOSAL_ID}`);
+    });
+
+    it("createConfigProposalReviewClickHandler stops propagation and calls onReviewConfigProposal", () => {
+        const onReviewConfigProposal = vi.fn();
+        const preventDefault = vi.fn();
+        const stopPropagation = vi.fn();
+        const handler = createConfigProposalReviewClickHandler(PROPOSAL_ID, onReviewConfigProposal);
+
+        handler({ preventDefault, stopPropagation });
+
+        expect(preventDefault).toHaveBeenCalledOnce();
+        expect(stopPropagation).toHaveBeenCalledOnce();
+        expect(onReviewConfigProposal).toHaveBeenCalledWith(PROPOSAL_ID);
+    });
+
+    it("createConfigProposalReviewClickHandler is a no-op without proposal id", () => {
+        const onReviewConfigProposal = vi.fn();
+        const preventDefault = vi.fn();
+        const stopPropagation = vi.fn();
+        const handler = createConfigProposalReviewClickHandler(null, onReviewConfigProposal);
+
+        handler({ preventDefault, stopPropagation });
+
+        expect(preventDefault).not.toHaveBeenCalled();
+        expect(stopPropagation).not.toHaveBeenCalled();
+        expect(onReviewConfigProposal).not.toHaveBeenCalled();
+    });
+
     it("handleConfigProposalReviewClick stops propagation and navigates with proposalId query", () => {
         const navigate = vi.fn();
         const preventDefault = vi.fn();
@@ -48,22 +81,5 @@ describe("configLayoutAssistReviewNavigation", () => {
         expect(preventDefault).toHaveBeenCalledOnce();
         expect(stopPropagation).toHaveBeenCalledOnce();
         expect(navigate).toHaveBeenCalledWith(buildConfigProposalReviewHref(PROPOSAL_ID));
-        expect(navigate.mock.calls[0][0]).toContain(`proposalId=${PROPOSAL_ID}`);
-    });
-
-    it("handleConfigProposalReviewClick is a no-op without proposal id", () => {
-        const navigate = vi.fn();
-        const preventDefault = vi.fn();
-        const stopPropagation = vi.fn();
-
-        handleConfigProposalReviewClick(
-            { preventDefault, stopPropagation },
-            null,
-            navigate
-        );
-
-        expect(preventDefault).not.toHaveBeenCalled();
-        expect(stopPropagation).not.toHaveBeenCalled();
-        expect(navigate).not.toHaveBeenCalled();
     });
 });

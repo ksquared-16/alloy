@@ -5,6 +5,8 @@ export type ConfigProposalReviewClickEvent = {
     stopPropagation: () => void;
 };
 
+export type ConfigProposalReviewDebugLog = (message: string, detail?: Record<string, unknown>) => void;
+
 /** Normalizes persisted proposal id from orchestrator / API. */
 export function resolveConfigProposalReviewId(
     persistedProposalId: string | null | undefined
@@ -20,9 +22,36 @@ export function readConfigProposalIdFromSearchParams(params: {
     return resolveConfigProposalReviewId(params.get("proposalId") ?? params.get("id"));
 }
 
+/** Settings review URL for a persisted proposal id. */
+export function configProposalReviewHrefForId(proposalId: string): string {
+    return buildConfigProposalReviewHref(proposalId);
+}
+
 /**
- * Navigates to Settings → Configuration proposals with the proposal selected.
- * Stops propagation so command-surface overlays do not swallow the click.
+ * Click handler for the command-surface Review proposal CTA.
+ * Stops propagation so parent surfaces do not swallow the click.
+ */
+export function createConfigProposalReviewClickHandler(
+    persistedProposalId: string | null | undefined,
+    onReviewConfigProposal: (proposalId: string) => void,
+    debugLog?: ConfigProposalReviewDebugLog
+): (event: ConfigProposalReviewClickEvent) => void {
+    const proposalId = resolveConfigProposalReviewId(persistedProposalId);
+    if (proposalId && debugLog) {
+        debugLog("card rendered with proposal id", { proposalId });
+    }
+
+    return (event) => {
+        if (!proposalId) return;
+        event.preventDefault();
+        event.stopPropagation();
+        debugLog?.("review button clicked", { proposalId });
+        onReviewConfigProposal(proposalId);
+    };
+}
+
+/**
+ * @deprecated Prefer {@link createConfigProposalReviewClickHandler} + shell `adminV2CommitNavigation`.
  */
 export function handleConfigProposalReviewClick(
     event: ConfigProposalReviewClickEvent,

@@ -1,14 +1,16 @@
 "use client";
 
+import { useMemo } from "react";
 import type { MouseEvent } from "react";
-import { useRouter } from "next/navigation";
 
 import { configLayoutAssistProposalStatusCopy } from "@/lib/agent/configLayoutAssist/configLayoutAssistProposalCopy";
 import type { ConfigurationProposalV1 } from "@/lib/agent/configLayoutAssist/configurationProposalV1";
 import type { ConfigLayoutAssistTraceV1 } from "@/lib/agent/configLayoutAssist/configLayoutAssistTypes";
 import {
-    handleConfigProposalReviewClick,
+    configProposalReviewHrefForId,
+    createConfigProposalReviewClickHandler,
     resolveConfigProposalReviewId,
+    type ConfigProposalReviewDebugLog,
 } from "@/lib/agent/configLayoutAssist/configLayoutAssistReviewNavigation";
 import { brand, derived, neutral } from "@/styles/tokens/colors";
 
@@ -22,31 +24,35 @@ export function ConfigLayoutAssistProposalThreadCard({
     proposal,
     trace,
     persistedProposalId,
-    onReviewProposal,
+    onReviewConfigProposal,
+    debugReviewNavigation,
 }: {
     proposal: ConfigurationProposalV1;
     trace: ConfigLayoutAssistTraceV1;
     persistedProposalId: string | null;
-    /** Shell-level navigation (preferred inside command surface footer). */
-    onReviewProposal?: (proposalId: string) => void;
+    onReviewConfigProposal: (proposalId: string) => void;
+    debugReviewNavigation?: ConfigProposalReviewDebugLog;
 }) {
-    const router = useRouter();
     const reviewProposalId = resolveConfigProposalReviewId(persistedProposalId);
     const statusCopy = configLayoutAssistProposalStatusCopy(proposal);
+    const reviewHref = reviewProposalId ? configProposalReviewHrefForId(reviewProposalId) : null;
 
     const mutatingCount = proposal.proposed_operations.filter(
         (o) => o.kind !== "data_quality_recommendation"
     ).length;
 
-    const onReviewClick = (event: MouseEvent<HTMLButtonElement>) => {
-        if (!reviewProposalId) return;
-        handleConfigProposalReviewClick(event, reviewProposalId, (href) => {
-            if (onReviewProposal) {
-                onReviewProposal(reviewProposalId);
-                return;
-            }
-            void router.push(href);
-        });
+    const onReviewClick = useMemo(
+        () =>
+            createConfigProposalReviewClickHandler(
+                persistedProposalId,
+                onReviewConfigProposal,
+                debugReviewNavigation
+            ),
+        [persistedProposalId, onReviewConfigProposal, debugReviewNavigation]
+    );
+
+    const handleReviewButtonClick = (event: MouseEvent<HTMLButtonElement>) => {
+        onReviewClick(event);
     };
 
     return (
@@ -92,13 +98,14 @@ export function ConfigLayoutAssistProposalThreadCard({
             >
                 {statusCopy}
             </p>
-            {reviewProposalId ? (
+            {reviewProposalId && reviewHref ? (
                 <button
                     type="button"
                     className="relative z-[1] mt-2 inline-flex cursor-pointer text-left text-[12px] font-semibold underline pointer-events-auto"
                     style={{ color: brand.secondary }}
                     data-command-surface-config-assist-review-proposal="true"
-                    onClick={onReviewClick}
+                    data-proposal-id={reviewProposalId}
+                    onClick={handleReviewButtonClick}
                 >
                     Review proposal →
                 </button>

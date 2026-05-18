@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { useRouter } from "next/navigation";
 import { neutral, derived, brand, semantic } from "@/styles/tokens/colors";
 import type { JobOverviewPlannerSuccess } from "@/lib/agent/planner/jobOverviewPlannerTypes";
 import { runOverviewLayoutSemanticPreview } from "@/lib/admin/agentLab/overviewLayoutSemanticAssistant";
@@ -34,7 +33,10 @@ import {
 } from "@/lib/agent/workflowAssist/workflowAssistReadV1";
 import type { ConfigurationProposalV1 } from "@/lib/agent/configLayoutAssist/configurationProposalV1";
 import type { ConfigLayoutAssistTraceV1 } from "@/lib/agent/configLayoutAssist/configLayoutAssistTypes";
-import { buildConfigProposalReviewHref } from "@/lib/agent/configLayoutAssist/configLayoutAssistEntityResolve";
+import { configProposalReviewHrefForId } from "@/lib/agent/configLayoutAssist/configLayoutAssistReviewNavigation";
+import type { ConfigProposalReviewDebugLog } from "@/lib/agent/configLayoutAssist/configLayoutAssistReviewNavigation";
+import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
+import { adminV2CommitNavigation } from "@/lib/adminV2/shellNavigation";
 import {
   buildWorkflowAssistCreateProposeFromIntent,
   parseDaysBeforeTour,
@@ -516,7 +518,7 @@ function AdvancedDrawer(props: {
 
 export default function AICommandSurfaceShell() {
   const shellRootRef = useRef<HTMLElement | null>(null);
-  const router = useRouter();
+  const adminDrawer = useAdminDrawerOptional();
 
   const globalAssistant = useGlobalAssistantOptional();
   const siteFilter = useWorkspaceSiteFilter();
@@ -1632,11 +1634,20 @@ export default function AICommandSurfaceShell() {
   const workflowAssistMutationBlockedReasonShell =
     workflowAssistMutationCapable === false ? WORKFLOW_ASSIST_PORTAL_MUTATION_BLOCKED_USER_MESSAGE : null;
 
+  const debugReviewNavigation = useCallback<ConfigProposalReviewDebugLog>((message, detail) => {
+    if (process.env.NODE_ENV === "development") {
+      console.info("[config-assist-review]", message, detail ?? "");
+    }
+  }, []);
+
   const onReviewConfigProposal = useCallback(
     (proposalId: string) => {
-      void router.push(buildConfigProposalReviewHref(proposalId));
+      debugReviewNavigation("shell handler received id", { proposalId });
+      const href = configProposalReviewHrefForId(proposalId);
+      debugReviewNavigation("adminV2CommitNavigation", { href });
+      adminV2CommitNavigation(href, { closeDrawer: adminDrawer?.closeDrawer });
     },
-    [router]
+    [adminDrawer?.closeDrawer, debugReviewNavigation]
   );
 
   return (
@@ -1710,6 +1721,7 @@ export default function AICommandSurfaceShell() {
                 workflowAssistMutationBlockedReason={workflowAssistMutationBlockedReasonShell}
                 workflowAssistMutationsAllowed={workflowAssistMutationsAllowed}
                 onReviewConfigProposal={onReviewConfigProposal}
+                debugReviewNavigation={debugReviewNavigation}
               />
             </div>
           ) : null}

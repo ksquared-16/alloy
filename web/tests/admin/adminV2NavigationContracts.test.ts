@@ -28,6 +28,13 @@ describe("AdminV2 shell navigation helpers", () => {
         expect(src).not.toContain("onShellNavigate");
         expect(src).not.toMatch(/\brouter\.push\s*\(/);
     });
+
+    it("config assist review CTA uses adminV2CommitNavigation like other shell links", () => {
+        const src = read("app/adminV2/components/aiCommandSurface/AICommandSurfaceShell.tsx");
+        expect(src).toContain("onReviewConfigProposal");
+        expect(src).toMatch(/onReviewConfigProposal[\s\S]*?adminV2CommitNavigation/);
+        expect(src).toContain("configProposalReviewHrefForId");
+    });
 });
 
 describe("AdminDrawerProvider pathname close", () => {

@@ -21,27 +21,30 @@ const clientPath = join(
 );
 
 describe("ConfigLayoutAssist proposal review CTA contract", () => {
-    it("thread card uses button navigation with stopPropagation and conditional CTA", () => {
+    it("thread card uses button + createConfigProposalReviewClickHandler", () => {
         const src = readFileSync(cardPath, "utf8");
-        expect(src).toContain("handleConfigProposalReviewClick");
+        expect(src).toContain("createConfigProposalReviewClickHandler");
         expect(src).toContain('type="button"');
         expect(src).toContain("data-command-surface-config-assist-review-proposal");
-        expect(src).toContain("reviewProposalId ?");
+        expect(src).toContain("onReviewConfigProposal");
+        expect(src).toContain("reviewProposalId && reviewHref");
         expect(src).not.toContain("<Link");
+        expect(src).not.toContain("useRouter");
         expect(src).not.toMatch(/\/apply|applyApproved|onApply/);
     });
 
-    it("command surface shell wires review navigation via router.push", () => {
+    it("command surface shell uses adminV2CommitNavigation (not router.push)", () => {
         const shellSrc = readFileSync(shellPath, "utf8");
-        expect(shellSrc).toContain("buildConfigProposalReviewHref");
+        expect(shellSrc).toContain("adminV2CommitNavigation");
+        expect(shellSrc).toContain("configProposalReviewHrefForId");
         expect(shellSrc).toContain("onReviewConfigProposal");
-        expect(shellSrc).toContain("router.push");
+        expect(shellSrc).not.toMatch(/onReviewConfigProposal[\s\S]{0,200}router\.push/);
     });
 
     it("thread passes onReviewConfigProposal to config layout assist card", () => {
         const threadSrc = readFileSync(threadPath, "utf8");
         expect(threadSrc).toContain("onReviewConfigProposal");
-        expect(threadSrc).toContain("onReviewProposal={onReviewConfigProposal}");
+        expect(threadSrc).toContain("onReviewConfigProposal={onReviewConfigProposal}");
         expect(threadSrc).toContain("ConfigLayoutAssistProposalThreadCard");
     });
 
