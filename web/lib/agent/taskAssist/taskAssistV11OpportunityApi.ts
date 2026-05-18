@@ -112,7 +112,7 @@ export type OperationalTaskCreateBody = {
     title: string;
     description: string | null;
     due_at: string;
-    source: "task_assist";
+    source: "task_assist" | "manual";
     proposal_id: string | null;
 };
 
@@ -120,8 +120,9 @@ export function buildOperationalTaskBody(params: {
     entityId: string;
     title: string;
     dueAtIso: string;
-    proposalId: string | null;
+    proposalId?: string | null;
     description?: string | null;
+    source?: "task_assist" | "manual";
 }): OperationalTaskCreateBody {
     return {
         entity_type: "opportunities",
@@ -129,9 +130,39 @@ export function buildOperationalTaskBody(params: {
         title: params.title.trim(),
         description: params.description?.trim() || null,
         due_at: params.dueAtIso,
-        source: "task_assist",
-        proposal_id: params.proposalId,
+        source: params.source ?? "task_assist",
+        proposal_id: params.proposalId ?? null,
     };
+}
+
+export type ScheduledSendPatchBody =
+    | { status: "canceled" }
+    | { scheduled_for: string; body_snapshot: string; subject_snapshot?: string | null };
+
+export async function patchCommunicationScheduledSend(id: string, body: ScheduledSendPatchBody): Promise<Response> {
+    return fetch(`${COMMUNICATION_SCHEDULED_SENDS_URL}/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: JSON_HEADERS,
+        body: JSON.stringify(body),
+    });
+}
+
+export async function processDueCommunicationScheduledSends(limit = 25): Promise<Response> {
+    return fetch(`${COMMUNICATION_SCHEDULED_SENDS_URL}/process-due`, {
+        method: "POST",
+        credentials: "include",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ limit }),
+    });
+}
+
+export function scheduledSendsAttentionSummaryUrl(): string {
+    return `${COMMUNICATION_SCHEDULED_SENDS_URL}?scope=workspace&summary=true`;
+}
+
+export async function fetchScheduledSendsAttentionSummary(): Promise<Response> {
+    return fetch(scheduledSendsAttentionSummaryUrl(), { credentials: "include" });
 }
 
 export async function readJson<T>(res: Response): Promise<T> {

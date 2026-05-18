@@ -4,7 +4,12 @@ import {
     isTaskAssistV1Uuid,
     validateTaskAssistV1ParsedJsonNoForbiddenWorkflowKeys,
 } from "@/lib/agent/taskAssist/taskAssistSuggestionValidators";
-import { cancelCommunicationScheduledSend } from "@/lib/communications/communicationScheduledSendsService";
+import {
+    cancelCommunicationScheduledSend,
+    getCommunicationScheduledSendById,
+    updateCommunicationScheduledSend,
+    validateCommunicationScheduledSendUpdateBody,
+} from "@/lib/communications/communicationScheduledSendsService";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { assertCommunicationsSendAllowed } from "@/lib/communications/communicationPermissions";
@@ -14,7 +19,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
     return v != null && typeof v === "object" && !Array.isArray(v);
 }
 
-function parseCancelPatch(body: unknown): { ok: false; error: string; message: string } | { ok: true } {
+function parseCancelPatch(body: unknown): { ok: false; error: string; message: string } | { ok: true; kind: "cancel" } {
     if (!isRecord(body)) {
         return { ok: false, error: "BAD_JSON_SHAPE", message: "Body must be a JSON object." };
     }
@@ -29,13 +34,15 @@ function parseCancelPatch(body: unknown): { ok: false; error: string; message: s
         }
     }
     if (body.status !== "canceled") {
-        return { ok: false, error: "STATUS_INVALID", message: "Only status: canceled is supported." };
+        return { ok: false, error: "STATUS_INVALID", message: "Only status: canceled is supported for cancel." };
     }
-    return { ok: true };
+    return { ok: true, kind: "cancel" };
 }
 
 /**
- * PATCH `/api/admin/communication-scheduled-sends/[id]` — `{ "status": "canceled" }` (**pending** only).
+ * PATCH `/api/admin/communication-scheduled-sends/[id]`
+ * - Cancel: `{ "status": "canceled" }` (pending or failed)
+ * - Edit/reschedule: `{ scheduled_for, body_snapshot, subject_snapshot? }` (pending; failed resets to pending)
  */
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const forbidden = await requireAdminOrOps();
@@ -67,18 +74,47 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         return NextResponse.json({ ok: false, error: "BAD_JSON" }, { status: 400 });
     }
 
-    const parsed = parseCancelPatch(body);
-    if (!parsed.ok) {
-        return NextResponse.json({ ok: false, error: parsed.error, message: parsed.message }, { status: 400 });
+    const supabase = createAdminClient();
+    const nowMs = Date.now();
+
+    if (isRecord(body) && body.status === "canceled") {
+        const parsed = parseCancelPatch(body);
+        if (!parsed.ok) {
+            return NextResponse.json({ ok: false, error: parsed.error, message: parsed.message }, { status: 400 });
+        }
+        const res = await cancelCommunicationScheduledSend({
+            supabase,
+            orgId: ctx.orgId,
+            id: id.trim(),
+        });
+        if (!res.ok) {
+            const status = res.status ?? (res.error === "NOT_FOUND" ? 404 : 400);
+            return NextResponse.json({ ok: false, error: res.error, message: res.message }, { status });
+        }
+        return NextResponse.json({ ok: true, scheduled_send: res.row });
     }
 
-    const supabase = createAdminClient();
-    const res = await cancelCommunicationScheduledSend({
+    const cur = await getCommunicationScheduledSendById({
         supabase,
         orgId: ctx.orgId,
         id: id.trim(),
     });
+    if (!cur.ok) {
+        return NextResponse.json({ ok: false, error: cur.error, message: cur.message }, { status: cur.status });
+    }
 
+    const parsedUpdate = validateCommunicationScheduledSendUpdateBody(body, cur.row, { nowMs });
+    if (!parsedUpdate.ok) {
+        return NextResponse.json({ ok: false, error: parsedUpdate.error, message: parsedUpdate.message }, { status: 400 });
+    }
+
+    const res = await updateCommunicationScheduledSend({
+        supabase,
+        orgId: ctx.orgId,
+        id: id.trim(),
+        input: parsedUpdate.value,
+        nowIso: new Date(nowMs).toISOString(),
+    });
     if (!res.ok) {
         const status = res.status ?? (res.error === "NOT_FOUND" ? 404 : 400);
         return NextResponse.json({ ok: false, error: res.error, message: res.message }, { status });

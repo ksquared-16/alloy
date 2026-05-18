@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { scheduledSendAttentionCounts } from "@/lib/agent/taskAssist/taskAssistScheduledSendPresentation";
 import { getTaskAssistProposalById } from "@/lib/agent/taskAssist/taskAssistProposalPersistence";
 import {
     isTaskAssistV1Uuid,
@@ -299,11 +300,12 @@ export async function cancelCommunicationScheduledSend(params: {
     });
     if (!cur.ok) return cur;
 
-    if (cur.row.status !== "pending") {
+    const st = cur.row.status.trim().toLowerCase();
+    if (st !== "pending" && st !== "failed") {
         return {
             ok: false,
             error: "INVALID_STATUS",
-            message: "Only pending scheduled sends can be canceled.",
+            message: "Only pending or failed scheduled sends can be canceled.",
             status: 409,
         };
     }
@@ -313,7 +315,7 @@ export async function cancelCommunicationScheduledSend(params: {
         .update({ status: "canceled" })
         .eq("org_id", params.orgId)
         .eq("id", params.id)
-        .eq("status", "pending")
+        .eq("status", st)
         .select("*")
         .maybeSingle();
 
@@ -321,6 +323,151 @@ export async function cancelCommunicationScheduledSend(params: {
         return { ok: false, error: "DB_UPDATE_FAILED", message: error?.message ?? "Cancel failed.", status: 409 };
     }
     return { ok: true, row: mapRow(data as Record<string, unknown>) };
+}
+
+export type CommunicationScheduledSendUpdateInput = {
+    scheduled_for_iso: string;
+    body_snapshot: string;
+    subject_snapshot: string | null;
+};
+
+export function validateCommunicationScheduledSendUpdateBody(
+    body: unknown,
+    row: CommunicationScheduledSendRow,
+    opts: { nowMs: number }
+): { ok: false; error: string; message: string } | { ok: true; value: CommunicationScheduledSendUpdateInput } {
+    if (!isRecord(body)) {
+        return { ok: false, error: "BAD_JSON_SHAPE", message: "Body must be a JSON object." };
+    }
+    const wf = validateTaskAssistV1ParsedJsonNoForbiddenWorkflowKeys(body);
+    if (wf.length) {
+        return { ok: false, error: "WORKFLOW_KEYS_FORBIDDEN", message: wf[0] ?? "Forbidden key." };
+    }
+    const allowed = new Set(["scheduled_for", "body_snapshot", "subject_snapshot"]);
+    for (const k of Object.keys(body)) {
+        if (!allowed.has(k)) {
+            return { ok: false, error: "UNKNOWN_BODY_KEYS", message: `Unexpected key: ${k}` };
+        }
+    }
+    const schedRaw = typeof body.scheduled_for === "string" ? body.scheduled_for.trim() : "";
+    const schedMs = Date.parse(schedRaw);
+    if (!schedRaw || Number.isNaN(schedMs)) {
+        return { ok: false, error: "SCHEDULED_FOR_INVALID", message: "scheduled_for must be a parseable ISO-8601 timestamp." };
+    }
+    if (schedMs <= opts.nowMs) {
+        return { ok: false, error: "SCHEDULED_FOR_NOT_FUTURE", message: "scheduled_for must be in the future." };
+    }
+    const bodySnap = typeof body.body_snapshot === "string" ? body.body_snapshot.trim() : "";
+    if (!bodySnap) {
+        return { ok: false, error: "BODY_SNAPSHOT_REQUIRED", message: "body_snapshot is required." };
+    }
+    let subjectSnap: string | null = null;
+    if (row.channel === "email") {
+        const sub = typeof body.subject_snapshot === "string" ? body.subject_snapshot.trim() : "";
+        if (!sub) {
+            return { ok: false, error: "SUBJECT_REQUIRED", message: "subject_snapshot is required for email." };
+        }
+        subjectSnap = sub;
+    } else if (body.subject_snapshot != null && String(body.subject_snapshot).trim() !== "") {
+        return { ok: false, error: "SUBJECT_NOT_APPLICABLE", message: "subject_snapshot must be omitted for sms." };
+    }
+    return {
+        ok: true,
+        value: {
+            scheduled_for_iso: new Date(schedMs).toISOString(),
+            body_snapshot: bodySnap,
+            subject_snapshot: subjectSnap,
+        },
+    };
+}
+
+export async function updateCommunicationScheduledSend(params: {
+    supabase: SupabaseClient;
+    orgId: string;
+    id: string;
+    input: CommunicationScheduledSendUpdateInput;
+    nowIso: string;
+}): Promise<{ ok: true; row: CommunicationScheduledSendRow } | { ok: false; error: string; message: string; status: number }> {
+    const cur = await getCommunicationScheduledSendById({
+        supabase: params.supabase,
+        orgId: params.orgId,
+        id: params.id,
+    });
+    if (!cur.ok) return cur;
+
+    const st = cur.row.status.trim().toLowerCase();
+    if (st === "queued" || st === "sent_to_provider" || st === "delivered" || st === "canceled" || st === "cancelled") {
+        return {
+            ok: false,
+            error: "INVALID_STATUS",
+            message: "Only pending or failed scheduled sends can be edited.",
+            status: 409,
+        };
+    }
+    if (st === "claimed") {
+        return {
+            ok: false,
+            error: "INVALID_STATUS",
+            message: "Send is being processed. Wait a moment or use Process now.",
+            status: 409,
+        };
+    }
+
+    const patch: Record<string, unknown> = {
+        scheduled_for: params.input.scheduled_for_iso,
+        body_snapshot: params.input.body_snapshot,
+        subject_snapshot: params.input.subject_snapshot,
+        metadata: mergeMetadata(cur.row.metadata, { last_edited_at: params.nowIso, source: "admin_patch" }),
+    };
+    if (st === "failed") {
+        patch.status = "pending";
+        patch.metadata = mergeMetadata(patch.metadata as Record<string, unknown>, {
+            rescheduled_from_failed_at: params.nowIso,
+        });
+    }
+
+    const { data, error } = await params.supabase
+        .from("communication_scheduled_sends")
+        .update(patch)
+        .eq("org_id", params.orgId)
+        .eq("id", params.id)
+        .in("status", st === "failed" ? ["failed"] : ["pending"])
+        .select("*")
+        .maybeSingle();
+
+    if (error || !data) {
+        return { ok: false, error: "DB_UPDATE_FAILED", message: error?.message ?? "Update failed.", status: 409 };
+    }
+    return { ok: true, row: mapRow(data as Record<string, unknown>) };
+}
+
+export async function summarizeCommunicationScheduledSendAttention(params: {
+    supabase: SupabaseClient;
+    orgId: string;
+    now?: Date;
+}): Promise<
+    | { ok: true; failed: number; needs_attention: number }
+    | { ok: false; error: string; message: string }
+> {
+    const now = params.now ?? new Date();
+    const { data, error } = await params.supabase
+        .from("communication_scheduled_sends")
+        .select("status, scheduled_for")
+        .eq("org_id", params.orgId)
+        .in("status", ["pending", "claimed", "failed"]);
+
+    if (error) {
+        return { ok: false, error: "DB_LIST_FAILED", message: error.message };
+    }
+
+    const counts = scheduledSendAttentionCounts(
+        (data ?? []).map((r) => ({
+            status: String((r as { status?: string }).status ?? ""),
+            scheduled_for: String((r as { scheduled_for?: string }).scheduled_for ?? ""),
+        })),
+        now
+    );
+    return { ok: true, ...counts };
 }
 
 /** Minimum `now - claimed_at` before a `claimed` row may be released to `pending` (crash recovery; reduces overlap with a slow finalize). */

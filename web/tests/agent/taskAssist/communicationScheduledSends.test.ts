@@ -5,7 +5,9 @@ import {
     processDueCommunicationScheduledSends,
     releaseStaleClaimedCommunicationScheduledSends,
     STALE_CLAIM_RELEASE_MINIMUM_AGE_MS,
+    updateCommunicationScheduledSend,
     validateCommunicationScheduledSendCreateBody,
+    validateCommunicationScheduledSendUpdateBody,
 } from "@/lib/communications/communicationScheduledSendsService";
 import { executeCommunicationsSend } from "@/lib/communications/executeCommunicationsSend";
 
@@ -81,6 +83,85 @@ describe("validateCommunicationScheduledSendCreateBody", () => {
         );
         expect(r.ok).toBe(false);
         if (!r.ok) expect(r.error).toBe("SUBJECT_REQUIRED");
+    });
+});
+
+describe("validateCommunicationScheduledSendUpdateBody", () => {
+    it("requires future scheduled_for", () => {
+        const row = baseRow({ status: "pending" }) as ReturnType<typeof baseRow>;
+        const r = validateCommunicationScheduledSendUpdateBody(
+            {
+                scheduled_for: new Date(Date.now() - 60_000).toISOString(),
+                body_snapshot: "hi",
+            },
+            mapRowTyped(row),
+            { nowMs: Date.now() }
+        );
+        expect(r.ok).toBe(false);
+        if (!r.ok) expect(r.error).toBe("SCHEDULED_FOR_NOT_FUTURE");
+    });
+});
+
+function mapRowTyped(data: Record<string, unknown>) {
+    return {
+        id: String(data.id),
+        org_id: String(data.org_id),
+        created_by: String(data.created_by),
+        proposal_id: data.proposal_id != null ? String(data.proposal_id) : null,
+        entity_type: String(data.entity_type),
+        entity_id: String(data.entity_id),
+        recipient_person_id: String(data.recipient_person_id),
+        channel: data.channel === "email" ? ("email" as const) : ("sms" as const),
+        subject_snapshot: data.subject_snapshot != null ? String(data.subject_snapshot) : null,
+        body_snapshot: String(data.body_snapshot),
+        communication_provider_binding_id:
+            data.communication_provider_binding_id != null ? String(data.communication_provider_binding_id) : null,
+        scheduled_for: String(data.scheduled_for),
+        status: String(data.status),
+        approved_at: String(data.approved_at),
+        approved_by: String(data.approved_by),
+        communication_message_id: data.communication_message_id != null ? String(data.communication_message_id) : null,
+        source: String(data.source),
+        metadata: (data.metadata as Record<string, unknown>) ?? {},
+        claimed_at: data.claimed_at != null ? String(data.claimed_at) : null,
+        claim_token: data.claim_token != null ? String(data.claim_token) : null,
+        created_at: String(data.created_at),
+        updated_at: String(data.updated_at),
+    };
+}
+
+describe("updateCommunicationScheduledSend", () => {
+    it("rejects edit when queued", async () => {
+        const supabase = {
+            from() {
+                return {
+                    select: () => ({
+                        eq: () => ({
+                            eq: () => ({
+                                maybeSingle: async () => ({
+                                    data: baseRow({ status: "queued", communication_message_id: personId }),
+                                    error: null,
+                                }),
+                            }),
+                        }),
+                    }),
+                };
+            },
+        } as never;
+
+        const r = await updateCommunicationScheduledSend({
+            supabase,
+            orgId,
+            id: sendId,
+            input: {
+                scheduled_for_iso: new Date(Date.now() + 3600_000).toISOString(),
+                body_snapshot: "updated",
+                subject_snapshot: null,
+            },
+            nowIso: new Date().toISOString(),
+        });
+        expect(r.ok).toBe(false);
+        if (!r.ok) expect(r.error).toBe("INVALID_STATUS");
     });
 });
 

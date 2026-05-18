@@ -75,7 +75,7 @@ describe("scheduledSendDeliveryUrgency", () => {
         ).toBe("Scheduled");
     });
 
-    it("labels pending past grace as Needs attention", () => {
+    it("labels pending past grace as Send not processed", () => {
         expect(
             scheduledSendDeliveryUrgency({
                 status: "pending",
@@ -84,6 +84,13 @@ describe("scheduledSendDeliveryUrgency", () => {
                 graceMs: 5 * 60 * 1000,
             })
         ).toBe("needs_attention");
+        expect(
+            scheduledSendUrgencyBadge(
+                { status: "pending", scheduled_for: "2026-05-16T10:00:00.000Z" },
+                NOW,
+                5 * 60 * 1000
+            ).label
+        ).toBe("Send not processed");
     });
 
     it("labels pending within grace as Processing", () => {

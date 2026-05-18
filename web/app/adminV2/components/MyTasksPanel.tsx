@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
+import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import {
     ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS,
     ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH,
@@ -10,6 +11,8 @@ import {
 import { formatTaskAssistClientError } from "@/lib/agent/taskAssist/taskAssistClientErrorMessages";
 import { operationalTaskUrgencyBadge } from "@/lib/agent/taskAssist/taskAssistOperationalUrgency";
 import {
+    buildOperationalTaskBody,
+    createOperationalTask,
     fetchWorkspaceOperationalTasks,
     patchOperationalTaskFields,
     patchOperationalTaskStatus,
@@ -65,6 +68,11 @@ export type MyTasksPanelProps = {
 export default function MyTasksPanel({ compact = false, onClose }: MyTasksPanelProps) {
     const v11 = isTaskAssistV1UiEnabled();
     const adminDrawer = useAdminDrawerOptional();
+    const globalAssistant = useGlobalAssistantOptional();
+    const linkedOpportunityId =
+        globalAssistant?.currentContext?.entity_type === "opportunities" ?
+            globalAssistant.currentContext.entity_id?.trim() || null
+        :   null;
     const [filter, setFilter] = useState<OperationalTaskWorkspaceFilter>("open");
     const [tasks, setTasks] = useState<MyTasksTaskRow[]>([]);
     const [loading, setLoading] = useState(false);
@@ -74,6 +82,11 @@ export default function MyTasksPanel({ compact = false, onClose }: MyTasksPanelP
     const [editTitle, setEditTitle] = useState("");
     const [editDue, setEditDue] = useState("");
     const [editNotes, setEditNotes] = useState("");
+    const [createOpen, setCreateOpen] = useState(false);
+    const [newTitle, setNewTitle] = useState("");
+    const [newDue, setNewDue] = useState("");
+    const [newNotes, setNewNotes] = useState("");
+    const [createBusy, setCreateBusy] = useState(false);
 
     const load = useCallback(async () => {
         if (!v11) return;
@@ -179,6 +192,35 @@ export default function MyTasksPanel({ compact = false, onClose }: MyTasksPanelP
         }
     }, [dispatchRefresh, editDue, editNotes, editTitle, editingId, load]);
 
+    const onCreateTask = useCallback(async () => {
+        if (!linkedOpportunityId || !newTitle.trim() || !newDue.trim()) return;
+        setCreateBusy(true);
+        setError(null);
+        try {
+            const body = buildOperationalTaskBody({
+                entityId: linkedOpportunityId,
+                title: newTitle,
+                dueAtIso: new Date(newDue).toISOString(),
+                description: newNotes,
+                source: "manual",
+                proposalId: null,
+            });
+            const res = await createOperationalTask(body);
+            const json = await readJson<{ ok?: boolean; error?: string; message?: string }>(res);
+            if (!res.ok || !json.ok) throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
+            setCreateOpen(false);
+            setNewTitle("");
+            setNewDue("");
+            setNewNotes("");
+            await load();
+            dispatchRefresh();
+        } catch (e: unknown) {
+            setError(formatTaskAssistClientError((e as Error).message));
+        } finally {
+            setCreateBusy(false);
+        }
+    }, [dispatchRefresh, linkedOpportunityId, load, newDue, newNotes, newTitle]);
+
     const emptyLabel = useMemo(() => {
         switch (filter) {
             case "due_today":
@@ -204,22 +246,88 @@ export default function MyTasksPanel({ compact = false, onClose }: MyTasksPanelP
                 </header>
             ) : null}
 
-            <div className="flex flex-wrap gap-1.5">
-                {FILTERS.map((f) => (
-                    <button
-                        key={f.key}
-                        type="button"
-                        onClick={() => setFilter(f.key)}
-                        className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${
-                            filter === f.key ?
-                                "border-alloy-midnight/30 bg-alloy-midnight/90 text-white"
-                            :   "border-alloy-stone/25 bg-white text-alloy-midnight/75 hover:bg-alloy-stone/[0.06]"
-                        }`}
-                    >
-                        {f.label}
-                    </button>
-                ))}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap gap-1.5">
+                    {FILTERS.map((f) => (
+                        <button
+                            key={f.key}
+                            type="button"
+                            onClick={() => setFilter(f.key)}
+                            className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${
+                                filter === f.key ?
+                                    "border-alloy-midnight/30 bg-alloy-midnight/90 text-white"
+                                :   "border-alloy-stone/25 bg-white text-alloy-midnight/75 hover:bg-alloy-stone/[0.06]"
+                            }`}
+                        >
+                            {f.label}
+                        </button>
+                    ))}
+                </div>
+                <button
+                    type="button"
+                    data-adminv2-new-task="true"
+                    className="rounded-md border border-alloy-stone/30 bg-white px-2.5 py-1 text-[11px] font-semibold text-alloy-blue hover:bg-alloy-stone/[0.04]"
+                    onClick={() => setCreateOpen((o) => !o)}
+                >
+                    New task
+                </button>
             </div>
+
+            {createOpen ? (
+                <div
+                    className="space-y-2 rounded-lg border border-alloy-stone/15 bg-white p-3 text-[12px] shadow-sm"
+                    data-adminv2-create-task-form="true"
+                >
+                    {linkedOpportunityId ? (
+                        <p className="text-[11px] text-alloy-midnight/60">
+                            Creates a follow-up task on the opportunity you have open in the workspace.
+                        </p>
+                    ) : (
+                        <p className="text-[11px] text-amber-900/85">
+                            Open an opportunity record first, or create a task from the command bar. Tasks must be linked to
+                            an opportunity.
+                        </p>
+                    )}
+                    <input
+                        type="text"
+                        placeholder="Title"
+                        value={newTitle}
+                        onChange={(e) => setNewTitle(e.target.value)}
+                        className="w-full rounded border border-alloy-stone/25 px-2 py-1 text-[12px]"
+                    />
+                    <input
+                        type="datetime-local"
+                        value={newDue}
+                        min={minDatetimeLocalValue()}
+                        onChange={(e) => setNewDue(e.target.value)}
+                        className="w-full rounded border border-alloy-stone/25 px-2 py-1 text-[12px]"
+                    />
+                    <textarea
+                        rows={2}
+                        placeholder="Notes (optional)"
+                        value={newNotes}
+                        onChange={(e) => setNewNotes(e.target.value)}
+                        className="w-full resize-y rounded border border-alloy-stone/25 px-2 py-1 text-[11px]"
+                    />
+                    <div className="flex flex-wrap gap-1">
+                        <button
+                            type="button"
+                            disabled={createBusy || !linkedOpportunityId || !newTitle.trim() || !newDue.trim()}
+                            className="rounded-md bg-alloy-midnight/90 px-2 py-1 text-[10px] font-semibold text-white disabled:opacity-45"
+                            onClick={() => void onCreateTask()}
+                        >
+                            Create task
+                        </button>
+                        <button
+                            type="button"
+                            className="rounded-md border border-alloy-stone/30 px-2 py-1 text-[10px] font-semibold"
+                            onClick={() => setCreateOpen(false)}
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            ) : null}
 
             {error ? (
                 <p className="text-sm font-medium text-red-800/90" role="alert">

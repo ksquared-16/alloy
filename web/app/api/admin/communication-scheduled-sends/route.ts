@@ -5,6 +5,7 @@ import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import {
     createCommunicationScheduledSend,
     listCommunicationScheduledSendsForEntity,
+    summarizeCommunicationScheduledSendAttention,
     validateCommunicationScheduledSendCreateBody,
 } from "@/lib/communications/communicationScheduledSendsService";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
@@ -25,7 +26,19 @@ export async function GET(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
+    const supabase = createAdminClient();
     const url = new URL(request.url);
+    const scope = (url.searchParams.get("scope") ?? "").trim().toLowerCase();
+    const summaryOnly = url.searchParams.get("summary") === "true";
+
+    if (scope === "workspace" && summaryOnly) {
+        const counts = await summarizeCommunicationScheduledSendAttention({ supabase, orgId: ctx.orgId });
+        if (!counts.ok) {
+            return NextResponse.json({ ok: false, error: counts.error, message: counts.message }, { status: 500 });
+        }
+        return NextResponse.json({ ok: true, counts: { failed: counts.failed, needs_attention: counts.needs_attention } });
+    }
+
     const entityType = (url.searchParams.get("entity_type") ?? "").trim().toLowerCase();
     const entityId = (url.searchParams.get("entity_id") ?? "").trim();
     if (entityType !== "opportunities") {
@@ -35,7 +48,6 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ ok: false, error: "ENTITY_ID_INVALID", message: "entity_id must be a UUID." }, { status: 400 });
     }
 
-    const supabase = createAdminClient();
     if (!(await assertRowOrg(supabase, "opportunities", entityId, ctx.orgId)).ok) {
         return NextResponse.json({ ok: false, error: "NOT_FOUND", message: "Opportunity not found." }, { status: 404 });
     }

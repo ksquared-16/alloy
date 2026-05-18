@@ -23,6 +23,8 @@ describe("OpportunityOperationalCompactStrip", () => {
         expect(src).toContain("scheduledSendUrgencyBadge");
         expect(src).toContain("operationalTaskUrgencyBadge");
         expect(src).toContain("scheduledSendStripVisible");
+        expect(src).toContain("ScheduledSendDetailPopover");
+        expect(src).toContain("popoverSendId");
         expect(src).not.toContain("pendingSends.map");
         expect(src).toContain("ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH");
         expect(src).toContain("ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS");
@@ -30,11 +32,14 @@ describe("OpportunityOperationalCompactStrip", () => {
 
     it("keeps popover anchor hooks before conditional returns (Rules of Hooks)", () => {
         const src = readFileSync(stripPath, "utf8");
-        const anchorRefIdx = src.indexOf("const popoverAnchorRef = useRef");
+        const taskAnchorIdx = src.indexOf("const taskPopoverAnchorRef = useRef");
+        const sendAnchorIdx = src.indexOf("const sendPopoverAnchorRef = useRef");
         const v11ReturnIdx = src.indexOf("if (!v11) return null");
-        expect(anchorRefIdx).toBeGreaterThan(-1);
+        expect(taskAnchorIdx).toBeGreaterThan(-1);
+        expect(sendAnchorIdx).toBeGreaterThan(-1);
         expect(v11ReturnIdx).toBeGreaterThan(-1);
-        expect(anchorRefIdx).toBeLessThan(v11ReturnIdx);
+        expect(taskAnchorIdx).toBeLessThan(v11ReturnIdx);
+        expect(sendAnchorIdx).toBeLessThan(v11ReturnIdx);
     });
 });
 

@@ -99,7 +99,7 @@ export async function createOperationalTask(params: {
     title: string;
     description: string | null;
     dueAtIso: string;
-    source: "task_assist";
+    source: "task_assist" | "manual";
     proposalId: string | null;
     assignedToUserId: string | null;
     metadata?: Record<string, unknown> | null;
@@ -143,7 +143,7 @@ export async function createOperationalTask(params: {
     }
 
     const row = mapTaskRow(data as Record<string, unknown>);
-    if (params.source === "task_assist") {
+    if (params.source === "task_assist" || params.source === "manual") {
         await syncOpportunityNextFollowUpFromOperationalTasks({
             supabase: params.supabase,
             orgId: params.orgId,
@@ -412,7 +412,7 @@ export function validateOperationalTaskCreateBody(body: unknown): { ok: false; e
     title: string;
     description: string | null;
     due_at: string;
-    source: "task_assist";
+    source: "task_assist" | "manual";
     proposal_id: string | null;
     assigned_to_user_id: string | null;
     metadata: Record<string, unknown>;
@@ -455,9 +455,10 @@ export function validateOperationalTaskCreateBody(body: unknown): { ok: false; e
     if (!dueRaw || Number.isNaN(Date.parse(dueRaw))) {
         return { ok: false, error: "DUE_AT_INVALID", message: "due_at must be a parseable ISO-8601 timestamp." };
     }
-    const source = body.source === "task_assist" ? "task_assist" : null;
+    const sourceRaw = typeof body.source === "string" ? body.source.trim().toLowerCase() : "";
+    const source = sourceRaw === "task_assist" || sourceRaw === "manual" ? sourceRaw : null;
     if (!source) {
-        return { ok: false, error: "SOURCE_INVALID", message: "source must be task_assist for this route." };
+        return { ok: false, error: "SOURCE_INVALID", message: "source must be task_assist or manual." };
     }
     let proposalId: string | null = null;
     if (body.proposal_id != null && body.proposal_id !== "") {

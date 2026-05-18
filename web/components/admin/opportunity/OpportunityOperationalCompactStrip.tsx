@@ -6,6 +6,10 @@ import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 import OperationalTaskDetailPopover, {
     type OperationalTaskDetail,
 } from "@/components/admin/opportunity/OperationalTaskDetailPopover";
+import ScheduledSendDetailPopover, {
+    type ScheduledSendDetail,
+} from "@/components/admin/opportunity/ScheduledSendDetailPopover";
+import { scheduledSendAttentionCounts } from "@/lib/agent/taskAssist/taskAssistScheduledSendPresentation";
 import {
     ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS,
     ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH,
@@ -43,6 +47,10 @@ type ScheduledSendRow = {
     status: string;
     scheduled_for: string;
     channel?: string;
+    body_snapshot?: string;
+    subject_snapshot?: string | null;
+    recipient_person_id?: string;
+    metadata?: Record<string, unknown> | null;
 };
 
 function parseNextFollowUpAt(overviewData: Record<string, unknown> | null | undefined): string | null {
@@ -89,7 +97,9 @@ export default function OpportunityOperationalCompactStrip({
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [popoverTaskId, setPopoverTaskId] = useState<string | null>(null);
-    const chipRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+    const [popoverSendId, setPopoverSendId] = useState<string | null>(null);
+    const taskChipRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+    const sendChipRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
     const load = useCallback(async () => {
         if (!v11 || !opportunityId) return;
@@ -144,6 +154,30 @@ export default function OpportunityOperationalCompactStrip({
         [openTasks, popoverTaskId]
     );
 
+    const sendAttention = useMemo(() => scheduledSendAttentionCounts(stripSends), [stripSends]);
+
+    const popoverSend = useMemo(
+        () => stripSends.find((s) => s.id === popoverSendId) ?? null,
+        [stripSends, popoverSendId]
+    );
+
+    const popoverSendDetail: ScheduledSendDetail | null = useMemo(() => {
+        if (!popoverSend) return null;
+        const ch = popoverSend.channel === "email" ? "email" : "sms";
+        return {
+            id: popoverSend.id,
+            channel: ch,
+            status: popoverSend.status,
+            scheduled_for: popoverSend.scheduled_for,
+            body_snapshot: popoverSend.body_snapshot?.trim() || "(empty)",
+            subject_snapshot: popoverSend.subject_snapshot ?? null,
+            recipient_person_id: popoverSend.recipient_person_id?.trim() || "—",
+            entity_id: opportunityId,
+            entity_label: entityLabel,
+            metadata: popoverSend.metadata ?? null,
+        };
+    }, [popoverSend, opportunityId, entityLabel]);
+
     const popoverDetail: OperationalTaskDetail | null = useMemo(() => {
         if (!popoverTask) return null;
         return {
@@ -186,17 +220,23 @@ export default function OpportunityOperationalCompactStrip({
         return () => window.removeEventListener(ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS, onFocus as EventListener);
     }, [opportunityId]);
 
-    const popoverAnchorRef = useRef<HTMLButtonElement | null>(null);
+    const taskPopoverAnchorRef = useRef<HTMLButtonElement | null>(null);
+    const sendPopoverAnchorRef = useRef<HTMLButtonElement | null>(null);
 
     useEffect(() => {
-        popoverAnchorRef.current =
-            popoverTaskId ? chipRefs.current.get(popoverTaskId) ?? null : null;
+        taskPopoverAnchorRef.current =
+            popoverTaskId ? taskChipRefs.current.get(popoverTaskId) ?? null : null;
     }, [popoverTaskId, openTasks]);
+
+    useEffect(() => {
+        sendPopoverAnchorRef.current =
+            popoverSendId ? sendChipRefs.current.get(popoverSendId) ?? null : null;
+    }, [popoverSendId, stripSends]);
 
     useEffect(() => {
         if (!popoverTaskId) return;
         requestAnimationFrame(() => {
-            chipRefs.current.get(popoverTaskId)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+            taskChipRefs.current.get(popoverTaskId)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
         });
     }, [popoverTaskId, openTasks]);
 
@@ -213,6 +253,21 @@ export default function OpportunityOperationalCompactStrip({
             {error ? (
                 <p className="text-[10px] font-medium text-red-800/90" role="alert">
                     {error}
+                </p>
+            ) : null}
+            {sendAttention.failed > 0 || sendAttention.needs_attention > 0 ? (
+                <p
+                    className="w-full rounded border border-amber-200/70 bg-amber-50/90 px-2 py-1 text-[10px] leading-snug text-amber-950/90"
+                    data-scheduled-send-attention-banner="true"
+                >
+                    {sendAttention.failed > 0 ?
+                        `${sendAttention.failed} scheduled message${sendAttention.failed === 1 ? "" : "s"} failed delivery.`
+                    :   null}
+                    {sendAttention.failed > 0 && sendAttention.needs_attention > 0 ? " " : null}
+                    {sendAttention.needs_attention > 0 ?
+                        `${sendAttention.needs_attention} scheduled message${sendAttention.needs_attention === 1 ? "" : "s"} not processed.`
+                    :   null}{" "}
+                    Open a chip to edit, cancel, or process.
                 </p>
             ) : null}
             <div className="flex w-full flex-wrap justify-end gap-1">
@@ -236,12 +291,15 @@ export default function OpportunityOperationalCompactStrip({
                             <button
                                 type="button"
                                 ref={(el) => {
-                                    if (el) chipRefs.current.set(t.id, el);
-                                    else chipRefs.current.delete(t.id);
+                                    if (el) taskChipRefs.current.set(t.id, el);
+                                    else taskChipRefs.current.delete(t.id);
                                 }}
                                 data-operational-task-chip={t.id}
                                 data-operational-task-urgency={taskBadge.urgency}
-                                onClick={() => setPopoverTaskId((prev) => (prev === t.id ? null : t.id))}
+                                onClick={() => {
+                                    setPopoverSendId(null);
+                                    setPopoverTaskId((prev) => (prev === t.id ? null : t.id));
+                                }}
                                 className={`${CHIP} cursor-pointer text-left border ${
                                     selected ?
                                         "border-alloy-blue/45 bg-alloy-blue/10 text-alloy-midnight/90 ring-2 ring-alloy-blue/25"
@@ -262,7 +320,7 @@ export default function OpportunityOperationalCompactStrip({
                             {selected && popoverDetail ? (
                                 <OperationalTaskDetailPopover
                                     task={popoverDetail}
-                                    anchorRef={popoverAnchorRef}
+                                    anchorRef={taskPopoverAnchorRef}
                                     onClose={() => setPopoverTaskId(null)}
                                     onUpdated={() => void load()}
                                 />
@@ -272,19 +330,42 @@ export default function OpportunityOperationalCompactStrip({
                 })}
                 {stripSends.map((s) => {
                     const sendBadge = scheduledSendUrgencyBadge(s);
+                    const selected = popoverSendId === s.id;
                     return (
-                        <span
-                            key={s.id}
-                            className={`${CHIP} border ${sendBadge.className}`}
-                            data-operational-scheduled-send-chip={s.id}
-                            data-scheduled-send-urgency={sendBadge.urgency}
-                        >
-                            <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide opacity-80">
-                                {(s.channel ?? "msg").toUpperCase()}
-                            </span>
-                            <span className="truncate font-semibold">{sendBadge.label}</span>
-                            <span className="shrink-0 opacity-75">· {shortWhen(s.scheduled_for)}</span>
-                        </span>
+                        <div key={s.id} className="relative">
+                            <button
+                                type="button"
+                                ref={(el) => {
+                                    if (el) sendChipRefs.current.set(s.id, el);
+                                    else sendChipRefs.current.delete(s.id);
+                                }}
+                                data-operational-scheduled-send-chip={s.id}
+                                data-scheduled-send-urgency={sendBadge.urgency}
+                                onClick={() => {
+                                    setPopoverTaskId(null);
+                                    setPopoverSendId((prev) => (prev === s.id ? null : s.id));
+                                }}
+                                className={`${CHIP} cursor-pointer text-left border ${
+                                    selected ?
+                                        "border-alloy-blue/45 bg-alloy-blue/10 text-alloy-midnight/90 ring-2 ring-alloy-blue/25"
+                                    :   `${sendBadge.className} hover:opacity-95`
+                                }`}
+                            >
+                                <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide opacity-80">
+                                    {(s.channel ?? "msg").toUpperCase()}
+                                </span>
+                                <span className="truncate font-semibold">{sendBadge.label}</span>
+                                <span className="shrink-0 opacity-75">· {shortWhen(s.scheduled_for)}</span>
+                            </button>
+                            {selected && popoverSendDetail ? (
+                                <ScheduledSendDetailPopover
+                                    send={popoverSendDetail}
+                                    anchorRef={sendPopoverAnchorRef}
+                                    onClose={() => setPopoverSendId(null)}
+                                    onUpdated={() => void load()}
+                                />
+                            ) : null}
+                        </div>
                     );
                 })}
             </div>
