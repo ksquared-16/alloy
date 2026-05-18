@@ -32,15 +32,14 @@ import {
     type FieldPolicyRequirementPreset,
     type FieldPolicySettingsView,
 } from "@/lib/fields/fieldPolicySettingsUi";
+import FieldDefinitionEditModal from "@/components/admin/fields/FieldDefinitionEditModal";
+import FieldRequiredInlineCell from "@/components/admin/fields/FieldRequiredInlineCell";
 import {
     canOperatorEditRequirementInline,
     isOperatorHiddenField,
     operatorFieldDisplayLabel,
-    operatorPolicyCapabilityHint,
-    operatorPolicyColumnLabel,
-    operatorRequirementLockedReason,
-    OPERATOR_REQUIREMENT_INLINE_OPTIONS,
 } from "@/lib/fields/fieldSettingsOperatorUi";
+import { resolveInlineRequirementPreset } from "@/lib/fields/fieldRequiredInlineUi";
 
 const FIELD_TYPES = ["text", "email", "phone", "number", "date", "datetime", "boolean", "select", "multiselect"] as const;
 
@@ -159,7 +158,8 @@ export default function EntityFieldsClient({
     const [inlineSavingKey, setInlineSavingKey] = useState<string | null>(null);
     const [inlineSavedKey, setInlineSavedKey] = useState<string | null>(null);
     const [inlineSaveError, setInlineSaveError] = useState<string | null>(null);
-    const [showEditAdvanced, setShowEditAdvanced] = useState(false);
+    const [inlineRowErrors, setInlineRowErrors] = useState<Record<string, string>>({});
+    const [inlinePresetOverrides, setInlinePresetOverrides] = useState<Record<string, FieldPolicyRequirementPreset>>({});
 
     const sortedItems = useMemo(() => sortFieldDefinitionsForAdminList(items), [items]);
 
@@ -248,8 +248,17 @@ export default function EntityFieldsClient({
         if (!canMutate || !policySettingsSupported) return;
         const view = policyViewsByFieldKey.get(row.field_key);
         if (!canOperatorEditRequirementInline(view ?? null)) return;
+
+        const previousPreset = resolveInlineRequirementPreset(row, view ?? null, inlinePresetOverrides[row.field_key]);
+        setInlinePresetOverrides((prev) => ({ ...prev, [row.field_key]: preset }));
+        setInlineRowErrors((prev) => {
+            const next = { ...prev };
+            delete next[row.field_key];
+            return next;
+        });
         setInlineSavingKey(row.field_key);
         setInlineSaveError(null);
+
         try {
             const parsed = parseStoredPoliciesForEdit({
                 field_key: row.field_key,
@@ -270,18 +279,25 @@ export default function EntityFieldsClient({
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Update failed");
+            setInlinePresetOverrides((prev) => {
+                const next = { ...prev };
+                delete next[row.field_key];
+                return next;
+            });
             setInlineSavedKey(row.field_key);
             window.setTimeout(() => setInlineSavedKey((k) => (k === row.field_key ? null : k)), 2000);
             await fetchItems();
         } catch (e) {
-            setInlineSaveError((e as Error).message);
+            const message = (e as Error).message;
+            setInlinePresetOverrides((prev) => ({ ...prev, [row.field_key]: previousPreset }));
+            setInlineRowErrors((prev) => ({ ...prev, [row.field_key]: message }));
+            setInlineSaveError(message);
         } finally {
             setInlineSavingKey(null);
         }
     };
 
     const openEdit = (row: FieldDef) => {
-        setShowEditAdvanced(false);
         setEditRow(row);
         setEditLabel(row.label ?? "");
         setEditDescription(row.description ?? "");
@@ -590,10 +606,6 @@ export default function EntityFieldsClient({
                                         ]
                                             .filter(Boolean)
                                             .join(", ");
-                                        const inlineEditable = canOperatorEditRequirementInline(policyView ?? null);
-                                        const reqPreset =
-                                            policyView?.requirementPreset ??
-                                            (row.is_required ? ("required" as const) : ("optional" as const));
                                         return (
                                         <tr key={row.id} className="border-b border-[#e6e8ec] align-middle">
                                             <td className="py-2.5 pr-4">
@@ -606,55 +618,18 @@ export default function EntityFieldsClient({
                                                 )}
                                             </td>
                                             <td className="py-2.5 pr-4">
-                                                {inlineEditable && canMutate ? (
-                                                    <div className="flex flex-col gap-0.5">
-                                                        <select
-                                                            value={reqPreset}
-                                                            disabled={inlineSavingKey === row.field_key}
-                                                            onChange={(e) =>
-                                                                void patchRequirementInline(
-                                                                    row,
-                                                                    e.target.value as FieldPolicyRequirementPreset
-                                                                )
-                                                            }
-                                                            className="min-w-[10.5rem] rounded border border-[#e6e8ec] px-2 py-1 text-xs"
-                                                            aria-label={`Required rule for ${displayLabel}`}
-                                                        >
-                                                            {OPERATOR_REQUIREMENT_INLINE_OPTIONS.map((o) => (
-                                                                <option key={o.value} value={o.value}>
-                                                                    {o.label}
-                                                                </option>
-                                                            ))}
-                                                        </select>
-                                                        {inlineSavingKey === row.field_key ? (
-                                                            <span className="text-[10px] text-alloy-midnight/45">Saving…</span>
-                                                        ) : inlineSavedKey === row.field_key ? (
-                                                            <span className="text-[10px] font-medium text-alloy-pine">Saved</span>
-                                                        ) : null}
-                                                    </div>
-                                                ) : policySettingsSupported ? (
-                                                    <div className="max-w-[14rem]">
-                                                        <span className="text-[#59678b]">
-                                                            {operatorPolicyColumnLabel(
-                                                                entityType,
-                                                                row.field_key,
-                                                                policyView ?? null,
-                                                                row.is_required
-                                                            )}
-                                                        </span>
-                                                        {policyView && !inlineEditable ? (
-                                                            <p className="mt-0.5 text-[10px] leading-snug text-[#59678b]/80">
-                                                                {operatorRequirementLockedReason(
-                                                                    entityType,
-                                                                    row.field_key,
-                                                                    policyView
-                                                                )}
-                                                            </p>
-                                                        ) : null}
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-[#59678b]">{row.is_required ? "Required" : "Optional"}</span>
-                                                )}
+                                                <FieldRequiredInlineCell
+                                                    entityType={entityType}
+                                                    row={row}
+                                                    policyView={policyView ?? null}
+                                                    canMutate={canMutate}
+                                                    displayLabel={displayLabel}
+                                                    presetOverride={inlinePresetOverrides[row.field_key]}
+                                                    saving={inlineSavingKey === row.field_key}
+                                                    saved={inlineSavedKey === row.field_key}
+                                                    rowError={inlineRowErrors[row.field_key]}
+                                                    onPresetChange={(preset) => void patchRequirementInline(row, preset)}
+                                                />
                                             </td>
                                             {policySettingsSupported && (
                                                 <td className="py-2.5 pr-4 text-[#59678b]">
@@ -662,12 +637,7 @@ export default function EntityFieldsClient({
                                                         ? "Read-only"
                                                         : policyView?.policyEditable
                                                           ? "Staff can edit"
-                                                          : operatorPolicyColumnLabel(
-                                                                entityType,
-                                                                row.field_key,
-                                                                policyView ?? null,
-                                                                row.is_required
-                                                            )}
+                                                          : "Managed elsewhere"}
                                                 </td>
                                             )}
                                             <td className="py-2.5 pr-4 text-[#59678b]">{showsIn || "Hidden"}</td>
@@ -712,238 +682,47 @@ export default function EntityFieldsClient({
                 </SectionCard>
             )}
 
-            {editOpen && editRow && (
-                <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-                    onClick={() => !editSaving && setEditOpen(false)}
-                >
-                    <div
-                        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg border border-[#e6e8ec] bg-white p-4 shadow-xl"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <h3 className="text-lg font-semibold text-[#31394d]">
-                            {operatorFieldDisplayLabel(entityType, {
-                                field_key: editRow.field_key,
-                                is_system: editRow.is_system,
-                                label: editRow.label,
-                            })}
-                        </h3>
-                        <p className="mb-4 text-xs text-[#59678b]">
-                            {editRow.is_system ? "System field" : "Custom field"} · {title.replace(/ Fields$/, "")}
-                        </p>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Display label</label>
-                                <input
-                                    type="text"
-                                    value={editLabel}
-                                    onChange={(e) => setEditLabel(e.target.value)}
-                                    className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
-                                />
-                            </div>
-                            {policySettingsSupported && editPolicyView ? (
-                                <div className="rounded-md border border-[#e6e8ec] bg-[#f8f9fb] p-3 space-y-3">
-                                    <div className="text-xs font-semibold text-[#31394d]">When saving in the drawer</div>
-                                    <p className="text-xs text-[#59678b]">
-                                        {operatorPolicyCapabilityHint(entityType, editRow.field_key, editPolicyView)}
-                                    </p>
-                                    {canOperatorEditRequirementInline(editPolicyView) || (editPolicyView.policyEditable && !editPolicyView.requirementAdvanced && !editPolicyView.interactionAdvanced) ? (
-                                        <>
-                                            {canOperatorEditRequirementInline(editPolicyView) ? (
-                                                <p className="text-xs text-[#59678b]">
-                                                    Required is set in the field list.
-                                                </p>
-                                            ) : null}
-                                            <div className={canOperatorEditRequirementInline(editPolicyView) ? "" : "grid grid-cols-1 gap-3 sm:grid-cols-2"}>
-                                                {!canOperatorEditRequirementInline(editPolicyView) ? (
-                                                <div>
-                                                    <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Required</label>
-                                                    <select
-                                                        value={editRequirementPreset}
-                                                        onChange={(e) =>
-                                                            setEditRequirementPreset(e.target.value as FieldPolicyRequirementPreset)
-                                                        }
-                                                        className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
-                                                    >
-                                                        {OPERATOR_REQUIREMENT_INLINE_OPTIONS.map((o) => (
-                                                            <option key={o.value} value={o.value}>
-                                                                {o.label}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                                ) : null}
-                                                <div>
-                                                    <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Staff can edit</label>
-                                                    <select
-                                                        value={editInteractionPreset}
-                                                        onChange={(e) =>
-                                                            setEditInteractionPreset(e.target.value as FieldPolicyInteractionPreset)
-                                                        }
-                                                        className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
-                                                    >
-                                                        <option value="editable">Yes</option>
-                                                        <option value="read_only">No (read-only)</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                        </>
-                                    ) : (
-                                        <p className="text-xs text-[#59678b]">
-                                            <span className="font-medium text-[#31394d]">
-                                                {editPolicyView.policyEditable ? "Custom rule" : "Managed by Alloy"}.
-                                            </span>{" "}
-                                            {editPolicyView.policyEditable
-                                                ? "Contact your Alloy administrator to change this rule."
-                                                : operatorRequirementLockedReason(entityType, editRow.field_key, editPolicyView)}
-                                        </p>
-                                    )}
-                                </div>
-                            ) : (
-                                <div className="flex flex-wrap gap-4">
-                                    <label className="flex items-center gap-2 text-sm">
-                                        <input
-                                            type="checkbox"
-                                            checked={editRequired}
-                                            onChange={(e) => setEditRequired(e.target.checked)}
-                                            className="rounded border-[#c4c8cc]"
-                                        />
-                                        Required
-                                    </label>
-                                </div>
-                            )}
-                            <div>
-                                <div className="mb-1 text-xs font-semibold text-[#31394d]">Where it appears</div>
-                                <div className="flex flex-wrap gap-4">
-                                    <label className="flex items-center gap-2 text-sm">
-                                        <input type="checkbox" checked={editVisibleDrawer} onChange={(e) => setEditVisibleDrawer(e.target.checked)} className="rounded border-[#c4c8cc]" />
-                                        Record drawer
-                                    </label>
-                                    <label className="flex items-center gap-2 text-sm">
-                                        <input type="checkbox" checked={editVisibleForm} onChange={(e) => setEditVisibleForm(e.target.checked)} className="rounded border-[#c4c8cc]" />
-                                        Forms
-                                    </label>
-                                    <label className="flex items-center gap-2 text-sm">
-                                        <input type="checkbox" checked={editVisibleTable} onChange={(e) => setEditVisibleTable(e.target.checked)} className="rounded border-[#c4c8cc]" />
-                                        Lists
-                                    </label>
-                                </div>
-                            </div>
-                            <details
-                                className="rounded-md border border-[#e6e8ec] px-3 py-2"
-                                open={showEditAdvanced}
-                                onToggle={(e) => setShowEditAdvanced((e.target as HTMLDetailsElement).open)}
-                            >
-                                <summary className="cursor-pointer text-xs font-medium text-[#59678b]">Technical details</summary>
-                                <div className="mt-3 space-y-3">
-                                    <div>
-                                        <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Description (optional)</label>
-                                        <input
-                                            type="text"
-                                            value={editDescription}
-                                            onChange={(e) => setEditDescription(e.target.value)}
-                                            className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
-                                        />
-                                    </div>
-                                    <div className="flex flex-wrap gap-4">
-                                        <label className="flex items-center gap-2 text-sm">
-                                            <input type="checkbox" checked={editActive} onChange={(e) => setEditActive(e.target.checked)} className="rounded border-[#c4c8cc]" />
-                                            Active
-                                        </label>
-                                        <label className="flex items-center gap-2 text-sm">
-                                            <input type="checkbox" checked={editFilterable} onChange={(e) => setEditFilterable(e.target.checked)} className="rounded border-[#c4c8cc]" />
-                                            Filterable in lists
-                                        </label>
-                                        <label className="flex items-center gap-2 text-sm">
-                                            <input type="checkbox" checked={editSortable} onChange={(e) => setEditSortable(e.target.checked)} className="rounded border-[#c4c8cc]" />
-                                            Sortable in lists
-                                        </label>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="block text-xs font-medium text-[#59678b] mb-0.5">Group</label>
-                                    <select
-                                        value={
-                                            sectionKeyInOptions(sectionOptions, editSectionKey)
-                                                ? editSectionKey
-                                                : (sectionOptions[0]?.value ?? "custom")
-                                        }
-                                        onChange={(e) => setEditSectionKey(e.target.value)}
-                                        className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
-                                    >
-                                        {sectionOptions.map((o) => (
-                                            <option key={o.value} value={o.value}>
-                                                {o.label}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-[#59678b] mb-0.5">Sort order</label>
-                                    <input
-                                        type="number"
-                                        value={editSortOrder}
-                                        onChange={(e) => setEditSortOrder(Number(e.target.value) || 0)}
-                                        className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
-                                    />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-[#59678b] mb-0.5">Placeholder</label>
-                                <input
-                                    type="text"
-                                    value={editPlaceholder}
-                                    onChange={(e) => setEditPlaceholder(e.target.value)}
-                                    className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-[#59678b] mb-0.5">Help text</label>
-                                <input
-                                    type="text"
-                                    value={editHelpText}
-                                    onChange={(e) => setEditHelpText(e.target.value)}
-                                    className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
-                                />
-                            </div>
-                            {editRow && isSelectLikeFieldType(editRow.field_type) && (
-                                <div>
-                                    <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Option set</label>
-                                    <OptionSetKeyPicker
-                                        value={editOptionSetKey}
-                                        onChange={setEditOptionSetKey}
-                                        disabled={!canMutate || editSaving}
-                                        manageOptionSetsHref={manageOptionSetsHref}
-                                    />
-                                </div>
-                            )}
-                                    <p className="text-[10px] font-mono text-[#59678b]/70">
-                                        {editRow.field_type} · {editRow.field_key}
-                                    </p>
-                                </div>
-                            </details>
-                        </div>
-                        {editError && <p className="mt-2 text-sm text-red-600">{editError}</p>}
-                        <div className="mt-4 flex justify-end gap-2">
-                            <button
-                                type="button"
-                                onClick={() => !editSaving && setEditOpen(false)}
-                                className="rounded border border-[#e6e8ec] px-3 py-1.5 text-sm font-medium hover:bg-[#eef0f4]"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                onClick={saveEdit}
-                                disabled={editSaving}
-                                className="rounded bg-alloy-midnight px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-                            >
-                                {editSaving ? "Saving…" : "Save"}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <FieldDefinitionEditModal
+                open={editOpen && editRow != null}
+                saving={editSaving}
+                canMutate={canMutate}
+                entityType={entityType}
+                entityTitle={title}
+                row={editRow!}
+                policySettingsSupported={policySettingsSupported}
+                policyView={editPolicyView}
+                sectionOptions={sectionOptions}
+                manageOptionSetsHref={manageOptionSetsHref}
+                editLabel={editLabel}
+                setEditLabel={setEditLabel}
+                editDescription={editDescription}
+                setEditDescription={setEditDescription}
+                editHelpText={editHelpText}
+                setEditHelpText={setEditHelpText}
+                editRequired={editRequired}
+                setEditRequired={setEditRequired}
+                editInteractionPreset={editInteractionPreset}
+                setEditInteractionPreset={setEditInteractionPreset}
+                editActive={editActive}
+                setEditActive={setEditActive}
+                editVisibleDrawer={editVisibleDrawer}
+                setEditVisibleDrawer={setEditVisibleDrawer}
+                editVisibleForm={editVisibleForm}
+                setEditVisibleForm={setEditVisibleForm}
+                editVisibleTable={editVisibleTable}
+                setEditVisibleTable={setEditVisibleTable}
+                editSectionKey={editSectionKey}
+                setEditSectionKey={setEditSectionKey}
+                editSortOrder={editSortOrder}
+                setEditSortOrder={setEditSortOrder}
+                editPlaceholder={editPlaceholder}
+                setEditPlaceholder={setEditPlaceholder}
+                editOptionSetKey={editOptionSetKey}
+                setEditOptionSetKey={setEditOptionSetKey}
+                editError={editError}
+                onClose={() => !editSaving && setEditOpen(false)}
+                onSave={() => void saveEdit()}
+            />
 
             {createOpen && (
                 <div

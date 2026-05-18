@@ -7451,6 +7451,10 @@ export default function AdminEntityDrawer() {
             if (savedOrder?.length) {
                 overviewSections = applyOverviewSectionOrder(overviewSections, savedOrder);
             }
+            const hiddenAll = new Set(oppDrawerCfg?.overview_hidden_sections ?? []);
+            if (hiddenAll.size) {
+                overviewSections = overviewSections.filter((s) => !hiddenAll.has(s.key));
+            }
         }
         if (
             drawer.type === "opportunities" &&

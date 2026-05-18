@@ -149,10 +149,10 @@ export function operatorRequirementLockedReason(
         const deferred = deferredFieldHint(entityType, fieldKey);
         if (deferred) return deferred;
         if (view.writeMap.policyMode === "deferred") return "Updated outside drawer field save";
-        return "Managed by Alloy — label and visibility may still be editable";
+        return "Managed elsewhere — you can still edit the label and visibility";
     }
     if (view.requirementAdvanced || view.interactionAdvanced) {
-        return "Uses a custom rule — contact your Alloy administrator to change";
+        return "Managed elsewhere — contact your Alloy administrator to change";
     }
     return "Cannot change here";
 }
@@ -168,10 +168,9 @@ export function operatorPolicyColumnLabel(
     if (!view.policyEditable) {
         const deferred = deferredFieldHint(entityType, fieldKey);
         if (deferred) return deferred;
-        if (view.requirementAdvanced || view.interactionAdvanced) return "Custom rule";
-        return "Managed by Alloy";
+        return "Managed elsewhere";
     }
-    if (view.requirementAdvanced || view.interactionAdvanced) return "Custom rule";
+    if (view.requirementAdvanced || view.interactionAdvanced) return "Managed elsewhere";
     switch (view.displayCategory) {
         case "required":
             return "Required";

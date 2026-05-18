@@ -4,6 +4,7 @@ import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { fetchEffectiveRecordDrawerLayout } from "@/lib/admin/effectiveRecordDrawerLayout";
 import {
     buildEffectiveDrawerLayoutPreview,
+    buildOpportunityWorkflowV1EditorSections,
     type PreviewFieldDef,
 } from "@/lib/recordChrome/effectiveDrawerLayoutPreview";
 import type { EntityPresentationType } from "@/lib/entityPresentation";
@@ -121,6 +122,11 @@ export async function GET(request: NextRequest) {
     const inquiryMode = cfg.inquiry_drawer_mode ?? null;
     const workflowV1Configured = inquiryMode === "workflow_v1";
 
+    const editor_sections =
+        workflowV1Configured && entityType === "opportunity"
+            ? buildOpportunityWorkflowV1EditorSections(cfg, fieldDefinitions, fieldSectionLabels)
+            : undefined;
+
     return NextResponse.json({
         entity_type: entityType,
         surface: "drawer",
@@ -140,5 +146,7 @@ export async function GET(request: NextRequest) {
         },
         preview_fidelity: preview.fidelity,
         sections: preview.sections,
+        editor_sections,
+        overview_hidden_sections: cfg.overview_hidden_sections ?? [],
     });
 }

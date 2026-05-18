@@ -610,7 +610,25 @@ cd web && npm run test -- tests/sprints/settingsRecordUxParityRegression.test.ts
 | Actions | Diagnostics-only card UI grouped by surface; technical details behind expander |
 | Tests | `fieldSettingsOperatorUi`, `layoutsSettingsEntities`, `actionInventoryDiagnostics` |
 
-**Still not editable in Settings UI:** action placements; new drawer sections (reorder only for opportunity workflow v1); status transition rules; raw layout JSON.
+**Pass 3 (Fields polish only, before drawer QA):**
+
+| Area | Change |
+|------|--------|
+| Fields table | Policy-editable opportunity/job fields: inline Required select (Optional / Required / Required when saving) with immediate PATCH + Saving…/Saved; locked fields show operator reason only |
+| Fields modal | Operator sections only by default; technical fields behind collapsed **Developer details** |
+| Tests | `fieldRequiredInlineUi`, `fieldEditModalOperatorUi`, `fieldSettingsOperatorUi.pass3` |
+
+**Settings Config Completion Pass (May 2026 — core control plane V1):**
+
+| Area | Shipped |
+|------|---------|
+| Fields (A) | Inline Required select + operator modal (Pass 3) |
+| Layouts (B) | Opportunity workflow v1: reorder, show/hide, rename workflow sections, restore hidden sections; `PATCH …/opportunity-workflow-v1-sections`; `editor_sections` on effective-preview |
+| Actions (C) | Org-scoped placement editor: enable/disable, label (org definitions), surface/slot/section/order on record surfaces; `PATCH /api/admin/action-placements/[id]`, `PATCH /api/admin/action-definitions/[id]` (label), `POST /api/admin/action-placements` |
+
+**Still not editable in Settings UI:** platform-global placements/definitions; queue/work-unit scoped placements; raw `condition_config` JSON; new workflow virtual sections (only show hidden + rename existing); job/schedule layout section builder; status transition rules; action definition create/migrate.
+
+**BOS / config-agent readiness:** Layout and placement mutations are structured PATCH bodies with validation helpers (`opportunityWorkflowV1SectionConfig.ts`, `actionPlacementMutation.ts`) — suitable for future agent proposals without raw JSON editors.
 
 ---
 
@@ -619,7 +637,10 @@ cd web && npm run test -- tests/sprints/settingsRecordUxParityRegression.test.ts
 | Concern | Path |
 |---------|------|
 | Settings index | `web/app/adminV2/settings/page.tsx` |
-| Fields UI | `web/components/admin/EntityFieldsClient.tsx` |
+| Fields UI | `web/components/admin/EntityFieldsClient.tsx`, `web/components/admin/fields/FieldRequiredInlineCell.tsx`, `web/components/admin/fields/FieldDefinitionEditModal.tsx` |
+| Fields operator UI helpers | `web/lib/fields/fieldSettingsOperatorUi.ts`, `fieldRequiredInlineUi.ts`, `fieldEditModalOperatorUi.ts` |
+| Layout section config V1 | `web/lib/admin/opportunityWorkflowV1SectionConfig.ts`, `web/app/api/admin/record-drawer-layouts/opportunity-workflow-v1-sections/route.ts`, `OpportunityWorkflowV1SectionsEditor.tsx` |
+| Action placement editor V1 | `web/lib/admin/actions/actionPlacementMutation.ts`, `actionPlacementEditorUi.ts`, `web/app/api/admin/action-placements/**`, `ActionPlacementsSettingsClient.tsx` |
 | Drawer | `web/components/admin/AdminEntityDrawer.tsx` |
 | Opportunity record | `web/lib/admin/opportunityEntityRecord.ts` |
 | Job RRS | `web/lib/rrs/entities/job.ts` |

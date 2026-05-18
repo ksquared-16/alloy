@@ -15,10 +15,17 @@ export function layoutSettingsSupportsSectionOrder(entity: LayoutSettingsEntityK
     return entity === "opportunity";
 }
 
-export function layoutSettingsSupportsAddSection(_entity: LayoutSettingsEntityKey): boolean {
-    return false;
+export function layoutSettingsSupportsSectionConfig(entity: LayoutSettingsEntityKey): boolean {
+    return entity === "opportunity";
 }
 
-export function layoutSettingsAddSectionUnavailableCopy(): string {
-    return "Adding new drawer sections is not available in Settings yet. You can reorder existing inquiry sections below. New sections require a platform release.";
+export function layoutSettingsSupportsAddSection(entity: LayoutSettingsEntityKey): boolean {
+    return entity === "opportunity";
+}
+
+export function layoutSettingsAddSectionUnavailableCopy(entity: LayoutSettingsEntityKey): string {
+    if (entity === "opportunity") {
+        return "Show a hidden drawer section using Add section, or reorder and rename sections below.";
+    }
+    return "Drawer section configuration for this record type is coming later.";
 }

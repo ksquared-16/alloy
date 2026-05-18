@@ -109,8 +109,10 @@ function mapOppFieldDefToDrawerField(f: PreviewFieldDef): EntityDrawerFieldConfi
 function computeOpportunityOverviewSectionsLikeDrawer(
     cfg: RecordLayoutConfigJson | null,
     fieldDefs: PreviewFieldDef[],
-    fieldSectionLabels: Record<string, string>
+    fieldSectionLabels: Record<string, string>,
+    opts?: { applyHiddenFilter?: boolean }
 ): EntityDrawerSectionConfig[] {
+    const applyHiddenFilter = opts?.applyHiddenFilter !== false;
     let visible = fieldDefs.filter((d) => d.is_visible_in_drawer !== false);
     visible = visible.filter((d) => !OPPORTUNITY_DRAWER_HIDE_PRICING_FIELD_KEYS.has(d.field_key));
     visible = visible.filter((d) => d.field_key !== "status");
@@ -246,7 +248,56 @@ function computeOpportunityOverviewSectionsLikeDrawer(
 
     overviewSections = overviewSections.filter((s) => s.key !== "tour_scheduling");
 
+    if (applyHiddenFilter) {
+        const hiddenAll = new Set(oppDrawerCfg?.overview_hidden_sections ?? []);
+        if (hiddenAll.size) {
+            overviewSections = overviewSections.filter((s) => !hiddenAll.has(s.key));
+        }
+    }
+
     return overviewSections;
+}
+
+export type OpportunityWorkflowV1EditorSectionRow = {
+    section_key: string;
+    title: string;
+    kind: "workflow_virtual" | "field_section_ref" | "injected_system";
+    visible: boolean;
+    title_editable: boolean;
+};
+
+/** Full section list for Settings editor (includes hidden sections, preserves saved order). */
+export function buildOpportunityWorkflowV1EditorSections(
+    cfg: RecordLayoutConfigJson,
+    fieldDefs: PreviewFieldDef[],
+    fieldSectionLabels: Record<string, string>
+): OpportunityWorkflowV1EditorSectionRow[] {
+    const allSections = computeOpportunityOverviewSectionsLikeDrawer(cfg, fieldDefs, fieldSectionLabels, {
+        applyHiddenFilter: false,
+    });
+    const hidden = new Set(cfg.overview_hidden_sections ?? []);
+    const wfKeys = new Set((cfg.inquiry_workflow_sections ?? []).map((w) => w.key));
+    const byKey = new Map(allSections.map((s) => [s.key, s]));
+    const order =
+        cfg.overview_section_order?.length && cfg.overview_section_order.length === allSections.length
+            ? cfg.overview_section_order
+            : allSections.map((s) => s.key);
+
+    return order.map((key) => {
+        const s = byKey.get(key);
+        const kind: OpportunityWorkflowV1EditorSectionRow["kind"] = wfKeys.has(key)
+            ? "workflow_virtual"
+            : key === "inquiry_children" || key === "inquiry_tuition" || key === "__unified_status"
+              ? "injected_system"
+              : "field_section_ref";
+        return {
+            section_key: key,
+            title: s?.title ?? key.replace(/_/g, " "),
+            kind,
+            visible: !hidden.has(key),
+            title_editable: kind === "workflow_virtual",
+        };
+    });
 }
 
 function toPreviewRows(sections: EntityDrawerSectionConfig[], cfg: RecordLayoutConfigJson | null): DrawerLayoutPreviewSection[] {

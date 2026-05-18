@@ -14,10 +14,10 @@ This note aligns **what Settings claims** with **what the product actually reads
 | Field `requirement_policy` / `interaction_policy` | `field_definitions` columns; PATCH API | **Editable + enforced (opportunity/job enforceable)** | Shipped Cards 2–4 |
 | Drawer field-policy write map (Card 1.5) | `drawerFieldPolicyAdapter.ts`; `_field_policy_resolved` on opportunity/job GET | **Active** | Shipped |
 | Field grouping (`section_key` labels) | `field_section_definitions`; `/adminV2/settings/field-sections` | **Editable** | Keep |
-| Drawer layout `config_json` | `record_drawer_layouts`, `record_layouts` | **Partial** — preview + opportunity workflow v1 order | Later: broader layout editor |
+| Drawer layout `config_json` | `record_drawer_layouts`, `record_layouts` | **Editable (opportunity workflow v1)** — reorder, show/hide, rename workflow sections; restore hidden via Add section | Job/schedule section builder later |
 | Layout integrity validation | `GET /api/admin/config/layout-integrity` | **Editable visibility** — Settings → Layouts **Layout integrity** panel (manual run, read-only report with severity/category) | **Done (Card 6)** |
 | Status transition rules | `status_transition_rules` table | **Read-only inventory** — `/adminV2/settings/status-transition-rules` | Developer/seed-managed for now |
-| Action definitions / placements | `action_definitions`, `action_placements` | **Read-only inventory** — `/adminV2/settings/actions` (runtime executor column) | **Done (Card 5)**; access verified Card 7 |
+| Action definitions / placements | `action_definitions`, `action_placements` | **Editable (org-scoped V1)** — `/adminV2/settings/actions` enable/disable, label, surface/slot/section/order on record surfaces; platform placements read-only | No condition_config editor; no new definitions |
 | Legacy `record_actions` | `record_actions` table; drawer/queue | **Partially exposed** (runtime only) | **Keep** until dedicated migration card |
 | Queue definitions | `work_units.queue_definition` | **Partial** — JSON editor on work units | Keep; validate via schema |
 | Attention / SLA rules | `departments.metadata.opportunity_attention_rules` | **Editable** — `/adminV2/settings/attention-sla-rules` | Work-unit overrides: later card |
@@ -60,13 +60,25 @@ This note aligns **what Settings claims** with **what the product actually reads
 
 **Settings → Layouts** includes an **effective preview** (`GET /api/admin/record-layouts/effective-preview`) aligned with **`AdminEntityDrawer`** assembly, plus a **Layout integrity** panel (`LayoutIntegrityReportPanel`, `GET /api/admin/config/layout-integrity`) — on-demand read-only diagnostics: field registry vs layout visibility, write paths, sections, and layout ordering. Presentation helpers: `layoutIntegrityPresentation.ts`. Does not mutate config; operators fix via Fields, Field grouping, and Layouts section-order editor (Card 9).
 
-### Safe drawer editing (Card 9, workflow v1 opportunity only)
+### Safe drawer editing (workflow v1 opportunity — Config Completion V1)
 
-- **Where:** Settings → Layouts → **Edit drawer section order** (shown only when effective layout has **`inquiry_drawer_mode: workflow_v1`**).
-- **What changes:** **`overview_section_order`** on effective **`config_json`**, plus **`inquiry_workflow_sections` array reorder** so workflow virtual definitions follow the same global order (no arbitrary JSON; full permutation validated server-side).
-- **Persistence:** **`record_drawer_layouts`** update when an org override exists; otherwise **INSERT** a new org row (surface `drawer`, key `default`, `entity_type = opportunity`) seeded from the effective global template + new order.
-- **API:** `PATCH /api/admin/record-drawer-layouts/opportunity-workflow-v1-order` (admin role). Body: `{ overview_section_order: string[] }` — must equal the canonical resolved section key list for that org (from `listOpportunityWorkflowV1CanonicalSectionKeys`).
-- **Runtime parity:** After workflow v1 filters in **`AdminEntityDrawer`**, if **`overview_section_order`** is non-empty, **`applyOverviewSectionOrder`** runs on the final overview list. When **no** saved order exists, legacy behavior pins **`inquiry_children`** first; saved order disables that pin so operators control full ordering. The preview builder (`effectiveDrawerLayoutPreview.ts`) matches this.
+- **Where:** Settings → Layouts → **Drawer sections** (when **`inquiry_drawer_mode: workflow_v1`**).
+- **What changes (structured, no raw JSON editor):**
+  - **Reorder:** `overview_section_order` + `inquiry_workflow_sections` reorder (`mergeOpportunityWorkflowV1OrderIntoConfigJson`).
+  - **Show/hide:** `overview_hidden_sections` (applies to all section keys after drawer assembly).
+  - **Rename:** `inquiry_workflow_sections[].title` for workflow virtual sections only; field-group labels remain on Field grouping.
+  - **Add section:** restore a hidden section (remove from `overview_hidden_sections`).
+- **APIs:** `PATCH …/opportunity-workflow-v1-order` (order only, Card 9); `PATCH …/opportunity-workflow-v1-sections` (order + visibility + titles). Effective preview returns **`editor_sections`** for the Settings editor.
+- **Persistence:** `persistOpportunityDrawerLayoutConfig` — org `record_drawer_layouts` update or insert from global template.
+- **Not in V1:** creating new workflow virtual sections with arbitrary `field_keys`; job/schedule section builders.
+
+### Action placement editing (Config Completion V1)
+
+- **Where:** Settings → Actions.
+- **Editable:** Org-scoped `action_placements` rows — `is_active`, `order_index`, `surface` (`record_header` \| `record_section`), `slot`, `section_key` (when record_section), `display_style`. Org-scoped `action_definitions.label`.
+- **Read-only:** Global/platform placements (`org_id` null); `condition_config`; department/work_unit scoping; creating new action definitions.
+- **APIs:** `PATCH /api/admin/action-placements/[id]`, `POST /api/admin/action-placements`, `PATCH /api/admin/action-definitions/[id]` (label only). Inventory unchanged: `GET /api/admin/actions/inventory`.
+- **Execute path unchanged:** `POST /api/admin/actions/execute` → `executeAdminAction.ts`.
 
 ### Workflow-generated vs static overview sections (opportunity)
 
