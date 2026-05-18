@@ -21,7 +21,7 @@ describe("taskAssistScheduledSendPresentation", () => {
 
     it("needs_attention headline explains unprocessed send", () => {
         const headline = scheduledSendAttentionHeadline("needs_attention");
-        expect(headline).toContain("not been processed");
+        expect(headline).toContain("Scheduled but not processed");
     });
 
     it("failed headline includes error detail", () => {

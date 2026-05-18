@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
+import { ADMINV2_DRAWER_PANEL_Z } from "@/components/admin/Drawer";
 import { formatTaskAssistClientError } from "@/lib/agent/taskAssist/taskAssistClientErrorMessages";
 import { scheduledSendUrgencyBadge } from "@/lib/agent/taskAssist/taskAssistOperationalUrgency";
 import {
@@ -54,14 +56,14 @@ function schedToLocalInput(iso: string): string {
 
 export type ScheduledSendDetailPopoverProps = {
     send: ScheduledSendDetail;
-    anchorRef: RefObject<HTMLElement | null>;
+    anchorEl: HTMLElement | null;
     onClose: () => void;
     onUpdated: () => void;
 };
 
 export default function ScheduledSendDetailPopover({
     send,
-    anchorRef,
+    anchorEl,
     onClose,
     onUpdated,
 }: ScheduledSendDetailPopoverProps) {
@@ -72,6 +74,9 @@ export default function ScheduledSendDetailPopover({
     const [subject, setSubject] = useState(send.subject_snapshot ?? "");
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [success, setSuccess] = useState<string | null>(null);
+    const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+    const [portalReady, setPortalReady] = useState(false);
 
     const badge = scheduledSendUrgencyBadge(send);
     const headline = scheduledSendAttentionHeadline(badge.urgency, send.metadata);
@@ -81,6 +86,11 @@ export default function ScheduledSendDetailPopover({
     const canProcessNow = scheduledSendCanProcessNow(send.status, send.scheduled_for);
     const linkedLabel = send.entity_label?.trim() || "Linked record";
     const isEmail = send.channel === "email";
+    const showEditActions = canEdit || canReschedule;
+
+    useEffect(() => {
+        setPortalReady(true);
+    }, []);
 
     useEffect(() => {
         setSchedLocal(schedToLocalInput(send.scheduled_for));
@@ -88,22 +98,49 @@ export default function ScheduledSendDetailPopover({
         setSubject(send.subject_snapshot ?? "");
         setEditing(false);
         setError(null);
+        setSuccess(null);
     }, [send.id, send.scheduled_for, send.body_snapshot, send.subject_snapshot, send.status]);
+
+    useLayoutEffect(() => {
+        if (!anchorEl) {
+            setPosition(null);
+            return;
+        }
+        const update = () => {
+            const rect = anchorEl.getBoundingClientRect();
+            const width = Math.min(window.innerWidth - 16, 352);
+            const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8));
+            setPosition({ top: rect.bottom + 6, left });
+        };
+        update();
+        window.addEventListener("resize", update);
+        window.addEventListener("scroll", update, true);
+        return () => {
+            window.removeEventListener("resize", update);
+            window.removeEventListener("scroll", update, true);
+        };
+    }, [anchorEl, send.id]);
 
     useEffect(() => {
         const onDoc = (e: MouseEvent) => {
             const t = e.target as Node;
             if (panelRef.current?.contains(t)) return;
-            if (anchorRef.current?.contains(t)) return;
+            if (anchorEl?.contains(t)) return;
             onClose();
         };
-        document.addEventListener("mousedown", onDoc);
-        return () => document.removeEventListener("mousedown", onDoc);
-    }, [anchorRef, onClose]);
+        const id = window.setTimeout(() => {
+            document.addEventListener("mousedown", onDoc);
+        }, 0);
+        return () => {
+            window.clearTimeout(id);
+            document.removeEventListener("mousedown", onDoc);
+        };
+    }, [anchorEl, onClose]);
 
-    const onCancel = useCallback(async () => {
+    const onCancelSend = useCallback(async () => {
         setBusy(true);
         setError(null);
+        setSuccess(null);
         try {
             const res = await cancelCommunicationScheduledSend(send.id);
             const json = await readJson<{ ok?: boolean; error?: string; message?: string }>(res);
@@ -120,6 +157,7 @@ export default function ScheduledSendDetailPopover({
     const onSave = useCallback(async () => {
         setBusy(true);
         setError(null);
+        setSuccess(null);
         try {
             const res = await patchCommunicationScheduledSend(send.id, {
                 scheduled_for: new Date(schedLocal).toISOString(),
@@ -129,6 +167,7 @@ export default function ScheduledSendDetailPopover({
             const json = await readJson<{ ok?: boolean; error?: string; message?: string }>(res);
             if (!res.ok || !json.ok) throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
             setEditing(false);
+            setSuccess("Scheduled send updated.");
             onUpdated();
         } catch (e: unknown) {
             setError(formatTaskAssistClientError((e as Error).message));
@@ -140,10 +179,12 @@ export default function ScheduledSendDetailPopover({
     const onProcessNow = useCallback(async () => {
         setBusy(true);
         setError(null);
+        setSuccess(null);
         try {
             const res = await processDueCommunicationScheduledSends(25);
             const json = await readJson<{ ok?: boolean; error?: string; message?: string }>(res);
             if (!res.ok || !json.ok) throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
+            setSuccess("Processing started for due sends.");
             onUpdated();
         } catch (e: unknown) {
             setError(formatTaskAssistClientError((e as Error).message));
@@ -152,15 +193,22 @@ export default function ScheduledSendDetailPopover({
         }
     }, [onUpdated]);
 
-    const showEditActions = canEdit || canReschedule;
+    if (!portalReady || typeof document === "undefined" || !position) {
+        return null;
+    }
 
-    return (
+    return createPortal(
         <div
             ref={panelRef}
             role="dialog"
             aria-label="Scheduled message details"
             data-scheduled-send-popover="true"
-            className="absolute right-0 top-full z-50 mt-1 w-[min(100vw-2rem,22rem)] rounded-lg border border-alloy-stone/20 bg-white p-2.5 text-[11px] shadow-lg ring-1 ring-alloy-stone/10"
+            className="fixed w-[min(100vw-2rem,22rem)] rounded-lg border border-alloy-stone/20 bg-white p-2.5 text-[11px] shadow-lg ring-1 ring-alloy-stone/10"
+            style={{
+                top: position.top,
+                left: position.left,
+                zIndex: ADMINV2_DRAWER_PANEL_Z + 15,
+            }}
         >
             <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
@@ -236,6 +284,11 @@ export default function ScheduledSendDetailPopover({
                 </>
             )}
 
+            {success ? (
+                <p className="mt-1 text-[10px] font-medium text-emerald-800/90" role="status">
+                    {success}
+                </p>
+            ) : null}
             {error ? (
                 <p className="mt-1 text-[10px] font-medium text-red-800/90" role="alert">
                     {error}
@@ -249,7 +302,7 @@ export default function ScheduledSendDetailPopover({
                         className="rounded-md border border-alloy-stone/30 px-2 py-1 text-[10px] font-semibold text-alloy-blue"
                         onClick={() => setEditing(true)}
                     >
-                        {canReschedule && !canEdit ? "Edit & reschedule" : "Edit"}
+                        Edit & reschedule
                     </button>
                 ) : null}
                 {editing ? (
@@ -286,12 +339,13 @@ export default function ScheduledSendDetailPopover({
                         type="button"
                         disabled={busy}
                         className="rounded-md border border-alloy-stone/30 px-2 py-1 text-[10px] font-semibold text-red-800/90 disabled:opacity-45"
-                        onClick={() => void onCancel()}
+                        onClick={() => void onCancelSend()}
                     >
                         Cancel send
                     </button>
                 ) : null}
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

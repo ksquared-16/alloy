@@ -75,7 +75,7 @@ describe("scheduledSendDeliveryUrgency", () => {
         ).toBe("Scheduled");
     });
 
-    it("labels pending past grace as Send not processed", () => {
+    it("labels pending past grace as Scheduled but not processed", () => {
         expect(
             scheduledSendDeliveryUrgency({
                 status: "pending",
@@ -90,7 +90,7 @@ describe("scheduledSendDeliveryUrgency", () => {
                 NOW,
                 5 * 60 * 1000
             ).label
-        ).toBe("Send not processed");
+        ).toBe("Scheduled but not processed");
     });
 
     it("labels pending within grace as Processing", () => {

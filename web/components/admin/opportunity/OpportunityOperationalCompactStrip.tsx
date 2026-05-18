@@ -221,7 +221,7 @@ export default function OpportunityOperationalCompactStrip({
     }, [opportunityId]);
 
     const taskPopoverAnchorRef = useRef<HTMLButtonElement | null>(null);
-    const sendPopoverAnchorRef = useRef<HTMLButtonElement | null>(null);
+    const [sendPopoverAnchorEl, setSendPopoverAnchorEl] = useState<HTMLButtonElement | null>(null);
 
     useEffect(() => {
         taskPopoverAnchorRef.current =
@@ -229,9 +229,8 @@ export default function OpportunityOperationalCompactStrip({
     }, [popoverTaskId, openTasks]);
 
     useEffect(() => {
-        sendPopoverAnchorRef.current =
-            popoverSendId ? sendChipRefs.current.get(popoverSendId) ?? null : null;
-    }, [popoverSendId, stripSends]);
+        if (!popoverSendId) setSendPopoverAnchorEl(null);
+    }, [popoverSendId]);
 
     useEffect(() => {
         if (!popoverTaskId) return;
@@ -257,7 +256,7 @@ export default function OpportunityOperationalCompactStrip({
             ) : null}
             {sendAttention.failed > 0 || sendAttention.needs_attention > 0 ? (
                 <p
-                    className="w-full rounded border border-amber-200/70 bg-amber-50/90 px-2 py-1 text-[10px] leading-snug text-amber-950/90"
+                    className="pointer-events-none w-full rounded border border-amber-200/70 bg-amber-50/90 px-2 py-1 text-[10px] leading-snug text-amber-950/90"
                     data-scheduled-send-attention-banner="true"
                 >
                     {sendAttention.failed > 0 ?
@@ -296,8 +295,10 @@ export default function OpportunityOperationalCompactStrip({
                                 }}
                                 data-operational-task-chip={t.id}
                                 data-operational-task-urgency={taskBadge.urgency}
-                                onClick={() => {
+                                onClick={(e) => {
+                                    e.stopPropagation();
                                     setPopoverSendId(null);
+                                    setSendPopoverAnchorEl(null);
                                     setPopoverTaskId((prev) => (prev === t.id ? null : t.id));
                                 }}
                                 className={`${CHIP} cursor-pointer text-left border ${
@@ -341,9 +342,12 @@ export default function OpportunityOperationalCompactStrip({
                                 }}
                                 data-operational-scheduled-send-chip={s.id}
                                 data-scheduled-send-urgency={sendBadge.urgency}
-                                onClick={() => {
+                                onClick={(e) => {
+                                    e.stopPropagation();
                                     setPopoverTaskId(null);
-                                    setPopoverSendId((prev) => (prev === s.id ? null : s.id));
+                                    const nextId = popoverSendId === s.id ? null : s.id;
+                                    setSendPopoverAnchorEl(nextId ? (e.currentTarget as HTMLButtonElement) : null);
+                                    setPopoverSendId(nextId);
                                 }}
                                 className={`${CHIP} cursor-pointer text-left border ${
                                     selected ?
@@ -360,8 +364,11 @@ export default function OpportunityOperationalCompactStrip({
                             {selected && popoverSendDetail ? (
                                 <ScheduledSendDetailPopover
                                     send={popoverSendDetail}
-                                    anchorRef={sendPopoverAnchorRef}
-                                    onClose={() => setPopoverSendId(null)}
+                                    anchorEl={sendPopoverAnchorEl}
+                                    onClose={() => {
+                                        setPopoverSendId(null);
+                                        setSendPopoverAnchorEl(null);
+                                    }}
                                     onUpdated={() => void load()}
                                 />
                             ) : null}

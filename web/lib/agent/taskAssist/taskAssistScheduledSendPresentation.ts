@@ -27,7 +27,7 @@ export function scheduledSendAttentionHeadline(
 ): string {
     switch (urgency) {
         case "needs_attention":
-            return "This message was scheduled but has not been processed.";
+            return "Scheduled but not processed. Edit and reschedule, process now, or cancel the send.";
         case "failed": {
             const detail = scheduledSendProcessErrorMessage(metadata);
             return detail ? `Delivery failed: ${detail}` : "Delivery failed. Review the message and reschedule or cancel.";

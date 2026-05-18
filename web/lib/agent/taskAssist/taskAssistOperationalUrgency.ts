@@ -40,7 +40,7 @@ const TASK_BADGE: Record<OperationalTaskDueUrgency, { label: string; className: 
 const SEND_BADGE: Record<ScheduledSendDeliveryUrgency, { label: string; className: string }> = {
     scheduled: { label: "Scheduled", className: "bg-violet-100 text-violet-900 border-violet-200/80" },
     processing: { label: "Processing", className: "bg-amber-100 text-amber-950 border-amber-200/80" },
-    needs_attention: { label: "Send not processed", className: "bg-amber-100 text-amber-950 border-amber-300/90" },
+    needs_attention: { label: "Scheduled but not processed", className: "bg-amber-100 text-amber-950 border-amber-300/90" },
     queued: { label: "Queued", className: "bg-slate-100 text-slate-900 border-slate-200/80" },
     sent_to_provider: { label: "Sent", className: "bg-sky-100 text-sky-900 border-sky-200/80" },
     delivered: { label: "Delivered", className: "bg-emerald-100 text-emerald-900 border-emerald-200/80" },
