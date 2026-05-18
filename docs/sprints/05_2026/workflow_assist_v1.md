@@ -511,4 +511,26 @@ User intent → **stub/AI advisory enrichment** → **deterministic normalizatio
 
 ---
 
+## 18. Operator review card + message variables (shipped)
+
+### Variable audit
+
+| Token / pattern | Supported for workflow runtime? | Workflow Assist preview |
+|-----------------|------------------------------|------------------------|
+| `{{contact.phone}}`, `{{person.phone}}`, `{{opportunity.id}}`, … | Yes — `web/lib/workflowTemplate.ts` dot paths | Configure in Automations action editor |
+| `{{contact_name}}`, `{{team_line}}` | **No** — Task Assist / needs-attention templates only (`suggestedContentTemplates.ts`) | Sanitized to `[Family first name]` or avoided in fallback |
+| Canonical first-name merge field | **Not defined** for workflows today | Fallback copy has no merge tokens |
+
+Module: `web/lib/agent/workflowAssist/workflowAssistMessageVariablesV1.ts`.
+
+### Operator-facing proposal card
+
+Compact sections: header (title, badges, scope), **Workflow** (when/who/action/status), **Message preview** (provenance label), **Needs review** (≤4 bullets), one safety sentence, **Apply** + **Open Automations**. Internal event strings, scaffolds, normalization, and AI caveats live in collapsed **Advanced details** (default closed).
+
+### Fallback message (tour reminder)
+
+Example: “Reminder: your upcoming tour is coming up in about 3 days. Reply here if you need to reschedule.”
+
+---
+
 **When to update this doc:** Card 0 amendments; first route shipped; permission key seeded; any intentional change to `requireAdmin` vs ops for workflow mutations.

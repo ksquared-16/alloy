@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import Link from "next/link";
 
 import type { WorkflowAssistDraftReviewV1 } from "@/lib/agent/workflowAssist/workflowAssistDraftEnrichmentV1";
@@ -11,157 +13,197 @@ const CMD = {
     textLabel: "rgba(39, 63, 82, 0.52)",
 } as const;
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Row({ label, value }: { label: string; value: string }) {
     return (
-        <section
-            className="space-y-1 rounded-md border px-2 py-1.5"
-            style={{ borderColor: derived.border }}
-            data-command-surface-workflow-assist-review-section={title.replace(/\s+/g, "_").toLowerCase()}
-        >
-            <h4 className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: CMD.textLabel }}>
-                {title}
-            </h4>
-            {children}
-        </section>
+        <div className="flex gap-2 text-[11px]">
+            <span className="w-14 shrink-0 font-semibold" style={{ color: CMD.textLabel }}>
+                {label}
+            </span>
+            <span style={{ color: CMD.textBody }}>{value}</span>
+        </div>
     );
 }
 
-export function WorkflowAssistProposalReviewPanel({ review }: { review: WorkflowAssistDraftReviewV1 }) {
+export function WorkflowAssistProposalReviewPanel({
+    review,
+    onApply,
+    applyBusy,
+    applyDone,
+    applyAllowed,
+    applyBlockedMessage,
+}: {
+    review: WorkflowAssistDraftReviewV1;
+    onApply: () => void;
+    applyBusy: boolean;
+    applyDone: boolean;
+    applyAllowed: boolean;
+    applyBlockedMessage?: string | null;
+}) {
+    const [advancedOpen, setAdvancedOpen] = useState(false);
+    const op = review.operator;
+
     return (
-        <div className="space-y-2" data-command-surface-workflow-assist-draft-review="true">
-            <div className="flex flex-wrap gap-1.5">
-                <span
-                    className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
-                    style={{ backgroundColor: "rgba(39, 63, 82, 0.08)", color: CMD.textLabel }}
-                >
-                    Disabled draft
-                </span>
-                <span
-                    className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
-                    style={{ backgroundColor: "rgba(0, 162, 131, 0.1)", color: brand.secondary }}
-                    data-command-surface-workflow-assist-message-provenance={review.message_preview.provenance}
-                >
-                    {review.message_preview.provenance_label}
-                </span>
-                {review.message_preview.needs_review ?
+        <div className="space-y-3" data-command-surface-workflow-assist-draft-review="true">
+            <header className="space-y-1.5">
+                <h3 className="text-[13px] font-semibold" style={{ color: CMD.textBody }} data-command-surface-workflow-assist-title>
+                    {op.display_title}
+                </h3>
+                <div className="flex flex-wrap gap-1.5">
+                    <span
+                        className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+                        style={{ backgroundColor: "rgba(39, 63, 82, 0.08)", color: CMD.textLabel }}
+                    >
+                        Disabled draft
+                    </span>
                     <span
                         className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
                         style={{ backgroundColor: "rgba(220, 38, 38, 0.1)", color: semantic.warning }}
                     >
                         Needs review
                     </span>
-                : null}
-                <span
-                    className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
-                    style={{ backgroundColor: "rgba(39, 63, 82, 0.06)", color: CMD.textLabel }}
-                    title="AI suggestions are advisory; normalized values are authoritative for apply"
-                >
-                    AI-assisted · {review.ai_suggestions.confidence}
-                </span>
-            </div>
-
-            <Section title="Workflow summary">
-                <p className="text-[11px] font-semibold" style={{ color: CMD.textBody }}>
-                    {review.workflow_summary.name}
-                </p>
-                <p className="text-[10px]" style={{ color: CMD.textSupporting }}>
-                    Scope: {review.workflow_summary.scope_label}
-                </p>
-                {review.workflow_summary.description ?
-                    <p className="text-[10px] leading-snug" style={{ color: CMD.textSupporting }}>
-                        {review.workflow_summary.description}
-                    </p>
-                : null}
-            </Section>
-
-            <Section title="Trigger & timing">
-                <p className="text-[10px]" style={{ color: CMD.textBody }}>
-                    {review.trigger.human_label}
-                </p>
+                </div>
                 <p className="text-[10px]" style={{ color: CMD.textLabel }}>
-                    {review.trigger.event_type} · {review.trigger.entity_type}
+                    Scope: {op.scope_label}
                 </p>
-                <p className="text-[10px]" style={{ color: CMD.textSupporting }}>
-                    {review.trigger.timing_description}
-                </p>
-            </Section>
+            </header>
 
-            {review.conditions.length ?
-                <Section title="Conditions">
-                    <ul className="list-disc pl-4 text-[10px]" style={{ color: CMD.textSupporting }}>
-                        {review.conditions.map((c, i) => (
-                            <li key={i}>{c}</li>
-                        ))}
-                    </ul>
-                </Section>
-            : null}
+            <section
+                className="space-y-1.5 rounded-md border px-2.5 py-2"
+                style={{ borderColor: derived.border }}
+                aria-label="Workflow"
+            >
+                <h4 className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: CMD.textLabel }}>
+                    Workflow
+                </h4>
+                <Row label="When" value={op.when_label} />
+                <Row label="Who" value={op.who_label} />
+                <Row label="Action" value={op.action_label} />
+                <Row label="Status" value={op.status_label} />
+            </section>
 
-            <Section title="Action preview">
-                <p className="text-[10px]" style={{ color: CMD.textBody }}>
-                    {review.action_preview.summary}
-                </p>
-                {review.action_preview.channel ?
-                    <p className="text-[10px]" style={{ color: CMD.textLabel }}>
-                        Channel: {review.action_preview.channel}
-                        {review.action_preview.scaffold_only ? " (scaffold only — not live)" : ""}
-                    </p>
-                : null}
-            </Section>
-
-            <Section title="Message preview">
-                <pre
-                    className="max-h-[min(120px,24vh)] overflow-y-auto whitespace-pre-wrap rounded border px-2 py-1 text-[10px]"
+            <section className="space-y-1" aria-label="Message preview">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: CMD.textLabel }}>
+                        Message preview
+                    </h4>
+                    <span
+                        className="text-[9px] font-semibold"
+                        style={{ color: brand.secondary }}
+                        data-command-surface-workflow-assist-message-provenance={review.message_preview.provenance}
+                    >
+                        {review.message_preview.provenance_label}
+                    </span>
+                </div>
+                <p
+                    className="rounded-md border px-2.5 py-2 text-[11px] leading-relaxed whitespace-pre-wrap"
                     style={{ borderColor: derived.border, color: CMD.textBody }}
                     data-command-surface-workflow-assist-message-preview-body="true"
                 >
                     {review.message_preview.body}
-                </pre>
-            </Section>
+                </p>
+            </section>
 
-            {review.ai_suggestions.missing_information.length || review.ai_suggestions.warnings.length ?
-                <Section title="AI suggestions & warnings">
-                    {review.ai_suggestions.missing_information.length ?
-                        <>
-                            <p className="text-[10px] font-semibold" style={{ color: CMD.textLabel }}>
-                                Missing information
-                            </p>
-                            <ul className="list-disc pl-4 text-[10px]" style={{ color: CMD.textSupporting }}>
-                                {review.ai_suggestions.missing_information.map((m, i) => (
-                                    <li key={i}>{m}</li>
-                                ))}
-                            </ul>
-                        </>
+            <section className="space-y-1" aria-label="Needs review">
+                <h4 className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: CMD.textLabel }}>
+                    Needs review
+                </h4>
+                <ul className="list-disc pl-4 text-[10px]" style={{ color: CMD.textSupporting }}>
+                    {op.needs_review.map((item) => (
+                        <li key={item}>{item}</li>
+                    ))}
+                </ul>
+            </section>
+
+            <div
+                className="rounded-md border px-2.5 py-2 text-[10px] leading-snug"
+                style={{ borderColor: derived.border, color: CMD.textSupporting }}
+                data-command-surface-workflow-assist-safety-once="true"
+            >
+                This creates a disabled draft. No messages will send until the workflow is reviewed and enabled in
+                Automations.
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+                <button
+                    type="button"
+                    disabled={applyBusy || applyDone || !applyAllowed}
+                    title={!applyAllowed ? (applyBlockedMessage ?? undefined) : undefined}
+                    className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
+                    data-command-surface-workflow-assist-apply="true"
+                    onClick={onApply}
+                >
+                    {applyBusy ? "Applying…" : applyDone ? "Applied" : "Apply disabled draft"}
+                </button>
+                <Link
+                    href="/adminV2/workflows"
+                    className="rounded-md border px-3 py-1.5 text-[11px] font-semibold"
+                    style={{ borderColor: derived.border, color: CMD.textBody }}
+                    data-command-surface-workflow-assist-open-automations="true"
+                >
+                    Open Automations
+                </Link>
+            </div>
+
+            {!applyAllowed && applyBlockedMessage ?
+                <p className="text-[10px]" style={{ color: CMD.textSupporting }} data-command-surface-workflow-assist-apply-blocked>
+                    {applyBlockedMessage}
+                </p>
+            : null}
+
+            <details
+                className="rounded-md border text-[10px]"
+                style={{ borderColor: derived.border }}
+                data-command-surface-workflow-assist-advanced-details="true"
+                open={advancedOpen}
+                onToggle={(e) => setAdvancedOpen((e.target as HTMLDetailsElement).open)}
+            >
+                <summary className="cursor-pointer px-2 py-1.5 font-semibold" style={{ color: CMD.textLabel }}>
+                    Advanced details
+                </summary>
+                <div className="space-y-2 border-t px-2 py-2" style={{ borderColor: derived.border, color: CMD.textSupporting }}>
+                    <p>
+                        <span className="font-semibold">event_type:</span> {review.advanced.event_type}
+                    </p>
+                    <p>
+                        <span className="font-semibold">entity_type:</span> {review.advanced.entity_type}
+                    </p>
+                    <p>
+                        <span className="font-semibold">Trigger:</span> {review.advanced.trigger_technical}
+                    </p>
+                    <p>
+                        <span className="font-semibold">Actions:</span> {review.advanced.actions_technical}
+                    </p>
+                    {review.advanced.description ?
+                        <p>
+                            <span className="font-semibold">Description:</span> {review.advanced.description}
+                        </p>
                     : null}
-                    {review.ai_suggestions.warnings.length ?
-                        <ul className="list-disc pl-4 text-[10px]" style={{ color: semantic.warning }}>
-                            {review.ai_suggestions.warnings.map((w, i) => (
+                    <p>
+                        <span className="font-semibold">Enrichment:</span> {review.advanced.enrichment_source} ·{" "}
+                        {review.advanced.confidence}
+                    </p>
+                    {review.advanced.rejected_fields.length ?
+                        <p>
+                            <span className="font-semibold">Rejected fields:</span>{" "}
+                            {review.advanced.rejected_fields.join(", ")}
+                        </p>
+                    : null}
+                    {review.message_preview.unresolved_tokens.length ?
+                        <p style={{ color: semantic.warning }}>
+                            <span className="font-semibold">Unresolved preview tokens:</span>{" "}
+                            {review.message_preview.unresolved_tokens.join(", ")} (not workflow merge fields — use{" "}
+                            {`{{contact.phone}}`} etc. in Automations)
+                        </p>
+                    : null}
+                    {review.advanced.warnings.length ?
+                        <ul className="list-disc pl-4">
+                            {review.advanced.warnings.map((w, i) => (
                                 <li key={i}>{w}</li>
                             ))}
                         </ul>
                     : null}
-                </Section>
-            : null}
-
-            <Section title="Review checklist">
-                <ul className="space-y-1 text-[10px]" style={{ color: CMD.textBody }}>
-                    {review.review_checklist.map((item) => (
-                        <li key={item.id} className="flex gap-1.5">
-                            <span aria-hidden>{item.required ? "☐" : "○"}</span>
-                            <span>{item.label}</span>
-                        </li>
-                    ))}
-                </ul>
-            </Section>
-
-            <p className="text-[10px] leading-snug" style={{ color: CMD.textLabel }}>
-                AI-generated fields are suggestions only. Apply writes a{" "}
-                <span className="font-semibold">disabled</span> workflow using normalized schema values — enable only
-                from{" "}
-                <Link href="/adminV2/workflows" className="font-semibold underline-offset-2 hover:underline" style={{ color: brand.secondary }}>
-                    Automations
-                </Link>
-                .
-            </p>
+                </div>
+            </details>
         </div>
     );
 }

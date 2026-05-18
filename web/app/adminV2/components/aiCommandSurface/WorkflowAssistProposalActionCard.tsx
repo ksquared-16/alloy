@@ -2,15 +2,16 @@
 
 import { useCallback, useState } from "react";
 
+import Link from "next/link";
+
 import { dispatchAiActivityRefresh } from "@/app/adminV2/components/aiActivity/RecentAiActionsStrip";
+import { WorkflowAssistProposalReviewPanel } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistProposalReviewPanel";
 import { dispatchWorkflowAutomationRefresh } from "@/lib/adminV2/aiCommandSurface/workflowAssistWorkspaceEvents";
 import type { WorkflowAssistCreateProposeBuildV1 } from "@/lib/agent/workflowAssist/workflowAssistCreateFromCommandV1";
 import type { WorkflowAssistSuggestionV1 } from "@/lib/agent/workflowAssist/workflowAssistProposalV1";
 import { WORKFLOW_ASSIST_PORTAL_MUTATION_BLOCKED_USER_MESSAGE } from "@/lib/agent/workflowAssist/workflowAssistReadV1";
-import { WorkflowAssistProposalReviewPanel } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistProposalReviewPanel";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { brand, derived, neutral, semantic } from "@/styles/tokens/colors";
-import Link from "next/link";
 
 const CMD = {
     textBody: neutral.textPrimary,
@@ -47,7 +48,6 @@ export function WorkflowAssistProposalActionCard({
 }: {
     suggestion: WorkflowAssistSuggestionV1;
     createInterpreted?: WorkflowAssistCreateProposeBuildV1["interpreted"];
-    /** When false, Apply stays disabled (session cannot mutate workflows via Assist). */
     applyAllowed?: boolean;
 }) {
     const globalAssistant = useGlobalAssistantOptional();
@@ -93,9 +93,40 @@ export function WorkflowAssistProposalActionCard({
         }
     }, [suggestion, applyAllowed, globalAssistant?.workspaceScope]);
 
-    const isCreate = suggestion.proposal_kind === "create_workflow";
-    const editReview = suggestion.edit_review ?? [];
     const draftReview = suggestion.draft_review ?? null;
+    const editReview = suggestion.edit_review ?? [];
+    const isCreate = suggestion.proposal_kind === "create_workflow";
+
+    if (draftReview) {
+        return (
+            <div className="space-y-2" data-command-surface-workflow-assist-proposal-card="true">
+                <WorkflowAssistProposalReviewPanel
+                    review={draftReview}
+                    onApply={() => void apply()}
+                    applyBusy={busy}
+                    applyDone={done?.ok === true}
+                    applyAllowed={applyAllowed}
+                    applyBlockedMessage={!applyAllowed ? WORKFLOW_ASSIST_PORTAL_MUTATION_BLOCKED_USER_MESSAGE : null}
+                />
+                {done && !done.ok ?
+                    <p className="text-[11px]" style={{ color: semantic.warning }} data-command-surface-workflow-assist-apply-error>
+                        {(done as { error?: string }).error}: {(done as { message?: string }).message ?? "Apply failed"}
+                    </p>
+                : null}
+                {done?.ok ?
+                    <p className="text-[11px]" style={{ color: brand.secondary }} data-command-surface-workflow-assist-apply-success>
+                        Draft saved.{" "}
+                        <Link
+                            href={`/adminV2/workflows?workflow=${encodeURIComponent((done as { workflow_id?: string }).workflow_id ?? "")}`}
+                            className="font-semibold underline-offset-2 hover:underline"
+                        >
+                            Open in Automations
+                        </Link>
+                    </p>
+                : null}
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-2" data-command-surface-workflow-assist-proposal-card="true">
@@ -110,20 +141,15 @@ export function WorkflowAssistProposalActionCard({
                     Admin approval required
                 </span>
             </div>
-            {draftReview ?
-                <WorkflowAssistProposalReviewPanel review={draftReview} />
-            : null}
-            {!draftReview ?
-                <p className="text-[11px] font-semibold" style={{ color: CMD.textBody }}>
+            <p className="text-[11px] font-semibold" style={{ color: CMD.textBody }}>
                 {createInterpreted?.headline ??
                     (isCreate ?
                         `Create disabled workflow: ${suggestion.draft_row?.name ?? "—"}`
                     : suggestion.proposal_kind === "pause_workflow" ?
                         `Disable workflow ${suggestion.target_workflow_id ?? ""}`
                     :   `Edit workflow ${suggestion.target_workflow_id ?? ""}`)}
-                </p>
-            : null}
-            {isCreate && !draftReview && createInterpreted ?
+            </p>
+            {isCreate && createInterpreted ?
                 <dl className="grid gap-1 text-[10px]" style={{ color: CMD.textSupporting }}>
                     <ProposalDetailRow label="Trigger" value={createInterpreted.trigger_label} />
                     <ProposalDetailRow label="Actions" value={createInterpreted.actions_label} />
@@ -150,35 +176,35 @@ export function WorkflowAssistProposalActionCard({
                     ))}
                 </dl>
             : null}
-            <p className="text-[10px]" style={{ color: CMD.textSupporting }}>
-                {suggestion.reasoning.summary}
-            </p>
-            {suggestion.reasoning.warnings.length ?
-                <ul className="list-disc pl-4 text-[10px]" style={{ color: semantic.warning }}>
-                    {suggestion.reasoning.warnings.map((w, i) => (
-                        <li key={i}>{w}</li>
-                    ))}
-                </ul>
-            : null}
-            <div className="rounded-md border border-dashed px-2 py-1.5 text-[10px]" style={{ borderColor: derived.border, color: CMD.textLabel }}>
-                Read-only summary cards above do not change workflows. Apply writes through the same admin paths as
-                Automations after you confirm — creates stay disabled; enable only from Automations.
+            <div
+                className="rounded-md border px-2.5 py-2 text-[10px] leading-snug"
+                style={{ borderColor: derived.border, color: CMD.textSupporting }}
+            >
+                This creates a disabled draft. No messages will send until the workflow is reviewed and enabled.
             </div>
             {!applyAllowed ?
                 <p className="text-[10px] leading-snug" style={{ color: CMD.textSupporting }} data-command-surface-workflow-assist-apply-blocked>
                     {WORKFLOW_ASSIST_PORTAL_MUTATION_BLOCKED_USER_MESSAGE}
                 </p>
             : null}
-            <button
-                type="button"
-                disabled={busy || done?.ok === true || !applyAllowed}
-                title={!applyAllowed ? WORKFLOW_ASSIST_PORTAL_MUTATION_BLOCKED_USER_MESSAGE : undefined}
-                className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
-                data-command-surface-workflow-assist-apply="true"
-                onClick={() => void apply()}
-            >
-                {busy ? "Applying…" : done?.ok ? "Applied" : "Apply as admin"}
-            </button>
+            <div className="flex flex-wrap gap-2">
+                <button
+                    type="button"
+                    disabled={busy || done?.ok === true || !applyAllowed}
+                    className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
+                    data-command-surface-workflow-assist-apply="true"
+                    onClick={() => void apply()}
+                >
+                    {busy ? "Applying…" : done?.ok ? "Applied" : "Apply disabled draft"}
+                </button>
+                <Link
+                    href="/adminV2/workflows"
+                    className="rounded-md border px-3 py-1.5 text-[11px] font-semibold"
+                    style={{ borderColor: derived.border, color: CMD.textBody }}
+                >
+                    Open Automations
+                </Link>
+            </div>
             {done && !done.ok ?
                 <p className="text-[11px]" style={{ color: semantic.warning }} data-command-surface-workflow-assist-apply-error>
                     {(done as { error?: string }).error}: {(done as { message?: string }).message ?? "Apply failed"}
@@ -186,7 +212,7 @@ export function WorkflowAssistProposalActionCard({
             : null}
             {done?.ok ?
                 <p className="text-[11px]" style={{ color: brand.secondary }} data-command-surface-workflow-assist-apply-success>
-                    Applied · workflow id {(done as { workflow_id?: string }).workflow_id}.{" "}
+                    Applied.{" "}
                     <Link
                         href={`/adminV2/workflows?workflow=${encodeURIComponent((done as { workflow_id?: string }).workflow_id ?? "")}`}
                         className="font-semibold underline-offset-2 hover:underline"

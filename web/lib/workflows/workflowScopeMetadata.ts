@@ -35,6 +35,7 @@ export type WorkflowAssistWorkflowMetadataV1 = {
             body: string;
             provenance: string;
             needs_review: boolean;
+            unresolved_tokens?: string[];
         };
     };
 };

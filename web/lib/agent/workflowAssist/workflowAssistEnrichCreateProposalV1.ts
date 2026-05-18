@@ -135,26 +135,20 @@ export function enrichWorkflowAssistCreateSuggestionV1(
                 body: draft_review.message_preview.body.slice(0, 4000),
                 provenance: draft_review.message_preview.provenance,
                 needs_review: draft_review.message_preview.needs_review,
+                unresolved_tokens: draft_review.message_preview.unresolved_tokens,
             },
         },
     });
 
     normalized_row.metadata = metadataRecord;
 
-    const warnings = [
-        ...input.suggestion.reasoning.warnings,
-        ...draft_review.ai_suggestions.warnings.filter(
-            (w) => !input.suggestion.reasoning.warnings.includes(w)
-        ),
-    ].slice(0, 24);
-
     return {
         ...input.suggestion,
         draft_row: normalized_row,
         draft_review,
         reasoning: {
-            summary: `Review disabled draft “${normalized_row.name}” (${draft_review.workflow_summary.scope_label}). ${draft_review.message_preview.provenance_label}.`,
-            warnings,
+            summary: `${draft_review.operator.display_title} · ${draft_review.operator.scope_label}`,
+            warnings: [],
         },
     };
 }

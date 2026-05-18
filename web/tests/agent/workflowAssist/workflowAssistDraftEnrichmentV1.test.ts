@@ -42,20 +42,23 @@ describe("workflowAssistDraftEnrichmentV1", () => {
         expect(msg.body).toContain("org template");
     });
 
-    it("falls back to AI then scaffold", () => {
+    it("falls back to AI then scaffold without contact_name", () => {
         const ai = resolveWorkflowAssistMessagePreview({
             template_id: "tour_reminder",
             org_metadata: {},
-            ai_raw: { suggested_message_preview: "AI draft SMS" },
+            ai_raw: { suggested_message_preview: "Reminder: tour in 3 days. Reply to reschedule." },
         });
         expect(ai.provenance).toBe("ai_generated");
+        expect(ai.body).not.toContain("{{contact_name}}");
 
         const fb = resolveWorkflowAssistMessagePreview({
-            template_id: "generic_stub",
+            template_id: "tour_reminder",
+            lead_days: 3,
             org_metadata: {},
             ai_raw: null,
         });
         expect(fb.provenance).toBe("fallback_scaffold");
+        expect(fb.body).not.toMatch(/\{\{contact_name\}\}/);
     });
 
     it("enrich create suggestion keeps workflow disabled and attaches draft_review", () => {
@@ -109,7 +112,7 @@ describe("workflowAssistDraftEnrichmentV1", () => {
                 },
             },
             raw: { suggested_trigger_event_type: "not_real" },
-            message: { body: "msg", provenance: "ai_generated", needs_review: true },
+            message: { body: "msg", provenance: "ai_generated", needs_review: true, unresolved_tokens: [] },
             enrichment_source: "stub_v1",
             rejected_fields: ["suggested_trigger_event_type"],
         });

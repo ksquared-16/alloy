@@ -3,26 +3,17 @@ import type {
     WorkflowAssistDraftEnrichmentRawV1,
     WorkflowAssistMessageProvenanceV1,
 } from "@/lib/agent/workflowAssist/workflowAssistDraftEnrichmentV1";
+import {
+    buildGenericOperatorPreviewMessage,
+    buildTourReminderOperatorPreviewMessage,
+    sanitizeWorkflowAssistPreviewMessage,
+} from "@/lib/agent/workflowAssist/workflowAssistMessageVariablesV1";
 
 /** Optional org-level templates under org_settings.metadata (advisory; not workflow truth). */
 export type OrgWorkflowAssistMessageTemplates = {
     tour_reminder_sms?: string | null;
     enrollment_status_sms?: string | null;
 };
-
-const FALLBACK_TOUR_REMINDER_SMS = `Hi {{contact_name}},
-
-This is a friendly reminder about your upcoming tour. If you need to reschedule, reply to this message.
-
-Thanks,
-{{team_line}}`;
-
-const FALLBACK_GENERIC_SMS = `Hi {{contact_name}},
-
-Following up from our team. Let us know if you have questions.
-
-Thanks,
-{{team_line}}`;
 
 export function parseOrgWorkflowAssistMessageTemplates(metadata: unknown): OrgWorkflowAssistMessageTemplates {
     if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return {};
@@ -49,19 +40,12 @@ export function resolveOrgTemplateMessage(
     return null;
 }
 
-export function buildFallbackScaffoldMessage(input: {
-    template_id: WorkflowAssistCreateTemplateIdV1;
-    lead_days?: number | null;
-}): string {
-    if (input.template_id === "tour_reminder") {
-        const days = input.lead_days ?? 3;
-        return (
-            `[Review before enable] Reminder ~${days} day(s) before tour: personalize greeting and tour date. ` +
-            `Placeholder variables: {{contact_name}}, {{team_line}}.`
-        );
-    }
-    return FALLBACK_GENERIC_SMS;
-}
+export type WorkflowAssistResolvedMessagePreviewV1 = {
+    body: string;
+    provenance: WorkflowAssistMessageProvenanceV1;
+    needs_review: boolean;
+    unresolved_tokens: string[];
+};
 
 export function resolveWorkflowAssistMessagePreview(input: {
     template_id: WorkflowAssistCreateTemplateIdV1;
@@ -69,37 +53,50 @@ export function resolveWorkflowAssistMessagePreview(input: {
     org_metadata: unknown;
     ai_raw: WorkflowAssistDraftEnrichmentRawV1 | null;
     existing_workflow_message?: string | null;
-}): { body: string; provenance: WorkflowAssistMessageProvenanceV1; needs_review: boolean } {
+}): WorkflowAssistResolvedMessagePreviewV1 {
     const orgTemplates = parseOrgWorkflowAssistMessageTemplates(input.org_metadata);
     const orgBody = resolveOrgTemplateMessage(input.template_id, orgTemplates);
     if (orgBody) {
-        return { body: orgBody, provenance: "org_template", needs_review: true };
+        const sanitized = sanitizeWorkflowAssistPreviewMessage(orgBody);
+        return {
+            body: sanitized.body,
+            provenance: "org_template",
+            needs_review: true,
+            unresolved_tokens: sanitized.unresolved_tokens,
+        };
     }
 
     if (input.existing_workflow_message?.trim()) {
+        const sanitized = sanitizeWorkflowAssistPreviewMessage(input.existing_workflow_message.trim());
         return {
-            body: input.existing_workflow_message.trim().slice(0, 4000),
+            body: sanitized.body.slice(0, 4000),
             provenance: "workflow_template",
             needs_review: true,
+            unresolved_tokens: sanitized.unresolved_tokens,
         };
     }
 
     const aiBody = input.ai_raw?.suggested_message_preview?.trim();
     if (aiBody) {
-        return { body: aiBody.slice(0, 4000), provenance: "ai_generated", needs_review: true };
-    }
-
-    if (input.template_id === "tour_reminder") {
+        const sanitized = sanitizeWorkflowAssistPreviewMessage(aiBody);
         return {
-            body: FALLBACK_TOUR_REMINDER_SMS,
-            provenance: "fallback_scaffold",
+            body: sanitized.body.slice(0, 4000),
+            provenance: "ai_generated",
             needs_review: true,
+            unresolved_tokens: sanitized.unresolved_tokens,
         };
     }
 
+    const days = input.lead_days ?? 3;
+    const fallbackBody =
+        input.template_id === "tour_reminder" ?
+            buildTourReminderOperatorPreviewMessage(days)
+        :   buildGenericOperatorPreviewMessage();
+
     return {
-        body: buildFallbackScaffoldMessage(input),
+        body: fallbackBody,
         provenance: "fallback_scaffold",
         needs_review: true,
+        unresolved_tokens: [],
     };
 }

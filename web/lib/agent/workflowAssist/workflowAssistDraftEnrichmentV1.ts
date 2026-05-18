@@ -4,6 +4,11 @@
  */
 
 import type { WorkflowAssistCreateTemplateIdV1 } from "@/lib/agent/workflowAssist/workflowAssistCreateFromCommandV1";
+import {
+    buildOperatorWorkflowLines,
+    operatorNeedsReviewItems,
+    workflowAssistDisplayTitle,
+} from "@/lib/agent/workflowAssist/workflowAssistOperatorCopyV1";
 
 export const WORKFLOW_ASSIST_ALLOWED_EVENT_TYPES = [
     "opportunity_schedule_tour_followup",
@@ -73,6 +78,30 @@ export type WorkflowAssistDraftReviewV1 = {
         provenance: WorkflowAssistMessageProvenanceV1;
         provenance_label: string;
         needs_review: boolean;
+        unresolved_tokens: string[];
+    };
+    /** Operator-facing compact card (primary UI). */
+    operator: {
+        display_title: string;
+        scope_label: string;
+        when_label: string;
+        who_label: string;
+        action_label: string;
+        status_label: string;
+        needs_review: string[];
+    };
+    /** Internal mechanics — default collapsed in UI. */
+    advanced: {
+        event_type: string;
+        entity_type: string;
+        trigger_technical: string;
+        actions_technical: string;
+        description: string | null;
+        enrichment_source: string;
+        confidence: WorkflowAssistEnrichmentConfidenceV1;
+        rejected_fields: string[];
+        warnings: string[];
+        missing_information: string[];
     };
     ai_suggestions: {
         source: "stub_v1" | "deterministic_v1" | "openai_v1";
@@ -81,6 +110,7 @@ export type WorkflowAssistDraftReviewV1 = {
         warnings: string[];
         rejected_fields: string[];
     };
+    /** @deprecated Use operator.needs_review — kept for tests/metadata compatibility. */
     review_checklist: WorkflowAssistDraftReviewChecklistItemV1[];
 };
 
@@ -179,30 +209,27 @@ export function normalizeWorkflowAssistConfidence(raw: string | null | undefined
 export function provenanceLabel(provenance: WorkflowAssistMessageProvenanceV1): string {
     switch (provenance) {
         case "org_template":
-            return "Using org template";
+            return "From org template";
         case "workflow_template":
-            return "Using workflow template";
+            return "From workflow template";
         case "ai_generated":
-            return "AI-generated draft";
+            return "AI-suggested draft";
         case "fallback_scaffold":
-            return "Fallback scaffold";
+            return "Fallback preview";
         default:
-            return "Deterministic starter";
+            return "Starter preview";
     }
 }
-
-const DEFAULT_REVIEW_CHECKLIST: WorkflowAssistDraftReviewChecklistItemV1[] = [
-    { id: "confirm_trigger", label: "Confirm trigger event and entity match your process", required: true },
-    { id: "confirm_conditions", label: "Add workflow conditions (site, status, dates) in Automations", required: true },
-    { id: "confirm_message", label: "Review and approve message copy before enabling", required: true },
-    { id: "confirm_timing", label: "Configure timing/offset in Automations (Assist does not schedule)", required: true },
-    { id: "keep_disabled", label: "Leave disabled until review is complete", required: true },
-];
 
 export function buildWorkflowAssistDraftReviewV1(input: {
     context: WorkflowAssistEnrichmentContextV1;
     raw: WorkflowAssistDraftEnrichmentRawV1 | null;
-    message: { body: string; provenance: WorkflowAssistMessageProvenanceV1; needs_review: boolean };
+    message: {
+        body: string;
+        provenance: WorkflowAssistMessageProvenanceV1;
+        needs_review: boolean;
+        unresolved_tokens: string[];
+    };
     enrichment_source: WorkflowAssistDraftReviewV1["ai_suggestions"]["source"];
     rejected_fields: string[];
 }): WorkflowAssistDraftReviewV1 {
@@ -231,11 +258,12 @@ export function buildWorkflowAssistDraftReviewV1(input: {
 
     const description = trimStr(raw?.suggested_description, 2000) ?? det.description;
 
-    const timing =
-        trimStr(raw?.suggested_timing_description, 500) ??
-        (input.context.lead_days_before_tour != null ?
-            `~${input.context.lead_days_before_tour} day(s) before tour-related signal (configure exact offset in Automations)`
-        :   "Configure timing in Automations");
+    const operatorLines = buildOperatorWorkflowLines({
+        template_id: input.context.template_id,
+        lead_days_before_tour: input.context.lead_days_before_tour,
+        scope_label: input.context.scope_label,
+        channel: channelNorm.value,
+    });
 
     const conditions = [
         ...trimStrArray(raw?.suggested_conditions, 8, 240),
@@ -243,14 +271,23 @@ export function buildWorkflowAssistDraftReviewV1(input: {
     ].slice(0, 10);
 
     const missing = trimStrArray(raw?.missing_information, 12, 240);
-    const warnings = [
+    const internalWarnings = [
         ...trimStrArray(raw?.warnings, 16, 400),
         ...det.unknowns,
         ...(input.rejected_fields.length ?
-            [`Assist ignored unsupported AI fields: ${input.rejected_fields.join(", ")}`]
+            [`Rejected AI fields: ${input.rejected_fields.join(", ")}`]
         :   []),
-        "AI suggestions are advisory — workflow schema is normalized before apply.",
+        ...(input.message.unresolved_tokens.length ?
+            [`Preview tokens need Automations mapping: ${input.message.unresolved_tokens.join(", ")}`]
+        :   []),
     ].slice(0, 20);
+
+    const needsReview = operatorNeedsReviewItems(input.context.template_id);
+    const review_checklist = needsReview.map((label, i) => ({
+        id: `review_${i}`,
+        label,
+        required: true,
+    }));
 
     return {
         version: 1,
@@ -263,12 +300,12 @@ export function buildWorkflowAssistDraftReviewV1(input: {
         trigger: {
             event_type: eventNorm.value,
             entity_type: entityType,
-            timing_description: timing,
+            timing_description: operatorLines.when_label,
             human_label: det.trigger_label,
         },
         conditions,
         action_preview: {
-            summary: det.actions_label,
+            summary: operatorLines.action_label,
             channel: channelNorm.value,
             scaffold_only: true,
         },
@@ -277,6 +314,31 @@ export function buildWorkflowAssistDraftReviewV1(input: {
             provenance: input.message.provenance,
             provenance_label: provenanceLabel(input.message.provenance),
             needs_review: input.message.needs_review,
+            unresolved_tokens: input.message.unresolved_tokens,
+        },
+        operator: {
+            display_title: workflowAssistDisplayTitle(input.context.template_id),
+            scope_label: input.context.scope_label ?? "Org-wide",
+            when_label: operatorLines.when_label,
+            who_label: operatorLines.who_label,
+            action_label: operatorLines.action_label,
+            status_label: operatorLines.status_label,
+            needs_review: needsReview,
+        },
+        advanced: {
+            event_type: eventNorm.value,
+            entity_type: entityType,
+            trigger_technical: det.trigger_label,
+            actions_technical: det.actions_label,
+            description,
+            enrichment_source: input.enrichment_source,
+            confidence:
+                input.enrichment_source === "deterministic_v1" ?
+                    "deterministic"
+                :   normalizeWorkflowAssistConfidence(raw?.confidence ?? null),
+            rejected_fields: [...input.rejected_fields],
+            warnings: internalWarnings,
+            missing_information: missing,
         },
         ai_suggestions: {
             source: input.enrichment_source,
@@ -285,9 +347,9 @@ export function buildWorkflowAssistDraftReviewV1(input: {
                     "deterministic"
                 :   normalizeWorkflowAssistConfidence(raw?.confidence ?? null),
             missing_information: missing,
-            warnings,
+            warnings: internalWarnings,
             rejected_fields: [...input.rejected_fields],
         },
-        review_checklist: DEFAULT_REVIEW_CHECKLIST,
+        review_checklist,
     };
 }
