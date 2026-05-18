@@ -320,29 +320,31 @@ export default function CommandSurfaceThread({
                             );
                         }
                         if (turn.card.type === "config_layout_assist_field_setup") {
+                            const card = turn.card;
                             return (
                                 <AssistantBubble key={turn.id}>
                                     <ConfigLayoutAssistFieldSetupCard
-                                        draft={turn.card.draft}
-                                        sectionOptions={turn.card.sectionOptions}
+                                        draft={card.draft}
+                                        sectionOptions={card.sectionOptions}
                                         busy={busy}
                                         onConfirm={(payload) =>
-                                            onConfirmConfigFieldSetup?.(turn.card.draft.command, payload)
+                                            onConfirmConfigFieldSetup?.(card.draft.command, payload)
                                         }
                                     />
                                 </AssistantBubble>
                             );
                         }
                         if (turn.card.type === "config_layout_assist_ready") {
+                            const card = turn.card;
                             return (
                                 <AssistantBubble key={turn.id}>
                                     <ConfigLayoutAssistReadyCard
-                                        readySummary={turn.card.readySummary}
-                                        persistedProposalId={turn.card.persistedProposalId}
+                                        readySummary={card.readySummary}
+                                        persistedProposalId={card.persistedProposalId}
                                         busy={busy}
                                         canApproveAndApply={configAssistCanApproveAndApply}
                                         onApproveAndApply={() =>
-                                            onApproveConfigProposal?.(turn.card.persistedProposalId)
+                                            onApproveConfigProposal?.(card.persistedProposalId)
                                         }
                                     />
                                 </AssistantBubble>

@@ -8,11 +8,11 @@ import {
     resolveFieldEditability,
     resolveFieldInteractionPolicy,
 } from "@/lib/fields/fieldInteractionPolicy";
-import { resolveEntityLabelsForOrg } from "@/lib/admin/entityLabelsResolve";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
     buildEntityResolveContext,
+    loadConfigLayoutAssistEntityResolveContext,
     type ConfigLayoutAssistEntityResolveContext,
 } from "./configLayoutAssistEntityResolve";
 import {
@@ -41,14 +41,7 @@ export type BuildConfigLayoutProposalInput = {
 
 const PERSON_MIRROR_FIELDS_ON_OPPORTUNITY = new Set(["first_name", "last_name", "email", "phone"]);
 
-export async function loadConfigLayoutAssistEntityResolveContext(
-    supabase: SupabaseClient,
-    orgId: string,
-    defaultEntityType?: string
-): Promise<ConfigLayoutAssistEntityResolveContext> {
-    const labels = await resolveEntityLabelsForOrg(supabase, orgId);
-    return buildEntityResolveContext(labels.effective, defaultEntityType ?? "opportunity");
-}
+export { loadConfigLayoutAssistEntityResolveContext } from "./configLayoutAssistEntityResolve";
 
 function newOp(
     partial: Omit<ConfigurationOperationV1, "operation_id" | "rationale" | "required_permissions"> & {

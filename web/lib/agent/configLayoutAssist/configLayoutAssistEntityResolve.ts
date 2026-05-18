@@ -3,7 +3,9 @@
  */
 
 import { ADMIN_FIELD_ENTITY_TYPE_TO_LABELS_KEY } from "@/lib/admin/adminFieldEntityDisplayLabel";
-import type { EntityLabelRow } from "@/lib/admin/entityLabelsResolve";
+import { resolveEntityLabelsForOrg, type EntityLabelRow } from "@/lib/admin/entityLabelsResolve";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import { CONFIGURATION_PROPOSAL_ENTITY_TYPES, type ConfigurationProposalEntityType } from "./configurationProposalV1";
 
 export type ConfigLayoutAssistEntityResolveContext = {
@@ -115,6 +117,15 @@ export function buildEntityResolveContext(
         aliasIndex,
         displayLabel: (canonical, form) => displayByCanonical.get(canonical)?.[form] ?? defaultDisplayLabel(canonical, form),
     };
+}
+
+export async function loadConfigLayoutAssistEntityResolveContext(
+    supabase: SupabaseClient,
+    orgId: string,
+    defaultEntityType?: string
+): Promise<ConfigLayoutAssistEntityResolveContext> {
+    const labels = await resolveEntityLabelsForOrg(supabase, orgId);
+    return buildEntityResolveContext(labels.effective, defaultEntityType ?? "opportunity");
 }
 
 export function resolveEntityTypeFromPhrase(

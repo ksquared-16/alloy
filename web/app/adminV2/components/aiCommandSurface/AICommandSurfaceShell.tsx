@@ -1221,18 +1221,21 @@ export default function AICommandSurfaceShell() {
       if (!res.ok || !j.ok || !j.draft || !j.section_options) {
         throw new Error(j.message ?? j.error ?? `HTTP ${res.status}`);
       }
+      const draft = j.draft;
+      const sectionOptions = j.section_options;
+      const introMessage = j.intro_message?.trim() ?? "";
       setThread((prev) => {
         let next = prev;
-        if (j.intro_message?.trim()) {
-          next = appendThreadTurn(next, { kind: "assistant_notice", text: j.intro_message.trim() });
+        if (introMessage) {
+          next = appendThreadTurn(next, { kind: "assistant_notice", text: introMessage });
         }
         return appendThreadTurn(next, {
           kind: "action_card",
           card: {
             type: "config_layout_assist_field_setup",
-            introMessage: j.intro_message ?? "",
-            draft: j.draft,
-            sectionOptions: j.section_options,
+            introMessage,
+            draft,
+            sectionOptions,
           },
         });
       });
@@ -1299,15 +1302,19 @@ export default function AICommandSurfaceShell() {
           );
           return;
         }
+        const proposal = j.proposal;
+        const trace = j.trace;
+        const persistedProposalId = j.persisted_proposal_id;
+        const readySummary = j.ready_summary;
         setThread((prev) =>
           appendThreadTurn(prev, {
             kind: "action_card",
             card: {
               type: "config_layout_assist_ready",
-              proposal: j.proposal,
-              trace: j.trace,
-              persistedProposalId: j.persisted_proposal_id,
-              readySummary: j.ready_summary,
+              proposal,
+              trace,
+              persistedProposalId,
+              readySummary,
             },
           })
         );
