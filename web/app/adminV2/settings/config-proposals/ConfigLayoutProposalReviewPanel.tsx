@@ -1,0 +1,210 @@
+"use client";
+
+import type { ReactNode } from "react";
+
+import type { ProposalReviewPresentation } from "@/lib/agent/configLayoutAssist/configLayoutAssistProposalPresentation";
+import type { ProposalStatePresentation } from "@/lib/agent/configLayoutAssist/configLayoutAssistProposalPresentation";
+import { operationKindLabel } from "@/lib/agent/configLayoutAssist/configLayoutAssistProposalPresentation";
+
+type LifecycleAction = {
+    label: string;
+    onClick: () => void;
+    variant?: "primary" | "danger";
+};
+
+export function ConfigLayoutProposalReviewPanel({
+    presentation,
+    statePresentation,
+    lifecycleActions,
+    busy,
+    message,
+    failedReason,
+    showApplyPermissionHint,
+    showRecommendationApprovedHint,
+}: {
+    presentation: ProposalReviewPresentation;
+    statePresentation: ProposalStatePresentation;
+    lifecycleActions: LifecycleAction[];
+    busy: boolean;
+    message: string | null;
+    failedReason?: string | null;
+    showApplyPermissionHint?: boolean;
+    showRecommendationApprovedHint?: boolean;
+}) {
+    return (
+        <div className="space-y-4">
+            <header className="space-y-1">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                    {statePresentation.stateLabel}
+                </p>
+                {statePresentation.statusHint ? (
+                    <p className="text-[11px] font-medium text-alloy-pine">{statePresentation.statusHint}</p>
+                ) : null}
+                <h2 className="text-lg font-semibold text-alloy-midnight">{presentation.title}</h2>
+                <p className="text-sm leading-snug text-alloy-midnight/70">{presentation.summary}</p>
+            </header>
+
+            <ConfirmChangeCard presentation={presentation} />
+
+            {presentation.kind !== "recommendation" && !statePresentation.isRecommendationOnly ? (
+                <StatusBanner variant={statePresentation.needsConfirmation ? "pending" : "neutral"}>
+                    {statePresentation.needsConfirmation
+                        ? "No changes have been applied yet. Review the details below, then mark reviewed and approve when ready."
+                        : "Approve and apply only after you have confirmed the details below."}
+                </StatusBanner>
+            ) : (
+                <StatusBanner variant="recommendation">
+                    No configuration changes will be applied for this proposal.
+                </StatusBanner>
+            )}
+
+            {showApplyPermissionHint ? (
+                <p className="text-xs text-alloy-midnight/55">
+                    Approve and apply require the configuration apply permission for your role.
+                </p>
+            ) : null}
+
+            {showRecommendationApprovedHint ? (
+                <p className="text-xs text-alloy-midnight/55">
+                    This proposal is recommendation-only; there are no configuration mutations to apply.
+                </p>
+            ) : null}
+
+            {lifecycleActions.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                    {lifecycleActions.map((a) => (
+                        <button
+                            key={a.label}
+                            type="button"
+                            disabled={busy}
+                            className={`rounded px-3 py-1.5 text-[11px] font-semibold disabled:opacity-50 ${
+                                a.variant === "danger"
+                                    ? "border border-red-200 text-red-800"
+                                    : "bg-alloy-midnight/90 text-white"
+                            }`}
+                            onClick={a.onClick}
+                        >
+                            {a.label}
+                        </button>
+                    ))}
+                </div>
+            ) : null}
+
+            {message ? <p className="text-xs text-alloy-midnight/70">{message}</p> : null}
+            {failedReason ? <p className="text-xs text-red-700">Failed: {failedReason}</p> : null}
+
+            <AdvancedDetails presentation={presentation} />
+        </div>
+    );
+}
+
+function ConfirmChangeCard({ presentation }: { presentation: ProposalReviewPresentation }) {
+    return (
+        <section className="rounded-lg border border-alloy-forge/12 bg-white/90 p-4 shadow-sm">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/50">
+                Confirm this change
+            </h3>
+            <dl className="mt-3 space-y-2.5">
+                {presentation.fieldRows.map((row) => (
+                    <div key={`${row.label}-${row.value}`} className="grid grid-cols-[minmax(0,9rem)_1fr] gap-x-3 gap-y-0.5 text-sm">
+                        {row.label ? (
+                            <dt className="text-alloy-midnight/50">{row.label}</dt>
+                        ) : (
+                            <dt className="sr-only">Detail</dt>
+                        )}
+                        <dd className="font-medium text-alloy-midnight">{row.value}</dd>
+                    </div>
+                ))}
+            </dl>
+            {presentation.humanExplanation ? (
+                <p className="mt-3 rounded-md border border-alloy-forge/10 bg-alloy-stone/[0.04] px-3 py-2 text-xs leading-relaxed text-alloy-midnight/75">
+                    {presentation.humanExplanation}
+                </p>
+            ) : null}
+            {presentation.confirmationQuestions.length > 0 ? (
+                <div className="mt-4 border-t border-alloy-forge/10 pt-3">
+                    <p className="text-[11px] font-semibold text-alloy-midnight/55">Please confirm</p>
+                    <ul className="mt-1.5 list-disc space-y-1 pl-4 text-xs text-alloy-midnight/70">
+                        {presentation.confirmationQuestions.map((q) => (
+                            <li key={q}>{q}</li>
+                        ))}
+                    </ul>
+                </div>
+            ) : null}
+        </section>
+    );
+}
+
+function AdvancedDetails({ presentation }: { presentation: ProposalReviewPresentation }) {
+    const { advanced } = presentation;
+    return (
+        <details className="rounded-lg border border-alloy-stone/15 bg-white/45 px-3 py-2">
+            <summary className="cursor-pointer select-none text-[11px] font-medium text-alloy-midnight/55 [&::-webkit-details-marker]:hidden">
+                Advanced details
+            </summary>
+            <div className="mt-3 space-y-3 text-[11px] text-alloy-midnight/70">
+                <dl className="grid grid-cols-2 gap-2">
+                    <div>
+                        <dt className="text-alloy-midnight/45">Proposal id</dt>
+                        <dd className="font-mono text-[10px] break-all">{advanced.proposal_id}</dd>
+                    </div>
+                    <div>
+                        <dt className="text-alloy-midnight/45">Risk</dt>
+                        <dd className="capitalize">{advanced.risk_level}</dd>
+                    </div>
+                    <div>
+                        <dt className="text-alloy-midnight/45">Apply mode</dt>
+                        <dd>{advanced.apply_mode}</dd>
+                    </div>
+                    {advanced.internal_field_key ? (
+                        <div className="col-span-2">
+                            <dt className="text-alloy-midnight/45">Internal key</dt>
+                            <dd className="font-mono text-[10px]">{advanced.internal_field_key}</dd>
+                        </div>
+                    ) : null}
+                </dl>
+                {advanced.permissions.length > 0 ? (
+                    <div>
+                        <p className="font-semibold text-alloy-midnight/55">Permissions</p>
+                        <p className="mt-0.5 font-mono text-[10px]">{advanced.permissions.join(", ")}</p>
+                    </div>
+                ) : null}
+                <div className="space-y-2">
+                    <p className="font-semibold text-alloy-midnight/55">Operations</p>
+                    {advanced.operations.map((op, idx) => (
+                        <div
+                            key={`${op.kind}-${idx}`}
+                            className="rounded border border-alloy-forge/10 bg-white/80 px-2 py-1.5"
+                        >
+                            <p className="font-medium text-alloy-midnight">
+                                {operationKindLabel(op.kind as Parameters<typeof operationKindLabel>[0])} ·{" "}
+                                {op.entity_type}
+                                {op.field_key ? ` · ${op.field_key}` : ""}
+                                {op.section_key ? ` · ${op.section_key}` : ""}
+                            </p>
+                            <pre className="mt-1 max-h-32 overflow-auto rounded bg-alloy-midnight/[0.04] p-1 font-mono text-[10px]">
+                                {op.raw_json}
+                            </pre>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </details>
+    );
+}
+
+function StatusBanner({
+    children,
+    variant,
+}: {
+    children: ReactNode;
+    variant: "pending" | "recommendation" | "neutral";
+}) {
+    const styles =
+        variant === "pending"
+            ? "border-amber-200/80 bg-amber-50/80 text-amber-900/90"
+            : variant === "recommendation"
+              ? "border-alloy-forge/15 bg-alloy-stone/[0.06] text-alloy-midnight/70"
+              : "border-alloy-forge/12 bg-white/60 text-alloy-midnight/65";
+    return <p className={`rounded border px-2 py-1.5 text-[11px] leading-snug ${styles}`}>{children}</p>;
+}

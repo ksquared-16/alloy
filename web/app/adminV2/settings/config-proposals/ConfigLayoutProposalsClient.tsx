@@ -3,9 +3,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
+import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import type { ConfigurationProposalV1 } from "@/lib/agent/configLayoutAssist/configurationProposalV1";
 import type { ConfigLayoutAssistCapabilitiesV1 } from "@/lib/agent/configLayoutAssist/configLayoutAssistTypes";
+import {
+    buildProposalListPresentation,
+    buildProposalListPresentationFromProposal,
+    buildProposalReviewPresentation,
+    formatProposalLifecycleState,
+} from "@/lib/agent/configLayoutAssist/configLayoutAssistProposalPresentation";
 import { readConfigProposalIdFromSearchParams } from "@/lib/agent/configLayoutAssist/configLayoutAssistReviewNavigation";
+
+import { ConfigLayoutProposalReviewPanel } from "./ConfigLayoutProposalReviewPanel";
 
 type ProposalListItem = {
     id: string;
@@ -25,24 +34,17 @@ type ProposalRecord = ProposalListItem & {
     rejection_reason?: string | null;
 };
 
-const STATE_LABEL: Record<string, string> = {
-    draft: "Draft (recommendation)",
-    reviewed: "Reviewed",
-    approved: "Approved (not yet applied)",
-    rejected: "Rejected",
-    applied: "Applied",
-    failed: "Failed",
-    rolled_back: "Rolled back",
-};
-
 export default function ConfigLayoutProposalsClient({ initialId }: { initialId?: string }) {
     const searchParams = useSearchParams();
+    const { labels: entityLabels } = useEntityLabels();
     const [list, setList] = useState<ProposalListItem[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(initialId ?? null);
     const [detail, setDetail] = useState<ProposalRecord | null>(null);
     const [caps, setCaps] = useState<ConfigLayoutAssistCapabilitiesV1 | null>(null);
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
+
+    const presentationCtx = useMemo(() => ({ entityLabels }), [entityLabels]);
 
     const loadList = useCallback(async () => {
         const res = await fetch("/api/admin/config-layout-assist/proposals", {
@@ -141,6 +143,19 @@ export default function ConfigLayoutProposalsClient({ initialId }: { initialId?:
     const canReview = caps?.can_review ?? false;
     const canApply = caps?.can_apply ?? false;
 
+    const reviewPresentation = useMemo(
+        () => (proposal ? buildProposalReviewPresentation(proposal, presentationCtx) : null),
+        [proposal, presentationCtx]
+    );
+
+    const statePresentation = useMemo(
+        () =>
+            detail
+                ? formatProposalLifecycleState(detail.state, detail.apply_mode, proposal ?? null)
+                : null,
+        [detail, proposal]
+    );
+
     const lifecycleActions = useMemo(() => {
         const s = detail?.state;
         if (!s) return [];
@@ -164,7 +179,7 @@ export default function ConfigLayoutProposalsClient({ initialId }: { initialId?:
             actions.push({ label: "Approve", onClick: () => void transition("approved"), variant: "primary" });
         }
         if (s === "approved" && canApply && detail.apply_mode !== "recommendation_only") {
-            actions.push({ label: "Apply (authoritative APIs)", onClick: () => void applyApproved(), variant: "primary" });
+            actions.push({ label: "Apply", onClick: () => void applyApproved(), variant: "primary" });
         }
         return actions;
     }, [detail?.state, detail?.apply_mode, canReview, canApply, transition, applyApproved]);
@@ -176,142 +191,66 @@ export default function ConfigLayoutProposalsClient({ initialId }: { initialId?:
                 <ul className="divide-y divide-alloy-forge/10 rounded-lg border border-alloy-forge/12 bg-white/60">
                     {list.length === 0 ? (
                         <li className="px-3 py-4 text-xs text-alloy-midnight/55">
-                            No proposals yet. Use Orchestrator or POST propose.
+                            No proposals yet. Use the Orchestrator command bar to create one.
                         </li>
                     ) : (
-                        list.map((p) => (
-                            <li key={p.id}>
-                                <button
-                                    type="button"
-                                    className={`w-full px-3 py-2 text-left text-xs hover:bg-white/80 ${selectedId === p.id ? "bg-white" : ""}`}
-                                    onClick={() => setSelectedId(p.id)}
-                                >
-                                    <div className="font-medium text-alloy-midnight">{p.summary}</div>
-                                    <div className="mt-0.5 text-[10px] text-alloy-midnight/50">
-                                        {STATE_LABEL[p.state] ?? p.state} · {p.risk_level} ·{" "}
-                                        {new Date(p.created_at).toLocaleString()}
-                                    </div>
-                                </button>
-                            </li>
-                        ))
+                        list.map((p) => {
+                            const listPresentation =
+                                selectedId === p.id && proposal
+                                    ? buildProposalListPresentationFromProposal(
+                                          proposal,
+                                          p.state,
+                                          p.apply_mode,
+                                          presentationCtx
+                                      )
+                                    : buildProposalListPresentation(p);
+                            return (
+                                <li key={p.id}>
+                                    <button
+                                        type="button"
+                                        className={`w-full px-3 py-2.5 text-left text-xs hover:bg-white/80 ${selectedId === p.id ? "bg-white" : ""}`}
+                                        onClick={() => setSelectedId(p.id)}
+                                    >
+                                        <div className="font-medium text-alloy-midnight">
+                                            {listPresentation.title}
+                                        </div>
+                                        {listPresentation.forLabel ? (
+                                            <p className="mt-0.5 text-[11px] text-alloy-midnight/60">
+                                                For: {listPresentation.forLabel}
+                                            </p>
+                                        ) : null}
+                                        <p className="mt-1 text-[10px] text-alloy-midnight/50">
+                                            Status: {listPresentation.stateLabel.split(" · ")[0]}
+                                            {listPresentation.statusHint
+                                                ? ` · ${listPresentation.statusHint}`
+                                                : ""}
+                                        </p>
+                                    </button>
+                                </li>
+                            );
+                        })
                     )}
                 </ul>
             </section>
 
-            <section className="min-w-0 flex-[1.4] space-y-3 rounded-lg border border-alloy-forge/12 bg-white/60 p-4">
-                {!detail || !proposal ? (
+            <section className="min-w-0 flex-[1.4] rounded-lg border border-alloy-forge/12 bg-white/60 p-4">
+                {!detail || !proposal || !reviewPresentation || !statePresentation ? (
                     <p className="text-xs text-alloy-midnight/55">
-                        Select a proposal to review operations, risks, and lifecycle actions.
+                        Select a proposal to review the change in plain language before approving or applying.
                     </p>
                 ) : (
-                    <>
-                        <header>
-                            <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
-                                {STATE_LABEL[detail.state] ?? detail.state}
-                            </p>
-                            <h2 className="text-base font-semibold text-alloy-midnight">{detail.summary}</h2>
-                            <p className="mt-1 text-xs text-alloy-midnight/60">{proposal.intent}</p>
-                        </header>
-
-                        <div className="grid grid-cols-2 gap-2 text-[11px]">
-                            <div>
-                                <span className="text-alloy-midnight/45">Risk</span>
-                                <p className="font-medium capitalize">{detail.risk_level}</p>
-                            </div>
-                            <div>
-                                <span className="text-alloy-midnight/45">Apply mode</span>
-                                <p className="font-medium">{detail.apply_mode}</p>
-                            </div>
-                        </div>
-
-                        {proposal.rationale.length > 0 ? (
-                            <div>
-                                <h3 className="text-[11px] font-semibold text-alloy-midnight/55">Rationale</h3>
-                                <ul className="mt-1 list-disc pl-4 text-xs text-alloy-midnight/70">
-                                    {proposal.rationale.map((r) => (
-                                        <li key={r}>{r}</li>
-                                    ))}
-                                </ul>
-                            </div>
-                        ) : null}
-
-                        <div>
-                            <h3 className="text-[11px] font-semibold text-alloy-midnight/55">Required permissions</h3>
-                            <p className="mt-1 text-xs text-alloy-midnight/70">
-                                {detail.permission_requirements.join(", ") || "—"}
-                            </p>
-                        </div>
-
-                        <div>
-                            <h3 className="text-[11px] font-semibold text-alloy-midnight/55">Operations (diff preview)</h3>
-                            <ul className="mt-2 space-y-2">
-                                {proposal.proposed_operations.map((op) => (
-                                    <li
-                                        key={op.operation_id}
-                                        className="rounded border border-alloy-forge/10 bg-white/80 px-2 py-1.5 text-[11px]"
-                                    >
-                                        <div className="font-medium text-alloy-midnight">
-                                            {op.kind} · {op.entity_type}
-                                            {op.field_key ? ` · ${op.field_key}` : ""}
-                                        </div>
-                                        {op.rationale[0] ? (
-                                            <p className="text-alloy-midnight/60">{op.rationale[0]}</p>
-                                        ) : null}
-                                        <pre className="mt-1 max-h-24 overflow-auto rounded bg-alloy-midnight/[0.04] p-1 text-[10px]">
-                                            {JSON.stringify({ before: op.before, after: op.after }, null, 2)}
-                                        </pre>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-
-                        {detail.state === "applied" ? (
-                            <p className="rounded border border-alloy-pine/30 bg-alloy-pine/5 px-2 py-1 text-[11px] text-alloy-pine">
-                                Applied change — authoritative config was updated after human approval.
-                            </p>
-                        ) : (
-                            <p className="rounded border border-amber-200/80 bg-amber-50/80 px-2 py-1 text-[11px] text-amber-900/90">
-                                Recommendation / pending — no config mutation until you approve and apply.
-                            </p>
-                        )}
-
-                        {detail.state === "reviewed" && canReview && !canApply ? (
-                            <p className="text-xs text-alloy-midnight/55">
-                                Approve and apply require <span className="font-mono">config_assist.apply</span>.
-                            </p>
-                        ) : null}
-
-                        {detail.apply_mode === "recommendation_only" && detail.state === "approved" ? (
-                            <p className="text-xs text-alloy-midnight/55">
-                                This proposal is recommendation-only; there are no configuration mutations to apply.
-                            </p>
-                        ) : null}
-
-                        {lifecycleActions.length > 0 ? (
-                            <div className="flex flex-wrap gap-2">
-                                {lifecycleActions.map((a) => (
-                                    <button
-                                        key={a.label}
-                                        type="button"
-                                        disabled={busy}
-                                        className={`rounded px-3 py-1.5 text-[11px] font-semibold disabled:opacity-50 ${
-                                            a.variant === "danger"
-                                                ? "border border-red-200 text-red-800"
-                                                : "bg-alloy-midnight/90 text-white"
-                                        }`}
-                                        onClick={a.onClick}
-                                    >
-                                        {a.label}
-                                    </button>
-                                ))}
-                            </div>
-                        ) : null}
-
-                        {message ? <p className="text-xs text-alloy-midnight/70">{message}</p> : null}
-                        {detail.failed_reason ? (
-                            <p className="text-xs text-red-700">Failed: {detail.failed_reason}</p>
-                        ) : null}
-                    </>
+                    <ConfigLayoutProposalReviewPanel
+                        presentation={reviewPresentation}
+                        statePresentation={statePresentation}
+                        lifecycleActions={lifecycleActions}
+                        busy={busy}
+                        message={message}
+                        failedReason={detail.failed_reason}
+                        showApplyPermissionHint={detail.state === "reviewed" && canReview && !canApply}
+                        showRecommendationApprovedHint={
+                            detail.apply_mode === "recommendation_only" && detail.state === "approved"
+                        }
+                    />
                 )}
             </section>
         </div>
