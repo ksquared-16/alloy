@@ -1650,6 +1650,19 @@ export default function AICommandSurfaceShell() {
     [adminDrawer?.closeDrawer, debugReviewNavigation]
   );
 
+  const onWorkflowAssistProposeEdit = useCallback(
+    (workflowId: string) => {
+      void proposeWorkflowAssistBody(
+        buildWorkflowAssistEditDescriptionProposeBody({
+          workflow_id: workflowId,
+          proposed_description:
+            "Assist: review reminder timing, audience, and message copy before enabling.",
+        })
+      );
+    },
+    [proposeWorkflowAssistBody]
+  );
+
   return (
     <SurfaceCard expanded={surfaceExpanded} rootRef={shellRootRef}>
       {hasThread ? (
@@ -1721,6 +1734,7 @@ export default function AICommandSurfaceShell() {
                 workflowAssistMutationBlockedReason={workflowAssistMutationBlockedReasonShell}
                 workflowAssistMutationsAllowed={workflowAssistMutationsAllowed}
                 onReviewConfigProposal={onReviewConfigProposal}
+                onWorkflowAssistProposeEdit={onWorkflowAssistProposeEdit}
                 debugReviewNavigation={debugReviewNavigation}
               />
             </div>

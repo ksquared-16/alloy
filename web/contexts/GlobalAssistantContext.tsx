@@ -74,6 +74,8 @@ type GlobalAssistantContextValue = {
     commandSurfaceThreadExpanded: boolean;
     setCommandSurfaceThreadExpanded: (expanded: boolean) => void;
     clearCommandSurfaceConversation: () => void;
+    /** Collapse thread panel when navigating away from a command-card CTA. */
+    collapseCommandSurfaceAfterNavigation: () => void;
     commandSurfaceJobCardUi: CommandSurfaceJobCardUiState;
     setCommandSurfaceJobCardUi: (
         updater: CommandSurfaceJobCardUiState | ((prev: CommandSurfaceJobCardUiState) => CommandSurfaceJobCardUiState)
@@ -131,6 +133,10 @@ export function GlobalAssistantProvider({ children }: { children: ReactNode }) {
         clearPersistedCommandSurfaceSession();
     }, []);
 
+    const collapseCommandSurfaceAfterNavigation = useCallback(() => {
+        setCommandSurfaceThreadExpandedState(false);
+    }, []);
+
     const focusCommandBar = useCallback((detail?: AdminV2FocusCommandBarDetail) => {
         if (typeof window !== "undefined") {
             window.dispatchEvent(new CustomEvent(ADMIN_V2_FOCUS_COMMAND_BAR, { detail: detail ?? {} }));
@@ -181,6 +187,7 @@ export function GlobalAssistantProvider({ children }: { children: ReactNode }) {
             commandSurfaceThreadExpanded,
             setCommandSurfaceThreadExpanded,
             clearCommandSurfaceConversation,
+            collapseCommandSurfaceAfterNavigation,
             commandSurfaceJobCardUi,
             setCommandSurfaceJobCardUi,
         }),
@@ -199,6 +206,7 @@ export function GlobalAssistantProvider({ children }: { children: ReactNode }) {
             commandSurfaceThreadExpanded,
             setCommandSurfaceThreadExpanded,
             clearCommandSurfaceConversation,
+            collapseCommandSurfaceAfterNavigation,
             commandSurfaceJobCardUi,
             setCommandSurfaceJobCardUi,
         ]

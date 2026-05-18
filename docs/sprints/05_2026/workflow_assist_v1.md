@@ -555,4 +555,30 @@ See §18 updates for navigation fix, tour date/time audit, and `reminder_intent_
 
 ---
 
+## 20. UX polish — navigation feedback, duplicates, stepper, Automations detail (shipped 2026-05-16)
+
+### Command card navigation feedback
+
+- `CommandSurfaceCardLink` shows **Opening…**, disables the button, calls `router.push`, and invokes `collapseCommandSurfaceAfterNavigation()` on `GlobalAssistantContext` (collapses thread panel).
+- Shared helper: `handleCommandSurfaceCardNavigate` + optional `onNavigateStart` in `commandSurfaceCardNavigation.ts`.
+
+### Duplicate workflow detection
+
+Before returning a create proposal, `POST …/workflow-assist/propose` loads org workflows and runs `findWorkflowAssistDuplicates` (`workflowAssistDuplicateDetectionV1.ts`). Matches on template id, event/entity, similar name, `reminder_intent_v1` timing, and scope overlap.
+
+UI: `WorkflowAssistDuplicateWarning` on the proposal card — **Open existing workflow**, **Propose edit**, **Create another draft anyway** (non-blocking).
+
+### Proposal visual stepper
+
+`WorkflowAssistProposalReviewPanel` renders numbered steps: Trigger → Timing → Audience → Action → Message (message step shows provenance label). Advanced details remain collapsed.
+
+### `/adminV2/workflows` detail + deep link
+
+- Row click updates `?workflow={id}` via `selectWorkflow`.
+- `AdminV2WorkflowDetailPanel` in the right column shows name, enabled state, event/entity, scope metadata, actions, conditions, Assist `reminder_intent_v1` when present.
+- `?workflow=` selects, highlights the row, and scrolls the detail panel into view.
+- GET single-workflow parsing accepts both raw row and `{ workflow }` wrapper.
+
+---
+
 **When to update this doc:** Card 0 amendments; first route shipped; permission key seeded; any intentional change to `requireAdmin` vs ops for workflow mutations.

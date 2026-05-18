@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import {
     CommandSurfaceActionCardShell,
     CommandSurfaceCardLink,
 } from "@/app/adminV2/components/aiCommandSurface/CommandSurfaceCardLink";
 import type { WorkflowAssistDraftReviewV1 } from "@/lib/agent/workflowAssist/workflowAssistDraftEnrichmentV1";
+import type { WorkflowAssistCreateTemplateIdV1 } from "@/lib/agent/workflowAssist/workflowAssistCreateFromCommandV1";
+import { buildWorkflowAssistProposalStepperV1 } from "@/lib/agent/workflowAssist/workflowAssistProposalStepperV1";
 import { WORKFLOW_ASSIST_AUTOMATIONS_HREF } from "@/lib/adminV2/aiCommandSurface/commandSurfaceRouter";
 import { brand, derived, neutral, semantic } from "@/styles/tokens/colors";
 
@@ -16,19 +18,69 @@ const CMD = {
     textLabel: "rgba(39, 63, 82, 0.52)",
 } as const;
 
-function Row({ label, value }: { label: string; value: string }) {
+function ProposalStepper({
+    steps,
+    messageProvenanceLabel,
+}: {
+    steps: ReturnType<typeof buildWorkflowAssistProposalStepperV1>;
+    messageProvenanceLabel: string;
+}) {
     return (
-        <div className="flex gap-2 text-[11px]">
-            <span className="w-14 shrink-0 font-semibold" style={{ color: CMD.textLabel }}>
-                {label}
-            </span>
-            <span style={{ color: CMD.textBody }}>{value}</span>
-        </div>
+        <ol
+            className="space-y-0"
+            data-command-surface-workflow-assist-proposal-stepper="true"
+            aria-label="Workflow proposal steps"
+        >
+            {steps.map((step, index) => (
+                <li key={step.id} className="flex gap-2.5">
+                    <div className="flex w-5 shrink-0 flex-col items-center">
+                        <span
+                            className="flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold"
+                            style={{ backgroundColor: derived.adminV2AiBarPineWash, color: brand.secondary }}
+                            aria-hidden
+                        >
+                            {index + 1}
+                        </span>
+                        {index < steps.length - 1 ?
+                            <span className="my-0.5 w-px flex-1 min-h-[12px]" style={{ backgroundColor: derived.border }} />
+                        : null}
+                    </div>
+                    <div className="min-w-0 flex-1 pb-3">
+                        <div className="flex flex-wrap items-center justify-between gap-1">
+                            <h4 className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: CMD.textLabel }}>
+                                {step.title}
+                            </h4>
+                            {step.id === "message" ?
+                                <span
+                                    className="text-[9px] font-semibold"
+                                    style={{ color: brand.secondary }}
+                                >
+                                    {messageProvenanceLabel}
+                                </span>
+                            : null}
+                        </div>
+                        {step.id === "message" ?
+                            <p
+                                className="mt-1 rounded-md border px-2.5 py-2 text-[11px] leading-relaxed whitespace-pre-wrap"
+                                style={{ borderColor: derived.border, color: CMD.textBody }}
+                                data-command-surface-workflow-assist-message-preview-body="true"
+                            >
+                                {step.body}
+                            </p>
+                        :   <p className="mt-0.5 text-[11px] leading-snug" style={{ color: CMD.textBody }}>
+                                {step.body}
+                            </p>
+                        }
+                    </div>
+                </li>
+            ))}
+        </ol>
     );
 }
 
 export function WorkflowAssistProposalReviewPanel({
     review,
+    templateId = "generic_stub",
     onApply,
     applyBusy,
     applyDone,
@@ -36,6 +88,7 @@ export function WorkflowAssistProposalReviewPanel({
     applyBlockedMessage,
 }: {
     review: WorkflowAssistDraftReviewV1;
+    templateId?: WorkflowAssistCreateTemplateIdV1;
     onApply: () => void;
     applyBusy: boolean;
     applyDone: boolean;
@@ -44,6 +97,10 @@ export function WorkflowAssistProposalReviewPanel({
 }) {
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const op = review.operator;
+    const steps = useMemo(
+        () => buildWorkflowAssistProposalStepperV1({ review, template_id: templateId }),
+        [review, templateId]
+    );
 
     return (
         <CommandSurfaceActionCardShell className="space-y-3" data-command-surface-workflow-assist-draft-review="true">
@@ -71,40 +128,21 @@ export function WorkflowAssistProposalReviewPanel({
             </header>
 
             <section
-                className="space-y-1.5 rounded-md border px-2.5 py-2"
+                className="rounded-md border px-2.5 py-2"
                 style={{ borderColor: derived.border }}
-                aria-label="Workflow"
+                aria-label="Workflow steps"
             >
-                <h4 className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: CMD.textLabel }}>
-                    Workflow
-                </h4>
-                <Row label="When" value={op.when_label} />
-                <Row label="Who" value={op.who_label} />
-                <Row label="Action" value={op.action_label} />
-                {op.uses_label ? <Row label="Uses" value={op.uses_label} /> : null}
+                <ProposalStepper steps={steps} messageProvenanceLabel={review.message_preview.provenance_label} />
             </section>
 
-            <section className="space-y-1" aria-label="Message preview">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h4 className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: CMD.textLabel }}>
-                        Message preview
-                    </h4>
-                    <span
-                        className="text-[9px] font-semibold"
-                        style={{ color: brand.secondary }}
-                        data-command-surface-workflow-assist-message-provenance={review.message_preview.provenance}
-                    >
-                        {review.message_preview.provenance_label}
-                    </span>
-                </div>
-                <p
-                    className="rounded-md border px-2.5 py-2 text-[11px] leading-relaxed whitespace-pre-wrap"
-                    style={{ borderColor: derived.border, color: CMD.textBody }}
-                    data-command-surface-workflow-assist-message-preview-body="true"
-                >
-                    {review.message_preview.body}
+            {op.uses_label ?
+                <p className="text-[10px]" style={{ color: CMD.textSupporting }}>
+                    <span className="font-semibold" style={{ color: CMD.textLabel }}>
+                        Uses:
+                    </span>{" "}
+                    {op.uses_label}
                 </p>
-            </section>
+            : null}
 
             <section className="space-y-1" aria-label="Needs review">
                 <h4 className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: CMD.textLabel }}>
@@ -122,8 +160,7 @@ export function WorkflowAssistProposalReviewPanel({
                 style={{ borderColor: derived.border, color: CMD.textSupporting }}
                 data-command-surface-workflow-assist-safety-once="true"
             >
-                This creates a disabled draft. No messages will send until the workflow is reviewed and enabled in
-                Automations.
+                This creates a disabled draft. No messages will send until reviewed and enabled.
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -194,8 +231,7 @@ export function WorkflowAssistProposalReviewPanel({
                     {review.message_preview.unresolved_tokens.length ?
                         <p style={{ color: semantic.warning }}>
                             <span className="font-semibold">Unresolved preview tokens:</span>{" "}
-                            {review.message_preview.unresolved_tokens.join(", ")} (not workflow merge fields — use{" "}
-                            {`{{contact.phone}}`} etc. in Automations)
+                            {review.message_preview.unresolved_tokens.join(", ")} (confirm mapping in Automations)
                         </p>
                     : null}
                     {review.advanced.warnings.length ?

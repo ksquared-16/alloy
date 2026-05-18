@@ -4,10 +4,24 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
     COMMAND_SURFACE_INTERACTIVE_CARD_CLASS,
+    COMMAND_SURFACE_NAV_OPENING_LABEL,
     handleCommandSurfaceCardNavigate,
 } from "@/lib/adminV2/aiCommandSurface/commandSurfaceCardNavigation";
 
 describe("commandSurfaceCardNavigation", () => {
+    it("handleCommandSurfaceCardNavigate invokes onNavigateStart", () => {
+        const navigate = vi.fn();
+        const onNavigateStart = vi.fn();
+        handleCommandSurfaceCardNavigate(
+            { preventDefault: vi.fn(), stopPropagation: vi.fn() },
+            "/adminV2/workflows",
+            navigate,
+            { onNavigateStart }
+        );
+        expect(onNavigateStart).toHaveBeenCalledOnce();
+        expect(navigate).toHaveBeenCalledWith("/adminV2/workflows");
+    });
+
     it("handleCommandSurfaceCardNavigate stops propagation and navigates", () => {
         const navigate = vi.fn();
         const preventDefault = vi.fn();
@@ -51,6 +65,22 @@ describe("command surface card navigation contract", () => {
         const src = readFileSync(join(root, "CommandSurfaceThread.tsx"), "utf8");
         expect(src).toContain("COMMAND_SURFACE_INTERACTIVE_CARD_CLASS");
         expect(src).toContain("CommandSurfaceCardLink");
+    });
+
+    it("CommandSurfaceCardLink shows opening state and collapses command surface", () => {
+        const src = readFileSync(join(root, "CommandSurfaceCardLink.tsx"), "utf8");
+        expect(src).toContain("COMMAND_SURFACE_NAV_OPENING_LABEL");
+        expect(src).toContain("navigating ? openingLabel");
+        expect(src).toContain("collapseCommandSurfaceAfterNavigation");
+        expect(src).toContain("setNavigating(true)");
+    });
+
+    it("GlobalAssistant exposes collapse after navigation", () => {
+        const src = readFileSync(
+            join(process.cwd(), "contexts/GlobalAssistantContext.tsx"),
+            "utf8"
+        );
+        expect(src).toContain("collapseCommandSurfaceAfterNavigation");
     });
 
     it("Config Assist proposal card uses shared interactive shell", () => {

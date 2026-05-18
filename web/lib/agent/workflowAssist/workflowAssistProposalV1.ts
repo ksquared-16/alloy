@@ -5,6 +5,7 @@
 import { createHash } from "node:crypto";
 
 import type { WorkflowAssistDraftReviewV1 } from "@/lib/agent/workflowAssist/workflowAssistDraftEnrichmentV1";
+import type { WorkflowAssistDuplicateCheckV1 } from "@/lib/agent/workflowAssist/workflowAssistDuplicateDetectionV1";
 import {
     buildWorkflowAssistScopeDisplay,
     buildWorkflowMetadataWithScope,
@@ -84,6 +85,8 @@ export type WorkflowAssistSuggestionV1 = {
     edit_review?: WorkflowAssistEditReviewRowV1[] | null;
     /** Advisory create draft review (AI-assisted enrichment + normalization). */
     draft_review?: WorkflowAssistDraftReviewV1 | null;
+    /** Likely existing workflows before creating another draft (advisory). */
+    duplicate_warning?: WorkflowAssistDuplicateCheckV1 | null;
     reasoning: { summary: string; warnings: string[] };
     approval_required: true;
 };

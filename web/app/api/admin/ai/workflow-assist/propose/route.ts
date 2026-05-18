@@ -16,6 +16,12 @@ import {
     evaluateOrgPolicyForOpenAiWorkflowAssistProposeRoute,
     evaluateOrgPolicyForStubWorkflowAssistProposeRoute,
 } from "@/lib/ai/aiEnrichmentRouteGuards";
+import {
+    findWorkflowAssistDuplicates,
+    type WorkflowAssistDuplicateProbeRowV1,
+} from "@/lib/agent/workflowAssist/workflowAssistDuplicateDetectionV1";
+import { parseWorkflowScopeFromMetadata } from "@/lib/workflows/workflowScopeMetadata";
+import type { WorkflowAssistWorkflowMetadataV1 } from "@/lib/workflows/workflowScopeMetadata";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
 /**
@@ -215,6 +221,28 @@ export async function POST(request: NextRequest) {
             org_metadata,
             enrichment_enabled: true,
         });
+
+        const { data: existingRows } = await supabase
+            .from("workflows")
+            .select("id, name, enabled, event_type, entity_type, metadata")
+            .eq("org_id", ctx.orgId);
+
+        const draftMeta = suggestion.draft_row?.metadata as WorkflowAssistWorkflowMetadataV1 | undefined;
+        const duplicate_warning = findWorkflowAssistDuplicates(
+            (existingRows ?? []) as WorkflowAssistDuplicateProbeRowV1[],
+            {
+                template_id,
+                proposed_name: suggestion.draft_row?.name ?? "",
+                event_type: suggestion.draft_row?.event_type ?? "",
+                entity_type: suggestion.draft_row?.entity_type ?? "",
+                scope: parseWorkflowScopeFromMetadata(draftMeta),
+                lead_days_before_tour,
+                reminder_intent_v1: draftMeta?.workflow_assist?.reminder_intent_v1 ?? null,
+            }
+        );
+        if (duplicate_warning.has_likely_duplicate) {
+            suggestion = { ...suggestion, duplicate_warning };
+        }
     }
 
     return NextResponse.json({ ok: true, suggestion });

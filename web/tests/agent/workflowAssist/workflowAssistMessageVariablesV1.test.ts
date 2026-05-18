@@ -71,8 +71,8 @@ describe("workflowAssist proposal review UX", () => {
         expect(src).toContain("data-command-surface-workflow-assist-advanced-details");
         expect(src).toContain("<details");
         expect(src).toContain("data-command-surface-workflow-assist-safety-once");
-        expect(src).toContain('label="Uses"');
         expect(src).toContain("CommandSurfaceCardLink");
+        expect(src).toContain("data-command-surface-workflow-assist-proposal-stepper");
         expect(src).not.toContain("read-only summary cards above");
         expect(src).not.toContain("AI-assisted ·");
     });

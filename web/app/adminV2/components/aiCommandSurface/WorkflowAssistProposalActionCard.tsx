@@ -7,7 +7,9 @@ import {
     CommandSurfaceCardLink,
 } from "@/app/adminV2/components/aiCommandSurface/CommandSurfaceCardLink";
 import { dispatchAiActivityRefresh } from "@/app/adminV2/components/aiActivity/RecentAiActionsStrip";
+import { WorkflowAssistDuplicateWarning } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistDuplicateWarning";
 import { WorkflowAssistProposalReviewPanel } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistProposalReviewPanel";
+import type { WorkflowAssistCreateTemplateIdV1 } from "@/lib/agent/workflowAssist/workflowAssistCreateFromCommandV1";
 import { WORKFLOW_ASSIST_AUTOMATIONS_HREF } from "@/lib/adminV2/aiCommandSurface/commandSurfaceRouter";
 import { dispatchWorkflowAutomationRefresh } from "@/lib/adminV2/aiCommandSurface/workflowAssistWorkspaceEvents";
 import type { WorkflowAssistCreateProposeBuildV1 } from "@/lib/agent/workflowAssist/workflowAssistCreateFromCommandV1";
@@ -44,18 +46,33 @@ type ApplyJson =
       }
     | { ok: false; error?: string; message?: string | null; validation_errors?: string[] | null };
 
+function parseCreateTemplateId(suggestion: WorkflowAssistSuggestionV1): WorkflowAssistCreateTemplateIdV1 {
+    const meta = suggestion.draft_row?.metadata;
+    if (meta && typeof meta === "object" && !Array.isArray(meta)) {
+        const wa = (meta as Record<string, unknown>).workflow_assist;
+        if (wa && typeof wa === "object" && !Array.isArray(wa)) {
+            const tid = (wa as Record<string, unknown>).template_id;
+            if (tid === "tour_reminder" || tid === "enrollment_when_move" || tid === "generic_stub") return tid;
+        }
+    }
+    return "generic_stub";
+}
+
 export function WorkflowAssistProposalActionCard({
     suggestion,
     createInterpreted,
     applyAllowed = true,
+    onProposeEditExisting,
 }: {
     suggestion: WorkflowAssistSuggestionV1;
     createInterpreted?: WorkflowAssistCreateProposeBuildV1["interpreted"];
     applyAllowed?: boolean;
+    onProposeEditExisting?: (workflowId: string) => void;
 }) {
     const globalAssistant = useGlobalAssistantOptional();
     const [busy, setBusy] = useState(false);
     const [done, setDone] = useState<ApplyJson | null>(null);
+    const [duplicateDismissed, setDuplicateDismissed] = useState(false);
 
     const apply = useCallback(async () => {
         if (!applyAllowed) return;
@@ -101,10 +118,20 @@ export function WorkflowAssistProposalActionCard({
     const isCreate = suggestion.proposal_kind === "create_workflow";
 
     if (draftReview) {
+        const templateId = parseCreateTemplateId(suggestion);
         return (
             <CommandSurfaceActionCardShell className="space-y-2" data-command-surface-workflow-assist-proposal-card="true">
+                {suggestion.duplicate_warning ?
+                    <WorkflowAssistDuplicateWarning
+                        duplicate={suggestion.duplicate_warning}
+                        dismissed={duplicateDismissed}
+                        onDismiss={() => setDuplicateDismissed(true)}
+                        onProposeEdit={(workflowId) => onProposeEditExisting?.(workflowId)}
+                    />
+                : null}
                 <WorkflowAssistProposalReviewPanel
                     review={draftReview}
+                    templateId={templateId}
                     onApply={() => void apply()}
                     applyBusy={busy}
                     applyDone={done?.ok === true}

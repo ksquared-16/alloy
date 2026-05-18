@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
@@ -9,6 +9,7 @@ import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { derived } from "@/styles/tokens/colors";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
+import { AdminV2WorkflowDetailPanel } from "@/app/adminV2/components/workflows/AdminV2WorkflowDetailPanel";
 
 type WorkflowSummaryRow = {
     id: string;
@@ -86,9 +87,11 @@ type WorkflowActionRunRow = {
 type WorkflowDetailRow = {
     id: string;
     name: string | null;
+    description?: string | null;
     enabled: boolean | null;
     entity_type: string | null;
     event_type: string | null;
+    metadata?: Record<string, unknown> | null;
 };
 
 type WorkflowActionDefRow = {
@@ -201,7 +204,18 @@ export default function AdminV2WorkflowsPage() {
     const [runDetailLoading, setRunDetailLoading] = useState(false);
     const [runDetailError, setRunDetailError] = useState<string | null>(null);
 
+    const workflowDetailRef = useRef<HTMLDivElement | null>(null);
     const init = useMemo(() => workspaceDataFetchInit(), []);
+
+    const selectWorkflow = useCallback(
+        (workflowId: string) => {
+            setSelectedWorkflowId(workflowId);
+            const sp = new URLSearchParams(searchParams?.toString() ?? "");
+            sp.set("workflow", workflowId);
+            router.replace(`/adminV2/workflows?${sp.toString()}`);
+        },
+        [router, searchParams]
+    );
 
     useEffect(() => {
         let cancelled = false;
@@ -324,7 +338,10 @@ export default function AdminV2WorkflowsPage() {
                 if (!wfRes.ok) throw new Error(typeof wfJson?.error === "string" ? wfJson.error : "Failed to load workflow");
                 if (!aRes.ok) throw new Error(typeof (aJson as any)?.error === "string" ? (aJson as any).error : "Failed to load actions");
                 if (!cRes.ok) throw new Error(typeof (cJson as any)?.error === "string" ? (cJson as any).error : "Failed to load conditions");
-                setSelectedWorkflowDetail((wfJson as { workflow?: WorkflowDetailRow }).workflow ?? null);
+                const wf =
+                    (wfJson as { workflow?: WorkflowDetailRow }).workflow ??
+                    ((wfJson as { id?: string }).id ? (wfJson as WorkflowDetailRow) : null);
+                setSelectedWorkflowDetail(wf);
                 setSelectedWorkflowActions(Array.isArray(aJson) ? (aJson as WorkflowActionDefRow[]) : []);
                 setSelectedWorkflowConditions(Array.isArray(cJson) ? (cJson as WorkflowConditionRow[]) : []);
             })
@@ -410,6 +427,11 @@ export default function AdminV2WorkflowsPage() {
         router.replace(`/adminV2/workflows?${sp.toString()}`);
     }, [router, searchParams]);
 
+    useEffect(() => {
+        if (!highlightWorkflowId || !selectedWorkflowDetail) return;
+        workflowDetailRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, [highlightWorkflowId, selectedWorkflowDetail?.id]);
+
     return (
         <WorkspaceChrome
             variant="bridge"
@@ -475,7 +497,8 @@ export default function AdminV2WorkflowsPage() {
                                 </thead>
                                 <tbody>
                                     {(workflows ?? []).map((w) => {
-                                        const active = w.id === selectedWorkflowId;
+                                        const active =
+                                            w.id === selectedWorkflowId || w.id === highlightWorkflowId;
                                         const last = w.last_run;
                                         return (
                                             <tr
@@ -487,7 +510,9 @@ export default function AdminV2WorkflowsPage() {
                                                 <td className="px-3 py-2">
                                                     <button
                                                         type="button"
-                                                        onClick={() => setSelectedWorkflowId(w.id)}
+                                                        onClick={() => selectWorkflow(w.id)}
+                                                        data-workflow-row-id={w.id}
+                                                        aria-current={active ? "true" : undefined}
                                                         className="text-left font-semibold text-alloy-midnight hover:underline"
                                                     >
                                                         {w.name?.trim() || w.id.slice(0, 8) + "…"}
@@ -672,9 +697,24 @@ export default function AdminV2WorkflowsPage() {
                     </section>
 
                     <aside
-                        className="w-full shrink-0 rounded-xl border border-admin-border bg-white/90 p-3 shadow-sm lg:w-[420px]"
-                        style={{ borderColor: derived.border }}
+                        className="flex w-full shrink-0 flex-col gap-3 lg:w-[420px]"
+                        data-adminv2-workflows-aside="true"
                     >
+                        <AdminV2WorkflowDetailPanel
+                            panelRef={workflowDetailRef}
+                            selectedWorkflowId={selectedWorkflowId}
+                            highlightWorkflowId={highlightWorkflowId}
+                            loading={selectedWorkflowDetailLoading}
+                            error={selectedWorkflowDetailError}
+                            workflow={selectedWorkflowDetail}
+                            actions={selectedWorkflowActions}
+                            conditions={selectedWorkflowConditions}
+                        />
+                        <section
+                            className="rounded-xl border border-admin-border bg-white/90 p-3 shadow-sm"
+                            style={{ borderColor: derived.border }}
+                            data-workflow-run-detail-panel="true"
+                        >
                         <div className="flex items-center justify-between gap-2">
                             <h2 className="text-sm font-semibold text-alloy-midnight">Run detail</h2>
                             {highlightRunId ? (
@@ -804,6 +844,7 @@ export default function AdminV2WorkflowsPage() {
                                 </div>
                             </div>
                         )}
+                        </section>
                     </aside>
                 </div>
             </div>

@@ -120,6 +120,8 @@ export type CommandSurfaceThreadProps = {
     ) => void;
     /** Navigate to Settings config proposals review (command surface footer). */
     onReviewConfigProposal: (proposalId: string) => void;
+    /** Propose a narrow edit for an existing workflow (duplicate warning path). */
+    onWorkflowAssistProposeEdit?: (workflowId: string) => void;
     debugReviewNavigation?: ConfigProposalReviewDebugLog;
 };
 
@@ -137,6 +139,7 @@ export default function CommandSurfaceThread({
     onClarificationChip,
     onConfirmFuzzySuggestion,
     onReviewConfigProposal,
+    onWorkflowAssistProposeEdit,
     debugReviewNavigation,
 }: CommandSurfaceThreadProps) {
     const showSearchDebug = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
@@ -302,6 +305,7 @@ export default function CommandSurfaceThread({
                                         suggestion={turn.card.suggestion}
                                         createInterpreted={turn.card.createInterpreted}
                                         applyAllowed={workflowAssistMutationsAllowed}
+                                        onProposeEditExisting={onWorkflowAssistProposeEdit}
                                     />
                                 </AssistantBubble>
                             );
