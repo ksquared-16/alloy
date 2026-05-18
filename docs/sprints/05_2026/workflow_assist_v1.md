@@ -518,18 +518,40 @@ User intent → **stub/AI advisory enrichment** → **deterministic normalizatio
 | Token / pattern | Supported for workflow runtime? | Workflow Assist preview |
 |-----------------|------------------------------|------------------------|
 | `{{contact.phone}}`, `{{person.phone}}`, `{{opportunity.id}}`, … | Yes — `web/lib/workflowTemplate.ts` dot paths | Configure in Automations action editor |
+| `{{opportunity.metadata.tour_date}}`, `{{opportunity.metadata.tour_time}}` | Yes when opportunity row is on the workflow payload (`enrichWorkflowEventPayloadEntities` in `workflowRun.ts`); values are `yyyy-MM-dd` / `HH:mm` | Tour reminder preview + `reminder_intent_v1` metadata; operator must confirm formatting in Automations |
+| `{{location.name}}` | Yes when location is joined on payload | Not used in tour reminder V1 preview |
 | `{{contact_name}}`, `{{team_line}}` | **No** — Task Assist / needs-attention templates only (`suggestedContentTemplates.ts`) | Sanitized to `[Family first name]` or avoided in fallback |
-| Canonical first-name merge field | **Not defined** for workflows today | Fallback copy has no merge tokens |
+| Canonical first-name merge field | **Not defined** for workflows today | Recipient called out in **Needs review** only (no invented name token) |
 
 Module: `web/lib/agent/workflowAssist/workflowAssistMessageVariablesV1.ts`.
 
 ### Operator-facing proposal card
 
-Compact sections: header (title, badges, scope), **Workflow** (when/who/action/status), **Message preview** (provenance label), **Needs review** (≤4 bullets), one safety sentence, **Apply** + **Open Automations**. Internal event strings, scaffolds, normalization, and AI caveats live in collapsed **Advanced details** (default closed).
+Compact sections: header (title, badges, scope), **Workflow** (when/who/action/**uses**), **Message preview** (provenance label), **Needs review** (≤4 bullets), one safety sentence, **Apply** + **Open Automations**. Internal event strings, scaffolds, normalization, and AI caveats live in collapsed **Advanced details** (default closed).
 
 ### Fallback message (tour reminder)
 
-Example: “Reminder: your upcoming tour is coming up in about 3 days. Reply here if you need to reschedule.”
+Example: “Reminder: your tour is scheduled for `{{opportunity.metadata.tour_date}}` at `{{opportunity.metadata.tour_time}}`. Reply here if you need to reschedule.”
+
+### Command card navigation (shipped)
+
+Nested links inside the command-surface footer thread were unreliable because parent surfaces could swallow clicks. Shared fix:
+
+- `web/lib/adminV2/aiCommandSurface/commandSurfaceCardNavigation.ts` — `handleCommandSurfaceCardNavigate` (`preventDefault` + `stopPropagation`) + `COMMAND_SURFACE_INTERACTIVE_CARD_CLASS`
+- `web/app/adminV2/components/aiCommandSurface/CommandSurfaceCardLink.tsx` — button-styled CTAs with `router.push`
+- `CommandSurfaceThread` assistant bubbles + Workflow/Config action cards use `pointer-events-auto` on interactive shells
+
+Regression tests: `web/tests/adminV2/commandSurfaceCardNavigation.test.ts`.
+
+### Reminder intent metadata (shipped)
+
+`workflows.metadata.workflow_assist.reminder_intent_v1` (advisory only) captures: `send_reminder`, channel (default SMS), `days_before_scheduled_tour`, opportunity entity, recipient intent, tour date/time field paths, message preview, and **`unresolved_mappings`** (operator-facing “Needs mapping” for date/time/recipient confirmation). Apply still inserts a **disabled** workflow with log scaffold only — no send, schedule, or auto-enable.
+
+---
+
+## 19. Command navigation + tour reminder intent (shipped 2026-05-16)
+
+See §18 updates for navigation fix, tour date/time audit, and `reminder_intent_v1` apply metadata.
 
 ---
 

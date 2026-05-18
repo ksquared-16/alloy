@@ -6,7 +6,9 @@ import TaskAssistClarificationCard from "@/components/admin/taskAssist/TaskAssis
 import TaskAssistCompactDraftCard from "@/components/admin/taskAssist/TaskAssistCompactDraftCard";
 import TaskAssistCompactReminderCard from "@/components/admin/taskAssist/TaskAssistCompactReminderCard";
 import TaskAssistOpportunityWorkspace from "@/components/admin/taskAssist/TaskAssistOpportunityWorkspace";
+import { CommandSurfaceCardLink } from "@/app/adminV2/components/aiCommandSurface/CommandSurfaceCardLink";
 import { ConfigLayoutAssistProposalThreadCard } from "@/app/adminV2/components/aiCommandSurface/ConfigLayoutAssistProposalThreadCard";
+import { COMMAND_SURFACE_INTERACTIVE_CARD_CLASS } from "@/lib/adminV2/aiCommandSurface/commandSurfaceCardNavigation";
 import { WorkflowAssistProposalActionCard } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistProposalActionCard";
 import { WorkflowAssistReadThreadCard } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistReadThreadCard";
 import { badgeLabel } from "@/lib/adminV2/aiCommandSurface/aiCommandSurfaceModel";
@@ -73,7 +75,7 @@ function AssistantBubble({ children }: { children: ReactNode }) {
     return (
         <div className="flex justify-start" data-command-surface-assistant-turn="true">
             <div
-                className="max-w-[min(96%,560px)] rounded-2xl rounded-bl-md border px-3 py-2 text-[12px] leading-snug"
+                className={`max-w-[min(96%,560px)] rounded-2xl rounded-bl-md border px-3 py-2 text-[12px] leading-snug ${COMMAND_SURFACE_INTERACTIVE_CARD_CLASS}`}
                 style={{ borderColor: derived.border, backgroundColor: neutral.surface, color: CMD.textBody }}
             >
                 {children}
@@ -173,12 +175,13 @@ export default function CommandSurfaceThread({
                             <AssistantBubble key={turn.id}>
                                 <div className="space-y-1.5" data-command-surface-workflow-notice="true">
                                     <p className="text-[12px] leading-snug">{WORKFLOW_ASSIST_NOTICE_TEXT}</p>
-                                    <a
+                                    <CommandSurfaceCardLink
                                         href={WORKFLOW_ASSIST_AUTOMATIONS_HREF}
                                         className="inline-block text-[11px] font-semibold text-alloy-blue hover:underline"
+                                        data-command-surface-workflow-assist-open-automations="true"
                                     >
                                         Open Automations
-                                    </a>
+                                    </CommandSurfaceCardLink>
                                 </div>
                             </AssistantBubble>
                         );

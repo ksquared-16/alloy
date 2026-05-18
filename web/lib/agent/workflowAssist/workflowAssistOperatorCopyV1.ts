@@ -20,6 +20,7 @@ export function buildOperatorWorkflowLines(input: {
     when_label: string;
     who_label: string;
     action_label: string;
+    uses_label: string | null;
     status_label: string;
 } {
     const scope = input.scope_label?.trim();
@@ -30,9 +31,10 @@ export function buildOperatorWorkflowLines(input: {
         const days = input.lead_days_before_tour ?? 3;
         const dayWord = days === 1 ? "day" : "days";
         return {
-            when_label: `${days} ${dayWord} before a scheduled tour`,
+            when_label: `${days} ${dayWord} before scheduled tour`,
             who_label: `Families with upcoming tours${scopeSuffix}`,
             action_label: input.channel === "email" ? "Send email reminder" : "Send SMS reminder",
+            uses_label: "Tour date + tour time (workflow merge fields)",
             status_label: "Disabled until you enable it in Automations",
         };
     }
@@ -42,6 +44,7 @@ export function buildOperatorWorkflowLines(input: {
             when_label: "When an opportunity status changes (configure exact transition in Automations)",
             who_label: `Matching enrollment opportunities${scopeSuffix}`,
             action_label: "Update status / notify (configure in Automations)",
+            uses_label: null,
             status_label: "Disabled until you enable it in Automations",
         };
     }
@@ -50,14 +53,15 @@ export function buildOperatorWorkflowLines(input: {
         when_label: "On configured trigger (set in Automations)",
         who_label: `Matching records${scopeSuffix}`,
         action_label: "Configured actions (add in Automations)",
+        uses_label: null,
         status_label: "Disabled until you enable it in Automations",
     };
 }
 
 export const WORKFLOW_ASSIST_OPERATOR_NEEDS_REVIEW_TOUR: readonly string[] = [
-    "Confirm timing (days before tour)",
-    "Confirm audience and conditions",
-    "Review message copy",
+    "Confirm recipient",
+    "Confirm tour date/time field mapping",
+    "Confirm message copy",
     "Enable from Automations when ready",
 ];
 

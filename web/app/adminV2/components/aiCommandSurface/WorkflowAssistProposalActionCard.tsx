@@ -2,10 +2,13 @@
 
 import { useCallback, useState } from "react";
 
-import Link from "next/link";
-
+import {
+    CommandSurfaceActionCardShell,
+    CommandSurfaceCardLink,
+} from "@/app/adminV2/components/aiCommandSurface/CommandSurfaceCardLink";
 import { dispatchAiActivityRefresh } from "@/app/adminV2/components/aiActivity/RecentAiActionsStrip";
 import { WorkflowAssistProposalReviewPanel } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistProposalReviewPanel";
+import { WORKFLOW_ASSIST_AUTOMATIONS_HREF } from "@/lib/adminV2/aiCommandSurface/commandSurfaceRouter";
 import { dispatchWorkflowAutomationRefresh } from "@/lib/adminV2/aiCommandSurface/workflowAssistWorkspaceEvents";
 import type { WorkflowAssistCreateProposeBuildV1 } from "@/lib/agent/workflowAssist/workflowAssistCreateFromCommandV1";
 import type { WorkflowAssistSuggestionV1 } from "@/lib/agent/workflowAssist/workflowAssistProposalV1";
@@ -99,7 +102,7 @@ export function WorkflowAssistProposalActionCard({
 
     if (draftReview) {
         return (
-            <div className="space-y-2" data-command-surface-workflow-assist-proposal-card="true">
+            <CommandSurfaceActionCardShell className="space-y-2" data-command-surface-workflow-assist-proposal-card="true">
                 <WorkflowAssistProposalReviewPanel
                     review={draftReview}
                     onApply={() => void apply()}
@@ -116,20 +119,20 @@ export function WorkflowAssistProposalActionCard({
                 {done?.ok ?
                     <p className="text-[11px]" style={{ color: brand.secondary }} data-command-surface-workflow-assist-apply-success>
                         Draft saved.{" "}
-                        <Link
-                            href={`/adminV2/workflows?workflow=${encodeURIComponent((done as { workflow_id?: string }).workflow_id ?? "")}`}
+                        <CommandSurfaceCardLink
+                            href={`${WORKFLOW_ASSIST_AUTOMATIONS_HREF}?workflow=${encodeURIComponent((done as { workflow_id?: string }).workflow_id ?? "")}`}
                             className="font-semibold underline-offset-2 hover:underline"
                         >
                             Open in Automations
-                        </Link>
+                        </CommandSurfaceCardLink>
                     </p>
                 : null}
-            </div>
+            </CommandSurfaceActionCardShell>
         );
     }
 
     return (
-        <div className="space-y-2" data-command-surface-workflow-assist-proposal-card="true">
+        <CommandSurfaceActionCardShell className="space-y-2" data-command-surface-workflow-assist-proposal-card="true">
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: CMD.textLabel }}>
                     Workflow Assist · proposal
@@ -197,13 +200,14 @@ export function WorkflowAssistProposalActionCard({
                 >
                     {busy ? "Applying…" : done?.ok ? "Applied" : "Apply disabled draft"}
                 </button>
-                <Link
-                    href="/adminV2/workflows"
+                <CommandSurfaceCardLink
+                    href={WORKFLOW_ASSIST_AUTOMATIONS_HREF}
                     className="rounded-md border px-3 py-1.5 text-[11px] font-semibold"
                     style={{ borderColor: derived.border, color: CMD.textBody }}
+                    data-command-surface-workflow-assist-open-automations="true"
                 >
                     Open Automations
-                </Link>
+                </CommandSurfaceCardLink>
             </div>
             {done && !done.ok ?
                 <p className="text-[11px]" style={{ color: semantic.warning }} data-command-surface-workflow-assist-apply-error>
@@ -213,14 +217,14 @@ export function WorkflowAssistProposalActionCard({
             {done?.ok ?
                 <p className="text-[11px]" style={{ color: brand.secondary }} data-command-surface-workflow-assist-apply-success>
                     Applied.{" "}
-                    <Link
-                        href={`/adminV2/workflows?workflow=${encodeURIComponent((done as { workflow_id?: string }).workflow_id ?? "")}`}
+                    <CommandSurfaceCardLink
+                        href={`${WORKFLOW_ASSIST_AUTOMATIONS_HREF}?workflow=${encodeURIComponent((done as { workflow_id?: string }).workflow_id ?? "")}`}
                         className="font-semibold underline-offset-2 hover:underline"
                     >
                         Open in Automations
-                    </Link>
+                    </CommandSurfaceCardLink>
                 </p>
             : null}
-        </div>
+        </CommandSurfaceActionCardShell>
     );
 }

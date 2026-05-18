@@ -2,6 +2,8 @@
  * Workflow metadata.scope — department / work-unit association without FK columns (V1).
  */
 
+import type { WorkflowAssistReminderIntentV1 } from "@/lib/agent/workflowAssist/workflowAssistMessageVariablesV1";
+
 export type WorkflowScopeMetadataV1 = {
     department_id?: string;
     work_unit_id?: string;
@@ -37,6 +39,8 @@ export type WorkflowAssistWorkflowMetadataV1 = {
             needs_review: boolean;
             unresolved_tokens?: string[];
         };
+        /** Advisory reminder intent for tour templates — not workflow execution truth. */
+        reminder_intent_v1?: WorkflowAssistReminderIntentV1;
     };
 };
 
@@ -221,13 +225,17 @@ export function buildWorkflowAssistScopeDisplay(input: {
 }
 
 /** Tour reminder — safe log scaffold + metadata draft_actions for intended message step. */
-export function buildTourReminderActionScaffolds(leadDays: number): WorkflowAssistDraftActionScaffoldV1[] {
+export function buildTourReminderActionScaffolds(
+    leadDays: number,
+    reminderIntent?: WorkflowAssistReminderIntentV1 | null
+): WorkflowAssistDraftActionScaffoldV1[] {
     const intended_message = {
         action_type: "create_message",
-        channel: "sms",
+        channel: reminderIntent?.channel ?? "sms",
         review_required: true,
         assist_scaffold: true,
         note: "Replace with approved family reminder copy before enabling workflow.",
+        ...(reminderIntent ? { reminder_intent_v1: reminderIntent } : {}),
     };
     return [
         {
@@ -237,7 +245,7 @@ export function buildTourReminderActionScaffolds(leadDays: number): WorkflowAssi
             assist_scaffold: true,
             payload: {
                 message:
-                    `Assist scaffold (~${leadDays}d before tour): review reminder message content before enabling. Opportunity {{ opportunity.id }}.`,
+                    `Assist scaffold (~${leadDays}d before tour): review reminder message content before enabling. Opportunity {{opportunity.id}}.`,
                 assist_scaffold: true,
                 scaffold_kind: "tour_reminder",
                 lead_days_before_tour: leadDays,

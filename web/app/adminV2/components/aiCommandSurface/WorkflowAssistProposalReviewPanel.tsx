@@ -2,9 +2,12 @@
 
 import { useState } from "react";
 
-import Link from "next/link";
-
+import {
+    CommandSurfaceActionCardShell,
+    CommandSurfaceCardLink,
+} from "@/app/adminV2/components/aiCommandSurface/CommandSurfaceCardLink";
 import type { WorkflowAssistDraftReviewV1 } from "@/lib/agent/workflowAssist/workflowAssistDraftEnrichmentV1";
+import { WORKFLOW_ASSIST_AUTOMATIONS_HREF } from "@/lib/adminV2/aiCommandSurface/commandSurfaceRouter";
 import { brand, derived, neutral, semantic } from "@/styles/tokens/colors";
 
 const CMD = {
@@ -43,7 +46,7 @@ export function WorkflowAssistProposalReviewPanel({
     const op = review.operator;
 
     return (
-        <div className="space-y-3" data-command-surface-workflow-assist-draft-review="true">
+        <CommandSurfaceActionCardShell className="space-y-3" data-command-surface-workflow-assist-draft-review="true">
             <header className="space-y-1.5">
                 <h3 className="text-[13px] font-semibold" style={{ color: CMD.textBody }} data-command-surface-workflow-assist-title>
                     {op.display_title}
@@ -78,7 +81,7 @@ export function WorkflowAssistProposalReviewPanel({
                 <Row label="When" value={op.when_label} />
                 <Row label="Who" value={op.who_label} />
                 <Row label="Action" value={op.action_label} />
-                <Row label="Status" value={op.status_label} />
+                {op.uses_label ? <Row label="Uses" value={op.uses_label} /> : null}
             </section>
 
             <section className="space-y-1" aria-label="Message preview">
@@ -134,14 +137,14 @@ export function WorkflowAssistProposalReviewPanel({
                 >
                     {applyBusy ? "Applying…" : applyDone ? "Applied" : "Apply disabled draft"}
                 </button>
-                <Link
-                    href="/adminV2/workflows"
+                <CommandSurfaceCardLink
+                    href={WORKFLOW_ASSIST_AUTOMATIONS_HREF}
                     className="rounded-md border px-3 py-1.5 text-[11px] font-semibold"
                     style={{ borderColor: derived.border, color: CMD.textBody }}
                     data-command-surface-workflow-assist-open-automations="true"
                 >
                     Open Automations
-                </Link>
+                </CommandSurfaceCardLink>
             </div>
 
             {!applyAllowed && applyBlockedMessage ?
@@ -204,6 +207,6 @@ export function WorkflowAssistProposalReviewPanel({
                     : null}
                 </div>
             </details>
-        </div>
+        </CommandSurfaceActionCardShell>
     );
 }

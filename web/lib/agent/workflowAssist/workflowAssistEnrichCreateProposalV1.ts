@@ -8,7 +8,9 @@ import {
 import { resolveWorkflowAssistMessagePreview } from "@/lib/agent/workflowAssist/workflowAssistMessageProvenanceV1";
 import { buildStubWorkflowAssistDraftEnrichmentRaw } from "@/lib/agent/workflowAssist/workflowAssistStubDraftEnrichmentV1";
 import type { WorkflowAssistSuggestionV1 } from "@/lib/agent/workflowAssist/workflowAssistProposalV1";
+import { buildTourReminderReminderIntentV1 } from "@/lib/agent/workflowAssist/workflowAssistMessageVariablesV1";
 import {
+    buildTourReminderActionScaffolds,
     buildWorkflowMetadataWithScope,
     type WorkflowAssistWorkflowMetadataV1,
 } from "@/lib/workflows/workflowScopeMetadata";
@@ -116,6 +118,17 @@ export function enrichWorkflowAssistCreateSuggestionV1(
             (row.metadata as WorkflowAssistWorkflowMetadataV1).workflow_assist
         :   undefined;
 
+    const reminderChannel =
+        draft_review.action_preview.channel === "email" ? "email" : "sms";
+    const reminder_intent_v1 =
+        template_id === "tour_reminder" ?
+            buildTourReminderReminderIntentV1({
+                lead_days: input.lead_days_before_tour ?? 3,
+                channel: reminderChannel,
+                message_preview: draft_review.message_preview.body,
+            })
+        :   undefined;
+
     const metadataRecord = buildWorkflowMetadataWithScope({
         scope:
             row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ?
@@ -137,14 +150,21 @@ export function enrichWorkflowAssistCreateSuggestionV1(
                 needs_review: draft_review.message_preview.needs_review,
                 unresolved_tokens: draft_review.message_preview.unresolved_tokens,
             },
+            ...(reminder_intent_v1 ? { reminder_intent_v1 } : {}),
         },
     });
 
     normalized_row.metadata = metadataRecord;
 
+    const draft_action_scaffolds =
+        template_id === "tour_reminder" ?
+            buildTourReminderActionScaffolds(input.lead_days_before_tour ?? 3, reminder_intent_v1 ?? null)
+        :   input.suggestion.draft_action_scaffolds;
+
     return {
         ...input.suggestion,
         draft_row: normalized_row,
+        ...(draft_action_scaffolds ? { draft_action_scaffolds } : {}),
         draft_review,
         reasoning: {
             summary: `${draft_review.operator.display_title} · ${draft_review.operator.scope_label}`,

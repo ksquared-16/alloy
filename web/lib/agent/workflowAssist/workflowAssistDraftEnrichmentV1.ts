@@ -87,6 +87,7 @@ export type WorkflowAssistDraftReviewV1 = {
         when_label: string;
         who_label: string;
         action_label: string;
+        uses_label: string | null;
         status_label: string;
         needs_review: string[];
     };
@@ -322,6 +323,7 @@ export function buildWorkflowAssistDraftReviewV1(input: {
             when_label: operatorLines.when_label,
             who_label: operatorLines.who_label,
             action_label: operatorLines.action_label,
+            uses_label: operatorLines.uses_label,
             status_label: operatorLines.status_label,
             needs_review: needsReview,
         },

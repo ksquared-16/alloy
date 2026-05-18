@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import type { MouseEvent } from "react";
 
+import { CommandSurfaceActionCardShell } from "@/app/adminV2/components/aiCommandSurface/CommandSurfaceCardLink";
 import { configLayoutAssistProposalStatusCopy } from "@/lib/agent/configLayoutAssist/configLayoutAssistProposalCopy";
 import type { ConfigurationProposalV1 } from "@/lib/agent/configLayoutAssist/configurationProposalV1";
 import type { ConfigLayoutAssistTraceV1 } from "@/lib/agent/configLayoutAssist/configLayoutAssistTypes";
@@ -56,7 +57,7 @@ export function ConfigLayoutAssistProposalThreadCard({
     };
 
     return (
-        <div data-command-surface-config-layout-assist-card="true" className="relative z-[1] pointer-events-auto">
+        <CommandSurfaceActionCardShell data-command-surface-config-layout-assist-card="true">
             <p className="text-[13px] font-semibold" style={{ color: CMD.textBody }}>
                 Configuration proposal (review required)
             </p>
@@ -114,6 +115,6 @@ export function ConfigLayoutAssistProposalThreadCard({
                     Save the proposal to Settings before review.
                 </p>
             )}
-        </div>
+        </CommandSurfaceActionCardShell>
     );
 }

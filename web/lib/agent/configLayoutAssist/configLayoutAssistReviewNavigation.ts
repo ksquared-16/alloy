@@ -1,4 +1,5 @@
 import { buildConfigProposalReviewHref } from "@/lib/agent/configLayoutAssist/configLayoutAssistEntityResolve";
+import { handleCommandSurfaceCardNavigate } from "@/lib/adminV2/aiCommandSurface/commandSurfaceCardNavigation";
 
 export type ConfigProposalReviewClickEvent = {
     preventDefault: () => void;
@@ -60,7 +61,5 @@ export function handleConfigProposalReviewClick(
 ): void {
     const proposalId = resolveConfigProposalReviewId(persistedProposalId);
     if (!proposalId) return;
-    event.preventDefault();
-    event.stopPropagation();
-    navigate(buildConfigProposalReviewHref(proposalId));
+    handleCommandSurfaceCardNavigate(event, buildConfigProposalReviewHref(proposalId), navigate);
 }

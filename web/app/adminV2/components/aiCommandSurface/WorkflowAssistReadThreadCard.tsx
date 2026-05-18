@@ -1,6 +1,10 @@
 "use client";
 
-import Link from "next/link";
+import {
+    CommandSurfaceActionCardShell,
+    CommandSurfaceCardLink,
+} from "@/app/adminV2/components/aiCommandSurface/CommandSurfaceCardLink";
+import { WORKFLOW_ASSIST_AUTOMATIONS_HREF } from "@/lib/adminV2/aiCommandSurface/commandSurfaceRouter";
 
 import type {
     WorkflowAssistErrorEnvelopeV1,
@@ -166,24 +170,24 @@ function WorkflowAssistReadCardBody({
                     </ul>
                     <div className="flex flex-wrap gap-2">
                         {ex.links.automations_href ?
-                            <Link
+                            <CommandSurfaceCardLink
                                 href={ex.links.automations_href}
                                 className="text-[11px] font-semibold underline-offset-2 hover:underline"
                                 style={{ color: brand.secondary }}
-                                data-command-surface-workflow-assist-explain-open-automations
+                                data-command-surface-workflow-assist-explain-open-automations="true"
                             >
                                 Open Automations
-                            </Link>
+                            </CommandSurfaceCardLink>
                         : null}
                         {ex.links.run_id && ex.links.run_href ?
-                            <Link
+                            <CommandSurfaceCardLink
                                 href={ex.links.run_href}
                                 className="text-[11px] font-semibold underline-offset-2 hover:underline"
                                 style={{ color: brand.secondary }}
-                                data-command-surface-workflow-assist-explain-open-run
+                                data-command-surface-workflow-assist-explain-open-run="true"
                             >
                                 View run
-                            </Link>
+                            </CommandSurfaceCardLink>
                         : null}
                     </div>
                     {parseHint}
@@ -217,15 +221,14 @@ function WorkflowAssistReadCardBody({
                                     style={{ borderColor: derived.border }}
                                 >
                                     <div className="min-w-0 flex-1">
-                                        <Link
-                                            href={`/adminV2/workflows?run=${encodeURIComponent(r.run_id)}`}
-                                            className="text-[11px] font-semibold hover:underline"
+                                        <CommandSurfaceCardLink
+                                            href={`${WORKFLOW_ASSIST_AUTOMATIONS_HREF}?run=${encodeURIComponent(r.run_id)}`}
+                                            className="text-[11px] font-semibold hover:underline text-left"
                                             style={{ color: CMD.textBody }}
-                                            data-command-surface-workflow-assist-failed-run-row
-                                            data-run-id={r.run_id}
+                                            data-command-surface-workflow-assist-failed-run-row={r.run_id}
                                         >
                                             {r.workflow_name ?? "Workflow"}
-                                        </Link>
+                                        </CommandSurfaceCardLink>
                                         <div className="text-[10px]" style={{ color: CMD.textLabel }}>
                                             {r.status}
                                             {r.has_failed_action ? " · failed step" : ""}
@@ -386,14 +389,14 @@ function WorkflowAssistReadCardBody({
                         </p>
                     : null}
                     <div>
-                        <Link
-                            href="/adminV2/workflows"
+                        <CommandSurfaceCardLink
+                            href={WORKFLOW_ASSIST_AUTOMATIONS_HREF}
                             className="text-[11px] font-semibold underline-offset-2 hover:underline"
                             style={{ color: brand.secondary }}
-                            data-command-surface-workflow-assist-open-automations
+                            data-command-surface-workflow-assist-open-automations="true"
                         >
                             Open Automations
-                        </Link>
+                        </CommandSurfaceCardLink>
                     </div>
                     {mutation ?
                         <div
@@ -440,7 +443,7 @@ export function WorkflowAssistReadThreadCard({
     mutationBlockedReason?: string | null;
 }) {
     return (
-        <div className="space-y-2" data-command-surface-workflow-assist-read-card="true">
+        <CommandSurfaceActionCardShell className="space-y-2" data-command-surface-workflow-assist-read-card="true">
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: CMD.textLabel }}>
                     Workflow Assist
@@ -470,6 +473,6 @@ export function WorkflowAssistReadThreadCard({
                     mutationBlockedReason={mutationBlockedReason ?? undefined}
                 />
             : null}
-        </div>
+        </CommandSurfaceActionCardShell>
     );
 }
