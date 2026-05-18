@@ -19,6 +19,11 @@ import {
     readJson,
 } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
+import {
+    operationalTaskUrgencyBadge,
+    scheduledSendStripVisible,
+    scheduledSendUrgencyBadge,
+} from "@/lib/agent/taskAssist/taskAssistOperationalUrgency";
 
 type OperationalTaskRow = {
     id: string;
@@ -122,8 +127,8 @@ export default function OpportunityOperationalCompactStrip({
     }, [opportunityId, v11]);
 
     const openTasks = useMemo(() => tasks.filter((t) => t.status === "open"), [tasks]);
-    const pendingSends = useMemo(
-        () => scheduledSends.filter((s) => s.status === "pending"),
+    const stripSends = useMemo(
+        () => scheduledSends.filter((s) => scheduledSendStripVisible(s.status)),
         [scheduledSends]
     );
     const nextFollowUpIso = useMemo(() => parseNextFollowUpAt(overviewData), [overviewData]);
@@ -197,7 +202,7 @@ export default function OpportunityOperationalCompactStrip({
 
     if (!v11) return null;
 
-    const hasChips = openTasks.length > 0 || pendingSends.length > 0 || showNextFollowUp;
+    const hasChips = openTasks.length > 0 || stripSends.length > 0 || showNextFollowUp;
     if (!hasChips && !loading && !error) return null;
 
     return (
@@ -225,6 +230,7 @@ export default function OpportunityOperationalCompactStrip({
                 ) : null}
                 {openTasks.map((t) => {
                     const selected = popoverTaskId === t.id;
+                    const taskBadge = operationalTaskUrgencyBadge(t);
                     return (
                         <div key={t.id} className="relative">
                             <button
@@ -234,18 +240,24 @@ export default function OpportunityOperationalCompactStrip({
                                     else chipRefs.current.delete(t.id);
                                 }}
                                 data-operational-task-chip={t.id}
+                                data-operational-task-urgency={taskBadge.urgency}
                                 onClick={() => setPopoverTaskId((prev) => (prev === t.id ? null : t.id))}
-                                className={`${CHIP} cursor-pointer text-left ${
+                                className={`${CHIP} cursor-pointer text-left border ${
                                     selected ?
                                         "border-alloy-blue/45 bg-alloy-blue/10 text-alloy-midnight/90 ring-2 ring-alloy-blue/25"
-                                    :   "border-sky-200/80 bg-sky-50/90 text-sky-950/90 hover:border-sky-300/90"
+                                    :   `${taskBadge.className} hover:opacity-95`
                                 }`}
                             >
-                                <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide text-sky-800/70">
+                                <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide opacity-80">
                                     Task
                                 </span>
                                 <span className="truncate font-semibold">{t.title}</span>
-                                <span className="shrink-0 text-sky-900/65">· {shortWhen(t.due_at)}</span>
+                                <span
+                                    className={`shrink-0 rounded-full border px-1 py-0 text-[8px] font-semibold ${taskBadge.className}`}
+                                >
+                                    {taskBadge.label}
+                                </span>
+                                <span className="shrink-0 opacity-75">· {shortWhen(t.due_at)}</span>
                             </button>
                             {selected && popoverDetail ? (
                                 <OperationalTaskDetailPopover
@@ -258,19 +270,23 @@ export default function OpportunityOperationalCompactStrip({
                         </div>
                     );
                 })}
-                {pendingSends.map((s) => (
-                    <span
-                        key={s.id}
-                        className={`${CHIP} border-violet-200/75 bg-violet-50/85 text-violet-950/90`}
-                        data-operational-scheduled-send-chip={s.id}
-                    >
-                        <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide text-violet-800/70">
-                            {(s.channel ?? "msg").toUpperCase()}
+                {stripSends.map((s) => {
+                    const sendBadge = scheduledSendUrgencyBadge(s);
+                    return (
+                        <span
+                            key={s.id}
+                            className={`${CHIP} border ${sendBadge.className}`}
+                            data-operational-scheduled-send-chip={s.id}
+                            data-scheduled-send-urgency={sendBadge.urgency}
+                        >
+                            <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide opacity-80">
+                                {(s.channel ?? "msg").toUpperCase()}
+                            </span>
+                            <span className="truncate font-semibold">{sendBadge.label}</span>
+                            <span className="shrink-0 opacity-75">· {shortWhen(s.scheduled_for)}</span>
                         </span>
-                        <span className="truncate">Scheduled</span>
-                        <span className="shrink-0 text-violet-900/65">· {shortWhen(s.scheduled_for)}</span>
-                    </span>
-                ))}
+                    );
+                })}
             </div>
         </div>
     );

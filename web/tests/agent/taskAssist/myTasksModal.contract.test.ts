@@ -35,6 +35,8 @@ describe("My tasks modal UX", () => {
         const src = readFileSync(panel, "utf8");
         expect(src).toContain("useAdminDrawerOptional");
         expect(src).not.toContain("useAdminDrawer()");
+        expect(src).not.toContain("fetchCommunicationScheduledSends");
+        expect(src).not.toContain("scheduledSends");
         expect(src).toContain("Array.isArray(json.tasks) ? json.tasks : []");
     });
 

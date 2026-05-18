@@ -20,6 +20,10 @@ describe("OpportunityOperationalCompactStrip", () => {
         expect(src).toContain("data-admin-opportunity-operational-strip");
         expect(src).toContain("data-operational-task-chip");
         expect(src).toContain("OperationalTaskDetailPopover");
+        expect(src).toContain("scheduledSendUrgencyBadge");
+        expect(src).toContain("operationalTaskUrgencyBadge");
+        expect(src).toContain("scheduledSendStripVisible");
+        expect(src).not.toContain("pendingSends.map");
         expect(src).toContain("ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH");
         expect(src).toContain("ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS");
     });
