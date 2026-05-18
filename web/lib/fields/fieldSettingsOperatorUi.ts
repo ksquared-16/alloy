@@ -3,6 +3,7 @@
  * UI-only; does not change PATCH enforcement or policy maps.
  */
 
+import type { FieldPolicyRequirementPreset } from "@/lib/fields/fieldPolicySettingsUi";
 import { resolveDrawerFieldPolicy } from "@/lib/fields/drawerFieldPolicyAdapter";
 import {
     entityTypeSupportsFieldPolicySettings,
@@ -19,6 +20,19 @@ const GLOBAL_HIDDEN_KEYS = new Set([
     "version",
     "sync_version",
 ]);
+
+export const OPERATOR_REQUIREMENT_INLINE_OPTIONS: ReadonlyArray<{
+    value: FieldPolicyRequirementPreset;
+    label: string;
+}> = [
+    { value: "optional", label: "Optional" },
+    { value: "required", label: "Required" },
+    { value: "required_on_save", label: "Required when saving" },
+];
+
+export function operatorRequirementPresetLabel(preset: FieldPolicyRequirementPreset): string {
+    return OPERATOR_REQUIREMENT_INLINE_OPTIONS.find((o) => o.value === preset)?.label ?? preset;
+}
 
 /** Keys that are always hidden from the default operator field list. */
 export function isAlwaysHiddenFieldKey(fieldKey: string): boolean {
@@ -37,13 +51,8 @@ export type OperatorFieldRow = {
     label: string | null;
 };
 
-/**
- * Whether a field_definition row should be hidden from the default operator list.
- * Custom (non-system) fields are shown unless they match structural id patterns.
- */
 export function isOperatorHiddenField(entityType: string, row: OperatorFieldRow): boolean {
     if (isAlwaysHiddenFieldKey(row.field_key)) return true;
-
     if (!row.is_system) return false;
 
     if (entityTypeSupportsFieldPolicySettings(entityType)) {
@@ -69,7 +78,6 @@ function humanizeFieldKey(fieldKey: string): string {
         .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-/** Per-entity overrides when stored label is missing or too technical. */
 const OPERATOR_LABEL_OVERRIDES: Record<string, Record<string, string>> = {
     opportunity: {
         name: "Inquiry name",
@@ -101,7 +109,6 @@ const OPERATOR_LABEL_OVERRIDES: Record<string, Record<string, string>> = {
     },
 };
 
-/** Primary list/modal title for operators (label → override → humanized key). */
 export function operatorFieldDisplayLabel(entityType: string, row: OperatorFieldRow): string {
     const key = row.field_key.trim();
     const stored = row.label?.trim();
@@ -118,19 +125,58 @@ function looksLikeRawKey(label: string): boolean {
     return /^[a-z][a-z0-9_]*$/.test(label.trim());
 }
 
+function deferredFieldHint(entityType: string, fieldKey: string): string | null {
+    const key = fieldKey.trim();
+    if (/^status/.test(key) || key === "status_key") return "Changed on the record status control";
+    if (/^tour_/.test(key) || key === "tour_date" || key === "tour_time") return "Set through tour scheduling";
+    if (/quote|pricing|discount|tuition|fee_/.test(key)) return "Set through quote or pricing flows";
+    if (key === "desired_start_date" || key === "program_type" || key === "schedule_type") {
+        return "Set through enrollment or inquiry workflow";
+    }
+    if (entityType === "opportunity" && key === "assigned_to") return null;
+    return "Updated outside drawer field save";
+}
+
+/** Why Required cannot be changed inline (empty when editable). */
+export function operatorRequirementLockedReason(
+    entityType: string,
+    fieldKey: string,
+    view: FieldPolicySettingsView | null
+): string {
+    if (!view) return "Not available for this record type";
+    if (canOperatorEditRequirementInline(view)) return "";
+    if (!view.policyEditable) {
+        const deferred = deferredFieldHint(entityType, fieldKey);
+        if (deferred) return deferred;
+        if (view.writeMap.policyMode === "deferred") return "Updated outside drawer field save";
+        return "Managed by Alloy — label and visibility may still be editable";
+    }
+    if (view.requirementAdvanced || view.interactionAdvanced) {
+        return "Uses a custom rule — contact your Alloy administrator to change";
+    }
+    return "Cannot change here";
+}
+
 /** Short policy column label for the field list. */
-export function operatorPolicyColumnLabel(view: FieldPolicySettingsView | null, isRequired: boolean): string {
+export function operatorPolicyColumnLabel(
+    entityType: string,
+    fieldKey: string,
+    view: FieldPolicySettingsView | null,
+    isRequired: boolean
+): string {
     if (!view) return isRequired ? "Required" : "Optional";
     if (!view.policyEditable) {
-        if (view.writeMap.policyMode === "deferred") return "Configured elsewhere";
-        return "Managed by system";
+        const deferred = deferredFieldHint(entityType, fieldKey);
+        if (deferred) return deferred;
+        if (view.requirementAdvanced || view.interactionAdvanced) return "Custom rule";
+        return "Managed by Alloy";
     }
-    if (view.requirementAdvanced || view.interactionAdvanced) return "Advanced rules";
+    if (view.requirementAdvanced || view.interactionAdvanced) return "Custom rule";
     switch (view.displayCategory) {
         case "required":
             return "Required";
         case "required_on_save":
-            return "Required on save";
+            return "Required when saving";
         case "read_only":
             return "Read-only";
         case "optional":
@@ -141,17 +187,20 @@ export function operatorPolicyColumnLabel(view: FieldPolicySettingsView | null, 
     }
 }
 
-/** Whether operators can change required/optional inline in the field list. */
 export function canOperatorEditRequirementInline(view: FieldPolicySettingsView | null): boolean {
     return Boolean(view?.policyEditable && !view.requirementAdvanced && !view.interactionAdvanced);
 }
 
-/** Subtitle under policy controls in the edit modal. */
-export function operatorPolicyCapabilityHint(view: FieldPolicySettingsView | null): string {
+export function operatorPolicyCapabilityHint(
+    entityType: string,
+    fieldKey: string,
+    view: FieldPolicySettingsView | null
+): string {
     if (!view) return "";
-    if (view.policyEditable) return "You can require this field and control whether staff can edit it when saving the record drawer.";
-    if (view.writeMap.policyMode === "deferred") {
-        return "This field is updated through another workflow (status, tour, quote, or pricing). Change it on the record or in that workflow.";
+    if (view.policyEditable) {
+        return "Control whether staff must fill this in and whether they can edit it when saving the record drawer.";
     }
-    return "Alloy manages this field internally. You can still adjust its label and where it appears when supported.";
+    const locked = operatorRequirementLockedReason(entityType, fieldKey, view);
+    if (locked) return locked;
+    return "You can still adjust the display label and where this field appears when supported.";
 }

@@ -60,8 +60,18 @@ function layoutSourceLabel(source: LayoutResolution["source"]): string {
     return source === "org_drawer_override" ? "Org drawer override" : "Global template fallback";
 }
 
-export default function EffectiveDrawerLayoutPreviewPanel({ refreshToken = 0 }: { refreshToken?: number }) {
-    const [entityType, setEntityType] = useState("opportunity");
+export default function EffectiveDrawerLayoutPreviewPanel({
+    refreshToken = 0,
+    entityType: entityTypeProp,
+    hideEntitySelect = false,
+}: {
+    refreshToken?: number;
+    /** When set, entity is controlled by parent (e.g. layouts hub tabs). */
+    entityType?: string;
+    hideEntitySelect?: boolean;
+}) {
+    const [entityTypeInternal, setEntityTypeInternal] = useState("opportunity");
+    const entityType = entityTypeProp ?? entityTypeInternal;
     const [data, setData] = useState<PreviewResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -90,28 +100,28 @@ export default function EffectiveDrawerLayoutPreviewPanel({ refreshToken = 0 }: 
         <section className="rounded-xl border border-alloy-forge/15 bg-white/75 p-4 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                    <h2 className="text-sm font-semibold text-alloy-midnight">Effective drawer layout</h2>
-                    <p className="mt-1 max-w-2xl text-[11px] leading-snug text-alloy-midnight/60">
-                        Same resolution chain as runtime <code className="rounded bg-alloy-stone/12 px-1 text-[10px]">record_drawer_layouts</code>{" "}
-                        → <code className="rounded bg-alloy-stone/12 px-1 text-[10px]">record_layouts</code>, then section ordering aligned with{" "}
-                        <code className="rounded bg-alloy-stone/12 px-1 text-[10px]">AdminEntityDrawer</code> for opportunities. For workflow v1, use
-                        the section order editor below; job/schedule use a presentation skeleton only.
+                    <h2 className="text-sm font-semibold text-alloy-midnight">Current drawer sections</h2>
+                    <p className="mt-1 max-w-2xl text-xs leading-snug text-alloy-midnight/60">
+                        Resolved order and labels as staff see them in the record drawer. Reorder inquiry sections above when workflow
+                        mode is enabled.
                     </p>
                 </div>
-                <label className="flex flex-col gap-0.5 text-[11px] text-alloy-midnight/70">
-                    <span className="font-medium">Entity</span>
-                    <select
-                        className="rounded-lg border border-admin-border bg-white px-2 py-1.5 text-xs text-alloy-midnight"
-                        value={entityType}
-                        onChange={(e) => setEntityType(e.target.value)}
-                    >
-                        {ENTITY_OPTIONS.map((o) => (
-                            <option key={o.value} value={o.value}>
-                                {o.label}
-                            </option>
-                        ))}
-                    </select>
-                </label>
+                {!hideEntitySelect ? (
+                    <label className="flex flex-col gap-0.5 text-[11px] text-alloy-midnight/70">
+                        <span className="font-medium">Entity</span>
+                        <select
+                            className="rounded-lg border border-admin-border bg-white px-2 py-1.5 text-xs text-alloy-midnight"
+                            value={entityType}
+                            onChange={(e) => setEntityTypeInternal(e.target.value)}
+                        >
+                            {ENTITY_OPTIONS.map((o) => (
+                                <option key={o.value} value={o.value}>
+                                    {o.label}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                ) : null}
             </div>
 
             {loading ? (

@@ -38,6 +38,8 @@ import {
     operatorFieldDisplayLabel,
     operatorPolicyCapabilityHint,
     operatorPolicyColumnLabel,
+    operatorRequirementLockedReason,
+    OPERATOR_REQUIREMENT_INLINE_OPTIONS,
 } from "@/lib/fields/fieldSettingsOperatorUi";
 
 const FIELD_TYPES = ["text", "email", "phone", "number", "date", "datetime", "boolean", "select", "multiselect"] as const;
@@ -155,6 +157,7 @@ export default function EntityFieldsClient({
     const [sectionRegistry, setSectionRegistry] = useState<FieldSectionRegistryRow[]>([]);
     const [showSystemFields, setShowSystemFields] = useState(false);
     const [inlineSavingKey, setInlineSavingKey] = useState<string | null>(null);
+    const [inlineSavedKey, setInlineSavedKey] = useState<string | null>(null);
     const [inlineSaveError, setInlineSaveError] = useState<string | null>(null);
     const [showEditAdvanced, setShowEditAdvanced] = useState(false);
 
@@ -267,6 +270,8 @@ export default function EntityFieldsClient({
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Update failed");
+            setInlineSavedKey(row.field_key);
+            window.setTimeout(() => setInlineSavedKey((k) => (k === row.field_key ? null : k)), 2000);
             await fetchItems();
         } catch (e) {
             setInlineSaveError((e as Error).message);
@@ -602,25 +607,51 @@ export default function EntityFieldsClient({
                                             </td>
                                             <td className="py-2.5 pr-4">
                                                 {inlineEditable && canMutate ? (
-                                                    <select
-                                                        value={reqPreset}
-                                                        disabled={inlineSavingKey === row.field_key}
-                                                        onChange={(e) =>
-                                                            void patchRequirementInline(
-                                                                row,
-                                                                e.target.value as FieldPolicyRequirementPreset
-                                                            )
-                                                        }
-                                                        className="rounded border border-[#e6e8ec] px-2 py-1 text-xs"
-                                                    >
-                                                        <option value="optional">Optional</option>
-                                                        <option value="required">Required</option>
-                                                        <option value="required_on_save">Required on save</option>
-                                                    </select>
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <select
+                                                            value={reqPreset}
+                                                            disabled={inlineSavingKey === row.field_key}
+                                                            onChange={(e) =>
+                                                                void patchRequirementInline(
+                                                                    row,
+                                                                    e.target.value as FieldPolicyRequirementPreset
+                                                                )
+                                                            }
+                                                            className="min-w-[10.5rem] rounded border border-[#e6e8ec] px-2 py-1 text-xs"
+                                                            aria-label={`Required rule for ${displayLabel}`}
+                                                        >
+                                                            {OPERATOR_REQUIREMENT_INLINE_OPTIONS.map((o) => (
+                                                                <option key={o.value} value={o.value}>
+                                                                    {o.label}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                        {inlineSavingKey === row.field_key ? (
+                                                            <span className="text-[10px] text-alloy-midnight/45">Saving…</span>
+                                                        ) : inlineSavedKey === row.field_key ? (
+                                                            <span className="text-[10px] font-medium text-alloy-pine">Saved</span>
+                                                        ) : null}
+                                                    </div>
                                                 ) : policySettingsSupported ? (
-                                                    <span className="text-[#59678b]">
-                                                        {operatorPolicyColumnLabel(policyView ?? null, row.is_required)}
-                                                    </span>
+                                                    <div className="max-w-[14rem]">
+                                                        <span className="text-[#59678b]">
+                                                            {operatorPolicyColumnLabel(
+                                                                entityType,
+                                                                row.field_key,
+                                                                policyView ?? null,
+                                                                row.is_required
+                                                            )}
+                                                        </span>
+                                                        {policyView && !inlineEditable ? (
+                                                            <p className="mt-0.5 text-[10px] leading-snug text-[#59678b]/80">
+                                                                {operatorRequirementLockedReason(
+                                                                    entityType,
+                                                                    row.field_key,
+                                                                    policyView
+                                                                )}
+                                                            </p>
+                                                        ) : null}
+                                                    </div>
                                                 ) : (
                                                     <span className="text-[#59678b]">{row.is_required ? "Required" : "Optional"}</span>
                                                 )}
@@ -631,7 +662,12 @@ export default function EntityFieldsClient({
                                                         ? "Read-only"
                                                         : policyView?.policyEditable
                                                           ? "Staff can edit"
-                                                          : operatorPolicyColumnLabel(policyView ?? null, row.is_required)}
+                                                          : operatorPolicyColumnLabel(
+                                                                entityType,
+                                                                row.field_key,
+                                                                policyView ?? null,
+                                                                row.is_required
+                                                            )}
                                                 </td>
                                             )}
                                             <td className="py-2.5 pr-4 text-[#59678b]">{showsIn || "Hidden"}</td>
@@ -705,22 +741,21 @@ export default function EntityFieldsClient({
                                     className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
                                 />
                             </div>
-                            <div>
-                                <label className="block text-xs font-medium text-[#59678b] mb-0.5">Description</label>
-                                <input
-                                    type="text"
-                                    value={editDescription}
-                                    onChange={(e) => setEditDescription(e.target.value)}
-                                    className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
-                                />
-                            </div>
                             {policySettingsSupported && editPolicyView ? (
                                 <div className="rounded-md border border-[#e6e8ec] bg-[#f8f9fb] p-3 space-y-3">
                                     <div className="text-xs font-semibold text-[#31394d]">When saving in the drawer</div>
-                                    <p className="text-xs text-[#59678b]">{operatorPolicyCapabilityHint(editPolicyView)}</p>
-                                    {editPolicyView.policyEditable && !editPolicyView.requirementAdvanced && !editPolicyView.interactionAdvanced ? (
+                                    <p className="text-xs text-[#59678b]">
+                                        {operatorPolicyCapabilityHint(entityType, editRow.field_key, editPolicyView)}
+                                    </p>
+                                    {canOperatorEditRequirementInline(editPolicyView) || (editPolicyView.policyEditable && !editPolicyView.requirementAdvanced && !editPolicyView.interactionAdvanced) ? (
                                         <>
-                                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                            {canOperatorEditRequirementInline(editPolicyView) ? (
+                                                <p className="text-xs text-[#59678b]">
+                                                    Required is set in the field list.
+                                                </p>
+                                            ) : null}
+                                            <div className={canOperatorEditRequirementInline(editPolicyView) ? "" : "grid grid-cols-1 gap-3 sm:grid-cols-2"}>
+                                                {!canOperatorEditRequirementInline(editPolicyView) ? (
                                                 <div>
                                                     <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Required</label>
                                                     <select
@@ -730,11 +765,14 @@ export default function EntityFieldsClient({
                                                         }
                                                         className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
                                                     >
-                                                        <option value="optional">Optional</option>
-                                                        <option value="required">Required</option>
-                                                        <option value="required_on_save">Required on save</option>
+                                                        {OPERATOR_REQUIREMENT_INLINE_OPTIONS.map((o) => (
+                                                            <option key={o.value} value={o.value}>
+                                                                {o.label}
+                                                            </option>
+                                                        ))}
                                                     </select>
                                                 </div>
+                                                ) : null}
                                                 <div>
                                                     <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Staff can edit</label>
                                                     <select
@@ -753,11 +791,11 @@ export default function EntityFieldsClient({
                                     ) : (
                                         <p className="text-xs text-[#59678b]">
                                             <span className="font-medium text-[#31394d]">
-                                                {editPolicyView.policyEditable ? "Advanced rules" : "Managed by system"}.
+                                                {editPolicyView.policyEditable ? "Custom rule" : "Managed by Alloy"}.
                                             </span>{" "}
                                             {editPolicyView.policyEditable
-                                                ? "Contact your Alloy administrator to change advanced rules."
-                                                : operatorPolicyColumnLabel(editPolicyView, editRow.is_required)}
+                                                ? "Contact your Alloy administrator to change this rule."
+                                                : operatorRequirementLockedReason(entityType, editRow.field_key, editPolicyView)}
                                         </p>
                                     )}
                                 </div>
@@ -796,8 +834,17 @@ export default function EntityFieldsClient({
                                 open={showEditAdvanced}
                                 onToggle={(e) => setShowEditAdvanced((e.target as HTMLDetailsElement).open)}
                             >
-                                <summary className="cursor-pointer text-xs font-medium text-[#59678b]">Advanced</summary>
+                                <summary className="cursor-pointer text-xs font-medium text-[#59678b]">Technical details</summary>
                                 <div className="mt-3 space-y-3">
+                                    <div>
+                                        <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Description (optional)</label>
+                                        <input
+                                            type="text"
+                                            value={editDescription}
+                                            onChange={(e) => setEditDescription(e.target.value)}
+                                            className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                        />
+                                    </div>
                                     <div className="flex flex-wrap gap-4">
                                         <label className="flex items-center gap-2 text-sm">
                                             <input type="checkbox" checked={editActive} onChange={(e) => setEditActive(e.target.checked)} className="rounded border-[#c4c8cc]" />

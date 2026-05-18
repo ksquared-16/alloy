@@ -110,10 +110,9 @@ export default function OpportunityWorkflowV1DrawerOrderEditor({ onSaved }: { on
     }
     if (!eligible) {
         return (
-            <div className="rounded-lg border border-alloy-forge/12 bg-alloy-stone/5 px-3 py-2 text-[11px] text-alloy-midnight/65">
-                <span className="font-semibold text-alloy-midnight/80">Drawer section order</span> — editing is available only when the
-                effective opportunity layout uses <span className="font-mono text-[10px]">inquiry_drawer_mode: workflow_v1</span>. Switch entity
-                to Opportunity in the preview above; if this message persists, the org is not on workflow v1 yet.
+            <div className="rounded-lg border border-alloy-forge/12 bg-alloy-stone/5 px-3 py-2 text-xs text-alloy-midnight/65">
+                <span className="font-semibold text-alloy-midnight/80">Section order</span> — available when this organization uses the
+                inquiry workflow drawer. If you expected to edit order here, your layout may still be on the classic inquiry mode.
             </div>
         );
     }
@@ -122,17 +121,9 @@ export default function OpportunityWorkflowV1DrawerOrderEditor({ onSaved }: { on
         <div className="rounded-xl border border-alloy-pine/25 bg-white/85 p-4 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                    <h2 className="text-sm font-semibold text-alloy-midnight">Edit drawer section order (workflow v1)</h2>
-                    <p className="mt-1 max-w-2xl text-[11px] leading-snug text-alloy-midnight/60">
-                        Reorder overview sections for the opportunity drawer. Changes persist to{" "}
-                        <code className="rounded bg-alloy-stone/12 px-1 text-[10px]">record_drawer_layouts.config_json</code> (
-                        <code className="rounded bg-alloy-stone/12 px-1 text-[10px]">overview_section_order</code> + aligned{" "}
-                        <code className="rounded bg-alloy-stone/12 px-1 text-[10px]">inquiry_workflow_sections</code>
-                        ). No raw JSON. Field groups remain on{" "}
-                        <a href="/adminV2/settings/field-sections" className="font-medium text-alloy-pine hover:underline">
-                            Field grouping catalog
-                        </a>
-                        .
+                    <h2 className="text-sm font-semibold text-alloy-midnight">Drawer section order</h2>
+                    <p className="mt-1 max-w-2xl text-xs leading-snug text-alloy-midnight/60">
+                        Drag order with Up/Down, then save. Staff see this order in the inquiry record drawer.
                     </p>
                 </div>
                 {preview?.layout_resolution?.source === "global_template" ? (
@@ -152,10 +143,7 @@ export default function OpportunityWorkflowV1DrawerOrderEditor({ onSaved }: { on
                         className="flex flex-wrap items-center gap-2 rounded-lg border border-admin-border/60 bg-white px-2 py-1.5 text-xs"
                     >
                         <span className="w-6 text-[10px] text-alloy-midnight/45">{i + 1}</span>
-                        <span className="min-w-0 flex-1 font-medium text-alloy-midnight">
-                            {titles[key] ?? key}
-                            <span className="ml-2 font-mono text-[10px] font-normal text-alloy-midnight/45">{key}</span>
-                        </span>
+                        <span className="min-w-0 flex-1 font-medium text-alloy-midnight">{titles[key] ?? key}</span>
                         {canMutate ? (
                             <span className="flex gap-1">
                                 <button

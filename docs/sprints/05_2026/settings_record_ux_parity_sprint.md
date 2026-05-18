@@ -596,6 +596,22 @@ cd web && npm run test -- tests/sprints/settingsRecordUxParityRegression.test.ts
 # Or full sprint bundle — paths listed in that file's SETTINGS_RECORD_UX_PARITY_TEST_PATHS
 ```
 
+### Settings UX repair passes (post-closeout, May 2026)
+
+**Pass 1:** Operator IA on Settings index (diagnostics section), Fields filtering/labels, modal copy, Layouts/Actions reframed as diagnostics where read-only.
+
+**Pass 2 (Settings UI before drawer QA):**
+
+| Area | Change |
+|------|--------|
+| Settings index | `max-w-6xl` two-column layout — main config grid + sticky diagnostics sidebar |
+| Fields | Inline Required dropdown with immediate save + Saved feedback; locked reasons per field; modal defers Required when editable inline |
+| Layouts | Entity tabs (opportunity/job/schedule); section order editor; disabled **Add section** with explicit not-yet copy; integrity check collapsed |
+| Actions | Diagnostics-only card UI grouped by surface; technical details behind expander |
+| Tests | `fieldSettingsOperatorUi`, `layoutsSettingsEntities`, `actionInventoryDiagnostics` |
+
+**Still not editable in Settings UI:** action placements; new drawer sections (reorder only for opportunity workflow v1); status transition rules; raw layout JSON.
+
 ---
 
 ## Appendix A — Key file index (implementation quick reference)

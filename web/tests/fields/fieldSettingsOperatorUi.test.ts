@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+    canOperatorEditRequirementInline,
     isOperatorHiddenField,
     operatorFieldDisplayLabel,
     operatorPolicyColumnLabel,
+    operatorRequirementLockedReason,
+    operatorRequirementPresetLabel,
 } from "@/lib/fields/fieldSettingsOperatorUi";
 import { buildFieldPolicySettingsView } from "@/lib/fields/fieldPolicySettingsUi";
 
@@ -42,7 +45,7 @@ describe("fieldSettingsOperatorUi", () => {
             requirement_policy: null,
             interaction_policy: null,
         });
-        expect(operatorPolicyColumnLabel(enforceable, false)).toBe("Optional");
+        expect(operatorPolicyColumnLabel("opportunity", "campus_pref", enforceable, false)).toBe("Optional");
 
         const status = buildFieldPolicySettingsView("opportunity", {
             field_key: "status_key",
@@ -51,6 +54,22 @@ describe("fieldSettingsOperatorUi", () => {
             requirement_policy: null,
             interaction_policy: null,
         });
-        expect(operatorPolicyColumnLabel(status, false)).toBe("Configured elsewhere");
+        expect(operatorPolicyColumnLabel("opportunity", "status_key", status, false)).toContain("status");
+    });
+
+    it("labels required when saving preset for operators", () => {
+        expect(operatorRequirementPresetLabel("required_on_save")).toBe("Required when saving");
+    });
+
+    it("explains locked requirement for status fields", () => {
+        const status = buildFieldPolicySettingsView("opportunity", {
+            field_key: "status_key",
+            is_system: true,
+            is_required: false,
+            requirement_policy: null,
+            interaction_policy: null,
+        });
+        expect(canOperatorEditRequirementInline(status)).toBe(false);
+        expect(operatorRequirementLockedReason("opportunity", "status_key", status)).toContain("status");
     });
 });
