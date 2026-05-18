@@ -29,6 +29,8 @@ export type FieldDef = {
     help_text: string | null;
     config: Record<string, unknown> | null;
     is_visible_in_public_booking: boolean;
+    requirement_policy?: unknown | null;
+    interaction_policy?: unknown | null;
     created_at: string;
     updated_at: string;
 };

@@ -20,6 +20,10 @@ import {
 } from "@/lib/opportunities/enrollmentOperationalMetadata";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { assertExistingOpportunityMutableInAdminScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import {
+    enforceDrawerFieldPoliciesOnPatch,
+    fieldPolicyValidationResponse,
+} from "@/lib/fields/enforceDrawerFieldPoliciesOnPatch";
 
 /**
  * PATCH allowlist intentionally excludes identity FKs (`primary_contact_id`, `primary_person_id`).
@@ -116,6 +120,18 @@ export async function PATCH(
         const scopeDim = scopeDimensionsFromAccess(access);
         if (!(await assertExistingOpportunityMutableInAdminScope(supabase, ctx.orgId, scopeDim, id))) {
             return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
+
+        const policyCheck = await enforceDrawerFieldPoliciesOnPatch({
+            supabase,
+            orgId: ctx.orgId,
+            entityType: "opportunity",
+            entityId: id,
+            body,
+            persistedRow: existingRow as Record<string, unknown>,
+        });
+        if (!policyCheck.ok) {
+            return NextResponse.json(fieldPolicyValidationResponse(policyCheck.violations), { status: 400 });
         }
 
         const orgId = existingRow.org_id;

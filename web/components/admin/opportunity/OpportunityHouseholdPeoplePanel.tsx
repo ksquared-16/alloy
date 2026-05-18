@@ -34,8 +34,26 @@ export function OpportunityHouseholdPeoplePanel(props: {
     opportunityFullHydratePending?: boolean;
     opportunityFullHydrateApplied?: boolean;
     opportunityFullHydrateFailed?: boolean;
+    /** Keys on record_header — avoid duplicate CTAs in customer_booking section. */
+    excludeActionKeys?: Set<string>;
 }) {
-    const { opportunityId, customerId, canMutate, sectionKey, departmentId, workUnitId, router, openDrawer, openForm, refreshKey, recordHydrationPending, opportunityFullHydratePending, opportunityFullHydrateApplied, opportunityFullHydrateFailed = false } = props;
+    const {
+        opportunityId,
+        customerId,
+        canMutate,
+        sectionKey,
+        departmentId,
+        workUnitId,
+        router,
+        openDrawer,
+        openForm,
+        refreshKey,
+        recordHydrationPending,
+        opportunityFullHydratePending,
+        opportunityFullHydrateApplied,
+        opportunityFullHydrateFailed = false,
+        excludeActionKeys,
+    } = props;
 
     const householdEmptyAwaitingFull =
         !opportunityFullHydrateFailed &&
@@ -105,6 +123,7 @@ export function OpportunityHouseholdPeoplePanel(props: {
                 sectionKey={sectionKey}
                 departmentId={departmentId ?? null}
                 workUnitId={workUnitId ?? null}
+                excludeActionKeys={excludeActionKeys}
                 canMutate={canMutate}
                 router={router}
                 openDrawer={openDrawer}

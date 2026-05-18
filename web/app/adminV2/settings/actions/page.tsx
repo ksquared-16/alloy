@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
+import {
+    classifyRegistryDefinitionExecutor,
+    registryExecutorLabel,
+    type ActionRuntimeExecutor,
+} from "@/lib/admin/actions/actionSurfaceFeedback";
 
 type InventoryItem = {
     definition: {
@@ -101,7 +106,12 @@ export default function AdminV2SettingsActionsPage() {
             <header>
                 <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">Actions</h1>
                 <p className="mt-1 max-w-2xl text-xs leading-snug text-alloy-midnight/60">
-                    Read-only inventory of real registry config (definitions + placements). Editors come next.
+                    Read-only inventory of the action registry (<code className="rounded bg-alloy-stone/10 px-1 text-[10px]">action_definitions</code>{" "}
+                    + <code className="rounded bg-alloy-stone/10 px-1 text-[10px]">action_placements</code>). Placements and conditions are
+                    still often seeded or changed by engineering — not editable here yet. Some drawer and queue buttons may still use
+                    legacy <code className="rounded bg-alloy-stone/10 px-1 text-[10px]">record_actions</code> or hardcoded paths alongside
+                    this registry. The <strong>Runtime executor</strong> column classifies how each registry placement runs in the
+                    product today (read-only).
                 </p>
             </header>
 
@@ -152,10 +162,14 @@ export default function AdminV2SettingsActionsPage() {
                                 <th className="px-4 py-2 font-semibold">scope</th>
                                 <th className="px-4 py-2 font-semibold">conditions</th>
                                 <th className="px-4 py-2 font-semibold">kind</th>
+                                <th className="px-4 py-2 font-semibold">runtime executor</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-alloy-stone/10">
                             {rows.map((r) => {
+                                const runtimeExecutor: ActionRuntimeExecutor = classifyRegistryDefinitionExecutor(
+                                    r.definition.action_type
+                                );
                                 const kind =
                                     r.definition.action_type === "ui_intent" ? "placeholder" : r.definition.action_type === "external_link" ? "link" : "functional";
                                 const scopeBits = [
@@ -196,19 +210,22 @@ export default function AdminV2SettingsActionsPage() {
                                                 {kind}
                                             </span>
                                         </td>
+                                        <td className="px-4 py-2 text-alloy-midnight/70">
+                                            {registryExecutorLabel(runtimeExecutor)}
+                                        </td>
                                     </tr>
                                 );
                             })}
                             {items != null && rows.length === 0 ? (
                                 <tr>
-                                    <td className="px-4 py-3 text-alloy-midnight/60" colSpan={12}>
+                                    <td className="px-4 py-3 text-alloy-midnight/60" colSpan={13}>
                                         No placements found for this org.
                                     </td>
                                 </tr>
                             ) : null}
                             {items == null ? (
                                 <tr>
-                                    <td className="px-4 py-3 text-alloy-midnight/60" colSpan={12}>
+                                    <td className="px-4 py-3 text-alloy-midnight/60" colSpan={13}>
                                         Loading…
                                     </td>
                                 </tr>

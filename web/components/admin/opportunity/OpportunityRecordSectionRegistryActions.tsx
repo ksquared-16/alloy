@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
+import {
+    ACTION_SURFACE_INLINE_ERROR_CLASS,
+    handleRegistrySectionActionOutcome,
+} from "@/lib/admin/actions/actionSurfaceFeedback";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
@@ -65,11 +69,13 @@ export default function OpportunityRecordSectionRegistryActions({
     const [bySlot, setBySlot] = useState<ResolvedActionsBySlot | null>(null);
     const [loading, setLoading] = useState(false);
     const [busyKey, setBusyKey] = useState<string | null>(null);
+    const [actionError, setActionError] = useState<string | null>(null);
 
     useEffect(() => {
         setShouldLoad(false);
         setBySlot(null);
         setLoading(false);
+        setActionError(null);
     }, [opportunityId, sectionKey]);
 
     useEffect(() => {
@@ -150,6 +156,7 @@ export default function OpportunityRecordSectionRegistryActions({
         async (resolved: ResolvedActionForClient) => {
             if (!canMutate) return;
             setBusyKey(resolved.key);
+            setActionError(null);
             try {
                 const out = await applyRegistryResolvedActionClient(resolved, {
                     router,
@@ -165,10 +172,13 @@ export default function OpportunityRecordSectionRegistryActions({
                         work_unit_id: workUnitId ?? null,
                     },
                 });
-                if (out.ok) {
-                    onExecutionResult?.(out.execution_result);
-                    onApplied?.();
+                const { error } = handleRegistrySectionActionOutcome(opportunityId, resolved, out);
+                if (error) {
+                    setActionError(error);
+                    return;
                 }
+                onExecutionResult?.(out.ok ? out.execution_result : undefined);
+                onApplied?.();
             } finally {
                 setBusyKey(null);
             }
@@ -217,6 +227,7 @@ export default function OpportunityRecordSectionRegistryActions({
                     )}
                 </div>
             ) : n === 0 ? null : (
+                <div className="space-y-2">
                 <div className="flex flex-wrap gap-2" data-opportunity-record-section-actions={sectionKey}>
                     {primary.map((a) => (
                         <button
@@ -251,6 +262,16 @@ export default function OpportunityRecordSectionRegistryActions({
                             {busyKey === a.key ? "…" : a.label}
                         </button>
                     ))}
+                </div>
+                {actionError ? (
+                    <p
+                        className={ACTION_SURFACE_INLINE_ERROR_CLASS}
+                        role="alert"
+                        data-opportunity-record-section-action-error={sectionKey}
+                    >
+                        {actionError}
+                    </p>
+                ) : null}
                 </div>
             )}
         </div>

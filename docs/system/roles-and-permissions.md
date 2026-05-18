@@ -34,9 +34,27 @@ Separate **capability** (what actions a user may perform) from **data visibility
 - **Prefer permission grants** for new gates; avoid adding new **`if (role === 'manager')`** branches in APIs when a **`permission_key`** can express the rule. The **only** small fixed role-key list in core access resolution is **`PORTAL_ROLES`** (**`admin`** / **`ops`**) for **portal shell** eligibility — not a substitute for **`permissionKeys`** on features.
 - **Do not** assume every admin route is scoped yet — new routes must opt in to **`getAdminAccessContextCached`** (see **`docs/execution/roadmap-and-gaps.md`**).
 
+## Settings + Record UX Parity sprint — mutation boundaries (Card 7)
+
+Verified **2026-05** for Cards 1–6 (field policy, drawer validation, layout integrity, action surface coherence). No permission model changes in that sprint.
+
+| Surface | Who can mutate (server) | Scope |
+|---------|-------------------------|--------|
+| **Field definitions** (`/api/admin/field-definitions`) | Portal **`admin`** only (`ctx.role === "admin"`) | Org via `ctx.orgId`; **org-wide** defs — dept-restricted admins with admin role still edit all org field defs |
+| **Layout integrity** | Read-only GET | Org-scoped |
+| **Record PATCH** (opportunity/job) | Portal admin/ops auth + **`getAdminAccessContextCached`** | `assertExistingOpportunityMutableInAdminScope` / `assertJobInAccessScope` before field policy enforcement |
+| **Action execute** | `requireAdminOrOps` + **`executeAdminAction`** | `accessScope` → `assertEntityDrawerRecordReadable` when scope restricts |
+| **Drawer inline edit / registry buttons (client)** | **`canMutate`** = membership includes portal **`admin`** | UI disabled state is **not** security; server PATCH/execute gates apply |
+
+### Ops drawer mutate — explicitly deferred
+
+**Decision (Card 7):** Ops users may use the admin portal (`admin` + `ops` role_keys) for **read** and many **action execute** paths, but **drawer inline edit** and registry action buttons remain gated by client **`canMutate`**, which requires the portal **`admin`** role_key (`web/lib/admin/adminPortalRolePick.ts` → `hasPortalAdminMutateAccess`).
+
+**Not in scope for the parity sprint:** Granting ops broad drawer write access. A future change should use explicit **`permission_key`** grants and scoped server checks — not `canMutate = ops`.
+
 ## Known gaps / risks
 
-- **Needs verification:** Exhaustive list of admin routes with vs without scope enforcement (grep-driven maintenance).
+- **Needs verification:** Exhaustive list of admin routes with vs without scope enforcement (grep-driven maintenance). Cards 1–6 paths listed in `docs/execution/admin-settings-config-parity.md` § Access verification (Card 7).
 
 ## AI enrichment + Agent specialists (Task Assist, Orchestrator)
 

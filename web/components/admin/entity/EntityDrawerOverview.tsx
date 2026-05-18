@@ -10,7 +10,9 @@ import {
 import { formatDate, formatDateTime, formatMoney, formatMoneyFromCents, formatPhoneUS, formatPayoutPercent, RECURRENCE_UNIT_OPTIONS } from "@/lib/adminFormatters";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import EntityDrawerSection from "./EntityDrawerSection";
-import EntityDrawerField from "./EntityDrawerField";
+import EntityDrawerField, { INPUT_ERROR_CLASS } from "./EntityDrawerField";
+import type { DrawerFieldPolicyChrome } from "@/lib/admin/drawer/fieldEditabilityInDrawer";
+import { listUnmappedFieldValidationErrors } from "@/lib/admin/drawer/drawerSaveErrors";
 import { isUuidLike, resolveOverviewRelationshipLabel } from "@/lib/admin/overviewRelationshipLabels";
 import { scheduleOverviewRelationshipReadLabel } from "@/lib/admin/scheduleOverviewLabels";
 import { isScheduleCanceledStatusKey } from "@/lib/admin/scheduleCanceledStatus";
@@ -72,6 +74,12 @@ interface EntityDrawerOverviewProps {
   scheduleRecordLayout?: RecordLayoutConfigJson | null;
   /** Body section chrome (e.g. childcare inquiry workflow drawer). */
   sectionSurface?: "default" | "premium";
+  /** Per-field server validation messages (opportunity/job policy enforcement). */
+  fieldErrorsByKey?: Record<string, string>;
+  /** Policy display chrome from `_field_policy_resolved` (required/read-only). */
+  fieldPolicyChromeByKey?: Record<string, DrawerFieldPolicyChrome>;
+  /** Labels for fields not visible in current sections (global error list). */
+  fieldLabelByKey?: Record<string, string>;
 }
 
 function formatFieldValue(
@@ -300,8 +308,12 @@ function renderFieldEditNode(
   statusDefs: StatusDefOption[] | undefined,
   disabled: boolean,
   selectOptionsByFieldKey: Record<string, { value: string; label: string }[]> | undefined,
-  presentationEntityType: EntityPresentationType
+  presentationEntityType: EntityPresentationType,
+  hasValidationError?: boolean
 ): ReactNode {
+  const errorInputClass = hasValidationError ? INPUT_ERROR_CLASS : "";
+  const inputClass = `${INLINE_EDIT_INPUT} ${errorInputClass}`.trim();
+  const selectClass = `${INLINE_EDIT_SELECT} ${errorInputClass}`.trim();
   const key = field.key;
   const formVal = formData[key];
   const formHasMeaningful =
@@ -335,7 +347,7 @@ function renderFieldEditNode(
         onBlur={onBlur}
         onKeyDown={onKeyDown}
         disabled={disabled}
-        className={INLINE_EDIT_INPUT}
+        className={inputClass}
       />
     );
   }
@@ -354,7 +366,7 @@ function renderFieldEditNode(
         onBlur={onBlur}
         onKeyDown={onKeyDown}
         disabled={disabled}
-        className={INLINE_EDIT_INPUT}
+        className={inputClass}
         placeholder="0.00"
       />
     );
@@ -372,7 +384,7 @@ function renderFieldEditNode(
         onBlur={onBlur}
         onKeyDown={onKeyDown}
         disabled={disabled}
-        className={INLINE_EDIT_SELECT}
+        className={selectClass}
       >
         <option value="">— None —</option>
         <option value="true">Yes</option>
@@ -408,7 +420,7 @@ function renderFieldEditNode(
         onBlur={onBlur}
         onKeyDown={onKeyDown}
         disabled={disabled}
-        className={INLINE_EDIT_SELECT}
+        className={selectClass}
       >
         <option value="">— None —</option>
         {refOpts.map((o) => (
@@ -450,7 +462,7 @@ function renderFieldEditNode(
         onBlur={onBlur}
         onKeyDown={onKeyDown}
         disabled={disabled}
-        className={INLINE_EDIT_SELECT}
+        className={selectClass}
       >
         <option value="">— None —</option>
         {options.map((s) => (
@@ -468,7 +480,7 @@ function renderFieldEditNode(
         onBlur={onBlur}
         onKeyDown={onKeyDown}
         disabled={disabled}
-        className={INLINE_EDIT_SELECT}
+        className={selectClass}
       >
         <option value="">— None —</option>
         {RECURRENCE_UNIT_OPTIONS.map((o) => (
@@ -486,7 +498,7 @@ function renderFieldEditNode(
       onBlur={onBlur}
       onKeyDown={onKeyDown}
       disabled={disabled}
-      className={INLINE_EDIT_INPUT}
+      className={inputClass}
     />
   );
 }
@@ -514,6 +526,9 @@ export default function EntityDrawerOverview({
   scheduleOverviewRows,
   scheduleRecordLayout,
   sectionSurface = "default",
+  fieldErrorsByKey,
+  fieldPolicyChromeByKey,
+  fieldLabelByKey = {},
 }: EntityDrawerOverviewProps) {
   const config = getEntityPresentation(entityType);
   const baseSections = overviewSectionsOverride ?? config.drawer?.overviewSections ?? [];
@@ -537,6 +552,11 @@ export default function EntityDrawerOverview({
     () => (entityType === "schedules" ? getScheduleSnapshot(record) : null),
     [entityType, record]
   );
+
+  const unmappedFieldErrors = useMemo(() => {
+    if (!fieldErrorsByKey || Object.keys(fieldErrorsByKey).length === 0) return [];
+    return listUnmappedFieldValidationErrors(fieldErrorsByKey, new Set(fieldIndex.keys()), fieldLabelByKey);
+  }, [fieldErrorsByKey, fieldIndex, fieldLabelByKey]);
 
   if (!baseSections.length) return null;
 
@@ -636,7 +656,10 @@ export default function EntityDrawerOverview({
       const resolved = resolveOverviewRelationshipLabel(record, key);
       if (resolved != null) displayFallback = resolved;
     }
-    const showFieldEdit = !!(isEditing && canEdit && field.editable && onFieldChange);
+    const policyChrome = fieldPolicyChromeByKey?.[key];
+    const policyReadOnly = policyChrome?.readOnly === true;
+    const showFieldEdit = !!(isEditing && canEdit && field.editable && !policyReadOnly && onFieldChange);
+    const fieldError = fieldErrorsByKey?.[key] ?? null;
     const rawForRead = displayFallback !== undefined ? displayFallback : record[key];
     const rawValue = showFieldEdit
       ? (() => {
@@ -660,7 +683,8 @@ export default function EntityDrawerOverview({
           statusDefs,
           !canEdit,
           selectOptionsByFieldKey,
-          entityType
+          entityType,
+          !!fieldError
         )
       : undefined;
     const scheduleSnapRow = !!(opts?.row && entityType === "schedules");
@@ -674,6 +698,8 @@ export default function EntityDrawerOverview({
       isEditing: showFieldEdit,
       density,
       showLabel: !scheduleSnapRow,
+      errorMessage: fieldError,
+      readOnlyHint: policyReadOnly && !showFieldEdit ? "Read-only (policy)" : null,
       ...(scheduleSnapRow && tier ? { valueEmphasis: tier } : {}),
     };
     if (scheduleSnapRow && opts?.scheduleChromePresentation === "flat") {
@@ -754,6 +780,22 @@ export default function EntityDrawerOverview({
       data-entity-drawer-overview
       data-section-surface={sectionSurface}
     >
+      {unmappedFieldErrors.length > 0 ? (
+        <div
+          className="mb-3 rounded-md border border-alloy-ember/30 bg-red-50 px-3 py-2 text-sm text-alloy-ember"
+          role="alert"
+          data-drawer-field-validation-summary
+        >
+          <p className="font-medium">Fix these fields (not shown in the current view):</p>
+          <ul className="mt-1 list-disc pl-4 space-y-0.5">
+            {unmappedFieldErrors.map((e) => (
+              <li key={e.field_key}>
+                <span className="font-medium">{e.label}</span>: {e.message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {useScheduleLayoutV2 && layoutBlocks?.length && entityType === "schedules" ? (
         <div className="mb-2 space-y-1.5" data-schedule-layout-version="2">
           {layoutBlocks.map((block) => {

@@ -19,6 +19,18 @@ import {
     sectionKeyInOptions,
     type FieldSectionRegistryRow,
 } from "@/lib/admin/fieldSectionSelectOptions";
+import {
+    buildFieldPolicySettingsViewsForList,
+    buildSimpleInteractionPolicy,
+    buildSimpleRequirementPolicy,
+    entityTypeSupportsFieldPolicySettings,
+    parseStoredPoliciesForEdit,
+    requirementPresetFromPolicy,
+    interactionPresetFromPolicy,
+    type FieldPolicyInteractionPreset,
+    type FieldPolicyRequirementPreset,
+    type FieldPolicySettingsView,
+} from "@/lib/fields/fieldPolicySettingsUi";
 
 const FIELD_TYPES = ["text", "email", "phone", "number", "date", "datetime", "boolean", "select", "multiselect"] as const;
 
@@ -56,6 +68,8 @@ function toFieldDef(r: Record<string, unknown>): FieldDef {
         placeholder: r.placeholder != null ? String(r.placeholder) : null,
         help_text: r.help_text != null ? String(r.help_text) : null,
         config: r.config != null && typeof r.config === "object" ? (r.config as Record<string, unknown>) : null,
+        requirement_policy: r.requirement_policy ?? null,
+        interaction_policy: r.interaction_policy ?? null,
         created_at: String(r.created_at),
         updated_at: String(r.updated_at),
     };
@@ -91,6 +105,9 @@ export default function EntityFieldsClient({
     const [editLabel, setEditLabel] = useState("");
     const [editDescription, setEditDescription] = useState("");
     const [editRequired, setEditRequired] = useState(false);
+    const [editRequirementPreset, setEditRequirementPreset] = useState<FieldPolicyRequirementPreset>("optional");
+    const [editInteractionPreset, setEditInteractionPreset] = useState<FieldPolicyInteractionPreset>("editable");
+    const [editPolicyView, setEditPolicyView] = useState<FieldPolicySettingsView | null>(null);
     const [editActive, setEditActive] = useState(true);
     const [editVisibleForm, setEditVisibleForm] = useState(true);
     const [editVisibleDrawer, setEditVisibleDrawer] = useState(true);
@@ -130,6 +147,25 @@ export default function EntityFieldsClient({
     const [sectionRegistry, setSectionRegistry] = useState<FieldSectionRegistryRow[]>([]);
 
     const sortedItems = useMemo(() => sortFieldDefinitionsForAdminList(items), [items]);
+
+    const policySettingsSupported = entityTypeSupportsFieldPolicySettings(entityType);
+
+    const policyViewsByFieldKey = useMemo(
+        () =>
+            policySettingsSupported
+                ? buildFieldPolicySettingsViewsForList(
+                      entityType,
+                      items.map((i) => ({
+                          field_key: i.field_key,
+                          is_system: i.is_system,
+                          is_required: i.is_required,
+                          requirement_policy: i.requirement_policy,
+                          interaction_policy: i.interaction_policy,
+                      }))
+                  )
+                : new Map<string, FieldPolicySettingsView>(),
+        [entityType, items, policySettingsSupported]
+    );
 
     const inUseSectionKeys = useMemo(
         () =>
@@ -184,6 +220,37 @@ export default function EntityFieldsClient({
         setEditLabel(row.label ?? "");
         setEditDescription(row.description ?? "");
         setEditRequired(row.is_required);
+        if (policySettingsSupported) {
+            const view = buildFieldPolicySettingsViewsForList(entityType, [
+                {
+                    field_key: row.field_key,
+                    is_system: row.is_system,
+                    is_required: row.is_required,
+                    requirement_policy: row.requirement_policy,
+                    interaction_policy: row.interaction_policy,
+                },
+            ]).get(row.field_key);
+            setEditPolicyView(view ?? null);
+            if (view?.policyEditable) {
+                const parsed = parseStoredPoliciesForEdit({
+                    field_key: row.field_key,
+                    is_system: row.is_system,
+                    is_required: row.is_required,
+                    requirement_policy: row.requirement_policy,
+                    interaction_policy: row.interaction_policy,
+                });
+                const reqPreset = requirementPresetFromPolicy(parsed.requirementPolicy) ?? (row.is_required ? "required" : "optional");
+                const intPreset =
+                    interactionPresetFromPolicy(parsed.interactionPolicy) ?? "editable";
+                setEditRequirementPreset(reqPreset);
+                setEditInteractionPreset(intPreset);
+            } else {
+                setEditRequirementPreset(row.is_required ? "required" : "optional");
+                setEditInteractionPreset("editable");
+            }
+        } else {
+            setEditPolicyView(null);
+        }
         setEditActive(row.is_active);
         setEditVisibleForm(row.is_visible_in_form);
         setEditVisibleDrawer(row.is_visible_in_drawer);
@@ -207,7 +274,6 @@ export default function EntityFieldsClient({
             const body: Record<string, unknown> = {
                 label: editLabel.trim() || null,
                 description: editDescription.trim() || null,
-                is_required: editRequired,
                 is_active: editActive,
                 is_visible_in_form: editVisibleForm,
                 is_visible_in_drawer: editVisibleDrawer,
@@ -221,6 +287,21 @@ export default function EntityFieldsClient({
             };
             if (isSelectLikeFieldType(editRow.field_type)) {
                 body.config = buildConfigWithOptionSetKey(editRow.config, editOptionSetKey);
+            }
+            if (
+                policySettingsSupported &&
+                editPolicyView?.policyEditable &&
+                !editPolicyView.requirementAdvanced &&
+                !editPolicyView.interactionAdvanced
+            ) {
+                body.requirement_policy = buildSimpleRequirementPolicy(editRequirementPreset);
+                body.interaction_policy = buildSimpleInteractionPolicy(
+                    editInteractionPreset,
+                    entityType,
+                    editRow.field_key
+                );
+            } else if (!policySettingsSupported) {
+                body.is_required = editRequired;
             }
             const res = await fetch(`/api/admin/field-definitions/${editRow.id}`, {
                 method: "PATCH",
@@ -389,6 +470,9 @@ export default function EntityFieldsClient({
                                     <th className="pb-2 pr-4 font-semibold">Section</th>
                                     <th className="pb-2 pr-4 font-semibold">Sort</th>
                                     <th className="pb-2 pr-4 font-semibold">Required</th>
+                                    {policySettingsSupported && (
+                                        <th className="pb-2 pr-4 font-semibold">Policy</th>
+                                    )}
                                     <th className="pb-2 pr-4 font-semibold">Form</th>
                                     <th className="pb-2 pr-4 font-semibold">Drawer</th>
                                     <th className="pb-2 pr-4 font-semibold">Table</th>
@@ -399,7 +483,10 @@ export default function EntityFieldsClient({
                             <tbody>
                                 {sortedItems.length === 0 ? (
                                     <tr>
-                                        <td colSpan={canMutate ? 11 : 10} className="py-4 text-[#59678b]">
+                                        <td
+                                            colSpan={(canMutate ? 11 : 10) + (policySettingsSupported ? 1 : 0)}
+                                            className="py-4 text-[#59678b]"
+                                        >
                                             No field definitions. Seed in Supabase or add a custom field.
                                         </td>
                                     </tr>
@@ -412,6 +499,11 @@ export default function EntityFieldsClient({
                                             <td className="py-2 pr-4 text-[#59678b]">{row.section_key ?? "—"}</td>
                                             <td className="py-2 pr-4 text-[#59678b]">{row.sort_order}</td>
                                             <td className="py-2 pr-4">{row.is_required ? "Yes" : "No"}</td>
+                                            {policySettingsSupported && (
+                                                <td className="py-2 pr-4 text-[#59678b]">
+                                                    {policyViewsByFieldKey.get(row.field_key)?.displayLabel ?? "—"}
+                                                </td>
+                                            )}
                                             <td className="py-2 pr-4">{row.is_visible_in_form ? "Yes" : "No"}</td>
                                             <td className="py-2 pr-4">{row.is_visible_in_drawer ? "Yes" : "No"}</td>
                                             <td className="py-2 pr-4">{row.is_visible_in_table ? "Yes" : "No"}</td>
@@ -479,11 +571,71 @@ export default function EntityFieldsClient({
                                     className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
                                 />
                             </div>
+                            {policySettingsSupported && editPolicyView ? (
+                                <div className="rounded-md border border-[#e6e8ec] bg-[#f8f9fb] p-3 space-y-3">
+                                    <div className="text-xs font-semibold text-[#31394d]">Field policy (drawer save)</div>
+                                    {editPolicyView.policyEditable && !editPolicyView.requirementAdvanced && !editPolicyView.interactionAdvanced ? (
+                                        <>
+                                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                                <div>
+                                                    <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Requirement</label>
+                                                    <select
+                                                        value={editRequirementPreset}
+                                                        onChange={(e) =>
+                                                            setEditRequirementPreset(e.target.value as FieldPolicyRequirementPreset)
+                                                        }
+                                                        className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                                    >
+                                                        <option value="optional">Optional</option>
+                                                        <option value="required">Always required</option>
+                                                        <option value="required_on_save">Required on save</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Editability</label>
+                                                    <select
+                                                        value={editInteractionPreset}
+                                                        onChange={(e) =>
+                                                            setEditInteractionPreset(e.target.value as FieldPolicyInteractionPreset)
+                                                        }
+                                                        className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                                    >
+                                                        <option value="editable">Editable</option>
+                                                        <option value="read_only">Read-only</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <p className="text-xs text-[#59678b]">
+                                                Always required sets legacy <span className="font-mono">is_required</span>. Required on save
+                                                enforces only on PATCH when the field has a mapped write path.
+                                            </p>
+                                        </>
+                                    ) : (
+                                        <p className="text-xs text-[#59678b]">
+                                            <span className="font-medium text-[#31394d]">
+                                                {editPolicyView.policyEditable ? "Advanced policy" : "Not enforceable"}.
+                                            </span>{" "}
+                                            {editPolicyView.policyHint}
+                                            {!editPolicyView.policyEditable
+                                                ? " Policy editing is disabled; drawer save will not enforce policies on this field yet."
+                                                : " Simple controls are disabled to avoid overwriting advanced JSON."}
+                                        </p>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="flex flex-wrap gap-4">
+                                    <label className="flex items-center gap-2 text-sm">
+                                        <input
+                                            type="checkbox"
+                                            checked={editRequired}
+                                            onChange={(e) => setEditRequired(e.target.checked)}
+                                            className="rounded border-[#c4c8cc]"
+                                        />
+                                        Required
+                                    </label>
+                                </div>
+                            )}
                             <div className="flex flex-wrap gap-4">
-                                <label className="flex items-center gap-2 text-sm">
-                                    <input type="checkbox" checked={editRequired} onChange={(e) => setEditRequired(e.target.checked)} className="rounded border-[#c4c8cc]" />
-                                    Required
-                                </label>
                                 <label className="flex items-center gap-2 text-sm">
                                     <input type="checkbox" checked={editActive} onChange={(e) => setEditActive(e.target.checked)} className="rounded border-[#c4c8cc]" />
                                     Active

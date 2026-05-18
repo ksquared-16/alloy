@@ -4,6 +4,7 @@ import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import { validateSelectLikeConfig } from "@/lib/fields/fieldDefinitionConfig";
 import { mergeFieldDefinitionPoliciesFromBody } from "@/lib/fields/fieldDefinitionPolicyWrite";
+import { resolveDrawerFieldPolicy } from "@/lib/fields/drawerFieldPolicyAdapter";
 
 const ALLOWED_PATCH_KEYS = [
     "label",
@@ -87,7 +88,7 @@ export async function PATCH(
     const supabase = createAdminClient();
     const { data: existing, error: fetchErr } = await supabase
         .from("field_definitions")
-        .select("id, org_id, is_system, field_type, config, is_required, requirement_policy, interaction_policy")
+        .select("id, org_id, entity_type, field_key, is_system, field_type, config, is_required, requirement_policy, interaction_policy")
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
@@ -152,6 +153,32 @@ export async function PATCH(
         const cfgCheck = validateSelectLikeConfig(ft, updates.config as Record<string, unknown>);
         if (!cfgCheck.ok) {
             return NextResponse.json({ error: cfgCheck.error }, { status: 400 });
+        }
+    }
+
+    const existingEntityType = String((existing as { entity_type?: string }).entity_type ?? "");
+    const existingFieldKey = String((existing as { field_key?: string }).field_key ?? "");
+    const existingIsSystem = Boolean((existing as { is_system?: boolean }).is_system);
+    const policyWriteRequested =
+        body.is_required !== undefined ||
+        body.requirement_policy !== undefined ||
+        body.interaction_policy !== undefined;
+
+    if (policyWriteRequested) {
+        const et = existingEntityType.trim().toLowerCase();
+        if (et === "opportunity" || et === "job") {
+            const resolved = resolveDrawerFieldPolicy(et, {
+                field_key: existingFieldKey,
+                is_system: existingIsSystem,
+            });
+            if (!resolved || resolved.policyMode !== "enforceable") {
+                return NextResponse.json(
+                    {
+                        error: `Field policy cannot be edited for this field: ${resolved?.reason ?? "not mapped for drawer enforcement"}`,
+                    },
+                    { status: 400 }
+                );
+            }
         }
     }
 

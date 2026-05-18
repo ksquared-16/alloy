@@ -23,6 +23,10 @@ import { attachDirectFkRelationshipDisplays } from "@/lib/admin/relationshipDisp
 import { attachFieldDefinitionsAndValues } from "@/lib/admin/entityFieldRegistryAttach";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { assertJobInAccessScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import {
+    enforceDrawerFieldPoliciesOnPatch,
+    fieldPolicyValidationResponse,
+} from "@/lib/fields/enforceDrawerFieldPoliciesOnPatch";
 
 const ALLOWED_KEYS = [
     "title",
@@ -218,6 +222,29 @@ export async function PATCH(
         const updates: Record<string, unknown> = {};
 
         const action = body.action as string | undefined;
+        if (!action || !(JOB_ACTIONS as readonly string[]).includes(action)) {
+            const { data: jobFull, error: jobFullErr } = await supabase
+                .from("jobs")
+                .select("*")
+                .eq("id", id)
+                .eq("org_id", ctx.orgId)
+                .maybeSingle();
+            if (jobFullErr || !jobFull) {
+                return NextResponse.json({ error: "Not found" }, { status: 404 });
+            }
+            const policyCheck = await enforceDrawerFieldPoliciesOnPatch({
+                supabase,
+                orgId: ctx.orgId,
+                entityType: "job",
+                entityId: id,
+                body,
+                persistedRow: jobFull as Record<string, unknown>,
+            });
+            if (!policyCheck.ok) {
+                return NextResponse.json(fieldPolicyValidationResponse(policyCheck.violations), { status: 400 });
+            }
+        }
+
         if (action && (JOB_ACTIONS as readonly string[]).includes(action)) {
             const { data: jobRow } = await supabase
                 .from("jobs")

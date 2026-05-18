@@ -18,6 +18,8 @@ const VALUE_EDIT_WRAP_COMPACT = "min-h-[1.375rem] flex items-stretch";
 const VALUE_EDIT_WRAP_COMPACT_PRIMARY = "min-h-[1.5rem] flex items-stretch";
 const VALUE_EDIT_WRAP_COMPACT_SUPPORTING = "min-h-[1.25rem] flex items-stretch";
 
+const INPUT_ERROR_CLASS = "border-alloy-ember/60 focus:border-alloy-ember focus:ring-alloy-ember/25";
+
 /**
  * Vertical field block: label on top, value below.
  * Same shell for read and edit so values stay left-aligned and do not shift by label width.
@@ -39,7 +41,13 @@ interface EntityDrawerFieldProps {
   showLabel?: boolean;
   /** Schedule overview snapshot rows only (`density=compact`): value typography tier. Omit for default compact styling. */
   valueEmphasis?: "primary" | "secondary" | "supporting";
+  /** Server validation message for this field (Card 4). */
+  errorMessage?: string | null;
+  /** Policy read-only hint shown under value when not editing. */
+  readOnlyHint?: string | null;
 }
+
+export { INPUT_ERROR_CLASS };
 
 export default function EntityDrawerField({
   label,
@@ -51,6 +59,8 @@ export default function EntityDrawerField({
   density = "default",
   showLabel = true,
   valueEmphasis,
+  errorMessage,
+  readOnlyHint,
 }: EntityDrawerFieldProps) {
   const showEdit = isEditing && editNode != null;
   const compact = density === "compact";
@@ -76,13 +86,22 @@ export default function EntityDrawerField({
       data-entity-field
       data-field-density={compact ? "compact" : "default"}
       data-span={span}
+      data-has-error={errorMessage ? "true" : undefined}
     >
       {showLabel ? <label className={compact ? LABEL_COMPACT : LABEL_DEFAULT}>{label}</label> : null}
       {showEdit ? (
         <div className={compact ? editWrapCompactClass : VALUE_EDIT_WRAP}>{editNode}</div>
       ) : (
-        <div className={compact ? valueCompactClass : VALUE_DEFAULT}>{value ?? "—"}</div>
+        <div
+          className={`${compact ? valueCompactClass : VALUE_DEFAULT} ${readOnlyHint ? "text-alloy-midnight/70" : ""}`}
+        >
+          {value ?? "—"}
+        </div>
       )}
+      {readOnlyHint && !showEdit ? (
+        <p className="mt-0.5 text-[11px] text-alloy-midnight/50">{readOnlyHint}</p>
+      ) : null}
+      {errorMessage ? <p className="mt-1 text-xs text-alloy-ember">{errorMessage}</p> : null}
     </div>
   );
 }

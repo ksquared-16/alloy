@@ -68,6 +68,15 @@ import {
     type EntityDrawerFieldConfig,
 } from "@/lib/entityPresentation";
 import EntityDrawerOverview from "@/components/admin/entity/EntityDrawerOverview";
+import {
+    buildFieldLabelMapFromEntityData,
+    buildDrawerFieldPolicyChromeFromEntityData,
+    applyPolicyChromeToOverviewSections,
+} from "@/lib/admin/drawer/fieldEditabilityInDrawer";
+import {
+    buildFieldValidationSummary,
+    parseDrawerFieldPolicySaveResponse,
+} from "@/lib/admin/drawer/drawerSaveErrors";
 import OpportunityRecordSectionRegistryActions from "@/components/admin/opportunity/OpportunityRecordSectionRegistryActions";
 import { OpportunityHouseholdPeoplePanel } from "@/components/admin/opportunity/OpportunityHouseholdPeoplePanel";
 import { useOpportunityActiveTourBookings } from "@/lib/tours/hooks/useOpportunityActiveTourBookings";
@@ -1171,6 +1180,7 @@ export default function AdminEntityDrawer() {
     const [initialInlineFormSnapshot, setInitialInlineFormSnapshot] = useState<string | null>(null);
     const [formData, setFormData] = useState<Record<string, unknown>>({});
     const [saveError, setSaveError] = useState<string | null>(null);
+    const [fieldValidationErrorsByKey, setFieldValidationErrorsByKey] = useState<Record<string, string>>({});
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [saving, setSaving] = useState(false);
     const [jobSchedules, setJobSchedules] = useState<{ id: string; job_id: string; start_at: string; end_at: string; timezone: string }[]>([]);
@@ -4933,7 +4943,24 @@ export default function AdminEntityDrawer() {
             }
             const res = await fetch(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
             const json = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error((json.error as string) || "Save failed");
+            if (!res.ok) {
+                if (drawer.type === "opportunities" || drawer.type === "jobs") {
+                    const parsed = parseDrawerFieldPolicySaveResponse(json);
+                    if (parsed) {
+                        setFieldValidationErrorsByKey(parsed.byFieldKey);
+                        setSaveError(
+                            buildFieldValidationSummary(
+                                parsed.violations,
+                                buildFieldLabelMapFromEntityData((data ?? null) as Record<string, unknown> | null)
+                            )
+                        );
+                        return;
+                    }
+                }
+                setFieldValidationErrorsByKey({});
+                throw new Error((json.error as string) || "Save failed");
+            }
+            setFieldValidationErrorsByKey({});
             setData((prev) => (prev ? { ...prev, ...json } : prev));
             refetch();
             router.refresh();
@@ -4955,11 +4982,24 @@ export default function AdminEntityDrawer() {
                 setInitialJobFormData(JOB_FORM_KEYS.reduce((acc, k) => ({ ...acc, [k]: formData[k] }), {} as Record<string, unknown>));
             }
         } catch (e: unknown) {
+            setFieldValidationErrorsByKey({});
             setSaveError((e as Error).message);
         } finally {
             setSaving(false);
         }
-    }, [drawer.type, drawer.id, formData, workflowConditions, workflowActions, refetch, router, jobDiscountOptions, data, openDrawer]);
+    }, [
+        drawer.type,
+        drawer.id,
+        formData,
+        workflowConditions,
+        workflowActions,
+        refetch,
+        router,
+        jobDiscountOptions,
+        data,
+        openDrawer,
+        data,
+    ]);
 
     const openJobLocationChange = useCallback(() => {
         setSetLocationEntity("job");
@@ -6766,6 +6806,7 @@ export default function AdminEntityDrawer() {
                                 executeContext: { surface: "record_section", section_key: "customer_booking" },
                             });
                         }}
+                        excludeActionKeys={opportunityRegistryHeaderActionKeys}
                         refreshKey={relatedPeopleRefreshKey}
                     />
                 );
@@ -7429,8 +7470,45 @@ export default function AdminEntityDrawer() {
         if (drawer.type === "opportunities") {
             overviewSections = overviewSections.filter((s) => s.key !== "operational_tasks_followups");
         }
+        if (drawer.type === "opportunities" || drawer.type === "jobs") {
+            const chrome = buildDrawerFieldPolicyChromeFromEntityData(
+                overviewData as Record<string, unknown>,
+                drawer.type
+            );
+            return applyPolicyChromeToOverviewSections(overviewSections, chrome);
+        }
         return overviewSections;
     }, [drawer.type, overviewData, presentationType, recordChromeSchedule.layout, recordChromeOpportunity.layout]);
+
+    const overviewFieldPolicyProps = useMemo(() => {
+        if (drawer.type !== "opportunities" && drawer.type !== "jobs") {
+            return {
+                fieldErrorsByKey: undefined as Record<string, string> | undefined,
+                fieldPolicyChromeByKey: undefined,
+                fieldLabelByKey: undefined as Record<string, string> | undefined,
+            };
+        }
+        const src = (overviewData ?? data) as Record<string, unknown> | null;
+        return {
+            fieldErrorsByKey: fieldValidationErrorsByKey,
+            fieldPolicyChromeByKey: buildDrawerFieldPolicyChromeFromEntityData(src, drawer.type),
+            fieldLabelByKey: buildFieldLabelMapFromEntityData(src),
+        };
+    }, [drawer.type, overviewData, data, fieldValidationErrorsByKey]);
+
+    const handleOverviewFieldChange = useCallback((key: string, value: unknown) => {
+        setFormData((prev) => ({ ...prev, [key]: value }));
+        setFieldValidationErrorsByKey((prev) => {
+            if (!prev[key]) return prev;
+            const next = { ...prev };
+            delete next[key];
+            return next;
+        });
+    }, []);
+
+    useEffect(() => {
+        setFieldValidationErrorsByKey({});
+    }, [drawer.type, drawer.id]);
 
     const overviewSelectOptionsByFieldKey = useMemo((): Record<string, { value: string; label: string }[]> => {
         const out: Record<string, { value: string; label: string }[]> = {};
@@ -10428,9 +10506,7 @@ export default function AdminEntityDrawer() {
                                             selectOptionsByFieldKey={overviewSelectOptionsByFieldKey}
                                             isEditing={isEditing || drawer.type === "jobs"}
                                             formData={formData}
-                                            onFieldChange={(key, value) => {
-                                                setFormData((prev) => ({ ...prev, [key]: value }));
-                                            }}
+                                            onFieldChange={handleOverviewFieldChange}
                                             onBlur={() => {
                                                 if (drawer.type === "jobs" && jobFormDirty) saveEdit();
                                                 else if (nonJobFormDirty) saveEdit();
@@ -10439,6 +10515,9 @@ export default function AdminEntityDrawer() {
                                             statusDefs={statusDefsForDrawer}
                                             getStatusLabel={getStatusLabel}
                                             onOpenDrawer={(type, id) => openEntityFromJobRecord(type as AdminDrawerEntityType, id)}
+                                            fieldErrorsByKey={overviewFieldPolicyProps.fieldErrorsByKey}
+                                            fieldPolicyChromeByKey={overviewFieldPolicyProps.fieldPolicyChromeByKey}
+                                            fieldLabelByKey={overviewFieldPolicyProps.fieldLabelByKey}
                                         />
                                     </div>
                                 </div>
@@ -10854,15 +10933,20 @@ export default function AdminEntityDrawer() {
                                     selectOptionsByFieldKey={overviewSelectOptionsByFieldKey}
                                     isEditing={isEditing}
                                     formData={formData}
-                                    onFieldChange={(key, value) => {
-                                        setFormData((prev) => ({ ...prev, [key]: value }));
-                                    }}
+                                    onFieldChange={
+                                        drawer.type === "opportunities" || drawer.type === "jobs"
+                                            ? handleOverviewFieldChange
+                                            : (key, value) => setFormData((prev) => ({ ...prev, [key]: value }))
+                                    }
                                     onBlur={() => { if (drawer.type === "jobs" && jobFormDirty) saveEdit(); else if (nonJobFormDirty) saveEdit(); }}
                                     canEdit={!!canMutate}
                                     statusDefs={statusDefsForDrawer}
                                     getStatusLabel={getStatusLabel}
                                     onOpenDrawer={(type, id) => openDrawer({ type: type as AdminDrawerEntityType, id })}
                                     sectionSurface={opportunityInquiryWorkflowDrawer ? "premium" : "default"}
+                                    fieldErrorsByKey={overviewFieldPolicyProps.fieldErrorsByKey}
+                                    fieldPolicyChromeByKey={overviewFieldPolicyProps.fieldPolicyChromeByKey}
+                                    fieldLabelByKey={overviewFieldPolicyProps.fieldLabelByKey}
                                 />
                                 {drawer.type === "opportunities" &&
                                     !opportunityInquiryWorkflowDrawer &&

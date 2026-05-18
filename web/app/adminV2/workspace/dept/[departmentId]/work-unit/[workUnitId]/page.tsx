@@ -30,6 +30,10 @@ import { KpiStripSkeleton } from "@/components/admin/workspace/KpiStripSkeleton"
 import { WorkUnitQueueCompactRowSkeletonList } from "@/components/admin/workspace/WorkUnitQueueCompactRowSkeleton";
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
+import {
+    formatLegacyRecordActionFailure,
+    formatRegistryActionFailure,
+} from "@/lib/admin/actions/actionSurfaceFeedback";
 import { REGISTRY_RIGHT_RAIL_ACTION_ID_PREFIX } from "@/lib/workspace/viewModels/enrollmentRightRailMerge";
 import { executeOpportunityRecordAction } from "@/lib/recordChrome/executeOpportunityRecordAction";
 import type { WorkspaceAction } from "@/lib/ui-v2/workspace-actions";
@@ -353,6 +357,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [opportunityQueueRowResolved, setOpportunityQueueRowResolved] = useState<ResolvedActionForClient[] | null>(null);
     const [enrollmentRightRailResolved, setEnrollmentRightRailResolved] = useState<ResolvedActionForClient[] | null>(null);
     const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+    const [actionSurfaceError, setActionSurfaceError] = useState<string | null>(null);
 
     const [queueSummaries, setQueueSummaries] = useState<QueueSummary[] | null>(null);
     const [queueSummariesError, setQueueSummariesError] = useState<string | null>(null);
@@ -617,6 +622,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
         const t = setTimeout(() => setActionFeedback(null), 10000);
         return () => clearTimeout(t);
     }, [actionFeedback]);
+
+    useEffect(() => {
+        if (!actionSurfaceError) return;
+        const t = setTimeout(() => setActionSurfaceError(null), 12000);
+        return () => clearTimeout(t);
+    }, [actionSurfaceError]);
 
     useEffect(() => {
         const gated =
@@ -2819,8 +2830,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             work_unit_id: workUnit?.id ?? null,
                         },
                     });
-                    if (!out.ok && out.error) {
+                    if (!out.ok) {
+                        setActionSurfaceError(formatRegistryActionFailure(out.error));
                         console.warn("[work-unit queue row]", out.error);
+                    } else {
+                        setActionSurfaceError(null);
                     }
                     return;
                 }
@@ -2904,9 +2918,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     return;
                 }
                 const r = await executeOpportunityRecordAction({ opportunityId: action.itemId, eventKey });
-                if (r.ok) {
-                    // Drawer close will cause refetch in other lanes; here we just rely on refresh-on-next navigation.
-                    // Keep simple: do nothing.
+                if (!r.ok) {
+                    setActionSurfaceError(formatLegacyRecordActionFailure(eventKey, r.error));
+                    console.warn("[work-unit queue row legacy]", eventKey, r.error);
+                } else {
+                    setActionSurfaceError(null);
                 }
                 return;
             }
@@ -3016,6 +3032,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 </div>
             ) : workUnitShellReady && effectiveModel ? (
                 <>
+                    {actionSurfaceError ? (
+                        <div
+                            className="mb-2 rounded-md border border-alloy-ember/30 bg-alloy-ember/5 px-3 py-2 text-sm text-alloy-ember"
+                            role="alert"
+                            data-work-unit-action-error
+                        >
+                            {actionSurfaceError}
+                        </div>
+                    ) : null}
                     {actionFeedback ? (
                         <div
                             className="mb-2 rounded-md border border-alloy-pine/30 bg-emerald-50/90 px-3 py-2 text-sm text-alloy-midnight"

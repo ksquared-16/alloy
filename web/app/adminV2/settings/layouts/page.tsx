@@ -23,9 +23,11 @@ export default function AdminV2SettingsLayoutsPage() {
             <header>
                 <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">Layouts</h1>
                 <p className="mt-1 max-w-2xl text-xs leading-snug text-alloy-midnight/60">
-                    <span className="font-medium text-alloy-midnight/70">Runtime drawer configuration</span> for admin record chrome. Preview
-                    matches <code className="rounded bg-alloy-stone/10 px-1 text-[10px]">AdminEntityDrawer</code>. Safe section reordering for
-                    opportunity <span className="font-mono text-[10px]">workflow_v1</span> is available below; field group labels live on{" "}
+                    <span className="font-medium text-alloy-midnight/70">Partial configuration</span> for admin record chrome: run{" "}
+                    <span className="font-medium text-alloy-midnight/70">layout integrity</span> checks, preview effective layouts, and
+                    reorder opportunity <span className="font-mono text-[10px]">workflow_v1</span> sections when enabled — not a full layout
+                    builder. Preview matches <code className="rounded bg-alloy-stone/10 px-1 text-[10px]">AdminEntityDrawer</code>. Field group
+                    labels live on{" "}
                     <Link href="/adminV2/settings/field-sections" className="font-medium text-alloy-pine hover:underline">
                         Field grouping catalog
                     </Link>

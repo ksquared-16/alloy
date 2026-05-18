@@ -20,7 +20,8 @@ Phases are **planning buckets**. Dates are narrative, not contractual.
 - **Shipped / stable foundations (carry-forward):** Communications V1; roles + department/site scope; resolver vs queue boundaries; enrollment **Needs Attention** + pipeline UX; **Tour Scheduling V1**; **Enrollment Packet E2E Phase 1**.
 - **AI groundwork shipped (maintain, do not expand as default sprint work):** needs-attention + enrich draft; Orchestrator + Task Assist V1.1; Workflow Assist V1 (narrow); Config/Layout Assist **foundation** (proposals + partial apply) — **`docs/product/ai-system.md`**.
 - **Waitlist placement priority V1** — **opt-in** engine shipped; promotion mutator still open.
-- **Partially implemented (near-term product):** Enrollment Packet Phase 2; waitlist **`add_to_waitlist_placeholder`**; required/optional semantics across surfaces; settings UI parity; Reporting V1.
+- **Partially implemented (near-term product):** Enrollment Packet Phase 2; waitlist **`add_to_waitlist_placeholder`**; Reporting V1.
+- **Settings + Record UX Parity sprint shipped (May 2026):** Settings truthfulness, field policy UI + enforcement (opportunity/job enforceable subset), drawer validation UX, layout integrity panel, action surface coherence, access verification — **`docs/sprints/05_2026/settings_record_ux_parity_sprint.md`** §12. **Still deferred:** full layout builder, full action migration, ops drawer mutate, policy expansion to status/tour/quote.
 
 ### Paused / deprioritized (explicit)
 
@@ -38,9 +39,9 @@ Phases are **planning buckets**. Dates are narrative, not contractual.
 1. **Enrollment Packet Phase 2** / enrollment-forms completion — **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**.
 2. **Waitlist** — real mutator replacing **`add_to_waitlist_placeholder`**; ops validation with placement priority pilots.
 3. **Tour scheduling Phase 2** — **`docs/sprints/05_2026/tour_scheduling_phase_2.md`**.
-4. **Settings / configuration UI parity** — layouts, queues, forms metadata, comms bindings.
-5. **Required vs optional field behavior** — **`requirement_policy`** / forms / drawers / layouts (**needs verification** per surface).
-6. **Editable record UX** + **action button cleanup**.
+4. **Settings / configuration UI parity** — **partially shipped** (May 2026 sprint); remaining: full layout builder, broader settings editors, forms-in-settings.
+5. **Required vs optional field behavior** — **partially shipped** for opportunity/job enforceable fields (server + drawer); expand subset + forms parity still open.
+6. **Editable record UX** + **action button cleanup** — drawer policy UX + action coherence **partially shipped**; full registry migration and ops mutate **deferred**.
 7. **Messaging hardening** — bindings, worker/cron, scheduled-send ops, deliverability.
 8. **Reporting V1** — scoped reports beyond KPI strips.
 
@@ -380,7 +381,7 @@ When verified in code or DB, fold conclusions into **`docs/system/entity-model.m
 
 - Hardcoded workflow remnants — grep when planning.
 - JSON validation for config columns.
-- Record layouts + queue definitions — schema-versioned; **full settings parity** — **partially implemented** ( **`admin-settings-config-parity.md`** supplementary).
+- Record layouts + queue definitions — schema-versioned; **settings/record UX parity sprint shipped May 2026** (integrity panel, field policies subset, drawer errors) — **full** builder/migration still open ( **`admin-settings-config-parity.md`**, sprint §12).
 
 ### Documents / forms / AI
 

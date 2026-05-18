@@ -2,6 +2,12 @@ import { unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { displayFromFieldValueRow } from "@/lib/admin/typedFieldValues";
 import { withDbTiming } from "@/lib/admin/dbQueryTiming";
+import {
+    attachDrawerFieldPolicyResolution,
+    type DrawerFieldDefinitionAttachRow,
+} from "@/lib/fields/drawerFieldPolicyAdapter";
+
+export type { DrawerFieldDefinitionAttachRow } from "@/lib/fields/drawerFieldPolicyAdapter";
 
 export const DRAWER_TYPE_TO_FIELD_ENTITY_TYPE: Record<string, string> = {
     customers: "customer",
@@ -38,21 +44,15 @@ const FIELD_REGISTRY_PROCESS_CACHE = new Map<
     string,
     {
         at: number;
-        fieldDefs: {
-            id: string;
-            field_key: string;
-            field_type: string;
-            label: string | null;
-            section_key: string | null;
-            sort_order: number;
-            is_system: boolean;
-            is_visible_in_drawer: boolean;
-        }[];
+        fieldDefs: DrawerFieldDefinitionAttachRow[];
         fieldSections: { section_key: string; label: string; sort_order: number }[];
     }
 >();
 
 const FIELD_REGISTRY_PROCESS_TTL_MS = 300_000;
+
+const FIELD_DEFINITIONS_DRAWER_SELECT =
+    "id, field_key, field_type, label, section_key, sort_order, is_system, is_visible_in_drawer, is_required, requirement_policy, interaction_policy";
 /** Match status_definitions_resolve: isolate-scoped warmup; disabled in test. */
 const FIELD_REGISTRY_PROCESS_CACHE_ENABLED = process.env.NODE_ENV !== "test";
 
@@ -105,16 +105,7 @@ async function fetchFieldDefinitionsAndSectionsFromDb(
     orgId: string,
     entityType: string
 ): Promise<{
-    fieldDefs: {
-        id: string;
-        field_key: string;
-        field_type: string;
-        label: string | null;
-        section_key: string | null;
-        sort_order: number;
-        is_system: boolean;
-        is_visible_in_drawer: boolean;
-    }[];
+    fieldDefs: DrawerFieldDefinitionAttachRow[];
     fieldSections: { section_key: string; label: string; sort_order: number }[];
 }> {
     const supabase = createAdminClient();
@@ -125,7 +116,7 @@ async function fetchFieldDefinitionsAndSectionsFromDb(
             async () => {
                 const { data } = await supabase
                     .from("field_definitions")
-                    .select("id, field_key, field_type, label, section_key, sort_order, is_system, is_visible_in_drawer")
+                    .select(FIELD_DEFINITIONS_DRAWER_SELECT)
                     .eq("org_id", orgId)
                     .eq("entity_type", entityType)
                     .eq("is_active", true)
@@ -148,16 +139,7 @@ async function fetchFieldDefinitionsAndSectionsFromDb(
             }
         ),
     ]);
-    const fieldDefs = (defRows ?? []) as {
-        id: string;
-        field_key: string;
-        field_type: string;
-        label: string | null;
-        section_key: string | null;
-        sort_order: number;
-        is_system: boolean;
-        is_visible_in_drawer: boolean;
-    }[];
+    const fieldDefs = (defRows ?? []) as DrawerFieldDefinitionAttachRow[];
     return {
         fieldDefs,
         fieldSections: (sectionRows ?? []) as { section_key: string; label: string; sort_order: number }[],
@@ -192,16 +174,7 @@ async function resolveFieldDefinitionsAndSectionsForDrawer(
     let fetcherRan = false;
     let fieldRegistryUncachedMs = 0;
     let bundle: {
-        fieldDefs: {
-            id: string;
-            field_key: string;
-            field_type: string;
-            label: string | null;
-            section_key: string | null;
-            sort_order: number;
-            is_system: boolean;
-            is_visible_in_drawer: boolean;
-        }[];
+        fieldDefs: DrawerFieldDefinitionAttachRow[];
         fieldSections: { section_key: string; label: string; sort_order: number }[];
     };
     let unstableAttempted = false;
@@ -305,6 +278,7 @@ export async function attachFieldDefinitionsAndValues(
 
     out._field_definitions = fieldDefs;
     out._field_sections = fieldSections;
+    attachDrawerFieldPolicyResolution(out, drawerType);
 
     if (fieldDefs.length === 0) return mergedDefsMeta;
 
