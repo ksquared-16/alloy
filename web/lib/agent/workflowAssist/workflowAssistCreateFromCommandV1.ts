@@ -139,7 +139,7 @@ export function buildWorkflowAssistCreateProposeFromIntent(
 
     if (intent.template_id === "tour_reminder") {
         const leadDays = days ?? 3;
-        const draft_action_scaffolds = buildTourReminderActionScaffolds(leadDays);
+        const draft_action_scaffolds = buildTourReminderActionScaffolds(leadDays, null);
         return {
             request: {
                 version: 1,
