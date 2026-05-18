@@ -42,6 +42,7 @@ Explain how **business facts** become **`workflow_events`**, trigger **workflows
 
 ## Known gaps / risks
 
+- **Workflow Assist (AI):** Propose/apply paths call existing workflow CRUD and **`executeWorkflowRun`** patterns — **no** bypass of this spine. **Template expansion paused**; operational **action button cleanup** and event coverage remain higher priority (`roadmap-and-gaps.md`).
 - **Verified (2026-05-02):** Exhaustive route/mutation inventory and **`emitEvent`** coverage — see **`docs/audits/event-integrity-audit.md`**. Remaining high-risk gaps (e.g. GL posting routes, book-v2 discount path, contact create) are listed there.
 - **Verified (2026-05-02):** Workflow fan-out consistency for **status changes**, **message send**, and **scheduling** — see **`docs/audits/workflow-execution-consistency-audit.md`** (includes intentional deviations such as manual workflow run without `event_id` and cancellation fee side effects).
 - Workflow payload still includes **`contact`** alongside **`person`** in `executeWorkflowRun` — treat **`person`** as preferred for new payload enrichment.

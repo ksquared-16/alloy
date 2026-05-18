@@ -68,8 +68,8 @@ Long-range program direction (PDF builder, compliance engine, AI ingestion as cr
 ## Known gaps / risks
 
 - **Needs verification:** Org-wide compliance hooks (virus scan, retention jobs) for documents — not evidenced beyond Storage + DB.
-- **Enrollment packets:** **Phase 1 E2E** (launch → email → public → activity → review → mapped PDFs → Documents tab) is **shipped**; broader **Phase 2** hardening (proposals, field-level review, reminders, queues, AI) is **planned** — **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**.
-- **Not implemented (production):** Automated **document AI parsing / extraction** pipeline (beyond mocks); do not assume OCR/LLM reliability from repo layout alone.
+- **Enrollment packets:** **Phase 1 E2E** is **shipped**; **Phase 2** (proposals, field-level review, reminders, queues) is **partially implemented / next execution priority** — **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**. **Document AI extraction** is **not implemented** and **not** in the current sprint lane (AI agent expansion **paused**).
+- **Required vs optional:** **`field_definitions.requirement_policy`** exists in DB; cross-surface behavior **needs verification** (`roadmap-and-gaps.md` item 5).
 
 ## Related
 

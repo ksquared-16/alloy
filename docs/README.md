@@ -28,12 +28,12 @@ For any merge that changes behavior, include `docs/execution/operating-doctrine.
 - `product/communications.md` — Threads, canonical enqueue, worker delivery, webhooks, provider bindings (lead loop + workflows).
 - `product/documents-and-forms.md` — Document upload + **forms engine** (definitions, submissions, packets); **Enrollment Packet Phase 1 shipped**; Phase 2 **partially implemented**.
 - `product/billing-and-financials.md`
-- `product/ai-system.md` — Orchestrator, Task Assist, Workflow Assist, attention enrich, Config/Layout Assist (**narrow**, human-in-the-loop).
+- `product/ai-system.md` — Assistive AI groundwork (Orchestrator, Task Assist, etc.); **expansion paused** — human-in-the-loop only.
 
 **Execution / change management:**
 
 - `execution/operating-doctrine.md` — Documentation + source-pack rules, deploy/tenancy, performance, production guardrails; **read before merging** behavior changes.
-- `execution/roadmap-and-gaps.md` — Roadmap buckets, confirmed gaps, verification debt, suggested sprint cards.
+- `execution/roadmap-and-gaps.md` — **Operational completion** sequencing; AI pause framing; gaps and verification debt.
 
 **Schema reference (when touching DB / RLS / triggers):**
 

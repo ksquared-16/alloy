@@ -10,7 +10,7 @@ Orient engineers and AI agents to how Alloy is structured today: org-scoped mult
 - Every tenant operation is scoped by **`org_id`** (directly on rows or verified through FKs in admin APIs). **CRM admin** routes additionally enforce **department** and **site** visibility via **`getAdminAccessContextCached`** (`user_access_profiles`, `user_department_access`, `user_site_access`) — see **`docs/system/roles-and-permissions.md`**, **`docs/system/configuration-system.md`**, and **`web/lib/admin/accessScope.ts`**.
 - **Communications V1** (canonical threads/messages, entity-scoped UI, provider webhooks, backend dispatcher): **`docs/product/communications.md`**.
 - **Forms engine foundation** (definitions, versions, public links, submissions, admin + public APIs): **`docs/product/documents-and-forms.md`** — **partially implemented**; **Enrollment Packet E2E Phase 1 shipped**; Phase 2 in flight.
-- **AI assistive layer (narrow):** Orchestrator command bar, Task Assist (comms/schedules/tasks), Workflow Assist (read/propose/apply), needs-attention enrich — **human-in-the-loop**; see **`docs/product/ai-system.md`**. **Not** broad autonomous agents.
+- **AI assistive groundwork (narrow, paused for expansion):** Orchestrator, Task Assist, Workflow Assist, needs-attention enrich — **human-in-the-loop**; see **`docs/product/ai-system.md`**. **Not** autonomous agents; **not** the primary execution roadmap right now.
 - **Human identity:** **`persons`** + **`customer_persons`** are the canonical model in code for CRM/booking writes; **`contacts`** remain for compatibility (messaging, documents, workflows, aged rows). Opportunity identity normalization is centralized in **`web/lib/opportunityIdentity.ts`**.
 - Side effects that matter for business state are **intended** to run through **events**, **workflows**, and **admin actions**; high-risk gaps and exceptions are tracked in **`docs/audits/event-integrity-audit.md`** (not assumed fully closed until that audit says so).
 
@@ -55,7 +55,7 @@ Aligned with platform intent; if code disagrees, fix code **or** update docs in 
 
 Alloy is **past proving foundational architecture viability**. The platform has **substantial** CRM, workspace, communications, access control, forms, tour scheduling, and a **narrow AI assistive stack** in code — enough for **focused pilots and internal ops**, not yet **general customer readiness**.
 
-**Current program theme:** **operational completion**, **UX hardening**, **integration reliability**, and **AI orchestration readiness** on stable primitives (records, events, workflows, permissions). Remaining work concentrates on **closing operator loops** (enrollment Phase 2, waitlist mutators, reporting), **settings parity**, and **production-gated AI** — not re-architecting the spine. See **`docs/execution/roadmap-and-gaps.md`** for checklist and AI roadmap tables.
+**Current program theme:** **Operational completion + product hardening** on stable primitives (records, events, workflows, permissions). **AI groundwork is present** but **deeper agent work is paused** — next execution focuses on **enrollment/forms**, **waitlist**, **tour depth**, **settings parity**, **field semantics**, **editable records**, **actions**, **messaging**, and **reporting**. See **`docs/execution/roadmap-and-gaps.md`** for the authoritative sprint sequence.
 
 ## Known gaps / risks
 

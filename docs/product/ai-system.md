@@ -4,6 +4,17 @@
 
 Document **actual** admin/agent HTTP routes and env gates in `web/` — not future AI platform plans.
 
+## Program status (execution)
+
+**May 2026:** **Deeper AI-agent work is paused.** The repo contains **assistive groundwork** (Orchestrator, Task Assist, Workflow Assist, attention enrich, Config/Layout Assist foundation) — all **narrow**, **policy-gated**, and **human-in-the-loop**. **Do not treat AI as the primary roadmap** until operational product loops advance (enrollment Phase 2, waitlist mutator, settings parity, etc.) — see **`docs/execution/roadmap-and-gaps.md`**.
+
+| Category | Status |
+|----------|--------|
+| **Shipped assistive surfaces** | **Implemented** (maintain, bugfix, pilot hardening) |
+| **Config/Layout Assist expansion** | **Partially implemented** — **paused** for new scope |
+| **Workflow Assist template expansion** | **Partially implemented** — **paused** for new scope |
+| **Autonomous agents** (enrollment, subsidy, director, monitoring) | **Not implemented** — **later** |
+
 ## AdminV2 agent model (Orchestrator + specialists)
 
 The bottom **command bar** is the **Orchestrator Agent** surface — not Task Assist. Operators talk to one input; the Orchestrator parses intent, resolves entity/context, routes to a specialist, and shows clarification or candidate selection in a **thread**. The Orchestrator **never directly executes** operational side effects (no auto-send, no workflow writes).
@@ -100,8 +111,9 @@ Definitions use **`SET search_path TO 'public'`** in live exports — keep align
 ## Known gaps / risks
 
 - Model provider(s), logging/redaction policy, and kill switches **beyond** the `AGENT_V2_*` env pattern — partially addressed by **`web/lib/ai`** (metadata policy + redaction + **stub** and **gated OpenAI-compatible** enrichment + telemetry). Live traffic remains **opt-in** per org policy + env + RBAC.
-- **Partially implemented:** **Config/Layout Assist** apply catalog — not all proposal categories executable yet (`configuration_layout_assist_v1.md`).
-- **Not implemented:** Autonomous agents (enrollment, subsidy ops, director assistant, monitoring) — roadmap only in **`docs/execution/roadmap-and-gaps.md`**.
+- **Partially implemented:** **Config/Layout Assist** apply catalog — not all proposal categories executable yet (`configuration_layout_assist_v1.md`); **new expansion paused**.
+- **Not implemented:** Autonomous agents (enrollment, subsidy ops, director assistant, monitoring) — **later**, not current execution (`roadmap-and-gaps.md`).
+- **Paused:** New specialist agents, Orchestrator capability growth, and Workflow Assist template expansion beyond maintenance — operational product work takes precedence.
 
 ## Manual staging validation checklist
 

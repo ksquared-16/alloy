@@ -4,7 +4,7 @@
 
 Single place for **phase timeline**, **completion vs in-progress tracking**, **shipped-feature rows**, **velocity highlights** (observed delivery windows), **active fix/cleanup items**, **confirmed gaps**, and **verification debt** — not a replacement for the issue tracker.
 
-**Product maturity framing:** See **`docs/core/system-overview.md`** (“Product maturity”). Alloy has **passed the “prove foundational architecture” phase** — CRM, workspace, communications, access control, forms, and the event/workflow spine are **real in code**. The program is now in **operational completion + AI orchestration readiness**: finish operator loops, harden UX and integrations, then layer assistive AI and narrow agents on stable primitives. **Focused pilots** remain appropriate; **general customer readiness** still depends on the checklist below.
+**Product maturity framing:** See **`docs/core/system-overview.md`** (“Product maturity”). Alloy has **passed the “prove foundational architecture” phase**. The program is now **operational completion + product hardening**; **AI groundwork is present** (assistive, narrow, human-in-the-loop) but **deeper agent expansion is intentionally paused**. **Focused pilots** remain appropriate; **general customer readiness** still depends on the checklist below.
 
 ---
 
@@ -12,40 +12,50 @@ Single place for **phase timeline**, **completion vs in-progress tracking**, **s
 
 Phases are **planning buckets**. Dates are narrative, not contractual.
 
-### Current phase (late May 2026 — end-of-week snapshot)
+### Current phase (late May 2026 — alignment snapshot)
 
-**Theme:** **Operational completion + AI readiness** — not greenfield platform proof.
+**Theme:** **Operational completion + product hardening; AI groundwork present, deeper agents paused.**
 
-- **Shipped / stable foundations (carry-forward):** Communications V1; roles + department/site scope; resolver vs queue boundaries; enrollment **Needs Attention** + pipeline UX; **Tour Scheduling V1**; **Enrollment Packet E2E Phase 1** (see prior sprint docs).
-- **Newly shipped since prior doc pass (code-grounded):**
-  - **AI assistive layer (narrow):** deterministic needs-attention suggestions + **Enhance draft** (`POST /api/admin/ai/enrich-attention-suggestion`); operational summary attach + drawer strip — **`docs/product/ai-system.md`**.
-  - **Orchestrator + Task Assist V1 / V1.1:** bottom command bar, entity search, SMS/email draft propose/apply, **`task_assist_proposals`**, **`communication_scheduled_sends`** + **`process-due`**, **`operational_tasks`** — human approval required; **no autonomous execution**.
-  - **Workflow Assist V1 (narrow):** workflow read cards, deterministic propose/apply (disabled templates), Explain v1, optional draft enrichment review — **`workflow-assist`** routes; **no LLM** on default apply path.
-  - **Waitlist placement priority V1:** configurable **`placement_priority_v1`** on work units, settings UI, queue **`_placement_priority`** previews and optional reorder — **opt-in**; sprint closed **`docs/sprints/05_2026/priority_placement_orchestration_may_2026.md`**.
-  - **Configuration / Layout Assist (foundation):** **`config_layout_assist_proposals`** table, **`ConfigurationProposalV1`** contract, Orchestrator route + propose path; apply catalog **partial** — sprint **`docs/sprints/05_2026/configuration_layout_assist_v1.md`**.
-- **Partially implemented:** **Enrollment Packet Phase 2**; **waitlist promotion** (`add_to_waitlist_placeholder` stub); **Config/Layout Assist** full apply surface; **Reporting V1**; **broad autonomous agents**.
+- **Primary execution focus:** Close enrollment/forms loops, waitlist mutators, tour depth, settings parity, field semantics, editable records, action buttons, messaging reliability, reporting — **not** new autonomous agent personas.
+- **Shipped / stable foundations (carry-forward):** Communications V1; roles + department/site scope; resolver vs queue boundaries; enrollment **Needs Attention** + pipeline UX; **Tour Scheduling V1**; **Enrollment Packet E2E Phase 1**.
+- **AI groundwork shipped (maintain, do not expand as default sprint work):** needs-attention + enrich draft; Orchestrator + Task Assist V1.1; Workflow Assist V1 (narrow); Config/Layout Assist **foundation** (proposals + partial apply) — **`docs/product/ai-system.md`**.
+- **Waitlist placement priority V1** — **opt-in** engine shipped; promotion mutator still open.
+- **Partially implemented (near-term product):** Enrollment Packet Phase 2; waitlist **`add_to_waitlist_placeholder`**; required/optional semantics across surfaces; settings UI parity; Reporting V1.
 
-### Next phase (near term)
+### Paused / deprioritized (explicit)
 
-- **Enrollment Packet Phase 2** — **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**.
-- **Waitlist** — replace placeholder mutator; validate placement + promotion with ops pilots.
-- **Tour scheduling Phase 2** — **`docs/sprints/05_2026/tour_scheduling_phase_2.md`**.
-- **Config/Layout Assist** — complete reviewed apply paths for high-value layout/field operations.
-- **Settings / configuration UI** parity — **`docs/execution/admin-settings-config-parity.md`** when loaded.
-- **Field policy / required semantics** — **`field_definitions.requirement_policy`** landed **`20260523120000`**; cross-surface behavior **needs verification**.
-- **Editable record UX** + **action button cleanup** + **messaging integration hardening**.
+**Do not schedule as primary roadmap execution unless product re-opens the lane:**
 
-### Following phase
+- **Autonomous agent catalog** — enrollment agent, subsidy ops agent, director assistant, monitoring agents, autonomous comms agent (**not implemented**; **later**).
+- **Config/Layout Assist expansion** — full apply catalog, broad NL config (**partial** today; **freeze** new scope until operational checklist advances).
+- **Workflow Assist template expansion** — beyond maintenance/bugfix (**partial** today).
+- **New specialist agents** or Orchestrator capability growth beyond fixes and pilot hardening.
 
-- **Reporting V1** (beyond KPI strips / lifecycle routes).
-- **Communications phase 2** (guided setup, notifications bell, routing depth).
-- **Placement priority V1.1** — workflow events, drawer mirror, persistence strategy (sprint § Phase 2).
+**Allowed without reopening the lane:** bugfixes, security/policy gates, staging parity, docs, and **assistive-only** hardening (item 10 below) when tied to pilots already using shipped surfaces.
+
+### Next phase (near term — operational)
+
+1. **Enrollment Packet Phase 2** / enrollment-forms completion — **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**.
+2. **Waitlist** — real mutator replacing **`add_to_waitlist_placeholder`**; ops validation with placement priority pilots.
+3. **Tour scheduling Phase 2** — **`docs/sprints/05_2026/tour_scheduling_phase_2.md`**.
+4. **Settings / configuration UI parity** — layouts, queues, forms metadata, comms bindings.
+5. **Required vs optional field behavior** — **`requirement_policy`** / forms / drawers / layouts (**needs verification** per surface).
+6. **Editable record UX** + **action button cleanup**.
+7. **Messaging hardening** — bindings, worker/cron, scheduled-send ops, deliverability.
+8. **Reporting V1** — scoped reports beyond KPI strips.
+
+### Following phase (after operational core)
+
+- **AI production hardening (assistive only)** — org **`ai_policy`**, RBAC, env gates, operator training for **existing** Orchestrator / Task Assist / attention enrich; **no** new agent personas.
+- **Communications phase 2** (guided setup, notifications bell).
+- **Placement priority V1.1** — workflow events, drawer mirror (sprint § Phase 2).
+- **Config/Layout Assist** apply completion — only when settings/field parity reduces risk.
 
 ### Later buckets
 
 - Billing / payments maturity (`product/billing-and-financials.md` — webhook truth **needs verification**).
 - Subsidy workflows; document extraction AI — **planned**.
-- Attendance, labor, full **autonomous agent** catalog (enrollment agent, subsidy ops agent, director assistant, monitoring agents) — **roadmap only** until routed through existing APIs with policy gates.
+- Attendance, labor; **autonomous agents** — **roadmap only**.
 
 ---
 
@@ -74,8 +84,8 @@ Capabilities below exist in **`web/` / `supabase/`**; “complete” means **fou
 |------|--------|--------|
 | **Enrollment / forms** | **Partially implemented** | **Phase 1 shipped**; **Phase 2** (proposals, field review, comms presets) open |
 | **Waitlist** | **Partially implemented** | Lanes + **placement priority V1** shipped (**opt-in**); **`add_to_waitlist_placeholder`** still stub |
-| **AI agents** | **Partially implemented** | Orchestrator + Task Assist + Workflow Assist + attention enrich **shipped narrow**; Config/Layout Assist **foundation**; **no** broad autonomous agents |
-| **Config / Layout Assist** | **Partially implemented** | Proposals + propose route; apply catalog incomplete — sprint **`configuration_layout_assist_v1.md`** |
+| **AI (assistive groundwork)** | **Partially implemented** | Narrow surfaces **shipped**; **execution paused** for expansion — see **Paused / deprioritized** |
+| **Config / Layout Assist** | **Partially implemented** | Foundation only; **deprioritized** until operational items 1–8 advance |
 
 ---
 
@@ -83,30 +93,33 @@ Capabilities below exist in **`web/` / `supabase/`**; “complete” means **fou
 
 Before treating Alloy as **broadly customer-ready**, expect progress on:
 
-1. **Enrollment/forms** — **Phase 1 done**; **Phase 2**; **`requirement_policy`** / required-field semantics validated on drawer + forms + public surfaces.
-2. **Waitlist** — real promotion mutator; placement priority pilot sign-off (**V1** engine exists; **opt-in**).
-3. **Tour scheduling** — **V1 done**; **Phase 2** depth per sprint doc.
-4. **AI (production posture)** — org **`ai_policy`**, RBAC, env gates documented per org; operators trained that agents are **assistive** (propose → approve → canonical APIs), not autonomous.
-5. **Settings / configuration** — UI parity to APIs; Config/Layout Assist apply paths for safe layout edits.
-6. **Editable records** — drawer/edit consistency with layouts and field policies.
-7. **Action buttons** — consistent routing, permissions, event coverage.
-8. **Messaging** — bindings, worker/cron, scheduled-send ops, monitoring.
-9. **Reporting** — defined report set beyond KPI strips.
+1. **Enrollment/forms** — **Phase 1 done**; **Phase 2** complete for pilot scope; required-field semantics validated.
+2. **Waitlist** — real promotion mutator; placement priority pilot sign-off (**V1** engine **opt-in**).
+3. **Tour scheduling** — **V1 done**; **Phase 2** per sprint doc.
+4. **Settings / configuration** — UI parity to APIs (human settings paths — not agent-driven config).
+5. **Editable records** — drawer/edit consistency with layouts and field policies.
+6. **Action buttons** — consistent routing, permissions, event coverage.
+7. **Messaging** — bindings, worker/cron, scheduled-send ops, monitoring.
+8. **Reporting** — defined report set beyond KPI strips.
+9. **AI (assistive pilots only)** — org **`ai_policy`**, RBAC, env gates for **existing** surfaces; operators understand **no autonomous execution** — **not** a blocker for general readiness if pilots do not require AI.
 
 ---
 
-## Recommended next sprint sequence (evaluate against actual bandwidth)
+## Recommended next sprint sequence (authoritative ordering)
 
-Order is **default sequencing** — swap when dependencies demand.
+**Default execution order** — swap only when a hard dependency demands it. **Items 1–9 are operational product work; item 10 is assistive AI only; item 11 is explicitly later.**
 
-1. **Enrollment Packet Phase 2 + waitlist mutator** — Phase 2 doc; replace **`add_to_waitlist_placeholder`**; validate placement priority with ops.
-2. **Config/Layout Assist apply completion** — close high-value, low-risk apply operations from approved proposals.
-3. **Tour scheduling Phase 2** — reminders, public polish per **`tour_scheduling_phase_2.md`**.
-4. **AI production hardening** — org policy templates, permission grants, kill switches, operator training materials; expand Workflow Assist templates only behind propose/apply gates.
-5. **Settings / configuration UI parity** — layouts, queues, forms, comms bindings.
-6. **Editable records + action button cleanup** — field policy alignment, `executeAdminAction` consistency.
-7. **Messaging hardening** — scheduled-send cron verification, binding QA, deliverability playbooks.
-8. **Reporting V1** — scoped exports/reports; do not claim full BI.
+1. **Enrollment Packet Phase 2** / enrollment-forms completion — **`enrollment_packet_phase_2.md`**.
+2. **Waitlist completion** — replace **`add_to_waitlist_placeholder`**; validate placement + promotion with ops.
+3. **Tour Scheduling Phase 2** — **`tour_scheduling_phase_2.md`**.
+4. **Settings / configuration UI parity** — record layouts, queue defs, forms metadata, comms bindings.
+5. **Required vs optional field behavior** — forms, drawers, layouts; **`requirement_policy`** (**needs verification** per surface).
+6. **Editable record UX** — drawer editability vs layouts and permissions.
+7. **Action button cleanup** — `executeAdminAction` registry, duplicates, permission gates.
+8. **Messaging hardening / integration setup** — worker, cron, bindings, scheduled sends, monitoring.
+9. **Reporting V1** — scoped reports/exports; not full BI.
+10. **AI production hardening (assistive only)** — policy/RBAC/env for **existing** surfaces; pilot training — **no** new agent personas or Config/Layout Assist expansion unless product re-opens pause.
+11. **Autonomous agents** — **later, not now** (enrollment, subsidy, director, monitoring personas).
 
 **Standing engineering hygiene** (parallel-friendly): emitEvent coverage, person-first inbound parity, Stripe webhook mapping — **Additional sprint cards** below.
 
@@ -134,7 +147,8 @@ Use this block for **velocity / stakeholder summaries**. Dates are **repo anchor
 | **Communications phase 2** | TBD | — | TBD | **Planned** |
 | **Roles phase 2** | TBD | — | TBD | **Planned** |
 | **Reporting V1** | TBD | KPI strips exist | TBD | **Planned** |
-| **Autonomous agent catalog** (enrollment, subsidy, comms, director, monitoring) | TBD | — | TBD | **Planned** (roadmap only) |
+| **Autonomous agent catalog** (enrollment, subsidy, comms, director, monitoring) | TBD | — | TBD | **Planned** — **paused** (not in current execution) |
+| **AI agent expansion** (new specialists, Config/Layout Assist catalog, Workflow Assist templates) | — | — | — | **Paused** — maintain shipped groundwork only |
 
 **Convention:** **Shipped** = capability usable as documented in topic files. **TBD** = still open or needs release tagging. Update this table when merges land.
 
@@ -142,7 +156,7 @@ Use this block for **velocity / stakeholder summaries**. Dates are **repo anchor
 
 ## AI / agent roadmap (current vs future)
 
-Alloy is **approaching an AI-native operational platform phase** — assistive layers on top of **records, workflows, permissions, and canonical APIs**. **Do not overstate maturity:** today’s agents are **narrow, env- and policy-gated, and human-in-the-loop**. Full detail: **`docs/product/ai-system.md`**.
+**Program status (May 2026):** **Deeper AI-agent work is paused.** Shipped surfaces remain **assistive groundwork** — narrow, env- and policy-gated, **human-in-the-loop**. **Do not overstate maturity.** **Near-future AI** (assistive layer expansion) runs **after** operational items 1–9 in **Recommended next sprint sequence** unless a pilot explicitly requires hardening (item 10). **Autonomous agents are later, not now.** Full route detail: **`docs/product/ai-system.md`**.
 
 ### 1. AI assistive layer
 
@@ -169,15 +183,15 @@ Alloy is **approaching an AI-native operational platform phase** — assistive l
 
 | Agent persona | Today | Future (planned) |
 |---------------|--------|------------------|
-| **Orchestrator** (command bar) | **Implemented** — routes only; **no** side effects | Richer multi-turn planning (still no auto-execute) |
-| **Task Assist** (comms, schedule, tasks) | **Implemented** (V1.1) | Expanded entity types beyond opportunities-first paths |
-| **Workflow Assist** | **Partially implemented** (V1) | Oversight agents, failed-run triage automation |
-| **Config / Layout Assist** | **Partially implemented** (proposals + partial apply) | Full layout/field/queue apply catalog |
-| **Enrollment agent** | **Not implemented** | End-to-end enrollment coordination (**roadmap**) |
-| **Subsidy ops agent** | **Not implemented** | **Roadmap** |
-| **Communications agent** | **Partially implemented** (Task Assist covers narrow comms) | Autonomous thread management — **not** shipped |
-| **Director assistant** | **Not implemented** | Cross-department operational briefings |
-| **Monitoring agents** | **Not implemented** | Proactive anomaly detection |
+| **Orchestrator** (command bar) | **Implemented** — routes only; **no** side effects | **Paused** — richer planning until operational core advances |
+| **Task Assist** (comms, schedule, tasks) | **Implemented** (V1.1) | **Paused** — entity expansion; maintain + harden only |
+| **Workflow Assist** | **Partially implemented** (V1) | **Paused** — new templates; maintenance only |
+| **Config / Layout Assist** | **Partially implemented** (proposals + partial apply) | **Paused** — full apply catalog after settings/field parity |
+| **Enrollment agent** | **Not implemented** | **Later** — autonomous catalog |
+| **Subsidy ops agent** | **Not implemented** | **Later** |
+| **Communications agent** (autonomous) | **Not implemented** (Task Assist = narrow assistive comms) | **Later** |
+| **Director assistant** | **Not implemented** | **Later** |
+| **Monitoring agents** | **Not implemented** | **Later** |
 
 **Groundwork completed (not “full AI platform”):** org **`metadata.ai_policy`**, permission keys (**`ai.enrichment.use`**, **`config_assist.*`**), proposal/audit tables (**`task_assist_proposals`**, **`config_layout_assist_proposals`**, agent v0–v2 DEFINER RPCs), Orchestrator routing, telemetry hooks, staging policy migrations.
 
@@ -371,7 +385,7 @@ When verified in code or DB, fold conclusions into **`docs/system/entity-model.m
 ### Documents / forms / AI
 
 - **Forms:** **`documents-and-forms.md`** — engine **partially implemented**; **Enrollment Packet E2E Phase 1 shipped**; Phase 2 sprint doc.
-- **AI:** **`product/ai-system.md`** — Orchestrator, Task Assist, Workflow Assist, attention enrich, Config/Layout Assist foundation **shipped narrow**; **autonomous multi-agent catalog** remains **roadmap** (see **AI / agent roadmap** above).
+- **AI:** **`product/ai-system.md`** — assistive groundwork **shipped narrow**; **expansion paused**; autonomous catalog **later** (see **AI / agent roadmap**, **Paused / deprioritized**).
 
 ### Billing / payments
 
@@ -397,8 +411,8 @@ When verified in code or DB, fold conclusions into **`docs/system/entity-model.m
 - **Waitlist actions:** Placeholder mutator — **not implemented**; placement priority V1 — **shipped opt-in** (`crm-system.md`, placement sprint).
 - **Tour Scheduling V1:** **shipped**; **Phase 2** open.
 - **Reporting V1:** KPI strips exist; **full reporting** — **not implemented**.
-- **AI:** Assistive agents **partially shipped** — see **`ai-system.md`** and **AI / agent roadmap**; **no** autonomous enrollment/subsidy/monitoring agents.
-- **Config/Layout Assist:** Proposals + partial apply — **not** full settings replacement UI.
+- **AI:** Assistive groundwork **partially shipped**; **deeper agent work paused** — see **`ai-system.md`**; **no** autonomous enrollment/subsidy/monitoring agents in execution.
+- **Config/Layout Assist:** Foundation only; apply catalog expansion **paused**.
 - **Stripe webhooks:** May be **backend** URL — verify (`billing-and-financials.md`).
 
 ---
@@ -430,7 +444,7 @@ When verified in code or DB, fold conclusions into **`docs/system/entity-model.m
 4. **Stripe webhooks → payment state** — Map actual handler deployment.
 5. **Documents storage** — RLS/retention facts.
 6. **AI routes & flags** — Org `ai_policy`, RBAC, env matrix in `ai-system.md`; pilot checklist per org.
-7. **Config/Layout Assist apply catalog** — Close approved operations; audit DEFINER/agent RPC parity.
+7. **Config/Layout Assist apply catalog** — **Paused** until operational core advances; resume with settings/field parity.
 8. **RRS expansion** — If/when entities move off flat selects.
 
 ---

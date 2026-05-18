@@ -101,6 +101,7 @@ Work-unit **CRM compact** queue rows show **Child** and **Program** columns usin
 
 ## Known gaps / risks
 
+- **Queue ordering:** Needs-attention list order and **placement priority** (when enabled) are **deterministic** in server code — **not** LLM-driven; see **`docs/product/ai-system.md`** (agent expansion **paused**).
 - **Needs verification:** Full map of all workspace API routes vs UI entry points for each vertical.
 - **Needs verification:** Attendance/staffing depth (may be thin or vertical-specific — see **Scheduling** in `product/crm-system.md`).
 

@@ -103,7 +103,8 @@ Outbound and inbound messaging threads tied to **entities** (person-first anchor
 
 - **Needs verification:** Per-org matrix of enabled channels/bindings in production.
 - **Needs verification:** Worker base URL and cron cadence per deployment (`INTERNAL_MESSAGES_PROCESS_URL`).
-- **Partially implemented / roadmap:** Integration setup hardening (operational runbooks, monitoring, template QA) and **legacy `messages` retirement** — canonical path exists alongside legacy; full cutover **not** done (`docs/audits/legacy-messages-retirement-plan.md`).
+- **Partially implemented / near-term priority:** Integration setup hardening (operational runbooks, monitoring, template QA, **`process-due`** cron) — **roadmap item 8**; ahead of new AI agent work (`roadmap-and-gaps.md`).
+- **Legacy `messages` retirement** — canonical path exists alongside legacy; full cutover **not** done (`docs/audits/legacy-messages-retirement-plan.md`).
 
 ## Related
 
