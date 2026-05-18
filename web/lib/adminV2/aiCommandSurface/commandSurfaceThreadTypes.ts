@@ -10,6 +10,11 @@ import type {
     WorkflowAssistThreadMutationHandlersV1,
 } from "@/lib/agent/workflowAssist/workflowAssistReadV1";
 import type { ConfigurationProposalV1 } from "@/lib/agent/configLayoutAssist/configurationProposalV1";
+import type {
+    ConfigLayoutAssistFieldSetupDraftV1,
+    ConfigLayoutAssistReadySummaryV1,
+    ConfigLayoutAssistSectionOptionV1,
+} from "@/lib/agent/configLayoutAssist/configLayoutAssistFieldSetup";
 import type { ConfigLayoutAssistTraceV1 } from "@/lib/agent/configLayoutAssist/configLayoutAssistTypes";
 import type { WorkflowAssistSuggestionV1 } from "@/lib/agent/workflowAssist/workflowAssistProposalV1";
 import type { AIStatusBadge, ResponseKind } from "@/lib/adminV2/aiCommandSurface/aiCommandSurfaceModel";
@@ -84,6 +89,19 @@ export type CommandSurfaceThreadTurn =
                     proposal: ConfigurationProposalV1;
                     trace: ConfigLayoutAssistTraceV1;
                     persistedProposalId: string | null;
+                }
+              | {
+                    type: "config_layout_assist_field_setup";
+                    introMessage: string;
+                    draft: ConfigLayoutAssistFieldSetupDraftV1;
+                    sectionOptions: ConfigLayoutAssistSectionOptionV1[];
+                }
+              | {
+                    type: "config_layout_assist_ready";
+                    proposal: ConfigurationProposalV1;
+                    trace: ConfigLayoutAssistTraceV1;
+                    persistedProposalId: string;
+                    readySummary: ConfigLayoutAssistReadySummaryV1;
                 };
           at: string;
       }

@@ -108,7 +108,7 @@ export function ConfigLayoutAssistProposalThreadCard({
                     data-proposal-id={reviewProposalId}
                     onClick={handleReviewButtonClick}
                 >
-                    Review proposal →
+                    View advanced review
                 </button>
             ) : (
                 <p className="mt-2 text-[11px] italic" style={{ color: CMD.textLabel }}>

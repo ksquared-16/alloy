@@ -7,7 +7,10 @@ import TaskAssistCompactDraftCard from "@/components/admin/taskAssist/TaskAssist
 import TaskAssistCompactReminderCard from "@/components/admin/taskAssist/TaskAssistCompactReminderCard";
 import TaskAssistOpportunityWorkspace from "@/components/admin/taskAssist/TaskAssistOpportunityWorkspace";
 import { CommandSurfaceCardLink } from "@/app/adminV2/components/aiCommandSurface/CommandSurfaceCardLink";
+import { ConfigLayoutAssistFieldSetupCard } from "@/app/adminV2/components/aiCommandSurface/ConfigLayoutAssistFieldSetupCard";
+import type { ConfigLayoutAssistFieldSetupConfirmPayload } from "@/app/adminV2/components/aiCommandSurface/ConfigLayoutAssistFieldSetupCard";
 import { ConfigLayoutAssistProposalThreadCard } from "@/app/adminV2/components/aiCommandSurface/ConfigLayoutAssistProposalThreadCard";
+import { ConfigLayoutAssistReadyCard } from "@/app/adminV2/components/aiCommandSurface/ConfigLayoutAssistReadyCard";
 import { COMMAND_SURFACE_INTERACTIVE_CARD_CLASS } from "@/lib/adminV2/aiCommandSurface/commandSurfaceCardNavigation";
 import { WorkflowAssistProposalActionCard } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistProposalActionCard";
 import { WorkflowAssistReadThreadCard } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistReadThreadCard";
@@ -123,6 +126,9 @@ export type CommandSurfaceThreadProps = {
     /** Propose a narrow edit for an existing workflow (duplicate warning path). */
     onWorkflowAssistProposeEdit?: (workflowId: string) => void;
     debugReviewNavigation?: ConfigProposalReviewDebugLog;
+    onConfirmConfigFieldSetup?: (command: string, payload: ConfigLayoutAssistFieldSetupConfirmPayload) => void;
+    onApproveConfigProposal?: (proposalId: string) => void;
+    configAssistCanApproveAndApply?: boolean;
 };
 
 export default function CommandSurfaceThread({
@@ -141,6 +147,9 @@ export default function CommandSurfaceThread({
     onReviewConfigProposal,
     onWorkflowAssistProposeEdit,
     debugReviewNavigation,
+    onConfirmConfigFieldSetup,
+    onApproveConfigProposal,
+    configAssistCanApproveAndApply = false,
 }: CommandSurfaceThreadProps) {
     const showSearchDebug = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
 
@@ -306,6 +315,35 @@ export default function CommandSurfaceThread({
                                         createInterpreted={turn.card.createInterpreted}
                                         applyAllowed={workflowAssistMutationsAllowed}
                                         onProposeEditExisting={onWorkflowAssistProposeEdit}
+                                    />
+                                </AssistantBubble>
+                            );
+                        }
+                        if (turn.card.type === "config_layout_assist_field_setup") {
+                            return (
+                                <AssistantBubble key={turn.id}>
+                                    <ConfigLayoutAssistFieldSetupCard
+                                        draft={turn.card.draft}
+                                        sectionOptions={turn.card.sectionOptions}
+                                        busy={busy}
+                                        onConfirm={(payload) =>
+                                            onConfirmConfigFieldSetup?.(turn.card.draft.command, payload)
+                                        }
+                                    />
+                                </AssistantBubble>
+                            );
+                        }
+                        if (turn.card.type === "config_layout_assist_ready") {
+                            return (
+                                <AssistantBubble key={turn.id}>
+                                    <ConfigLayoutAssistReadyCard
+                                        readySummary={turn.card.readySummary}
+                                        persistedProposalId={turn.card.persistedProposalId}
+                                        busy={busy}
+                                        canApproveAndApply={configAssistCanApproveAndApply}
+                                        onApproveAndApply={() =>
+                                            onApproveConfigProposal?.(turn.card.persistedProposalId)
+                                        }
                                     />
                                 </AssistantBubble>
                             );

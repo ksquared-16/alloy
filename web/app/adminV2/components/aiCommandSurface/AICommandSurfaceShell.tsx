@@ -32,7 +32,18 @@ import {
   type WorkflowAssistThreadMutationHandlersV1,
 } from "@/lib/agent/workflowAssist/workflowAssistReadV1";
 import type { ConfigurationProposalV1 } from "@/lib/agent/configLayoutAssist/configurationProposalV1";
-import type { ConfigLayoutAssistTraceV1 } from "@/lib/agent/configLayoutAssist/configLayoutAssistTypes";
+import type {
+    ConfigLayoutAssistCapabilitiesV1,
+    ConfigLayoutAssistTraceV1,
+} from "@/lib/agent/configLayoutAssist/configLayoutAssistTypes";
+import type {
+    ConfigLayoutAssistFieldSetupDraftV1,
+    ConfigLayoutAssistReadySummaryV1,
+    ConfigLayoutAssistSectionOptionV1,
+} from "@/lib/agent/configLayoutAssist/configLayoutAssistFieldSetup";
+import type { ConfigLayoutAssistFieldSetupConfirmPayload } from "@/app/adminV2/components/aiCommandSurface/ConfigLayoutAssistFieldSetupCard";
+import { CONFIG_ASSIST_NEW_SECTION_VALUE } from "@/lib/agent/configLayoutAssist/configLayoutAssistFieldSetup";
+import { parseConfigLayoutAssistIntent } from "@/lib/agent/configLayoutAssist/configLayoutAssistIntent";
 import { configProposalReviewHrefForId } from "@/lib/agent/configLayoutAssist/configLayoutAssistReviewNavigation";
 import type { ConfigProposalReviewDebugLog } from "@/lib/agent/configLayoutAssist/configLayoutAssistReviewNavigation";
 import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
@@ -143,6 +154,8 @@ function lastThreadPreviewText(turns: CommandSurfaceThreadTurn[]): string | null
       if (turn.card.type === "task_assist") return turn.card.entityLabel?.trim() || null;
       if (turn.card.type === "job_layout") return turn.card.headline?.trim() || "Job layout";
       if (turn.card.type === "workflow_assist_proposal") return "Workflow Assist proposal";
+      if (turn.card.type === "config_layout_assist_field_setup") return "Field setup";
+      if (turn.card.type === "config_layout_assist_ready") return "Ready to apply";
       if (turn.card.type === "config_layout_assist_proposal") return "Configuration proposal";
     }
   }
@@ -554,6 +567,9 @@ export default function AICommandSurfaceShell() {
 
   const [busy, setBusy] = useState(false);
   const [workflowAssistMutationCapable, setWorkflowAssistMutationCapable] = useState<boolean | null>(null);
+  const [configLayoutAssistCaps, setConfigLayoutAssistCaps] = useState<ConfigLayoutAssistCapabilitiesV1 | null>(
+    null
+  );
   const [viewportH, setViewportH] = useState<number>(typeof window !== "undefined" ? window.innerHeight : 900);
   const threadScrollRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
@@ -1152,42 +1168,146 @@ export default function AICommandSurfaceShell() {
     [globalAssistant, runWorkflowAssistExplainForEntity, selectedSiteId, setThread]
   );
 
+  const runConfigLayoutAssistProposePersisted = useCallback(
+    async (cmd: string) => {
+      const res = await fetch("/api/admin/ai/config-layout-assist/propose", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ command: cmd, persist: true }),
+      });
+      const j = (await res.json()) as {
+        ok?: boolean;
+        proposal?: ConfigurationProposalV1;
+        trace?: ConfigLayoutAssistTraceV1;
+        persisted_proposal_id?: string | null;
+        error?: string;
+        message?: string;
+      };
+      if (!res.ok || !j.ok || !j.proposal || !j.trace) {
+        throw new Error(j.message ?? j.error ?? `HTTP ${res.status}`);
+      }
+      setThread((prev) =>
+        appendThreadTurn(prev, {
+          kind: "action_card",
+          card: {
+            type: "config_layout_assist_proposal",
+            proposal: j.proposal as ConfigurationProposalV1,
+            trace: j.trace as ConfigLayoutAssistTraceV1,
+            persistedProposalId: j.persisted_proposal_id ?? null,
+          },
+        })
+      );
+    },
+    [setThread]
+  );
+
+  const runConfigLayoutAssistFieldSetup = useCallback(
+    async (cmd: string) => {
+      const res = await fetch("/api/admin/ai/config-layout-assist/field-setup", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ command: cmd }),
+      });
+      const j = (await res.json()) as {
+        ok?: boolean;
+        draft?: ConfigLayoutAssistFieldSetupDraftV1;
+        section_options?: ConfigLayoutAssistSectionOptionV1[];
+        intro_message?: string;
+        error?: string;
+        message?: string;
+      };
+      if (!res.ok || !j.ok || !j.draft || !j.section_options) {
+        throw new Error(j.message ?? j.error ?? `HTTP ${res.status}`);
+      }
+      setThread((prev) => {
+        let next = prev;
+        if (j.intro_message?.trim()) {
+          next = appendThreadTurn(next, { kind: "assistant_notice", text: j.intro_message.trim() });
+        }
+        return appendThreadTurn(next, {
+          kind: "action_card",
+          card: {
+            type: "config_layout_assist_field_setup",
+            introMessage: j.intro_message ?? "",
+            draft: j.draft,
+            sectionOptions: j.section_options,
+          },
+        });
+      });
+    },
+    [setThread]
+  );
+
   const runConfigLayoutAssistRoute = useCallback(
     async (cmd: string) => {
       try {
-        const res = await fetch("/api/admin/ai/config-layout-assist/propose", {
+        const intent = parseConfigLayoutAssistIntent(cmd);
+        if (intent.kind === "create_field" && intent.field_label?.trim()) {
+          await runConfigLayoutAssistFieldSetup(cmd);
+          return;
+        }
+        await runConfigLayoutAssistProposePersisted(cmd);
+      } catch (e) {
+        setThread((prev) =>
+          appendThreadTurn(prev, {
+            kind: "error",
+            text:
+              e instanceof Error
+                ? e.message
+                : "Configuration Assist request failed.",
+          })
+        );
+      }
+    },
+    [runConfigLayoutAssistFieldSetup, runConfigLayoutAssistProposePersisted, setThread]
+  );
+
+  const confirmConfigLayoutFieldSetup = useCallback(
+    async (cmd: string, payload: ConfigLayoutAssistFieldSetupConfirmPayload) => {
+      setBusy(true);
+      try {
+        const res = await fetch("/api/admin/ai/config-layout-assist/field-setup/confirm", {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({ command: cmd, persist: true }),
+          body: JSON.stringify({
+            command: cmd,
+            field_type: payload.field_type,
+            required: payload.required,
+            section_key: payload.section_key,
+            section_is_new: payload.section_key === CONFIG_ASSIST_NEW_SECTION_VALUE,
+            new_section_label: payload.new_section_label,
+          }),
         });
         const j = (await res.json()) as {
           ok?: boolean;
           proposal?: ConfigurationProposalV1;
           trace?: ConfigLayoutAssistTraceV1;
           persisted_proposal_id?: string | null;
-          error?: string;
+          ready_summary?: ConfigLayoutAssistReadySummaryV1;
           message?: string;
+          error?: string;
         };
-        if (!res.ok || !j.ok || !j.proposal || !j.trace) {
+        if (!res.ok || !j.ok || !j.proposal || !j.trace || !j.persisted_proposal_id || !j.ready_summary) {
           setThread((prev) =>
             appendThreadTurn(prev, {
               kind: "error",
-              text: `Configuration Assist could not build a proposal: ${j.message ?? j.error ?? `HTTP ${res.status}`}`,
+              text: j.message ?? j.error ?? "Could not save field setup.",
             })
           );
           return;
         }
-        const proposal = j.proposal as ConfigurationProposalV1;
-        const trace = j.trace as ConfigLayoutAssistTraceV1;
         setThread((prev) =>
           appendThreadTurn(prev, {
             kind: "action_card",
             card: {
-              type: "config_layout_assist_proposal",
-              proposal,
-              trace,
-              persistedProposalId: j.persisted_proposal_id ?? null,
+              type: "config_layout_assist_ready",
+              proposal: j.proposal,
+              trace: j.trace,
+              persistedProposalId: j.persisted_proposal_id,
+              readySummary: j.ready_summary,
             },
           })
         );
@@ -1195,9 +1315,60 @@ export default function AICommandSurfaceShell() {
         setThread((prev) =>
           appendThreadTurn(prev, {
             kind: "error",
-            text: e instanceof Error ? e.message : "Configuration Assist request failed.",
+            text: e instanceof Error ? e.message : "Field setup confirmation failed.",
           })
         );
+      } finally {
+        setBusy(false);
+      }
+    },
+    [setThread]
+  );
+
+  const approveAndApplyConfigProposal = useCallback(
+    async (proposalId: string) => {
+      setBusy(true);
+      try {
+        const transition = async (to_state: string) => {
+          const res = await fetch(
+            `/api/admin/config-layout-assist/proposals/${encodeURIComponent(proposalId)}/state`,
+            {
+              method: "PATCH",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ to_state }),
+            }
+          );
+          const j = (await res.json()) as { ok?: boolean; message?: string };
+          if (!res.ok || !j.ok) {
+            throw new Error(j.message ?? `Could not move proposal to ${to_state}`);
+          }
+        };
+        await transition("reviewed");
+        await transition("approved");
+        const applyRes = await fetch(
+          `/api/admin/config-layout-assist/proposals/${encodeURIComponent(proposalId)}/apply`,
+          { method: "POST", credentials: "include", headers: { Accept: "application/json" } }
+        );
+        const applyJ = (await applyRes.json()) as { ok?: boolean; message?: string; error?: string };
+        if (!applyRes.ok || !applyJ.ok) {
+          throw new Error(applyJ.message ?? applyJ.error ?? "Apply failed");
+        }
+        setThread((prev) =>
+          appendThreadTurn(prev, {
+            kind: "assistant_notice",
+            text: "Field configuration applied successfully.",
+          })
+        );
+      } catch (e) {
+        setThread((prev) =>
+          appendThreadTurn(prev, {
+            kind: "error",
+            text: e instanceof Error ? e.message : "Approve and apply failed.",
+          })
+        );
+      } finally {
+        setBusy(false);
       }
     },
     [setThread]
@@ -1340,6 +1511,22 @@ export default function AICommandSurfaceShell() {
         if (!cancelled) setWorkflowAssistMutationCapable(false);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/admin/ai/config-layout-assist/capabilities", {
+      credentials: "include",
+      headers: { Accept: "application/json" },
+    })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!cancelled && j.ok) setConfigLayoutAssistCaps(j as ConfigLayoutAssistCapabilitiesV1);
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
@@ -1736,6 +1923,14 @@ export default function AICommandSurfaceShell() {
                 onReviewConfigProposal={onReviewConfigProposal}
                 onWorkflowAssistProposeEdit={onWorkflowAssistProposeEdit}
                 debugReviewNavigation={debugReviewNavigation}
+                onConfirmConfigFieldSetup={(command, payload) =>
+                  void confirmConfigLayoutFieldSetup(command, payload)
+                }
+                onApproveConfigProposal={(proposalId) => void approveAndApplyConfigProposal(proposalId)}
+                configAssistCanApproveAndApply={
+                  (configLayoutAssistCaps?.can_review ?? false) &&
+                  (configLayoutAssistCaps?.can_apply ?? false)
+                }
               />
             </div>
           ) : null}
