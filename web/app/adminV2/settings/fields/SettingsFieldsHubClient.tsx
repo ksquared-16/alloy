@@ -56,9 +56,12 @@ export default function SettingsFieldsHubClient({ initialEntity }: { initialEnti
         <div className="w-full max-w-6xl space-y-6">
             <SettingsEntityTabBar tabs={entityTabs} activeKey={entity} onSelect={onEntityChange} />
 
-            <p className="text-xs leading-relaxed text-alloy-midnight/50">
-                Rows are org-scoped in <code className="rounded bg-alloy-stone/35 px-1 text-[11px]">field_definitions</code>.
-                Registry seeds run at deploy time; an empty list until backfill is expected for new orgs.
+            <p className="text-xs leading-relaxed text-alloy-midnight/55">
+                Choose a record type to manage labels, visibility, and required rules. For drawer section order, use{" "}
+                <a href="/adminV2/settings/layouts" className="font-medium text-alloy-pine hover:underline">
+                    Record layouts
+                </a>
+                .
             </p>
 
             <div key={entity} className="space-y-4">

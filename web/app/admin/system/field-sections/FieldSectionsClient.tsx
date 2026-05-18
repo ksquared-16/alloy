@@ -239,9 +239,9 @@ export default function FieldSectionsClient({ adminV2Chrome = false }: { adminV2
         <>
             {adminV2Chrome ? (
                 <SettingsPageHeader
-                    title="Field grouping catalog"
+                    title="Section label catalog"
                     subtitle={
-                        "Labels and sort order for field_definitions.section_key — a grouping catalog for forms and config-driven grids. This is not the runtime drawer layout editor: opportunity drawer chrome (workflow v1 sections, ordering) lives under Settings → Layouts (record_drawer_layouts.config_json). See docs/execution/admin-settings-config-parity.md."
+                        "Advanced: names for field groups on forms and grids. Drawer section order is configured under Settings → Record layouts."
                     }
                     actions={newSectionAction}
                 />

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 type RuleRow = {
@@ -70,9 +71,16 @@ export default function AdminV2SettingsStatusTransitionRulesPage() {
     return (
         <div className="w-full max-w-6xl space-y-4 pb-2">
             <header>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-alloy-midnight/40">Diagnostics</p>
                 <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">Status transition rules</h1>
-                <p className="mt-1 max-w-2xl text-xs leading-snug text-alloy-midnight/60">
-                    Read-only guardrails that block invalid status changes server-side.
+                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-alloy-midnight/60">
+                    Reference list of rules that block invalid status changes. Changes are made through engineering releases, not in
+                    this UI.
+                </p>
+                <p className="mt-2 text-xs text-alloy-midnight/45">
+                    <Link href="/adminV2/settings" className="font-medium text-alloy-pine hover:underline">
+                        ← Back to Settings
+                    </Link>
                 </p>
             </header>
 
@@ -80,10 +88,7 @@ export default function AdminV2SettingsStatusTransitionRulesPage() {
                 <div className="flex items-center justify-between px-4 py-3">
                     <div>
                         <div className="text-sm font-semibold text-alloy-midnight">Configured rules</div>
-                        <div className="mt-0.5 text-xs text-alloy-midnight/60">
-                            Source:{" "}
-                            <code className="rounded bg-alloy-stone/10 px-1.5 py-0.5">status_transition_rules</code>
-                        </div>
+                        <div className="mt-0.5 text-xs text-alloy-midnight/60">Read-only reference for this organization.</div>
                     </div>
                     <div className="text-xs text-alloy-midnight/60">{rows.length} rules</div>
                 </div>

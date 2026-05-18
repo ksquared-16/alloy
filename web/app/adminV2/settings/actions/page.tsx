@@ -104,14 +104,17 @@ export default function AdminV2SettingsActionsPage() {
     return (
         <div className="w-full max-w-6xl space-y-4 pb-2">
             <header>
-                <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">Actions</h1>
-                <p className="mt-1 max-w-2xl text-xs leading-snug text-alloy-midnight/60">
-                    Read-only inventory of the action registry (<code className="rounded bg-alloy-stone/10 px-1 text-[10px]">action_definitions</code>{" "}
-                    + <code className="rounded bg-alloy-stone/10 px-1 text-[10px]">action_placements</code>). Placements and conditions are
-                    still often seeded or changed by engineering — not editable here yet. Some drawer and queue buttons may still use
-                    legacy <code className="rounded bg-alloy-stone/10 px-1 text-[10px]">record_actions</code> or hardcoded paths alongside
-                    this registry. The <strong>Runtime executor</strong> column classifies how each registry placement runs in the
-                    product today (read-only).
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-alloy-midnight/40">Diagnostics</p>
+                <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">Action button inventory</h1>
+                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-alloy-midnight/60">
+                    Reference list of configured buttons and where they appear on drawers and queues. Editing placements is not
+                    available here yet — use Automations for workflow-driven actions. The <strong>How it runs</strong> column describes
+                    what happens when a staff member clicks the button.
+                </p>
+                <p className="mt-2 text-xs text-alloy-midnight/45">
+                    <Link href="/adminV2/settings" className="font-medium text-alloy-pine hover:underline">
+                        ← Back to Settings
+                    </Link>
                 </p>
             </header>
 
@@ -122,8 +125,8 @@ export default function AdminV2SettingsActionsPage() {
                 <Card href="/adminV2/settings/work-units" title="Work units">
                     Many placements are scoped by work unit (right rail, queue row).
                 </Card>
-                <Card href="/adminV2/settings/layouts" title="Layouts">
-                    Runtime drawer layouts; opportunity workflow v1 section order is editable on the Layouts page.
+                <Card href="/adminV2/settings/layouts" title="Record layouts">
+                    Drawer sections and inquiry workflow order.
                 </Card>
                 <Card href="/adminV2/settings/statuses" title="Statuses">
                     Status keys/labels per entity (used by forms like “Update status”).
@@ -134,10 +137,7 @@ export default function AdminV2SettingsActionsPage() {
                 <div className="flex items-center justify-between px-4 py-3">
                     <div>
                         <div className="text-sm font-semibold text-alloy-midnight">Configured buttons & placements</div>
-                        <div className="mt-0.5 text-xs text-alloy-midnight/60">
-                            Source: <code className="rounded bg-alloy-stone/10 px-1.5 py-0.5">action_definitions</code> +{" "}
-                            <code className="rounded bg-alloy-stone/10 px-1.5 py-0.5">action_placements</code>
-                        </div>
+                        <div className="mt-0.5 text-xs text-alloy-midnight/60">Read-only reference for this organization.</div>
                     </div>
                     <div className="text-xs text-alloy-midnight/60">{rows.length} placements</div>
                 </div>
@@ -162,7 +162,7 @@ export default function AdminV2SettingsActionsPage() {
                                 <th className="px-4 py-2 font-semibold">scope</th>
                                 <th className="px-4 py-2 font-semibold">conditions</th>
                                 <th className="px-4 py-2 font-semibold">kind</th>
-                                <th className="px-4 py-2 font-semibold">runtime executor</th>
+                                <th className="px-4 py-2 font-semibold">How it runs</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-alloy-stone/10">

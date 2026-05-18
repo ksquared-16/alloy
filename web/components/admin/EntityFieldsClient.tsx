@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
@@ -31,6 +32,13 @@ import {
     type FieldPolicyRequirementPreset,
     type FieldPolicySettingsView,
 } from "@/lib/fields/fieldPolicySettingsUi";
+import {
+    canOperatorEditRequirementInline,
+    isOperatorHiddenField,
+    operatorFieldDisplayLabel,
+    operatorPolicyCapabilityHint,
+    operatorPolicyColumnLabel,
+} from "@/lib/fields/fieldSettingsOperatorUi";
 
 const FIELD_TYPES = ["text", "email", "phone", "number", "date", "datetime", "boolean", "select", "multiselect"] as const;
 
@@ -145,8 +153,26 @@ export default function EntityFieldsClient({
     const [deleteError, setDeleteError] = useState<string | null>(null);
 
     const [sectionRegistry, setSectionRegistry] = useState<FieldSectionRegistryRow[]>([]);
+    const [showSystemFields, setShowSystemFields] = useState(false);
+    const [inlineSavingKey, setInlineSavingKey] = useState<string | null>(null);
+    const [inlineSaveError, setInlineSaveError] = useState<string | null>(null);
+    const [showEditAdvanced, setShowEditAdvanced] = useState(false);
 
     const sortedItems = useMemo(() => sortFieldDefinitionsForAdminList(items), [items]);
+
+    const visibleItems = useMemo(() => {
+        if (showSystemFields) return sortedItems;
+        return sortedItems.filter(
+            (row) =>
+                !isOperatorHiddenField(entityType, {
+                    field_key: row.field_key,
+                    is_system: row.is_system,
+                    label: row.label,
+                })
+        );
+    }, [entityType, showSystemFields, sortedItems]);
+
+    const hiddenFieldCount = sortedItems.length - visibleItems.length;
 
     const policySettingsSupported = entityTypeSupportsFieldPolicySettings(entityType);
 
@@ -215,7 +241,42 @@ export default function EntityFieldsClient({
         };
     }, [entityType]);
 
+    const patchRequirementInline = async (row: FieldDef, preset: FieldPolicyRequirementPreset) => {
+        if (!canMutate || !policySettingsSupported) return;
+        const view = policyViewsByFieldKey.get(row.field_key);
+        if (!canOperatorEditRequirementInline(view ?? null)) return;
+        setInlineSavingKey(row.field_key);
+        setInlineSaveError(null);
+        try {
+            const parsed = parseStoredPoliciesForEdit({
+                field_key: row.field_key,
+                is_system: row.is_system,
+                is_required: row.is_required,
+                requirement_policy: row.requirement_policy,
+                interaction_policy: row.interaction_policy,
+            });
+            const intPreset =
+                interactionPresetFromPolicy(parsed.interactionPolicy) ?? view?.interactionPreset ?? "editable";
+            const res = await fetch(`/api/admin/field-definitions/${row.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    requirement_policy: buildSimpleRequirementPolicy(preset),
+                    interaction_policy: buildSimpleInteractionPolicy(intPreset, entityType, row.field_key),
+                }),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Update failed");
+            await fetchItems();
+        } catch (e) {
+            setInlineSaveError((e as Error).message);
+        } finally {
+            setInlineSavingKey(null);
+        }
+    };
+
     const openEdit = (row: FieldDef) => {
+        setShowEditAdvanced(false);
         setEditRow(row);
         setEditLabel(row.label ?? "");
         setEditDescription(row.description ?? "");
@@ -418,11 +479,11 @@ export default function EntityFieldsClient({
         }
     };
 
-    const defaultSubtitle = `Configure field definitions for ${title.toLowerCase().replace(/\s+fields$/, "")}. System fields can be customized (labels, visibility, order). Add custom fields for your org.`;
+    const defaultSubtitle = `Labels, visibility, and required rules for ${title.toLowerCase().replace(/\s+fields$/, "")} fields.`;
     const resolvedSubtitle = subtitle ?? defaultSubtitle;
-    const compactSubtitle =
-        "System fields: labels, visibility, and order. Add custom fields for your org — same APIs as legacy System pages.";
-    const compactDescription = subtitle ?? compactSubtitle;
+    const compactDescription =
+        subtitle ??
+        "Set how fields read in the product, where they appear, and whether staff must fill them in. For drawer section order, use Record layouts.";
 
     const addFieldButton = canMutate ? (
         <button
@@ -454,63 +515,129 @@ export default function EntityFieldsClient({
 
             {!loading && !error && (
                 <SectionCard
-                    title={adminV2Chrome ? "Field definitions" : `${title} definitions`}
+                    title={adminV2Chrome ? "Fields" : `${title} definitions`}
                     surfaceTone={adminV2Chrome ? "settingsPanel" : "default"}
                 >
                     {deleteError && (
                         <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{deleteError}</div>
                     )}
+                    {inlineSaveError && (
+                        <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{inlineSaveError}</div>
+                    )}
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-alloy-midnight/55">
+                        <span>
+                            {visibleItems.length} field{visibleItems.length === 1 ? "" : "s"}
+                            {hiddenFieldCount > 0 && !showSystemFields
+                                ? ` (${hiddenFieldCount} system field${hiddenFieldCount === 1 ? "" : "s"} hidden)`
+                                : ""}
+                        </span>
+                        <label className="flex cursor-pointer items-center gap-2">
+                            <input
+                                type="checkbox"
+                                checked={showSystemFields}
+                                onChange={(e) => setShowSystemFields(e.target.checked)}
+                                className="rounded border-alloy-stone/50"
+                            />
+                            Show system fields
+                        </label>
+                    </div>
+                    {adminV2Chrome && policySettingsSupported && (
+                        <p className="mb-3 text-xs leading-relaxed text-alloy-midnight/50">
+                            Required and editability apply when staff save the record drawer for supported fields. Status, tour, and
+                            pricing fields are managed elsewhere.
+                        </p>
+                    )}
                     <div className="overflow-x-auto">
-                        <table className="w-full min-w-[800px] text-left text-sm">
+                        <table className="w-full min-w-[720px] text-left text-sm">
                             <thead>
                                 <tr className="border-b border-[#e6e8ec] text-[#59678b]">
-                                    <th className="pb-2 pr-4 font-semibold">Key</th>
-                                    <th className="pb-2 pr-4 font-semibold">Type</th>
-                                    <th className="pb-2 pr-4 font-semibold">Label</th>
-                                    <th className="pb-2 pr-4 font-semibold">Section</th>
-                                    <th className="pb-2 pr-4 font-semibold">Sort</th>
+                                    <th className="pb-2 pr-4 font-semibold">Field</th>
                                     <th className="pb-2 pr-4 font-semibold">Required</th>
-                                    {policySettingsSupported && (
-                                        <th className="pb-2 pr-4 font-semibold">Policy</th>
-                                    )}
-                                    <th className="pb-2 pr-4 font-semibold">Form</th>
-                                    <th className="pb-2 pr-4 font-semibold">Drawer</th>
-                                    <th className="pb-2 pr-4 font-semibold">Table</th>
-                                    <th className="pb-2 pr-4 font-semibold">System</th>
-                                    {canMutate && <th className="pb-2 font-semibold">Actions</th>}
+                                    {policySettingsSupported && <th className="pb-2 pr-4 font-semibold">Editability</th>}
+                                    <th className="pb-2 pr-4 font-semibold">Shows in</th>
+                                    {canMutate && <th className="pb-2 font-semibold"> </th>}
                                 </tr>
                             </thead>
                             <tbody>
-                                {sortedItems.length === 0 ? (
+                                {visibleItems.length === 0 ? (
                                     <tr>
                                         <td
-                                            colSpan={(canMutate ? 11 : 10) + (policySettingsSupported ? 1 : 0)}
+                                            colSpan={policySettingsSupported ? (canMutate ? 4 : 3) : canMutate ? 3 : 2}
                                             className="py-4 text-[#59678b]"
                                         >
-                                            No field definitions. Seed in Supabase or add a custom field.
+                                            {sortedItems.length === 0
+                                                ? "No fields yet. Add a custom field or turn on system fields."
+                                                : "No operator-facing fields match this filter. Try showing system fields."}
                                         </td>
                                     </tr>
                                 ) : (
-                                    sortedItems.map((row) => (
+                                    visibleItems.map((row) => {
+                                        const policyView = policyViewsByFieldKey.get(row.field_key);
+                                        const displayLabel = operatorFieldDisplayLabel(entityType, {
+                                            field_key: row.field_key,
+                                            is_system: row.is_system,
+                                            label: row.label,
+                                        });
+                                        const showsIn = [
+                                            row.is_visible_in_drawer ? "Drawer" : null,
+                                            row.is_visible_in_form ? "Forms" : null,
+                                            row.is_visible_in_table ? "Lists" : null,
+                                        ]
+                                            .filter(Boolean)
+                                            .join(", ");
+                                        const inlineEditable = canOperatorEditRequirementInline(policyView ?? null);
+                                        const reqPreset =
+                                            policyView?.requirementPreset ??
+                                            (row.is_required ? ("required" as const) : ("optional" as const));
+                                        return (
                                         <tr key={row.id} className="border-b border-[#e6e8ec] align-middle">
-                                            <td className="py-2 pr-4 font-mono text-[#59678b]">{row.field_key}</td>
-                                            <td className="py-2 pr-4 text-[#59678b]">{row.field_type}</td>
-                                            <td className="py-2 pr-4 font-medium text-[#31394d]">{row.label ?? "—"}</td>
-                                            <td className="py-2 pr-4 text-[#59678b]">{row.section_key ?? "—"}</td>
-                                            <td className="py-2 pr-4 text-[#59678b]">{row.sort_order}</td>
-                                            <td className="py-2 pr-4">{row.is_required ? "Yes" : "No"}</td>
+                                            <td className="py-2.5 pr-4">
+                                                <div className="font-medium text-[#31394d]">{displayLabel}</div>
+                                                {row.label && row.label !== displayLabel && (
+                                                    <div className="text-xs text-[#59678b]">Stored label: {row.label}</div>
+                                                )}
+                                                {showSystemFields && (
+                                                    <div className="font-mono text-[10px] text-[#59678b]/80">{row.field_key}</div>
+                                                )}
+                                            </td>
+                                            <td className="py-2.5 pr-4">
+                                                {inlineEditable && canMutate ? (
+                                                    <select
+                                                        value={reqPreset}
+                                                        disabled={inlineSavingKey === row.field_key}
+                                                        onChange={(e) =>
+                                                            void patchRequirementInline(
+                                                                row,
+                                                                e.target.value as FieldPolicyRequirementPreset
+                                                            )
+                                                        }
+                                                        className="rounded border border-[#e6e8ec] px-2 py-1 text-xs"
+                                                    >
+                                                        <option value="optional">Optional</option>
+                                                        <option value="required">Required</option>
+                                                        <option value="required_on_save">Required on save</option>
+                                                    </select>
+                                                ) : policySettingsSupported ? (
+                                                    <span className="text-[#59678b]">
+                                                        {operatorPolicyColumnLabel(policyView ?? null, row.is_required)}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-[#59678b]">{row.is_required ? "Required" : "Optional"}</span>
+                                                )}
+                                            </td>
                                             {policySettingsSupported && (
-                                                <td className="py-2 pr-4 text-[#59678b]">
-                                                    {policyViewsByFieldKey.get(row.field_key)?.displayLabel ?? "—"}
+                                                <td className="py-2.5 pr-4 text-[#59678b]">
+                                                    {policyView?.interactionPreset === "read_only"
+                                                        ? "Read-only"
+                                                        : policyView?.policyEditable
+                                                          ? "Staff can edit"
+                                                          : operatorPolicyColumnLabel(policyView ?? null, row.is_required)}
                                                 </td>
                                             )}
-                                            <td className="py-2 pr-4">{row.is_visible_in_form ? "Yes" : "No"}</td>
-                                            <td className="py-2 pr-4">{row.is_visible_in_drawer ? "Yes" : "No"}</td>
-                                            <td className="py-2 pr-4">{row.is_visible_in_table ? "Yes" : "No"}</td>
-                                            <td className="py-2 pr-4">{row.is_system ? "Yes" : "—"}</td>
+                                            <td className="py-2.5 pr-4 text-[#59678b]">{showsIn || "Hidden"}</td>
                                             {canMutate && (
-                                                <td className="py-2">
-                                                    <div className="flex flex-wrap gap-1">
+                                                <td className="py-2.5 text-right">
+                                                    <div className="flex flex-wrap justify-end gap-1">
                                                         <button
                                                             type="button"
                                                             onClick={() => openEdit(row)}
@@ -532,11 +659,20 @@ export default function EntityFieldsClient({
                                                 </td>
                                             )}
                                         </tr>
-                                    ))
+                                        );
+                                    })
                                 )}
                             </tbody>
                         </table>
                     </div>
+                    {adminV2Chrome && (
+                        <p className="mt-3 text-xs text-alloy-midnight/45">
+                            <Link href="/adminV2/settings/layouts" className="font-medium text-alloy-pine hover:underline">
+                                Record layouts
+                            </Link>{" "}
+                            control drawer sections and order.
+                        </p>
+                    )}
                 </SectionCard>
             )}
 
@@ -549,12 +685,19 @@ export default function EntityFieldsClient({
                         className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg border border-[#e6e8ec] bg-white p-4 shadow-xl"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <h3 className="mb-4 text-lg font-semibold text-[#31394d]">
-                            Edit field: {editRow.field_key} {editRow.is_system && "(system)"}
+                        <h3 className="text-lg font-semibold text-[#31394d]">
+                            {operatorFieldDisplayLabel(entityType, {
+                                field_key: editRow.field_key,
+                                is_system: editRow.is_system,
+                                label: editRow.label,
+                            })}
                         </h3>
-                        <div className="space-y-3">
+                        <p className="mb-4 text-xs text-[#59678b]">
+                            {editRow.is_system ? "System field" : "Custom field"} · {title.replace(/ Fields$/, "")}
+                        </p>
+                        <div className="space-y-4">
                             <div>
-                                <label className="block text-xs font-medium text-[#59678b] mb-0.5">Label</label>
+                                <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Display label</label>
                                 <input
                                     type="text"
                                     value={editLabel}
@@ -573,12 +716,13 @@ export default function EntityFieldsClient({
                             </div>
                             {policySettingsSupported && editPolicyView ? (
                                 <div className="rounded-md border border-[#e6e8ec] bg-[#f8f9fb] p-3 space-y-3">
-                                    <div className="text-xs font-semibold text-[#31394d]">Field policy (drawer save)</div>
+                                    <div className="text-xs font-semibold text-[#31394d]">When saving in the drawer</div>
+                                    <p className="text-xs text-[#59678b]">{operatorPolicyCapabilityHint(editPolicyView)}</p>
                                     {editPolicyView.policyEditable && !editPolicyView.requirementAdvanced && !editPolicyView.interactionAdvanced ? (
                                         <>
                                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                                 <div>
-                                                    <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Requirement</label>
+                                                    <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Required</label>
                                                     <select
                                                         value={editRequirementPreset}
                                                         onChange={(e) =>
@@ -587,12 +731,12 @@ export default function EntityFieldsClient({
                                                         className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
                                                     >
                                                         <option value="optional">Optional</option>
-                                                        <option value="required">Always required</option>
+                                                        <option value="required">Required</option>
                                                         <option value="required_on_save">Required on save</option>
                                                     </select>
                                                 </div>
                                                 <div>
-                                                    <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Editability</label>
+                                                    <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Staff can edit</label>
                                                     <select
                                                         value={editInteractionPreset}
                                                         onChange={(e) =>
@@ -600,25 +744,20 @@ export default function EntityFieldsClient({
                                                         }
                                                         className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
                                                     >
-                                                        <option value="editable">Editable</option>
-                                                        <option value="read_only">Read-only</option>
+                                                        <option value="editable">Yes</option>
+                                                        <option value="read_only">No (read-only)</option>
                                                     </select>
                                                 </div>
                                             </div>
-                                            <p className="text-xs text-[#59678b]">
-                                                Always required sets legacy <span className="font-mono">is_required</span>. Required on save
-                                                enforces only on PATCH when the field has a mapped write path.
-                                            </p>
                                         </>
                                     ) : (
                                         <p className="text-xs text-[#59678b]">
                                             <span className="font-medium text-[#31394d]">
-                                                {editPolicyView.policyEditable ? "Advanced policy" : "Not enforceable"}.
+                                                {editPolicyView.policyEditable ? "Advanced rules" : "Managed by system"}.
                                             </span>{" "}
-                                            {editPolicyView.policyHint}
-                                            {!editPolicyView.policyEditable
-                                                ? " Policy editing is disabled; drawer save will not enforce policies on this field yet."
-                                                : " Simple controls are disabled to avoid overwriting advanced JSON."}
+                                            {editPolicyView.policyEditable
+                                                ? "Contact your Alloy administrator to change advanced rules."
+                                                : operatorPolicyColumnLabel(editPolicyView, editRow.is_required)}
                                         </p>
                                     )}
                                 </div>
@@ -635,37 +774,47 @@ export default function EntityFieldsClient({
                                     </label>
                                 </div>
                             )}
-                            <div className="flex flex-wrap gap-4">
-                                <label className="flex items-center gap-2 text-sm">
-                                    <input type="checkbox" checked={editActive} onChange={(e) => setEditActive(e.target.checked)} className="rounded border-[#c4c8cc]" />
-                                    Active
-                                </label>
+                            <div>
+                                <div className="mb-1 text-xs font-semibold text-[#31394d]">Where it appears</div>
+                                <div className="flex flex-wrap gap-4">
+                                    <label className="flex items-center gap-2 text-sm">
+                                        <input type="checkbox" checked={editVisibleDrawer} onChange={(e) => setEditVisibleDrawer(e.target.checked)} className="rounded border-[#c4c8cc]" />
+                                        Record drawer
+                                    </label>
+                                    <label className="flex items-center gap-2 text-sm">
+                                        <input type="checkbox" checked={editVisibleForm} onChange={(e) => setEditVisibleForm(e.target.checked)} className="rounded border-[#c4c8cc]" />
+                                        Forms
+                                    </label>
+                                    <label className="flex items-center gap-2 text-sm">
+                                        <input type="checkbox" checked={editVisibleTable} onChange={(e) => setEditVisibleTable(e.target.checked)} className="rounded border-[#c4c8cc]" />
+                                        Lists
+                                    </label>
+                                </div>
                             </div>
-                            <div className="flex flex-wrap gap-4">
-                                <label className="flex items-center gap-2 text-sm">
-                                    <input type="checkbox" checked={editVisibleForm} onChange={(e) => setEditVisibleForm(e.target.checked)} className="rounded border-[#c4c8cc]" />
-                                    Form
-                                </label>
-                                <label className="flex items-center gap-2 text-sm">
-                                    <input type="checkbox" checked={editVisibleDrawer} onChange={(e) => setEditVisibleDrawer(e.target.checked)} className="rounded border-[#c4c8cc]" />
-                                    Drawer
-                                </label>
-                                <label className="flex items-center gap-2 text-sm">
-                                    <input type="checkbox" checked={editVisibleTable} onChange={(e) => setEditVisibleTable(e.target.checked)} className="rounded border-[#c4c8cc]" />
-                                    Table
-                                </label>
-                                <label className="flex items-center gap-2 text-sm">
-                                    <input type="checkbox" checked={editFilterable} onChange={(e) => setEditFilterable(e.target.checked)} className="rounded border-[#c4c8cc]" />
-                                    Filterable
-                                </label>
-                                <label className="flex items-center gap-2 text-sm">
-                                    <input type="checkbox" checked={editSortable} onChange={(e) => setEditSortable(e.target.checked)} className="rounded border-[#c4c8cc]" />
-                                    Sortable
-                                </label>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
+                            <details
+                                className="rounded-md border border-[#e6e8ec] px-3 py-2"
+                                open={showEditAdvanced}
+                                onToggle={(e) => setShowEditAdvanced((e.target as HTMLDetailsElement).open)}
+                            >
+                                <summary className="cursor-pointer text-xs font-medium text-[#59678b]">Advanced</summary>
+                                <div className="mt-3 space-y-3">
+                                    <div className="flex flex-wrap gap-4">
+                                        <label className="flex items-center gap-2 text-sm">
+                                            <input type="checkbox" checked={editActive} onChange={(e) => setEditActive(e.target.checked)} className="rounded border-[#c4c8cc]" />
+                                            Active
+                                        </label>
+                                        <label className="flex items-center gap-2 text-sm">
+                                            <input type="checkbox" checked={editFilterable} onChange={(e) => setEditFilterable(e.target.checked)} className="rounded border-[#c4c8cc]" />
+                                            Filterable in lists
+                                        </label>
+                                        <label className="flex items-center gap-2 text-sm">
+                                            <input type="checkbox" checked={editSortable} onChange={(e) => setEditSortable(e.target.checked)} className="rounded border-[#c4c8cc]" />
+                                            Sortable in lists
+                                        </label>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="block text-xs font-medium text-[#59678b] mb-0.5">Section</label>
+                                    <label className="block text-xs font-medium text-[#59678b] mb-0.5">Group</label>
                                     <select
                                         value={
                                             sectionKeyInOptions(sectionOptions, editSectionKey)
@@ -721,6 +870,11 @@ export default function EntityFieldsClient({
                                     />
                                 </div>
                             )}
+                                    <p className="text-[10px] font-mono text-[#59678b]/70">
+                                        {editRow.field_type} · {editRow.field_key}
+                                    </p>
+                                </div>
+                            </details>
                         </div>
                         {editError && <p className="mt-2 text-sm text-red-600">{editError}</p>}
                         <div className="mt-4 flex justify-end gap-2">
