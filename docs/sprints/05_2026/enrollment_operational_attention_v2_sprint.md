@@ -15,8 +15,8 @@ Ship an **operational prioritization layer for enrollment**, not a “warning ba
 **Related as-built context:**
 
 - Canonical evaluator: `web/lib/opportunities/opportunityAttentionResolver.ts` (**resolver v2**).
-- Count / cohort / histogram semantics: `docs/execution/crm-opportunity-needs-attention-count-semantics.md`.
-- Settings vs runtime parity: `docs/execution/admin-settings-config-parity.md`.
+- Count / cohort / histogram semantics: `docs/system/workspace-system.md` § Needs attention count semantics.
+- Settings vs runtime parity: `docs/system/configuration-system.md`.
 - AI agent boundaries: `docs/product/ai-system.md`.
 - **Canonical enrollment execution vs overlay (pipeline pills + default lenses):** [`canonical_enrollment_operating_model_seed.md`](./canonical_enrollment_operating_model_seed.md).
 
@@ -54,7 +54,7 @@ Ship an **operational prioritization layer for enrollment**, not a “warning ba
 - Multi-reason histograms **change the meaning** of the data vs primary-only rollups.
 - **Requirement:** Label in UI/tooltips/copy that totals are **reason-level** unless using primary-only aggregation; **never imply** bin sums equal unique inquiries without qualification.
 - **Engineering:** `summarizeAttentionReasonCountsPrimaryOnly` documents primary-only call sites; multi-reason default remains for operational breadth.
-- **Docs:** `docs/execution/crm-opportunity-needs-attention-count-semantics.md` expanded accordingly.
+- **Docs:** `docs/system/workspace-system.md` § Needs attention count semantics expanded accordingly.
 
 ### B. Invalid PATCH behavior
 

@@ -49,7 +49,30 @@ All authoritative reads must come from:
 - **Work unit (`…/work-unit/:workUnitId`):** Needs Attention lists rows from `GET /api/admin/queues/.../needs_attention` with optional **`attention_bucket`** matching a configured bucket **`key`**. Chips/sub-tabs reflect enabled buckets from metadata (same precedence as lanes). **`QueueService.enrichOpportunityRows`** runs resolver attention for **every** opportunity queue list so rows carry **`_needs_attention`** / attention labels — **any** pipeline lane may show the subtle warning styling when the resolver marks the record. Queue rows remain preview-only (see **[Queue truth boundary](#queue-truth-boundary-critical-rule)**).
 - **Drawer:** Explainability lives on **`_operational_attention`** from entity GET — surfaced as a **compact header strip** (`OperationalAttentionHeaderStrip`), not a large Overview card.
 
-Org/work-unit tuning for visible buckets: `metadata.opportunity_attention_rules.needs_attention_buckets`. See **`docs/execution/crm-opportunity-needs-attention-count-semantics.md`** for histogram vs unique-inquiry bucket counting and saturation notes.
+Org/work-unit tuning for visible buckets: `metadata.opportunity_attention_rules.needs_attention_buckets`. **Count semantics** (below) explain when totals differ across surfaces.
+
+## Needs attention count semantics
+
+**Membership** uses `resolveOpportunityAttention` (resolver v2) with config from `resolveOpportunityAttentionConfigFromMetadata` and optional **`metadata.enrollment_operational`** (admin PATCH field `enrollment_operational`).
+
+**Histograms (`attention_reason_counts`):** Each reason on an opportunity can increment its own bucket — one inquiry with three reasons contributes three counts. Sum of bins ≠ unique inquiries unless each row has one reason. Use **primary-only** summarization when copy must match “inquiries” (`summarizeAttentionReasonCountsPrimaryOnly`).
+
+**Department lane buckets:**
+
+- **Work-unit aligned (`bucket_count_scope: work_unit_needs_attention_list_cap`):** Pass `work_unit_id` on preview API. Counts are **unique inquiries** whose `reasons[]` intersects bucket `reason_codes` — same cap as `loadOpportunityNeedsAttentionRows` (`NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP`, default **5000**). If `candidate_window_saturated`, true matches may exceed reported totals.
+- **Org preview fallback (`org_preview_cap_500`):** Histogram sums over **500**-row org window — **not** comparable to work-unit tab counts.
+
+**Deep links:** Prefer `attention_reason_code`; legacy `attention_reason` (label) supported. Combine with `queue=needs_attention` for work-unit URLs.
+
+| Surface | Cap / cohort | `total` meaning |
+|---------|--------------|-----------------|
+| Standalone attention API | **500** org rows | Matches in first window |
+| Dept preview (scoped WU) | **5000** WU-scoped | Unique inquiries per bucket |
+| Dept preview (legacy org) | **500** org | Histogram-based; not WU-aligned |
+| QueueService WU summaries | **800** or **5000** | Per work-unit cohort |
+| Workspace enrollment signal | **500** | Not comparable to WU tab |
+
+**Parity rule:** Align cohort + cap before QA comparisons. Job needs-attention summaries are separate (`getNeedsAttentionSummary`).
 
 ## Opportunity CRM compact previews — child vs program (doctrine)
 

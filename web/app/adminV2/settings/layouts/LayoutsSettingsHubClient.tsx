@@ -62,10 +62,14 @@ export default function LayoutsSettingsHubClient({ initialEntity }: { initialEnt
             />
 
             <p className="text-xs leading-relaxed text-alloy-midnight/55">
-                Configure drawer sections for <span className="font-medium text-alloy-midnight/75">{entityLabel}</span> records.
-                Field labels and required rules are on{" "}
+                Drawer composition for <span className="font-medium text-alloy-midnight/75">{entityLabel}</span> records.
+                Field rules are on{" "}
                 <Link href="/adminV2/settings/fields" className="font-medium text-alloy-pine hover:underline">
                     Fields
+                </Link>
+                ; catalog group labels are on{" "}
+                <Link href="/adminV2/settings/field-sections" className="font-medium text-alloy-pine hover:underline">
+                    Field grouping
                 </Link>
                 .
             </p>

@@ -55,7 +55,7 @@ Aligned with platform intent; if code disagrees, fix code **or** update docs in 
 
 Alloy is **past proving foundational architecture viability**. The platform has **substantial** CRM, workspace, communications, access control, forms, tour scheduling, and a **narrow AI assistive stack** in code — enough for **focused pilots and internal ops**, not yet **general customer readiness**.
 
-**Current program theme:** **Operational completion + product hardening** on stable primitives (records, events, workflows, permissions). **AI groundwork is present** but **deeper agent work is paused** — next execution focuses on **enrollment/forms**, **waitlist**, **tour depth**, **settings parity**, **field semantics**, **editable records**, **actions**, **messaging**, and **reporting**. See **`docs/execution/roadmap-and-gaps.md`** for the authoritative sprint sequence.
+**Current program theme:** **Operational completion + product hardening** on stable primitives (records, events, workflows, permissions). **AI groundwork is present** but **deeper agent work is paused** — next execution focuses on **enrollment/forms**, **waitlist**, **tour depth**, **settings control-plane follow-ons** (Record Experience Builder, forms/field parity), **messaging**, and **reporting**. Settings four-plane V1 shipped May 2026 — **`docs/system/configuration-system.md`**. See **`docs/execution/roadmap-and-gaps.md`** for the authoritative sprint sequence.
 
 ## Known gaps / risks
 

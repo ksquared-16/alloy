@@ -1,14 +1,12 @@
 "use client";
 
-import OptionSetKeyPicker from "@/components/admin/OptionSetKeyPicker";
 import type { FieldDef } from "@/app/api/admin/field-definitions/route";
-import { isSelectLikeFieldType } from "@/lib/admin/fieldDefinitionOptionSetConfig";
 import { sectionKeyInOptions } from "@/lib/admin/fieldSectionSelectOptions";
-import { operatorModalShowsDeveloperDetailsByDefault } from "@/lib/fields/fieldEditModalOperatorUi";
 import {
-    canOperatorEditRequirementInline,
-    operatorFieldDisplayLabel,
-} from "@/lib/fields/fieldSettingsOperatorUi";
+    buildFieldEditModalCapabilities,
+    operatorModalShowsDeveloperDetailsByDefault,
+} from "@/lib/fields/fieldEditModalOperatorUi";
+import { operatorFieldDisplayLabel } from "@/lib/fields/fieldSettingsOperatorUi";
 import type {
     FieldPolicyInteractionPreset,
     FieldPolicySettingsView,
@@ -24,19 +22,14 @@ export type FieldDefinitionEditModalProps = {
     policySettingsSupported: boolean;
     policyView: FieldPolicySettingsView | null;
     sectionOptions: Array<{ value: string; label: string }>;
-    manageOptionSetsHref?: string;
     editLabel: string;
     setEditLabel: (v: string) => void;
-    editDescription: string;
-    setEditDescription: (v: string) => void;
     editHelpText: string;
     setEditHelpText: (v: string) => void;
     editRequired: boolean;
     setEditRequired: (v: boolean) => void;
     editInteractionPreset: FieldPolicyInteractionPreset;
     setEditInteractionPreset: (v: FieldPolicyInteractionPreset) => void;
-    editActive: boolean;
-    setEditActive: (v: boolean) => void;
     editVisibleDrawer: boolean;
     setEditVisibleDrawer: (v: boolean) => void;
     editVisibleForm: boolean;
@@ -47,14 +40,26 @@ export type FieldDefinitionEditModalProps = {
     setEditSectionKey: (v: string) => void;
     editSortOrder: number;
     setEditSortOrder: (v: number) => void;
-    editPlaceholder: string;
-    setEditPlaceholder: (v: string) => void;
-    editOptionSetKey: string;
-    setEditOptionSetKey: (v: string) => void;
     editError: string | null;
     onClose: () => void;
     onSave: () => void;
 };
+
+const FIELD_TYPE_LABELS: Record<string, string> = {
+    text: "Text",
+    email: "Email",
+    phone: "Phone",
+    number: "Number",
+    date: "Date",
+    datetime: "Date and time",
+    boolean: "Yes/No",
+    select: "Single choice",
+    multiselect: "Multiple choice",
+};
+
+function operatorFieldTypeLabel(fieldType: string): string {
+    return FIELD_TYPE_LABELS[fieldType] ?? fieldType.replace(/_/g, " ");
+}
 
 export default function FieldDefinitionEditModal({
     open,
@@ -66,19 +71,14 @@ export default function FieldDefinitionEditModal({
     policySettingsSupported,
     policyView,
     sectionOptions,
-    manageOptionSetsHref,
     editLabel,
     setEditLabel,
-    editDescription,
-    setEditDescription,
     editHelpText,
     setEditHelpText,
     editRequired,
     setEditRequired,
     editInteractionPreset,
     setEditInteractionPreset,
-    editActive,
-    setEditActive,
     editVisibleDrawer,
     setEditVisibleDrawer,
     editVisibleForm,
@@ -89,18 +89,25 @@ export default function FieldDefinitionEditModal({
     setEditSectionKey,
     editSortOrder,
     setEditSortOrder,
-    editPlaceholder,
-    setEditPlaceholder,
-    editOptionSetKey,
-    setEditOptionSetKey,
     editError,
     onClose,
     onSave,
 }: FieldDefinitionEditModalProps) {
     if (!open) return null;
 
-    const showStaffEditability =
-        policySettingsSupported && policyView?.policyEditable && canOperatorEditRequirementInline(policyView);
+    const cap = buildFieldEditModalCapabilities({
+        entityType,
+        fieldKey: row.field_key,
+        policySettingsSupported,
+        policyView,
+    });
+
+    const recordLabel = entityTitle.replace(/ Fields$/, "").trim();
+    const displayTitle = operatorFieldDisplayLabel(entityType, {
+        field_key: row.field_key,
+        is_system: row.is_system,
+        label: row.label,
+    });
 
     return (
         <div
@@ -112,19 +119,11 @@ export default function FieldDefinitionEditModal({
                 onClick={(e) => e.stopPropagation()}
                 data-testid="field-definition-edit-modal"
             >
-                <h3 className="text-lg font-semibold text-[#31394d]">
-                    {operatorFieldDisplayLabel(entityType, {
-                        field_key: row.field_key,
-                        is_system: row.is_system,
-                        label: row.label,
-                    })}
-                </h3>
-                <p className="mb-4 text-xs text-[#59678b]">
-                    {row.is_system ? "System field" : "Custom field"} · {entityTitle.replace(/ Fields$/, "")}
-                </p>
+                <h3 className="text-lg font-semibold text-[#31394d]">{displayTitle}</h3>
+                <p className="mb-4 text-xs text-[#59678b]">{recordLabel} · Field settings</p>
 
                 <div className="space-y-4" data-testid="field-edit-operator-sections">
-                    <div>
+                    <div data-testid="field-edit-display-label">
                         <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Display label</label>
                         <input
                             type="text"
@@ -134,7 +133,7 @@ export default function FieldDefinitionEditModal({
                         />
                     </div>
 
-                    <div>
+                    <div data-testid="field-edit-help-text">
                         <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Help text</label>
                         <input
                             type="text"
@@ -145,7 +144,7 @@ export default function FieldDefinitionEditModal({
                         />
                     </div>
 
-                    {showStaffEditability ? (
+                    {cap.showStaffEditabilitySelect ? (
                         <div data-testid="field-edit-staff-editability">
                             <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Staff can edit</label>
                             <select
@@ -156,10 +155,27 @@ export default function FieldDefinitionEditModal({
                                 <option value="editable">Yes</option>
                                 <option value="read_only">No (read-only)</option>
                             </select>
-                            <p className="mt-1 text-xs text-[#59678b]">Required is set in the field list.</p>
+                            {cap.requirementSetInTableNote ? (
+                                <p className="mt-1 text-xs text-[#59678b]">Required is set in the field list.</p>
+                            ) : null}
                         </div>
-                    ) : !policySettingsSupported ? (
-                        <label className="flex items-center gap-2 text-sm" data-testid="field-edit-legacy-required">
+                    ) : null}
+
+                    {cap.showStaffEditabilityLockedNote ? (
+                        <div
+                            className="rounded-md border border-[#e6e8ec] bg-[#f8f9fb] px-3 py-2 text-xs text-[#59678b]"
+                            data-testid="field-edit-staff-editability-locked"
+                        >
+                            <span className="font-medium text-[#31394d]">Staff can edit</span>
+                            <p className="mt-0.5">{cap.staffEditabilityLockedNote}</p>
+                        </div>
+                    ) : null}
+
+                    {cap.showLegacyRequiredCheckbox ? (
+                        <label
+                            className="flex items-center gap-2 text-sm"
+                            data-testid="field-edit-legacy-required"
+                        >
                             <input
                                 type="checkbox"
                                 checked={editRequired}
@@ -203,60 +219,22 @@ export default function FieldDefinitionEditModal({
                         </div>
                     </div>
 
-                    <details className="rounded-md border border-[#e6e8ec] px-3 py-2" data-testid="field-edit-developer-details">
+                    <details
+                        className="rounded-md border border-[#e6e8ec] px-3 py-2"
+                        data-testid="field-edit-developer-details"
+                    >
                         <summary className="cursor-pointer text-xs font-medium text-[#59678b]">Developer details</summary>
                         <div className="mt-3 space-y-3">
                             <div>
-                                <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Internal description</label>
-                                <input
-                                    type="text"
-                                    value={editDescription}
-                                    onChange={(e) => setEditDescription(e.target.value)}
-                                    className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
-                                />
+                                <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Field key</label>
+                                <p className="font-mono text-xs text-[#59678b]">{row.field_key}</p>
                             </div>
-                            <label className="flex items-center gap-2 text-sm">
-                                <input
-                                    type="checkbox"
-                                    checked={editActive}
-                                    onChange={(e) => setEditActive(e.target.checked)}
-                                    className="rounded border-[#c4c8cc]"
-                                />
-                                Active
-                            </label>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="mb-0.5 block text-xs font-medium text-[#59678b]">List order</label>
-                                    <input
-                                        type="number"
-                                        value={editSortOrder}
-                                        onChange={(e) => setEditSortOrder(Number(e.target.value) || 0)}
-                                        className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Placeholder</label>
-                                    <input
-                                        type="text"
-                                        value={editPlaceholder}
-                                        onChange={(e) => setEditPlaceholder(e.target.value)}
-                                        className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
-                                    />
-                                </div>
-                            </div>
-                            {isSelectLikeFieldType(row.field_type) && (
-                                <div>
-                                    <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Option list</label>
-                                    <OptionSetKeyPicker
-                                        value={editOptionSetKey}
-                                        onChange={setEditOptionSetKey}
-                                        disabled={!canMutate || saving}
-                                        manageOptionSetsHref={manageOptionSetsHref}
-                                    />
-                                </div>
-                            )}
                             <div>
-                                <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Form group</label>
+                                <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Type</label>
+                                <p className="text-sm text-[#31394d]">{operatorFieldTypeLabel(row.field_type)}</p>
+                            </div>
+                            <div>
+                                <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Catalog group</label>
                                 <select
                                     value={
                                         sectionKeyInOptions(sectionOptions, editSectionKey)
@@ -272,15 +250,25 @@ export default function FieldDefinitionEditModal({
                                         </option>
                                     ))}
                                 </select>
+                                <p className="mt-1 text-[10px] text-[#59678b]">
+                                    Group labels are managed on{" "}
+                                    <span className="font-medium">Field grouping</span>.
+                                </p>
                             </div>
-                            <p className="text-[10px] font-mono text-[#59678b]/70">
-                                {row.field_type} · {row.field_key}
-                            </p>
+                            <div>
+                                <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Sort order</label>
+                                <input
+                                    type="number"
+                                    value={editSortOrder}
+                                    onChange={(e) => setEditSortOrder(Number(e.target.value) || 0)}
+                                    className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                />
+                            </div>
                         </div>
                     </details>
                 </div>
 
-                {editError && <p className="mt-2 text-sm text-red-600">{editError}</p>}
+                {editError ? <p className="mt-2 text-sm text-red-600">{editError}</p> : null}
                 <div className="mt-4 flex justify-end gap-2">
                     <button
                         type="button"

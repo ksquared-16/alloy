@@ -549,7 +549,7 @@ export default function EntityFieldsClient({
                         <span>
                             {visibleItems.length} field{visibleItems.length === 1 ? "" : "s"}
                             {hiddenFieldCount > 0 && !showSystemFields
-                                ? ` (${hiddenFieldCount} system field${hiddenFieldCount === 1 ? "" : "s"} hidden)`
+                                ? ` (${hiddenFieldCount} workflow or relationship field${hiddenFieldCount === 1 ? "" : "s"} hidden)`
                                 : ""}
                         </span>
                         <label className="flex cursor-pointer items-center gap-2">
@@ -559,7 +559,7 @@ export default function EntityFieldsClient({
                                 onChange={(e) => setShowSystemFields(e.target.checked)}
                                 className="rounded border-alloy-stone/50"
                             />
-                            Show system fields
+                            Show workflow and relationship fields
                         </label>
                     </div>
                     {adminV2Chrome && policySettingsSupported && (
@@ -587,8 +587,8 @@ export default function EntityFieldsClient({
                                             className="py-4 text-[#59678b]"
                                         >
                                             {sortedItems.length === 0
-                                                ? "No fields yet. Add a custom field or turn on system fields."
-                                                : "No operator-facing fields match this filter. Try showing system fields."}
+                                                ? "No fields yet. Add a field or show workflow and relationship fields."
+                                                : "No fields match this filter. Try showing workflow and relationship fields."}
                                         </td>
                                     </tr>
                                 ) : (
@@ -610,12 +610,6 @@ export default function EntityFieldsClient({
                                         <tr key={row.id} className="border-b border-[#e6e8ec] align-middle">
                                             <td className="py-2.5 pr-4">
                                                 <div className="font-medium text-[#31394d]">{displayLabel}</div>
-                                                {row.label && row.label !== displayLabel && (
-                                                    <div className="text-xs text-[#59678b]">Stored label: {row.label}</div>
-                                                )}
-                                                {showSystemFields && (
-                                                    <div className="font-mono text-[10px] text-[#59678b]/80">{row.field_key}</div>
-                                                )}
                                             </td>
                                             <td className="py-2.5 pr-4">
                                                 <FieldRequiredInlineCell
@@ -673,10 +667,15 @@ export default function EntityFieldsClient({
                     </div>
                     {adminV2Chrome && (
                         <p className="mt-3 text-xs text-alloy-midnight/45">
+                            Drawer section order and visibility are on{" "}
                             <Link href="/adminV2/settings/layouts" className="font-medium text-alloy-pine hover:underline">
                                 Record layouts
-                            </Link>{" "}
-                            control drawer sections and order.
+                            </Link>
+                            . Catalog group labels are on{" "}
+                            <Link href="/adminV2/settings/field-sections" className="font-medium text-alloy-pine hover:underline">
+                                Field grouping
+                            </Link>
+                            .
                         </p>
                     )}
                 </SectionCard>
@@ -692,19 +691,14 @@ export default function EntityFieldsClient({
                 policySettingsSupported={policySettingsSupported}
                 policyView={editPolicyView}
                 sectionOptions={sectionOptions}
-                manageOptionSetsHref={manageOptionSetsHref}
                 editLabel={editLabel}
                 setEditLabel={setEditLabel}
-                editDescription={editDescription}
-                setEditDescription={setEditDescription}
                 editHelpText={editHelpText}
                 setEditHelpText={setEditHelpText}
                 editRequired={editRequired}
                 setEditRequired={setEditRequired}
                 editInteractionPreset={editInteractionPreset}
                 setEditInteractionPreset={setEditInteractionPreset}
-                editActive={editActive}
-                setEditActive={setEditActive}
                 editVisibleDrawer={editVisibleDrawer}
                 setEditVisibleDrawer={setEditVisibleDrawer}
                 editVisibleForm={editVisibleForm}
@@ -715,10 +709,6 @@ export default function EntityFieldsClient({
                 setEditSectionKey={setEditSectionKey}
                 editSortOrder={editSortOrder}
                 setEditSortOrder={setEditSortOrder}
-                editPlaceholder={editPlaceholder}
-                setEditPlaceholder={setEditPlaceholder}
-                editOptionSetKey={editOptionSetKey}
-                setEditOptionSetKey={setEditOptionSetKey}
                 editError={editError}
                 onClose={() => !editSaving && setEditOpen(false)}
                 onSave={() => void saveEdit()}

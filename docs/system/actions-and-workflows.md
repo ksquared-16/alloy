@@ -6,13 +6,23 @@ Explain how **business facts** become **`workflow_events`**, trigger **workflows
 
 **Terminology:** **Admin action** refers to UI/system-triggered admin operations; **workflow action** refers to an ordered step executed inside workflow runs. Disambiguation of terms: **`docs/core/glossary.md`**.
 
+## Actions (placement) vs Automations (execution)
+
+| Concern | Settings / config | Runtime |
+|---------|-------------------|---------|
+| **Where a button appears** | `action_placements` (surface, slot, section, order, enabled) — Settings → Actions V1 for org-scoped rows | `resolveActionsForContext.ts` at render time |
+| **What the button does** | `action_definitions` (handler, payload schema) — label editable in Settings V1; create/migrate still platform/seed | `POST /api/admin/actions/execute` → `executeAdminAction.ts` |
+| **Side effects & workflows** | Workflow definitions in Automations hub | `emitEvent`, `executeWorkflowRun` |
+
+Settings configures **placement + enablement**, not execution semantics. Older **`record_actions`** chrome and dedicated modals (tour, quote, job) remain alongside the registry — see **`docs/system/configuration-system.md`** (Admin Settings capability inventory).
+
 ## Current state
 
 - **`emitEvent`** (`web/lib/emitEvent.ts`) inserts into **`workflow_events`** (server-only, canonical layer).
 - **Status transitions:** Many entity PATCH routes and admin actions call **`emitStatusChangedEvent`** (`web/lib/admin/emitStatusChangedEvent.ts`): emits **`opportunity_status_changed`** for entity type `opportunities`, otherwise **`entity_status_changed`**, then fan-out **`executeWorkflowRun`** with `event_id` (grep for call sites).
 - **`executeWorkflowRun`** (`web/lib/workflowRun.ts`) loads workflow rows, enriches payload with related entities, evaluates conditions, and runs workflow actions (large implementation).
 - **`executeAdminAction`** (`web/lib/admin/actions/executeAdminAction.ts`) routes declarative admin operations; for workflow starts it emits an event and invokes `executeWorkflowRun` with `event_id` for event-driven validation paths.
-- **Admin action registry (UI):** `GET /api/admin/actions` resolves placements per surface (`record_header`, `record_section`, `queue_row`, `right_rail`, …) via `resolveActionsForContext.ts`; mutating types run through `POST /api/admin/actions/execute` → `executeAdminAction.ts`. Legacy **`record_actions`** and hardcoded queue/drawer buttons still exist alongside the registry — see runtime inventory in `docs/execution/admin-settings-config-parity.md` § Action surface runtime inventory. Client feedback/refetch helpers: `actionSurfaceFeedback.ts` (Card 5). **Full migration deferred** — sprint closeout §12 in `docs/sprints/05_2026/settings_record_ux_parity_sprint.md`.
+- **Admin action registry (UI):** `GET /api/admin/actions` resolves placements per surface (`record_header`, `record_section`, `queue_row`, `right_rail`, …) via `resolveActionsForContext.ts`; mutating types run through `POST /api/admin/actions/execute` → `executeAdminAction.ts`. Legacy **`record_actions`** and hardcoded queue/drawer buttons still exist alongside the registry — see **`docs/system/configuration-system.md`**. Client feedback/refetch helpers: `actionSurfaceFeedback.ts` (Card 5). **Full migration deferred** — sprint closeout §12 in `docs/sprints/05_2026/settings_record_ux_parity_sprint.md`.
 - **Settings placement editor (V1):** Org-scoped rows in **`action_placements`** / **`action_definitions`** may be edited from Settings → Actions (`actionPlacementMutation.ts`, admin PATCH routes). Does **not** change **`executeAdminAction`** semantics or add a new engine. Platform-global placements remain read-only; **`condition_config`** is not editable in Settings.
 - **Action links:** Consumption routes (e.g. `web/app/api/action/[token]/consume/route.ts`) mark links consumed, emit events, and fan out to enabled workflows.
 - **Entity-specific PATCH routes** sometimes emit events directly and loop workflows (e.g. job actions in `web/app/api/admin/jobs/[id]/route.ts`).

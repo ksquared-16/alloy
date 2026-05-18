@@ -152,7 +152,7 @@ export function operatorRequirementLockedReason(
         return "Managed elsewhere — you can still edit the label and visibility";
     }
     if (view.requirementAdvanced || view.interactionAdvanced) {
-        return "Managed elsewhere — contact your Alloy administrator to change";
+        return "Managed elsewhere";
     }
     return "Cannot change here";
 }

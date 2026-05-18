@@ -1800,7 +1800,7 @@ export async function getWorkUnitQueueSummaries(params: {
     /**
      * When false, omit preview rows and skip enrichment (department KPI cards only need counts).
      * Opportunity `needs_attention` uses a capped candidate fetch (see `opportunity_needs_attention_semantics`
-     * on the returned summary and `docs/execution/crm-opportunity-needs-attention-count-semantics.md`).
+     * on the returned summary and `docs/system/workspace-system.md`).
      */
     includePreviews?: boolean;
     /** Optional label for [queue-perf] logs (e.g. department id). */

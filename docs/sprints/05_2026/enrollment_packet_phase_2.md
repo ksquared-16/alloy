@@ -219,5 +219,5 @@ Swap **D** earlier if deliverability is blocking pilots.
 | Communications + webhooks | **`docs/product/communications.md`** |
 | Sprint comms QA / matrix | **`docs/sprints/05_2026/communications.txt`** |
 | Historical packet audit (Card 0) | **`docs/sprints/05_2026/enrollment_journey_packet_operations_v1.md`** |
-| Long-range forms vision | **`docs/strategy/forms-platform.md`** |
+| Long-range forms vision | **`docs/product/documents-and-forms.md`** (long-term vision) |
 | Roadmap tracking | **`docs/execution/roadmap-and-gaps.md`** |

@@ -40,7 +40,16 @@ Cover **`documents`** (file + metadata records) attached to entities and the **f
 - **Required vs optional field semantics** — JSON-schema / version payloads evolve; **needs verification** per form kind and publish path.
 - **Automatic sync from submission payload → entity field_values** — **not** assumed (migration comments: payload is canonical; no automatic sync).
 
-Long-range program direction (PDF builder, compliance engine, AI ingestion as critical path): **`docs/strategy/forms-platform.md`** — **not** current production scope.
+### Long-term vision (not current production scope)
+
+Unified intake, documents, and compliance-oriented capture: web/API/email channels; outcomes include CRM intake, enrollment packets, compliance artifacts, billing-adjacent forms. **Advanced (future):** AI-assisted parsing, document recreation, jurisdiction rules, dynamic field logic. **Not V1:** PDF builder, full compliance engine, AI ingestion as critical path. Phase 2: **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**.
+
+### Relationship to Settings (four-plane model)
+
+- **Forms hub** (`/adminV2/forms`) owns **`form_definitions`**, versions, public links, and packet flows — not the Settings index tiles for Fields/Layouts/Actions.
+- **Settings → Actions** configures **where** org-owned buttons appear (`action_placements`); **`open_form`** handlers resolve through **`executeAdminAction`** and form APIs — no `payload_schema` editing in Settings V1.
+- **Settings → Fields** configures **`field_definitions`** policies; form-version required semantics vs field policies remain roadmap work (`roadmap-and-gaps.md` item 5).
+- Full control-plane inventory: **`docs/system/configuration-system.md`**.
 
 ## How it works
 

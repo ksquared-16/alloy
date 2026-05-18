@@ -1,8 +1,8 @@
 # Settings + Record UX Parity Sprint
 
 **Path:** `docs/sprints/05_2026/settings_record_ux_parity_sprint.md`  
-**Status:** **Sprint complete (Cards 0–9).** Shipped May 2026 — settings/record UX parity, field policy enforcement subset, layout integrity panel, action surface coherence, access verification. See **§12 Sprint closeout**.  
-**Prerequisites:** Step 0 audit (conversation / product hardening backlog); active docs: `docs/system/configuration-system.md`, `docs/system/record-system.md`, `docs/system/workspace-system.md`, `docs/system/actions-and-workflows.md`, `docs/execution/roadmap-and-gaps.md`, `docs/execution/admin-settings-config-parity.md`.  
+**Status:** **Sprint complete (Cards 0–9 + post-closeout passes).** Shipped May 2026 — settings/record UX parity, field policy enforcement subset, layout integrity panel, action placement V1, opportunity workflow v1 layout sections, UX contract pass (four-plane copy + unified field modal). See **§12–§13**.  
+**Prerequisites:** Step 0 audit (conversation / product hardening backlog); active docs: `docs/system/configuration-system.md`, `docs/system/record-system.md`, `docs/system/workspace-system.md`, `docs/system/actions-and-workflows.md`, `docs/execution/roadmap-and-gaps.md`, `docs/system/configuration-system.md`.  
 **Program framing:** Operational completion + product hardening; **AI agent expansion paused** — this sprint does not expand Config/Layout Assist apply catalog or autonomous agents.
 
 ---
@@ -24,7 +24,7 @@ Success means operators can trust that **what Settings says, what the drawer sho
 
 Alloy is past architecture proof. Pilots and internal ops depend on **config-driven** CRM/workspace behavior, but today:
 
-- Settings surfaces mix **fully editable**, **read-only inventory**, and **stale marketing copy** (e.g. Attention & SLA labeled inactive while a full editor exists).
+- Settings surfaces historically mixed **fully editable**, **read-only inventory**, and **stale marketing copy** (e.g. Attention & SLA labeled inactive while a full editor exists) — **addressed in Cards 1–9 and post-closeout passes**; see §12–§13 for current shipped state.
 - `field_definitions.requirement_policy` and `interaction_policy` are **shipped in DB and PATCH APIs** but **not exposed in Fields settings** and **not enforced on drawer save** (`evaluateFieldRequirementViolations` is test/lib-only for mutations).
 - The record drawer (`AdminEntityDrawer.tsx`, ~13k lines) uses **blur-to-save** and **admin-only `canMutate`**, while **two action systems** (`action_definitions` + legacy `record_actions`) create duplicate opportunity mutation paths.
 - **~54 / 263** admin API routes use `getAdminAccessContextCached`; CRM entity paths are relatively strong, but settings remain **org-admin-wide** by design — operators need clarity, not surprise.
@@ -34,6 +34,8 @@ This sprint closes **parity and trust gaps** on stable primitives — aligned wi
 ---
 
 ## 3. Current State Summary
+
+> **Note:** This table is the **Step 0 / sprint-start** snapshot. **Post-sprint shipped state** is in **§12–§13** and **`docs/system/configuration-system.md`**.
 
 | Area | State | Evidence (repo) |
 |------|--------|-------------------|
@@ -106,8 +108,9 @@ This sprint closes **parity and trust gaps** on stable primitives — aligned wi
 |-------|----------------|--------------|-------|
 | **Organization** | Communications, departments, work units (incl. queue JSON), placement priority, KPIs, users/roles | Existing admin APIs | Work-unit `metadata` mostly read-only in UI except placement priority |
 | **Records — editable** | Fields, field-sections, statuses, entity-labels, tour availability, layouts (section order), attention/SLA (department) | PATCH routes as today | Fields gains **policy controls** (Card 2) |
-| **Records — read-only inventory** | Actions, status-transition-rules | None from UI | Copy explains “seed/API/migration” path |
-| **Layouts** | Effective preview + **integrity report** (read-only) + workflow v1 order editor | `record_drawer_layouts` / insert override | Not a full layout builder |
+| **Records — read-only inventory** | Status-transition-rules | None from UI | Copy explains seed/migration path |
+| **Actions** | Org placement editor V1 (enable, label, surface/slot/section/order) | `action_placements`, `action_definitions` | Execution via Automations / `executeAdminAction`; not definition create |
+| **Layouts** | Effective preview + integrity report + **opportunity workflow v1** section config (reorder, show/hide, rename, restore hidden) | `record_drawer_layouts` | Not Record Experience Builder |
 | **Forms** | Linked from Settings index → `/adminV2/forms` | `form_definitions` etc. | Parity = navigation + doc, not moving forms into Settings |
 | **Config proposals** | Existing review hub | Proposal lifecycle only | No new apply kinds in this sprint |
 
@@ -165,7 +168,7 @@ This sprint closes **parity and trust gaps** on stable primitives — aligned wi
 - Mark Step 0 audit complete in this doc (reference date).
 - Confirm **in-scope / non-scope** tables match §4–§5.
 - List **entity priority** for Cards 3–4: **Phase 1:** `opportunity`, `job`; **Phase 2 (if time):** `person`, `schedule`; defer catalog-only entities.
-- Record **dual action inventory** snapshot: grep `record_actions`, `executeOpportunityRecordAction`, hardcoded job buttons — attach path list in card notes or `docs/execution/admin-settings-config-parity.md`.
+- Record **dual action inventory** snapshot: grep `record_actions`, `executeOpportunityRecordAction`, hardcoded job buttons — attach path list in card notes or `docs/system/configuration-system.md`.
 - Confirm **ops mutate** default: **non-scope** (document only in Card 7).
 
 **Acceptance:**
@@ -189,18 +192,20 @@ This sprint closes **parity and trust gaps** on stable primitives — aligned wi
   - Add tile or footer link: **Forms** → `/adminV2/forms` (definitions/metadata parity).
   - Layouts tile: mention **integrity report** (Card 6 entry point — can ship stub link in Card 1 if Card 6 follows).
 - **Read-only vs editable** — short helper on each tile category (Organization vs Records vs Layouts).
-- Optional: redirect note on legacy `/admin/settings` and `/admin/system/*` — “prefer AdminV2 Settings” in `docs/execution/admin-settings-config-parity.md` only (no mass redirect implementation required).
+- Optional: redirect note on legacy `/admin/settings` and `/admin/system/*` — “prefer AdminV2 Settings” in `docs/system/configuration-system.md` only (no mass redirect implementation required).
 
 **Files (expected):**
 
 - `web/app/adminV2/settings/page.tsx`
-- `docs/execution/admin-settings-config-parity.md` (Settings inventory table)
+- `docs/system/configuration-system.md` (Settings inventory table)
 
 **Acceptance:**
 
 - [ ] No Settings tile claims “not implemented” for shipped editors (attention-sla, work-units queue JSON, users-roles, etc.).
 - [ ] Forms hub discoverable from Settings without implementing forms editor in Settings.
 - [ ] Actions + status-transition-rules tiles explicitly **read-only**.
+
+> **Post-closeout:** Actions gained **org placement editor V1** (Config Completion Pass); status-transition-rules remain read-only. See §12–§13.
 
 ---
 
@@ -334,7 +339,7 @@ This sprint closes **parity and trust gaps** on stable primitives — aligned wi
 
 **Work (implemented):**
 
-- **Runtime inventory** — `docs/execution/admin-settings-config-parity.md` § Action surface runtime inventory (registry vs legacy vs hardcoded vs dedicated).
+- **Runtime inventory** — `docs/system/configuration-system.md` § Action surface runtime inventory (registry vs legacy vs hardcoded vs dedicated).
 - **`actionSurfaceFeedback.ts`** — normalize errors; `dispatchOpportunityRecordUpdated` on mutating registry success.
 - **Section registry actions** — inline errors; post-mutate `adminv2:opportunity-updated` (`OpportunityRecordSectionRegistryActions`, `OpportunityInquiryChildrenRegistryActions`).
 - **Queue** — visible errors for registry + legacy `executeOpportunityRecordAction` failures (work-unit page); registry-first branch unchanged.
@@ -352,7 +357,7 @@ This sprint closes **parity and trust gaps** on stable primitives — aligned wi
 - `web/app/adminV2/workspace/dept/.../work-unit/[workUnitId]/page.tsx`
 - `web/app/adminV2/settings/actions/page.tsx`
 - `web/components/admin/AdminEntityDrawer.tsx` (surgical: `excludeActionKeys` on customer_booking panel only)
-- `docs/execution/admin-settings-config-parity.md`, `docs/system/actions-and-workflows.md`
+- `docs/system/configuration-system.md`, `docs/system/actions-and-workflows.md`
 
 **Acceptance:**
 
@@ -385,7 +390,7 @@ This sprint closes **parity and trust gaps** on stable primitives — aligned wi
 - `web/lib/config/layoutIntegrityPresentation.ts`
 - `web/tests/config/layoutIntegrityPresentation.test.ts`
 - `web/app/adminV2/settings/layouts/LayoutsSettingsClient.tsx` (mount)
-- `docs/execution/admin-settings-config-parity.md`, `docs/system/configuration-system.md`
+- `docs/system/configuration-system.md`, `docs/system/configuration-system.md`
 
 **Acceptance:**
 
@@ -410,7 +415,7 @@ This sprint closes **parity and trust gaps** on stable primitives — aligned wi
 **Files:**
 
 - `web/tests/admin/settingsRecordUxParityAccess.test.ts`
-- `docs/system/roles-and-permissions.md`, `docs/system/record-system.md`, `docs/execution/admin-settings-config-parity.md`
+- `docs/system/roles-and-permissions.md`, `docs/system/record-system.md`, `docs/system/configuration-system.md`
 
 **Acceptance:**
 
@@ -449,7 +454,7 @@ cd web && npm run test -- tests/adminV2/settingsSurfaceModes.test.ts tests/field
 
 **Purpose:** Active docs and roadmap reflect shipped vs deferred work.
 
-**Work (completed):** §12 Sprint closeout + updates to `roadmap-and-gaps.md`, `admin-settings-config-parity.md`, `configuration-system.md`, `record-system.md`, `actions-and-workflows.md`, `roles-and-permissions.md`.
+**Work (completed):** §12 Sprint closeout + updates to `roadmap-and-gaps.md`, `configuration-system.md`, `record-system.md`, `actions-and-workflows.md`, `roles-and-permissions.md`.
 
 **Acceptance:**
 
@@ -516,7 +521,7 @@ Must land before sprint is **closed** (can land incrementally per card):
 1. `docs/system/configuration-system.md` — field policies UI + enforcement; layout integrity entry
 2. `docs/system/record-system.md` — drawer validation/save; read-only semantics
 3. `docs/execution/roadmap-and-gaps.md` — checklist items 4–6 progress
-4. `docs/execution/admin-settings-config-parity.md` — Settings truth table; integrity; actions inventory
+4. `docs/system/configuration-system.md` — Settings truth table; integrity; actions inventory
 5. `docs/system/actions-and-workflows.md` — **if** Card 5 changes primary execute path for any shipped action
 6. `docs/system/roles-and-permissions.md` — **if** Card 7 documents ops mutate deferral or changes
 7. This file — update **Status** line per card completion
@@ -554,7 +559,7 @@ Cards **3 + 4** should land close together so operators are not blocked by error
 | Deliverable | Cards | Primary surfaces |
 |-------------|-------|------------------|
 | Settings index truthfulness + parity copy | 1 | `/adminV2/settings` |
-| Configurable-but-unexposed inventory table | 1 | `admin-settings-config-parity.md` |
+| Configurable-but-unexposed inventory table | 1 | `configuration-system.md` |
 | Drawer field-policy mapping adapter (`_field_policy_resolved`) | 1.5 | Opportunity/job entity GET |
 | Field policy UI (enforceable opportunity/job fields) | 2 | Settings → Fields |
 | Server-side policy enforcement on PATCH | 3 | Opportunity/job PATCH APIs |
@@ -598,7 +603,7 @@ cd web && npm run test -- tests/sprints/settingsRecordUxParityRegression.test.ts
 
 ### Settings UX repair passes (post-closeout, May 2026)
 
-**Pass 1:** Operator IA on Settings index (diagnostics section), Fields filtering/labels, modal copy, Layouts/Actions reframed as diagnostics where read-only.
+**Pass 1:** Operator IA on Settings index (diagnostics section), Fields filtering/labels, modal copy; interim Layouts/Actions framing (superseded by Pass 3–4).
 
 **Pass 2 (Settings UI before drawer QA):**
 
@@ -606,8 +611,8 @@ cd web && npm run test -- tests/sprints/settingsRecordUxParityRegression.test.ts
 |------|--------|
 | Settings index | `max-w-6xl` two-column layout — main config grid + sticky diagnostics sidebar |
 | Fields | Inline Required dropdown with immediate save + Saved feedback; locked reasons per field; modal defers Required when editable inline |
-| Layouts | Entity tabs (opportunity/job/schedule); section order editor; disabled **Add section** with explicit not-yet copy; integrity check collapsed |
-| Actions | Diagnostics-only card UI grouped by surface; technical details behind expander |
+| Layouts | Entity tabs (opportunity/job/schedule); interim section UI (superseded by Config Completion Pass) |
+| Actions | Interim inventory/diagnostics UI (superseded by placement editor V1) |
 | Tests | `fieldSettingsOperatorUi`, `layoutsSettingsEntities`, `actionInventoryDiagnostics` |
 
 **Pass 3 (Fields polish only, before drawer QA):**
@@ -623,12 +628,40 @@ cd web && npm run test -- tests/sprints/settingsRecordUxParityRegression.test.ts
 | Area | Shipped |
 |------|---------|
 | Fields (A) | Inline Required select + operator modal (Pass 3) |
-| Layouts (B) | Opportunity workflow v1: reorder, show/hide, rename workflow sections, restore hidden sections; `PATCH …/opportunity-workflow-v1-sections`; `editor_sections` on effective-preview |
+| Layouts (B) | Opportunity workflow v1: reorder, show/hide, rename workflow virtual titles, **Show hidden section**; `PATCH …/opportunity-workflow-v1-sections`; `editor_sections` on effective-preview |
 | Actions (C) | Org-scoped placement editor: enable/disable, label (org definitions), surface/slot/section/order on record surfaces; `PATCH /api/admin/action-placements/[id]`, `PATCH /api/admin/action-definitions/[id]` (label), `POST /api/admin/action-placements` |
 
 **Still not editable in Settings UI:** platform-global placements/definitions; queue/work-unit scoped placements; raw `condition_config` JSON; new workflow virtual sections (only show hidden + rename existing); job/schedule layout section builder; status transition rules; action definition create/migrate.
 
 **BOS / config-agent readiness:** Layout and placement mutations are structured PATCH bodies with validation helpers (`opportunityWorkflowV1SectionConfig.ts`, `actionPlacementMutation.ts`) — suitable for future agent proposals without raw JSON editors.
+
+**Settings UX Contract pass (Fields + IA, May 2026):**
+
+| Area | Change |
+|------|--------|
+| Four-plane copy | Fields, Field grouping, Layouts, Actions hubs aligned to control-plane doctrine |
+| Field modal | `FieldDefinitionEditModal` + `buildFieldEditModalCapabilities` — operator sections default; Developer details collapsed |
+| Field list | Operator labels only; workflow/relationship/computed keys hidden by default |
+| Not in pass | Person/Location modal unification; Layouts/Actions builder expansion |
+
+---
+
+## 13. Final control-plane doctrine (post-sprint)
+
+Canonical reference: **`docs/system/configuration-system.md`**.
+
+| Plane | Owns | Does not own |
+|-------|------|----------------|
+| **Fields** | Registry + policies on `field_definitions` | Drawer section order; button placement |
+| **Field grouping** | Catalog taxonomy (`field_section_definitions`) | Workflow virtual section titles |
+| **Layouts** | Drawer composition (`record_drawer_layouts`) | Field policies; arbitrary new workflow virtuals with custom `field_keys` |
+| **Actions** | Placement + enablement (`action_placements`) | Execution (`executeAdminAction`, workflows) |
+| **Automations** | Workflow execution semantics | Placement rows |
+| **Forms** | Form definitions/versions (hub) | Action payload editing in Settings |
+
+**Control plane vs runtime:** Settings configures structure/presentation/policies; runtime PATCH and workflows execute operational logic. **BOS/AI** should orchestrate via structured PATCH helpers — not raw JSON mutation.
+
+**Next strategic layers (deferred):** Record Experience Builder; BOS/AI config layer; linked-record editing; structured condition builders; workflow-driven actions/forms wiring from Settings.
 
 ---
 
@@ -656,7 +689,7 @@ cd web && npm run test -- tests/sprints/settingsRecordUxParityRegression.test.ts
 | Legacy opportunity actions | `web/lib/recordChrome/executeOpportunityRecordAction.ts` |
 | Access scope | `web/lib/admin/accessScope.ts` |
 | Admin auth (canMutate) | `web/contexts/AdminAuthContext.tsx` |
-| Settings parity doc | `docs/execution/admin-settings-config-parity.md` |
+| Settings parity doc | `docs/system/configuration-system.md` |
 
 ---
 

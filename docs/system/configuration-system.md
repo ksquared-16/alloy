@@ -4,6 +4,72 @@
 
 Define what **configuration** is allowed to control vs what must remain **platform-owned** logic — preventing “JSON became the codebase” failures.
 
+## Control plane vs runtime
+
+| Layer | Role |
+|-------|------|
+| **Settings (control plane)** | Structure, presentation, and **policies** operators may change through validated admin APIs: field registry, catalog section labels, drawer layout composition, action placement rows, department attention metadata, queue definitions, etc. |
+| **Runtime (operational)** | Business logic and side effects: entity PATCH, `executeAdminAction`, `executeWorkflowRun`, dedicated tour/quote/job flows, status transitions. |
+| **Integrity / diagnostics** | Read-only checks (e.g. layout integrity) that config matches enforceable write paths — not a second config store. |
+
+**Principles:** No second source of truth; no builder-only hidden config; no AI-only config model. Future **BOS / config agents** use the same structured PATCH helpers and tables as human operators (see **BOS readiness** below).
+
+## Four-plane operator model (Records settings)
+
+Settings hub: `/adminV2/settings` — tiles use **Editable ·**, **Partial ·**, **Read-only ·**, or **Related hub ·** (`web/lib/adminV2/settingsSurfaceModes.ts`). Sprint closeout: **`docs/sprints/05_2026/settings_record_ux_parity_sprint.md`** §12–§13.
+
+| Plane | Route | Owns | Does **not** own |
+|-------|-------|------|------------------|
+| **Fields** | `/adminV2/settings/fields` | Registry: labels, help, required rules, editability, visibility | Drawer section order; button placement |
+| **Field grouping** | `/adminV2/settings/field-sections` | Catalog taxonomy (`field_section_definitions`) | Workflow virtual section titles |
+| **Layouts** | `/adminV2/settings/layouts` | Drawer composition; opportunity workflow v1 section order/show/hide/titles | Field policies; net-new workflow virtuals with arbitrary `field_keys` |
+| **Actions** | `/adminV2/settings/actions` | Org placement + enablement (`action_placements`) | Execution (`executeAdminAction`, workflows) |
+| **Automations** | `/adminV2/workflows` | Workflow definitions, execution semantics | Placement rows |
+| **Forms** | `/adminV2/forms` | Definitions, versions, packets | Action `payload_schema` in Settings (today) |
+
+Related Settings surfaces (same family): statuses, attention/SLA metadata, queue definitions, communications bindings, users/roles, option sets, KPI placements, etc.
+
+### Next strategic layers (deferred)
+
+Record Experience Builder; BOS/AI config layer (structured PATCH only); linked-record inline PATCH (`interaction_policy` schema exists); structured `condition_config` builders; workflow-driven actions/forms wiring from Settings.
+
+### Admin Settings capability inventory
+
+| Capability | Exposure | Notes |
+|------------|----------|-------|
+| Field policies + visibility | **Editable** (opportunity/job enforceable) | Inline Required + `FieldDefinitionEditModal`; PATCH enforcement on entity routes |
+| Field grouping | **Editable** | `field_section_definitions` |
+| Drawer layout (workflow v1) | **Editable** | Reorder, show/hide, rename workflow virtuals; **Show hidden section** |
+| Layout integrity | **Read-only report** | Settings → Layouts panel; `GET /api/admin/config/layout-integrity` |
+| Action placements (org) | **Editable V1** | Enable, label, surface/slot/section/order |
+| Status transition rules | **Read-only** | Seed/migration-managed |
+| Attention & SLA | **Editable** | Department `metadata.opportunity_attention_rules` |
+| Legacy `record_actions` | **Runtime only** | Coexists with registry; migration deferred |
+| Forms / packets | **Related hub** | `/adminV2/forms` |
+
+### Drawer layout and field policy (source of truth)
+
+- **Tables:** `record_drawer_layouts` (org), `record_layouts` (templates). Effective `config_json` drives drawer body; opportunity workflow v1 uses `overview_section_order`, `overview_hidden_sections`, `inquiry_workflow_sections`.
+- **Settings APIs:** `PATCH …/opportunity-workflow-v1-sections`, `…/opportunity-workflow-v1-order`; helpers `opportunityWorkflowV1SectionConfig.ts`, `persistOpportunityDrawerLayoutConfig`.
+- **Field policy:** `drawerFieldPolicyAdapter.ts` → `_field_policy_resolved` on GET; `enforceDrawerFieldPoliciesOnPatch` on opportunity/job PATCH. Violation contract: `{ error: "Field validation failed", violations: [...] }`.
+- **Action placement V1:** `actionPlacementMutation.ts`; `PATCH /api/admin/action-placements/[id]`, `POST …`, `PATCH /api/admin/action-definitions/[id]` (label). Registry + legacy `record_actions` inventory summarized in **`docs/system/actions-and-workflows.md`**.
+
+### Attention & SLA (Settings)
+
+**Settings → Attention & SLA Rules** PATCHes `departments.metadata.opportunity_attention_rules` (buckets + supported thresholds). Evaluator: `resolveOpportunityAttention`. Count semantics across workspace surfaces: **`docs/system/workspace-system.md`** § Needs attention count semantics.
+
+### BOS / configuration-agent readiness
+
+| Domain | Structured entry points |
+|--------|-------------------------|
+| Fields | `PATCH /api/admin/field-definitions/:id`; `fieldSettingsOperatorUi.ts`, `drawerFieldPolicyAdapter.ts` |
+| Layouts | Opportunity workflow v1 PATCH routes; `opportunityWorkflowV1SectionConfig.ts` |
+| Actions | `actionPlacementMutation.ts`; placement PATCH/POST |
+| Integrity | `GET /api/admin/config/layout-integrity`; effective-preview `editor_sections` |
+| Proposals | `config_layout_assist_proposals` — apply catalog expansion **paused** |
+
+Do **not** train agents on raw `config_json` or React-only state as source of truth.
+
 ## Current state
 
 Config surfaces include (non-exhaustive):
@@ -18,10 +84,11 @@ Config surfaces include (non-exhaustive):
 - **Person / role type** metadata for dropdowns (`web/lib/admin/personTypeSettings.ts`).
 - **Queue UI** presentation hints (`web/lib/ui-v2/queueUiConfig.ts`).
 - **Placement priority (waitlist lanes)** — subtree **`placement_priority_v1`** on **`work_units.metadata`** (and optional department defaults): enable flag, preset **`profile_id`**, lane filter, evaluation cap, display flags, rule order — validated on PATCH; drives queue preview ordering only when enabled (**opt-in**). Settings UI: **`/adminV2/settings/placement-priority`**.
-- **Field / section policies** — **`field_definitions.requirement_policy`**, **`interaction_policy`** (migration **`20260523120000_field_policy_and_section_v1.sql`**). **Write map:** `drawerFieldPolicyAdapter.ts` → **`_field_policy_resolved`** on opportunity/job GET. **Settings (Card 2):** opportunity/job Fields hub edits simple policies for enforceable keys only. **Enforcement (Card 3):** opportunity/job admin PATCH validates required/read-only before DB write. Advanced/conditional policies are not editable or enforced in v1 except where already stored (shown as read-only in Settings).
+- **Field / section policies** — **`field_definitions.requirement_policy`**, **`interaction_policy`** (migration **`20260523120000_field_policy_and_section_v1.sql`**). **Write map:** `drawerFieldPolicyAdapter.ts` → **`_field_policy_resolved`** on opportunity/job GET. **Settings:** opportunity/job Fields hub — inline Required + unified edit modal (`FieldDefinitionEditModal`, capability matrix) for enforceable keys; catalog grouping via **`field_section_definitions`**. **Enforcement:** opportunity/job admin PATCH validates required/read-only before DB write. Complex stored JSON policies are not edited in Settings UI.
 - **Layout integrity (read-only)** — **`GET /api/admin/config/layout-integrity`** (`validateLayoutIntegrityNow`); operator UI at **Settings → Layouts** (`LayoutIntegrityReportPanel`, formatting in **`layoutIntegrityPresentation.ts`**). Manual run per entity type; reports issues (severity, code, field/section/layout targets) without changing config.
 - **Settings + Record UX Parity (May 2026)** — Field policy UI + PATCH enforcement for opportunity/job **enforceable** subset; layout integrity panel; Settings index parity.
-- **Settings Config Completion V1 (May 2026)** — Opportunity workflow drawer sections (reorder, show/hide, rename workflow virtuals, restore hidden); org-scoped **action placement** editor (enable, label, record surface/slot/section/order). Structured admin PATCH APIs only — no raw JSON primary UX. **Deferred:** job/schedule layout builder, new workflow virtual definitions, platform-global placement edits, `condition_config` editor, BOS agent apply. See sprint doc Config Completion Pass; **`docs/execution/admin-settings-config-parity.md`**.
+- **Settings Config Completion V1 (May 2026)** — Opportunity workflow drawer sections (reorder, show/hide, rename workflow virtual titles, **Show hidden section**); org-scoped **action placement** editor. Structured admin PATCH only — no raw JSON primary UX.
+- **Settings UX Contract pass (May 2026)** — Four-plane Settings copy; operator-first field modal; workflow/relationship fields hidden by default. **Deferred:** items under [Next strategic layers](#next-strategic-layers-deferred) above.
 - **Config/Layout Assist proposals** — **`config_layout_assist_proposals`** durable lifecycle (`draft` → … → `applied`); propose via Orchestrator + admin APIs; apply **partially implemented** — see **`docs/product/ai-system.md`**, sprint **`configuration_layout_assist_v1.md`**. **Roadmap:** foundation shipped; **catalog expansion paused** until settings/field parity advances (`roadmap-and-gaps.md`).
 
 ## How it works
@@ -55,6 +122,7 @@ When **agents** or automation apply JSON config (queue definitions, record overv
 
 ## Known gaps / risks
 
+- **Deferred Settings work:** platform-global placements; `condition_config` editors; new action definitions wizard; job/schedule layout builders; person/location field modal parity; full `record_actions` → registry migration; work-unit attention overrides in UI.
 - **Needs verification:** Single index of all JSON columns used as “config” in production (beyond those listed).
 - Archived audits referenced hardcoded workflow debt — confirm with `docs/archive/2026-05-02-docs-reset/` if needed, but treat codebase grep as truth.
 

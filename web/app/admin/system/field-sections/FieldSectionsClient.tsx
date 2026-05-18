@@ -239,9 +239,9 @@ export default function FieldSectionsClient({ adminV2Chrome = false }: { adminV2
         <>
             {adminV2Chrome ? (
                 <SettingsPageHeader
-                    title="Section label catalog"
+                    title="Field grouping"
                     subtitle={
-                        "Advanced: names for field groups on forms and grids. Drawer section order is configured under Settings → Record layouts."
+                        "Catalog section labels and order for fields. Drawer section order and visibility are on Record layouts; field rules are on Fields."
                     }
                     actions={newSectionAction}
                 />

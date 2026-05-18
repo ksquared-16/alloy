@@ -764,7 +764,7 @@ Ordered for dependencies and safe rollback.
 | G3-6 | **Deep links** | `attention_reason_code` query param + deprecation shim for label-based param. |
 | G3-7 | **Tests** | Fixture matrix: multi-reason, waiting buckets, SLA tier edges, primary ordering, parity tests QueueService vs standalone for same row. |
 | G3-8 | **Event stubs / comparison helper** | Internal helper comparing two resolver outputs + tier transitions; optional feature-flagged emit behind env. |
-| G3-9 | **Docs** | Update `crm-opportunity-needs-attention-count-semantics.md` + `admin-settings-config-parity.md` with V2 fields. |
+| G3-9 | **Docs** | Update `workspace-system.md` (count semantics) + `configuration-system.md` with V2 fields. |
 
 **Deferred (post–GATE 3):** materialized snapshot store, admin policy editor UI, AI overlay endpoint.
 

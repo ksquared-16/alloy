@@ -25,7 +25,7 @@ export function layoutSettingsSupportsAddSection(entity: LayoutSettingsEntityKey
 
 export function layoutSettingsAddSectionUnavailableCopy(entity: LayoutSettingsEntityKey): string {
     if (entity === "opportunity") {
-        return "Show a hidden drawer section using Add section, or reorder and rename sections below.";
+        return "Show a hidden drawer section, or reorder and rename sections below.";
     }
     return "Drawer section configuration for this record type is coming later.";
 }

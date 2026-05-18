@@ -10,6 +10,17 @@ For any merge that changes behavior, include `docs/execution/operating-doctrine.
 - **Supabase reference CSVs:** **8** generated files under `docs/supabase/reference/` — **do not edit by hand**; regenerate with `npm run export:supabase-schema` and `DATABASE_URL`.
 - **Total GPT/Cursor stack:** target **25 or fewer** files — **currently 17 + 8 = 25**.
 
+### Active topic files (16)
+
+| Folder | Files |
+|--------|-------|
+| `core/` | `system-overview.md`, `glossary.md` |
+| `system/` | `entity-model.md`, `actions-and-workflows.md`, `record-system.md`, `workspace-system.md`, `roles-and-permissions.md`, `configuration-system.md`, `api-contracts.md` |
+| `product/` | `crm-system.md`, `communications.md`, `documents-and-forms.md`, `billing-and-financials.md`, `ai-system.md` |
+| `execution/` | `operating-doctrine.md`, `roadmap-and-gaps.md` |
+
+**Consolidated (May 2026):** Former `execution/admin-settings-config-parity.md`, `execution/crm-opportunity-needs-attention-count-semantics.md`, `execution/crm-go-live-gap-analysis.md`, and `strategy/*` were merged into `system/configuration-system.md`, `system/workspace-system.md`, and `product/crm-system.md` / `documents-and-forms.md` to stay within the 16-topic cap. Historical copies may exist under `docs/archive/` if exported.
+
 ## Load order for AI / onboarding
 
 1. **`core/system-overview.md`** — Multi-tenant model, event/workflow spine, org scope, principles (including person vs contact).
@@ -17,16 +28,16 @@ For any merge that changes behavior, include `docs/execution/operating-doctrine.
 3. **`system/entity-model.md`** — Tables and identity (persons, customer_persons, customers, opportunities, etc.).
 4. **`system/actions-and-workflows.md`** — Events, workflows, admin actions; do not bypass.
 5. **`system/record-system.md`** — Resolver-backed records (RRS), drawer/API truth vs previews.
-6. **`system/workspace-system.md`** — Departments, work units, queues, Admin V2 workspace.
+6. **`system/workspace-system.md`** — Departments, work units, queues, Admin V2 workspace; needs-attention count semantics.
 7. **`system/roles-and-permissions.md`** — Capabilities (`role_permission_grants`) vs visibility (`user_access_profiles`); API enforcement.
-8. **`system/configuration-system.md`** — What config may steer vs what must stay in code/workflows.
+8. **`system/configuration-system.md`** — Config vs code/workflows; **Admin Settings four-plane control plane** (Fields, Field grouping, Layouts, Actions).
 9. **`system/api-contracts.md`** — Representative admin/public API boundaries.
 
 **Product (load when touching that area):**
 
-- `product/crm-system.md` — Opportunities, CRM, scheduling (CRM/tour focus).
+- `product/crm-system.md` — Opportunities, CRM, scheduling, **CRM go-live** definition and gap themes.
 - `product/communications.md` — Threads, canonical enqueue, worker delivery, webhooks, provider bindings (lead loop + workflows).
-- `product/documents-and-forms.md` — Document upload + **forms engine** (definitions, submissions, packets); **Enrollment Packet Phase 1 shipped**; Phase 2 **partially implemented**.
+- `product/documents-and-forms.md` — Document upload + **forms engine** (definitions, submissions, packets); long-term forms vision; **Enrollment Packet Phase 1 shipped**; Phase 2 **partially implemented**.
 - `product/billing-and-financials.md`
 - `product/ai-system.md` — Assistive AI groundwork (Orchestrator, Task Assist, etc.); **expansion paused** — human-in-the-loop only.
 
@@ -49,9 +60,9 @@ For any merge that changes behavior, include `docs/execution/operating-doctrine.
 ## Archive and sprints
 
 - **Archived docs (2026-05-02 reset):** `docs/archive/2026-05-02-docs-reset/` (prior `architecture/`, `audits/`, `implementation/`, `specs/`, root `README`, and former `archive/` shard).
-- **Sprints:** `docs/sprints/` — intentionally **not** moved.
+- **Sprints:** `docs/sprints/` — intentionally **not** moved; not counted in the 16-topic cap.
 - **Supplementary audits** (not counted in the active markdown cap unless you explicitly load them): `docs/audits/` — e.g. **`supabase-schema-alignment-audit.md`**, **`workflow-rbac-alignment-audit.md`**, **`legacy-messages-retirement-plan.md`**, person vs contact, event integrity, workflow consistency, Admin V2 hardening.
 
 ## When this README must be updated
 
-Load order changes, source-pack totals change, new topic file approved, or archive path changes.
+Load order changes, source-pack totals change, new topic file approved, consolidation moves, or archive path changes.

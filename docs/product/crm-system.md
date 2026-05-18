@@ -79,7 +79,7 @@ Cover **opportunities**, pipeline status, CRM-adjacent admin behavior, and **sch
 
 **Surfaces**
 
-- **Department:** Needs Attention lane renders buckets **only from configured `needs_attention_buckets`** (otherwise a calm empty state). When the department has a **`needs_attention`** work unit, `GET …/opportunity-attention-preview?work_unit_id=…` returns **`bucket_count_scope: work_unit_needs_attention_list_cap`** — counts are **unique inquiries per bucket** inside the same capped candidate window **`loadOpportunityNeedsAttentionRows`** uses for the execution queue (see execution semantics doc). Resolver membership is unchanged when buckets are empty; only lens tiles are absent.
+- **Department:** Needs Attention lane renders buckets **only from configured `needs_attention_buckets`** (otherwise a calm empty state). When the department has a **`needs_attention`** work unit, `GET …/opportunity-attention-preview?work_unit_id=…` returns **`bucket_count_scope: work_unit_needs_attention_list_cap`** — counts are **unique inquiries per bucket** inside the same capped candidate window **`loadOpportunityNeedsAttentionRows`** uses for the execution queue (see **`docs/system/workspace-system.md`** § Needs attention count semantics). Resolver membership is unchanged when buckets are empty; only lens tiles are absent.
 - **Work unit:** Needs Attention supports **`attention_bucket`** (bucket `key`) alongside **`queue=needs_attention`** for bucket-scoped lists; single-code drills may still use **`attention_reason_code`**. **All** pipeline queues apply the same subtle attention accent when resolver **`needs_attention`** is true on the row (not only inside the Needs Attention tab).
 - **Drawer:** A compact **operational attention** strip (`OperationalAttentionHeaderStrip`) reads **`_operational_attention`** from entity GET and sits in the **record header** (below inquiry/status summary, above overview tabs) — not as a large Overview card.
 
@@ -157,6 +157,34 @@ Canonical documentation: **`docs/product/communications.md`** (threads, enqueue,
 
 ---
 
+## CRM go-live (product definition)
+
+**Scope:** What Alloy CRM must support for a childcare director to run **enrollment and lead work** without a legacy center CRM for that slice — product outcome, not a build spec.
+
+**Target users:** Director (pipeline decisions); enrollment/admin staff (intake, follow-up, tours, records).
+
+**Day-1 workflows:** New inquiry intake; follow-up/messaging; tour scheduling; pipeline tracking; conversion to enrolled household.
+
+**Must-have:** Threaded comms on the record; pipeline visibility; activity/history on the record; basic reporting (inquiries, drop-offs, closes).
+
+**Not in this go-live:** Billing/tuition; classroom attendance/staff scheduling platform; full parent portal.
+
+**Success:** Director manages inquiries end-to-end in Alloy through tour, decision, and enrollment handoff with sufficient history and reporting.
+
+### Go-live gap themes (planning)
+
+| Workflow | Supported today (summary) | Gaps |
+|----------|---------------------------|------|
+| Inquiry intake | Opportunities + person-first paths; admin PATCH | Childcare-owned public intake; unified forms engine; email-as-lead |
+| Messaging | Canonical SMS/email; entity threads | Global triage inbox; email inbound parity; notifications |
+| Tours | `schedules` + workflows (**`job_id` required** on create) | Opportunity-centric tour UX without job-first mental model |
+| Pipeline | Stages, queues, drawer, workflows | KPI/report definitions aligned with queues; staleness UX |
+| Conversion | Customers/members/jobs | Packaged childcare enrollment handoff vs book-v2-shaped confirm |
+
+**Structural note:** `schedules.job_id` is required — “opportunity-only tour” needs a documented lightweight-job pattern unless storage changes. Tracking: **`docs/execution/roadmap-and-gaps.md`**.
+
+---
+
 ## When this doc must be updated
 
-Pipeline or CRM table changes; opportunity status/role semantics; schedule states, workforce features, or calendar integration changes; **enrollment packet** CRM surfaces (Activity / Documents / review) or trust-boundary behavior. Communications channels/enqueue — **`docs/product/communications.md`**.
+Pipeline or CRM table changes; opportunity status/role semantics; schedule states, workforce features, or calendar integration changes; **enrollment packet** CRM surfaces (Activity / Documents / review) or trust-boundary behavior; **CRM go-live** scope changes. Communications channels/enqueue — **`docs/product/communications.md`**.

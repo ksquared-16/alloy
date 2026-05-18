@@ -29,7 +29,7 @@ export type QueueSummary = {
     calendar_meta?: QueueOperationalCalendarMeta;
     /**
      * Present when `entity_type==="opportunity"` and `key==="needs_attention"`.
-     * Explains bounded candidate fetch vs exhaustive org totals (`docs/execution/crm-opportunity-needs-attention-count-semantics.md`).
+     * Explains bounded candidate fetch vs exhaustive org totals (`docs/system/workspace-system.md`).
      */
     opportunity_needs_attention_semantics?: QueueServiceOpportunityNeedsAttentionSemantics;
 };

@@ -160,7 +160,7 @@ export default function OpportunityWorkflowV1SectionsEditor({ onSaved }: { onSav
                 <div>
                     <h2 className="text-sm font-semibold text-alloy-midnight">Drawer sections</h2>
                     <p className="mt-1 max-w-2xl text-xs leading-snug text-alloy-midnight/60">
-                        Reorder, show or hide, and rename workflow sections. Field-group labels are on{" "}
+                        Reorder, show or hide, and rename workflow section titles here. To rename catalog group labels, use{" "}
                         <Link href="/adminV2/settings/field-sections" className="font-medium text-alloy-pine hover:underline">
                             Field grouping
                         </Link>
@@ -177,7 +177,7 @@ export default function OpportunityWorkflowV1SectionsEditor({ onSaved }: { onSav
             {availableToShow.length > 0 && canMutate ? (
                 <div className="mt-3 flex flex-wrap items-end gap-2 rounded-lg border border-dashed border-alloy-forge/20 bg-alloy-stone/[0.03] px-3 py-2">
                     <div>
-                        <label className="mb-0.5 block text-[10px] font-medium text-alloy-midnight/55">Add section</label>
+                        <label className="mb-0.5 block text-[10px] font-medium text-alloy-midnight/55">Show hidden section</label>
                         <select
                             value={addKey}
                             onChange={(e) => setAddKey(e.target.value)}
