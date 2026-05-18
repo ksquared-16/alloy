@@ -115,6 +115,8 @@ export type CommandSurfaceThreadProps = {
         candidate: TaskAssistEntitySearchCandidate,
         intent: TaskAssistCommandIntent | null
     ) => void;
+    /** Navigate to Settings config proposals review (command surface footer). */
+    onReviewConfigProposal?: (proposalId: string) => void;
 };
 
 export default function CommandSurfaceThread({
@@ -130,6 +132,7 @@ export default function CommandSurfaceThread({
     workflowAssistMutationBlockedReason,
     onClarificationChip,
     onConfirmFuzzySuggestion,
+    onReviewConfigProposal,
 }: CommandSurfaceThreadProps) {
     const showSearchDebug = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
 
@@ -304,6 +307,7 @@ export default function CommandSurfaceThread({
                                         proposal={turn.card.proposal}
                                         trace={turn.card.trace}
                                         persistedProposalId={turn.card.persistedProposalId}
+                                        onReviewProposal={onReviewConfigProposal}
                                     />
                                 </AssistantBubble>
                             );

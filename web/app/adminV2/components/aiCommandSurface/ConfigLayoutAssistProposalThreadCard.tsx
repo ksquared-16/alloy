@@ -1,11 +1,15 @@
 "use client";
 
+import type { MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 
-import { buildConfigProposalReviewHref } from "@/lib/agent/configLayoutAssist/configLayoutAssistEntityResolve";
 import { configLayoutAssistProposalStatusCopy } from "@/lib/agent/configLayoutAssist/configLayoutAssistProposalCopy";
 import type { ConfigurationProposalV1 } from "@/lib/agent/configLayoutAssist/configurationProposalV1";
 import type { ConfigLayoutAssistTraceV1 } from "@/lib/agent/configLayoutAssist/configLayoutAssistTypes";
+import {
+    handleConfigProposalReviewClick,
+    resolveConfigProposalReviewId,
+} from "@/lib/agent/configLayoutAssist/configLayoutAssistReviewNavigation";
 import { brand, derived, neutral } from "@/styles/tokens/colors";
 
 const CMD = {
@@ -18,21 +22,35 @@ export function ConfigLayoutAssistProposalThreadCard({
     proposal,
     trace,
     persistedProposalId,
+    onReviewProposal,
 }: {
     proposal: ConfigurationProposalV1;
     trace: ConfigLayoutAssistTraceV1;
     persistedProposalId: string | null;
+    /** Shell-level navigation (preferred inside command surface footer). */
+    onReviewProposal?: (proposalId: string) => void;
 }) {
     const router = useRouter();
-    const reviewHref = buildConfigProposalReviewHref(persistedProposalId);
+    const reviewProposalId = resolveConfigProposalReviewId(persistedProposalId);
     const statusCopy = configLayoutAssistProposalStatusCopy(proposal);
 
     const mutatingCount = proposal.proposed_operations.filter(
         (o) => o.kind !== "data_quality_recommendation"
     ).length;
 
+    const onReviewClick = (event: MouseEvent<HTMLButtonElement>) => {
+        if (!reviewProposalId) return;
+        handleConfigProposalReviewClick(event, reviewProposalId, (href) => {
+            if (onReviewProposal) {
+                onReviewProposal(reviewProposalId);
+                return;
+            }
+            void router.push(href);
+        });
+    };
+
     return (
-        <div data-command-surface-config-layout-assist-card="true">
+        <div data-command-surface-config-layout-assist-card="true" className="relative z-[1] pointer-events-auto">
             <p className="text-[13px] font-semibold" style={{ color: CMD.textBody }}>
                 Configuration proposal (review required)
             </p>
@@ -74,15 +92,21 @@ export function ConfigLayoutAssistProposalThreadCard({
             >
                 {statusCopy}
             </p>
-            <button
-                type="button"
-                className="mt-2 inline-flex text-left text-[12px] font-semibold underline"
-                style={{ color: brand.secondary }}
-                data-command-surface-config-assist-review-proposal="true"
-                onClick={() => router.push(reviewHref)}
-            >
-                Review proposal →
-            </button>
+            {reviewProposalId ? (
+                <button
+                    type="button"
+                    className="relative z-[1] mt-2 inline-flex cursor-pointer text-left text-[12px] font-semibold underline pointer-events-auto"
+                    style={{ color: brand.secondary }}
+                    data-command-surface-config-assist-review-proposal="true"
+                    onClick={onReviewClick}
+                >
+                    Review proposal →
+                </button>
+            ) : (
+                <p className="mt-2 text-[11px] italic" style={{ color: CMD.textLabel }}>
+                    Save the proposal to Settings before review.
+                </p>
+            )}
         </div>
     );
 }

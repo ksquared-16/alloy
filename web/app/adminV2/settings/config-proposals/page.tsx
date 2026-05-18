@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import ConfigLayoutProposalsClient from "./ConfigLayoutProposalsClient";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +27,10 @@ export default async function ConfigLayoutProposalsPage({
                     admin services only — no autonomous AI mutation.
                 </p>
             </header>
-            <ConfigLayoutProposalsClient initialId={initialId} />
+            <Suspense fallback={<p className="text-sm text-alloy-midnight/55">Loading proposals…</p>}>
+                <ConfigLayoutProposalsClient initialId={initialId} />
+            </Suspense>
         </div>
     );
 }
+

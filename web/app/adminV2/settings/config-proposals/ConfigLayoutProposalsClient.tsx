@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 
 import type { ConfigurationProposalV1 } from "@/lib/agent/configLayoutAssist/configurationProposalV1";
 import type { ConfigLayoutAssistCapabilitiesV1 } from "@/lib/agent/configLayoutAssist/configLayoutAssistTypes";
+import { readConfigProposalIdFromSearchParams } from "@/lib/agent/configLayoutAssist/configLayoutAssistReviewNavigation";
 
 type ProposalListItem = {
     id: string;
@@ -75,10 +76,8 @@ export default function ConfigLayoutProposalsClient({ initialId }: { initialId?:
     }, [loadList]);
 
     useEffect(() => {
-        const fromUrl = searchParams.get("proposalId") ?? searchParams.get("id");
-        if (fromUrl?.trim()) {
-            setSelectedId(fromUrl.trim());
-        }
+        const fromUrl = readConfigProposalIdFromSearchParams(searchParams);
+        if (fromUrl) setSelectedId(fromUrl);
     }, [searchParams]);
 
     useEffect(() => {
