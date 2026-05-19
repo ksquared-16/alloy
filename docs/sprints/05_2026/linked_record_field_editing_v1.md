@@ -63,7 +63,13 @@ If a field is shown on a drawer surface and **`field_definitions.interaction_pol
 
 **Children parity:** Drawer `_inquiry_children` now merges **active household `relationship=child` members** with OCM join rows (`inquiryChildrenHydration.ts`) so count matches work-unit queue enrichment.
 
-**Summary layout (hardcoded v1, polish):** Left column — Family & contacts + **What matters for this inquiry** (desired start, tour date). Right column — **Recommended by Alloy / Needs attention** + task/follow-up chips only (`data-opportunity-inquiry-summary-layout="hardcoded_v1"`). Deferred: full **Record layouts** builder for inquiry summary grid.
+**Summary layout (hardcoded v1, polish):** Left column — Family & contacts + **What matters for this inquiry** (desired start and tour date stacked full-width). Right column — **What BOS has to say** (attention/suggestion when present) + grouped **Tasks** / **Reminders** (or calm empty state). No global drawer Save for these surfaces (`data-opportunity-inquiry-summary-layout="hardcoded_v1"`). Deferred: full **Record layouts** builder for inquiry summary grid.
+
+**Save UX (drawer surfaces):**
+- Single native/custom opportunity fields (e.g. `desired_start_date`): save on **blur** to opportunity / `field_values`.
+- Person contact cards (primary + linked adults): save when focus leaves the **whole card** (~350ms delay); state: Unsaved changes · Saving… · Saved · Error.
+- Inquiry child rows: identity debounced; program/schedule/outcome/notes row-level; per-row state on card.
+- All linked-record writes PATCH the **source** record only — never denormalize onto `opportunities`.
 
 **Desired start doctrine:** `desired_start_date` remains **V1 household/inquiry-level** (`field_values` / opportunity metadata). Future preferred model: **per-child desired start** on `opportunity_customer_members` when siblings need different dates — no migration in this pass (OCM has no child start column today).
 
@@ -78,7 +84,7 @@ If a field is shown on a drawer surface and **`field_definitions.interaction_pol
 | **Family & contacts — primary** | Inquiry summary (`family_contacts` in layout) | Yes when `primary_person_id` + policy + `canMutate` | `PATCH /api/admin/persons/:id` |
 | **Family & contacts — linked adults** | Same panel; `_opportunity_persons` minus primary | Yes when row has `person_id` + `canMutate` | `PATCH /api/admin/persons/:id` |
 | **Family & contacts — linked adults** | Row missing `person_id` | Read-only link/display only | — |
-| **Inquiry summary header contact** | Legacy header block (name + `OppInquiryContactChannelsRow`) | Read-only display | — (use Family & contacts card to edit) |
+| **Inquiry summary header contact** | Legacy header block when `family_contacts` not in layout | Read-only display | — (use Family & contacts card to edit) |
 | **Household people** (`customer_booking` when `family_contacts` not in layout) | Related customer fetch | Read-only link cards | — |
 | **Inquiry children** | Children section | Name/DOB → member; program/notes → OCM | See V1b table |
 | **Config overview person fields** | Record layout overview | Per `interaction_policy` | `PATCH /api/admin/persons/:id` when `editable_through_related_record` |

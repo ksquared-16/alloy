@@ -14,7 +14,7 @@ describe("inquiryChildrenHydration", () => {
         expect(isActiveChildCustomerMemberForInquiry({ relationship: "child", is_active: false })).toBe(false);
     });
 
-    it("merges household children missing from OCM join rows", () => {
+    it("merges household children missing from OCM join rows (drawer count matches work-unit active-child rule)", () => {
         const linked: InquiryChildHydrateRow[] = [
             {
                 id: "ocm-1",

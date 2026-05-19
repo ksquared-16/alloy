@@ -204,13 +204,12 @@ export default function EditablePersonContactCard({
                 ? gates.first_name.readOnlyReason ?? gates.email.readOnlyReason ?? null
                 : null;
 
-    const outerClass = [
-        "rounded-lg border border-alloy-stone/20 bg-white shadow-sm ring-1 ring-alloy-stone/[0.06]",
-        cardPad,
-        className,
-    ]
-        .filter(Boolean)
-        .join(" ");
+    const surfaceClass =
+        dataCardKind === "primary" ?
+            "rounded-lg border border-alloy-stone/20 bg-white shadow-sm ring-1 ring-emerald-600/10"
+        :   "rounded-lg border border-alloy-stone/18 border-t-2 border-t-alloy-blue/20 bg-alloy-stone/[0.035] shadow-sm ring-1 ring-alloy-stone/[0.05]";
+
+    const outerClass = [surfaceClass, cardPad, className].filter(Boolean).join(" ");
 
     return (
         <div

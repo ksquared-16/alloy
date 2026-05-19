@@ -334,7 +334,7 @@ export default function OpportunityInquiryChildrenSection({
     const fieldInput =
         "w-full min-w-0 rounded-md border border-alloy-stone/35 bg-white px-1.5 py-1 text-[12px] text-alloy-midnight/85 disabled:opacity-60";
     const fieldSelect = `${fieldInput} pr-6`;
-    const cardPad = embeddedInPremiumSection ? "px-2.5 py-2.5" : "px-3 py-3";
+    const cardPad = embeddedInPremiumSection ? "px-2.5 py-2" : "px-3 py-2.5";
 
     const rowStatus = (rowId: string) => {
         const err = errorById[rowId];
@@ -398,9 +398,9 @@ export default function OpportunityInquiryChildrenSection({
                             : "";
 
                     return (
-                        <div key={r.id} className={`${cardPad} ${rowAttentionClass}`}>
-                            <div className="flex flex-wrap items-start justify-between gap-2">
-                                <div className="min-w-0 flex-1 space-y-1.5">
+                        <div key={r.id} className={`${cardPad} ${rowAttentionClass}`} data-inquiry-child-card="true">
+                            <div className="flex flex-wrap items-start justify-between gap-1.5">
+                                <div className="min-w-0 flex-1 rounded-md border border-alloy-stone/12 bg-alloy-stone/[0.03] px-2 py-1.5 space-y-1">
                                     {rowCanEdit ? (
                                         <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-[1fr_1fr_minmax(8.5rem,10rem)]">
                                             <div>
@@ -511,7 +511,11 @@ export default function OpportunityInquiryChildrenSection({
                                 ) : null}
                             </div>
 
-                            <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+                            <div className="mt-1.5 border-t border-alloy-stone/10 pt-1.5">
+                                <div className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
+                                    Program & outcome
+                                </div>
+                                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
                                 <div>
                                     <label className="mb-0.5 block text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
                                         Program
@@ -599,9 +603,10 @@ export default function OpportunityInquiryChildrenSection({
                                         <span className="text-[12px] text-alloy-midnight/70">{fallbackOutcome}</span>
                                     )}
                                 </div>
+                                </div>
                             </div>
 
-                            <div className="mt-2">
+                            <div className="mt-1.5 border-t border-dashed border-alloy-stone/12 pt-1.5">
                                 <label className="mb-0.5 block text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
                                     Notes
                                 </label>
@@ -633,7 +638,7 @@ export default function OpportunityInquiryChildrenSection({
                             </div>
 
                             {rowCanEdit ? (
-                                <div className="mt-1.5 min-h-[1rem]">{rowStatus(r.id)}</div>
+                                <div className="mt-1 min-h-[0.875rem]">{rowStatus(r.id)}</div>
                             ) : null}
                         </div>
                     );

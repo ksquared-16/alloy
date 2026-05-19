@@ -10846,7 +10846,7 @@ export default function AdminEntityDrawer() {
                                                                     )}
                                                                     <div className="mt-2.5 border-t border-alloy-stone/10 pt-2">
                                                                         <div className={tinyLabel}>What matters for this inquiry</div>
-                                                                        <div className="mt-1.5 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                                                        <div className="mt-1.5 space-y-2">
                                                                             <div>
                                                                                 <div className={tinyLabel}>Desired start</div>
                                                                                 <input
@@ -10862,8 +10862,11 @@ export default function AdminEntityDrawer() {
                                                                                         if (nonJobFormDirty) saveEdit();
                                                                                     }}
                                                                                     disabled={!canMutate}
-                                                                                    className={oppInqFieldInput}
+                                                                                    className={`${oppInqFieldInput} w-full`}
                                                                                 />
+                                                                                <p className="mt-0.5 text-[10px] text-alloy-midnight/45">
+                                                                                    Saves on blur to this inquiry.
+                                                                                </p>
                                                                             </div>
                                                                             <div>
                                                                                 {drawer.id && drawer.id !== "new" ? (
@@ -10899,26 +10902,40 @@ export default function AdminEntityDrawer() {
                                                                     </div>
 
                                                                 </div>
-                                                                <div className={`${oppInqInnerCard} min-w-0`}>
+                                                                <div className={`${oppInqInnerCard} flex min-w-0 flex-col`}>
+                                                                    <div className={tinyLabel}>What BOS has to say</div>
                                                                     {overviewData && !(overviewData as { _create?: boolean })._create ? (
-                                                                        <div className="pt-0.5">
+                                                                        <div className="mt-1 min-h-0">
                                                                             <OperationalAttentionHeaderStrip
                                                                                 key={`attn-summary-${String((overviewData as { id?: string }).id ?? "")}`}
                                                                                 variant="panel"
+                                                                                suppressSectionBrandLabel
                                                                                 overviewData={overviewData as Record<string, unknown>}
                                                                             />
                                                                         </div>
                                                                     ) : null}
-                                                                    {drawer.id && drawer.id !== "new" && isTaskAssistV1UiEnabled() ? (
-                                                                        <div className="mt-2 border-t border-alloy-stone/10 pt-2">
-                                                                            <OpportunityOperationalCompactStrip
-                                                                                opportunityId={drawer.id}
-                                                                                entityLabel={String(d.name ?? "").trim() || null}
-                                                                                overviewData={d}
-                                                                            />
+                                                                    {drawer.id && drawer.id !== "new" ? (
+                                                                        <div
+                                                                            className={
+                                                                                overviewData && !(overviewData as { _create?: boolean })._create ?
+                                                                                    "mt-2 border-t border-alloy-stone/10 pt-2"
+                                                                                :   "mt-1"
+                                                                            }
+                                                                        >
+                                                                            {isTaskAssistV1UiEnabled() ? (
+                                                                                <OpportunityOperationalCompactStrip
+                                                                                    layout="inquiry_summary"
+                                                                                    opportunityId={drawer.id}
+                                                                                    entityLabel={String(d.name ?? "").trim() || null}
+                                                                                    overviewData={d}
+                                                                                />
+                                                                            ) : (
+                                                                                <p className="text-[11px] text-alloy-midnight/50">
+                                                                                    No active tasks or reminders.
+                                                                                </p>
+                                                                            )}
                                                                         </div>
                                                                     ) : null}
-                                                                    {/* Next step is now rendered inline in the drawer header (informational). */}
                                                                 </div>
                                                             </div>
                                                         </div>

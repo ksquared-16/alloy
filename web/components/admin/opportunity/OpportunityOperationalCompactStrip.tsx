@@ -28,6 +28,10 @@ import {
     scheduledSendStripVisible,
     scheduledSendUrgencyBadge,
 } from "@/lib/agent/taskAssist/taskAssistOperationalUrgency";
+import {
+    operationalStripShowEmptyState,
+    type OpportunityOperationalStripLayout,
+} from "@/lib/admin/drawer/opportunityOperationalStripPresentation";
 
 type OperationalTaskRow = {
     id: string;
@@ -83,12 +87,18 @@ export type OpportunityOperationalCompactStripProps = {
     opportunityId: string;
     overviewData?: Record<string, unknown> | null;
     entityLabel?: string | null;
+    /** `inquiry_summary`: grouped Tasks / Reminders under inquiry summary column. */
+    layout?: OpportunityOperationalStripLayout;
 };
+
+const GROUP_LABEL =
+    "text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45";
 
 export default function OpportunityOperationalCompactStrip({
     opportunityId,
     overviewData = null,
     entityLabel = null,
+    layout = "header_chips",
 }: OpportunityOperationalCompactStripProps) {
     const v11 = isTaskAssistV1UiEnabled();
     const adminDrawer = useAdminDrawerOptional();
@@ -241,13 +251,142 @@ export default function OpportunityOperationalCompactStrip({
 
     if (!v11) return null;
 
+    const inquirySummary = layout === "inquiry_summary";
     const hasChips = openTasks.length > 0 || stripSends.length > 0 || showNextFollowUp;
-    if (!hasChips && !loading && !error) return null;
+    const showEmpty = operationalStripShowEmptyState({
+        loading,
+        openTaskCount: openTasks.length,
+        stripSendCount: stripSends.length,
+        showNextFollowUp,
+        hasError: Boolean(error),
+    });
+    if (!inquirySummary && !hasChips && !loading && !error) return null;
+
+    const chipRowClass = inquirySummary ? "flex w-full flex-wrap gap-1" : "flex w-full flex-wrap justify-end gap-1";
+    const hasReminders = stripSends.length > 0 || showNextFollowUp;
+
+    const renderTaskChips = () =>
+        openTasks.map((t) => {
+            const selected = popoverTaskId === t.id;
+            const taskBadge = operationalTaskUrgencyBadge(t);
+            return (
+                <div key={t.id} className="relative">
+                    <button
+                        type="button"
+                        ref={(el) => {
+                            if (el) taskChipRefs.current.set(t.id, el);
+                            else taskChipRefs.current.delete(t.id);
+                        }}
+                        data-operational-task-chip={t.id}
+                        data-operational-task-urgency={taskBadge.urgency}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setPopoverSendId(null);
+                            setSendPopoverAnchorEl(null);
+                            setPopoverTaskId((prev) => (prev === t.id ? null : t.id));
+                        }}
+                        className={`${CHIP} cursor-pointer text-left border ${
+                            selected ?
+                                "border-alloy-blue/45 bg-alloy-blue/10 text-alloy-midnight/90 ring-2 ring-alloy-blue/25"
+                            :   `${taskBadge.className} hover:opacity-95`
+                        }`}
+                    >
+                        {!inquirySummary ? (
+                            <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide opacity-80">
+                                Task
+                            </span>
+                        ) : null}
+                        <span className="truncate font-semibold">{t.title}</span>
+                        <span
+                            className={`shrink-0 rounded-full border px-1 py-0 text-[8px] font-semibold ${taskBadge.className}`}
+                        >
+                            {taskBadge.label}
+                        </span>
+                        <span className="shrink-0 opacity-75">· {shortWhen(t.due_at)}</span>
+                    </button>
+                    {selected && popoverDetail ? (
+                        <OperationalTaskDetailPopover
+                            task={popoverDetail}
+                            anchorRef={taskPopoverAnchorRef}
+                            onClose={() => setPopoverTaskId(null)}
+                            onUpdated={() => void load()}
+                        />
+                    ) : null}
+                </div>
+            );
+        });
+
+    const renderReminderChips = () => (
+        <>
+            {showNextFollowUp && nextFollowUpIso ? (
+                <span
+                    className={`${CHIP} border-alloy-stone/25 bg-alloy-stone/[0.06] text-alloy-midnight/75`}
+                    data-operational-next-follow-up="true"
+                >
+                    <span className="text-alloy-midnight/50">Next follow-up</span>
+                    <span className="truncate">{shortWhen(nextFollowUpIso)}</span>
+                </span>
+            ) : null}
+            {stripSends.map((s) => {
+                const sendBadge = scheduledSendUrgencyBadge(s);
+                const selected = popoverSendId === s.id;
+                return (
+                    <div key={s.id} className="relative">
+                        <button
+                            type="button"
+                            ref={(el) => {
+                                if (el) sendChipRefs.current.set(s.id, el);
+                                else sendChipRefs.current.delete(s.id);
+                            }}
+                            data-operational-scheduled-send-chip={s.id}
+                            data-scheduled-send-urgency={sendBadge.urgency}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setPopoverTaskId(null);
+                                const nextId = popoverSendId === s.id ? null : s.id;
+                                setSendPopoverAnchorEl(nextId ? (e.currentTarget as HTMLButtonElement) : null);
+                                setPopoverSendId(nextId);
+                            }}
+                            className={`${CHIP} cursor-pointer text-left border ${
+                                selected ?
+                                    "border-alloy-blue/45 bg-alloy-blue/10 text-alloy-midnight/90 ring-2 ring-alloy-blue/25"
+                                :   `${sendBadge.className} hover:opacity-95`
+                            }`}
+                        >
+                            {!inquirySummary ? (
+                                <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide opacity-80">
+                                    {(s.channel ?? "msg").toUpperCase()}
+                                </span>
+                            ) : null}
+                            <span className="truncate font-semibold">{sendBadge.label}</span>
+                            <span className="shrink-0 opacity-75">· {shortWhen(s.scheduled_for)}</span>
+                        </button>
+                        {selected && popoverSendDetail ? (
+                            <ScheduledSendDetailPopover
+                                send={popoverSendDetail}
+                                anchorEl={sendPopoverAnchorEl}
+                                onClose={() => {
+                                    setPopoverSendId(null);
+                                    setSendPopoverAnchorEl(null);
+                                }}
+                                onUpdated={() => void load()}
+                            />
+                        ) : null}
+                    </div>
+                );
+            })}
+        </>
+    );
 
     return (
         <div
-            className="relative flex w-full min-w-0 max-w-[min(100%,28rem)] flex-col items-end gap-1"
+            className={
+                inquirySummary ?
+                    "relative flex w-full min-w-0 flex-col gap-2"
+                :   "relative flex w-full min-w-0 max-w-[min(100%,28rem)] flex-col items-end gap-1"
+            }
             data-admin-opportunity-operational-strip="true"
+            data-operational-strip-layout={layout}
         >
             {error ? (
                 <p className="text-[10px] font-medium text-red-800/90" role="alert">
@@ -269,113 +408,38 @@ export default function OpportunityOperationalCompactStrip({
                     Open a chip to edit, cancel, or process.
                 </p>
             ) : null}
-            <div className="flex w-full flex-wrap justify-end gap-1">
-                {loading && !hasChips ? (
-                    <span className="text-[10px] text-alloy-midnight/50">Loading follow-ups…</span>
-                ) : null}
-                {showNextFollowUp && nextFollowUpIso ? (
-                    <span
-                        className={`${CHIP} border-alloy-stone/25 bg-alloy-stone/[0.06] text-alloy-midnight/75`}
-                        data-operational-next-follow-up="true"
-                    >
-                        <span className="text-alloy-midnight/50">Next follow-up</span>
-                        <span className="truncate">{shortWhen(nextFollowUpIso)}</span>
-                    </span>
-                ) : null}
-                {openTasks.map((t) => {
-                    const selected = popoverTaskId === t.id;
-                    const taskBadge = operationalTaskUrgencyBadge(t);
-                    return (
-                        <div key={t.id} className="relative">
-                            <button
-                                type="button"
-                                ref={(el) => {
-                                    if (el) taskChipRefs.current.set(t.id, el);
-                                    else taskChipRefs.current.delete(t.id);
-                                }}
-                                data-operational-task-chip={t.id}
-                                data-operational-task-urgency={taskBadge.urgency}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setPopoverSendId(null);
-                                    setSendPopoverAnchorEl(null);
-                                    setPopoverTaskId((prev) => (prev === t.id ? null : t.id));
-                                }}
-                                className={`${CHIP} cursor-pointer text-left border ${
-                                    selected ?
-                                        "border-alloy-blue/45 bg-alloy-blue/10 text-alloy-midnight/90 ring-2 ring-alloy-blue/25"
-                                    :   `${taskBadge.className} hover:opacity-95`
-                                }`}
-                            >
-                                <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide opacity-80">
-                                    Task
-                                </span>
-                                <span className="truncate font-semibold">{t.title}</span>
-                                <span
-                                    className={`shrink-0 rounded-full border px-1 py-0 text-[8px] font-semibold ${taskBadge.className}`}
-                                >
-                                    {taskBadge.label}
-                                </span>
-                                <span className="shrink-0 opacity-75">· {shortWhen(t.due_at)}</span>
-                            </button>
-                            {selected && popoverDetail ? (
-                                <OperationalTaskDetailPopover
-                                    task={popoverDetail}
-                                    anchorRef={taskPopoverAnchorRef}
-                                    onClose={() => setPopoverTaskId(null)}
-                                    onUpdated={() => void load()}
-                                />
-                            ) : null}
+            {inquirySummary ? (
+                <>
+                    {loading && !hasChips ? (
+                        <p className="text-[11px] text-alloy-midnight/50">Loading tasks and reminders…</p>
+                    ) : null}
+                    {openTasks.length > 0 ? (
+                        <div data-operational-strip-group="tasks">
+                            <div className={GROUP_LABEL}>Tasks</div>
+                            <div className={`mt-1 ${chipRowClass}`}>{renderTaskChips()}</div>
                         </div>
-                    );
-                })}
-                {stripSends.map((s) => {
-                    const sendBadge = scheduledSendUrgencyBadge(s);
-                    const selected = popoverSendId === s.id;
-                    return (
-                        <div key={s.id} className="relative">
-                            <button
-                                type="button"
-                                ref={(el) => {
-                                    if (el) sendChipRefs.current.set(s.id, el);
-                                    else sendChipRefs.current.delete(s.id);
-                                }}
-                                data-operational-scheduled-send-chip={s.id}
-                                data-scheduled-send-urgency={sendBadge.urgency}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setPopoverTaskId(null);
-                                    const nextId = popoverSendId === s.id ? null : s.id;
-                                    setSendPopoverAnchorEl(nextId ? (e.currentTarget as HTMLButtonElement) : null);
-                                    setPopoverSendId(nextId);
-                                }}
-                                className={`${CHIP} cursor-pointer text-left border ${
-                                    selected ?
-                                        "border-alloy-blue/45 bg-alloy-blue/10 text-alloy-midnight/90 ring-2 ring-alloy-blue/25"
-                                    :   `${sendBadge.className} hover:opacity-95`
-                                }`}
-                            >
-                                <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide opacity-80">
-                                    {(s.channel ?? "msg").toUpperCase()}
-                                </span>
-                                <span className="truncate font-semibold">{sendBadge.label}</span>
-                                <span className="shrink-0 opacity-75">· {shortWhen(s.scheduled_for)}</span>
-                            </button>
-                            {selected && popoverSendDetail ? (
-                                <ScheduledSendDetailPopover
-                                    send={popoverSendDetail}
-                                    anchorEl={sendPopoverAnchorEl}
-                                    onClose={() => {
-                                        setPopoverSendId(null);
-                                        setSendPopoverAnchorEl(null);
-                                    }}
-                                    onUpdated={() => void load()}
-                                />
-                            ) : null}
+                    ) : null}
+                    {hasReminders ? (
+                        <div data-operational-strip-group="reminders">
+                            <div className={GROUP_LABEL}>Reminders</div>
+                            <div className={`mt-1 ${chipRowClass}`}>{renderReminderChips()}</div>
                         </div>
-                    );
-                })}
-            </div>
+                    ) : null}
+                    {showEmpty ? (
+                        <p className="text-[11px] text-alloy-midnight/50" data-operational-strip-empty="true">
+                            No active tasks or reminders.
+                        </p>
+                    ) : null}
+                </>
+            ) : (
+                <div className={chipRowClass}>
+                    {loading && !hasChips ? (
+                        <span className="text-[10px] text-alloy-midnight/50">Loading follow-ups…</span>
+                    ) : null}
+                    {renderReminderChips()}
+                    {renderTaskChips()}
+                </div>
+            )}
         </div>
     );
 }

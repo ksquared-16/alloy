@@ -101,7 +101,7 @@ describe("OperationalAttentionHeaderStrip", () => {
                 }}
             />,
         );
-        expect(html).toContain("Recommended by Alloy");
+        expect(html).toContain("What BOS has to say");
         expect(html).toContain('data-drawer-slot="alloy_linked_actions_placeholder"');
         expect(html).not.toContain("Operational read");
         expect(html).not.toContain("data-drawer-slot=\"operational_summary_narrative\"");
@@ -136,7 +136,7 @@ describe("OperationalAttentionHeaderStrip", () => {
             />,
         );
         expect(html).toContain("Suggested next step");
-        expect(html).not.toContain("Recommended by Alloy");
+        expect(html).not.toContain("What BOS has to say");
         expect(html).not.toContain("Draft · not sent");
     });
 });

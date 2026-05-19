@@ -22,6 +22,8 @@ type Props = {
      * `panel`: standalone bordered summary (dev fixtures / rare embedded uses).
      */
     variant?: "chrome" | "panel";
+    /** When parent renders a section title (e.g. inquiry summary “What BOS has to say”). */
+    suppressSectionBrandLabel?: boolean;
 };
 
 const WHY_MAX_CHARS = 220;
@@ -34,11 +36,15 @@ function conciseWhy(text: string): string {
 
 /**
  * Primary operational-attention chrome for the drawer.
- * Premium surface is **Recommended by Alloy** (deterministic suggestion + optional draft).
+ * Premium surface is **What BOS has to say** (deterministic suggestion + optional draft).
  * `_operational_summary` may still be present on `overviewData` from the server; this strip does not
  * duplicate it here — queue list previews may still use `operationalSummaryPreview` separately.
  */
-export default function OperationalAttentionHeaderStrip({ overviewData, variant = "panel" }: Props) {
+export default function OperationalAttentionHeaderStrip({
+    overviewData,
+    variant = "panel",
+    suppressSectionBrandLabel = false,
+}: Props) {
     const draftTriggerRef = useRef<HTMLButtonElement>(null);
     const [draftPopoverOpen, setDraftPopoverOpen] = useState(false);
     const payload = overviewData._operational_attention as OpportunityAttentionResult | null | undefined;
@@ -128,9 +134,11 @@ export default function OperationalAttentionHeaderStrip({ overviewData, variant 
                         aria-hidden
                     />
                     <div className="min-w-0 flex-1 space-y-0.5">
-                        <div className="text-[8px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/38">
-                            Recommended by Alloy
-                        </div>
+                        {!suppressSectionBrandLabel ? (
+                            <div className="text-[8px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/38">
+                                What BOS has to say
+                            </div>
+                        ) : null}
                         <div
                             className={
                                 chrome

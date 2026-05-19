@@ -293,12 +293,22 @@ export function FamilyContactsPanel(props: {
                             <DrawerRelationshipPanelSkeleton density="comfortable" rows={1} />
                         )
                     ) : (
-                        <div className={`${variant === "summary" ? "mt-1.5 min-h-[1.125rem]" : ""} ${oppInqMutedEmpty}`}>
-                            No additional people linked yet.
-                        </div>
+                        <p className={`${variant === "summary" ? "mt-1.5" : "mt-2"} ${oppInqMutedEmpty}`}>
+                            No additional contacts linked yet.
+                        </p>
                     )
                 ) : (
-                    <ul className={`${variant === "summary" ? "space-y-1.5" : "space-y-2.5"} mt-1.5 list-none`}>
+                    <>
+                        <div
+                            className={
+                                variant === "summary" ?
+                                    "mt-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/45"
+                                :   "mt-2.5 text-[11px] font-semibold tracking-wide text-alloy-forge/55"
+                            }
+                        >
+                            Additional contacts
+                        </div>
+                        <ul className={`${variant === "summary" ? "space-y-2" : "space-y-2.5"} mt-1 list-none`}>
                         {sorted.map((r) => {
                             const personId = String(r.person_id ?? "").trim();
                             const initialValues = personContactCardValuesFromOpportunityPersonRow(r);
@@ -323,7 +333,8 @@ export function FamilyContactsPanel(props: {
                                 </li>
                             );
                         })}
-                    </ul>
+                        </ul>
+                    </>
                 )}
             </div>
         </div>
