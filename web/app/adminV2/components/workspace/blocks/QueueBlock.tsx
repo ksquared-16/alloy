@@ -16,6 +16,7 @@ import type {
 } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
 import { logAdminV2QueueRowClick } from "@/lib/debug/adminV2QueueRowClickDebug";
+import { prefetchOpportunityDrawerOnRowIntent } from "@/lib/admin/opportunityDrawerIntentPrefetch";
 import { DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS } from "@/lib/ui-v2/queueUiConfig";
 import { normalizePreviewLooseDateTokens } from "@/lib/adminFormatters";
 import { CRM_COMPACT_VALUE_DOT_SEP } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
@@ -1035,6 +1036,11 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
                 data-ws-needs-attention={attentionAccent ? "true" : undefined}
                 role="button"
                 tabIndex={0}
+                onMouseDown={() => {
+                  if (queue.queueEntityType === "opportunity") {
+                    prefetchOpportunityDrawerOnRowIntent(item.id);
+                  }
+                }}
                 onClick={() => fireQueueRowOpenRecord(queue, item.id, onAction, "card")}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {

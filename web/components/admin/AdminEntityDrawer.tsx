@@ -20,6 +20,11 @@ import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
+import {
+    reportDrawerFullHydrated,
+    reportDrawerPrimaryReady,
+    reportDrawerVisibleApplied,
+} from "@/lib/perf/adminV2DrawerPerf";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import EntityDocumentsSection from "@/components/admin/EntityDocumentsSection";
 import CommunicationsDrawerSection from "@/components/admin/communications/CommunicationsDrawerSection";
@@ -1289,19 +1294,15 @@ export default function AdminEntityDrawer() {
         memberPersonGraphOverlayDoneRef.current = null;
     }, [drawer.type, drawer.id]);
 
-    /** Deferred comms prefetch: reserve slot in layout phase (before child effects) — rAF+idle starts HTTP. */
+    /** Reserve comms prefetch slot as soon as drawer opens (HTTP deferred inside helper). */
     useLayoutEffect(() => {
         if (!drawer.id || drawer.id === "new") return;
-        if (!drawerReady) return;
-        if (!data || typeof data !== "object") return;
-        if (!entityDataMatchesDrawer(data, drawer.id)) return;
-
         if (drawer.type === "opportunities") {
             scheduleDeferredCommunicationsDrawerPrefetch("opportunities", drawer.id);
         } else if (drawer.type === "jobs") {
             scheduleDeferredCommunicationsDrawerPrefetch("jobs", drawer.id);
         }
-    }, [drawer.type, drawer.id, drawerReady, data]);
+    }, [drawer.type, drawer.id]);
 
     useEffect(() => {
         const t = drawer.type;
@@ -1414,6 +1415,7 @@ export default function AdminEntityDrawer() {
     const opportunityHeaderResolvedSigRef = useRef<string | null>(null);
     const drawerLoadStartRef = useRef<{ key: string; at: number } | null>(null);
     const drawerReadyLoggedKeyRef = useRef<string | null>(null);
+    const opportunityDrawerShellSettledPerfRef = useRef(false);
     const [addInquiryChildState, setAddInquiryChildState] = useState<{ mode: "child" | "sibling" } | null>(null);
     const [collectPaymentOpen, setCollectPaymentOpen] = useState(false);
     const [collectPaymentContext, setCollectPaymentContext] = useState<AdminCollectPaymentModalContext | null>(null);
@@ -1975,6 +1977,7 @@ export default function AdminEntityDrawer() {
                                 (json as { _record_surface?: string })._record_surface === "drawer_visible"
                             ) {
                                 alloyPerfSet("drawer_opportunity_visible_applied", t);
+                                reportDrawerVisibleApplied(String(drawer.id));
                             }
                         });
                     });
@@ -2024,6 +2027,7 @@ export default function AdminEntityDrawer() {
                     requestAnimationFrame(() => {
                         requestAnimationFrame(() => {
                             alloyPerfSet("drawer_opportunity_full_applied", performance.now());
+                            reportDrawerFullHydrated(String(drawer.id));
                         });
                     });
                 }
@@ -2055,7 +2059,7 @@ export default function AdminEntityDrawer() {
         if (!url) return;
         memberPersonGraphOverlayInFlightRef.current = drawer.id;
         const ac = new AbortController();
-        fetch(url, { signal: ac.signal })
+        dedupeAdminFetch(url, { ...workspaceDataFetchInit(), signal: ac.signal })
             .then((res) => {
                 captureDrawerEntityResponsePerf(res);
                 if (!res.ok) throw new Error(String(res.status));
@@ -5896,13 +5900,18 @@ export default function AdminEntityDrawer() {
     }, [overviewData, drawer.type]);
 
     const opportunityHeaderLocationLabel = useMemo(() => {
-        if (drawer.type !== "opportunities" || !overviewData || (overviewData as { _create?: boolean })._create) {
-            return null;
+        if (drawer.type !== "opportunities") return null;
+        if (overviewData && !(overviewData as { _create?: boolean })._create) {
+            const loc = opportunityOverviewRelationshipReadLabel(
+                overviewData as Record<string, unknown>,
+                "location_id"
+            );
+            if (loc !== undefined && loc.trim()) return loc.trim();
         }
-        const loc = opportunityOverviewRelationshipReadLabel(overviewData as Record<string, unknown>, "location_id");
-        if (loc === undefined || !loc.trim()) return null;
-        return loc.trim();
-    }, [drawer.type, overviewData]);
+        const previewLoc = drawer.opportunityQueuePreviewSeed?.locationLabel?.trim();
+        if (drawerGateLoading && previewLoc) return previewLoc;
+        return null;
+    }, [drawer.type, overviewData, drawerGateLoading, drawer.opportunityQueuePreviewSeed?.locationLabel]);
 
     const title: React.ReactNode = overviewData
         ? drawer.type === "contacts"
@@ -6018,6 +6027,20 @@ export default function AdminEntityDrawer() {
         recordChromeOpportunity.configResolved &&
         !!overviewData &&
         !(overviewData as { _create?: boolean })._create;
+
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
+            opportunityDrawerShellSettledPerfRef.current = false;
+            return;
+        }
+        if (!opportunityDrawerShellSettled) {
+            opportunityDrawerShellSettledPerfRef.current = false;
+            return;
+        }
+        if (opportunityDrawerShellSettledPerfRef.current) return;
+        opportunityDrawerShellSettledPerfRef.current = true;
+        reportDrawerPrimaryReady(String(drawer.id));
+    }, [drawer.type, drawer.id, opportunityDrawerShellSettled]);
 
     const opportunityDrawerTabsPending =
         drawer.type === "opportunities" &&
@@ -7974,6 +7997,10 @@ export default function AdminEntityDrawer() {
                 </div>
             )
         ) : drawer.type === "opportunities" &&
+          drawerGateLoading &&
+          drawer.opportunityQueuePreviewSeed?.statusLabel?.trim() ? (
+            <StatusBadge label={drawer.opportunityQueuePreviewSeed.statusLabel.trim()} variant="default" />
+        ) : drawer.type === "opportunities" &&
           !opportunityInquiryWorkflowDrawer &&
           (opportunityOverviewStatusBadgeLabel(overviewData as Record<string, unknown>) ||
               (overviewData as { status_key?: string }).status_key) ? (
@@ -8223,10 +8250,16 @@ export default function AdminEntityDrawer() {
                     : title != null
                       ? String(title)
                       : "—";
-    const headerSubtitleBase =
-        drawerGateLoading && drawer.type === "opportunities" && opportunityQueuePreviewSeed?.subtitle?.trim()
-            ? opportunityQueuePreviewSeed.subtitle.trim()
-            : jobV2MetaSubtitle ?? drawerHeaderRecordSubtitle ?? undefined;
+    const headerSubtitleBase = (() => {
+        if (drawerGateLoading && drawer.type === "opportunities" && opportunityQueuePreviewSeed) {
+            const previewSub = opportunityQueuePreviewSeed.subtitle?.trim();
+            const recordHint = opportunityQueuePreviewSeed.recordNumberHint?.trim();
+            if (previewSub && recordHint) return `${previewSub} · ${recordHint}`;
+            if (previewSub) return previewSub;
+            if (recordHint) return recordHint;
+        }
+        return jobV2MetaSubtitle ?? drawerHeaderRecordSubtitle ?? undefined;
+    })();
     const workflowCompactRecordNum =
         drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer && typeof headerSubtitleBase === "string"
             ? (() => {

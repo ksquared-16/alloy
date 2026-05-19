@@ -6,7 +6,31 @@ export type OpportunityDrawerQueuePreviewSeed = {
     subtitle?: string | null;
     statusLabel?: string | null;
     stageLabel?: string | null;
+    /** Site / room / program context from queue CRM compact slots. */
+    locationLabel?: string | null;
+    valueLabel?: string | null;
+    urgencyTier?: "critical" | "warning" | "standard";
+    activityStaleLabel?: string | null;
+    /** Display-only hint (e.g. meta line with record #) — not authoritative record number. */
+    recordNumberHint?: string | null;
 };
+
+function pickLocationLabel(crm: QueuePreviewItemVm["semanticCrmCompact"]): string | null {
+    if (!crm) return null;
+    const room = crm.roomContext?.trim();
+    if (room) return room;
+    const program = crm.programContext?.trim();
+    if (program) return program;
+    const loc = crm.locationContext?.trim();
+    if (loc) return loc;
+    return null;
+}
+
+function pickRecordNumberHint(item: QueuePreviewItemVm): string | null {
+    const meta = item.metaLines?.find((m) => /record|inquiry|#/i.test(m.label));
+    if (meta?.value?.trim()) return meta.value.trim();
+    return null;
+}
 
 export function opportunityDrawerSeedFromQueueItem(item: QueuePreviewItemVm): OpportunityDrawerQueuePreviewSeed {
     const crm = item.semanticCrmCompact;
@@ -20,7 +44,22 @@ export function opportunityDrawerSeedFromQueueItem(item: QueuePreviewItemVm): Op
         null;
     const statusLabel = crm?.statusLabel?.trim() || null;
     const stageLabel = crm?.stageLabel?.trim() || null;
-    return { title, subtitle, statusLabel, stageLabel };
+    const locationLabel = pickLocationLabel(crm);
+    const valueLabel = item.valueLabel?.trim() || crm?.commercialValue?.trim() || null;
+    const urgencyTier = item.urgencyTier;
+    const activityStaleLabel = crm?.activityStale?.label?.trim() || null;
+    const recordNumberHint = pickRecordNumberHint(item);
+    return {
+        title,
+        subtitle,
+        statusLabel,
+        stageLabel,
+        locationLabel,
+        valueLabel,
+        urgencyTier,
+        activityStaleLabel,
+        recordNumberHint,
+    };
 }
 
 export function findQueuePreviewItemById(

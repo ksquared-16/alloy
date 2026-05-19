@@ -68,6 +68,8 @@ import {
     findQueuePreviewItemById,
     opportunityDrawerSeedFromQueueItem,
 } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
+import { prefetchOpportunityDrawerOnRowIntent } from "@/lib/admin/opportunityDrawerIntentPrefetch";
+import { markDrawerRowClickStart } from "@/lib/perf/adminV2DrawerPerf";
 import { dedupeAdminFetch, dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions/UpdateStatusAddNoteModal";
@@ -2692,6 +2694,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
             const opportunityQueuePreviewSeed = previewRow
                 ? opportunityDrawerSeedFromQueueItem(previewRow)
                 : undefined;
+            markDrawerRowClickStart();
+            prefetchOpportunityDrawerOnRowIntent(id, opportunityWorkspaceContext ?? undefined);
             openDrawer({
                 type: "opportunities",
                 id,
@@ -2699,7 +2703,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 opportunityQueuePreviewSeed,
             });
         },
-        [openDrawer, oppDrawerExtra]
+        [openDrawer, oppDrawerExtra, opportunityWorkspaceContext]
     );
 
     const onAction = useCallback(
