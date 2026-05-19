@@ -63,7 +63,7 @@ If a field is shown on a drawer surface and **`field_definitions.interaction_pol
 
 **Children parity:** Drawer `_inquiry_children` now merges **active household `relationship=child` members** with OCM join rows (`inquiryChildrenHydration.ts`) so count matches work-unit queue enrichment.
 
-**Summary layout (hardcoded v1, polish):** Left column — Family & contacts + **What matters for this inquiry** (desired start and tour date stacked full-width). Right column — **What BOS has to say** (attention/suggestion when present) + grouped **Tasks** / **Reminders** (or calm empty state). No global drawer Save for these surfaces (`data-opportunity-inquiry-summary-layout="hardcoded_v1"`). Deferred: full **Record layouts** builder for inquiry summary grid.
+**Summary layout (hardcoded v1, polish):** Left column — Family & contacts + **What matters for this inquiry** (desired start and tour date stacked full-width). Right column — **What BOS has to say** (attention/suggestion when present) + grouped **Tasks** / **Reminders** (or calm empty state) + **Activity** (enrollment packet status from `GET …/enrollment-packets`, helper copy, **Activity** / **Documents** tab switches; hidden when no packet sessions). Overview tab no longer duplicates packet banner. No global drawer Save for these surfaces (`data-opportunity-inquiry-summary-layout="hardcoded_v1"`). Deferred: full **Record layouts** builder for inquiry summary grid.
 
 **Save UX (drawer surfaces):**
 - Single native/custom opportunity fields (e.g. `desired_start_date`): save on **blur** to opportunity / `field_values`.
@@ -73,7 +73,7 @@ If a field is shown on a drawer surface and **`field_definitions.interaction_pol
 
 **Desired start doctrine:** `desired_start_date` remains **V1 household/inquiry-level** (`field_values` / opportunity metadata). Future preferred model: **per-child desired start** on `opportunity_customer_members` when siblings need different dates — no migration in this pass (OCM has no child start column today).
 
-**Tests:** `inquiryChildrenHydration.test.ts`, `inquiryChildFieldEdit.test.ts`, `opportunityDrawerFieldSave.test.ts`, `primaryPersonCardEdit.test.ts`
+**Tests:** `inquiryChildrenHydration.test.ts`, `inquiryChildFieldEdit.test.ts`, `opportunityDrawerFieldSave.test.ts`, `primaryPersonCardEdit.test.ts`, `enrollmentPacketSummaryPresentation.test.ts`
 
 ---
 
@@ -95,8 +95,30 @@ If a field is shown on a drawer surface and **`field_definitions.interaction_pol
 
 ---
 
+## Audit — configurable Inquiry child surface (May 2026, no build)
+
+**Question:** Should `opportunity_customer_members` (OCM) be exposed in Settings → Fields so operators can add per-child fields (e.g. **Desired start**)?
+
+**Finding:** `field_definitions` / Settings Fields allow only `person | customer | job | opportunity | vendor | schedule | location` (`web/app/api/admin/field-definitions/route.ts`, `SettingsFieldsHubClient.tsx`). `field_values` is generic (`entity_type` + `entity_id`) but only persists keys that exist as defs for that `entity_type`. **No** repeating-row / sub-entity field host in `EntityDrawerOverview`; `inquiry_children` is **`injected_system`** (`effectiveDrawerLayoutPreview.ts`) with hardcoded columns in `OpportunityInquiryChildrenSection.tsx` → PATCH `customer_members` (identity) + `opportunity_customer_members` (program, schedule, outcome, notes).
+
+**Recommendation (follow-up build):**
+
+| Layer | Choice |
+|-------|--------|
+| Settings `entity_type` | **`inquiry_child`** (friendly), not raw `opportunity_customer_members` |
+| Storage for `desired_start_date` | **Native `date` column on OCM** (nullable); optional UI inherit from opportunity-level `desired_start_date` when null |
+| Custom org fields on child row | **`field_values`** with `entity_type = inquiry_child`, `entity_id = ocm.id` (after defs + PATCH + hydrate exist) |
+| Drawer | Extend inquiry children grid from **allowlisted native keys + configured defs**; keep section injected until Record Experience Builder supports row hosts |
+
+**Do not** use opportunity `field_definitions` with `section_key: inquiry_children` as a substitute — those are opportunity-scalar fields, not per-OCM row fields.
+
+See audit summary in chat / `record-system.md` + `configuration-system.md` proposed deltas when implementing.
+
+---
+
 ## Deferred
 
+- **Inquiry child configurable surface** — audit above; needs entity_type `inquiry_child`, OCM column + PATCH/hydrate, Settings tab, drawer column renderer
 - Job / customer / contact one-hop hosts
 - Inquiry summary layout via Record layouts config (primitive documented; hardcoded grid only today)
 - `_primary_person_name` / `_primary_person_email` display keys as inline editors (use opportunity field defs with interaction policy instead)

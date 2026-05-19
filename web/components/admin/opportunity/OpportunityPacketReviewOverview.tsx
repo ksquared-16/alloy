@@ -2,6 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import {
+    enrollmentPacketReviewedStatusLabel,
+    enrollmentPacketSubjectLine,
+} from "@/lib/admin/opportunity/enrollmentPacketSummaryPresentation";
+
 type ReviewWarning = { kind?: string; message?: string; field_key?: string };
 
 type EnrollmentPacketSessionRow = {
@@ -25,9 +30,19 @@ type Props = {
     opportunityId: string;
     canMutate: boolean;
     onInvalidate: () => void;
+    /** `inquiry_summary` — compact, no outer margins; `overview_tab` — legacy banner spacing */
+    placement?: "overview_tab" | "inquiry_summary";
 };
 
-export function OpportunityPacketReviewOverview({ opportunityId, canMutate, onInvalidate }: Props) {
+export function OpportunityPacketReviewOverview({
+    opportunityId,
+    canMutate,
+    onInvalidate,
+    placement = "overview_tab",
+}: Props) {
+    const compact = placement === "inquiry_summary";
+    const statusMargin = compact ? "mt-1" : "mb-3";
+
     const [loading, setLoading] = useState(true);
     const [err, setErr] = useState<string | null>(null);
     const [sessions, setSessions] = useState<EnrollmentPacketSessionRow[]>([]);
@@ -86,12 +101,6 @@ export function OpportunityPacketReviewOverview({ opportunityId, canMutate, onIn
             ? headSession
             : null;
 
-    const subjectLine = (s: EnrollmentPacketSessionRow) => {
-        const lc = s.launch_context;
-        const label = lc && typeof lc.label === "string" && lc.label.trim() ? lc.label.trim() : null;
-        return label || s.packet_name || "Enrollment packet";
-    };
-
     const applyReview = async (next: "approved" | "rejected" | "needs_correction") => {
         if (!activeSession) return;
         setSaving(true);
@@ -134,18 +143,25 @@ export function OpportunityPacketReviewOverview({ opportunityId, canMutate, onIn
     };
 
     if (loading) {
-        return <p className="mb-3 text-[11px] text-alloy-midnight/50">Loading packet status…</p>;
+        if (compact) return null;
+        return <p className={`${statusMargin} text-[11px] text-alloy-midnight/50`}>Loading packet status…</p>;
     }
     if (err) {
-        return <p className="mb-3 text-[11px] text-red-700">{err}</p>;
+        return <p className={`${statusMargin} text-[11px] text-red-700`}>{err}</p>;
     }
     if (pending.length === 0) {
         if (reviewedHead) {
-            const st = reviewedHead.operator_review_status === "approved" ? "Approved" : "Rejected";
+            const st = enrollmentPacketReviewedStatusLabel(reviewedHead.operator_review_status);
             return (
-                <p className="mb-3 rounded-md border border-alloy-stone/20 bg-alloy-stone/[0.03] px-3 py-2 text-[11px] text-alloy-midnight/70">
+                <p
+                    className={
+                        compact ?
+                            `${statusMargin} text-[11px] leading-snug text-alloy-midnight/70`
+                        :   `${statusMargin} rounded-md border border-alloy-stone/20 bg-alloy-stone/[0.03] px-3 py-2 text-[11px] text-alloy-midnight/70`
+                    }
+                >
                     <span className="font-medium text-alloy-midnight/80">Packet</span>
-                    <span className="text-alloy-midnight/60"> · {subjectLine(reviewedHead)}</span>
+                    <span className="text-alloy-midnight/60"> · {enrollmentPacketSubjectLine(reviewedHead)}</span>
                     <span className="text-alloy-midnight/55"> · {st}</span>
                 </p>
             );
@@ -153,14 +169,20 @@ export function OpportunityPacketReviewOverview({ opportunityId, canMutate, onIn
         return null;
     }
 
-    const head = pending[0]!;
+    const head = pending[0] as EnrollmentPacketSessionRow;
 
     return (
         <>
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-xs text-alloy-midnight">
+            <div
+                className={
+                    compact ?
+                        `${statusMargin} flex flex-wrap items-center justify-between gap-1.5 rounded border border-amber-200/70 bg-amber-50/80 px-2 py-1.5 text-[11px] text-alloy-midnight`
+                    :   "mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-xs text-alloy-midnight"
+                }
+            >
                 <div className="min-w-0">
                     <span className="font-semibold text-alloy-midnight">Packet submitted</span>
-                    <span className="text-alloy-midnight/70"> · {subjectLine(head)}</span>
+                    <span className="text-alloy-midnight/70"> · {enrollmentPacketSubjectLine(head)}</span>
                     <span className="text-amber-900"> · Needs review</span>
                     {(head.operator_review_warnings?.length ?? 0) > 0 ? (
                         <span className="ms-1 text-[11px] font-medium text-amber-900">
@@ -170,7 +192,11 @@ export function OpportunityPacketReviewOverview({ opportunityId, canMutate, onIn
                 </div>
                 <button
                     type="button"
-                    className="shrink-0 rounded border border-alloy-stone/40 bg-white px-2.5 py-1 text-[11px] font-semibold text-alloy-blue hover:bg-alloy-stone/10"
+                    className={
+                        compact ?
+                            "shrink-0 rounded border border-alloy-stone/40 bg-white px-2 py-0.5 text-[10px] font-semibold text-alloy-blue hover:bg-alloy-stone/10"
+                        :   "shrink-0 rounded border border-alloy-stone/40 bg-white px-2.5 py-1 text-[11px] font-semibold text-alloy-blue hover:bg-alloy-stone/10"
+                    }
                     onClick={() => {
                         setActiveSession(head);
                         setNotes("");
@@ -195,7 +221,7 @@ export function OpportunityPacketReviewOverview({ opportunityId, canMutate, onIn
                         onClick={(e) => e.stopPropagation()}
                     >
                         <h3 className="text-sm font-semibold text-alloy-midnight">Review packet</h3>
-                        <p className="mt-1 text-xs text-alloy-midnight/70">{subjectLine(activeSession)}</p>
+                        <p className="mt-1 text-xs text-alloy-midnight/70">{enrollmentPacketSubjectLine(activeSession)}</p>
                         <a
                             href={activeSession.admin_packet_review_path}
                             target="_blank"

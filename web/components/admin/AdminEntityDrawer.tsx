@@ -124,7 +124,7 @@ import {
     summarizeInquiryChildrenRows,
 } from "@/lib/admin/drawer/inquiryChildrenDebug";
 import { OpportunityInquiryChildrenRegistryActions } from "@/components/admin/opportunity/OpportunityInquiryChildrenRegistryActions";
-import { OpportunityPacketReviewOverview } from "@/components/admin/opportunity/OpportunityPacketReviewOverview";
+import { OpportunityInquirySummaryActivity } from "@/components/admin/opportunity/OpportunityInquirySummaryActivity";
 import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
 import { deriveTourMetadataMirrorFromBooking, TOUR_BOOKING_OPPORTUNITY_STATUS } from "@/lib/tours/opportunity/tourBookingOpportunityIntegration";
 import { validateQueueDefinition, type QueueDefinitionV1, type QueueFilter } from "@/lib/config/queueDefinitionSchema";
@@ -953,6 +953,26 @@ function DrawerWorkflowHeaderQuickActionsSkeleton() {
     );
 }
 
+/** Queue-preview bootstrap: section-shaped reserves (not one large empty block). */
+function DrawerOpportunityQueueBootstrapBodySkeleton() {
+    return (
+        <div className="space-y-3 pt-0.5" aria-busy="true" data-opportunity-drawer-bootstrap-body="true">
+            <div className="space-y-2 rounded-xl border border-alloy-stone/12 bg-white/80 px-2.5 py-2 shadow-sm">
+                <DrawerQuietSkeletonBar className="h-3 w-24" />
+                <DrawerQuietSkeletonBar className="h-11 w-[min(100%,20rem)] rounded-lg" />
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <DrawerQuietSkeletonBar className="h-10 rounded-lg" />
+                    <DrawerQuietSkeletonBar className="min-h-[2.5rem] rounded-lg" />
+                </div>
+            </div>
+            <DrawerQuietSkeletonBar
+                className="w-full rounded-xl border border-alloy-stone/10 bg-white/45"
+                style={{ minHeight: ADMINV2_DRAWER_OPPORTUNITY_BOOTSTRAP_BODY_MIN_H }}
+            />
+        </div>
+    );
+}
+
 function DrawerRecordTabStripGateSkeleton({ tabCount = 4 }: { tabCount?: number }) {
     return (
         <div
@@ -988,14 +1008,7 @@ function DrawerRecordGateSkeleton(props: {
     } = props;
 
     if (opportunityQueueBootstrapCompact) {
-        return (
-            <div className="space-y-3 pt-0.5" aria-busy="true">
-                <DrawerQuietSkeletonBar
-                    className="w-full rounded-xl border border-alloy-stone/10 bg-white/50"
-                    style={{ minHeight: ADMINV2_DRAWER_OPPORTUNITY_BOOTSTRAP_BODY_MIN_H }}
-                />
-            </div>
-        );
+        return <DrawerOpportunityQueueBootstrapBodySkeleton />;
     }
 
     if (modalOpportunityWorkflow || recordGateOpportunityWorkflowShape) {
@@ -5509,12 +5522,7 @@ export default function AdminEntityDrawer() {
     }, [opportunityResolvedHeaderActions]);
 
     const opportunityHeaderQuickActionsNode =
-        isOpportunityExistingView &&
-        drawer.id &&
-        !loading &&
-        data != null &&
-        entityRowReady &&
-        !opportunityResolvedHeaderLoading
+        isOpportunityExistingView && drawer.id && data != null && entityRowReady
             ? (
                   <div
                       className={`flex flex-col items-end gap-1.5 ${
@@ -5547,6 +5555,15 @@ export default function AdminEntityDrawer() {
                           const overflowCls = opportunityInquiryWorkflowDrawer
                               ? `px-4 py-2 text-[12px] font-semibold rounded-full ${blueOutline} disabled:opacity-50`
                               : `px-3 py-1.5 text-sm font-semibold rounded-md ${blueOutline} disabled:opacity-50`;
+                          if (opportunityResolvedHeaderLoading && !useOpportunityActionRegistryHeader) {
+                              return (
+                                  <>
+                                      <DrawerQuietSkeletonBar className="h-9 w-[5.25rem] rounded-full" />
+                                      <DrawerQuietSkeletonBar className="h-9 w-24 rounded-full" />
+                                      <DrawerQuietSkeletonBar className="h-9 w-28 rounded-full" />
+                                  </>
+                              );
+                          }
                           return (
                               <>
                                   {useOpportunityActionRegistryHeader ?
@@ -8403,11 +8420,24 @@ export default function AdminEntityDrawer() {
             headerSubtitleResolved
         );
 
+    /** Inquiry workflow anchors primary actions beside the title row — omit empty headerActions row entirely. */
+    const workflowOpportunityUsesTitleRailActions =
+        drawer.type === "opportunities" && opportunityInquiryWorkflowDrawerShell;
+
+    const opportunityTitleRailActive =
+        (workflowOpportunityUsesTitleRailActions || opportunityWorkflowHeaderUsesQueuePreview) &&
+        isOpportunityExistingView &&
+        !!drawer.id;
+
     const headerTitleRightForDrawer =
         opportunityWorkflowHeaderChromePending ? (
             <DrawerWorkflowHeaderQuickActionsSkeleton />
-        ) : opportunityWorkflowHeaderUsesQueuePreview ? (
-            <div className="min-h-[2.375rem] shrink-0" aria-hidden />
+        ) : opportunityTitleRailActive ? (
+            entityRowReady ? (
+                workflowHeaderTitleRight
+            ) : (
+                <DrawerWorkflowHeaderQuickActionsSkeleton />
+            )
         ) : (
             workflowHeaderTitleRight
         );
@@ -8427,16 +8457,13 @@ export default function AdminEntityDrawer() {
             opportunityInquiryWorkflowHeaderTimeline
         );
 
-    /** Inquiry workflow anchors primary actions beside the title row — omit empty headerActions row entirely. */
-    const workflowOpportunityUsesTitleRailActions =
-        drawer.type === "opportunities" && opportunityInquiryWorkflowDrawerShell;
-
     const opportunityHeaderActionsPending =
         drawer.type === "opportunities" &&
         isOpportunityExistingView &&
         !!drawer.id &&
         drawer.id !== "new" &&
-        !opportunityDrawerShellSettled;
+        !opportunityDrawerShellSettled &&
+        !opportunityResolvedHeaderActions;
 
     const headerActionsForDrawer = workflowOpportunityUsesTitleRailActions
         ? undefined
@@ -10581,43 +10608,6 @@ export default function AdminEntityDrawer() {
                                 <JobRrsOverviewTab jobId={drawer.id} variant="legacy" />
                             </div>
                         )}
-                    {drawerTab === "overview" &&
-                        drawer.type === "opportunities" &&
-                        drawer.id &&
-                        drawer.id !== "new" &&
-                        !(data as { _create?: boolean })?._create && (
-                            <div className="mb-4 space-y-3">
-                                <OpportunityPacketReviewOverview
-                                    opportunityId={drawer.id}
-                                    canMutate={!!canMutate}
-                                    onInvalidate={() => {
-                                        setOpportunityRelatedData(null);
-                                        setOpportunityActivitySignalNonce((n) => n + 1);
-                                    }}
-                                />
-                                <p className="rounded-md border border-alloy-stone/25 bg-alloy-stone/[0.04] px-3 py-2 text-[11px] leading-relaxed text-alloy-midnight/65">
-                                    Send new packets from the toolbar (
-                                    <span className="font-medium text-alloy-midnight/75">Send enrollment packet</span>
-                                    ).{" "}
-                                    <button
-                                        type="button"
-                                        className="font-semibold text-alloy-blue hover:underline"
-                                        onClick={() => setDrawerTab("activity")}
-                                    >
-                                        Activity
-                                    </button>
-                                    {" · "}
-                                    <button
-                                        type="button"
-                                        className="font-semibold text-alloy-blue hover:underline"
-                                        onClick={() => setDrawerTab("documents")}
-                                    >
-                                        Documents
-                                    </button>{" "}
-                                    list launches and linked files.
-                                </p>
-                            </div>
-                        )}
                     {drawerTab === "overview" && useConfigDrivenOverview && presentationType && (
                         isJobDrawerV2 && drawer.type === "jobs" ? (
                             showJobRecordModalV2 ? (
@@ -11044,6 +11034,17 @@ export default function AdminEntityDrawer() {
                                                                                 </p>
                                                                             )}
                                                                         </div>
+                                                                    ) : null}
+                                                                    {drawer.id && drawer.id !== "new" ? (
+                                                                        <OpportunityInquirySummaryActivity
+                                                                            opportunityId={drawer.id}
+                                                                            canMutate={!!canMutate}
+                                                                            onInvalidate={() => {
+                                                                                setOpportunityRelatedData(null);
+                                                                                setOpportunityActivitySignalNonce((n) => n + 1);
+                                                                            }}
+                                                                            onGoToTab={(tab) => setDrawerTab(tab)}
+                                                                        />
                                                                     ) : null}
                                                                 </div>
                                                             </div>
