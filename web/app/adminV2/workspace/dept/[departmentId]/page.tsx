@@ -16,7 +16,10 @@ import { DepartmentWorkspaceBridgeShell } from "@/components/admin/workspace/Dep
 import { WorkspaceActionsRailPlaceholder } from "@/components/admin/workspace/WorkspaceActionsRailPlaceholder";
 import KPIBlock from "@/app/adminV2/components/workspace/blocks/KPIBlock";
 import { DepartmentWorkspaceColdShell } from "@/components/admin/workspace/DepartmentWorkspaceColdShell";
-import { WorkspaceQuietKpiReserve } from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
+import {
+    DeptPairedOperQuietReserve,
+    WorkspaceQuietKpiReserve,
+} from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
 import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
 import ActionsBlock from "@/app/adminV2/components/workspace/blocks/ActionsBlock";
 import { useAdminDrawer, useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
@@ -532,7 +535,6 @@ export default function AdminV2WorkspaceDepartmentPage() {
         }
 
         const summariesFetchPromise = refreshQueueSummaries(null, []);
-        const attentionFetchPromise = fetchDeptAttentionPreview(null);
 
         void (async () => {
             const routeStart = typeof performance !== "undefined" ? performance.now() : 0;
@@ -557,7 +559,6 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     dedupeAdminFetch(wuRoute, init),
                 ]);
                 void summariesFetchPromise;
-                void attentionFetchPromise;
 
                 const deptJson = (await deptRes.json().catch(() => ({}))) as {
                     error?: string;
@@ -672,9 +673,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     }
 
                     const naWu = wuCommit.find((w) => (w.key ?? "").trim().toLowerCase() === "needs_attention");
-                    if (naWu != null) {
-                        void fetchDeptAttentionPreview(naWu.id);
-                    }
+                    void fetchDeptAttentionPreview(naWu?.id ?? null);
 
                     void (async () => {
                         if (cancelled) return;
@@ -748,8 +747,44 @@ export default function AdminV2WorkspaceDepartmentPage() {
         return deptLoading;
     }, [departmentId, deptLoading]);
 
-    /** KPI strip only — core queue panels must not wait on placements or automation. */
+    /** KPI strip only — operational panels use a separate readiness gate. */
     const deptKpiPlacementPending = !dept || departmentPageBlockingLoad || deptPlacementRows === undefined;
+
+    const deptExpectsPipelineLanes = useMemo(() => {
+        const list = deptWorkUnits ?? [];
+        if (!list.length) return false;
+        return list.some((w) => (w.key ?? "").trim().toLowerCase() === "enrollment_pipeline");
+    }, [deptWorkUnits]);
+
+    const deptThroughputPanelReady = useMemo(() => {
+        if (!dept || departmentPageBlockingLoad) return false;
+        const list = deptWorkUnits ?? [];
+        if (!list.length) return true;
+        if (deptExpectsPipelineLanes) {
+            return !deptPipelineExecLoading;
+        }
+        return !deptQueueSummariesLoading;
+    }, [
+        dept,
+        departmentPageBlockingLoad,
+        deptWorkUnits,
+        deptExpectsPipelineLanes,
+        deptPipelineExecLoading,
+        deptQueueSummariesLoading,
+    ]);
+
+    const deptAttentionPanelReady = useMemo(() => {
+        if (!dept || departmentPageBlockingLoad) return false;
+        return !deptAttentionBucketsLoading;
+    }, [dept, departmentPageBlockingLoad, deptAttentionBucketsLoading]);
+
+    /** One operational reveal — avoid WU rows swapping to pipeline lanes or attention refetch thrash. */
+    const deptOperPanelsRevealReady = deptThroughputPanelReady && deptAttentionPanelReady;
+
+    const deptOperPanelTitle =
+        deptOperPanelsRevealReady && deptPipelineExecSurface?.panelTitle
+            ? deptPipelineExecSurface.panelTitle
+            : "Work Unit Queue";
 
     useEffect(() => {
         if (!isEnrollmentLikeDepartmentKey(deptKey) || !departmentId || !primaryWorkUnit?.id) {
@@ -881,7 +916,10 @@ export default function AdminV2WorkspaceDepartmentPage() {
         [departmentId, enrollmentRightRailByKey, needsAttentionHref, openDrawer, primaryWorkUnit?.id, router]
     );
 
-    const execPanelTitle = deptPipelineExecSurface?.panelTitle ?? "Work Unit Queue";
+    const showPipelineLanes =
+        Boolean(deptPipelineExecSurface && deptPipelineExecSurface.lanes.length > 0);
+    const showWuThroughputRows =
+        !deptExpectsPipelineLanes || (!deptPipelineExecLoading && !showPipelineLanes);
 
     const throughputLaneBody = (
         <ul className="adminv2-ws-queue-list" role="list">
@@ -892,10 +930,10 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             </div>
                         </li>
                     ) : null}
-                    {deptPipelineExecSurface && deptPipelineExecSurface.lanes.length > 0 ? (
+                    {showPipelineLanes ? (
                         <>
-                            {deptPipelineExecSurface.lanes.map((lane) => {
-                                const wuHref = `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(deptPipelineExecSurface.workUnitId)}`;
+                            {deptPipelineExecSurface!.lanes.map((lane) => {
+                                const wuHref = `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(deptPipelineExecSurface!.workUnitId)}`;
                                 const href = `${wuHref}?queue=${encodeURIComponent(lane.key)}`;
                                 return (
                                     <li key={`pipe:${lane.key}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
@@ -912,9 +950,11 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                 );
                             })}
                         </>
-                    ) : (
+                    ) : showWuThroughputRows ? (
                         <>
-                            {(deptWorkUnits ?? []).map((wu) => {
+                            {(deptWorkUnits ?? [])
+                                .filter((w) => (w.key ?? "").trim().toLowerCase() !== "needs_attention")
+                                .map((wu) => {
                                 const s = deptWorkUnitSummaries[wu.id];
                                 const total = s ? s.total : null;
                                 const wuHref = `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(wu.id)}`;
@@ -926,14 +966,14 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                             label={wu.name?.trim() || "Work unit"}
                                             iconKey={null}
                                             total={total}
-                                            totalPending={deptQueueSummariesLoading && total == null}
+                                            countsDeferred={false}
                                             variant="throughput"
                                         />
                                     </li>
                                 );
                             })}
                         </>
-                    )}
+                    ) : null}
                 </ul>
     );
 
@@ -985,7 +1025,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
     const throughputPairedPanels = (
         <div className="adminv2-ws-soft-content-reveal">
             <WorkspacePairedOperPanelsGrid>
-                <WorkspacePairedOperPanel tone="throughput" ariaLabel={execPanelTitle} title={execPanelTitle}>
+                <WorkspacePairedOperPanel tone="throughput" ariaLabel={deptOperPanelTitle} title={deptOperPanelTitle}>
                     {throughputLaneBody}
                 </WorkspacePairedOperPanel>
                 <WorkspacePairedOperPanel
@@ -1039,7 +1079,13 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             </div>
                         ) : null
                     }
-                    throughputSlot={throughputPairedPanels}
+                    throughputSlot={
+                        deptOperPanelsRevealReady ? (
+                            throughputPairedPanels
+                        ) : (
+                            <DeptPairedOperQuietReserve throughputTitle="Work Unit Queue" />
+                        )
+                    }
                     attentionSlot={null}
                     contextSlot={
                         <div
@@ -1048,7 +1094,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         >
                             <AutomationWorkflowsBlock
                                 title="Automations"
-                                kpisLoading={workflowKpisLoading}
+                                kpisLoading={workflowKpisLoading && deptOperPanelsRevealReady}
                                 kpis={{
                                     runs_today: workflowKpis.runs_today,
                                     failed_last_7d: workflowKpis.failed_last_7d,

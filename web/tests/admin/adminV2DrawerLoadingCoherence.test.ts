@@ -127,15 +127,21 @@ describe("Drawer opportunity header grouped loading", () => {
     });
 });
 
-describe("Dept core panels vs KPI", () => {
-    it("does not block throughput/attention on KPI placements or paired quiet reserve", () => {
+describe("Dept operational panel render-state", () => {
+    it("holds paired panels until throughput shape and attention are ready", () => {
         const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
-        expect(src).toContain("deptKpiPlacementPending");
+        expect(src).toContain("deptOperPanelsRevealReady");
+        expect(src).toContain("deptExpectsPipelineLanes");
+        expect(src).toContain("showPipelineLanes");
+        expect(src).not.toContain("totalPending=");
+        expect(src).toMatch(/deptOperPanelsRevealReady \? \([\s\S]*?throughputPairedPanels[\s\S]*?DeptPairedOperQuietReserve/);
+    });
+
+    it("fetches attention once after work units resolve (no early parallel refetch)", () => {
+        const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
         expect(src).toContain("summariesFetchPromise");
-        expect(src).toContain("attentionFetchPromise");
-        expect(src).toContain("throughputSlot={throughputPairedPanels}");
-        expect(src).not.toContain("deptOperationalCoherencePending");
-        expect(src).not.toContain("DeptPairedOperQuietReserve");
+        expect(src).not.toContain("attentionFetchPromise");
+        expect(src).toMatch(/void fetchDeptAttentionPreview\(naWu\?\.id/);
     });
 });
 
@@ -165,11 +171,23 @@ describe("Drawer single-reveal bootstrap body", () => {
     it("holds inquiry overview on bootstrap until full hydrate and defers secondary surfaces", () => {
         const src = read("components/admin/AdminEntityDrawer.tsx");
         expect(src).toContain("opportunityDrawerOverviewRevealReady");
+        expect(src).toContain("opportunityDrawerPreOverviewShell");
         expect(src).toContain("opportunityDrawerSecondaryReady");
         expect(src).toMatch(
-            /opportunityDrawerUsesBootstrapBodyShell[\s\S]*?!opportunityDrawerOverviewRevealReady/,
+            /opportunityDrawerPreOverviewShell[\s\S]*?DrawerOpportunityQueueBootstrapBodySkeleton/,
         );
         expect(src).toMatch(/reportDrawerPrimaryReady[\s\S]*?opportunityDrawerPrimaryCoherent/);
+    });
+
+    it("reveals inquiry tabs with overview and keeps preview title until primary reveal", () => {
+        const src = read("components/admin/AdminEntityDrawer.tsx");
+        expect(src).toMatch(
+            /!opportunityDrawerOverviewRevealReady[\s\S]*?opportunityQueuePreviewSeed\?\.title/,
+        );
+        expect(src).toMatch(
+            /opportunityDrawerOverviewRevealReady[\s\S]*?drawerTabStripKeys/,
+        );
+        expect(src).not.toMatch(/opportunityDrawerTabsPending && isOpportunityRecordModalTarget/);
     });
 
     it("does not show loading copy for packet status probe", () => {

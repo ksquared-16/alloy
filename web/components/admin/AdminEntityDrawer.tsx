@@ -6109,7 +6109,8 @@ export default function AdminEntityDrawer() {
 
     const opportunityDrawerPrimaryCoherent = opportunityDrawerOverviewRevealReady;
 
-    const opportunityDrawerUsesBootstrapBodyShell =
+    /** Inquiry drawer: one pre-overview shell (bootstrap body) until primary overview is coherent. */
+    const opportunityDrawerPreOverviewShell =
         drawer.type === "opportunities" &&
         !!drawer.id &&
         drawer.id !== "new" &&
@@ -6117,6 +6118,8 @@ export default function AdminEntityDrawer() {
         !error &&
         opportunityInquiryWorkflowDrawer &&
         !opportunityDrawerOverviewRevealReady;
+
+    const opportunityDrawerUsesBootstrapBodyShell = opportunityDrawerPreOverviewShell;
 
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
@@ -6153,12 +6156,7 @@ export default function AdminEntityDrawer() {
         };
     }, [drawer.type, drawer.id, opportunityDrawerOverviewRevealReady]);
 
-    const opportunityDrawerTabsPending =
-        drawer.type === "opportunities" &&
-        !!drawer.id &&
-        drawer.id !== "new" &&
-        !(overviewData && (overviewData as { _create?: boolean })._create) &&
-        !opportunityDrawerShellSettled;
+    const opportunityDrawerTabsPending = false;
 
     /** Inquiry workflow (or record-chrome loading for an existing opportunity): fixed top tabs; no Related. */
     const drawerTabStripKeys = useMemo((): DrawerTabKey[] => {
@@ -6168,14 +6166,14 @@ export default function AdminEntityDrawer() {
         if (overviewData && (overviewData as { _create?: boolean })._create) {
             return tabList;
         }
-        if (!opportunityDrawerShellSettled) {
+        if (!opportunityDrawerOverviewRevealReady) {
             return [];
         }
         if (opportunityRecordGateWorkflowLayout) {
             return OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP;
         }
         return tabList;
-    }, [drawer.type, drawer.id, overviewData, opportunityDrawerShellSettled, opportunityRecordGateWorkflowLayout, tabList]);
+    }, [drawer.type, drawer.id, overviewData, opportunityDrawerOverviewRevealReady, opportunityRecordGateWorkflowLayout, tabList]);
 
     useEffect(() => {
         if (!isJobDrawerV2 || drawer.type !== "jobs" || !drawer.id || drawer.id === "new") return;
@@ -7514,6 +7512,7 @@ export default function AdminEntityDrawer() {
                         defaultExpanded: true,
                         collapsible: true,
                         gridCols: 1,
+                        contentLayout: "block",
                         fields: [],
                         locked: true,
                     },
@@ -8300,9 +8299,24 @@ export default function AdminEntityDrawer() {
                 onSelect={setDrawerTab}
                 tabButtonsDisabled={drawerGateLoading}
             />
-        ) : opportunityDrawerTabsPending && isOpportunityRecordModalTarget ? (
-            <DrawerRecordTabStripGateSkeleton tabCount={OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP.length} />
+        ) : isOpportunityRecordModalTarget &&
+          opportunityInquiryWorkflowDrawer &&
+          opportunityDrawerOverviewRevealReady &&
+          drawerTabStripKeys.length > 0 ? (
+            <div className="flex min-h-[2.875rem] flex-wrap gap-0.5 rounded-lg border border-admin-border bg-white p-0.5">
+                {drawerTabStripKeys.map((tab) => (
+                    <button
+                        key={tab}
+                        type="button"
+                        onClick={() => setDrawerTab(tab)}
+                        className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors adminv2-record-modal-tab ${drawerTab === tab ? "adminv2-record-modal-tab--active" : "text-alloy-forge/80 hover:bg-alloy-stone/50"}`}
+                    >
+                        {tabLabels[tab] ?? tab}
+                    </button>
+                ))}
+            </div>
         ) : (drawerReady || drawerGateLoading) &&
+          !opportunityInquiryWorkflowDrawer &&
           ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "persons", "vendors", "locations", "payments", "discount_redemptions", "service_offerings", "service_plan_templates", "addons", "subscriptions", "documents"].includes(
               drawer.type,
           ) &&
@@ -8337,12 +8351,23 @@ export default function AdminEntityDrawer() {
                   .join(" · ") || undefined
             : undefined;
     const opportunityQueuePreviewSeed = drawer.opportunityQueuePreviewSeed;
+    const opportunityDrawerPreviewSubtitle = useMemo(() => {
+        const seed = opportunityQueuePreviewSeed;
+        if (!seed) return undefined;
+        const previewSub = seed.subtitle?.trim();
+        const recordHint = seed.recordNumberHint?.trim();
+        if (previewSub && recordHint) return `${previewSub} · ${recordHint}`;
+        if (previewSub) return previewSub;
+        if (recordHint) return recordHint;
+        return undefined;
+    }, [opportunityQueuePreviewSeed]);
     const drawerTitleResolved =
         isOpportunityRecordModalTarget &&
         drawer.type === "opportunities" &&
         drawer.id !== "new" &&
-        !opportunityDrawerShellSettled &&
-        !error
+        !error &&
+        opportunityInquiryWorkflowDrawer &&
+        !opportunityDrawerOverviewRevealReady
             ? opportunityQueuePreviewSeed?.title?.trim() ||
               (opportunityDrawerQueueBootstrap
                   ? `Loading ${getEntityLabel(labels, drawer.type, "singular").toLowerCase()}…`
@@ -8463,7 +8488,13 @@ export default function AdminEntityDrawer() {
         !opportunityWorkflowHeaderUsesQueuePreview;
 
     const headerSubtitleForDrawer =
-        opportunityWorkflowHeaderChromePending ? (
+        opportunityInquiryWorkflowDrawer &&
+        !opportunityDrawerOverviewRevealReady &&
+        opportunityDrawerPreviewSubtitle ? (
+            opportunityDrawerPreviewSubtitle
+        ) : opportunityInquiryWorkflowDrawer && !opportunityDrawerOverviewRevealReady ? (
+            <DrawerOpportunityWorkflowSubtitleGateSkeleton />
+        ) : opportunityWorkflowHeaderChromePending ? (
             <DrawerOpportunityWorkflowSubtitleGateSkeleton />
         ) : drawerGateLoading && !(drawer.type === "opportunities" && opportunityQueuePreviewSeed?.subtitle?.trim()) ? (
             <DrawerSubtitleGateSkeleton />
@@ -8481,7 +8512,9 @@ export default function AdminEntityDrawer() {
         !!drawer.id;
 
     const headerTitleRightForDrawer =
-        opportunityWorkflowHeaderChromePending ? (
+        opportunityTitleRailActive && !opportunityDrawerOverviewRevealReady ? (
+            <DrawerWorkflowHeaderQuickActionsSkeleton />
+        ) : opportunityWorkflowHeaderChromePending ? (
             <DrawerWorkflowHeaderQuickActionsSkeleton />
         ) : opportunityTitleRailActive ? (
             opportunityHeaderQuickActionsNode ?? <DrawerWorkflowHeaderQuickActionsSkeleton />
@@ -8490,7 +8523,13 @@ export default function AdminEntityDrawer() {
         );
 
     const headerSignalsForDrawer =
-        opportunityWorkflowHeaderChromePending ? (
+        opportunityInquiryWorkflowDrawer && !opportunityDrawerOverviewRevealReady ? (
+            opportunityWorkflowHeaderUsesQueuePreview ? (
+                <DrawerOpportunityTimelineReserve />
+            ) : (
+                <DrawerOpportunityWorkflowTimelineGateSkeleton />
+            )
+        ) : opportunityWorkflowHeaderChromePending ? (
             <DrawerOpportunityWorkflowTimelineGateSkeleton />
         ) : opportunityWorkflowHeaderUsesQueuePreview ? (
             <DrawerOpportunityTimelineReserve />
@@ -8567,7 +8606,7 @@ export default function AdminEntityDrawer() {
                 >
                     <DrawerOpportunityQueueBootstrapBodySkeleton />
                 </div>
-            ) : drawerBodyGateLoading ? (
+            ) : drawerBodyGateLoading && !opportunityInquiryWorkflowDrawer ? (
                 <div
                     className={drawerRecordBodyRootClassName}
                     data-adminv2-drawer-record-gate-skeleton="true"
