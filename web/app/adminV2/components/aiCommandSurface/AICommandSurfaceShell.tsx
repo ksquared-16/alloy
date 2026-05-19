@@ -33,13 +33,13 @@ import {
 } from "@/lib/agent/workflowAssist/workflowAssistReadV1";
 import type { ConfigurationProposalV1 } from "@/lib/agent/configLayoutAssist/configurationProposalV1";
 import type {
-    ConfigLayoutAssistCapabilitiesV1,
-    ConfigLayoutAssistTraceV1,
+  ConfigLayoutAssistCapabilitiesV1,
+  ConfigLayoutAssistTraceV1,
 } from "@/lib/agent/configLayoutAssist/configLayoutAssistTypes";
 import type {
-    ConfigLayoutAssistFieldSetupDraftV1,
-    ConfigLayoutAssistReadySummaryV1,
-    ConfigLayoutAssistSectionOptionV1,
+  ConfigLayoutAssistFieldSetupDraftV1,
+  ConfigLayoutAssistReadySummaryV1,
+  ConfigLayoutAssistSectionOptionV1,
 } from "@/lib/agent/configLayoutAssist/configLayoutAssistFieldSetup";
 import type { ConfigLayoutAssistFieldSetupConfirmPayload } from "@/app/adminV2/components/aiCommandSurface/ConfigLayoutAssistFieldSetupCard";
 import { CONFIG_ASSIST_NEW_SECTION_VALUE } from "@/lib/agent/configLayoutAssist/configLayoutAssistFieldSetup";
@@ -98,17 +98,17 @@ import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGa
 import { formatTaskAssistEntitySearchNoMatchMessage } from "@/lib/agent/taskAssist/taskAssistEntitySearchVariants";
 import { taskAssistFollowUpNoticeText } from "@/lib/agent/taskAssist/taskAssistCompactActionCard";
 import {
-    clarificationPromptText,
-    mergeClarificationIntoIntent,
-    needsMessageGoalClarification,
-    reminderClarificationKind,
-    type TaskAssistClarificationKind,
+  clarificationPromptText,
+  mergeClarificationIntoIntent,
+  needsMessageGoalClarification,
+  reminderClarificationKind,
+  type TaskAssistClarificationKind,
 } from "@/lib/agent/taskAssist/taskAssistClarification";
 import { primaryTaskAssistEntitySearchToken } from "@/lib/agent/taskAssist/taskAssistEntitySearchVariants";
 import { fetchTaskAssistEntitySearch, readJson } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 import {
-    ADMIN_V2_FOCUS_COMMAND_BAR,
-    type AdminV2FocusCommandBarDetail,
+  ADMIN_V2_FOCUS_COMMAND_BAR,
+  type AdminV2FocusCommandBarDetail,
 } from "@/lib/adminV2/aiCommandSurface/adminV2CommandBarEvents";
 
 const CMD = {
@@ -423,14 +423,14 @@ function AIActionsRow(props: {
         </button>
       ) : null}
 
-        <a
-          href="/adminV2/ai-activity"
-          className="text-[10px] underline-offset-2 hover:underline opacity-70"
-          style={{ color: CMD.textSupporting }}
-          title="Full audit log (recent actions are above the command bar)"
-        >
-          Full log
-        </a>
+      <a
+        href="/adminV2/ai-activity"
+        className="text-[10px] underline-offset-2 hover:underline opacity-70"
+        style={{ color: CMD.textSupporting }}
+        title="Full audit log (recent actions are above the command bar)"
+      >
+        Full log
+      </a>
     </div>
   );
 }
@@ -606,8 +606,8 @@ export default function AICommandSurfaceShell() {
       const messageIntent =
         !isReminderIntent &&
         (intent?.intent_type === "draft_message" ||
-            intent?.intent_type === "schedule_message" ||
-            Boolean(intent?.message_goal_text?.trim()));
+          intent?.intent_type === "schedule_message" ||
+          Boolean(intent?.message_goal_text?.trim()));
       const uiPhase: "draft" | "workspace" | "reminder" = isReminderIntent ? "reminder" : messageIntent ? "draft" : "workspace";
       setThread((prev) => {
         let next = appendThreadTurn(prev, {
@@ -855,7 +855,7 @@ export default function AICommandSurfaceShell() {
         const ctxOpp =
           globalAssistant.currentContext?.entity_type === "opportunities" && globalAssistant.currentContext.entity_id ?
             globalAssistant.currentContext
-          : null;
+            : null;
         if (ctxOpp && !looksLikeAmbientOnlyCommand(cmd)) {
           const chip: TaskAssistEntitySearchCandidate = {
             entity_type: "opportunities",
@@ -878,7 +878,7 @@ export default function AICommandSurfaceShell() {
           return;
         }
         const fuzzyOnly =
-            list.length === 1 && list[0]!.matched_fields.some((f) => f === "fuzzy_match");
+          list.length === 1 && list[0]!.matched_fields.some((f) => f === "fuzzy_match");
         if (fuzzyOnly) {
           const c = list[0]!;
           setThread((prev) =>
@@ -894,7 +894,7 @@ export default function AICommandSurfaceShell() {
         const intro =
           list.length > 1 ?
             `I found ${list.length} matching records. Which one?`
-          : "Confirm who you mean.";
+            : "Confirm who you mean.";
         setThread((prev) => {
           let next = appendThreadTurn(prev, { kind: "assistant_notice", text: intro });
           next = appendThreadTurn(next, { kind: "candidate_results", candidates: list, intent });
@@ -968,7 +968,7 @@ export default function AICommandSurfaceShell() {
             entity_type: "opportunities" as const,
             entity_id: globalAssistant.currentContext.entity_id,
           }
-        : null;
+          : null;
 
       const isExplain = intent.sub_intent === "explain_v0" || intent.sub_intent === "explain_v1";
       const needsSummary = !isExplain;
@@ -1105,7 +1105,7 @@ export default function AICommandSurfaceShell() {
             const msg =
               typeof (summaryJson as { error?: string }).error === "string" ?
                 (summaryJson as { error: string }).error
-              : `HTTP ${sRes.status}`;
+                : `HTTP ${sRes.status}`;
             appendRead({
               payload: null,
               error: workflowAssistErrorEnvelope(
@@ -1137,7 +1137,7 @@ export default function AICommandSurfaceShell() {
             const msg =
               typeof (runs7dJson as { error?: string }).error === "string" ?
                 (runs7dJson as { error: string }).error
-              : `HTTP ${runsRes.status}`;
+                : `HTTP ${runsRes.status}`;
             appendRead({
               payload: null,
               error: workflowAssistErrorEnvelope(
@@ -1398,7 +1398,7 @@ export default function AICommandSurfaceShell() {
           ...(enrich?.template_id ? { template_id: enrich.template_id } : {}),
           ...(enrich?.lead_days_before_tour != null ?
             { lead_days_before_tour: enrich.lead_days_before_tour }
-          : {}),
+            : {}),
           ...(createInterpreted ?
             {
               interpreted: {
@@ -1407,7 +1407,7 @@ export default function AICommandSurfaceShell() {
                 unknowns: createInterpreted.unknowns,
               },
             }
-          : {}),
+            : {}),
         }),
       });
       const j = (await res.json()) as {
@@ -1448,7 +1448,7 @@ export default function AICommandSurfaceShell() {
               department_id: ws.department_id,
               ...(ws.work_unit_id ? { work_unit_id: ws.work_unit_id } : {}),
             }
-          : null,
+            : null,
         scope_labels: {
           department_name: ws?.department_name ?? null,
           work_unit_name: ws?.work_unit_name ?? null,
@@ -1470,7 +1470,7 @@ export default function AICommandSurfaceShell() {
         const prompted =
           typeof window !== "undefined" ?
             window.prompt("Proposed workflow name", currentName)?.trim()
-          : null;
+            : null;
         const proposed =
           prompted && prompted !== currentName.trim() ? prompted : workflowAssistRenameFallbackName(currentName);
         await proposeWorkflowAssistBody(
@@ -1481,7 +1481,7 @@ export default function AICommandSurfaceShell() {
         const prompted =
           typeof window !== "undefined" ?
             window.prompt("Proposed description", WORKFLOW_ASSIST_DESCRIPTION_NOTE_DEFAULT)?.trim()
-          : null;
+            : null;
         const proposed = prompted || WORKFLOW_ASSIST_DESCRIPTION_NOTE_DEFAULT;
         await proposeWorkflowAssistBody(
           buildWorkflowAssistEditDescriptionProposeBody({
@@ -1547,7 +1547,7 @@ export default function AICommandSurfaceShell() {
     if (pending) {
       const merged = mergeClarificationIntoIntent(pending.intent, {
         goalText:
-            pending.awaiting === "message_goal" || pending.awaiting === "reminder_what" ? cmd : undefined,
+          pending.awaiting === "message_goal" || pending.awaiting === "reminder_what" ? cmd : undefined,
         timingText: pending.awaiting === "reminder_when" ? cmd : undefined,
       });
       if (pending.awaiting === "message_goal" && needsMessageGoalClarification(merged)) {
@@ -1950,9 +1950,8 @@ export default function AICommandSurfaceShell() {
 
       <div className={`flex items-end gap-2 ${hasThread ? "mt-0" : "mt-2"}`}>
         <div
-          className={`flex-1 min-w-0 border-2 bg-white px-3 py-2 ${
-            hasThread ? "rounded-b-xl rounded-t-none border-t border-t-[rgba(0,0,0,0.06)]" : "rounded-2xl px-3.5 py-2.5"
-          }`}
+          className={`flex-1 min-w-0 border-2 bg-white px-3 py-2 ${hasThread ? "rounded-b-xl rounded-t-none border-t border-t-[rgba(0,0,0,0.06)]" : "rounded-2xl px-3.5 py-2.5"
+            }`}
           style={{
             borderColor: derived.adminV2AiInputPineRing,
             boxShadow:
@@ -1965,7 +1964,7 @@ export default function AICommandSurfaceShell() {
             ref={inputRef}
             value={commandText}
             onChange={(e) => setCommandText(e.target.value)}
-            placeholder="Ask me anything"
+            placeholder="Talk to Bos"
             className="w-full resize-none bg-transparent outline-none text-sm leading-snug"
             rows={1}
             style={{ color: neutral.textPrimary }}

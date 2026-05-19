@@ -14,8 +14,8 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: "Alloy | Trusted Home Services in Bend",
-  description: "Alloy connects homeowners with vetted local pros, starting with home cleaning in Bend, Oregon.",
+  title: "Alloy | Powered by BOS",
+  description: "Alloy - future operating system for organizations.",
   icons: {
     icon: "/brand/alloy-brandmark-blue.svg",
     apple: "/brand/alloy-brandmark-blue.svg",
