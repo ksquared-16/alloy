@@ -22,6 +22,7 @@ import {
     WorkUnitQueueCompactRowSkeleton,
     WorkUnitQueueCompactRowSkeletonList,
 } from "@/components/admin/workspace/WorkUnitQueueCompactRowSkeleton";
+import { ADMINV2_DEPT_ATTENTION_LOADING_ROW_COUNT } from "@/lib/ui-v2/adminV2LoadingGeometry";
 import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
 import ActionsBlock from "@/app/adminV2/components/workspace/blocks/ActionsBlock";
 import { useAdminDrawer, useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
@@ -960,13 +961,11 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             </div>
                         </li>
                     ) : null}
-                    {deptAttentionBucketsLoading && !sortedDeptAttentionBuckets.length ? (
-                        <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
-                            <div className="rounded-lg border border-admin-border bg-white/50 px-3 py-3 text-xs text-alloy-midnight/55">
-                                Loading operational buckets…
-                            </div>
-                        </li>
-                    ) : null}
+                    {deptAttentionBucketsLoading && !sortedDeptAttentionBuckets.length
+                        ? Array.from({ length: ADMINV2_DEPT_ATTENTION_LOADING_ROW_COUNT }, (_, i) => (
+                              <WorkUnitQueueCompactRowSkeleton key={`attn-skel-${i}`} variant="attention" />
+                          ))
+                        : null}
                     {!deptAttentionBucketsLoading && !deptAttentionBucketsError && sortedDeptAttentionBuckets.length === 0 ? (
                         <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                             <div className="rounded-lg border border-admin-border bg-white/50 px-3 py-3 text-xs text-alloy-midnight/60">

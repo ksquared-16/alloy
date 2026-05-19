@@ -19,6 +19,8 @@ type Props = {
    * Pass false when KPIs are not loaded asynchronously.
    */
   kpiStripPlaceholder: boolean;
+  /** When placements are known, match skeleton cell count to final strip width. */
+  kpiStripSkeletonCellCount?: number;
   /**
    * Keep the command column at its final desktop width while registry right-rail actions resolve
    * (enrollment work units — avoids primary column reflow when actions arrive).
@@ -37,6 +39,7 @@ export default function WorkUnitWorkspace({
   onAction,
   headerQueuePicker,
   kpiStripPlaceholder,
+  kpiStripSkeletonCellCount,
   reserveActionsRail = false,
   primaryFooterSlot,
 }: Props) {
@@ -147,7 +150,7 @@ export default function WorkUnitWorkspace({
               ) : null}
               {kpiStripPlaceholder ? (
                 <div data-workspace-zone="kpi-banner">
-                  <KpiStripSkeleton id="wu-kpi-skeleton" />
+                  <KpiStripSkeleton id="wu-kpi-skeleton" cellCount={kpiStripSkeletonCellCount} />
                 </div>
               ) : hasKpis ? (
                 <div className="adminv2-ws-soft-content-reveal" data-workspace-zone="kpi-banner">

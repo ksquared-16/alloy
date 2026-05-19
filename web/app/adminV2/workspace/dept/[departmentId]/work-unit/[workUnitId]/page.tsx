@@ -28,6 +28,7 @@ import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { KpiStripSkeleton } from "@/components/admin/workspace/KpiStripSkeleton";
 import { WorkUnitQueueCompactRowSkeletonList } from "@/components/admin/workspace/WorkUnitQueueCompactRowSkeleton";
+import { ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT } from "@/lib/ui-v2/adminV2LoadingGeometry";
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import {
@@ -2380,9 +2381,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
             laneInterpretation:
                 entity === "job"
                     ? {
-                          laneStatusLine: queueItemsLoading
-                              ? "Loading queue items…"
-                              : `Queue: ${activeQueue?.key ?? "—"} · ${rowTotalDisplay} items`,
+                          laneStatusLine: rowsRefreshing
+                              ? activeQueue?.label?.trim()
+                                  ? `Refreshing ${activeQueue.label.trim()}…`
+                                  : "Refreshing queue…"
+                              : queueItemsLoading
+                                ? "Loading queue items…"
+                                : `Queue: ${activeQueue?.key ?? "—"} · ${rowTotalDisplay} items`,
                           recommendedActionLine: "Open a row to view the record in the drawer.",
                       }
                     : null,
@@ -3038,9 +3043,20 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     data-ws-surface="work_unit"
                     aria-busy="true"
                 >
-                    <KpiStripSkeleton id="wu-blocking-kpi-skeleton" />
+                    <KpiStripSkeleton
+                        id="wu-blocking-kpi-skeleton"
+                        cellCount={
+                            wuPlacementRows && wuPlacementRows.length > 0
+                                ? wuPlacementRows.length
+                                : undefined
+                        }
+                    />
                     <div className="adminv2-ws-dept-v2-operational-row adminv2-ws-dept-v2-operational-row--double mt-4">
-                        <WorkUnitQueueCompactRowSkeletonList count={6} variant="standard" ariaLabel="Loading queue" />
+                        <WorkUnitQueueCompactRowSkeletonList
+                            count={ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT}
+                            variant="standard"
+                            ariaLabel="Loading queue"
+                        />
                     </div>
                 </div>
             ) : workUnitShellReady && effectiveModel ? (
@@ -3070,6 +3086,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         onAction={onAction}
                         headerQueuePicker={headerQueuePickerSlot}
                         kpiStripPlaceholder={workUnitKpiStripPlaceholder}
+                        kpiStripSkeletonCellCount={
+                            wuPlacementRows && wuPlacementRows.length > 0 ? wuPlacementRows.length : undefined
+                        }
                         reserveActionsRail={isEnrollmentLikeDepartmentKey(dept?.key)}
                         primaryFooterSlot={
                             <AutomationWorkflowsBlock

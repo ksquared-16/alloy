@@ -1,11 +1,19 @@
 "use client";
 
-const CELLS = 5;
+import { ADMINV2_KPI_STRIP_CELL_COUNT } from "@/lib/ui-v2/adminV2LoadingGeometry";
 
 /**
  * Deferred KPI placements — same row geometry as the live orientation strip (`premium-loading` cells).
  */
-export function KpiStripSkeleton({ id = "kpi-strip-skeleton" }: { id?: string }) {
+export function KpiStripSkeleton({
+    id = "kpi-strip-skeleton",
+    cellCount = ADMINV2_KPI_STRIP_CELL_COUNT,
+}: {
+    id?: string;
+    /** Match resolved placement row count when known to avoid strip width jump. */
+    cellCount?: number;
+}) {
+    const cells = Math.max(1, Math.min(cellCount, 8));
     return (
         <div
             id={id}
@@ -17,7 +25,7 @@ export function KpiStripSkeleton({ id = "kpi-strip-skeleton" }: { id?: string })
                 className="adminv2-ws-kpi-strip adminv2-ws-kpi-strip--orientation adminv2-ws-kpi-strip--premium-loading"
                 role="presentation"
             >
-                {Array.from({ length: CELLS }, (_, i) => (
+                {Array.from({ length: cells }, (_, i) => (
                     <div
                         key={i}
                         className={[

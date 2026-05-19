@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import "@/app/adminV2/components/workspace/workspace.css";
@@ -25,6 +25,11 @@ import {
     reportDrawerPrimaryReady,
     reportDrawerVisibleApplied,
 } from "@/lib/perf/adminV2DrawerPerf";
+import {
+    ADMINV2_DRAWER_OPPORTUNITY_BOOTSTRAP_BODY_MIN_H,
+    ADMINV2_DRAWER_OPPORTUNITY_TIMELINE_MIN_H,
+    ADMINV2_DRAWER_OPPORTUNITY_WORKFLOW_BODY_MIN_H,
+} from "@/lib/ui-v2/adminV2LoadingGeometry";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import EntityDocumentsSection from "@/components/admin/EntityDocumentsSection";
 import CommunicationsDrawerSection from "@/components/admin/communications/CommunicationsDrawerSection";
@@ -113,6 +118,11 @@ import { formatVendorOptionLabel, type AdminVendorSelectOption } from "@/lib/adm
 import { mergeUnifiedStatusIntoConfigOverview } from "@/lib/admin/unifiedDrawerStatus";
 import { recordSurfaceContextStyle } from "@/lib/visualContext";
 import OpportunityInquiryChildrenSection, { type InquiryChildRow } from "@/components/admin/entity/OpportunityInquiryChildrenSection";
+import {
+    filterInquiryChildRowsForDrawer,
+    logInquiryChildrenDebug,
+    summarizeInquiryChildrenRows,
+} from "@/lib/admin/drawer/inquiryChildrenDebug";
 import { OpportunityInquiryChildrenRegistryActions } from "@/components/admin/opportunity/OpportunityInquiryChildrenRegistryActions";
 import { OpportunityPacketReviewOverview } from "@/components/admin/opportunity/OpportunityPacketReviewOverview";
 import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
@@ -864,8 +874,20 @@ function JobDrawerRelationshipsSection(props: {
 }
 
 /** Quiet block placeholder — avoids spinners inside the drawer after the shell mounts. */
-function DrawerQuietSkeletonBar({ className = "" }: { className?: string }) {
-    return <div className={`skeleton-pulse rounded-md bg-alloy-stone/15 ${className}`.trim()} aria-hidden />;
+function DrawerQuietSkeletonBar({
+    className = "",
+    style,
+}: {
+    className?: string;
+    style?: CSSProperties;
+}) {
+    return (
+        <div
+            className={`skeleton-pulse rounded-md bg-alloy-stone/15 ${className}`.trim()}
+            style={style}
+            aria-hidden
+        />
+    );
 }
 
 function DrawerSubtitleGateSkeleton({ lines = 2 }: { lines?: number }) {
@@ -890,11 +912,22 @@ function DrawerOpportunityWorkflowSubtitleGateSkeleton() {
     );
 }
 
+function DrawerOpportunityTimelineReserve() {
+    return (
+        <div
+            className="w-full shrink-0 rounded-xl border border-transparent"
+            style={{ minHeight: ADMINV2_DRAWER_OPPORTUNITY_TIMELINE_MIN_H }}
+            aria-hidden
+        />
+    );
+}
+
 function DrawerOpportunityWorkflowTimelineGateSkeleton() {
     return (
         <div
             data-opportunity-workflow-timeline-skeleton="true"
-            className="min-h-[52px] rounded-xl border border-alloy-stone/12 bg-white/60 px-2.5 py-2 shadow-sm ring-1 ring-alloy-stone/10"
+            className="rounded-xl border border-alloy-stone/12 bg-white/60 px-2.5 py-2 shadow-sm ring-1 ring-alloy-stone/10"
+            style={{ minHeight: ADMINV2_DRAWER_OPPORTUNITY_TIMELINE_MIN_H }}
             aria-busy="true"
         >
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -942,9 +975,28 @@ function DrawerRecordGateSkeleton(props: {
     modalOpportunityClassic: boolean;
     /** Non-modal opportunity drawer: same workflow-shaped skeleton while record chrome resolves. */
     recordGateOpportunityWorkflowShape: boolean;
+    /** Queue preview bootstrap — quieter body reserve (header already preview-backed). */
+    opportunityQueueBootstrapCompact?: boolean;
 }) {
-    const { modalJob, modalSchedule, modalOpportunityWorkflow, modalOpportunityClassic, recordGateOpportunityWorkflowShape } =
-        props;
+    const {
+        modalJob,
+        modalSchedule,
+        modalOpportunityWorkflow,
+        modalOpportunityClassic,
+        recordGateOpportunityWorkflowShape,
+        opportunityQueueBootstrapCompact,
+    } = props;
+
+    if (opportunityQueueBootstrapCompact) {
+        return (
+            <div className="space-y-3 pt-0.5" aria-busy="true">
+                <DrawerQuietSkeletonBar
+                    className="w-full rounded-xl border border-alloy-stone/10 bg-white/50"
+                    style={{ minHeight: ADMINV2_DRAWER_OPPORTUNITY_BOOTSTRAP_BODY_MIN_H }}
+                />
+            </div>
+        );
+    }
 
     if (modalOpportunityWorkflow || recordGateOpportunityWorkflowShape) {
         return (
@@ -969,7 +1021,10 @@ function DrawerRecordGateSkeleton(props: {
                         </div>
                     </div>
                 </div>
-                <DrawerQuietSkeletonBar className="min-h-[18rem] w-full rounded-xl border border-alloy-stone/10 bg-white/40" />
+                <DrawerQuietSkeletonBar
+                    className="w-full rounded-xl border border-alloy-stone/10 bg-white/40"
+                    style={{ minHeight: ADMINV2_DRAWER_OPPORTUNITY_WORKFLOW_BODY_MIN_H }}
+                />
             </div>
         );
     }
@@ -6944,15 +6999,25 @@ export default function AdminEntityDrawer() {
                           };
                       })
                     : [];
+                const { kept: drawerChildRows, dropped: droppedChildRows } = filterInquiryChildRowsForDrawer(rows);
+                logInquiryChildrenDebug("AdminEntityDrawer.inquiry_children", {
+                    component: "OpportunityInquiryChildrenSection",
+                    sectionTitle: "Inquiry children",
+                    opportunityId: drawer.id,
+                    customerId: d.customer_id ?? null,
+                    recordSurface: d._record_surface ?? null,
+                    apiRoute: drawer.id ? `/api/admin/entity/opportunities/${drawer.id}` : null,
+                    apiChildCount: rows.length,
+                    afterComponentFilterCount: drawerChildRows.length,
+                    droppedByComponentFilter: droppedChildRows,
+                    apiChildren: summarizeInquiryChildrenRows(rows),
+                    renderedChildren: summarizeInquiryChildrenRows(drawerChildRows),
+                    serverDebug: d._debug_inquiry_children ?? null,
+                });
                 const detailPending = d._member_person_graph_pending === true;
                 out.inquiry_children = (
                     <OpportunityInquiryChildrenSection
-                        rows={rows.filter(
-                            (r) =>
-                                r.id &&
-                                (r.customer_member_id || r.display_name) &&
-                                !String(r.customer_member_id).startsWith("metadata_child:")
-                        )}
+                        rows={drawerChildRows}
                         opportunityId={drawer.id ?? undefined}
                         canEdit={!!canMutate}
                         embeddedInPremiumSection={oppCfg?.inquiry_drawer_mode === "workflow_v1"}
@@ -8317,13 +8382,17 @@ export default function AdminEntityDrawer() {
             </div>
         ) : undefined;
 
+    const opportunityWorkflowHeaderUsesQueuePreview =
+        opportunityDrawerQueueBootstrap && Boolean(opportunityQueuePreviewSeed?.title?.trim());
+
     const opportunityWorkflowHeaderChromePending =
         drawer.type === "opportunities" &&
         opportunityInquiryWorkflowDrawerShell &&
         !!drawer.id &&
         drawer.id !== "new" &&
         !(overviewData && (overviewData as { _create?: boolean })._create) &&
-        !opportunityDrawerShellSettled;
+        !opportunityDrawerShellSettled &&
+        !opportunityWorkflowHeaderUsesQueuePreview;
 
     const headerSubtitleForDrawer =
         opportunityWorkflowHeaderChromePending ? (
@@ -8337,6 +8406,8 @@ export default function AdminEntityDrawer() {
     const headerTitleRightForDrawer =
         opportunityWorkflowHeaderChromePending ? (
             <DrawerWorkflowHeaderQuickActionsSkeleton />
+        ) : opportunityWorkflowHeaderUsesQueuePreview ? (
+            <div className="min-h-[2.375rem] shrink-0" aria-hidden />
         ) : (
             workflowHeaderTitleRight
         );
@@ -8344,6 +8415,8 @@ export default function AdminEntityDrawer() {
     const headerSignalsForDrawer =
         opportunityWorkflowHeaderChromePending ? (
             <DrawerOpportunityWorkflowTimelineGateSkeleton />
+        ) : opportunityWorkflowHeaderUsesQueuePreview ? (
+            <DrawerOpportunityTimelineReserve />
         ) : drawerGateLoading && isJobRecordModalTarget && drawer.type === "jobs" ? (
             <div className="min-h-[3.25rem] w-full" aria-busy="true">
                 <DrawerQuietSkeletonBar className="h-14 w-full rounded-lg opacity-95" />
@@ -8440,6 +8513,9 @@ export default function AdminEntityDrawer() {
                             )
                         }
                         recordGateOpportunityWorkflowShape={recordGateOpportunityWorkflowShape}
+                        opportunityQueueBootstrapCompact={
+                            opportunityDrawerQueueBootstrap && drawerBodyGateLoading
+                        }
                     />
                 </div>
             ) : drawerReady && data && dataMatchesDrawer ? (

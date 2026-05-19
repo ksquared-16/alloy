@@ -115,4 +115,20 @@ describe("Drawer opportunity header grouped loading", () => {
         expect(src).toContain("opportunityDrawerQueueBootstrap");
         expect(src).toMatch(/opportunityQueuePreviewSeed\?\.title/);
     });
+
+    it("uses compact drawer body reserve when queue preview bootstrap is active", () => {
+        const src = read("components/admin/AdminEntityDrawer.tsx");
+        expect(src).toContain("opportunityQueueBootstrapCompact");
+        expect(src).toContain("ADMINV2_DRAWER_OPPORTUNITY_BOOTSTRAP_BODY_MIN_H");
+        expect(src).toContain("opportunityWorkflowHeaderUsesQueuePreview");
+        expect(src).toContain("DrawerOpportunityTimelineReserve");
+    });
+});
+
+describe("Dept attention loading geometry", () => {
+    it("uses compact row skeleton instead of loading copy", () => {
+        const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
+        expect(src).toContain("ADMINV2_DEPT_ATTENTION_LOADING_ROW_COUNT");
+        expect(src).not.toContain("Loading operational buckets");
+    });
 });

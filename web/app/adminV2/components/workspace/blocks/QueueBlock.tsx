@@ -22,6 +22,7 @@ import { normalizePreviewLooseDateTokens } from "@/lib/adminFormatters";
 import { CRM_COMPACT_VALUE_DOT_SEP } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 import { QueueRowPlacementPriorityStrip } from "@/app/adminV2/components/workspace/blocks/QueueRowPlacementPriorityStrip";
 import { WorkUnitQueueCompactRowSkeleton } from "@/components/admin/workspace/WorkUnitQueueCompactRowSkeleton";
+import { ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT } from "@/lib/ui-v2/adminV2LoadingGeometry";
 import {
     formatPlacementGroupHeaderTitle,
     placementWaitlistGroupRowMode,
@@ -940,7 +941,7 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
           role="list"
         >
         {queue.rowsLoading && queue.items.length === 0
-          ? Array.from({ length: 6 }, (_, i) => (
+          ? Array.from({ length: ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT }, (_, i) => (
               <WorkUnitQueueCompactRowSkeleton key={`queue-row-skel-${i}`} variant="standard" />
             ))
           : null}
