@@ -17,6 +17,11 @@ export type DeptPipelineExecSurface = {
 
 type WorkUnitCandidate = { id: string; key: string | null };
 
+export type WorkUnitDetailSnapshot = {
+    queue_definition?: unknown;
+    department_id?: string | null;
+};
+
 /**
  * Find the first work unit in `candidates` with `pipeline_with_attention` layout and lane counts.
  * Probes candidates in parallel (bounded concurrency) instead of sequential awaits.
@@ -26,8 +31,10 @@ export async function resolveDeptPipelineExecSurface(params: {
     candidates: WorkUnitCandidate[];
     init?: RequestInit;
     concurrency?: number;
+    /** Skip GET /work-units/:id when bootstrap or another surface already loaded the row. */
+    workUnitDetailById?: ReadonlyMap<string, WorkUnitDetailSnapshot>;
 }): Promise<DeptPipelineExecSurface | null> {
-    const { departmentId, candidates, init, concurrency = 4 } = params;
+    const { departmentId, candidates, init, concurrency = 4, workUnitDetailById } = params;
     if (!candidates.length) return null;
 
     const ordered = [...candidates].sort((a, b) => {
@@ -40,12 +47,15 @@ export async function resolveDeptPipelineExecSurface(params: {
 
     const surfaces = await mapWithConcurrency(ordered, concurrency, async (wu) => {
         try {
-            const wuRes = await dedupeAdminFetch(`/api/admin/work-units/${encodeURIComponent(wu.id)}`, init ?? {});
-            if (!wuRes.ok) return null;
-            const row = (await wuRes.json().catch(() => ({}))) as {
-                queue_definition?: unknown;
-                department_id?: string | null;
-            };
+            const cached = workUnitDetailById?.get(wu.id);
+            let row: WorkUnitDetailSnapshot;
+            if (cached) {
+                row = cached;
+            } else {
+                const wuRes = await dedupeAdminFetch(`/api/admin/work-units/${encodeURIComponent(wu.id)}`, init ?? {});
+                if (!wuRes.ok) return null;
+                row = (await wuRes.json().catch(() => ({}))) as WorkUnitDetailSnapshot;
+            }
             if (String(row.department_id ?? "").trim() !== departmentId) return null;
             let def;
             try {

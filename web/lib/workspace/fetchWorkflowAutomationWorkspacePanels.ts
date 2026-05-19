@@ -1,4 +1,5 @@
 import type { WorkflowScopePartitionV1 } from "@/lib/workflows/workflowScopeMetadata";
+import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 
 export type WorkflowAutomationWorkspaceKpis = {
     runs_today: number;
@@ -39,8 +40,8 @@ export async function fetchWorkflowAutomationWorkspacePanels(
     if (work_unit_id) summaryQs.set("work_unit_id", work_unit_id);
 
     const [kRes, sRes] = await Promise.all([
-        fetch("/api/admin/workflow-runs?list=kpis", init),
-        fetch(`/api/admin/workflows/summary?${summaryQs.toString()}`, init),
+        dedupeAdminFetch("/api/admin/workflow-runs?list=kpis", init),
+        dedupeAdminFetch(`/api/admin/workflows/summary?${summaryQs.toString()}`, init),
     ]);
 
     const kBody = (await kRes.json().catch(() => ({}))) as { kpis?: Partial<WorkflowAutomationWorkspaceKpis> };

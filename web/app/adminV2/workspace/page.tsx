@@ -248,6 +248,12 @@ export default function AdminV2WorkspaceIndexPage() {
                 const t0 = perfDebug ? performance.now() : 0;
 
                 const fetchInit = workspaceDataFetchInit() ?? {};
+                const placementUrl = "/api/admin/workspace-kpi-placements?surface=workspace";
+                const placementP = dedupeAdminFetchWithTtl(
+                    placementUrl,
+                    { ...(fetchInit ?? {}), cache: "no-store" },
+                    8000
+                ).catch(() => null as Response | null);
                 const [res, wuRes] = await Promise.all([
                     dedupeAdminFetch("/api/admin/departments", fetchInit),
                     dedupeAdminFetch("/api/admin/work-units", fetchInit).catch(() => null as Response | null),
@@ -315,13 +321,6 @@ export default function AdminV2WorkspaceIndexPage() {
                                 items?: WorkspaceKpiPlacementRow[];
                                 scope_has_placements?: boolean;
                             };
-                            const placementUrl = "/api/admin/workspace-kpi-placements?surface=workspace";
-                            const placementP = dedupeAdminFetchWithTtl(
-                                placementUrl,
-                                { ...(workspaceDataFetchInit() ?? {}), cache: "no-store" },
-                                8000
-                            ).catch(() => null as Response | null);
-
                             const [rollupResult, placementRes] = await Promise.all([
                                 loadWorkspaceRollup(active, wuRes, wuJson),
                                 placementP,

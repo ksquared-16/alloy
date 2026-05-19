@@ -494,6 +494,15 @@ export default function AdminV2WorkspaceDepartmentPage() {
             }
             try {
                 const init = workspaceDataFetchInit() ?? {};
+                deptKpisPerfKeyRef.current = null;
+                if (!cancelled) {
+                    setDeptPlacementRows(undefined);
+                    setDeptScopeHasPlacements(false);
+                }
+                const placementT0 =
+                    typeof performance !== "undefined" && typeof window !== "undefined" ? performance.now() : 0;
+                const placementUrl = `/api/admin/workspace-kpi-placements?surface=department&department_id=${encodeURIComponent(departmentId)}`;
+                const placementP = dedupeAdminFetchWithTtl(placementUrl, { ...(init ?? {}), cache: "no-store" }, 8000);
                 const deptRoute = `/api/admin/departments/${encodeURIComponent(departmentId)}`;
                 const wuRoute = `/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`;
                 const [deptRes, wuRes] = await Promise.all([
@@ -571,6 +580,47 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         refreshQueueSummaries(deptCommit, wuCommit),
                         (async () => {
                             if (cancelled) return;
+                            try {
+                                const res = await placementP;
+                                if (!res.ok) {
+                                    if (!cancelled) {
+                                        setDeptPlacementRows([]);
+                                        setDeptScopeHasPlacements(false);
+                                    }
+                                } else {
+                                    const j = (await res.json().catch(() => ({}))) as {
+                                        items?: WorkspaceKpiPlacementRow[];
+                                        scope_has_placements?: boolean;
+                                    };
+                                    if (!cancelled) {
+                                        setDeptPlacementRows(j.items ?? []);
+                                        setDeptScopeHasPlacements(j.scope_has_placements === true);
+                                    }
+                                }
+                            } catch {
+                                if (!cancelled) {
+                                    setDeptPlacementRows([]);
+                                    setDeptScopeHasPlacements(false);
+                                }
+                            }
+                            if (
+                                !cancelled &&
+                                typeof performance !== "undefined" &&
+                                typeof window !== "undefined" &&
+                                deptKpisPerfKeyRef.current !== departmentId
+                            ) {
+                                deptKpisPerfKeyRef.current = departmentId;
+                                perfDeptLoad({
+                                    phase: "kpis_ready",
+                                    ms: Math.round(performance.now() - placementT0),
+                                    source: "background",
+                                    org_id: orgId,
+                                    department_id: departmentId,
+                                });
+                            }
+                        })(),
+                        (async () => {
+                            if (cancelled) return;
                             setDeptAttentionBucketsLoading(true);
                             setDeptAttentionBucketsError(null);
                             try {
@@ -646,61 +696,6 @@ export default function AdminV2WorkspaceDepartmentPage() {
             cancelled = true;
         };
     }, [departmentId, orgId, principalUserId, accessScopeFingerprint, selectedSiteId]);
-
-    useEffect(() => {
-        if (!departmentId) return;
-        deptKpisPerfKeyRef.current = null;
-        setDeptPlacementRows(undefined);
-        setDeptScopeHasPlacements(false);
-        let cancelled = false;
-        const init = workspaceDataFetchInit();
-        const t0 =
-            typeof performance !== "undefined" && typeof window !== "undefined" ? performance.now() : 0;
-        const placementUrl = `/api/admin/workspace-kpi-placements?surface=department&department_id=${encodeURIComponent(departmentId)}`;
-        void (async () => {
-            const logKpisPerf = () => {
-                if (typeof performance === "undefined" || typeof window === "undefined" || cancelled) return;
-                if (deptKpisPerfKeyRef.current === departmentId) return;
-                deptKpisPerfKeyRef.current = departmentId;
-                perfDeptLoad({
-                    phase: "kpis_ready",
-                    ms: Math.round(performance.now() - t0),
-                    source: "background",
-                    org_id: orgId,
-                    department_id: departmentId,
-                });
-            };
-
-            try {
-                const res = await dedupeAdminFetchWithTtl(placementUrl, { ...(init ?? {}), cache: "no-store" }, 8000);
-                if (!res.ok) {
-                    if (!cancelled) {
-                        setDeptPlacementRows([]);
-                        setDeptScopeHasPlacements(false);
-                    }
-                    logKpisPerf();
-                    return;
-                }
-                const j = (await res.json().catch(() => ({}))) as {
-                    items?: WorkspaceKpiPlacementRow[];
-                    scope_has_placements?: boolean;
-                };
-                if (cancelled) return;
-                setDeptPlacementRows(j.items ?? []);
-                setDeptScopeHasPlacements(j.scope_has_placements === true);
-                logKpisPerf();
-            } catch {
-                if (!cancelled) {
-                    setDeptPlacementRows([]);
-                    setDeptScopeHasPlacements(false);
-                }
-                logKpisPerf();
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, [departmentId, orgId, principalUserId, accessScopeFingerprint]);
 
     useEffect(() => {
         if (!departmentId || deptLoading || deptWorkUnits === null) {

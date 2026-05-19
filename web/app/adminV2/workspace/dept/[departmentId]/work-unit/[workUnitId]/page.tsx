@@ -387,6 +387,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const workUnitDetailReadyRef = useRef(false);
     const pendingDeferredAfterWudRef = useRef(false);
     const bootstrapWuRef = useRef<WorkUnitRow | null>(null);
+    /** Overlaps dept work-unit list GET with bootstrap — consumed by deferred supplement. */
+    const deptWuListPromiseRef = useRef<Promise<Response> | null>(null);
     const firstUsefulPaintMarkedRef = useRef(false);
     const seededWorkUnitShellRef = useRef(false);
     /** User changed lane via tabs/buckets — bootstrap must not overwrite selection when summaries arrive. */
@@ -758,20 +760,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
         setWorkflowKpisLoading(true);
         try {
-            const [kRes, sRes] = await Promise.all([
-                fetch("/api/admin/workflow-runs?list=kpis", init),
-                fetch(
-                    `/api/admin/workflows/summary?variant=workspace&department_id=${encodeURIComponent(departmentId)}&work_unit_id=${encodeURIComponent(workUnitId)}`,
-                    init
-                ),
-            ]);
-            const kBody = (await kRes.json().catch(() => ({}))) as { kpis?: Partial<WorkflowKpis> };
-            const sJson = (await sRes.json().catch(() => ({}))) as {
-                workflows?: WorkflowSummaryRow[];
-                partitions?: WorkflowScopePartitionV1;
-            };
-            if (kRes.ok && kBody.kpis) setWorkflowKpis({ ...DEFAULT_WF_KPIS, ...kBody.kpis });
-            if (sRes.ok && sJson.partitions) setWorkflowPartitions(sJson.partitions);
+            const { kpis, partitions } = await fetchWorkflowAutomationWorkspacePanels({
+                department_id: departmentId,
+                work_unit_id: workUnitId,
+                init,
+            });
+            setWorkflowKpis({ ...DEFAULT_WF_KPIS, ...kpis });
+            if (partitions) setWorkflowPartitions(partitions);
         } catch {
             // non-fatal
         } finally {
@@ -779,14 +774,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
         }
 
         try {
-            const res = await dedupeAdminFetch(
-                `/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`,
-                init
-            );
+            const res = await (deptWuListPromiseRef.current ??
+                dedupeAdminFetch(
+                    `/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`,
+                    init
+                ));
             const j = (await res.json().catch(() => ({}))) as { items?: Array<{ id: string; key?: string | null }> };
             if (res.ok) {
                 const naWu = (j.items ?? []).find((r) => String(r.key ?? "").trim().toLowerCase() === "needs_attention");
-                setNeedsAttentionWorkUnitId(naWu?.id ?? null);
+                if (naWu?.id) setNeedsAttentionWorkUnitId(naWu.id);
             }
         } catch {
             /* non-fatal */
@@ -811,7 +807,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
             const kpiBase = `/api/admin/workspace-kpi-placements?surface=work_unit&department_id=${encodeURIComponent(
                 departmentId
             )}&work_unit_id=${encodeURIComponent(workUnitId)}`;
-            const res = await fetch(appendWorkspaceSiteToUrl(kpiBase, selectedSiteId), { ...(init ?? {}), cache: "no-store" });
+            const res = await dedupeAdminFetchWithTtl(
+                appendWorkspaceSiteToUrl(kpiBase, selectedSiteId),
+                { ...(init ?? {}), cache: "no-store" },
+                8000
+            );
             if (!res.ok) {
                 setWuPlacementRows([]);
                 setWuScopeHasPlacements(false);
@@ -1241,6 +1241,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             workUnitDetailReadyRef.current = false;
             pendingDeferredAfterWudRef.current = false;
             bootstrapWuRef.current = null;
+            deptWuListPromiseRef.current = null;
             firstUsefulPaintMarkedRef.current = false;
             return;
         }
@@ -1260,11 +1261,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
             workUnitDetailReadyRef.current = false;
             pendingDeferredAfterWudRef.current = false;
             bootstrapWuRef.current = null;
+            deptWuListPromiseRef.current = null;
             if (!preserveShell) firstUsefulPaintMarkedRef.current = false;
 
             const qFromUrlEffective = initialLocationRef.current.queue.trim();
 
             try {
+                deptWuListPromiseRef.current = dedupeAdminFetch(
+                    `/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`,
+                    init
+                );
                 if (!cancelled && !preserveShell) {
                     setWorkUnit(null);
                     setDept(null);
@@ -1390,6 +1396,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
                 workUnitDetailReadyRef.current = true;
                 bootstrapWuRef.current = wu;
+                if ((wu.key ?? "").trim().toLowerCase() === "needs_attention") {
+                    setNeedsAttentionWorkUnitId(wu.id);
+                }
                 if (pendingDeferredAfterWudRef.current) {
                     pendingDeferredAfterWudRef.current = false;
                     requestWorkUnitDeferredSupplement();

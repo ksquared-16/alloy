@@ -10,77 +10,97 @@ import { loadOperationalOrgTimezoneIana } from "@/lib/admin/loadOperationalOrgTi
 
 export const dynamic = "force-dynamic";
 
+async function loadOrgDisplayName(orgId: string): Promise<string | null> {
+    try {
+        const supabase = createAdminClient();
+        const { data: orgRow } = await supabase.from("orgs").select("name").eq("id", orgId).maybeSingle();
+        const n =
+            orgRow && typeof (orgRow as { name?: unknown }).name === "string" ?
+                (orgRow as { name: string }).name.trim()
+            :   "";
+        return n || null;
+    } catch (e) {
+        console.error("[adminV2/workspace/layout] org name load failed:", e);
+        return null;
+    }
+}
+
+async function loadViewerTimezoneSafe(userId: string): Promise<AdminViewerTimezoneValue> {
+    try {
+        return await loadAdminViewerTimezoneBootstrap(userId);
+    } catch (e) {
+        console.error("[adminV2/workspace/layout] viewer timezone bootstrap failed:", e);
+        return { iana: "UTC", source: "utc_fallback" };
+    }
+}
+
+async function loadOperationalTimezoneSafe(orgId: string): Promise<string> {
+    try {
+        return await loadOperationalOrgTimezoneIana(orgId);
+    } catch (e) {
+        console.error("[adminV2/workspace/layout] operational org timezone failed:", e);
+        return "UTC";
+    }
+}
+
 export default async function AdminV2WorkspaceLayout({
-  children,
+    children,
 }: {
-  children: React.ReactNode;
+    children: React.ReactNode;
 }) {
-  const auth = await getAdminAuth();
+    const layoutT0 = typeof performance !== "undefined" ? performance.now() : 0;
 
-  if (!auth?.user?.id || !auth.role) {
-    redirect("/unauthorized");
-  }
+    const auth = await getAdminAuth();
 
-  const orgId = auth.orgId;
-  if (!orgId) {
+    if (!auth?.user?.id || !auth.role) {
+        redirect("/unauthorized");
+    }
+
+    const orgId = auth.orgId;
+    if (!orgId) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-admin-page p-6 text-alloy-midnight">
+                Loading context...
+            </div>
+        );
+    }
+
+    const [orgName, viewerTimezone, operationalTimezoneIana, access] = await Promise.all([
+        loadOrgDisplayName(orgId),
+        loadViewerTimezoneSafe(auth.user.id),
+        loadOperationalTimezoneSafe(orgId),
+        getAdminAccessContextCached(),
+    ]);
+
+    if (!access.ok) {
+        redirect("/unauthorized");
+    }
+    const accessScopeFingerprint = buildAccessScopeCacheFingerprint(scopeDimensionsFromAccess(access));
+
+    if (process.env.NODE_ENV === "development") {
+        const layoutMs =
+            typeof performance !== "undefined" ? Math.round(performance.now() - layoutT0) : null;
+        console.info("[adminV2/workspace] resolved_timezones", {
+            viewer: viewerTimezone,
+            operational_org_iana: operationalTimezoneIana,
+            org_id: orgId,
+            layout_parallel_bundle_ms: layoutMs,
+        });
+    }
+
     return (
-      <div className="flex min-h-screen items-center justify-center bg-admin-page p-6 text-alloy-midnight">
-        Loading context...
-      </div>
+        <AdminV2WorkspaceClientProviders
+            userEmail={typeof auth.user.email === "string" && auth.user.email ? auth.user.email : "Unknown"}
+            principalUserId={auth.user.id}
+            role={auth.role}
+            roleKeys={auth.roleKeys ?? []}
+            orgName={orgName}
+            orgId={orgId}
+            accessScopeFingerprint={accessScopeFingerprint}
+            initialViewerTimezone={viewerTimezone}
+            initialOperationalTimezoneIana={operationalTimezoneIana}
+        >
+            {children}
+        </AdminV2WorkspaceClientProviders>
     );
-  }
-
-  let orgName: string | null = null;
-  try {
-    const supabase = createAdminClient();
-    const { data: orgRow } = await supabase.from("orgs").select("name").eq("id", orgId).maybeSingle();
-    const n = orgRow && typeof (orgRow as { name?: unknown }).name === "string" ? (orgRow as { name: string }).name.trim() : "";
-    orgName = n || null;
-  } catch (e) {
-    console.error("[adminV2/workspace/layout] org name load failed:", e);
-  }
-
-  let viewerTimezone: AdminViewerTimezoneValue = { iana: "UTC", source: "utc_fallback" };
-  try {
-    viewerTimezone = await loadAdminViewerTimezoneBootstrap(auth.user.id);
-  } catch (e) {
-    console.error("[adminV2/workspace/layout] viewer timezone bootstrap failed:", e);
-  }
-
-  let operationalTimezoneIana = "UTC";
-  try {
-    operationalTimezoneIana = await loadOperationalOrgTimezoneIana(orgId);
-  } catch (e) {
-    console.error("[adminV2/workspace/layout] operational org timezone failed:", e);
-  }
-
-  if (process.env.NODE_ENV === "development") {
-    console.info("[adminV2/workspace] resolved_timezones", {
-      viewer: viewerTimezone,
-      operational_org_iana: operationalTimezoneIana,
-      org_id: orgId,
-    });
-  }
-
-  const access = await getAdminAccessContextCached();
-  if (!access.ok) {
-    redirect("/unauthorized");
-  }
-  const accessScopeFingerprint = buildAccessScopeCacheFingerprint(scopeDimensionsFromAccess(access));
-
-  return (
-    <AdminV2WorkspaceClientProviders
-      userEmail={typeof auth.user.email === "string" && auth.user.email ? auth.user.email : "Unknown"}
-      principalUserId={auth.user.id}
-      role={auth.role}
-      roleKeys={auth.roleKeys ?? []}
-      orgName={orgName}
-      orgId={orgId}
-      accessScopeFingerprint={accessScopeFingerprint}
-      initialViewerTimezone={viewerTimezone}
-      initialOperationalTimezoneIana={operationalTimezoneIana}
-    >
-      {children}
-    </AdminV2WorkspaceClientProviders>
-  );
 }
