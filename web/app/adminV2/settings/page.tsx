@@ -92,13 +92,16 @@ export default function AdminV2SettingsIndexPage() {
 
                     <SettingsGroup label="Records & layouts">
                         <SettingsLink href="/adminV2/settings/layouts" title="Record layouts" emphasis>
-                            Drawer sections and inquiry order.
+                            Drawer sections, fields per section, and inquiry order.
+                        </SettingsLink>
+                        <SettingsLink href="/adminV2/settings/actions" title="Action buttons" emphasis>
+                            Where record buttons appear and which are enabled.
                         </SettingsLink>
                         <SettingsLink href="/adminV2/settings/fields" title="Fields">
                             Labels, visibility, and required rules.
                         </SettingsLink>
                         <SettingsLink href="/adminV2/settings/statuses" title="Statuses">
-                            Status names by record type.
+                            Status display names by record type (not transition rules).
                         </SettingsLink>
                         <SettingsLink href="/adminV2/settings/entity-labels" title="Record labels">
                             Family, Inquiry, and other names.
@@ -146,14 +149,11 @@ export default function AdminV2SettingsIndexPage() {
                         </p>
                     </div>
                     <div className="space-y-2">
-                        <DiagnosticLink href="/adminV2/settings/actions" title="Action buttons">
-                            Where buttons appear on drawers and queues.
+                        <DiagnosticLink href="/adminV2/settings/status-transition-rules" title="Status transition rules">
+                            Allowed status changes (read-only reference).
                         </DiagnosticLink>
-                        <DiagnosticLink href="/adminV2/settings/status-transition-rules" title="Status rules">
-                            Allowed status changes (view only).
-                        </DiagnosticLink>
-                        <DiagnosticLink href="/adminV2/settings/field-sections" title="Section labels">
-                            Internal form group names — use Record layouts for drawer order.
+                        <DiagnosticLink href="/adminV2/settings/field-sections" title="Field grouping (advanced)">
+                            Bulk catalog section names — drawer composition uses Record layouts.
                         </DiagnosticLink>
                     </div>
                 </aside>

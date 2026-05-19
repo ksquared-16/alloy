@@ -60,7 +60,10 @@ function entityTypeDisplayLabel(
 }
 
 const STATUSES_DEFAULT_SUBTITLE =
-    "Single source of truth for admin status labels and keys on schedules, jobs, customers, opportunities, vendors, plan templates, and people. Drawers read options from here; the saved value remains each entity’s status key (and server logic keeps legacy FKs in sync where needed).";
+    "Display names for status keys on schedules, jobs, customers, opportunities, vendors, plan templates, and people. Drawers read options from here. Which status changes are allowed is not configured here — see Status transition rules under Settings diagnostics (read-only) or a future Workflow Status Configuration sprint.";
+
+const STATUSES_ADMINV2_SUBTITLE =
+    "Edit status display names and order. Transition rules (from → to) belong to platform configuration — view the read-only list under Settings → Status transition rules.";
 
 export default function StatusesClient({
     basePath = "/admin/system/statuses",
@@ -383,7 +386,11 @@ export default function StatusesClient({
     );
 
     const statusTitle = entityTypeFilter ? `Statuses — ${filterLabel}` : "Statuses";
-    const statusSubtitle = entityTypeFilter ? undefined : STATUSES_DEFAULT_SUBTITLE;
+    const statusSubtitle = entityTypeFilter
+        ? undefined
+        : adminV2Chrome
+          ? STATUSES_ADMINV2_SUBTITLE
+          : STATUSES_DEFAULT_SUBTITLE;
     const newStatusBtn = canMutate ? (
         <button
             type="button"

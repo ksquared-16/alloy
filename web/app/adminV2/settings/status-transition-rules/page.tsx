@@ -71,11 +71,15 @@ export default function AdminV2SettingsStatusTransitionRulesPage() {
     return (
         <div className="w-full max-w-6xl space-y-4 pb-2">
             <header>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-alloy-midnight/40">Diagnostics</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-alloy-midnight/40">Workflows · Diagnostics</p>
                 <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">Status transition rules</h1>
                 <p className="mt-1 max-w-2xl text-sm leading-relaxed text-alloy-midnight/60">
-                    Reference list of rules that block invalid status changes. Changes are made through engineering releases, not in
-                    this UI.
+                    Read-only reference for which status changes are allowed or blocked. Status <strong>display names</strong> are
+                    edited on{" "}
+                    <Link href="/adminV2/settings/statuses" className="font-medium text-alloy-pine hover:underline">
+                        Statuses
+                    </Link>
+                    . Editable transition configuration is deferred to a future Workflow Status Configuration sprint.
                 </p>
                 <p className="mt-2 text-xs text-alloy-midnight/45">
                     <Link href="/adminV2/settings" className="font-medium text-alloy-pine hover:underline">

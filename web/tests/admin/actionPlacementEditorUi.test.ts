@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     actionPlacementEditorCapabilities,
+    formatActionPlacementWhere,
     groupPlacementEditorRows,
     type ActionPlacementEditorRow,
 } from "@/lib/admin/actions/actionPlacementEditorUi";
@@ -27,6 +28,25 @@ describe("actionPlacementEditorUi", () => {
         const groups = groupPlacementEditorRows(rows);
         expect(groups).toHaveLength(1);
         expect(groups[0]?.title).toContain("Record header");
+    });
+
+    it("formats placement location for operators", () => {
+        expect(
+            formatActionPlacementWhere({
+                surface: "record_section",
+                slot: "primary",
+                section_key: "details",
+                entity_type: "opportunity",
+            })
+        ).toContain("Record section");
+        expect(
+            formatActionPlacementWhere({
+                surface: "record_section",
+                slot: "primary",
+                section_key: "details",
+                entity_type: "opportunity",
+            })
+        ).toContain("details");
     });
 
     it("marks platform placements locked", () => {

@@ -141,21 +141,17 @@ export default function LayoutIntegrityReportPanel() {
                     Layout integrity
                 </h2>
                 <p className="mt-1 text-xs leading-relaxed text-alloy-midnight/65">
-                    Checks whether your <strong>field definitions</strong>, <strong>field grouping</strong>, and{" "}
-                    <strong>effective drawer layout</strong> point at valid fields and sections for the selected entity.
-                    This is a read-only diagnostic — it does not change configuration. Fix findings in{" "}
-                    <Link href="/adminV2/settings/fields" className="font-medium text-alloy-pine hover:underline">
-                        Fields
-                    </Link>
-                    ,{" "}
-                    <Link href="/adminV2/settings/field-sections" className="font-medium text-alloy-pine hover:underline">
-                        Field grouping
-                    </Link>
-                    , or{" "}
+                    Checks whether <strong>field definitions</strong> and the <strong>effective drawer layout</strong> for the
+                    selected entity reference valid fields and drawer sections. Read-only — it does not change configuration. Fix
+                    findings in{" "}
                     <Link href="/adminV2/settings/layouts" className="font-medium text-alloy-pine hover:underline">
                         Layouts
                     </Link>{" "}
-                    (section order / workflow sections where applicable).
+                    (drawer composition) or{" "}
+                    <Link href="/adminV2/settings/fields" className="font-medium text-alloy-pine hover:underline">
+                        Fields
+                    </Link>
+                    .
                 </p>
             </div>
 

@@ -1,7 +1,7 @@
 # Sprint: Record Experience Builder — Phase 1
 
 **Path:** `docs/sprints/05_2026/record_experience_builder_phase_1.md`  
-**Status:** **In progress — Cards 0–4 complete (checkpoint); Cards 5–9 deferred**  
+**Status:** **Checkpoint — Cards 0–4 + UX correction + control plane closeout; Cards 5–9 deferred**  
 **Prerequisites:** `docs/sprints/05_2026/settings_record_ux_parity_sprint.md` (closed), `docs/system/configuration-system.md`, `docs/system/record-system.md`, `docs/system/actions-and-workflows.md`, `docs/execution/operating-doctrine.md`  
 **Program framing:** Extend the **four-plane Settings control plane** so **Layouts** is the operator-facing **drawer composition** surface — **not** a no-code builder, second layout SoT, or raw JSON editor. Align with **BOS** (`docs/product/bos-foundation.md`) as orchestration intelligence over the same validated Settings APIs.
 
@@ -657,3 +657,14 @@ Perform a **read-only audit** that locks the sprint baseline. Update **§4 Curre
 | 7 | `feat(settings): job/schedule read-only layout composition UX` |
 | 8 | `test: Record Experience Builder phase 1 regression manifest` |
 | 9 | `docs: Record Experience Builder phase 1 closeout` |
+
+---
+
+## 23. Control plane closeout (May 2026)
+
+**Doc:** `docs/sprints/05_2026/settings_control_plane_closeout.md`
+
+- **Layouts UX correction:** drawer composition list = effective layout only (not all catalog rows); section copy uses **section name**; field picker uses layout eligibility.
+- **Actions promoted** on Settings index; filters by `entity_type` / `section_key`; Layouts deep-link to Actions for buttons.
+- **Status ownership documented:** labels on Statuses; transitions read-only until Workflow Status Configuration V1.
+- **Cards 5–9 remain deferred** — no action preview in Layouts, no linked-record PATCH, no builder expansion.

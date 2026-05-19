@@ -277,7 +277,7 @@ export default function LayoutSectionFieldsPanel({
 
             <dl className="mt-2 space-y-1.5 text-xs">
                 <div className="flex flex-wrap gap-x-2">
-                    <dt className="text-alloy-midnight/50">Label</dt>
+                    <dt className="text-alloy-midnight/50">Section name</dt>
                     <dd className="min-w-0 flex-1 font-medium text-alloy-midnight">
                         {fieldsAssignable && canMutate ? (
                             <input
@@ -308,6 +308,17 @@ export default function LayoutSectionFieldsPanel({
 
             <p className="mt-3 rounded-md border border-alloy-forge/10 bg-alloy-stone/[0.04] px-2.5 py-2 text-[11px] leading-snug text-alloy-midnight/65">
                 {drawerSectionTypeDetail(section.kind)}
+            </p>
+
+            <p className="mt-2 text-[10px] text-alloy-midnight/45">
+                Buttons in this drawer are configured on{" "}
+                <Link
+                    href={`/adminV2/settings/actions?entity_type=${encodeURIComponent(entityType)}&section_key=${encodeURIComponent(section.section_key)}`}
+                    className="font-medium text-alloy-pine hover:underline"
+                >
+                    Action buttons
+                </Link>
+                .
             </p>
 
             {loading ? <p className="mt-3 text-xs text-alloy-midnight/55">Loading fields…</p> : null}

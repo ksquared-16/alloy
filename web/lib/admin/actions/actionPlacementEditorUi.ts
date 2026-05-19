@@ -23,6 +23,22 @@ export type ActionPlacementEditorRow = {
     is_active: boolean;
 };
 
+/** Operator-facing summary of where a placement renders. */
+export function formatActionPlacementWhere(row: Pick<ActionPlacementEditorRow, "surface" | "slot" | "section_key" | "entity_type">): string {
+    const surface = actionPlacementSurfaceLabel(row.surface);
+    const entity = row.entity_type ? ` · ${row.entity_type}` : "";
+    const slot = row.slot ? ` · ${row.slot}` : "";
+    const section =
+        row.surface === "record_section" && row.section_key?.trim()
+            ? ` · section “${row.section_key.trim()}”`
+            : "";
+    return `${surface}${entity}${slot}${section}`;
+}
+
+export function actionPlacementOwnershipLabel(orgId: string | null): "org" | "platform" {
+    return orgId ? "org" : "platform";
+}
+
 export function actionPlacementSurfaceLabel(surface: string): string {
     switch (surface) {
         case "record_header":
