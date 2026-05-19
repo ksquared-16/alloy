@@ -28,9 +28,23 @@
 | Command metadata | **Done** | Optional `capability_key` on action cards; `withCommandSurfaceCardCapabilityKey()` |
 | Tests | **Done** | `web/tests/bos/**` (12 tests) |
 | Docs | **Done** | `bos-foundation.md`, this file, `bos_registry_proposal_envelope_phase_2.md` |
-| Auth barrel | **Deferred** | Phase 3 — no behavior change required yet |
+| Auth barrel | **Done (Phase 3)** | `web/lib/bos/auth/index.ts` |
 
 Sprint detail: **`docs/sprints/05_2026/bos_registry_proposal_envelope_phase_2.md`**.
+
+---
+
+## Phase 3 — Foundation closeout — Done (2026-05-18)
+
+| Step | Status | Notes |
+|------|--------|-------|
+| Thread envelope wiring | **Done** | Workflow + Config proposal cards in command shell |
+| Legacy commit adapters | **Done** | agent v0 / v1 / v2 |
+| Auth barrel | **Done** | Re-exports + access hints |
+| Readiness tests | **Done** | `bosFoundationReadiness.test.ts` |
+| Closeout doc | **Done** | `bos_foundation_closeout_phase_3.md` |
+
+Sprint detail: **`docs/sprints/05_2026/bos_foundation_closeout_phase_3.md`**.
 
 ### Phase 2 checklist (acceptance)
 
@@ -105,7 +119,7 @@ Sprint detail: **`docs/sprints/05_2026/bos_registry_proposal_envelope_phase_2.md
 
 ---
 
-## Phase 3 readiness checklist
+## Phase 4 readiness checklist
 
 Use before starting **new** BOS capabilities or resuming paused expansion.
 

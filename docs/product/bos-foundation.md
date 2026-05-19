@@ -141,12 +141,33 @@ Operator input (NL or structured)
 | `WorkflowAssistSuggestionV1` | `workflowAssistSuggestionToBosProposalEnvelope()` |
 | `ConfigurationProposalV1` | `configurationProposalToBosProposalEnvelope()` |
 | `AttentionSuggestionV1` | `needsAttentionSuggestionToBosProposalEnvelope()` |
+| `AgentV0QueueDefinitionCommitPayloadV1` | `agentV0QueueDefinitionToBosProposalEnvelope()` |
+| `AgentV1RecordOverviewLayoutCommitPayloadV1` | `agentV1RecordOverviewLayoutToBosProposalEnvelope()` |
+| `AgentV2FieldVisibilityCommitPayloadV1` | `agentV2FieldVisibilityToBosProposalEnvelope()` |
 
-Existing APIs keep native shapes. Envelopes are for metadata, logging, and future admin views.
+Catalog: `BOS_CAPABILITIES_WITH_PROPOSAL_ADAPTERS` in `web/lib/bos/bosAdapterCatalog.ts`.
 
-### Command surface metadata
+Existing APIs keep native shapes. Envelopes are for **thread metadata**, diagnostics (`buildBosEnvelopeLogSummary`), and future proposal inbox UI.
 
-Optional `capability_key` on action cards (`CommandSurfaceCardBosMetadata`). Helper: `withCommandSurfaceCardCapabilityKey()`.
+### Command surface wiring (Phase 3)
+
+- Optional `capability_key` on cards — `withCommandSurfaceCardCapabilityKey()`.
+- Optional `bos_envelope` on `action_card` thread turns (internal only).
+- `appendActionCardTurnWithBosMetadata()` — used when Workflow Assist / Config Assist proposal cards are appended in `AICommandSurfaceShell`.
+
+### Auth barrel (Phase 3)
+
+`web/lib/bos/auth/index.ts` re-exports `resolveAiEnrichmentPortalAccess` and related helpers. `getBosCapabilityAccessHints(capability_key)` returns registry policy metadata — **does not enforce**; routes keep existing guards.
+
+## Adding a future BOS capability (required)
+
+1. Add entry to `BOS_CAPABILITY_REGISTRY`.
+2. Implement native proposal types in `web/lib/agent/**` (or documented module).
+3. Add `*ToBosProposalEnvelope()` adapter with `raw_payload` = native object reference.
+4. Wire Orchestrator routing + tests under `web/tests/bos/`.
+5. Update this doc’s capability table in the same change.
+
+Do **not** ship UI integration without steps 1 and 3.
 
 ## Capability boundaries (by domain)
 
@@ -187,8 +208,8 @@ Optional `capability_key` on action cards (`CommandSurfaceCardBosMetadata`). Hel
 
 | Layer | Path | Notes |
 |-------|------|-------|
-| BOS registry + envelope | `web/lib/bos/` | `bosCapabilityRegistry.ts`, `bosProposalEnvelope.ts`, `adapters/` |
-| Orchestrator UI / routing | `web/lib/adminV2/aiCommandSurface/` | Unchanged |
+| BOS registry + envelope + auth | `web/lib/bos/` | Registry, adapters, `auth/`, `commandSurfaceBosWire` |
+| Orchestrator UI / routing | `web/lib/adminV2/aiCommandSurface/` | Proposal cards use `appendActionCardTurnWithBosMetadata` |
 | Capability logic | `web/lib/agent/**` | Unchanged — registry `source_modules` points here |
 | Shared AI provider | `web/lib/ai/` | Enrich + gated LLM |
 | HTTP — operational | `web/app/api/admin/ai/` | **No rename** |

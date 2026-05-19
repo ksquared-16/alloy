@@ -87,6 +87,7 @@ import {
   toggleActionCardExpanded,
   updateThreadTurn,
 } from "@/lib/adminV2/aiCommandSurface/commandSurfaceThreadState";
+import { appendActionCardTurnWithBosMetadata } from "@/lib/bos/commandSurfaceBosWire";
 import type {
   CommandSurfaceThreadState,
   CommandSurfaceThreadTurn,
@@ -1188,14 +1189,11 @@ export default function AICommandSurfaceShell() {
         throw new Error(j.message ?? j.error ?? `HTTP ${res.status}`);
       }
       setThread((prev) =>
-        appendThreadTurn(prev, {
-          kind: "action_card",
-          card: {
-            type: "config_layout_assist_proposal",
-            proposal: j.proposal as ConfigurationProposalV1,
-            trace: j.trace as ConfigLayoutAssistTraceV1,
-            persistedProposalId: j.persisted_proposal_id ?? null,
-          },
+        appendActionCardTurnWithBosMetadata(prev, {
+          type: "config_layout_assist_proposal",
+          proposal: j.proposal as ConfigurationProposalV1,
+          trace: j.trace as ConfigLayoutAssistTraceV1,
+          persistedProposalId: j.persisted_proposal_id ?? null,
         })
       );
     },
@@ -1307,15 +1305,12 @@ export default function AICommandSurfaceShell() {
         const persistedProposalId = j.persisted_proposal_id;
         const readySummary = j.ready_summary;
         setThread((prev) =>
-          appendThreadTurn(prev, {
-            kind: "action_card",
-            card: {
-              type: "config_layout_assist_ready",
-              proposal,
-              trace,
-              persistedProposalId,
-              readySummary,
-            },
+          appendActionCardTurnWithBosMetadata(prev, {
+            type: "config_layout_assist_ready",
+            proposal,
+            trace,
+            persistedProposalId,
+            readySummary,
           })
         );
       } catch (e) {
@@ -1433,9 +1428,10 @@ export default function AICommandSurfaceShell() {
         return;
       }
       setThread((prev) =>
-        appendThreadTurn(prev, {
-          kind: "action_card",
-          card: { type: "workflow_assist_proposal", suggestion, createInterpreted },
+        appendActionCardTurnWithBosMetadata(prev, {
+          type: "workflow_assist_proposal",
+          suggestion,
+          createInterpreted,
         })
       );
     },

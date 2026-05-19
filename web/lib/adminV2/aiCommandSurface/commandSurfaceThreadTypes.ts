@@ -19,6 +19,7 @@ import type { ConfigLayoutAssistTraceV1 } from "@/lib/agent/configLayoutAssist/c
 import type { WorkflowAssistSuggestionV1 } from "@/lib/agent/workflowAssist/workflowAssistProposalV1";
 import type { AIStatusBadge, ResponseKind } from "@/lib/adminV2/aiCommandSurface/aiCommandSurfaceModel";
 import type { BosCapabilityKey } from "@/lib/bos/bosCapability";
+import type { BosProposalEnvelopeV1 } from "@/lib/bos/bosProposalEnvelope";
 
 /** Optional BOS metadata on action cards — does not replace native payloads or `agent_key`. */
 export type CommandSurfaceCardBosMetadata = {
@@ -109,6 +110,8 @@ export type CommandSurfaceThreadTurn =
                     persistedProposalId: string;
                     readySummary: ConfigLayoutAssistReadySummaryV1;
                 } & CommandSurfaceCardBosMetadata);
+          /** Internal thread metadata — not sent to public APIs. */
+          bos_envelope?: BosProposalEnvelopeV1 | null;
           at: string;
       }
     | {
@@ -173,6 +176,7 @@ export type CommandSurfaceThreadTurnInput =
     | {
           kind: "action_card";
           card: Extract<CommandSurfaceThreadTurn, { kind: "action_card" }>["card"];
+          bos_envelope?: BosProposalEnvelopeV1 | null;
       }
     | { kind: "workflow_notice" }
     | {
