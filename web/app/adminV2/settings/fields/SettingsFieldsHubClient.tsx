@@ -11,10 +11,27 @@ import SettingsEntityTabBar from "@/components/adminV2/settings/SettingsEntityTa
 
 const MANAGE_OPTION_SETS_HREF = "/adminV2/settings/option-sets";
 
-export type FieldEntityKey = "person" | "location" | "customer" | "job" | "opportunity" | "vendor" | "schedule";
+export type FieldEntityKey =
+    | "person"
+    | "location"
+    | "customer"
+    | "job"
+    | "opportunity"
+    | "inquiry_child"
+    | "vendor"
+    | "schedule";
 
-/** Tab order: person, customer, job, opportunity, vendor, schedule, location */
-const ENTITY_SELECT_ORDER: FieldEntityKey[] = ["person", "customer", "job", "opportunity", "vendor", "schedule", "location"];
+/** Tab order: person, customer, job, opportunity, inquiry child, vendor, schedule, location */
+const ENTITY_SELECT_ORDER: FieldEntityKey[] = [
+    "person",
+    "customer",
+    "job",
+    "opportunity",
+    "inquiry_child",
+    "vendor",
+    "schedule",
+    "location",
+];
 
 const ALLOWED_ENTITY_KEYS = new Set<string>(ENTITY_SELECT_ORDER);
 
@@ -60,7 +77,14 @@ export default function SettingsFieldsHubClient({ initialEntity }: { initialEnti
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-alloy-midnight/40">Field registry</p>
                 <p className="max-w-2xl text-xs leading-relaxed text-alloy-midnight/55">
                     Define fields and rules for each record type: labels, help text, required when saving, staff editability,
-                    and where fields appear. Drawer section order is on{" "}
+                    and where fields appear.{" "}
+                    {entity === "inquiry_child" ? (
+                        <>
+                            <span className="font-medium text-alloy-midnight/70">Inquiry child</span> fields apply to each
+                            child row on an inquiry (stored on the participation join, not the opportunity).{" "}
+                        </>
+                    ) : null}
+                    Drawer section order is on{" "}
                     <a href="/adminV2/settings/layouts" className="font-medium text-alloy-pine hover:underline">
                         Record layouts
                     </a>

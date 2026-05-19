@@ -16,6 +16,11 @@ describe("inquiryChildFieldEdit", () => {
         });
     });
 
+    it("InquiryChildOcmPatch type includes desired_start_date", () => {
+        const patch = { desired_start_date: "2026-09-01" as string | null };
+        expect(patch.desired_start_date).toBe("2026-09-01");
+    });
+
     it("resolveInquiryChildOcmId returns null for unlinked household rows", () => {
         expect(
             resolveInquiryChildOcmId({

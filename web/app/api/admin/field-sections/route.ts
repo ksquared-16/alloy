@@ -3,8 +3,9 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import { parseFieldSectionConfig } from "@/lib/fields/sectionManagement";
+import { FIELD_DEFINITION_ENTITY_TYPES, isFieldDefinitionEntityType } from "@/lib/fields/inquiryChildFieldRegistry";
 
-const ALLOWED_ENTITY_TYPES = ["person", "customer", "job", "opportunity", "vendor", "schedule", "location"] as const;
+const ALLOWED_ENTITY_TYPES = FIELD_DEFINITION_ENTITY_TYPES;
 const SECTION_KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
 export async function GET(request: NextRequest) {
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const entityType = searchParams.get("entity_type")?.trim() || null;
-    if (!entityType || !ALLOWED_ENTITY_TYPES.includes(entityType as (typeof ALLOWED_ENTITY_TYPES)[number])) {
+    if (!entityType || !isFieldDefinitionEntityType(entityType)) {
         return NextResponse.json(
             { error: `entity_type required; one of: ${ALLOWED_ENTITY_TYPES.join(", ")}` },
             { status: 400 }
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
     }
 
     const entity_type = typeof body.entity_type === "string" ? body.entity_type.trim() : "";
-    if (!ALLOWED_ENTITY_TYPES.includes(entity_type as (typeof ALLOWED_ENTITY_TYPES)[number])) {
+    if (!isFieldDefinitionEntityType(entity_type)) {
         return NextResponse.json({ error: `entity_type invalid` }, { status: 400 });
     }
 

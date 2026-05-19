@@ -4,8 +4,9 @@ import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { fetchEffectiveRecordDrawerLayout } from "@/lib/admin/effectiveRecordDrawerLayout";
 import { validateLayoutIntegrityNow } from "@/lib/config/layoutIntegrityValidator";
 import type { LayoutIntegrityFieldInput } from "@/lib/config/layoutIntegrityValidator";
+import { FIELD_DEFINITION_ENTITY_TYPES, isFieldDefinitionEntityType } from "@/lib/fields/inquiryChildFieldRegistry";
 
-const ALLOWED_ENTITY_TYPES = ["person", "customer", "job", "opportunity", "vendor", "schedule", "location"] as const;
+const ALLOWED_ENTITY_TYPES = FIELD_DEFINITION_ENTITY_TYPES;
 
 /**
  * GET — read-only layout integrity report for an entity type (Card 4 admin visibility).
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
     }
 
     const entityType = request.nextUrl.searchParams.get("entity_type")?.trim() || "";
-    if (!ALLOWED_ENTITY_TYPES.includes(entityType as (typeof ALLOWED_ENTITY_TYPES)[number])) {
+    if (!entityType || !isFieldDefinitionEntityType(entityType)) {
         return NextResponse.json(
             { error: `entity_type required; one of: ${ALLOWED_ENTITY_TYPES.join(", ")}` },
             { status: 400 }

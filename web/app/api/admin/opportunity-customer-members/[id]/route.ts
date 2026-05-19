@@ -3,13 +3,13 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
-
-const ALLOWED_KEYS = [
-    "desired_program_type",
-    "desired_schedule_type",
-    "outcome_status_key",
-    "notes",
-] as const;
+import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
+import {
+    INQUIRY_CHILD_ENTITY_TYPE,
+    INQUIRY_CHILD_NATIVE_OCM_PATCH_KEYS,
+    normalizeIsoDateOnly,
+    partitionInquiryChildPatchBody,
+} from "@/lib/fields/inquiryChildFieldRegistry";
 
 export async function PATCH(
     request: NextRequest,
@@ -30,18 +30,27 @@ export async function PATCH(
         return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
 
+    const { native: nativeBody, custom: customBody } = partitionInquiryChildPatchBody(body);
+
     const updates: Record<string, unknown> = {};
-    for (const k of ALLOWED_KEYS) {
-        if (body[k] === undefined) continue;
-        const v = body[k];
+    for (const k of INQUIRY_CHILD_NATIVE_OCM_PATCH_KEYS) {
+        if (nativeBody[k] === undefined) continue;
+        const v = nativeBody[k];
         if (k === "notes") {
             updates.notes = typeof v === "string" ? v : v == null ? null : String(v);
+            continue;
+        }
+        if (k === "desired_start_date") {
+            updates.desired_start_date =
+                v === "" || v == null ? null : normalizeIsoDateOnly(typeof v === "string" ? v : String(v));
             continue;
         }
         updates[k] = v === "" || v == null ? null : typeof v === "string" ? v.trim() || null : v;
     }
 
-    if (Object.keys(updates).length === 0) {
+    const hasNative = Object.keys(updates).length > 0;
+    const hasCustom = Object.keys(customBody).length > 0;
+    if (!hasNative && !hasCustom) {
         return NextResponse.json({ error: "No allowed fields to update" }, { status: 400 });
     }
 
@@ -50,13 +59,28 @@ export async function PATCH(
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
+    if (hasCustom) {
+        await upsertFieldValuesFromBody(
+            supabase,
+            ctx.orgId,
+            INQUIRY_CHILD_ENTITY_TYPE,
+            id,
+            customBody,
+            [...INQUIRY_CHILD_NATIVE_OCM_PATCH_KEYS]
+        );
+    }
+
+    if (!hasNative) {
+        return NextResponse.json({ id, updated: true });
+    }
+
     const { data, error } = await supabase
         .from("opportunity_customer_members")
         .update(updates)
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .select(
-            "id, org_id, opportunity_id, customer_member_id, desired_program_type, desired_schedule_type, outcome_status_key, notes, updated_at"
+            "id, org_id, opportunity_id, customer_member_id, desired_program_type, desired_schedule_type, desired_start_date, outcome_status_key, notes, updated_at"
         )
         .single();
 
@@ -69,4 +93,3 @@ export async function PATCH(
 
     return NextResponse.json(data);
 }
-

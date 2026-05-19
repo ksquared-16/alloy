@@ -26,6 +26,8 @@ import { assertOpportunityInAccessScope } from "@/lib/admin/accessScope";
 import { fetchDepartmentMetadataForActivity } from "@/lib/admin/loadOpportunityActivitySignal";
 import { attachOpportunityAttentionSuggestionBundle } from "@/lib/admin/opportunityAttentionSuggestionAttachment";
 import { applyPrimaryPersonMirrorValuesToHostRecord } from "@/lib/admin/drawer/linkedRecordFieldEditing";
+import { loadInquiryChildCustomFieldValuesByOcmId } from "@/lib/admin/drawer/inquiryChildCustomFieldValues";
+import { normalizeIsoDateOnly } from "@/lib/fields/inquiryChildFieldRegistry";
 
 type AdminSupabase = ReturnType<typeof createAdminClient>;
 
@@ -203,6 +205,7 @@ type CmBootstrapRow = {
 type OcmJoinRow = {
   id: string;
   customer_member_id: string;
+  desired_start_date?: string | null;
   desired_program_type?: string | null;
   desired_schedule_type?: string | null;
   outcome_status_key?: string | null;
@@ -232,10 +235,25 @@ type InquiryHydrateChild = {
   outcome_status_label: string | null;
   fit_status: string | null;
   notes: string | null;
+  desired_start_date: string | null;
+  custom_fields: Record<string, unknown>;
   metadata: Record<string, unknown> | null;
   created_at: string | null;
   updated_at: string | null;
 };
+
+async function attachInquiryChildRowCustomFields(
+  supabase: AdminSupabase,
+  orgId: string,
+  rows: InquiryHydrateChild[],
+): Promise<InquiryHydrateChild[]> {
+  const ocmIds = rows.map((r) => r.ocm_id).filter((id): id is string => Boolean(id && String(id).trim()));
+  const byOcm = await loadInquiryChildCustomFieldValuesByOcmId(supabase, orgId, ocmIds);
+  return rows.map((r) => ({
+    ...r,
+    custom_fields: r.ocm_id ? (byOcm[r.ocm_id] ?? {}) : {},
+  }));
+}
 
 function mapOcmJoinRowsToInquiryChildrenBlock(
   jrowsIn: OcmJoinRow[],
@@ -304,6 +322,8 @@ function mapOcmJoinRowsToInquiryChildrenBlock(
       outcome_status_label: outcomeStatusLabel,
       fit_status: trimOrNull(r.fit_status),
       notes: trimOrNull(r.notes),
+      desired_start_date: normalizeIsoDateOnly(r.desired_start_date),
+      custom_fields: {},
       metadata: (r.metadata as Record<string, unknown>) ?? null,
       created_at: r.created_at ?? null,
       updated_at: r.updated_at ?? null,
@@ -358,6 +378,8 @@ function applyInquiryChildrenMetadataFallbacks(
           outcome_status_label: null,
           fit_status: null,
           notes: typeof row.notes === "string" ? trimOrNull(row.notes) : null,
+          desired_start_date: null,
+          custom_fields: {},
           metadata: (row.metadata as Record<string, unknown>) ?? {
             source: "opportunity_metadata",
           },
@@ -412,6 +434,8 @@ function applyInquiryChildrenMetadataFallbacks(
           outcome_status_label: null,
           fit_status: null,
           notes: typeof md.notes === "string" ? trimOrNull(md.notes) : null,
+          desired_start_date: null,
+          custom_fields: {},
           metadata: { source: "opportunity_metadata_demo_child_name" },
           created_at: null,
           updated_at: null,
@@ -462,7 +486,7 @@ async function respondOpportunityRelationshipMemberOverlay(
     const r = await supabase
       .from("opportunity_customer_members")
       .select(
-        "id, customer_member_id, desired_program_type, desired_schedule_type, outcome_status_key, fit_status, notes, metadata, created_at, updated_at",
+        "id, customer_member_id, desired_start_date, desired_program_type, desired_schedule_type, outcome_status_key, fit_status, notes, metadata, created_at, updated_at",
       )
       .eq("org_id", orgId)
       .eq("opportunity_id", opportunityId)
@@ -614,6 +638,7 @@ async function respondOpportunityRelationshipMemberOverlay(
     optionLabelMap,
   );
   inquiryBlocks = applyInquiryChildrenMetadataFallbacks(inquiryBlocks, oppMeta, opportunityId);
+  inquiryBlocks = await attachInquiryChildRowCustomFields(supabase, orgId, inquiryBlocks);
 
   const payload = {
     id: opportunityId,
@@ -1318,7 +1343,7 @@ export async function respondOpportunityEntityGet(
   const ocmJoinP = supabase
     .from("opportunity_customer_members")
     .select(
-      "id, customer_member_id, desired_program_type, desired_schedule_type, outcome_status_key, fit_status, notes, metadata, created_at, updated_at",
+      "id, customer_member_id, desired_start_date, desired_program_type, desired_schedule_type, outcome_status_key, fit_status, notes, metadata, created_at, updated_at",
     )
     .eq("org_id", orgId)
     .eq("opportunity_id", id)
@@ -1636,7 +1661,8 @@ export async function respondOpportunityEntityGet(
     oppDefaultScheduleType,
     optionLabelMap,
   );
-  const inquiryChildrenOut = applyInquiryChildrenMetadataFallbacks(inquiryChildrenMerged, oppMeta, id);
+  let inquiryChildrenOut = applyInquiryChildrenMetadataFallbacks(inquiryChildrenMerged, oppMeta, id);
+  inquiryChildrenOut = await attachInquiryChildRowCustomFields(supabase, orgId, inquiryChildrenOut);
   out._inquiry_children = inquiryChildrenOut;
   if (process.env.NODE_ENV !== "production") {
     out._debug_inquiry_children = {

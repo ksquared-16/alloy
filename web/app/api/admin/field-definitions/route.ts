@@ -4,8 +4,13 @@ import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { ADMIN_FIELD_TYPES } from "@/lib/fields/adminFieldTypeList";
 import { validateSelectLikeConfig } from "@/lib/fields/fieldDefinitionConfig";
 import { mergeFieldDefinitionPoliciesFromBody } from "@/lib/fields/fieldDefinitionPolicyWrite";
+import {
+    FIELD_DEFINITION_ENTITY_TYPES,
+    isFieldDefinitionEntityType,
+    isReservedInquiryChildFieldKey,
+} from "@/lib/fields/inquiryChildFieldRegistry";
 
-const ALLOWED_ENTITY_TYPES = ["person", "customer", "job", "opportunity", "vendor", "schedule", "location"] as const;
+const ALLOWED_ENTITY_TYPES = FIELD_DEFINITION_ENTITY_TYPES;
 
 export type FieldDef = {
     id: string;
@@ -48,7 +53,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const entityType = searchParams.get("entity_type")?.trim() || null;
 
-    if (!entityType || !ALLOWED_ENTITY_TYPES.includes(entityType as (typeof ALLOWED_ENTITY_TYPES)[number])) {
+    if (!entityType || !isFieldDefinitionEntityType(entityType)) {
         return NextResponse.json(
             { error: `entity_type is required and must be one of: ${ALLOWED_ENTITY_TYPES.join(", ")}` },
             { status: 400 }
@@ -94,7 +99,7 @@ export async function POST(request: NextRequest) {
     }
 
     const entity_type = typeof body.entity_type === "string" ? body.entity_type.trim() : "";
-    if (!ALLOWED_ENTITY_TYPES.includes(entity_type as (typeof ALLOWED_ENTITY_TYPES)[number])) {
+    if (!isFieldDefinitionEntityType(entity_type)) {
         return NextResponse.json(
             { error: `entity_type must be one of: ${ALLOWED_ENTITY_TYPES.join(", ")}` },
             { status: 400 }
@@ -105,6 +110,13 @@ export async function POST(request: NextRequest) {
     if (!FIELD_KEY_REGEX.test(field_key)) {
         return NextResponse.json(
             { error: "field_key must be 2–64 characters, lowercase letters, numbers, and underscores only" },
+            { status: 400 }
+        );
+    }
+
+    if (entity_type === "inquiry_child" && isReservedInquiryChildFieldKey(field_key)) {
+        return NextResponse.json(
+            { error: `field_key '${field_key}' is reserved for a native inquiry child field` },
             { status: 400 }
         );
     }

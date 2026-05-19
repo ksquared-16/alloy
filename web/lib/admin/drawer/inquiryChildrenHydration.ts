@@ -34,6 +34,8 @@ export type InquiryChildHydrateRow = {
     outcome_status_label: string | null;
     fit_status: string | null;
     notes: string | null;
+    desired_start_date: string | null;
+    custom_fields: Record<string, unknown>;
     metadata: Record<string, unknown> | null;
     created_at: string | null;
     updated_at: string | null;
@@ -164,6 +166,8 @@ export function mergeHouseholdActiveChildrenIntoInquiryChildren(
             outcome_status_label: null,
             fit_status: null,
             notes: null,
+            desired_start_date: null,
+            custom_fields: {},
             metadata: (m.metadata as Record<string, unknown>) ?? null,
             created_at: null,
             updated_at: null,

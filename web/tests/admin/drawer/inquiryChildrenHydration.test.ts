@@ -38,6 +38,8 @@ describe("inquiryChildrenHydration", () => {
                 outcome_status_label: null,
                 fit_status: null,
                 notes: null,
+                desired_start_date: null,
+                custom_fields: {},
                 metadata: null,
                 created_at: null,
                 updated_at: null,

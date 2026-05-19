@@ -11,10 +11,12 @@ export type InquiryChildIdentityPatch = {
 };
 
 export type InquiryChildOcmPatch = {
+    desired_start_date?: string | null;
     desired_program_type?: string | null;
     desired_schedule_type?: string | null;
     outcome_status_key?: string | null;
     notes?: string | null;
+    [key: string]: string | null | undefined;
 };
 
 export function buildCustomerMemberPatch(

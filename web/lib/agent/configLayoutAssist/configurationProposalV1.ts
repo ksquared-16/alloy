@@ -3,6 +3,8 @@
  * No persistence, apply, routing, or AI generation.
  */
 
+import { FIELD_DEFINITION_ENTITY_TYPES } from "@/lib/fields/inquiryChildFieldRegistry";
+
 export const CONFIGURATION_LAYOUT_ASSIST_AGENT_KEY = "config_layout_assist" as const;
 
 export const CONFIGURATION_PROPOSAL_VERSION = 1 as const;
@@ -10,15 +12,7 @@ export const CONFIGURATION_PROPOSAL_VERSION = 1 as const;
 export type ConfigurationProposalVersion = typeof CONFIGURATION_PROPOSAL_VERSION;
 
 /** Supported admin field definition entity types (mirrors field-definitions API). */
-export const CONFIGURATION_PROPOSAL_ENTITY_TYPES = [
-    "person",
-    "customer",
-    "job",
-    "opportunity",
-    "vendor",
-    "schedule",
-    "location",
-] as const;
+export const CONFIGURATION_PROPOSAL_ENTITY_TYPES = FIELD_DEFINITION_ENTITY_TYPES;
 
 export type ConfigurationProposalEntityType = (typeof CONFIGURATION_PROPOSAL_ENTITY_TYPES)[number];
 
