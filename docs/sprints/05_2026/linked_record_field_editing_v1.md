@@ -30,7 +30,9 @@ If a field is shown on a drawer surface and **`field_definitions.interaction_pol
 
 **Code:** `web/lib/admin/drawer/linkedRecordFieldEditing.ts`, `primaryPersonCardEdit.ts`, `PrimaryPersonContactCard.tsx`, `FamilyContactsPanel.tsx`, `fieldEditabilityInDrawer.ts`, `AdminEntityDrawer` save partition, `EntityDrawerOverview` read fallback.
 
-**UI surfaces:** Config-driven overview fields **and** inquiry summary **Family & contacts** primary person card (`FamilyContactsPanel` → `PrimaryPersonContactCard`).
+**UI surfaces:** Config-driven overview fields **and** inquiry summary **Family & contacts** person cards (`FamilyContactsPanel` → `PrimaryPersonContactCard` / `EditablePersonContactCard`). Card saves on **focus leaving the whole card** (350ms delay) so tabbing first → last name does not partial-save.
+
+**Linked adults (parity, May 2026):** `_opportunity_persons` rows with `person_id` render `EditablePersonContactCard` (name, email, phone → `PATCH /api/admin/persons/:id`). Rows without `person_id` stay read-only (no fake edit affordance). Role badge + View person link preserved.
 
 **Tests:** `web/tests/admin/drawer/linkedRecordFieldEditing.test.ts`, `web/tests/admin/opportunity/primaryPersonCardEdit.test.ts`
 
@@ -61,9 +63,29 @@ If a field is shown on a drawer surface and **`field_definitions.interaction_pol
 
 **Children parity:** Drawer `_inquiry_children` now merges **active household `relationship=child` members** with OCM join rows (`inquiryChildrenHydration.ts`) so count matches work-unit queue enrichment.
 
-**Summary layout (hardcoded v1):** Family & contacts left; **What matters now** + **Recommended by Alloy / Needs attention** + task/follow-up chips right (`data-opportunity-inquiry-summary-layout="hardcoded_v1"`). Deferred: full **Record layouts** builder for inquiry summary grid.
+**Summary layout (hardcoded v1, polish):** Left column — Family & contacts + **What matters for this inquiry** (desired start, tour date). Right column — **Recommended by Alloy / Needs attention** + task/follow-up chips only (`data-opportunity-inquiry-summary-layout="hardcoded_v1"`). Deferred: full **Record layouts** builder for inquiry summary grid.
+
+**Desired start doctrine:** `desired_start_date` remains **V1 household/inquiry-level** (`field_values` / opportunity metadata). Future preferred model: **per-child desired start** on `opportunity_customer_members` when siblings need different dates — no migration in this pass (OCM has no child start column today).
 
 **Tests:** `inquiryChildrenHydration.test.ts`, `inquiryChildFieldEdit.test.ts`, `opportunityDrawerFieldSave.test.ts`, `primaryPersonCardEdit.test.ts`
+
+---
+
+## Opportunity drawer — contact / person cards (audit)
+
+| Surface | When shown | Editable? | PATCH / write route |
+|--------|------------|-----------|---------------------|
+| **Family & contacts — primary** | Inquiry summary (`family_contacts` in layout) | Yes when `primary_person_id` + policy + `canMutate` | `PATCH /api/admin/persons/:id` |
+| **Family & contacts — linked adults** | Same panel; `_opportunity_persons` minus primary | Yes when row has `person_id` + `canMutate` | `PATCH /api/admin/persons/:id` |
+| **Family & contacts — linked adults** | Row missing `person_id` | Read-only link/display only | — |
+| **Inquiry summary header contact** | Legacy header block (name + `OppInquiryContactChannelsRow`) | Read-only display | — (use Family & contacts card to edit) |
+| **Household people** (`customer_booking` when `family_contacts` not in layout) | Related customer fetch | Read-only link cards | — |
+| **Inquiry children** | Children section | Name/DOB → member; program/notes → OCM | See V1b table |
+| **Config overview person fields** | Record layout overview | Per `interaction_policy` | `PATCH /api/admin/persons/:id` when `editable_through_related_record` |
+
+**Reusable component:** `EditablePersonContactCard` — any drawer that supplies `personId`, `initialValues`, `gates`, and `onPersonUpdated` after person PATCH. Do not use without a clear person id and person route.
+
+**Display merge after save:** Primary → `applyPersonPatchToOpportunityHydration`; linked list → `applyPersonPatchToOpportunityPersonList` (and primary hydration when same id).
 
 ---
 

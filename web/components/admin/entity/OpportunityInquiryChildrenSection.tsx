@@ -284,7 +284,9 @@ export default function OpportunityInquiryChildrenSection({
         }
     };
 
-    const saveIdentityBlur = async (row: InquiryChildRow) => {
+    const debouncedIdentity = useDebouncedPatch(600);
+
+    const scheduleIdentitySave = (row: InquiryChildRow) => {
         const isMetadataOnly = (row.customer_member_id ?? "").startsWith("metadata_child:");
         if (!canEdit || isMetadataOnly || !row.customer_member_id) return;
         const draft = identityLocal[row.id];
@@ -296,14 +298,16 @@ export default function OpportunityInquiryChildrenSection({
         };
         const patch = buildCustomerMemberPatch(draft, baseline);
         if (Object.keys(patch).length === 0) return;
-        markRowSaveState(row.id, "saving");
-        try {
-            await patchCustomerMemberFromInquiryChild(row.customer_member_id, patch);
-            markRowSaveState(row.id, "saved");
-            onChildrenMutated?.();
-        } catch (e) {
-            markRowSaveState(row.id, "error", (e as Error).message);
-        }
+        debouncedIdentity.schedule(`${row.id}:identity`, patch, async (_id, p) => {
+            markRowSaveState(row.id, "saving");
+            try {
+                await patchCustomerMemberFromInquiryChild(row.customer_member_id, p);
+                markRowSaveState(row.id, "saved");
+                onChildrenMutated?.();
+            } catch (e) {
+                markRowSaveState(row.id, "error", (e as Error).message);
+            }
+        });
     };
 
     if (!rows.length) {
@@ -324,290 +328,316 @@ export default function OpportunityInquiryChildrenSection({
         );
     }
 
-    const tableWrap = embeddedInPremiumSection
-        ? "overflow-x-auto rounded-md border border-alloy-stone/15 bg-white/75"
-        : "overflow-x-auto rounded-lg border border-alloy-stone/25 bg-white";
-    const theadRow = embeddedInPremiumSection
-        ? "border-b border-alloy-stone/15 bg-alloy-stone/[0.04]"
-        : "border-b border-alloy-stone/25 bg-alloy-stone/10";
+    const listWrap = embeddedInPremiumSection
+        ? "rounded-md border border-alloy-stone/15 bg-white/75 divide-y divide-alloy-stone/15"
+        : "rounded-lg border border-alloy-stone/25 bg-white divide-y divide-alloy-stone/20";
+    const fieldInput =
+        "w-full min-w-0 rounded-md border border-alloy-stone/35 bg-white px-1.5 py-1 text-[12px] text-alloy-midnight/85 disabled:opacity-60";
+    const fieldSelect = `${fieldInput} pr-6`;
+    const cardPad = embeddedInPremiumSection ? "px-2.5 py-2.5" : "px-3 py-3";
+
+    const rowStatus = (rowId: string) => {
+        const err = errorById[rowId];
+        if (err) return <span className="text-[11px] font-medium text-red-700">{err}</span>;
+        if (savingById[rowId]) return <span className="text-[11px] text-alloy-midnight/45">Saving…</span>;
+        if (savedById[rowId]) return <span className="text-[11px] font-medium text-emerald-800/75">Saved</span>;
+        return null;
+    };
 
     return (
         <div className={rootCol}>
-            <div className={tableWrap}>
-                <table className="w-full min-w-[760px] text-left text-sm">
-                    <thead className={theadRow}>
-                        <tr className="text-[11px] font-semibold tracking-[0.12em] text-alloy-midnight/55">
-                            <th className="px-3 py-2">Child</th>
-                            <th className="px-3 py-2">DOB / Age</th>
-                            <th className="px-3 py-2">Desired program</th>
-                            <th className="px-3 py-2">Desired schedule</th>
-                            <th className="px-3 py-2">Outcome</th>
-                            <th className="px-3 py-2">Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loadErr ? (
-                            <tr className="border-b border-alloy-stone/20 last:border-b-0">
-                                <td className="px-3 py-2 text-sm text-red-700" colSpan={6}>
-                                    {loadErr}
-                                </td>
-                            </tr>
-                        ) : null}
-                        {rows.map((r) => {
-                            const name = (r.display_name ?? "").trim() || "—";
-                            const isMetadataOnly = (r.customer_member_id ?? "").startsWith("metadata_child:");
-                            const dob = r.dob ? formatDate(r.dob) : "—";
-                            const age = (r.age ?? "").trim();
-                            const dobAge = age ? `${dob} · ${age}` : dob;
-                            const st = local[r.id] ?? {
-                                desired_program_type: normalizeKey(r.desired_program_type),
-                                desired_schedule_type: normalizeKey(r.desired_schedule_type),
-                                outcome_status_key: normalizeKey(r.outcome_status_key),
-                                notes: (r.notes ?? "").toString(),
-                            };
-                            const saving = !!savingById[r.id];
-                            const err = errorById[r.id];
-                            const rowCanEdit = canEdit && !isMetadataOnly;
-                            const identity = identityLocal[r.id] ?? {
-                                first_name: "",
-                                last_name: "",
-                                dob: r.dob ? String(r.dob).slice(0, 10) : "",
-                            };
+            {loadErr ? <p className="mb-2 text-sm text-red-700">{loadErr}</p> : null}
+            <div className={listWrap}>
+                {rows.map((r) => {
+                    const name = (r.display_name ?? "").trim() || "—";
+                    const isMetadataOnly = (r.customer_member_id ?? "").startsWith("metadata_child:");
+                    const dob = r.dob ? formatDate(r.dob) : "—";
+                    const age = (r.age ?? "").trim();
+                    const dobAge = age ? `${dob} · ${age}` : dob;
+                    const st = local[r.id] ?? {
+                        desired_program_type: normalizeKey(r.desired_program_type),
+                        desired_schedule_type: normalizeKey(r.desired_schedule_type),
+                        outcome_status_key: normalizeKey(r.outcome_status_key),
+                        notes: (r.notes ?? "").toString(),
+                    };
+                    const saving = !!savingById[r.id];
+                    const rowCanEdit = canEdit && !isMetadataOnly;
+                    const identity = identityLocal[r.id] ?? {
+                        first_name: "",
+                        last_name: "",
+                        dob: r.dob ? String(r.dob).slice(0, 10) : "",
+                    };
+                    const fallbackProgram =
+                        (r.desired_program_label ?? "").trim() ||
+                        (st.desired_program_type
+                            ? (programLabelByKey.get(st.desired_program_type) ?? st.desired_program_type)
+                            : "—");
+                    const fallbackSchedule =
+                        (r.desired_schedule_label ?? "").trim() ||
+                        (st.desired_schedule_type
+                            ? (scheduleLabelByKey.get(st.desired_schedule_type) ?? st.desired_schedule_type)
+                            : "—");
+                    const fallbackOutcome =
+                        (r.outcome_status_label ?? "").trim() ||
+                        (st.outcome_status_key
+                            ? (statusLabelByKey.get(st.outcome_status_key) ?? st.outcome_status_key)
+                            : "—");
+                    const attention = inquiryChildRowAttention({
+                        dob: r.dob,
+                        desiredProgramType: st.desired_program_type || normalizeKey(r.desired_program_type),
+                        desiredScheduleType: st.desired_schedule_type || normalizeKey(r.desired_schedule_type),
+                        outcomeKey: st.outcome_status_key,
+                        outcomeLabel: fallbackOutcome,
+                    });
+                    const rowAttentionClass = attention
+                        ? "bg-amber-50/[0.35] ring-1 ring-inset ring-amber-200/60"
+                        : "";
+                    const outcomeSelectAttention =
+                        attention && isWaitlistedInquiryOutcome(st.outcome_status_key, fallbackOutcome)
+                            ? "border-amber-300/80 bg-amber-50/50"
+                            : "";
 
-                            const fallbackProgram = (r.desired_program_label ?? "").trim() || (st.desired_program_type ? (programLabelByKey.get(st.desired_program_type) ?? st.desired_program_type) : "—");
-                            const fallbackSchedule = (r.desired_schedule_label ?? "").trim() || (st.desired_schedule_type ? (scheduleLabelByKey.get(st.desired_schedule_type) ?? st.desired_schedule_type) : "—");
-                            const fallbackOutcome = (r.outcome_status_label ?? "").trim() || (st.outcome_status_key ? (statusLabelByKey.get(st.outcome_status_key) ?? st.outcome_status_key) : "—");
-                            const attention = inquiryChildRowAttention({
-                                dob: r.dob,
-                                desiredProgramType: st.desired_program_type || normalizeKey(r.desired_program_type),
-                                desiredScheduleType: st.desired_schedule_type || normalizeKey(r.desired_schedule_type),
-                                outcomeKey: st.outcome_status_key,
-                                outcomeLabel: fallbackOutcome,
-                            });
-                            const rowAttentionClass = attention
-                                ? "bg-amber-50/[0.38] [box-shadow:inset_3px_0_0_0_rgba(245,158,11,0.55)]"
-                                : "";
-                            const outcomeSelectAttention =
-                                attention && isWaitlistedInquiryOutcome(st.outcome_status_key, fallbackOutcome)
-                                    ? "border-amber-300/80 bg-amber-50/50"
-                                    : "";
-                            return (
-                                <tr key={r.id} className={`border-b border-alloy-stone/20 last:border-b-0 ${rowAttentionClass}`}>
-                                    <td className="px-3 py-2 font-medium text-alloy-midnight/85">
-                                        {rowCanEdit ? (
-                                            <div className="space-y-1 min-w-[140px]">
-                                                <div className="grid grid-cols-2 gap-1">
-                                                    <input
-                                                        value={identity.first_name}
-                                                        disabled={savingById[r.id]}
-                                                        onChange={(e) =>
-                                                            setIdentityLocal((p) => ({
-                                                                ...p,
-                                                                [r.id]: { ...identity, first_name: e.target.value },
-                                                            }))
-                                                        }
-                                                        onBlur={() => void saveIdentityBlur(r)}
-                                                        className="w-full rounded-md border border-alloy-stone/40 bg-white px-2 py-1 text-sm disabled:opacity-60"
-                                                        placeholder="First"
-                                                        aria-label={`First name for ${name}`}
-                                                    />
-                                                    <input
-                                                        value={identity.last_name}
-                                                        disabled={savingById[r.id]}
-                                                        onChange={(e) =>
-                                                            setIdentityLocal((p) => ({
-                                                                ...p,
-                                                                [r.id]: { ...identity, last_name: e.target.value },
-                                                            }))
-                                                        }
-                                                        onBlur={() => void saveIdentityBlur(r)}
-                                                        className="w-full rounded-md border border-alloy-stone/40 bg-white px-2 py-1 text-sm disabled:opacity-60"
-                                                        placeholder="Last"
-                                                        aria-label={`Last name for ${name}`}
-                                                    />
-                                                </div>
-                                                {onOpenChild && !isMetadataOnly ? (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            onOpenChild({
-                                                                person_id: r.person_id,
-                                                                customer_member_id: r.customer_member_id,
-                                                                display_name: r.display_name,
-                                                            })
-                                                        }
-                                                        className="text-left text-[11px] text-alloy-blue hover:underline"
-                                                    >
-                                                        View record
-                                                    </button>
-                                                ) : null}
+                    return (
+                        <div key={r.id} className={`${cardPad} ${rowAttentionClass}`}>
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1 space-y-1.5">
+                                    {rowCanEdit ? (
+                                        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-[1fr_1fr_minmax(8.5rem,10rem)]">
+                                            <div>
+                                                <label className="mb-0.5 block text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                                    First
+                                                </label>
+                                                <input
+                                                    value={identity.first_name}
+                                                    disabled={saving}
+                                                    onChange={(e) => {
+                                                        setIdentityLocal((p) => ({
+                                                            ...p,
+                                                            [r.id]: { ...identity, first_name: e.target.value },
+                                                        }));
+                                                        scheduleIdentitySave(r);
+                                                    }}
+                                                    className={fieldInput}
+                                                    placeholder="First"
+                                                    aria-label={`First name for ${name}`}
+                                                />
                                             </div>
-                                        ) : onOpenChild && name !== "—" && !isMetadataOnly ? (
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    onOpenChild({
-                                                        person_id: r.person_id,
-                                                        customer_member_id: r.customer_member_id,
-                                                        display_name: r.display_name,
-                                                    })
-                                                }
-                                                className="text-left text-alloy-blue hover:underline font-semibold"
-                                            >
-                                                {name}
-                                            </button>
-                                        ) : (
-                                            name
-                                        )}
-                                        {!r.linked_on_inquiry && rowCanEdit ? (
-                                            <div className="mt-0.5 text-[10px] font-medium text-alloy-midnight/45">
-                                                Not on inquiry yet — saves will link
+                                            <div>
+                                                <label className="mb-0.5 block text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                                    Last
+                                                </label>
+                                                <input
+                                                    value={identity.last_name}
+                                                    disabled={saving}
+                                                    onChange={(e) => {
+                                                        setIdentityLocal((p) => ({
+                                                            ...p,
+                                                            [r.id]: { ...identity, last_name: e.target.value },
+                                                        }));
+                                                        scheduleIdentitySave(r);
+                                                    }}
+                                                    className={fieldInput}
+                                                    placeholder="Last"
+                                                    aria-label={`Last name for ${name}`}
+                                                />
                                             </div>
-                                        ) : null}
-                                    </td>
-                                    <td className="px-3 py-2 text-alloy-midnight/65 tabular-nums">
-                                        {rowCanEdit ? (
-                                            <div className="min-w-[120px] space-y-0.5">
+                                            <div>
+                                                <label className="mb-0.5 block text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                                    DOB
+                                                </label>
                                                 <input
                                                     type="date"
                                                     value={identity.dob}
-                                                    disabled={savingById[r.id]}
-                                                    onChange={(e) =>
+                                                    disabled={saving}
+                                                    onChange={(e) => {
                                                         setIdentityLocal((p) => ({
                                                             ...p,
                                                             [r.id]: { ...identity, dob: e.target.value },
-                                                        }))
-                                                    }
-                                                    onBlur={() => void saveIdentityBlur(r)}
-                                                    className="w-full rounded-md border border-alloy-stone/40 bg-white px-2 py-1 text-sm disabled:opacity-60"
+                                                        }));
+                                                        scheduleIdentitySave(r);
+                                                    }}
+                                                    className={fieldInput}
                                                     aria-label={`Date of birth for ${name}`}
                                                 />
                                                 {age ? (
-                                                    <div className="text-[11px] text-alloy-midnight/50">{age}</div>
+                                                    <div className="mt-0.5 text-[10px] text-alloy-midnight/45">{age}</div>
                                                 ) : null}
                                             </div>
-                                        ) : (
-                                            dobAge
-                                        )}
-                                    </td>
-                                    <td className="px-3 py-2 text-alloy-midnight/65">
-                                        {rowCanEdit ? (
-                                            <select
-                                                value={st.desired_program_type}
-                                                disabled={!rowCanEdit || saving}
-                                                onChange={(e) => {
-                                                    const v = e.target.value;
-                                                    setLocal((p) => ({ ...p, [r.id]: { ...st, desired_program_type: v } }));
-                                                    debounced.schedule(r.id, { desired_program_type: v || null }, (_id, patch) => {
-                                                        void saveOcmPatch(r, patch);
-                                                    });
-                                                }}
-                                                className="w-full min-w-[150px] rounded-md border border-alloy-stone/40 bg-white px-2 py-1 text-sm disabled:opacity-60"
-                                                aria-label={`Desired program for ${name}`}
-                                            >
-                                                <option value="">(inherit)</option>
-                                                {programItems.map((i) => (
-                                                    <option key={i.item_key} value={i.item_key}>
-                                                        {i.label ?? i.item_key}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        ) : (
-                                            fallbackProgram
-                                        )}
-                                    </td>
-                                    <td className="px-3 py-2 text-alloy-midnight/65">
-                                        {rowCanEdit ? (
-                                            <select
-                                                value={st.desired_schedule_type}
-                                                disabled={!rowCanEdit || saving}
-                                                onChange={(e) => {
-                                                    const v = e.target.value;
-                                                    setLocal((p) => ({ ...p, [r.id]: { ...st, desired_schedule_type: v } }));
-                                                    debounced.schedule(r.id, { desired_schedule_type: v || null }, (_id, patch) => {
-                                                        void saveOcmPatch(r, patch);
-                                                    });
-                                                }}
-                                                className="w-full min-w-[150px] rounded-md border border-alloy-stone/40 bg-white px-2 py-1 text-sm disabled:opacity-60"
-                                                aria-label={`Desired schedule for ${name}`}
-                                            >
-                                                <option value="">(inherit)</option>
-                                                {scheduleItems.map((i) => (
-                                                    <option key={i.item_key} value={i.item_key}>
-                                                        {i.label ?? i.item_key}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        ) : (
-                                            fallbackSchedule
-                                        )}
-                                    </td>
-                                    <td className="px-3 py-2 text-alloy-midnight/65">
-                                        {rowCanEdit ? (
-                                            <select
-                                                value={st.outcome_status_key}
-                                                disabled={!rowCanEdit || saving}
-                                                onChange={(e) => {
-                                                    const v = e.target.value;
-                                                    setLocal((p) => ({ ...p, [r.id]: { ...st, outcome_status_key: v } }));
-                                                    debounced.schedule(r.id, { outcome_status_key: v || null }, (_id, patch) => {
-                                                        void saveOcmPatch(r, patch);
-                                                    });
-                                                }}
-                                                className={`w-full min-w-[150px] rounded-md border border-alloy-stone/40 bg-white px-2 py-1 text-sm disabled:opacity-60 ${outcomeSelectAttention}`}
-                                                aria-label={`Outcome for ${name}`}
-                                            >
-                                                <option value="">—</option>
-                                                {statusItems.map((s) => (
-                                                    <option key={s.status_key} value={s.status_key}>
-                                                        {s.status_label ?? s.status_key}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        ) : (
-                                            fallbackOutcome
-                                        )}
-                                    </td>
-                                    <td className="px-3 py-2 text-alloy-midnight/65">
-                                        {rowCanEdit ? (
-                                            <div className="min-w-[260px] max-w-[420px]">
-                                                <input
-                                                    value={st.notes}
-                                                    disabled={!rowCanEdit || saving}
-                                                    onChange={(e) => {
-                                                        const v = e.target.value;
-                                                        setLocal((p) => ({ ...p, [r.id]: { ...st, notes: v } }));
-                                                        debounced.schedule(r.id, { notes: v }, (_id, patch) => {
-                                                            void saveOcmPatch(r, patch);
-                                                        });
-                                                    }}
-                                                    onBlur={() =>
-                                                        debounced.flush(r.id, (_id, patch) => {
-                                                            void saveOcmPatch(r, patch);
+                                        </div>
+                                    ) : (
+                                        <div className="text-[13px] font-semibold text-alloy-midnight/85">
+                                            {onOpenChild && name !== "—" && !isMetadataOnly ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        onOpenChild({
+                                                            person_id: r.person_id,
+                                                            customer_member_id: r.customer_member_id,
+                                                            display_name: r.display_name,
                                                         })
                                                     }
-                                                    className="w-full rounded-md border border-alloy-stone/40 bg-white px-2 py-1 text-sm disabled:opacity-60"
-                                                    placeholder="Add notes…"
-                                                    aria-label={`Notes for ${name}`}
-                                                />
-                                                {err ? <div className="mt-1 text-[11px] font-medium text-red-700">{err}</div> : null}
-                                                {saving ? (
-                                                    <div className="mt-1 text-[11px] font-medium text-alloy-midnight/45">Saving…</div>
-                                                ) : savedById[r.id] ? (
-                                                    <div className="mt-1 text-[11px] font-medium text-emerald-800/75">Saved</div>
-                                                ) : null}
+                                                    className="text-alloy-blue hover:underline"
+                                                >
+                                                    {name}
+                                                </button>
+                                            ) : (
+                                                name
+                                            )}
+                                            <div className="mt-0.5 text-[12px] font-normal tabular-nums text-alloy-midnight/60">
+                                                {dobAge}
                                             </div>
-                                        ) : (
-                                            <span className="block max-w-[280px] truncate" title={normalizeKey(r.notes) ? String(r.notes) : undefined}>
-                                                {normalizeKey(r.notes) ? String(r.notes).trim() : "—"}
-                                            </span>
-                                        )}
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
+                                        </div>
+                                    )}
+                                    {!r.linked_on_inquiry && rowCanEdit ? (
+                                        <p className="text-[10px] font-medium text-alloy-midnight/45">
+                                            Not on inquiry yet — inquiry fields will link on save
+                                        </p>
+                                    ) : null}
+                                </div>
+                                {onOpenChild && rowCanEdit ? (
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            onOpenChild({
+                                                person_id: r.person_id,
+                                                customer_member_id: r.customer_member_id,
+                                                display_name: r.display_name,
+                                            })
+                                        }
+                                        className="shrink-0 text-[11px] font-semibold text-alloy-blue hover:underline"
+                                    >
+                                        View record
+                                    </button>
+                                ) : null}
+                            </div>
+
+                            <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+                                <div>
+                                    <label className="mb-0.5 block text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                        Program
+                                    </label>
+                                    {rowCanEdit ? (
+                                        <select
+                                            value={st.desired_program_type}
+                                            disabled={saving}
+                                            onChange={(e) => {
+                                                const v = e.target.value;
+                                                setLocal((p) => ({ ...p, [r.id]: { ...st, desired_program_type: v } }));
+                                                debounced.schedule(r.id, { desired_program_type: v || null }, (_id, patch) => {
+                                                    void saveOcmPatch(r, patch);
+                                                });
+                                            }}
+                                            className={fieldSelect}
+                                            aria-label={`Desired program for ${name}`}
+                                        >
+                                            <option value="">(inherit)</option>
+                                            {programItems.map((i) => (
+                                                <option key={i.item_key} value={i.item_key}>
+                                                    {i.label ?? i.item_key}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <span className="text-[12px] text-alloy-midnight/70">{fallbackProgram}</span>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="mb-0.5 block text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                        Schedule
+                                    </label>
+                                    {rowCanEdit ? (
+                                        <select
+                                            value={st.desired_schedule_type}
+                                            disabled={saving}
+                                            onChange={(e) => {
+                                                const v = e.target.value;
+                                                setLocal((p) => ({ ...p, [r.id]: { ...st, desired_schedule_type: v } }));
+                                                debounced.schedule(r.id, { desired_schedule_type: v || null }, (_id, patch) => {
+                                                    void saveOcmPatch(r, patch);
+                                                });
+                                            }}
+                                            className={fieldSelect}
+                                            aria-label={`Desired schedule for ${name}`}
+                                        >
+                                            <option value="">(inherit)</option>
+                                            {scheduleItems.map((i) => (
+                                                <option key={i.item_key} value={i.item_key}>
+                                                    {i.label ?? i.item_key}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <span className="text-[12px] text-alloy-midnight/70">{fallbackSchedule}</span>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="mb-0.5 block text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                        Outcome
+                                    </label>
+                                    {rowCanEdit ? (
+                                        <select
+                                            value={st.outcome_status_key}
+                                            disabled={saving}
+                                            onChange={(e) => {
+                                                const v = e.target.value;
+                                                setLocal((p) => ({ ...p, [r.id]: { ...st, outcome_status_key: v } }));
+                                                debounced.schedule(r.id, { outcome_status_key: v || null }, (_id, patch) => {
+                                                    void saveOcmPatch(r, patch);
+                                                });
+                                            }}
+                                            className={`${fieldSelect} ${outcomeSelectAttention}`}
+                                            aria-label={`Outcome for ${name}`}
+                                        >
+                                            <option value="">—</option>
+                                            {statusItems.map((s) => (
+                                                <option key={s.status_key} value={s.status_key}>
+                                                    {s.status_label ?? s.status_key}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <span className="text-[12px] text-alloy-midnight/70">{fallbackOutcome}</span>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="mt-2">
+                                <label className="mb-0.5 block text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                    Notes
+                                </label>
+                                {rowCanEdit ? (
+                                    <input
+                                        value={st.notes}
+                                        disabled={saving}
+                                        onChange={(e) => {
+                                            const v = e.target.value;
+                                            setLocal((p) => ({ ...p, [r.id]: { ...st, notes: v } }));
+                                            debounced.schedule(r.id, { notes: v }, (_id, patch) => {
+                                                void saveOcmPatch(r, patch);
+                                            });
+                                        }}
+                                        onBlur={() =>
+                                            debounced.flush(r.id, (_id, patch) => {
+                                                void saveOcmPatch(r, patch);
+                                            })
+                                        }
+                                        className={fieldInput}
+                                        placeholder="Add notes…"
+                                        aria-label={`Notes for ${name}`}
+                                    />
+                                ) : (
+                                    <p className="text-[12px] text-alloy-midnight/70">
+                                        {normalizeKey(r.notes) ? String(r.notes).trim() : "—"}
+                                    </p>
+                                )}
+                            </div>
+
+                            {rowCanEdit ? (
+                                <div className="mt-1.5 min-h-[1rem]">{rowStatus(r.id)}</div>
+                            ) : null}
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );

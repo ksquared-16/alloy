@@ -80,6 +80,7 @@ import {
     resolveOpportunityLinkedFieldSources,
     type FieldDefForLinkedEdit,
 } from "@/lib/admin/drawer/linkedRecordFieldEditing";
+import { applyPersonPatchToOpportunityPersonList } from "@/lib/admin/drawer/primaryPersonCardEdit";
 import {
     buildFieldValidationSummary,
     parseDrawerFieldPolicySaveResponse,
@@ -10747,6 +10748,21 @@ export default function AdminEntityDrawer() {
                                                                                     });
                                                                                     void refetch();
                                                                                 }}
+                                                                                onLinkedPersonUpdated={(personId, person) => {
+                                                                                    setData((prev) => {
+                                                                                        if (!prev) return prev;
+                                                                                        const next = { ...prev } as Record<string, unknown>;
+                                                                                        applyPersonPatchToOpportunityPersonList(next, personId, person);
+                                                                                        const primaryId = String(
+                                                                                            next.primary_person_id ?? ""
+                                                                                        ).trim();
+                                                                                        if (primaryId && primaryId === personId) {
+                                                                                            applyPersonPatchToOpportunityHydration(next, person);
+                                                                                        }
+                                                                                        return next;
+                                                                                    });
+                                                                                    void refetch();
+                                                                                }}
                                                                                 openForm={({ form_key, action }) => {
                                                                                     setActionFormState({
                                                                                         form_key,
@@ -10828,61 +10844,64 @@ export default function AdminEntityDrawer() {
                                                                             )}
                                                                         </>
                                                                     )}
-                                                                </div>
-                                                                <div className={`${oppInqInnerCard} min-h-[11.5rem] min-w-0`}>
-                                                                    <div className={tinyLabel}>What matters now</div>
-                                                                    <div className="mt-1.5 flex min-h-0 flex-1 flex-col space-y-2">
-                                                                        <div>
-                                                                            <div className={tinyLabel}>Desired start</div>
-                                                                            <input
-                                                                                type="date"
-                                                                                value={toDateInputValue(formData.desired_start_date ?? d.desired_start_date)}
-                                                                                onChange={(e) =>
-                                                                                    setFormData((prev) => ({
-                                                                                        ...prev,
-                                                                                        desired_start_date: e.target.value || null,
-                                                                                    }))
-                                                                                }
-                                                                                onBlur={() => {
-                                                                                    if (nonJobFormDirty) saveEdit();
-                                                                                }}
-                                                                                disabled={!canMutate}
-                                                                                className={oppInqFieldInput}
-                                                                            />
-                                                                        </div>
-                                                                        <div>
-                                                                            {drawer.id && drawer.id !== "new" ? (
-                                                                                <OpportunityInquiryTourDateBlock
-                                                                                    opportunityId={drawer.id}
-                                                                                    locationId={String((d.location_id as string | null | undefined) ?? "").trim()}
-                                                                                    metadata={d.metadata}
-                                                                                    viewerTimezone={viewerTz}
-                                                                                    canMutate={!!canMutate}
-                                                                                    onRefresh={refetch}
-                                                                                    labelClassName={tinyLabel}
-                                                                                    readonlyFieldClassName={oppInqReadonlyField}
+                                                                    <div className="mt-2.5 border-t border-alloy-stone/10 pt-2">
+                                                                        <div className={tinyLabel}>What matters for this inquiry</div>
+                                                                        <div className="mt-1.5 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                                                            <div>
+                                                                                <div className={tinyLabel}>Desired start</div>
+                                                                                <input
+                                                                                    type="date"
+                                                                                    value={toDateInputValue(formData.desired_start_date ?? d.desired_start_date)}
+                                                                                    onChange={(e) =>
+                                                                                        setFormData((prev) => ({
+                                                                                            ...prev,
+                                                                                            desired_start_date: e.target.value || null,
+                                                                                        }))
+                                                                                    }
+                                                                                    onBlur={() => {
+                                                                                        if (nonJobFormDirty) saveEdit();
+                                                                                    }}
+                                                                                    disabled={!canMutate}
+                                                                                    className={oppInqFieldInput}
                                                                                 />
-                                                                            ) : (
-                                                                                <>
-                                                                                    <div className={tinyLabel}>Tour date</div>
-                                                                                    <div
-                                                                                        className={`${oppInqReadonlyField}`}
-                                                                                        aria-label="Tour date (managed by actions)"
-                                                                                    >
-                                                                                        {(() => {
-                                                                                            const md = (d.metadata ?? null) as Record<string, unknown> | null;
-                                                                                            const fmt = formatTourDateTime(md?.tour_date, md?.tour_time, {
-                                                                                                displayTimeZoneIana: viewerTz,
-                                                                                            });
-                                                                                            return fmt.display;
-                                                                                        })()}
-                                                                                    </div>
-                                                                                </>
-                                                                            )}
+                                                                            </div>
+                                                                            <div>
+                                                                                {drawer.id && drawer.id !== "new" ? (
+                                                                                    <OpportunityInquiryTourDateBlock
+                                                                                        opportunityId={drawer.id}
+                                                                                        locationId={String((d.location_id as string | null | undefined) ?? "").trim()}
+                                                                                        metadata={d.metadata}
+                                                                                        viewerTimezone={viewerTz}
+                                                                                        canMutate={!!canMutate}
+                                                                                        onRefresh={refetch}
+                                                                                        labelClassName={tinyLabel}
+                                                                                        readonlyFieldClassName={oppInqReadonlyField}
+                                                                                    />
+                                                                                ) : (
+                                                                                    <>
+                                                                                        <div className={tinyLabel}>Tour date</div>
+                                                                                        <div
+                                                                                            className={`${oppInqReadonlyField}`}
+                                                                                            aria-label="Tour date (managed by actions)"
+                                                                                        >
+                                                                                            {(() => {
+                                                                                                const md = (d.metadata ?? null) as Record<string, unknown> | null;
+                                                                                                const fmt = formatTourDateTime(md?.tour_date, md?.tour_time, {
+                                                                                                    displayTimeZoneIana: viewerTz,
+                                                                                                });
+                                                                                                return fmt.display;
+                                                                                            })()}
+                                                                                        </div>
+                                                                                    </>
+                                                                                )}
+                                                                            </div>
                                                                         </div>
                                                                     </div>
+
+                                                                </div>
+                                                                <div className={`${oppInqInnerCard} min-w-0`}>
                                                                     {overviewData && !(overviewData as { _create?: boolean })._create ? (
-                                                                        <div className="mt-2 border-t border-alloy-stone/10 pt-2">
+                                                                        <div className="pt-0.5">
                                                                             <OperationalAttentionHeaderStrip
                                                                                 key={`attn-summary-${String((overviewData as { id?: string }).id ?? "")}`}
                                                                                 variant="panel"

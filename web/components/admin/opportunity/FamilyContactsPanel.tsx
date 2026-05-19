@@ -8,6 +8,13 @@ import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
 import { formatPhoneUS } from "@/lib/adminFormatters";
 import { normalizePhone } from "@/lib/contactNormalize";
 import { DrawerRelationshipPanelSkeleton } from "@/components/admin/workspace/DrawerRelationshipPanelSkeleton";
+import type { FieldDefForLinkedEdit } from "@/lib/admin/drawer/linkedRecordFieldEditing";
+import EditablePersonContactCard from "@/components/admin/opportunity/EditablePersonContactCard";
+import PrimaryPersonContactCard from "@/components/admin/opportunity/PrimaryPersonContactCard";
+import {
+    personContactCardValuesFromOpportunityPersonRow,
+    resolveLinkedPersonContactCardFieldGates,
+} from "@/lib/admin/drawer/primaryPersonCardEdit";
 import {
     oppDrawerRolePillComfortable,
     oppInqContactChannelLink,
@@ -15,7 +22,6 @@ import {
     oppInqContactSep,
     oppInqEyebrow,
     oppInqMutedEmpty,
-    oppInqNameLink,
     oppInqRolePill,
 } from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
 
@@ -124,6 +130,12 @@ export function FamilyContactsPanel(props: {
     opportunityFullHydrateFailed?: boolean;
     /** Summary card in inquiry header vs overview body (layout-only body mount is deprecated). */
     variant?: "default" | "summary";
+    /** Opportunity field definitions for linked-person policy gates (optional). */
+    fieldDefinitions?: FieldDefForLinkedEdit[];
+    /** After primary person PATCH from this card — parent should merge hydration + refetch. */
+    onPrimaryPersonUpdated?: (person: Record<string, unknown>) => void;
+    /** After linked opportunity_person row person PATCH — parent merges `_opportunity_persons` + refetch. */
+    onLinkedPersonUpdated?: (personId: string, person: Record<string, unknown>) => void;
 }) {
     const {
         opportunityId,
@@ -143,6 +155,9 @@ export function FamilyContactsPanel(props: {
         opportunityFullHydrateApplied,
         opportunityFullHydrateFailed = false,
         variant = "default",
+        fieldDefinitions = [],
+        onPrimaryPersonUpdated,
+        onLinkedPersonUpdated,
     } = props;
 
     const relationshipRowsAwaitingFullHydrate =
@@ -174,9 +189,6 @@ export function FamilyContactsPanel(props: {
     }, [opportunityId, sectionKey, variant, timingEnabled]);
 
     const primaryPersonId = record.primary_person_id != null ? String(record.primary_person_id).trim() : "";
-    const primaryName = record._primary_person_name != null ? String(record._primary_person_name).trim() : "";
-    const primaryEmail = record._primary_person_email != null ? String(record._primary_person_email) : null;
-    const primaryPhone = record._primary_person_phone != null ? String(record._primary_person_phone) : null;
 
     const rows = useMemo(() => {
         const raw = (record._opportunity_persons as unknown[]) ?? [];
@@ -211,8 +223,6 @@ export function FamilyContactsPanel(props: {
     const eyebrow = oppInqEyebrow;
     const cardPad = variant === "summary" ? "px-2 py-1.5" : "px-3 py-2.5";
 
-    const nameLink = oppInqNameLink;
-
     const roleBadge = variant === "summary" ? oppInqRolePill : oppDrawerRolePillComfortable;
 
     const registryDensity = variant === "summary" ? "summary" : "default";
@@ -222,12 +232,15 @@ export function FamilyContactsPanel(props: {
             <div className="min-w-0">
                 {variant === "default" ? <div className={eyebrow}>Primary person</div> : null}
                 {primaryPersonId ? (
-                    <div className={`mt-1 rounded-lg border border-alloy-stone/20 bg-white shadow-sm ring-1 ring-alloy-stone/[0.06] ${cardPad}`}>
-                        <button type="button" onClick={() => openDrawer({ type: "persons", id: primaryPersonId })} className={nameLink}>
-                            {primaryName && primaryName !== "—" ? primaryName : "View person"}
-                        </button>
-                        <OppInquiryContactChannelsRow phone={primaryPhone} email={primaryEmail} />
-                    </div>
+                    <PrimaryPersonContactCard
+                        record={record}
+                        canMutate={canMutate}
+                        fieldDefinitions={fieldDefinitions}
+                        cardPad={cardPad}
+                        variant={variant}
+                        openDrawer={openDrawer}
+                        onPersonUpdated={onPrimaryPersonUpdated}
+                    />
                 ) : primaryContactAwaitingFullHydrate ? (
                     variant === "summary" ? (
                         <SummaryPrimaryPersonCardSkeleton cardPad={cardPad} />
@@ -286,30 +299,30 @@ export function FamilyContactsPanel(props: {
                     )
                 ) : (
                     <ul className={`${variant === "summary" ? "space-y-1.5" : "space-y-2.5"} mt-1.5 list-none`}>
-                        {sorted.map((r) => (
-                            <li
-                                key={r.id}
-                                className={`rounded-lg border border-alloy-stone/20 bg-white shadow-sm ring-1 ring-alloy-stone/[0.06] ${cardPad}`}
-                            >
-                                <div className="flex flex-wrap items-start justify-between gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => openDrawer({ type: "persons", id: r.person_id })}
-                                        className={`min-w-0 flex-1 truncate ${nameLink}`}
-                                    >
-                                        {r.name && r.name.trim() ? r.name : "View person"}
-                                    </button>
-                                    <span className={roleBadge} title={r.role_type}>
-                                        {formatRoleTypeLabel(r.role_type)}
-                                    </span>
-                                </div>
-                                <OppInquiryContactChannelsRow
-                                    phone={r.phone}
-                                    email={r.email}
-                                    phoneHref={(raw) => normalizePhone(raw) ?? raw.replace(/\D/g, "")}
-                                />
-                            </li>
-                        ))}
+                        {sorted.map((r) => {
+                            const personId = String(r.person_id ?? "").trim();
+                            const initialValues = personContactCardValuesFromOpportunityPersonRow(r);
+                            const gates = resolveLinkedPersonContactCardFieldGates(personId, canMutate);
+                            return (
+                                <li key={r.id}>
+                                    <EditablePersonContactCard
+                                        personId={personId || null}
+                                        initialValues={initialValues}
+                                        gates={gates}
+                                        canMutate={canMutate}
+                                        cardPad={cardPad}
+                                        variant={variant}
+                                        openDrawer={openDrawer}
+                                        roleLabel={formatRoleTypeLabel(r.role_type)}
+                                        roleBadgeClassName={roleBadge}
+                                        saveHint="Edits save to linked person · not this opportunity"
+                                        dataCardKind="linked"
+                                        phoneHref={(raw) => normalizePhone(raw) ?? raw.replace(/\D/g, "")}
+                                        onPersonUpdated={(person) => onLinkedPersonUpdated?.(personId, person)}
+                                    />
+                                </li>
+                            );
+                        })}
                     </ul>
                 )}
             </div>
