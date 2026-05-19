@@ -168,6 +168,10 @@ export function evaluateDrawerFieldPoliciesOnPatch(params: {
         };
         const editability = resolveFieldEditability(intSource, { permission_keys: ["__admin_patch__"] });
 
+        if (editability.editability_mode === "editable_through_related_record") {
+            continue;
+        }
+
         if (!editability.editable && editability.editability_mode === "read_only" && touched.has(def.field_key)) {
             const before =
                 resolved.storage === "field_values"

@@ -74,6 +74,12 @@ import {
     applyPolicyChromeToOverviewSections,
 } from "@/lib/admin/drawer/fieldEditabilityInDrawer";
 import {
+    applyPersonPatchToOpportunityHydration,
+    partitionOpportunitySaveByLinkedFields,
+    patchLinkedPersonFromOpportunityDrawer,
+    resolveOpportunityLinkedFieldSources,
+} from "@/lib/admin/drawer/linkedRecordFieldEditing";
+import {
     buildFieldValidationSummary,
     parseDrawerFieldPolicySaveResponse,
 } from "@/lib/admin/drawer/drawerSaveErrors";
@@ -4843,7 +4849,7 @@ export default function AdminEntityDrawer() {
                 return;
             }
             const url = `/api/admin/${drawer.type}/${drawer.id}`;
-            const payload: Record<string, unknown> = { ...formData };
+            let payload: Record<string, unknown> = { ...formData };
             if ("status_label" in payload) delete payload.status_label;
             if (drawer.type === "opportunities") {
                 const notes = formData.customer_notes !== undefined ? formData.customer_notes : payload.notes;
@@ -4941,6 +4947,55 @@ export default function AdminEntityDrawer() {
                 window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "documents", id: drawer.id } }));
                 return;
             }
+            if (drawer.type === "opportunities" && data) {
+                let initial: Record<string, unknown> = {};
+                try {
+                    initial = initialInlineFormSnapshot
+                        ? (JSON.parse(initialInlineFormSnapshot) as Record<string, unknown>)
+                        : {};
+                } catch {
+                    initial = {};
+                }
+                const oppDefs = (data._field_definitions as FieldDefRow[] | undefined) ?? [];
+                const partitioned = partitionOpportunitySaveByLinkedFields({
+                    formData: payload,
+                    initial,
+                    record: data as Record<string, unknown>,
+                    defs: oppDefs,
+                });
+                payload = partitioned.opportunityPayload;
+                if (partitioned.personId && Object.keys(partitioned.personPatch).length > 0) {
+                    const personResult = await patchLinkedPersonFromOpportunityDrawer({
+                        personId: partitioned.personId,
+                        body: partitioned.personPatch,
+                    });
+                    if (!personResult.ok) {
+                        if (personResult.status === 403) {
+                            throw new Error("You do not have permission to edit the linked person.");
+                        }
+                        throw new Error(personResult.error);
+                    }
+                    setData((prev) => {
+                        if (!prev) return prev;
+                        const next = { ...prev } as Record<string, unknown>;
+                        applyPersonPatchToOpportunityHydration(next, personResult.json);
+                        return next;
+                    });
+                    const linkedSources = resolveOpportunityLinkedFieldSources(
+                        data as Record<string, unknown>,
+                        oppDefs
+                    );
+                    setFormData((prev) => {
+                        const next = { ...prev };
+                        for (const [hostKey, source] of Object.entries(linkedSources)) {
+                            if (partitioned.personPatch[source.target_field_key] === undefined) continue;
+                            const v = personResult.json[source.target_field_key];
+                            next[hostKey] = v == null ? "" : v;
+                        }
+                        return next;
+                    });
+                }
+            }
             const res = await fetch(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) {
@@ -4998,7 +5053,7 @@ export default function AdminEntityDrawer() {
         jobDiscountOptions,
         data,
         openDrawer,
-        data,
+        initialInlineFormSnapshot,
     ]);
 
     const openJobLocationChange = useCallback(() => {

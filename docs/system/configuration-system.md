@@ -31,7 +31,7 @@ Related Settings surfaces (same family): statuses, attention/SLA metadata, queue
 
 ### Next strategic layers (deferred)
 
-Record Experience Builder; BOS/AI config layer (structured PATCH only); linked-record inline PATCH (`interaction_policy` schema exists); structured `condition_config` builders; workflow-driven actions/forms wiring from Settings.
+Record Experience Builder; BOS/AI config layer (structured PATCH only); **multi-hop** linked-record PATCH fanout; structured `condition_config` builders; workflow-driven actions/forms wiring from Settings.
 
 ### Admin Settings capability inventory
 
@@ -98,6 +98,7 @@ Config surfaces include (non-exhaustive):
 - **Queue UI** presentation hints (`web/lib/ui-v2/queueUiConfig.ts`).
 - **Placement priority (waitlist lanes)** — subtree **`placement_priority_v1`** on **`work_units.metadata`** (and optional department defaults): enable flag, preset **`profile_id`**, lane filter, evaluation cap, display flags, rule order — validated on PATCH; drives queue preview ordering only when enabled (**opt-in**). Settings UI: **`/adminV2/settings/placement-priority`**.
 - **Field / section policies** — **`field_definitions.requirement_policy`**, **`interaction_policy`** (migration **`20260523120000_field_policy_and_section_v1.sql`**). **Write map:** `drawerFieldPolicyAdapter.ts` → **`_field_policy_resolved`** on opportunity/job GET. **Settings:** opportunity/job Fields hub — inline Required + unified edit modal (`FieldDefinitionEditModal`, capability matrix) for enforceable keys; catalog grouping via **`field_section_definitions`**. **Enforcement:** opportunity/job admin PATCH validates required/read-only before DB write. Complex stored JSON policies are not edited in Settings UI.
+- **Linked-record edit (V1):** **`editable_through_related_record`** on opportunity fields (`first_name`, `last_name`, `email`, `phone`) routes drawer blur-save to **`PATCH /api/admin/persons/:id`** when **`primary_person_id`** is set; preset **`personFieldOnOpportunityInteractionPolicy`**. Host opportunity PATCH ignores those keys. See **`docs/sprints/05_2026/linked_record_field_editing_v1.md`**.
 - **Layout integrity (read-only)** — **`GET /api/admin/config/layout-integrity`** (`validateLayoutIntegrityNow`); operator UI at **Settings → Layouts** (`LayoutIntegrityReportPanel`, formatting in **`layoutIntegrityPresentation.ts`**). Manual run per entity type; reports issues (severity, code, field/section/layout targets) without changing config.
 - **Settings + Record UX Parity (May 2026)** — Field policy UI + PATCH enforcement for opportunity/job **enforceable** subset; layout integrity panel; Settings index parity.
 - **Settings Config Completion V1 (May 2026)** — Opportunity workflow drawer sections (reorder, show/hide, rename workflow virtual titles, **Show hidden section**); org-scoped **action placement** editor. Structured admin PATCH only — no raw JSON primary UX.

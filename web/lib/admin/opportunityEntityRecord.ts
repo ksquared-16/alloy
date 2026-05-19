@@ -20,6 +20,7 @@ import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import { assertOpportunityInAccessScope } from "@/lib/admin/accessScope";
 import { fetchDepartmentMetadataForActivity } from "@/lib/admin/loadOpportunityActivitySignal";
 import { attachOpportunityAttentionSuggestionBundle } from "@/lib/admin/opportunityAttentionSuggestionAttachment";
+import { applyPrimaryPersonMirrorValuesToHostRecord } from "@/lib/admin/drawer/linkedRecordFieldEditing";
 
 type AdminSupabase = ReturnType<typeof createAdminClient>;
 
@@ -109,6 +110,7 @@ async function fetchPrimaryPersonContactHydrate(
     patch._primary_person_phone = trimOrNull(p?.phone);
     patch._contact_name = patch._primary_person_name;
     patch._primary_contact_name = patch._primary_person_name;
+    applyPrimaryPersonMirrorValuesToHostRecord(patch, p);
   } else if (opp.primary_contact_id) {
     const contact = await supabase
       .from("contacts")
@@ -139,6 +141,7 @@ async function fetchPrimaryPersonContactHydrate(
       if (p?.id) warmPersonRows.push(p);
       patch._primary_person_id = p?.id ?? null;
       patch._primary_person_name = warmPersonDisplayName(p);
+      applyPrimaryPersonMirrorValuesToHostRecord(patch, p);
       if (!patch._primary_contact_email && p?.email)
         patch._primary_contact_email = trimOrNull(p.email);
       if (!patch._primary_contact_phone && p?.phone)

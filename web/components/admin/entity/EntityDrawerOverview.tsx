@@ -12,6 +12,10 @@ import { StatusBadge } from "@/components/admin/StatusBadge";
 import EntityDrawerSection from "./EntityDrawerSection";
 import EntityDrawerField, { INPUT_ERROR_CLASS } from "./EntityDrawerField";
 import type { DrawerFieldPolicyChrome } from "@/lib/admin/drawer/fieldEditabilityInDrawer";
+import {
+    OPPORTUNITY_PRIMARY_PERSON_MIRROR_FIELD_KEYS,
+    readLinkedPersonMirrorValue,
+} from "@/lib/admin/drawer/linkedRecordFieldEditing";
 import { listUnmappedFieldValidationErrors } from "@/lib/admin/drawer/drawerSaveErrors";
 import { isUuidLike, resolveOverviewRelationshipLabel } from "@/lib/admin/overviewRelationshipLabels";
 import { scheduleOverviewRelationshipReadLabel } from "@/lib/admin/scheduleOverviewLabels";
@@ -259,6 +263,11 @@ function canonicalReadFallbackForShadowedField(
     }
     if (fieldKey === "pets" && typeof record.has_pets === "boolean") {
       return record.has_pets;
+    }
+  }
+  if (entityType === "opportunities") {
+    if (OPPORTUNITY_PRIMARY_PERSON_MIRROR_FIELD_KEYS.has(fieldKey)) {
+      return readLinkedPersonMirrorValue(record, fieldKey, fieldKey);
     }
   }
   if (entityType === "locations" || entityType === "jobs" || entityType === "schedules") {
@@ -699,7 +708,15 @@ export default function EntityDrawerOverview({
       density,
       showLabel: !scheduleSnapRow,
       errorMessage: fieldError,
-      readOnlyHint: policyReadOnly && !showFieldEdit ? "Read-only (policy)" : null,
+      readOnlyHint:
+        policyReadOnly && !showFieldEdit
+          ? policyChrome?.readOnlyReason?.trim() ||
+            (policyChrome?.linkedSourceLabel
+              ? `${policyChrome.linkedSourceLabel} (read-only)`
+              : "Read-only (policy)")
+          : policyChrome?.linkedSourceLabel && showFieldEdit
+            ? `Edits save to ${policyChrome.linkedSourceLabel.toLowerCase()}`
+            : null,
       ...(scheduleSnapRow && tier ? { valueEmphasis: tier } : {}),
     };
     if (scheduleSnapRow && opts?.scheduleChromePresentation === "flat") {

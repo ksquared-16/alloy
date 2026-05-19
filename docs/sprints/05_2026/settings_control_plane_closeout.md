@@ -57,9 +57,13 @@ Close the current **configuration foundation** so operators have a coherent four
 
 ---
 
+## Follow-on shipped (May 2026)
+
+- **Linked record field editing V1** — Opportunity drawer → primary person (`first_name`, `last_name`, `email`, `phone`) via `interaction_policy` + `PATCH /api/admin/persons/:id`. See **`linked_record_field_editing_v1.md`**.
+
 ## Deferred (do not start in this pass)
 
-- Record Experience Builder **Cards 5–9** (action preview in Layouts, linked-record primitives, job/schedule editors, assist apply expansion)
+- Record Experience Builder **Cards 5–9** (action preview in Layouts, job/schedule linked-record editors, assist apply expansion)
 - **Workflow Status Configuration V1** — editable transition matrix, transition requirements, permissions, automation hooks UI
 - Full `record_actions` → registry migration
 - Raw JSON layout editor

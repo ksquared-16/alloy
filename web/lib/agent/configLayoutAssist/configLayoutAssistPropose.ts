@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 
+import { OPPORTUNITY_PRIMARY_PERSON_MIRROR_FIELD_KEYS } from "@/lib/admin/drawer/linkedRecordFieldEditing";
 import { fetchEffectiveRecordDrawerLayout } from "@/lib/admin/effectiveRecordDrawerLayout";
 import { validateLayoutIntegrityNow } from "@/lib/config/layoutIntegrityValidator";
 import type { LayoutIntegrityFieldInput } from "@/lib/config/layoutIntegrityValidator";
@@ -38,8 +39,6 @@ export type BuildConfigLayoutProposalInput = {
     default_entity_type?: string;
     entityResolve?: ConfigLayoutAssistEntityResolveContext;
 };
-
-const PERSON_MIRROR_FIELDS_ON_OPPORTUNITY = new Set(["first_name", "last_name", "email", "phone"]);
 
 export { loadConfigLayoutAssistEntityResolveContext } from "./configLayoutAssistEntityResolve";
 
@@ -236,7 +235,7 @@ function buildSetFieldInteractionOperation(intent: ConfigLayoutAssistIntentV1): 
     const label = intent.field_label ?? fieldKey;
     const entityLabel = intent.entity_display_label;
 
-    if (intent.entity_type === "opportunity" && PERSON_MIRROR_FIELDS_ON_OPPORTUNITY.has(fieldKey)) {
+    if (intent.entity_type === "opportunity" && OPPORTUNITY_PRIMARY_PERSON_MIRROR_FIELD_KEYS.has(fieldKey)) {
         const interaction_policy = personFieldOnOpportunityInteractionPolicy(fieldKey);
         return newOp({
             kind: "set_field_interaction",

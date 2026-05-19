@@ -7,12 +7,16 @@ import type { DrawerFieldPolicyResolved } from "@/lib/fields/drawerFieldPolicyAd
 import { resolveFieldEditability } from "@/lib/fields/fieldInteractionPolicy";
 import { resolveFieldRequirementPolicy } from "@/lib/fields/fieldRequirementPolicy";
 import { isAdvancedRequirementPolicyForSettings } from "@/lib/fields/fieldPolicySettingsUi";
+import { resolveOpportunityLinkedFieldSources } from "@/lib/admin/drawer/linkedRecordFieldEditing";
 
 export type DrawerFieldPolicyChrome = {
     /** Show required asterisk on label. */
     showRequired: boolean;
     /** Policy marks field read-only in drawer (display + block edit). */
     readOnly: boolean;
+    /** When set, inline edit routes to linked record PATCH (V1: primary person). */
+    linkedSourceLabel?: string | null;
+    readOnlyReason?: string | null;
 };
 
 type FieldDefRow = {
@@ -41,6 +45,10 @@ export function buildDrawerFieldPolicyChromeFromEntityData(
 
     const resolved = (data._field_policy_resolved ?? {}) as Record<string, DrawerFieldPolicyResolved>;
     const defs = (data._field_definitions ?? []) as FieldDefRow[];
+    const linkedByKey =
+        canon === "opportunity"
+            ? resolveOpportunityLinkedFieldSources(data, defs, { permission_keys: ["__drawer_display__"] })
+            : {};
     const out: Record<string, DrawerFieldPolicyChrome> = {};
 
     for (const def of defs) {
@@ -61,9 +69,24 @@ export function buildDrawerFieldPolicyChromeFromEntityData(
             },
             { permission_keys: ["__drawer_display__"] }
         );
-        const readOnly = !editability.editable && editability.editability_mode === "read_only";
+        const linked = linkedByKey[def.field_key];
+        let readOnly = !editability.editable && editability.editability_mode === "read_only";
+        let linkedSourceLabel: string | null = null;
+        let readOnlyReason: string | null = null;
 
-        out[def.field_key] = { showRequired, readOnly };
+        if (linked) {
+            if (linked.editable) {
+                readOnly = false;
+                linkedSourceLabel = "Primary person";
+            } else {
+                readOnly = true;
+                readOnlyReason = linked.read_only_reason ?? "Linked person field is read-only.";
+            }
+        } else if (!editability.editable && editability.lock_reason) {
+            readOnlyReason = editability.lock_reason;
+        }
+
+        out[def.field_key] = { showRequired, readOnly, linkedSourceLabel, readOnlyReason };
     }
 
     return out;
@@ -88,9 +111,14 @@ function applyChromeToField<T extends { key: string; editable?: boolean; label: 
     const next = { ...field };
     if (chrome.readOnly) {
         next.editable = false;
+    } else if (chrome.linkedSourceLabel) {
+        next.editable = true;
     }
     if (chrome.showRequired && !field.label.includes("*")) {
         next.label = `${field.label} *`;
+    }
+    if (chrome.linkedSourceLabel && !field.label.includes("(")) {
+        next.label = `${field.label} (${chrome.linkedSourceLabel})`;
     }
     return next;
 }
