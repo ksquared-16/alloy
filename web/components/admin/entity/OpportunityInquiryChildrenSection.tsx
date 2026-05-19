@@ -23,10 +23,10 @@ import {
     resolveInquiryChildDesiredStartDisplay,
     type InquiryChildFieldDefLike,
 } from "@/lib/fields/inquiryChildFieldRegistry";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
-/** Desktop/tablet: one row per child; horizontal scroll when drawer is narrow. Stack only below 480px. */
-function inquiryChildRowGridClass(showDesiredStart: boolean, customColumnCount: number): string {
+/** Column template for one header/data row (inline style — dynamic Tailwind grid-cols is not compiled). */
+function inquiryChildRowGridTemplateColumns(showDesiredStart: boolean, customColumnCount: number): string {
     const parts = ["minmax(6.5rem,1.05fr)", "minmax(6.25rem,6.5rem)"];
     if (showDesiredStart) parts.push("minmax(5.75rem,6.25rem)");
     for (let i = 0; i < customColumnCount; i++) parts.push("minmax(4.75rem,5.5rem)");
@@ -37,13 +37,15 @@ function inquiryChildRowGridClass(showDesiredStart: boolean, customColumnCount: 
         "minmax(7rem,1.35fr)",
         "minmax(2.75rem,auto)"
     );
-    return `grid w-full min-w-[52rem] grid-cols-[${parts.join("_")}] gap-x-1.5 gap-y-0 items-center`;
+    return parts.join(" ");
 }
+
+const INQUIRY_CHILD_ROW_GRID_CLASS = "grid w-full min-w-[52rem] gap-x-1.5 gap-y-0 items-center";
 
 const INQUIRY_CHILD_COL_HDR =
     "truncate text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/45 leading-none";
-const INQUIRY_CHILD_MOBILE_LABEL =
-    "mb-0.5 hidden text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/40 max-[479px]:block";
+/** Header row supplies labels; per-field labels stay hidden to keep one compact row. */
+const INQUIRY_CHILD_MOBILE_LABEL = "hidden";
 const INQUIRY_CHILD_CELL = "min-w-0 self-center";
 
 export type InquiryChildRow = {
@@ -325,8 +327,13 @@ export default function OpportunityInquiryChildrenSection({
             ),
         [fieldDefs]
     );
-    const rowGridClass = useMemo(
-        () => inquiryChildRowGridClass(showDesiredStartColumn, customDrawerDefs.length),
+    const rowGridStyle = useMemo<CSSProperties>(
+        () => ({
+            gridTemplateColumns: inquiryChildRowGridTemplateColumns(
+                showDesiredStartColumn,
+                customDrawerDefs.length
+            ),
+        }),
         [showDesiredStartColumn, customDrawerDefs.length]
     );
 
@@ -465,7 +472,8 @@ export default function OpportunityInquiryChildrenSection({
             {loadErr ? <p className="mb-2 text-sm text-red-700">{loadErr}</p> : null}
             <div className={`${listWrap} overflow-x-auto`} role="region" aria-label="Inquiry children">
                 <div
-                    className={`${rowGridClass} sticky left-0 z-[1] hidden border-b border-alloy-stone/15 bg-alloy-stone/[0.04] px-1.5 py-1 min-[480px]:grid`}
+                    className={`${INQUIRY_CHILD_ROW_GRID_CLASS} sticky left-0 z-[1] border-b border-alloy-stone/15 bg-alloy-stone/[0.04] px-1.5 py-1`}
+                    style={rowGridStyle}
                     role="row"
                 >
                     <div className={INQUIRY_CHILD_COL_HDR}>Child</div>
@@ -482,7 +490,7 @@ export default function OpportunityInquiryChildrenSection({
                     <div className={INQUIRY_CHILD_COL_HDR}>Notes</div>
                     <div className={`${INQUIRY_CHILD_COL_HDR} text-right`}>View</div>
                 </div>
-                <div className="max-[479px]:space-y-2 max-[479px]:p-1.5">
+                <div>
                 {rows.map((r) => {
                     const name = (r.display_name ?? "").trim() || "—";
                     const isMetadataOnly = (r.customer_member_id ?? "").startsWith("metadata_child:");
@@ -552,13 +560,11 @@ export default function OpportunityInquiryChildrenSection({
                     return (
                         <div
                             key={r.id}
-                            className={`min-[480px]:border-b min-[480px]:border-alloy-stone/8 min-[480px]:px-1.5 min-[480px]:py-0.5 max-[479px]:rounded-md max-[479px]:border max-[479px]:border-alloy-stone/15 max-[479px]:p-2 ${rowAttentionClass}`}
+                            className={`border-b border-alloy-stone/8 px-1.5 py-0.5 last:border-b-0 ${rowAttentionClass}`}
                             data-inquiry-child-card="true"
                             role="row"
                         >
-                            <div
-                                className={`${rowGridClass} max-[479px]:min-w-0 max-[479px]:grid-cols-1 max-[479px]:gap-y-2`}
-                            >
+                            <div className={INQUIRY_CHILD_ROW_GRID_CLASS} style={rowGridStyle}>
                             {!r.linked_on_inquiry && rowCanEdit ? (
                                 <p className="col-span-full pb-0.5 text-[9px] font-medium leading-tight text-alloy-midnight/45">
                                     Not on inquiry — saving program/schedule/outcome/notes links this child.
