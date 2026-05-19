@@ -116,12 +116,21 @@ describe("Drawer opportunity header grouped loading", () => {
         expect(src).toMatch(/opportunityQueuePreviewSeed\?\.title/);
     });
 
-    it("uses compact drawer body reserve when queue preview bootstrap is active", () => {
+    it("uses section-shaped bootstrap body and title-rail action reserves when queue preview is active", () => {
         const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("opportunityQueueBootstrapCompact");
-        expect(src).toContain("ADMINV2_DRAWER_OPPORTUNITY_BOOTSTRAP_BODY_MIN_H");
-        expect(src).toContain("opportunityWorkflowHeaderUsesQueuePreview");
-        expect(src).toContain("DrawerOpportunityTimelineReserve");
+        expect(src).toContain("DrawerOpportunityQueueBootstrapBodySkeleton");
+        expect(src).toContain("opportunityTitleRailActive");
+        expect(src).toContain("DrawerWorkflowHeaderQuickActionsSkeleton");
+        expect(src).not.toMatch(
+            /opportunityWorkflowHeaderUsesQueuePreview[\s\S]*?min-h-\[2\.375rem\][\s\S]*?aria-hidden/,
+        );
+    });
+
+    it("shows header actions before shell settled when record_header resolves", () => {
+        const src = read("components/admin/AdminEntityDrawer.tsx");
+        expect(src).toMatch(
+            /opportunityHeaderActionsPending[\s\S]*?!opportunityDrawerShellSettled[\s\S]*?!opportunityResolvedHeaderActions/,
+        );
     });
 });
 

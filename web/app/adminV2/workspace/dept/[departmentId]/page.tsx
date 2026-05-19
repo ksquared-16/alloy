@@ -16,7 +16,6 @@ import { DepartmentWorkspaceBridgeShell } from "@/components/admin/workspace/Dep
 import { WorkspaceActionsRailPlaceholder } from "@/components/admin/workspace/WorkspaceActionsRailPlaceholder";
 import KPIBlock from "@/app/adminV2/components/workspace/blocks/KPIBlock";
 import { DepartmentWorkspaceColdShell } from "@/components/admin/workspace/DepartmentWorkspaceColdShell";
-import { DeptPairedOperQueuesSkeleton } from "@/components/admin/workspace/DepartmentPairedOperQueuesSkeleton";
 import { KpiStripSkeleton } from "@/components/admin/workspace/KpiStripSkeleton";
 import {
     WorkUnitQueueCompactRowSkeleton,
@@ -577,6 +576,52 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 }
 
                 if (deptCommit && deptRes.ok && wuRes.ok) {
+                    const pipelineCandidates = wuCommit.filter(
+                        (w) => (w.key ?? "").trim().toLowerCase() !== "needs_attention"
+                    );
+                    if (pipelineCandidates.length) {
+                        setDeptPipelineExecLoading(true);
+                        void (async () => {
+                            try {
+                                const enroll = pipelineCandidates.find(
+                                    (w) => (w.key ?? "").trim().toLowerCase() === "enrollment_pipeline"
+                                );
+                                const detailMap = new Map<string, { queue_definition?: unknown; department_id?: string | null }>();
+                                if (enroll) {
+                                    const detailRes = await dedupeAdminFetch(
+                                        `/api/admin/work-units/${encodeURIComponent(enroll.id)}`,
+                                        workspaceDataFetchInit() ?? {}
+                                    );
+                                    if (detailRes.ok) {
+                                        detailMap.set(
+                                            enroll.id,
+                                            (await detailRes.json().catch(() => ({}))) as {
+                                                queue_definition?: unknown;
+                                                department_id?: string | null;
+                                            }
+                                        );
+                                    }
+                                }
+                                const surface = await resolveDeptPipelineExecSurface({
+                                    departmentId,
+                                    candidates: pipelineCandidates,
+                                    init: workspaceDataFetchInit() ?? {},
+                                    workUnitDetailById: detailMap,
+                                });
+                                if (!cancelled) {
+                                    setDeptPipelineExecSurface(surface);
+                                }
+                            } catch {
+                                if (!cancelled) setDeptPipelineExecSurface(null);
+                            } finally {
+                                if (!cancelled) setDeptPipelineExecLoading(false);
+                            }
+                        })();
+                    } else {
+                        setDeptPipelineExecSurface(null);
+                        setDeptPipelineExecLoading(false);
+                    }
+
                     void Promise.all([
                         refreshQueueSummaries(deptCommit, wuCommit),
                         (async () => {
@@ -698,68 +743,10 @@ export default function AdminV2WorkspaceDepartmentPage() {
         };
     }, [departmentId, orgId, principalUserId, accessScopeFingerprint, selectedSiteId]);
 
-    useEffect(() => {
-        if (!departmentId || deptLoading || deptWorkUnits === null) {
-            setDeptPipelineExecSurface(null);
-            setDeptPipelineExecLoading(false);
-            return;
-        }
-        const candidates = [...deptWorkUnits].filter(
-            (w) => (w.key ?? "").trim().toLowerCase() !== "needs_attention"
-        );
-        if (!candidates.length) {
-            setDeptPipelineExecSurface(null);
-            setDeptPipelineExecLoading(false);
-            return;
-        }
-
-        let cancelled = false;
-        setDeptPipelineExecLoading(true);
-        void (async () => {
-            try {
-                const surface = await resolveDeptPipelineExecSurface({
-                    departmentId,
-                    candidates,
-                    init: workspaceDataFetchInit() ?? {},
-                });
-                if (!cancelled) {
-                    setDeptPipelineExecSurface(surface);
-                    setDeptPipelineExecLoading(false);
-                }
-            } catch {
-                if (!cancelled) {
-                    setDeptPipelineExecSurface(null);
-                    setDeptPipelineExecLoading(false);
-                }
-            }
-        })();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [departmentId, deptLoading, deptWorkUnits]);
-
     const departmentPageBlockingLoad = useMemo(() => {
         if (!departmentId) return false;
         return deptLoading;
     }, [departmentId, deptLoading]);
-
-    /** Throughput lane: work units + optional pipeline lanes — do not wait on attention buckets. */
-    const deptThroughputOperReady = useMemo(() => {
-        if (!departmentId || deptLoading || deptWorkUnits === null) return false;
-        return !deptPipelineExecLoading;
-    }, [departmentId, deptLoading, deptWorkUnits, deptPipelineExecLoading]);
-
-    const deptAttentionOperReady = useMemo(() => {
-        if (!departmentId || deptLoading) return false;
-        return !deptAttentionBucketsLoading;
-    }, [departmentId, deptLoading, deptAttentionBucketsLoading]);
-
-    const deptOperPairedCoordinatedLoading =
-        !!dept &&
-        !departmentPageBlockingLoad &&
-        ((!deptWorkUnitsError && !deptThroughputOperReady) ||
-            (!deptAttentionBucketsError && !deptAttentionOperReady));
 
     useEffect(() => {
         if (!isEnrollmentLikeDepartmentKey(deptKey) || !departmentId || !primaryWorkUnit?.id) {
@@ -923,7 +910,11 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             })}
                         </>
                     ) : deptPipelineExecLoading && (deptWorkUnits ?? []).length > 0 ? (
-                        <WorkUnitQueueCompactRowSkeleton variant="throughput" />
+                        <WorkUnitQueueCompactRowSkeletonList
+                            count={Math.min((deptWorkUnits ?? []).length, 5)}
+                            variant="throughput"
+                            ariaLabel="Loading pipeline lanes"
+                        />
                     ) : (
                         <>
                             {deptQueueSummariesLoading && (deptWorkUnits ?? []).length > 0 ? (
@@ -1002,9 +993,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 </ul>
     );
 
-    const throughputPairedPanels = deptOperPairedCoordinatedLoading ? (
-        <DeptPairedOperQueuesSkeleton throughputTitle={execPanelTitle} />
-    ) : (
+    const throughputPairedPanels = (
         <div className="adminv2-ws-soft-content-reveal">
             <WorkspacePairedOperPanelsGrid>
                 <WorkspacePairedOperPanel tone="throughput" ariaLabel={execPanelTitle} title={execPanelTitle}>

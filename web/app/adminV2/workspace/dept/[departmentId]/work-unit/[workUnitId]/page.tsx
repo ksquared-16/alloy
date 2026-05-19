@@ -416,7 +416,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const primaryLaneRowsSettledOnceRef = useRef(false);
 
     const [workflowKpis, setWorkflowKpis] = useState<WorkflowKpis>(DEFAULT_WF_KPIS);
-    const [workflowKpisLoading, setWorkflowKpisLoading] = useState(true);
+    const [workflowKpisLoading, setWorkflowKpisLoading] = useState(false);
     const [workflowPartitions, setWorkflowPartitions] = useState<WorkflowScopePartitionV1 | null>(null);
     const globalAssistant = useGlobalAssistantOptional();
 
@@ -715,6 +715,51 @@ export default function AdminV2OpportunityWorkUnitPage() {
         return () => window.removeEventListener(ADMIN_V2_WORKFLOW_AUTOMATION_REFRESH, onRefresh);
     }, [departmentId, workUnitId, refreshWorkflowPanels]);
 
+    const loadWuKpiPlacements = useCallback(
+        async (wuK: WorkUnitRow) => {
+            if (!workUnitId || !departmentId) return;
+            let suppress = false;
+            try {
+                const def = wuK.queue_definition ? validateQueueDefinition(wuK.queue_definition) : null;
+                const ui = def ? getQueueUiConfig(def) : null;
+                suppress = shouldSuppressWorkUnitKpiStrip({ def, ui });
+            } catch {
+                suppress = false;
+            }
+            if (suppress) {
+                setWuPlacementRows([]);
+                setWuScopeHasPlacements(true);
+                return;
+            }
+            try {
+                const init = workspaceDataFetchInit();
+                const kpiBase = `/api/admin/workspace-kpi-placements?surface=work_unit&department_id=${encodeURIComponent(
+                    departmentId
+                )}&work_unit_id=${encodeURIComponent(workUnitId)}`;
+                const res = await dedupeAdminFetchWithTtl(
+                    appendWorkspaceSiteToUrl(kpiBase, selectedSiteId),
+                    { ...(init ?? {}), cache: "no-store" },
+                    8000
+                );
+                if (!res.ok) {
+                    setWuPlacementRows([]);
+                    setWuScopeHasPlacements(false);
+                    return;
+                }
+                const j = (await res.json().catch(() => ({}))) as {
+                    items?: WorkspaceKpiPlacementRow[];
+                    scope_has_placements?: boolean;
+                };
+                setWuPlacementRows(j.items ?? []);
+                setWuScopeHasPlacements(j.scope_has_placements === true);
+            } catch {
+                setWuPlacementRows([]);
+                setWuScopeHasPlacements(false);
+            }
+        },
+        [departmentId, workUnitId, selectedSiteId]
+    );
+
     const loadWorkUnitDeferredSupplement = useCallback(async () => {
         if (!workUnitId || !departmentId) return;
         const init = workspaceDataFetchInit();
@@ -790,47 +835,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         } catch {
             /* non-fatal */
         }
-
-        const wuK = bootstrapWuRef.current;
-        if (!wuK) return;
-        let suppress = false;
-        try {
-            const def = wuK.queue_definition ? validateQueueDefinition(wuK.queue_definition) : null;
-            const ui = def ? getQueueUiConfig(def) : null;
-            suppress = shouldSuppressWorkUnitKpiStrip({ def, ui });
-        } catch {
-            suppress = false;
-        }
-        if (suppress) {
-            setWuPlacementRows([]);
-            setWuScopeHasPlacements(true);
-            return;
-        }
-        try {
-            const kpiBase = `/api/admin/workspace-kpi-placements?surface=work_unit&department_id=${encodeURIComponent(
-                departmentId
-            )}&work_unit_id=${encodeURIComponent(workUnitId)}`;
-            const res = await dedupeAdminFetchWithTtl(
-                appendWorkspaceSiteToUrl(kpiBase, selectedSiteId),
-                { ...(init ?? {}), cache: "no-store" },
-                8000
-            );
-            if (!res.ok) {
-                setWuPlacementRows([]);
-                setWuScopeHasPlacements(false);
-                return;
-            }
-            const j = (await res.json().catch(() => ({}))) as {
-                items?: WorkspaceKpiPlacementRow[];
-                scope_has_placements?: boolean;
-            };
-            setWuPlacementRows(j.items ?? []);
-            setWuScopeHasPlacements(j.scope_has_placements === true);
-        } catch {
-            setWuPlacementRows([]);
-            setWuScopeHasPlacements(false);
-        }
-    }, [departmentId, workUnitId, selectedSiteId]);
+    }, [departmentId, workUnitId]);
 
     const requestWorkUnitDeferredSupplement = useCallback(() => {
         if (workUnitDeferredScheduledRef.current) return;
@@ -1402,10 +1407,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 if ((wu.key ?? "").trim().toLowerCase() === "needs_attention") {
                     setNeedsAttentionWorkUnitId(wu.id);
                 }
+                void loadWuKpiPlacements(wu);
                 if (pendingDeferredAfterWudRef.current) {
                     pendingDeferredAfterWudRef.current = false;
-                    requestWorkUnitDeferredSupplement();
                 }
+                requestWorkUnitDeferredSupplement();
 
                 if (!cancelled) {
                     setLoading(false);
