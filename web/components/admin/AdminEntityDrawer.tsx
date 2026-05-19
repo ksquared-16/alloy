@@ -78,6 +78,7 @@ import {
     partitionOpportunitySaveByLinkedFields,
     patchLinkedPersonFromOpportunityDrawer,
     resolveOpportunityLinkedFieldSources,
+    type FieldDefForLinkedEdit,
 } from "@/lib/admin/drawer/linkedRecordFieldEditing";
 import {
     buildFieldValidationSummary,
@@ -5539,7 +5540,10 @@ export default function AdminEntityDrawer() {
                           );
                       })()}
                   </div>
-                  {drawer.id && drawer.id !== "new" && isTaskAssistV1UiEnabled() ? (
+                  {drawer.id &&
+                  drawer.id !== "new" &&
+                  isTaskAssistV1UiEnabled() &&
+                  !opportunityInquiryWorkflowDrawer ? (
                       <OpportunityOperationalCompactStrip
                           opportunityId={drawer.id}
                           entityLabel={entityDataMatchesDrawer(data, drawer.id) ? String((data as { name?: string }).name ?? "").trim() || null : null}
@@ -6909,16 +6913,27 @@ export default function AdminEntityDrawer() {
                                       : null,
                               outcome_status_label: r.outcome_status_label != null ? String(r.outcome_status_label) : null,
                               notes: r.notes != null ? String(r.notes) : null,
+                              first_name: r.first_name != null ? String(r.first_name) : null,
+                              last_name: r.last_name != null ? String(r.last_name) : null,
+                              linked_on_inquiry: r.linked_on_inquiry === true,
+                              ocm_id: r.ocm_id != null ? String(r.ocm_id) : null,
                           };
                       })
                     : [];
                 const detailPending = d._member_person_graph_pending === true;
                 out.inquiry_children = (
                     <OpportunityInquiryChildrenSection
-                        rows={rows.filter((r) => r.id && (r.customer_member_id || r.display_name))}
+                        rows={rows.filter(
+                            (r) =>
+                                r.id &&
+                                (r.customer_member_id || r.display_name) &&
+                                !String(r.customer_member_id).startsWith("metadata_child:")
+                        )}
+                        opportunityId={drawer.id ?? undefined}
                         canEdit={!!canMutate}
                         embeddedInPremiumSection={oppCfg?.inquiry_drawer_mode === "workflow_v1"}
                         recordDetailPending={detailPending}
+                        onChildrenMutated={() => void refetch()}
                         onOpenChild={(row) => {
                             const cm = row.customer_member_id?.trim() ?? "";
                             if (!cm || cm.startsWith("metadata_child:")) return;
@@ -8234,13 +8249,6 @@ export default function AdminEntityDrawer() {
                         </span>
                     ) : null}
                 </div>
-                {overviewData && !(overviewData as { _create?: boolean })._create ? (
-                    <OperationalAttentionHeaderStrip
-                        key={`attn-hdr-${String((overviewData as { id?: string }).id ?? "")}`}
-                        variant="chrome"
-                        overviewData={overviewData as Record<string, unknown>}
-                    />
-                ) : null}
                 {opportunityActivityHeaderLine}
             </div>
         ) : drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? (
@@ -10697,6 +10705,7 @@ export default function AdminEntityDrawer() {
                                                         <div
                                                             className="rounded-xl border border-alloy-stone/15 border-l-[3px] border-l-[rgb(0,162,131)] bg-gradient-to-br from-emerald-50/45 via-white to-white px-2.5 py-2.5 shadow-md ring-1 ring-alloy-stone/10"
                                                             data-opportunity-inquiry-summary="true"
+                                                            data-opportunity-inquiry-summary-layout="hardcoded_v1"
                                                         >
                                                             <div className="flex flex-wrap items-end justify-between gap-2 border-b border-alloy-stone/12 pb-2">
                                                                 <span className={tinyLabel}>Inquiry summary</span>
@@ -10725,6 +10734,19 @@ export default function AdminEntityDrawer() {
                                                                                 opportunityFullHydratePending={opportunityFullHydratePending}
                                                                                 opportunityFullHydrateApplied={opportunityFullHydrateApplied}
                                                                                 opportunityFullHydrateFailed={opportunityFullHydrateFailed}
+                                                                                fieldDefinitions={
+                                                                                    (d._field_definitions as FieldDefForLinkedEdit[] | undefined) ??
+                                                                                    []
+                                                                                }
+                                                                                onPrimaryPersonUpdated={(person) => {
+                                                                                    setData((prev) => {
+                                                                                        if (!prev) return prev;
+                                                                                        const next = { ...prev } as Record<string, unknown>;
+                                                                                        applyPersonPatchToOpportunityHydration(next, person);
+                                                                                        return next;
+                                                                                    });
+                                                                                    void refetch();
+                                                                                }}
                                                                                 openForm={({ form_key, action }) => {
                                                                                     setActionFormState({
                                                                                         form_key,
@@ -10859,6 +10881,24 @@ export default function AdminEntityDrawer() {
                                                                             )}
                                                                         </div>
                                                                     </div>
+                                                                    {overviewData && !(overviewData as { _create?: boolean })._create ? (
+                                                                        <div className="mt-2 border-t border-alloy-stone/10 pt-2">
+                                                                            <OperationalAttentionHeaderStrip
+                                                                                key={`attn-summary-${String((overviewData as { id?: string }).id ?? "")}`}
+                                                                                variant="panel"
+                                                                                overviewData={overviewData as Record<string, unknown>}
+                                                                            />
+                                                                        </div>
+                                                                    ) : null}
+                                                                    {drawer.id && drawer.id !== "new" && isTaskAssistV1UiEnabled() ? (
+                                                                        <div className="mt-2 border-t border-alloy-stone/10 pt-2">
+                                                                            <OpportunityOperationalCompactStrip
+                                                                                opportunityId={drawer.id}
+                                                                                entityLabel={String(d.name ?? "").trim() || null}
+                                                                                overviewData={d}
+                                                                            />
+                                                                        </div>
+                                                                    ) : null}
                                                                     {/* Next step is now rendered inline in the drawer header (informational). */}
                                                                 </div>
                                                             </div>

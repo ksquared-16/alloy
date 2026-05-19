@@ -1,0 +1,178 @@
+/**
+ * Inquiry drawer children: merge OCM-linked rows with active household child members
+ * so drawer parity matches work-unit queue (all active `relationship=child` members).
+ */
+
+import { optionLabelFromBatchMap, type batchOptionItemLabelsForOrg } from "@/lib/admin/optionItemLabelForOrg";
+
+export type HouseholdChildMemberRow = {
+    id: string;
+    display_name?: string | null;
+    relationship?: string | null;
+    dob?: string | null;
+    person_id?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    metadata?: Record<string, unknown> | null;
+    is_active?: boolean | null;
+};
+
+export type InquiryChildHydrateRow = {
+    id: string;
+    customer_member_id: string;
+    person_id: string | null;
+    display_name: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    dob: string | null;
+    age: string | null;
+    desired_program_type: string | null;
+    desired_program_label: string | null;
+    desired_schedule_type: string | null;
+    desired_schedule_label: string | null;
+    outcome_status_key: string | null;
+    outcome_status_label: string | null;
+    fit_status: string | null;
+    notes: string | null;
+    metadata: Record<string, unknown> | null;
+    created_at: string | null;
+    updated_at: string | null;
+    linked_on_inquiry: boolean;
+    ocm_id: string | null;
+};
+
+type WarmPersonRow = {
+    id?: string;
+    first_name?: string | null;
+    last_name?: string | null;
+    full_name?: string | null;
+    date_of_birth?: string | null;
+};
+
+function trimOrNull(v: unknown): string | null {
+    if (v == null) return null;
+    const s = String(v).trim();
+    return s || null;
+}
+
+function warmPersonDisplayName(p: WarmPersonRow | null): string | null {
+    if (!p) return null;
+    const full = trimOrNull(p.full_name);
+    if (full) return full;
+    const fn = trimOrNull(p.first_name);
+    const ln = trimOrNull(p.last_name);
+    const joined = [fn, ln].filter(Boolean).join(" ").trim();
+    return joined || null;
+}
+
+function ageFromDobIso(dobIso: string | null | undefined): { label: string } | null {
+    const raw = String(dobIso ?? "").trim();
+    if (!raw) return null;
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return null;
+    const now = new Date();
+    let years = now.getFullYear() - d.getFullYear();
+    let months = now.getMonth() - d.getMonth();
+    if (now.getDate() - d.getDate() < 0) months -= 1;
+    if (months < 0) {
+        years -= 1;
+        months += 12;
+    }
+    if (years < 0) return null;
+    const label =
+        years >= 2 ? `${years}y` : years >= 1 ? `${years}y ${months}m` : `${Math.max(0, years * 12 + months)}m`;
+    return { label };
+}
+
+/** Matches work-unit queue child membership filter (`QueueService.isActiveChildCustomerMemberRow`). */
+export function isActiveChildCustomerMemberForInquiry(row: Record<string, unknown>): boolean {
+    const rel = String(row.relationship ?? "").trim().toLowerCase();
+    if (rel !== "child") return false;
+    return row.is_active === true;
+}
+
+export const UNLINKED_INQUIRY_CHILD_ID_PREFIX = "unlinked:";
+
+export function isUnlinkedInquiryChildRowId(id: string): boolean {
+    return id.startsWith(UNLINKED_INQUIRY_CHILD_ID_PREFIX);
+}
+
+/**
+ * Append household active child members not already represented in OCM-linked inquiry rows.
+ */
+export function mergeHouseholdActiveChildrenIntoInquiryChildren(
+    linkedRows: InquiryChildHydrateRow[],
+    householdMembers: HouseholdChildMemberRow[],
+    pmap: Map<string, WarmPersonRow>,
+    oppDefaultProgramType: string | null,
+    oppDefaultScheduleType: string | null,
+    optionLabelMap: Awaited<ReturnType<typeof batchOptionItemLabelsForOrg>>
+): InquiryChildHydrateRow[] {
+    const byMemberId = new Map<string, InquiryChildHydrateRow>();
+    for (const row of linkedRows) {
+        const cmId = trimOrNull(row.customer_member_id);
+        if (cmId) byMemberId.set(cmId, { ...row, linked_on_inquiry: true, ocm_id: row.ocm_id ?? row.id });
+    }
+
+    for (const m of householdMembers) {
+        if (!isActiveChildCustomerMemberForInquiry(m as Record<string, unknown>)) continue;
+        const cmId = trimOrNull(m.id);
+        if (!cmId || byMemberId.has(cmId)) continue;
+
+        const pid = trimOrNull(m.person_id);
+        const p = pid ? (pmap.get(pid) ?? null) : null;
+        const dob = p?.date_of_birth ? String(p.date_of_birth) : m.dob ? String(m.dob) : null;
+        const age = ageFromDobIso(dob);
+        const first_name = trimOrNull(m.first_name) ?? trimOrNull(p?.first_name);
+        const last_name = trimOrNull(m.last_name) ?? trimOrNull(p?.last_name);
+        const display_name =
+            trimOrNull(m.display_name) ?? warmPersonDisplayName(p) ?? `${cmId.slice(0, 8)}…`;
+
+        const desiredProgramType = oppDefaultProgramType;
+        const desiredScheduleType = oppDefaultScheduleType;
+        const memMeta = (m.metadata ?? null) as Record<string, unknown> | null;
+        const demoProgramLabel =
+            memMeta && typeof memMeta.demo_program_label === "string"
+                ? trimOrNull(memMeta.demo_program_label)
+                : null;
+
+        byMemberId.set(cmId, {
+            id: `${UNLINKED_INQUIRY_CHILD_ID_PREFIX}${cmId}`,
+            customer_member_id: cmId,
+            person_id: pid,
+            display_name,
+            first_name,
+            last_name,
+            dob,
+            age: age ? age.label : null,
+            desired_program_type: desiredProgramType,
+            desired_program_label:
+                optionLabelFromBatchMap(optionLabelMap, "childcare_program_type", desiredProgramType) ??
+                demoProgramLabel,
+            desired_schedule_type: desiredScheduleType,
+            desired_schedule_label: optionLabelFromBatchMap(
+                optionLabelMap,
+                "childcare_schedule_type",
+                desiredScheduleType
+            ),
+            outcome_status_key: null,
+            outcome_status_label: null,
+            fit_status: null,
+            notes: null,
+            metadata: (m.metadata as Record<string, unknown>) ?? null,
+            created_at: null,
+            updated_at: null,
+            linked_on_inquiry: false,
+            ocm_id: null,
+        });
+    }
+
+    const linkedOrder = linkedRows.map((r) => trimOrNull(r.customer_member_id)).filter(Boolean) as string[];
+    const extraIds = [...byMemberId.keys()].filter((id) => !linkedOrder.includes(id));
+    const ordered = [
+        ...linkedOrder.map((cmId) => byMemberId.get(cmId)).filter(Boolean),
+        ...extraIds.map((cmId) => byMemberId.get(cmId)).filter(Boolean),
+    ] as InquiryChildHydrateRow[];
+
+    return ordered;
+}

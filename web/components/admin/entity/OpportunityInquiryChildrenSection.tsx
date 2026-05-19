@@ -2,6 +2,13 @@
 
 import { AdminV2DrawerLoadingState } from "@/components/admin/workspace/AdminV2DrawerLoadingState";
 import { formatDate } from "@/lib/adminFormatters";
+import {
+    buildCustomerMemberPatch,
+    ensureOpportunityCustomerMemberLink,
+    patchCustomerMemberFromInquiryChild,
+    patchOpportunityCustomerMemberFromInquiryChild,
+    resolveInquiryChildOcmId,
+} from "@/lib/admin/drawer/inquiryChildFieldEdit";
 import { loadWorkspaceChildcareInquiryOptionSets } from "@/lib/workspace/workspaceChildcareInquiryOptionSets";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
@@ -12,6 +19,10 @@ export type InquiryChildRow = {
     customer_member_id: string;
     person_id: string | null;
     display_name: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    linked_on_inquiry?: boolean;
+    ocm_id?: string | null;
     dob: string | null;
     age: string | null;
     desired_program_type: string | null;
@@ -97,10 +108,14 @@ function useDebouncedPatch(ms: number) {
     return { schedule, flush };
 }
 
+type IdentityLocal = { first_name: string; last_name: string; dob: string };
+
 export default function OpportunityInquiryChildrenSection({
     rows,
     canEdit,
+    opportunityId,
     onOpenChild,
+    onChildrenMutated,
     /** When true and rows are empty, show a loading shell (full inquiry payload still fetching). */
     recordDetailPending = false,
     /** When true, outer EntityDrawerSection already provides premium card chrome — avoid nested heavy cards. */
@@ -108,7 +123,9 @@ export default function OpportunityInquiryChildrenSection({
 }: {
     rows: InquiryChildRow[];
     canEdit: boolean;
+    opportunityId?: string;
     onOpenChild?: (row: Pick<InquiryChildRow, "person_id" | "customer_member_id" | "display_name">) => void;
+    onChildrenMutated?: () => void;
     recordDetailPending?: boolean;
     embeddedInPremiumSection?: boolean;
 }) {
@@ -125,7 +142,10 @@ export default function OpportunityInquiryChildrenSection({
     const [local, setLocal] = useState<Record<string, { desired_program_type: string; desired_schedule_type: string; outcome_status_key: string; notes: string }>>(
         {}
     );
+    const [identityLocal, setIdentityLocal] = useState<Record<string, IdentityLocal>>({});
+    const [ocmIdByRowKey, setOcmIdByRowKey] = useState<Record<string, string>>({});
     const [savingById, setSavingById] = useState<Record<string, boolean>>({});
+    const [savedById, setSavedById] = useState<Record<string, boolean>>({});
     const [errorById, setErrorById] = useState<Record<string, string | null>>({});
 
     useEffect(() => {
@@ -139,6 +159,34 @@ export default function OpportunityInquiryChildrenSection({
                     outcome_status_key: normalizeKey(r.outcome_status_key),
                     notes: (r.notes ?? "").toString(),
                 };
+            }
+            return next;
+        });
+        setIdentityLocal((prev) => {
+            const next = { ...prev };
+            for (const r of rows) {
+                if (!r.id) continue;
+                const display = (r.display_name ?? "").trim();
+                let first = (r.first_name ?? "").trim();
+                let last = (r.last_name ?? "").trim();
+                if (!first && !last && display) {
+                    const parts = display.split(/\s+/).filter(Boolean);
+                    first = parts[0] ?? "";
+                    last = parts.length > 1 ? parts.slice(1).join(" ") : "";
+                }
+                next[r.id] = {
+                    first_name: first,
+                    last_name: last,
+                    dob: r.dob ? String(r.dob).slice(0, 10) : "",
+                };
+            }
+            return next;
+        });
+        setOcmIdByRowKey((prev) => {
+            const next = { ...prev };
+            for (const r of rows) {
+                const ocm = resolveInquiryChildOcmId(r);
+                if (ocm) next[r.id] = ocm;
             }
             return next;
         });
@@ -193,21 +241,69 @@ export default function OpportunityInquiryChildrenSection({
 
     const debounced = useDebouncedPatch(600);
 
-    const savePatch = async (id: string, patch: Record<string, unknown>) => {
-        setSavingById((p) => ({ ...p, [id]: true }));
-        setErrorById((p) => ({ ...p, [id]: null }));
-        try {
-            const res = await fetch(`/api/admin/opportunity-customer-members/${encodeURIComponent(id)}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(patch),
-            });
-            const json = (await res.json().catch(() => ({}))) as { error?: string };
-            if (!res.ok) throw new Error(json.error ?? "Save failed");
-        } catch (e) {
-            setErrorById((p) => ({ ...p, [id]: (e as Error).message }));
+    const resolveOcmIdForRow = async (row: InquiryChildRow): Promise<string> => {
+        const cached = ocmIdByRowKey[row.id];
+        if (cached) return cached;
+        const existing = resolveInquiryChildOcmId(row);
+        if (existing) return existing;
+        const oppId = opportunityId?.trim() ?? "";
+        const cmId = row.customer_member_id?.trim() ?? "";
+        if (!oppId || !cmId) throw new Error("Cannot save inquiry fields for this child row");
+        const linked = await ensureOpportunityCustomerMemberLink({
+            opportunityId: oppId,
+            customerMemberId: cmId,
+        });
+        setOcmIdByRowKey((p) => ({ ...p, [row.id]: linked.ocmId }));
+        onChildrenMutated?.();
+        return linked.ocmId;
+    };
+
+    const markRowSaveState = (rowKey: string, phase: "saving" | "saved" | "error", message?: string) => {
+        if (phase === "saving") {
+            setSavingById((p) => ({ ...p, [rowKey]: true }));
+            setSavedById((p) => ({ ...p, [rowKey]: false }));
+            setErrorById((p) => ({ ...p, [rowKey]: null }));
+            return;
         }
-        setSavingById((p) => ({ ...p, [id]: false }));
+        setSavingById((p) => ({ ...p, [rowKey]: false }));
+        if (phase === "saved") {
+            setSavedById((p) => ({ ...p, [rowKey]: true }));
+            window.setTimeout(() => setSavedById((p) => ({ ...p, [rowKey]: false })), 2000);
+        }
+        if (phase === "error") setErrorById((p) => ({ ...p, [rowKey]: message ?? "Save failed" }));
+    };
+
+    const saveOcmPatch = async (row: InquiryChildRow, patch: Record<string, unknown>) => {
+        markRowSaveState(row.id, "saving");
+        try {
+            const ocmId = await resolveOcmIdForRow(row);
+            await patchOpportunityCustomerMemberFromInquiryChild(ocmId, patch);
+            markRowSaveState(row.id, "saved");
+        } catch (e) {
+            markRowSaveState(row.id, "error", (e as Error).message);
+        }
+    };
+
+    const saveIdentityBlur = async (row: InquiryChildRow) => {
+        const isMetadataOnly = (row.customer_member_id ?? "").startsWith("metadata_child:");
+        if (!canEdit || isMetadataOnly || !row.customer_member_id) return;
+        const draft = identityLocal[row.id];
+        if (!draft) return;
+        const baseline = {
+            first_name: (row.first_name ?? "").trim(),
+            last_name: (row.last_name ?? "").trim(),
+            dob: row.dob ? String(row.dob).slice(0, 10) : "",
+        };
+        const patch = buildCustomerMemberPatch(draft, baseline);
+        if (Object.keys(patch).length === 0) return;
+        markRowSaveState(row.id, "saving");
+        try {
+            await patchCustomerMemberFromInquiryChild(row.customer_member_id, patch);
+            markRowSaveState(row.id, "saved");
+            onChildrenMutated?.();
+        } catch (e) {
+            markRowSaveState(row.id, "error", (e as Error).message);
+        }
     };
 
     if (!rows.length) {
@@ -272,6 +368,11 @@ export default function OpportunityInquiryChildrenSection({
                             const saving = !!savingById[r.id];
                             const err = errorById[r.id];
                             const rowCanEdit = canEdit && !isMetadataOnly;
+                            const identity = identityLocal[r.id] ?? {
+                                first_name: "",
+                                last_name: "",
+                                dob: r.dob ? String(r.dob).slice(0, 10) : "",
+                            };
 
                             const fallbackProgram = (r.desired_program_label ?? "").trim() || (st.desired_program_type ? (programLabelByKey.get(st.desired_program_type) ?? st.desired_program_type) : "—");
                             const fallbackSchedule = (r.desired_schedule_label ?? "").trim() || (st.desired_schedule_type ? (scheduleLabelByKey.get(st.desired_schedule_type) ?? st.desired_schedule_type) : "—");
@@ -293,7 +394,55 @@ export default function OpportunityInquiryChildrenSection({
                             return (
                                 <tr key={r.id} className={`border-b border-alloy-stone/20 last:border-b-0 ${rowAttentionClass}`}>
                                     <td className="px-3 py-2 font-medium text-alloy-midnight/85">
-                                        {onOpenChild && name !== "—" && !isMetadataOnly ? (
+                                        {rowCanEdit ? (
+                                            <div className="space-y-1 min-w-[140px]">
+                                                <div className="grid grid-cols-2 gap-1">
+                                                    <input
+                                                        value={identity.first_name}
+                                                        disabled={savingById[r.id]}
+                                                        onChange={(e) =>
+                                                            setIdentityLocal((p) => ({
+                                                                ...p,
+                                                                [r.id]: { ...identity, first_name: e.target.value },
+                                                            }))
+                                                        }
+                                                        onBlur={() => void saveIdentityBlur(r)}
+                                                        className="w-full rounded-md border border-alloy-stone/40 bg-white px-2 py-1 text-sm disabled:opacity-60"
+                                                        placeholder="First"
+                                                        aria-label={`First name for ${name}`}
+                                                    />
+                                                    <input
+                                                        value={identity.last_name}
+                                                        disabled={savingById[r.id]}
+                                                        onChange={(e) =>
+                                                            setIdentityLocal((p) => ({
+                                                                ...p,
+                                                                [r.id]: { ...identity, last_name: e.target.value },
+                                                            }))
+                                                        }
+                                                        onBlur={() => void saveIdentityBlur(r)}
+                                                        className="w-full rounded-md border border-alloy-stone/40 bg-white px-2 py-1 text-sm disabled:opacity-60"
+                                                        placeholder="Last"
+                                                        aria-label={`Last name for ${name}`}
+                                                    />
+                                                </div>
+                                                {onOpenChild && !isMetadataOnly ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            onOpenChild({
+                                                                person_id: r.person_id,
+                                                                customer_member_id: r.customer_member_id,
+                                                                display_name: r.display_name,
+                                                            })
+                                                        }
+                                                        className="text-left text-[11px] text-alloy-blue hover:underline"
+                                                    >
+                                                        View record
+                                                    </button>
+                                                ) : null}
+                                            </div>
+                                        ) : onOpenChild && name !== "—" && !isMetadataOnly ? (
                                             <button
                                                 type="button"
                                                 onClick={() =>
@@ -310,8 +459,37 @@ export default function OpportunityInquiryChildrenSection({
                                         ) : (
                                             name
                                         )}
+                                        {!r.linked_on_inquiry && rowCanEdit ? (
+                                            <div className="mt-0.5 text-[10px] font-medium text-alloy-midnight/45">
+                                                Not on inquiry yet — saves will link
+                                            </div>
+                                        ) : null}
                                     </td>
-                                    <td className="px-3 py-2 text-alloy-midnight/65 tabular-nums">{dobAge}</td>
+                                    <td className="px-3 py-2 text-alloy-midnight/65 tabular-nums">
+                                        {rowCanEdit ? (
+                                            <div className="min-w-[120px] space-y-0.5">
+                                                <input
+                                                    type="date"
+                                                    value={identity.dob}
+                                                    disabled={savingById[r.id]}
+                                                    onChange={(e) =>
+                                                        setIdentityLocal((p) => ({
+                                                            ...p,
+                                                            [r.id]: { ...identity, dob: e.target.value },
+                                                        }))
+                                                    }
+                                                    onBlur={() => void saveIdentityBlur(r)}
+                                                    className="w-full rounded-md border border-alloy-stone/40 bg-white px-2 py-1 text-sm disabled:opacity-60"
+                                                    aria-label={`Date of birth for ${name}`}
+                                                />
+                                                {age ? (
+                                                    <div className="text-[11px] text-alloy-midnight/50">{age}</div>
+                                                ) : null}
+                                            </div>
+                                        ) : (
+                                            dobAge
+                                        )}
+                                    </td>
                                     <td className="px-3 py-2 text-alloy-midnight/65">
                                         {rowCanEdit ? (
                                             <select
@@ -320,7 +498,9 @@ export default function OpportunityInquiryChildrenSection({
                                                 onChange={(e) => {
                                                     const v = e.target.value;
                                                     setLocal((p) => ({ ...p, [r.id]: { ...st, desired_program_type: v } }));
-                                                    debounced.schedule(r.id, { desired_program_type: v || null }, savePatch);
+                                                    debounced.schedule(r.id, { desired_program_type: v || null }, (_id, patch) => {
+                                                        void saveOcmPatch(r, patch);
+                                                    });
                                                 }}
                                                 className="w-full min-w-[150px] rounded-md border border-alloy-stone/40 bg-white px-2 py-1 text-sm disabled:opacity-60"
                                                 aria-label={`Desired program for ${name}`}
@@ -344,7 +524,9 @@ export default function OpportunityInquiryChildrenSection({
                                                 onChange={(e) => {
                                                     const v = e.target.value;
                                                     setLocal((p) => ({ ...p, [r.id]: { ...st, desired_schedule_type: v } }));
-                                                    debounced.schedule(r.id, { desired_schedule_type: v || null }, savePatch);
+                                                    debounced.schedule(r.id, { desired_schedule_type: v || null }, (_id, patch) => {
+                                                        void saveOcmPatch(r, patch);
+                                                    });
                                                 }}
                                                 className="w-full min-w-[150px] rounded-md border border-alloy-stone/40 bg-white px-2 py-1 text-sm disabled:opacity-60"
                                                 aria-label={`Desired schedule for ${name}`}
@@ -368,7 +550,9 @@ export default function OpportunityInquiryChildrenSection({
                                                 onChange={(e) => {
                                                     const v = e.target.value;
                                                     setLocal((p) => ({ ...p, [r.id]: { ...st, outcome_status_key: v } }));
-                                                    debounced.schedule(r.id, { outcome_status_key: v || null }, savePatch);
+                                                    debounced.schedule(r.id, { outcome_status_key: v || null }, (_id, patch) => {
+                                                        void saveOcmPatch(r, patch);
+                                                    });
                                                 }}
                                                 className={`w-full min-w-[150px] rounded-md border border-alloy-stone/40 bg-white px-2 py-1 text-sm disabled:opacity-60 ${outcomeSelectAttention}`}
                                                 aria-label={`Outcome for ${name}`}
@@ -393,15 +577,25 @@ export default function OpportunityInquiryChildrenSection({
                                                     onChange={(e) => {
                                                         const v = e.target.value;
                                                         setLocal((p) => ({ ...p, [r.id]: { ...st, notes: v } }));
-                                                        debounced.schedule(r.id, { notes: v }, savePatch);
+                                                        debounced.schedule(r.id, { notes: v }, (_id, patch) => {
+                                                            void saveOcmPatch(r, patch);
+                                                        });
                                                     }}
-                                                    onBlur={() => debounced.flush(r.id, savePatch)}
+                                                    onBlur={() =>
+                                                        debounced.flush(r.id, (_id, patch) => {
+                                                            void saveOcmPatch(r, patch);
+                                                        })
+                                                    }
                                                     className="w-full rounded-md border border-alloy-stone/40 bg-white px-2 py-1 text-sm disabled:opacity-60"
                                                     placeholder="Add notes…"
                                                     aria-label={`Notes for ${name}`}
                                                 />
                                                 {err ? <div className="mt-1 text-[11px] font-medium text-red-700">{err}</div> : null}
-                                                {saving ? <div className="mt-1 text-[11px] font-medium text-alloy-midnight/45">Saving…</div> : null}
+                                                {saving ? (
+                                                    <div className="mt-1 text-[11px] font-medium text-alloy-midnight/45">Saving…</div>
+                                                ) : savedById[r.id] ? (
+                                                    <div className="mt-1 text-[11px] font-medium text-emerald-800/75">Saved</div>
+                                                ) : null}
                                             </div>
                                         ) : (
                                             <span className="block max-w-[280px] truncate" title={normalizeKey(r.notes) ? String(r.notes) : undefined}>

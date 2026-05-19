@@ -14,6 +14,10 @@ import {
 import type { FieldRegistryAttachMeta } from "@/lib/admin/entityFieldRegistryAttach";
 import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
 import { batchOptionItemLabelsForOrg, optionLabelFromBatchMap } from "@/lib/admin/optionItemLabelForOrg";
+import {
+  mergeHouseholdActiveChildrenIntoInquiryChildren,
+  type InquiryChildHydrateRow,
+} from "@/lib/admin/drawer/inquiryChildrenHydration";
 import { logDbTiming, withDbTiming } from "@/lib/admin/dbQueryTiming";
 import { perfDrawerFullHydrate, timingOpportunityApiVisible } from "@/lib/perf/adminV2PerfLog";
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
@@ -213,8 +217,12 @@ type InquiryHydrateChild = {
   customer_member_id: string;
   person_id: string | null;
   display_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
   dob: string | null;
   age: string | null;
+  linked_on_inquiry: boolean;
+  ocm_id: string | null;
   desired_program_type: string | null;
   desired_program_label: string | null;
   desired_schedule_type: string | null;
@@ -271,6 +279,8 @@ function mapOcmJoinRowsToInquiryChildrenBlock(
     const outcomeStatusLabel = outcomeStatusKey
       ? resolveDisplayFromLabelMap(ocmStatusLabelByKey, outcomeStatusKey, null)
       : null;
+    const first_name = trimOrNull(m?.first_name) ?? trimOrNull(p?.first_name);
+    const last_name = trimOrNull(m?.last_name) ?? trimOrNull(p?.last_name);
     return {
       id: r.id,
       customer_member_id: r.customer_member_id,
@@ -279,8 +289,12 @@ function mapOcmJoinRowsToInquiryChildrenBlock(
         m?.display_name ??
         (pid ? warmPersonDisplayName(p) : null) ??
         r.customer_member_id.slice(0, 8) + "…",
+      first_name,
+      last_name,
       dob,
       age: age ? age.label : null,
+      linked_on_inquiry: true,
+      ocm_id: r.id,
       desired_program_type: desiredProgramType,
       desired_program_label: desiredProgramLabel,
       desired_schedule_type: desiredScheduleType,
@@ -321,6 +335,10 @@ function applyInquiryChildrenMetadataFallbacks(
           customer_member_id: sid,
           person_id: null,
           display_name: displayName,
+          first_name: null,
+          last_name: null,
+          linked_on_inquiry: false,
+          ocm_id: null,
           dob: typeof row.dob === "string" ? row.dob : null,
           age: typeof row.age === "string" ? row.age : null,
           desired_program_type:
@@ -365,6 +383,10 @@ function applyInquiryChildrenMetadataFallbacks(
           customer_member_id: sid,
           person_id: null,
           display_name: demoChild,
+          first_name: null,
+          last_name: null,
+          linked_on_inquiry: false,
+          ocm_id: null,
           dob: typeof md.child_dob === "string" ? md.child_dob : null,
           age: typeof md.child_age === "string" ? md.child_age : null,
           desired_program_type:
@@ -581,6 +603,14 @@ async function respondOpportunityRelationshipMemberOverlay(
     oppDefaultScheduleType,
     optionLabelMap,
     ocmStatusLabelByKey,
+  );
+  inquiryBlocks = mergeHouseholdActiveChildrenIntoInquiryChildren(
+    inquiryBlocks as InquiryChildHydrateRow[],
+    bootstrapList,
+    pmap,
+    oppDefaultProgramType,
+    oppDefaultScheduleType,
+    optionLabelMap,
   );
   inquiryBlocks = applyInquiryChildrenMetadataFallbacks(inquiryBlocks, oppMeta, opportunityId);
 
@@ -1597,7 +1627,15 @@ export async function respondOpportunityEntityGet(
     optionLabelMap,
     ocmStatusLabelByKey,
   );
-  const inquiryChildrenOut = applyInquiryChildrenMetadataFallbacks(inquiryBlocks, oppMeta, id);
+  let inquiryChildrenMerged = mergeHouseholdActiveChildrenIntoInquiryChildren(
+    inquiryBlocks as InquiryChildHydrateRow[],
+    bootstrapList,
+    pmap,
+    oppDefaultProgramType,
+    oppDefaultScheduleType,
+    optionLabelMap,
+  );
+  const inquiryChildrenOut = applyInquiryChildrenMetadataFallbacks(inquiryChildrenMerged, oppMeta, id);
   out._inquiry_children = inquiryChildrenOut;
   markPhase("after_inquiry_children_resolved");
   lapSegment("inquiry_children_metadata_fallbacks");

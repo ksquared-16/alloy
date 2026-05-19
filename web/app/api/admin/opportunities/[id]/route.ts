@@ -24,6 +24,7 @@ import {
     enforceDrawerFieldPoliciesOnPatch,
     fieldPolicyValidationResponse,
 } from "@/lib/fields/enforceDrawerFieldPoliciesOnPatch";
+import { opportunityBodyHasCustomFieldUpdates } from "@/lib/admin/drawer/opportunityDrawerFieldSave";
 
 /**
  * PATCH allowlist intentionally excludes identity FKs (`primary_contact_id`, `primary_person_id`).
@@ -262,21 +263,41 @@ export async function PATCH(
             }
         }
 
-        if (Object.keys(updates).length === 0) {
+        const hasNativeUpdates = Object.keys(updates).length > 0;
+        const hasCustomFieldUpdates = opportunityBodyHasCustomFieldUpdates(body, PIPELINE_ONLY_KEYS);
+
+        if (!hasNativeUpdates && !hasCustomFieldUpdates) {
             return NextResponse.json({ error: "No allowed fields to update" }, { status: 400 });
         }
 
-        await normalizeOpportunityWritePayload(supabase, updates, "admin/opportunities/PATCH");
+        let data: Record<string, unknown> | null = null;
 
-        const { data, error } = await supabase
-            .from("opportunities")
-            .update(updates)
-            .eq("id", id)
-            .eq("org_id", ctx.orgId)
-            .select()
-            .single();
+        if (hasNativeUpdates) {
+            await normalizeOpportunityWritePayload(supabase, updates, "admin/opportunities/PATCH");
 
-        if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+            const { data: updated, error } = await supabase
+                .from("opportunities")
+                .update(updates)
+                .eq("id", id)
+                .eq("org_id", ctx.orgId)
+                .select()
+                .single();
+
+            if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+            data = updated as Record<string, unknown>;
+        } else {
+            const { data: existingRowOut, error: readErr } = await supabase
+                .from("opportunities")
+                .select()
+                .eq("id", id)
+                .eq("org_id", ctx.orgId)
+                .maybeSingle();
+            if (readErr || !existingRowOut) {
+                return NextResponse.json({ error: "Not found" }, { status: 404 });
+            }
+            data = existingRowOut as Record<string, unknown>;
+        }
+
         await upsertFieldValuesFromBody(supabase, orgId, "opportunity", id, body, [
             ...ALLOWED_KEYS,
             ...Array.from(PIPELINE_ONLY_KEYS),

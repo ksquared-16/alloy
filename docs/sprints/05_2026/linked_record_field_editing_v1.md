@@ -1,7 +1,7 @@
 # Sprint: Linked Record Field Editing V1 (May 2026)
 
 **Path:** `docs/sprints/05_2026/linked_record_field_editing_v1.md`  
-**Status:** **Shipped (V1 — Opportunity → Person)**  
+**Status:** **In progress — V1 person card shipped; V1b inquiry children + source fields + summary layout (May 2026)**  
 **Parent:** Settings control plane closeout; record UX parity.
 
 ---
@@ -28,9 +28,11 @@ If a field is shown on a drawer surface and **`field_definitions.interaction_pol
 
 **UI:** Drawer overview labels append `(Primary person)`; read-only when no `primary_person_id` / `_primary_person_id`.
 
-**Code:** `web/lib/admin/drawer/linkedRecordFieldEditing.ts`, `fieldEditabilityInDrawer.ts`, `AdminEntityDrawer` save partition, `EntityDrawerOverview` read fallback.
+**Code:** `web/lib/admin/drawer/linkedRecordFieldEditing.ts`, `primaryPersonCardEdit.ts`, `PrimaryPersonContactCard.tsx`, `FamilyContactsPanel.tsx`, `fieldEditabilityInDrawer.ts`, `AdminEntityDrawer` save partition, `EntityDrawerOverview` read fallback.
 
-**Tests:** `web/tests/admin/drawer/linkedRecordFieldEditing.test.ts`
+**UI surfaces:** Config-driven overview fields **and** inquiry summary **Family & contacts** primary person card (`FamilyContactsPanel` → `PrimaryPersonContactCard`).
+
+**Tests:** `web/tests/admin/drawer/linkedRecordFieldEditing.test.ts`, `web/tests/admin/opportunity/primaryPersonCardEdit.test.ts`
 
 **Preset policy:** `personFieldOnOpportunityInteractionPolicy(fieldKey)` in `fieldInteractionPolicy.ts` (also used by config layout assist proposals).
 
@@ -46,9 +48,29 @@ If a field is shown on a drawer surface and **`field_definitions.interaction_pol
 
 ---
 
+## V1b — Inquiry children + source fields (May 2026)
+
+**Doctrine (all drawer surfaces):** Editability follows the **source record + field policy**, not the host drawer. No denormalizing linked data onto `opportunities`. Hardcoded sections must honor the same rules.
+
+| Surface | Source of truth | PATCH route |
+|--------|-----------------|-------------|
+| Inquiry children — name, DOB | `customer_members` | `PATCH /api/admin/customer-members/:id` |
+| Inquiry children — program, schedule, outcome, notes | `opportunity_customer_members` | `PATCH /api/admin/opportunity-customer-members/:id` (auto-`POST` link when household child not yet on inquiry) |
+| Source & external (native) | `opportunities.source`, `external_source`, `external_id` | `PATCH /api/admin/opportunities/:id` |
+| Source & external (custom defs, e.g. `inquiry_source`, `desired_start_date`) | `field_values` | `PATCH /api/admin/opportunities/:id` → `upsertFieldValuesFromBody` (custom-only bodies no longer 400) |
+
+**Children parity:** Drawer `_inquiry_children` now merges **active household `relationship=child` members** with OCM join rows (`inquiryChildrenHydration.ts`) so count matches work-unit queue enrichment.
+
+**Summary layout (hardcoded v1):** Family & contacts left; **What matters now** + **Recommended by Alloy / Needs attention** + task/follow-up chips right (`data-opportunity-inquiry-summary-layout="hardcoded_v1"`). Deferred: full **Record layouts** builder for inquiry summary grid.
+
+**Tests:** `inquiryChildrenHydration.test.ts`, `inquiryChildFieldEdit.test.ts`, `opportunityDrawerFieldSave.test.ts`, `primaryPersonCardEdit.test.ts`
+
+---
+
 ## Deferred
 
 - Job / customer / contact one-hop hosts
+- Inquiry summary layout via Record layouts config (primitive documented; hardcoded grid only today)
 - `_primary_person_name` / `_primary_person_email` display keys as inline editors (use opportunity field defs with interaction policy instead)
 - Person **custom** `field_values` from opportunity drawer
 - Ops-role inline edit (`canMutate` remains admin-only)
