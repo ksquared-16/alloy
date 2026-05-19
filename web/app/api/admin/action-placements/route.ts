@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
             order_index: input.order_index ?? 100,
             display_style: input.display_style ?? "button",
             condition_config: {},
-            is_active: true,
+            is_active: input.is_active !== false,
         })
         .select(
             "id, org_id, action_definition_id, surface, slot, entity_type, section_key, order_index, display_style, is_active"
