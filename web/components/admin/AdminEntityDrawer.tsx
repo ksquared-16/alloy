@@ -1319,6 +1319,8 @@ export default function AdminEntityDrawer() {
     }, [opportunityResolvedHeaderActions, opportunityRecordHeaderActiveTours]);
     /** After `drawer_visible_ready` + two animation frames — defer non-critical fetches (activity-signal, deletion check). */
     const [postDrawerVisibleKey, setPostDrawerVisibleKey] = useState<string | null>(null);
+    /** Packet, activity strip, tour editor — after primary overview reveal (no extra visible phases). */
+    const [opportunityDrawerSecondaryReady, setOpportunityDrawerSecondaryReady] = useState(false);
     /** Background `surface=full` after `drawer_visible` — avoids second loading shell; cleared on new entity fetch / drawer close. */
     const opportunityFullHydrateInFlightRef = useRef<string | null>(null);
     const opportunityFullHydrateDoneRef = useRef<string | null>(null);
@@ -1356,6 +1358,7 @@ export default function AdminEntityDrawer() {
 
     useEffect(() => {
         setPostDrawerVisibleKey(null);
+        setOpportunityDrawerSecondaryReady(false);
         opportunityFullHydrateInFlightRef.current = null;
         opportunityFullHydrateDoneRef.current = null;
         memberPersonGraphOverlayInFlightRef.current = null;
@@ -6100,12 +6103,11 @@ export default function AdminEntityDrawer() {
         !!overviewData &&
         !(overviewData as { _create?: boolean })._create;
 
-    /** Subjective primary-ready: shell + overview stable; header action rail reserved or loaded (not blocked on tours/packet). */
-    const opportunityDrawerPrimaryCoherent =
-        opportunityDrawerShellSettled &&
-        (!opportunityResolvedHeaderLoading ||
-            opportunityResolvedHeaderActions != null ||
-            !useOpportunityActionRegistryHeader);
+    /** One primary overview reveal — no per-field hydrate skeletons in the inquiry summary. */
+    const opportunityDrawerOverviewRevealReady =
+        opportunityDrawerShellSettled && !opportunityFullHydratePending;
+
+    const opportunityDrawerPrimaryCoherent = opportunityDrawerOverviewRevealReady;
 
     const opportunityDrawerUsesBootstrapBodyShell =
         drawer.type === "opportunities" &&
@@ -6113,9 +6115,8 @@ export default function AdminEntityDrawer() {
         drawer.id !== "new" &&
         !(overviewData && (overviewData as { _create?: boolean })._create) &&
         !error &&
-        (opportunityDrawerQueueBootstrap
-            ? !opportunityDrawerPrimaryCoherent
-            : drawerBodyGateLoading && opportunityInquiryWorkflowDrawer);
+        opportunityInquiryWorkflowDrawer &&
+        !opportunityDrawerOverviewRevealReady;
 
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
@@ -6130,6 +6131,27 @@ export default function AdminEntityDrawer() {
         opportunityDrawerShellSettledPerfRef.current = true;
         reportDrawerPrimaryReady(String(drawer.id));
     }, [drawer.type, drawer.id, opportunityDrawerPrimaryCoherent]);
+
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
+            setOpportunityDrawerSecondaryReady(false);
+            return;
+        }
+        if (!opportunityDrawerOverviewRevealReady) {
+            setOpportunityDrawerSecondaryReady(false);
+            return;
+        }
+        let cancelled = false;
+        const id = requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                if (!cancelled) setOpportunityDrawerSecondaryReady(true);
+            });
+        });
+        return () => {
+            cancelled = true;
+            cancelAnimationFrame(id);
+        };
+    }, [drawer.type, drawer.id, opportunityDrawerOverviewRevealReady]);
 
     const opportunityDrawerTabsPending =
         drawer.type === "opportunities" &&
@@ -10979,7 +11001,7 @@ export default function AdminEntityDrawer() {
                                                                         <div className={tinyLabel}>What matters for this inquiry</div>
                                                                         <div className="mt-1.5 space-y-2">
                                                                             <div>
-                                                                                {drawer.id && drawer.id !== "new" ? (
+                                                                                {drawer.id && drawer.id !== "new" && opportunityDrawerSecondaryReady ? (
                                                                                     <OpportunityInquiryTourDateBlock
                                                                                         opportunityId={drawer.id}
                                                                                         locationId={String((d.location_id as string | null | undefined) ?? "").trim()}
@@ -10989,6 +11011,11 @@ export default function AdminEntityDrawer() {
                                                                                         onRefresh={refetch}
                                                                                         labelClassName={tinyLabel}
                                                                                         readonlyFieldClassName={oppInqReadonlyField}
+                                                                                    />
+                                                                                ) : drawer.id && drawer.id !== "new" ? (
+                                                                                    <div
+                                                                                        className="min-h-[3.25rem] rounded-md border border-alloy-stone/10 bg-alloy-stone/[0.03]"
+                                                                                        aria-hidden
                                                                                     />
                                                                                 ) : (
                                                                                     <>
@@ -11014,8 +11041,10 @@ export default function AdminEntityDrawer() {
                                                                 </div>
                                                                 <div className={`${oppInqInnerCard} flex min-w-0 flex-col`}>
                                                                     <div className={tinyLabel}>What BOS has to say</div>
-                                                                    {overviewData && !(overviewData as { _create?: boolean })._create ? (
-                                                                        <div className="mt-1 min-h-0">
+                                                                    {opportunityDrawerSecondaryReady &&
+                                                                    overviewData &&
+                                                                    !(overviewData as { _create?: boolean })._create ? (
+                                                                        <div className="mt-1 min-h-0 adminv2-ws-soft-content-reveal">
                                                                             <OperationalAttentionHeaderStrip
                                                                                 key={`attn-summary-${String((overviewData as { id?: string }).id ?? "")}`}
                                                                                 variant="panel"
@@ -11024,14 +11053,8 @@ export default function AdminEntityDrawer() {
                                                                             />
                                                                         </div>
                                                                     ) : null}
-                                                                    {drawer.id && drawer.id !== "new" ? (
-                                                                        <div
-                                                                            className={
-                                                                                overviewData && !(overviewData as { _create?: boolean })._create ?
-                                                                                    "mt-2 border-t border-alloy-stone/10 pt-2"
-                                                                                :   "mt-1"
-                                                                            }
-                                                                        >
+                                                                    {drawer.id && drawer.id !== "new" && opportunityDrawerSecondaryReady ? (
+                                                                        <div className="mt-2 border-t border-alloy-stone/10 pt-2 adminv2-ws-soft-content-reveal">
                                                                             {isTaskAssistV1UiEnabled() ? (
                                                                                 <OpportunityOperationalCompactStrip
                                                                                     layout="inquiry_summary"
@@ -11039,14 +11062,10 @@ export default function AdminEntityDrawer() {
                                                                                     entityLabel={String(d.name ?? "").trim() || null}
                                                                                     overviewData={d}
                                                                                 />
-                                                                            ) : (
-                                                                                <p className="text-[11px] text-alloy-midnight/50">
-                                                                                    No active tasks or reminders.
-                                                                                </p>
-                                                                            )}
+                                                                            ) : null}
                                                                         </div>
                                                                     ) : null}
-                                                                    {drawer.id && drawer.id !== "new" ? (
+                                                                    {drawer.id && drawer.id !== "new" && opportunityDrawerSecondaryReady ? (
                                                                         <OpportunityInquirySummaryActivity
                                                                             opportunityId={drawer.id}
                                                                             canMutate={!!canMutate}

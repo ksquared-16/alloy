@@ -127,16 +127,24 @@ describe("Drawer opportunity header grouped loading", () => {
     });
 });
 
-describe("Dept single-reveal operational coherence", () => {
-    it("gates KPI, paired panels, and automation spinner behind one coherence pass", () => {
+describe("Dept core panels vs KPI", () => {
+    it("does not block throughput/attention on KPI placements or paired quiet reserve", () => {
         const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
-        expect(src).toContain("deptOperationalCoherencePending");
-        expect(src).toContain("WorkspaceQuietKpiReserve");
-        expect(src).toContain("DeptPairedOperQuietReserve");
-        expect(src).toMatch(
-            /kpisLoading=\{workflowKpisLoading && !deptOperationalCoherencePending\}/,
-        );
-        expect(src).not.toContain("WorkUnitQueueCompactRowSkeletonList");
+        expect(src).toContain("deptKpiPlacementPending");
+        expect(src).toContain("summariesFetchPromise");
+        expect(src).toContain("attentionFetchPromise");
+        expect(src).toContain("throughputSlot={throughputPairedPanels}");
+        expect(src).not.toContain("deptOperationalCoherencePending");
+        expect(src).not.toContain("DeptPairedOperQuietReserve");
+    });
+});
+
+describe("Work-unit early action rail", () => {
+    it("fetches right-rail actions in parallel with work-unit bootstrap", () => {
+        const src = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
+        expect(src).toContain("rightRailP");
+        expect(src).toMatch(/Promise\.all\(\[wuP, deptP, rightRailP\]\)/);
+        expect(src).toContain("setEnrollmentRightRailResolved");
     });
 });
 
@@ -154,14 +162,19 @@ describe("Work-unit queue-first loading coherence", () => {
 });
 
 describe("Drawer single-reveal bootstrap body", () => {
-    it("holds overview on bootstrap shell until primary coherent", () => {
+    it("holds inquiry overview on bootstrap until full hydrate and defers secondary surfaces", () => {
         const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("opportunityDrawerUsesBootstrapBodyShell");
-        expect(src).toContain("opportunityDrawerPrimaryCoherent");
+        expect(src).toContain("opportunityDrawerOverviewRevealReady");
+        expect(src).toContain("opportunityDrawerSecondaryReady");
         expect(src).toMatch(
-            /opportunityDrawerUsesBootstrapBodyShell[\s\S]*?DrawerOpportunityQueueBootstrapBodySkeleton/,
+            /opportunityDrawerUsesBootstrapBodyShell[\s\S]*?!opportunityDrawerOverviewRevealReady/,
         );
         expect(src).toMatch(/reportDrawerPrimaryReady[\s\S]*?opportunityDrawerPrimaryCoherent/);
+    });
+
+    it("does not show loading copy for packet status probe", () => {
+        const src = read("components/admin/opportunity/OpportunityPacketReviewOverview.tsx");
+        expect(src).not.toContain("Loading packet status");
     });
 
     it("reserves title-rail actions without waiting on entity row when preview is active", () => {

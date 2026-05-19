@@ -16,10 +16,7 @@ import { DepartmentWorkspaceBridgeShell } from "@/components/admin/workspace/Dep
 import { WorkspaceActionsRailPlaceholder } from "@/components/admin/workspace/WorkspaceActionsRailPlaceholder";
 import KPIBlock from "@/app/adminV2/components/workspace/blocks/KPIBlock";
 import { DepartmentWorkspaceColdShell } from "@/components/admin/workspace/DepartmentWorkspaceColdShell";
-import {
-    DeptPairedOperQuietReserve,
-    WorkspaceQuietKpiReserve,
-} from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
+import { WorkspaceQuietKpiReserve } from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
 import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
 import ActionsBlock from "@/app/adminV2/components/workspace/blocks/ActionsBlock";
 import { useAdminDrawer, useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
@@ -442,6 +439,55 @@ export default function AdminV2WorkspaceDepartmentPage() {
             return next;
         };
 
+        async function fetchDeptAttentionPreview(naWuId: string | null) {
+            if (cancelled) return;
+            setDeptAttentionBucketsLoading(true);
+            setDeptAttentionBucketsError(null);
+            try {
+                const init = workspaceDataFetchInit();
+                const baseUrl = `/api/admin/departments/${encodeURIComponent(departmentId)}/opportunity-attention-preview`;
+                const url =
+                    naWuId != null
+                        ? `${baseUrl}?work_unit_id=${encodeURIComponent(naWuId)}`
+                        : baseUrl;
+                const res = await dedupeAdminFetch(url, init ?? {});
+                const j = (await res.json().catch(() => ({}))) as {
+                    error?: string;
+                    total?: number;
+                    needs_attention_buckets?: DeptAttentionBucket[];
+                    opportunity_needs_attention_semantics?: DeptAttentionSemantics | null;
+                    bucket_count_scope?: string | null;
+                };
+                if (cancelled) return;
+                if (!res.ok) {
+                    setDeptAttentionBuckets(null);
+                    setDeptAttentionPreviewTotal(null);
+                    setDeptAttentionSemantics(null);
+                    setDeptBucketCountScope(null);
+                    setDeptAttentionBucketsError(j.error ?? "Needs attention preview failed");
+                    return;
+                }
+                const buckets = Array.isArray(j.needs_attention_buckets) ? j.needs_attention_buckets : [];
+                setDeptAttentionBuckets(buckets);
+                setDeptAttentionPreviewTotal(typeof j.total === "number" ? j.total : null);
+                setDeptAttentionSemantics(j.opportunity_needs_attention_semantics ?? null);
+                setDeptBucketCountScope(typeof j.bucket_count_scope === "string" ? j.bucket_count_scope : null);
+                setDeptAttentionBucketsError(null);
+            } catch (e) {
+                if (!cancelled) {
+                    setDeptAttentionBucketsError(
+                        e instanceof Error ? e.message : "Needs attention preview failed"
+                    );
+                    setDeptAttentionBuckets(null);
+                    setDeptAttentionPreviewTotal(null);
+                    setDeptAttentionSemantics(null);
+                    setDeptBucketCountScope(null);
+                }
+            } finally {
+                if (!cancelled) setDeptAttentionBucketsLoading(false);
+            }
+        }
+
         async function refreshQueueSummaries(deptCommit: DeptRow | null, wuCommit: Array<{ id: string; name: string | null; key: string | null }>) {
             if (cancelled) return;
             try {
@@ -485,6 +531,9 @@ export default function AdminV2WorkspaceDepartmentPage() {
             }
         }
 
+        const summariesFetchPromise = refreshQueueSummaries(null, []);
+        const attentionFetchPromise = fetchDeptAttentionPreview(null);
+
         void (async () => {
             const routeStart = typeof performance !== "undefined" ? performance.now() : 0;
             if (typeof performance !== "undefined" && typeof window !== "undefined") {
@@ -507,6 +556,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     dedupeAdminFetch(deptRoute, init),
                     dedupeAdminFetch(wuRoute, init),
                 ]);
+                void summariesFetchPromise;
+                void attentionFetchPromise;
 
                 const deptJson = (await deptRes.json().catch(() => ({}))) as {
                     error?: string;
@@ -620,101 +671,52 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         setDeptPipelineExecLoading(false);
                     }
 
-                    void Promise.all([
-                        refreshQueueSummaries(deptCommit, wuCommit),
-                        (async () => {
-                            if (cancelled) return;
-                            try {
-                                const res = await placementP;
-                                if (!res.ok) {
-                                    if (!cancelled) {
-                                        setDeptPlacementRows([]);
-                                        setDeptScopeHasPlacements(false);
-                                    }
-                                } else {
-                                    const j = (await res.json().catch(() => ({}))) as {
-                                        items?: WorkspaceKpiPlacementRow[];
-                                        scope_has_placements?: boolean;
-                                    };
-                                    if (!cancelled) {
-                                        setDeptPlacementRows(j.items ?? []);
-                                        setDeptScopeHasPlacements(j.scope_has_placements === true);
-                                    }
-                                }
-                            } catch {
+                    const naWu = wuCommit.find((w) => (w.key ?? "").trim().toLowerCase() === "needs_attention");
+                    if (naWu != null) {
+                        void fetchDeptAttentionPreview(naWu.id);
+                    }
+
+                    void (async () => {
+                        if (cancelled) return;
+                        try {
+                            const res = await placementP;
+                            if (!res.ok) {
                                 if (!cancelled) {
                                     setDeptPlacementRows([]);
                                     setDeptScopeHasPlacements(false);
                                 }
-                            }
-                            if (
-                                !cancelled &&
-                                typeof performance !== "undefined" &&
-                                typeof window !== "undefined" &&
-                                deptKpisPerfKeyRef.current !== departmentId
-                            ) {
-                                deptKpisPerfKeyRef.current = departmentId;
-                                perfDeptLoad({
-                                    phase: "kpis_ready",
-                                    ms: Math.round(performance.now() - placementT0),
-                                    source: "background",
-                                    org_id: orgId,
-                                    department_id: departmentId,
-                                });
-                            }
-                        })(),
-                        (async () => {
-                            if (cancelled) return;
-                            setDeptAttentionBucketsLoading(true);
-                            setDeptAttentionBucketsError(null);
-                            try {
-                                const init = workspaceDataFetchInit();
-                                const naWu = wuCommit.find(
-                                    (w) => (w.key ?? "").trim().toLowerCase() === "needs_attention"
-                                );
-                                const baseUrl = `/api/admin/departments/${encodeURIComponent(departmentId)}/opportunity-attention-preview`;
-                                const url =
-                                    naWu != null
-                                        ? `${baseUrl}?work_unit_id=${encodeURIComponent(naWu.id)}`
-                                        : baseUrl;
-                                const res = await dedupeAdminFetch(url, init ?? {});
+                            } else {
                                 const j = (await res.json().catch(() => ({}))) as {
-                                    error?: string;
-                                    total?: number;
-                                    needs_attention_buckets?: DeptAttentionBucket[];
-                                    opportunity_needs_attention_semantics?: DeptAttentionSemantics | null;
-                                    bucket_count_scope?: string | null;
+                                    items?: WorkspaceKpiPlacementRow[];
+                                    scope_has_placements?: boolean;
                                 };
-                                if (cancelled) return;
-                                if (!res.ok) {
-                                    setDeptAttentionBuckets(null);
-                                    setDeptAttentionPreviewTotal(null);
-                                    setDeptAttentionSemantics(null);
-                                    setDeptBucketCountScope(null);
-                                    setDeptAttentionBucketsError(j.error ?? "Needs attention preview failed");
-                                    return;
-                                }
-                                const buckets = Array.isArray(j.needs_attention_buckets) ? j.needs_attention_buckets : [];
-                                setDeptAttentionBuckets(buckets);
-                                setDeptAttentionPreviewTotal(typeof j.total === "number" ? j.total : null);
-                                setDeptAttentionSemantics(j.opportunity_needs_attention_semantics ?? null);
-                                setDeptBucketCountScope(typeof j.bucket_count_scope === "string" ? j.bucket_count_scope : null);
-                                setDeptAttentionBucketsError(null);
-                            } catch (e) {
                                 if (!cancelled) {
-                                    setDeptAttentionBucketsError(
-                                        e instanceof Error ? e.message : "Needs attention preview failed"
-                                    );
-                                    setDeptAttentionBuckets(null);
-                                    setDeptAttentionPreviewTotal(null);
-                                    setDeptAttentionSemantics(null);
-                                    setDeptBucketCountScope(null);
+                                    setDeptPlacementRows(j.items ?? []);
+                                    setDeptScopeHasPlacements(j.scope_has_placements === true);
                                 }
-                            } finally {
-                                if (!cancelled) setDeptAttentionBucketsLoading(false);
                             }
-                        })(),
-                    ]);
+                        } catch {
+                            if (!cancelled) {
+                                setDeptPlacementRows([]);
+                                setDeptScopeHasPlacements(false);
+                            }
+                        }
+                        if (
+                            !cancelled &&
+                            typeof performance !== "undefined" &&
+                            typeof window !== "undefined" &&
+                            deptKpisPerfKeyRef.current !== departmentId
+                        ) {
+                            deptKpisPerfKeyRef.current = departmentId;
+                            perfDeptLoad({
+                                phase: "kpis_ready",
+                                ms: Math.round(performance.now() - placementT0),
+                                source: "background",
+                                org_id: orgId,
+                                department_id: departmentId,
+                            });
+                        }
+                    })();
                 } else if (!cancelled) {
                     setDeptQueueSummariesLoading(false);
                 }
@@ -746,23 +748,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
         return deptLoading;
     }, [departmentId, deptLoading]);
 
-    /** One operational reveal — avoid KPI + row skeletons + automation spinner at once. */
-    const deptOperationalCoherencePending = useMemo(() => {
-        if (!dept || departmentPageBlockingLoad) return false;
-        return (
-            deptPlacementRows === undefined ||
-            deptQueueSummariesLoading ||
-            deptPipelineExecLoading ||
-            deptAttentionBucketsLoading
-        );
-    }, [
-        dept,
-        departmentPageBlockingLoad,
-        deptPlacementRows,
-        deptQueueSummariesLoading,
-        deptPipelineExecLoading,
-        deptAttentionBucketsLoading,
-    ]);
+    /** KPI strip only — core queue panels must not wait on placements or automation. */
+    const deptKpiPlacementPending = !dept || departmentPageBlockingLoad || deptPlacementRows === undefined;
 
     useEffect(() => {
         if (!isEnrollmentLikeDepartmentKey(deptKey) || !departmentId || !primaryWorkUnit?.id) {
@@ -1044,7 +1031,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     briefSubtitle=""
                     signalsSlot={null}
                     kpiSlot={
-                        deptOperationalCoherencePending ? (
+                        deptKpiPlacementPending ? (
                             <WorkspaceQuietKpiReserve id="dept-kpi-quiet-reserve" />
                         ) : kpis.length ? (
                             <div className="adminv2-ws-soft-content-reveal">
@@ -1052,13 +1039,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             </div>
                         ) : null
                     }
-                    throughputSlot={
-                        deptOperationalCoherencePending ? (
-                            <DeptPairedOperQuietReserve throughputTitle={execPanelTitle} />
-                        ) : (
-                            throughputPairedPanels
-                        )
-                    }
+                    throughputSlot={throughputPairedPanels}
                     attentionSlot={null}
                     contextSlot={
                         <div
@@ -1067,7 +1048,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         >
                             <AutomationWorkflowsBlock
                                 title="Automations"
-                                kpisLoading={workflowKpisLoading && !deptOperationalCoherencePending}
+                                kpisLoading={workflowKpisLoading}
                                 kpis={{
                                     runs_today: workflowKpis.runs_today,
                                     failed_last_7d: workflowKpis.failed_last_7d,

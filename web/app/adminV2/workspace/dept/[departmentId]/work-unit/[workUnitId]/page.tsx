@@ -762,7 +762,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
         if (!workUnitId || !departmentId) return;
         const init = workspaceDataFetchInit();
         let parsedQueueRowQuick: QueueItemQuickActionVm[] | null = null;
-        let parsedRightRail: ResolvedActionForClient[] = [];
 
         const actionsListRoute =
             `/api/admin/actions?` +
@@ -772,14 +771,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 work_unit_id: workUnitId,
                 department_id: departmentId,
             }).toString();
-        const [actionsSettled, rightRailSettled] = await Promise.allSettled([
-            dedupeAdminFetchWithTtl(actionsListRoute, init, 1500),
-            fetchWorkspaceRightRailResolvedActions({
-                departmentId,
-                workUnitId,
-                fetchInit: init,
-            }),
-        ]);
+        const [actionsSettled] = await Promise.allSettled([dedupeAdminFetchWithTtl(actionsListRoute, init, 1500)]);
 
         if (actionsSettled.status === "fulfilled") {
             try {
@@ -797,12 +789,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             }
         }
 
-        if (rightRailSettled.status === "fulfilled" && Array.isArray(rightRailSettled.value)) {
-            parsedRightRail = rightRailSettled.value;
-        }
-
         setOpportunityQueueRowActions(parsedQueueRowQuick);
-        setEnrollmentRightRailResolved(parsedRightRail);
 
         setWorkflowKpisLoading(true);
         try {
@@ -1315,6 +1302,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     alloyPerfSet("work_unit_summaries_request_start", performance.now());
                 }
 
+                const rightRailP = fetchWorkspaceRightRailResolvedActions({
+                    departmentId,
+                    workUnitId,
+                    fetchInit: init,
+                }).catch(() => [] as ResolvedActionForClient[]);
+
                 const summariesP = dedupeAdminFetch(queueListRoute, init).then(async (res) => {
                     const hdrT = performance.now();
                     if (typeof window !== "undefined" && typeof performance !== "undefined") {
@@ -1364,7 +1357,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     void fetchQueueItems(workUnitId, qFromUrlEffective, null);
                 }
 
-                const [wuR, deptR] = await Promise.all([wuP, deptP]);
+                const [wuR, deptR, rightRailList] = await Promise.all([wuP, deptP, rightRailP]);
 
                 if (!wuR.res.ok) throw new Error(wuR.j.error ?? "Failed to load work unit");
 
@@ -1391,6 +1384,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     const deptRow = deptR.j as DeptRow;
                     setWorkUnit(wu);
                     setDept(deptRow);
+                    setEnrollmentRightRailResolved(Array.isArray(rightRailList) ? rightRailList : []);
                     if (orgId) {
                         writeWorkUnitPageCache(orgId, principalUserId, accessScopeFingerprint, {
                             departmentId,

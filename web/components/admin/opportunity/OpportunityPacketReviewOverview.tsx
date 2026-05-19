@@ -143,8 +143,7 @@ export function OpportunityPacketReviewOverview({
     };
 
     if (loading) {
-        if (compact) return null;
-        return <p className={`${statusMargin} text-[11px] text-alloy-midnight/50`}>Loading packet status…</p>;
+        return null;
     }
     if (err) {
         return <p className={`${statusMargin} text-[11px] text-red-700`}>{err}</p>;
