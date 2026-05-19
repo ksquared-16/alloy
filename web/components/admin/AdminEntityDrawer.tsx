@@ -6100,19 +6100,36 @@ export default function AdminEntityDrawer() {
         !!overviewData &&
         !(overviewData as { _create?: boolean })._create;
 
+    /** Subjective primary-ready: shell + overview stable; header action rail reserved or loaded (not blocked on tours/packet). */
+    const opportunityDrawerPrimaryCoherent =
+        opportunityDrawerShellSettled &&
+        (!opportunityResolvedHeaderLoading ||
+            opportunityResolvedHeaderActions != null ||
+            !useOpportunityActionRegistryHeader);
+
+    const opportunityDrawerUsesBootstrapBodyShell =
+        drawer.type === "opportunities" &&
+        !!drawer.id &&
+        drawer.id !== "new" &&
+        !(overviewData && (overviewData as { _create?: boolean })._create) &&
+        !error &&
+        (opportunityDrawerQueueBootstrap
+            ? !opportunityDrawerPrimaryCoherent
+            : drawerBodyGateLoading && opportunityInquiryWorkflowDrawer);
+
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
             opportunityDrawerShellSettledPerfRef.current = false;
             return;
         }
-        if (!opportunityDrawerShellSettled) {
+        if (!opportunityDrawerPrimaryCoherent) {
             opportunityDrawerShellSettledPerfRef.current = false;
             return;
         }
         if (opportunityDrawerShellSettledPerfRef.current) return;
         opportunityDrawerShellSettledPerfRef.current = true;
         reportDrawerPrimaryReady(String(drawer.id));
-    }, [drawer.type, drawer.id, opportunityDrawerShellSettled]);
+    }, [drawer.type, drawer.id, opportunityDrawerPrimaryCoherent]);
 
     const opportunityDrawerTabsPending =
         drawer.type === "opportunities" &&
@@ -8445,11 +8462,7 @@ export default function AdminEntityDrawer() {
         opportunityWorkflowHeaderChromePending ? (
             <DrawerWorkflowHeaderQuickActionsSkeleton />
         ) : opportunityTitleRailActive ? (
-            entityRowReady ? (
-                workflowHeaderTitleRight
-            ) : (
-                <DrawerWorkflowHeaderQuickActionsSkeleton />
-            )
+            opportunityHeaderQuickActionsNode ?? <DrawerWorkflowHeaderQuickActionsSkeleton />
         ) : (
             workflowHeaderTitleRight
         );
@@ -8474,7 +8487,7 @@ export default function AdminEntityDrawer() {
         isOpportunityExistingView &&
         !!drawer.id &&
         drawer.id !== "new" &&
-        !opportunityDrawerShellSettled &&
+        opportunityResolvedHeaderLoading &&
         !opportunityResolvedHeaderActions;
 
     const headerActionsForDrawer = workflowOpportunityUsesTitleRailActions
@@ -8525,7 +8538,14 @@ export default function AdminEntityDrawer() {
         >
             <div className="">
             {error && <p className="text-alloy-ember">Error: {error}</p>}
-            {drawerBodyGateLoading ? (
+            {opportunityDrawerUsesBootstrapBodyShell ? (
+                <div
+                    className={drawerRecordBodyRootClassName}
+                    data-adminv2-opportunity-drawer-body={opportunityRecordChromeBodyShell ? "true" : undefined}
+                >
+                    <DrawerOpportunityQueueBootstrapBodySkeleton />
+                </div>
+            ) : drawerBodyGateLoading ? (
                 <div
                     className={drawerRecordBodyRootClassName}
                     data-adminv2-drawer-record-gate-skeleton="true"

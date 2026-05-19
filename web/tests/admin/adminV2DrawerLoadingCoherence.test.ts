@@ -82,10 +82,10 @@ describe("Dept paired oper queue skeleton alignment", () => {
 });
 
 describe("Work-unit KPI and queue picker loading", () => {
-    it("uses grouped KPI strip placeholder while placement or summaries are pending", () => {
+    it("defers KPI strip placeholder until queue reveal is ready", () => {
         const src = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
         expect(src).toContain("workUnitKpiMetricsPending");
-        expect(src).toContain("KpiStripSkeleton");
+        expect(src).toContain("workUnitQueueRevealReady");
         expect(src).toContain("kpiStripPlaceholder={workUnitKpiStripPlaceholder}");
     });
 
@@ -125,19 +125,58 @@ describe("Drawer opportunity header grouped loading", () => {
             /opportunityWorkflowHeaderUsesQueuePreview[\s\S]*?min-h-\[2\.375rem\][\s\S]*?aria-hidden/,
         );
     });
+});
 
-    it("shows header actions before shell settled when record_header resolves", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
+describe("Dept single-reveal operational coherence", () => {
+    it("gates KPI, paired panels, and automation spinner behind one coherence pass", () => {
+        const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
+        expect(src).toContain("deptOperationalCoherencePending");
+        expect(src).toContain("WorkspaceQuietKpiReserve");
+        expect(src).toContain("DeptPairedOperQuietReserve");
         expect(src).toMatch(
-            /opportunityHeaderActionsPending[\s\S]*?!opportunityDrawerShellSettled[\s\S]*?!opportunityResolvedHeaderActions/,
+            /kpisLoading=\{workflowKpisLoading && !deptOperationalCoherencePending\}/,
         );
+        expect(src).not.toContain("WorkUnitQueueCompactRowSkeletonList");
     });
 });
 
-describe("Dept attention loading geometry", () => {
-    it("uses compact row skeleton instead of loading copy", () => {
-        const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
-        expect(src).toContain("ADMINV2_DEPT_ATTENTION_LOADING_ROW_COUNT");
-        expect(src).not.toContain("Loading operational buckets");
+describe("Work-unit queue-first loading coherence", () => {
+    it("uses a single quiet queue reserve for blocking load and defers KPI/automation", () => {
+        const src = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
+        expect(src).toContain("workUnitQueueRevealReady");
+        expect(src).toContain("WorkspaceQuietQueueLaneReserve");
+        expect(src).toMatch(
+            /workUnitKpiStripPlaceholder = workUnitQueueRevealReady && workUnitKpiMetricsPending/,
+        );
+        expect(src).toMatch(/primaryFooterSlot=\{[\s\S]*?workUnitQueueRevealReady/);
+        expect(src).not.toContain("wu-blocking-kpi-skeleton");
+    });
+});
+
+describe("Drawer single-reveal bootstrap body", () => {
+    it("holds overview on bootstrap shell until primary coherent", () => {
+        const src = read("components/admin/AdminEntityDrawer.tsx");
+        expect(src).toContain("opportunityDrawerUsesBootstrapBodyShell");
+        expect(src).toContain("opportunityDrawerPrimaryCoherent");
+        expect(src).toMatch(
+            /opportunityDrawerUsesBootstrapBodyShell[\s\S]*?DrawerOpportunityQueueBootstrapBodySkeleton/,
+        );
+        expect(src).toMatch(/reportDrawerPrimaryReady[\s\S]*?opportunityDrawerPrimaryCoherent/);
+    });
+
+    it("reserves title-rail actions without waiting on entity row when preview is active", () => {
+        const src = read("components/admin/AdminEntityDrawer.tsx");
+        expect(src).toMatch(
+            /opportunityTitleRailActive[\s\S]*?opportunityHeaderQuickActionsNode \?\? <DrawerWorkflowHeaderQuickActionsSkeleton/,
+        );
+    });
+
+    it("blocks header actions only while record_header resolves, not until shell settled", () => {
+        const src = read("components/admin/AdminEntityDrawer.tsx");
+        expect(src).toContain("opportunityHeaderActionsPending");
+        expect(src).toContain("opportunityResolvedHeaderLoading");
+        expect(src).not.toMatch(
+            /opportunityHeaderActionsPending[\s\S]{0,220}!opportunityDrawerShellSettled/,
+        );
     });
 });

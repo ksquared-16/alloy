@@ -16,12 +16,10 @@ import { DepartmentWorkspaceBridgeShell } from "@/components/admin/workspace/Dep
 import { WorkspaceActionsRailPlaceholder } from "@/components/admin/workspace/WorkspaceActionsRailPlaceholder";
 import KPIBlock from "@/app/adminV2/components/workspace/blocks/KPIBlock";
 import { DepartmentWorkspaceColdShell } from "@/components/admin/workspace/DepartmentWorkspaceColdShell";
-import { KpiStripSkeleton } from "@/components/admin/workspace/KpiStripSkeleton";
 import {
-    WorkUnitQueueCompactRowSkeleton,
-    WorkUnitQueueCompactRowSkeletonList,
-} from "@/components/admin/workspace/WorkUnitQueueCompactRowSkeleton";
-import { ADMINV2_DEPT_ATTENTION_LOADING_ROW_COUNT } from "@/lib/ui-v2/adminV2LoadingGeometry";
+    DeptPairedOperQuietReserve,
+    WorkspaceQuietKpiReserve,
+} from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
 import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
 import ActionsBlock from "@/app/adminV2/components/workspace/blocks/ActionsBlock";
 import { useAdminDrawer, useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
@@ -748,6 +746,24 @@ export default function AdminV2WorkspaceDepartmentPage() {
         return deptLoading;
     }, [departmentId, deptLoading]);
 
+    /** One operational reveal — avoid KPI + row skeletons + automation spinner at once. */
+    const deptOperationalCoherencePending = useMemo(() => {
+        if (!dept || departmentPageBlockingLoad) return false;
+        return (
+            deptPlacementRows === undefined ||
+            deptQueueSummariesLoading ||
+            deptPipelineExecLoading ||
+            deptAttentionBucketsLoading
+        );
+    }, [
+        dept,
+        departmentPageBlockingLoad,
+        deptPlacementRows,
+        deptQueueSummariesLoading,
+        deptPipelineExecLoading,
+        deptAttentionBucketsLoading,
+    ]);
+
     useEffect(() => {
         if (!isEnrollmentLikeDepartmentKey(deptKey) || !departmentId || !primaryWorkUnit?.id) {
             setEnrollmentDeptRightRail(null);
@@ -909,17 +925,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                 );
                             })}
                         </>
-                    ) : deptPipelineExecLoading && (deptWorkUnits ?? []).length > 0 ? (
-                        <WorkUnitQueueCompactRowSkeletonList
-                            count={Math.min((deptWorkUnits ?? []).length, 5)}
-                            variant="throughput"
-                            ariaLabel="Loading pipeline lanes"
-                        />
                     ) : (
                         <>
-                            {deptQueueSummariesLoading && (deptWorkUnits ?? []).length > 0 ? (
-                                <WorkUnitQueueCompactRowSkeleton variant="throughput" />
-                            ) : null}
                             {(deptWorkUnits ?? []).map((wu) => {
                                 const s = deptWorkUnitSummaries[wu.id];
                                 const total = s ? s.total : null;
@@ -952,11 +959,6 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             </div>
                         </li>
                     ) : null}
-                    {deptAttentionBucketsLoading && !sortedDeptAttentionBuckets.length
-                        ? Array.from({ length: ADMINV2_DEPT_ATTENTION_LOADING_ROW_COUNT }, (_, i) => (
-                              <WorkUnitQueueCompactRowSkeleton key={`attn-skel-${i}`} variant="attention" />
-                          ))
-                        : null}
                     {!deptAttentionBucketsLoading && !deptAttentionBucketsError && sortedDeptAttentionBuckets.length === 0 ? (
                         <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                             <div className="rounded-lg border border-admin-border bg-white/50 px-3 py-3 text-xs text-alloy-midnight/60">
@@ -1042,15 +1044,21 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     briefSubtitle=""
                     signalsSlot={null}
                     kpiSlot={
-                        deptPlacementRows === undefined ? (
-                            <KpiStripSkeleton id="dept-kpi-skeleton" />
+                        deptOperationalCoherencePending ? (
+                            <WorkspaceQuietKpiReserve id="dept-kpi-quiet-reserve" />
                         ) : kpis.length ? (
                             <div className="adminv2-ws-soft-content-reveal">
                                 <KPIBlock kpis={kpis} maxVisible={5} />
                             </div>
                         ) : null
                     }
-                    throughputSlot={throughputPairedPanels}
+                    throughputSlot={
+                        deptOperationalCoherencePending ? (
+                            <DeptPairedOperQuietReserve throughputTitle={execPanelTitle} />
+                        ) : (
+                            throughputPairedPanels
+                        )
+                    }
                     attentionSlot={null}
                     contextSlot={
                         <div
@@ -1059,7 +1067,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         >
                             <AutomationWorkflowsBlock
                                 title="Automations"
-                                kpisLoading={workflowKpisLoading}
+                                kpisLoading={workflowKpisLoading && !deptOperationalCoherencePending}
                                 kpis={{
                                     runs_today: workflowKpis.runs_today,
                                     failed_last_7d: workflowKpis.failed_last_7d,

@@ -26,9 +26,7 @@ import {
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
-import { KpiStripSkeleton } from "@/components/admin/workspace/KpiStripSkeleton";
-import { WorkUnitQueueCompactRowSkeletonList } from "@/components/admin/workspace/WorkUnitQueueCompactRowSkeleton";
-import { ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT } from "@/lib/ui-v2/adminV2LoadingGeometry";
+import { WorkspaceQuietQueueLaneReserve } from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import {
@@ -2010,10 +2008,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     subline: dept.name ?? "Department",
                     aiAwarenessLine: undefined,
                 },
-                laneInterpretation: {
-                    laneStatusLine: "Loading queues…",
-                    recommendedActionLine: "Records will appear here when the queue is ready.",
-                },
+                laneInterpretation: null,
                 signals: [],
                 kpis: [],
                 primaryQueue: {
@@ -3026,11 +3021,30 @@ export default function AdminV2OpportunityWorkUnitPage() {
         !suppressWorkUnitKpiStrip &&
         (wuPlacementRows === undefined ||
             (wuPlacementRows !== undefined && queueSummaries === null && !queueSummariesError));
-    const workUnitKpiStripPlaceholder = workUnitKpiMetricsPending;
-
     /** Shell + header render after WU + dept; queue summaries and rows stay in-lane (Phase 3.1). */
     const workUnitShellReady = Boolean(workUnit) && Boolean(dept) && !error;
     const workUnitPageBlockingLoad = loading && !workUnitShellReady;
+
+    /** Queue-first reveal — KPI strip and automation footer defer until the lane is useful. */
+    const workUnitQueueRevealReady = useMemo(() => {
+        if (!workUnitShellReady) return false;
+        if (queueSummaries === null && !queueSummariesError) return false;
+        if (queueSummariesError && !queueSummaries) return true;
+        if (!queueSummaries) return false;
+        if (queueRowsBufferRef.current.length > 0) return true;
+        if (queueItems !== null && !queueItemsLoading) return true;
+        if (queueItemsError) return true;
+        return queueSummaries.length === 0;
+    }, [
+        workUnitShellReady,
+        queueSummaries,
+        queueSummariesError,
+        queueItems,
+        queueItemsLoading,
+        queueItemsError,
+    ]);
+
+    const workUnitKpiStripPlaceholder = workUnitQueueRevealReady && workUnitKpiMetricsPending;
 
     return (
         <WorkspaceChrome
@@ -3049,21 +3063,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     data-ws-surface="work_unit"
                     aria-busy="true"
                 >
-                    <KpiStripSkeleton
-                        id="wu-blocking-kpi-skeleton"
-                        cellCount={
-                            wuPlacementRows && wuPlacementRows.length > 0
-                                ? wuPlacementRows.length
-                                : undefined
-                        }
-                    />
-                    <div className="adminv2-ws-dept-v2-operational-row adminv2-ws-dept-v2-operational-row--double mt-4">
-                        <WorkUnitQueueCompactRowSkeletonList
-                            count={ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT}
-                            variant="standard"
-                            ariaLabel="Loading queue"
-                        />
-                    </div>
+                    <WorkspaceQuietQueueLaneReserve />
                 </div>
             ) : workUnitShellReady && effectiveModel ? (
                 <>
@@ -3097,19 +3097,21 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         }
                         reserveActionsRail={isEnrollmentLikeDepartmentKey(dept?.key)}
                         primaryFooterSlot={
-                            <AutomationWorkflowsBlock
-                                title="Automations"
-                                kpisLoading={workflowKpisLoading}
-                                kpis={{
-                                    runs_today: workflowKpis.runs_today,
-                                    failed_last_7d: workflowKpis.failed_last_7d,
-                                    running_last_7d: workflowKpis.running_last_7d,
-                                    success_rate_last_7d: workflowKpis.success_rate_last_7d,
-                                }}
-                                partitions={workflowPartitions}
-                                href="/adminV2/workflows"
-                                onAskWorkflowAssist={askWorkflowAssist}
-                            />
+                            workUnitQueueRevealReady ? (
+                                <AutomationWorkflowsBlock
+                                    title="Automations"
+                                    kpisLoading={workflowKpisLoading}
+                                    kpis={{
+                                        runs_today: workflowKpis.runs_today,
+                                        failed_last_7d: workflowKpis.failed_last_7d,
+                                        running_last_7d: workflowKpis.running_last_7d,
+                                        success_rate_last_7d: workflowKpis.success_rate_last_7d,
+                                    }}
+                                    partitions={workflowPartitions}
+                                    href="/adminV2/workflows"
+                                    onAskWorkflowAssist={askWorkflowAssist}
+                                />
+                            ) : null
                         }
                     />
                     <UpdateStatusAddNoteModal
