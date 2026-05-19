@@ -18,7 +18,7 @@ Close the current **configuration foundation** so operators have a coherent four
 |-------|-------|----------------|
 | **Layouts** | `/adminV2/settings/layouts` | Compose opportunity workflow v1 drawer: section order, show/hide, section names (catalog + workflow titles), move eligible fields between sections, add custom sections to layout, restore layout-hidden sections |
 | **Fields** | `/adminV2/settings/fields` | Field definitions, policies, visibility, required rules |
-| **Actions** | `/adminV2/settings/actions` | Org-owned placement: enable, display label (org defs), surface/slot/section/order for `record_header` / `record_section` |
+| **Actions** | `/adminV2/settings/actions` (Settings → Workflows & automation) | Create org placement from approved catalog; enable; surface/slot/section/order; org-owned label |
 | **Statuses** | `/adminV2/settings/statuses` | Status display labels, sort order, active flag per entity type |
 | **Automations** | `/adminV2/workflows` | Workflow definitions and execution (not placement) |
 
@@ -75,12 +75,17 @@ Close the current **configuration foundation** so operators have a coherent four
 - Field picker uses layout eligibility (drawer-visible), not Fields-settings hide list.
 
 ### Actions
-- Promoted on Settings index to **Records & layouts** (daily operator use).
-- Inventory supports `entity_type` / `section_key` query filters; deep-link from Layouts section detail.
+- Settings index: **Workflows & automation** (same card style as other settings — no emphasis/disabled tint).
+- **Create button from existing action** — `POST /api/admin/action-placements` + `GET /api/admin/actions/definition-catalog` (org placement only; no new execution handlers).
+- **Org-owned placements** fully editable: enabled, record type, surface (record header, record section, workspace side panel, workspace queue row), slot, section key, order; org-owned definition labels.
+- **Built-in placements** read-only; **Add org placement** clones from catalog with prefilled context.
+- Operator copy for surfaces/slots in `actionPlacementPresentation.ts`.
+- **Deferred:** `surface=workspace` on workspace root (schema allows it; UI resolves `right_rail` / `queue_row` today).
 
 ### Status / workflow
-- **Statuses** settings remain the home for display labels.
-- **Status transition rules** stay read-only diagnostics; follow-up sprint owns editable transitions.
+- **Statuses** — display names and order only.
+- **Workflow automation rules** (formerly “status transition rules” in copy) — read-only diagnostics; behavior like “tour date set → Tour Scheduled” is **Automations**, not a standalone status-rules product.
+- Custom action execution / full automation builder — **deferred**.
 
 ---
 

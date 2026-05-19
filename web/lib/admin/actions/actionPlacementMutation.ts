@@ -25,8 +25,13 @@ export const ACTION_PLACEMENT_SLOTS: readonly ActionSlot[] = [
 
 export const ACTION_PLACEMENT_DISPLAY_STYLES = ["button", "icon_button", "link", "menu_item"] as const;
 
-/** Surfaces operators may move placements between in Settings V1. */
-export const OPERATOR_EDITABLE_ACTION_SURFACES: readonly ActionSurface[] = ["record_header", "record_section"] as const;
+/** Surfaces operators may assign in Settings V1 (see actionPlacementPresentation.ts for labels). */
+export const OPERATOR_EDITABLE_ACTION_SURFACES: readonly ActionSurface[] = [
+    "record_header",
+    "record_section",
+    "right_rail",
+    "queue_row",
+] as const;
 
 export type ActionPlacementPatchInput = {
     is_active?: boolean;
@@ -34,6 +39,7 @@ export type ActionPlacementPatchInput = {
     surface?: ActionSurface;
     slot?: ActionSlot;
     section_key?: string | null;
+    entity_type?: string | null;
     display_style?: string;
 };
 
@@ -45,6 +51,7 @@ export type ActionPlacementCreateInput = {
     section_key?: string | null;
     order_index?: number;
     display_style?: string;
+    is_active?: boolean;
 };
 
 export class ActionPlacementValidationError extends Error {
@@ -85,9 +92,7 @@ export function validateActionPlacementPatch(body: unknown): ActionPlacementPatc
         const s = String(b.surface ?? "").trim();
         if (!isSurface(s)) throw new ActionPlacementValidationError("Invalid surface");
         if (!(OPERATOR_EDITABLE_ACTION_SURFACES as readonly string[]).includes(s)) {
-            throw new ActionPlacementValidationError(
-                "Only record drawer surfaces (record header, record section) can be changed in Settings"
-            );
+            throw new ActionPlacementValidationError("Surface cannot be changed to that value in Settings");
         }
         out.surface = s;
     }
@@ -105,6 +110,13 @@ export function validateActionPlacementPatch(body: unknown): ActionPlacementPatc
                 throw new ActionPlacementValidationError("Invalid section_key");
             }
             out.section_key = sk;
+        }
+    }
+    if ("entity_type" in b) {
+        if (b.entity_type === null || b.entity_type === "") {
+            out.entity_type = null;
+        } else {
+            out.entity_type = String(b.entity_type).trim().toLowerCase();
         }
     }
     if ("display_style" in b) {
@@ -131,7 +143,7 @@ export function validateActionPlacementCreate(body: unknown): ActionPlacementCre
 
     const surface = String(b.surface ?? "").trim();
     if (!isSurface(surface) || !(OPERATOR_EDITABLE_ACTION_SURFACES as readonly string[]).includes(surface)) {
-        throw new ActionPlacementValidationError("surface must be record_header or record_section");
+        throw new ActionPlacementValidationError("Invalid surface for Settings placement");
     }
 
     const slot = String(b.slot ?? "").trim();
@@ -169,6 +181,14 @@ export function validateActionPlacementCreate(body: unknown): ActionPlacementCre
         throw new ActionPlacementValidationError("Invalid display_style");
     }
 
+    let is_active = true;
+    if ("is_active" in b) {
+        if (typeof b.is_active !== "boolean") {
+            throw new ActionPlacementValidationError("is_active must be a boolean");
+        }
+        is_active = b.is_active;
+    }
+
     return {
         action_definition_id,
         surface,
@@ -177,6 +197,7 @@ export function validateActionPlacementCreate(body: unknown): ActionPlacementCre
         section_key,
         order_index,
         display_style,
+        is_active,
     };
 }
 

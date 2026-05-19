@@ -72,14 +72,19 @@ export default function AdminV2SettingsStatusTransitionRulesPage() {
         <div className="w-full max-w-6xl space-y-4 pb-2">
             <header>
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-alloy-midnight/40">Workflows · Diagnostics</p>
-                <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">Status transition rules</h1>
+                <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">Workflow automation rules</h1>
                 <p className="mt-1 max-w-2xl text-sm leading-relaxed text-alloy-midnight/60">
-                    Read-only reference for which status changes are allowed or blocked. Status <strong>display names</strong> are
-                    edited on{" "}
+                    These are <strong>workflow automation rules</strong> that may update status when business conditions are met — not
+                    a separate status-rules product. Example: when a tour date is set → update status to Tour Scheduled. Status{" "}
+                    <strong>display names</strong> are edited on{" "}
                     <Link href="/adminV2/settings/statuses" className="font-medium text-alloy-pine hover:underline">
                         Statuses
                     </Link>
-                    . Editable transition configuration is deferred to a future Workflow Status Configuration sprint.
+                    ; triggers and side effects are owned by{" "}
+                    <Link href="/adminV2/workflows" className="font-medium text-alloy-pine hover:underline">
+                        Automations
+                    </Link>
+                    . This table is read-only reference.
                 </p>
                 <p className="mt-2 text-xs text-alloy-midnight/45">
                     <Link href="/adminV2/settings" className="font-medium text-alloy-pine hover:underline">

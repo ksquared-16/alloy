@@ -18,8 +18,18 @@ describe("actionPlacementMutation", () => {
         expect(patch.order_index).toBe(50);
     });
 
-    it("rejects unsupported surface changes", () => {
-        expect(() => validateActionPlacementPatch({ surface: "queue_row" })).toThrow(ActionPlacementValidationError);
+    it("rejects surfaces not editable in Settings", () => {
+        expect(() => validateActionPlacementPatch({ surface: "department" })).toThrow(ActionPlacementValidationError);
+    });
+
+    it("allows workspace-related surface changes", () => {
+        const patch = validateActionPlacementPatch({ surface: "right_rail" });
+        expect(patch.surface).toBe("right_rail");
+    });
+
+    it("allows entity_type on patch", () => {
+        const patch = validateActionPlacementPatch({ entity_type: "opportunity" });
+        expect(patch.entity_type).toBe("opportunity");
     });
 
     it("requires section_key for record_section create", () => {
@@ -40,5 +50,26 @@ describe("actionPlacementMutation", () => {
             section_key: "inquiry_children",
         });
         expect(ok.section_key).toBe("inquiry_children");
+    });
+
+    it("allows right_rail workspace placement on create", () => {
+        const ok = validateActionPlacementCreate({
+            action_definition_id: "00000000-0000-0000-0000-000000000001",
+            surface: "right_rail",
+            slot: "right_rail",
+            entity_type: "opportunity",
+        });
+        expect(ok.surface).toBe("right_rail");
+    });
+
+    it("accepts is_active on create", () => {
+        const created = validateActionPlacementCreate({
+            action_definition_id: "00000000-0000-0000-0000-000000000001",
+            surface: "record_header",
+            slot: "primary",
+            entity_type: "opportunity",
+            is_active: false,
+        });
+        expect(created.is_active).toBe(false);
     });
 });

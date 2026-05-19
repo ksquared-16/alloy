@@ -4,18 +4,25 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import { OPERATOR_EDITABLE_ACTION_SURFACES } from "@/lib/admin/actions/actionPlacementMutation";
 import {
-    ACTION_PLACEMENT_SLOTS,
-    OPERATOR_EDITABLE_ACTION_SURFACES,
-} from "@/lib/admin/actions/actionPlacementMutation";
+    ACTION_BUTTON_OWNERSHIP_COPY,
+    SETTINGS_SURFACE_OPTIONS,
+    settingsSlotsForSurface,
+    settingsSurfaceLabel,
+    surfaceRequiresSectionKey,
+} from "@/lib/admin/actions/actionPlacementPresentation";
 import {
     actionPlacementEditorCapabilities,
     actionPlacementOwnershipLabel,
-    actionPlacementSurfaceLabel,
     formatActionPlacementWhere,
     groupPlacementEditorRows,
     type ActionPlacementEditorRow,
 } from "@/lib/admin/actions/actionPlacementEditorUi";
+import { ACTION_PLACEMENT_ENTITY_TYPES } from "@/lib/admin/actions/actionButtonCreateUi";
+import ActionButtonCreatePanel, {
+    type ActionButtonCreateSeed,
+} from "@/components/adminV2/settings/ActionButtonCreatePanel";
 
 type InventoryItem = {
     definition: {
@@ -44,6 +51,7 @@ function toEditorRow(item: InventoryItem): ActionPlacementEditorRow {
         placement_id: item.placement.id,
         definition_id: item.definition.id,
         definition_key: item.definition.key,
+        definition_org_id: item.definition.org_id,
         label: item.definition.label,
         action_type: item.definition.action_type,
         entity_type: item.placement.entity_type ?? item.definition.entity_type,
@@ -69,6 +77,7 @@ export default function ActionPlacementsSettingsClient() {
     const [savingId, setSavingId] = useState<string | null>(null);
     const [entityFilter, setEntityFilter] = useState(initialEntity);
     const [sectionFilter, setSectionFilter] = useState(initialSection);
+    const [createSeed, setCreateSeed] = useState<ActionButtonCreateSeed | null>(null);
 
     const load = useCallback(async () => {
         try {
@@ -159,13 +168,16 @@ export default function ActionPlacementsSettingsClient() {
 
     return (
         <div className="space-y-5" data-testid="action-placements-settings">
-            <div className="rounded-xl border border-alloy-pine/20 bg-alloy-pine/[0.04] px-4 py-3 text-sm text-alloy-midnight/75">
-                <p className="font-medium text-alloy-midnight">What you can change here</p>
-                <ul className="mt-1 list-inside list-disc text-xs leading-relaxed">
-                    <li>Which buttons are enabled for your organization</li>
-                    <li>Button label (org-owned definitions)</li>
-                    <li>Where record buttons appear — header vs drawer section, slot, and order</li>
-                </ul>
+            <ActionButtonCreatePanel
+                onCreated={() => void load()}
+                initialEntityType={initialEntity}
+                initialSectionKey={initialSection}
+                seed={createSeed}
+                onSeedConsumed={() => setCreateSeed(null)}
+            />
+
+            <div className="rounded-xl border border-alloy-forge/12 bg-alloy-stone/[0.04] px-4 py-3 text-sm text-alloy-midnight/75">
+                <p className="text-xs leading-relaxed">{ACTION_BUTTON_OWNERSHIP_COPY}</p>
                 <p className="mt-2 text-xs leading-relaxed">
                     What happens when a button is clicked is configured in{" "}
                     <Link href="/adminV2/workflows" className="font-medium text-alloy-pine hover:underline">
@@ -271,7 +283,7 @@ export default function ActionPlacementsSettingsClient() {
                                                                 : "bg-alloy-forge/10 text-alloy-forge/70",
                                                         ].join(" ")}
                                                     >
-                                                        {ownership === "org" ? "Your org" : "Platform"}
+                                                        {ownership === "org" ? "Your org" : "Built-in"}
                                                     </span>
                                                 </div>
                                                 <p className="text-[11px] text-alloy-midnight/50">
@@ -282,79 +294,112 @@ export default function ActionPlacementsSettingsClient() {
                                                     {formatActionPlacementWhere(row)}
                                                 </p>
                                                 {cap.editable && isAdmin && canMutate ? (
-                                                    <div className="flex flex-wrap gap-2 text-xs">
-                                                        <label className="flex items-center gap-1.5">
-                                                            <span className="text-alloy-midnight/55">Surface</span>
-                                                            <select
-                                                                value={row.surface}
-                                                                disabled={saving}
-                                                                className="rounded border border-[#e6e8ec] px-1.5 py-0.5"
-                                                                onChange={(e) =>
-                                                                    void patchPlacement(row.placement_id, {
-                                                                        surface: e.target.value,
-                                                                    })
-                                                                }
-                                                            >
-                                                                {OPERATOR_EDITABLE_ACTION_SURFACES.map((s) => (
-                                                                    <option key={s} value={s}>
-                                                                        {actionPlacementSurfaceLabel(s)}
-                                                                    </option>
-                                                                ))}
-                                                            </select>
-                                                        </label>
-                                                        <label className="flex items-center gap-1.5">
-                                                            <span className="text-alloy-midnight/55">Slot</span>
-                                                            <select
-                                                                value={row.slot}
-                                                                disabled={saving}
-                                                                className="rounded border border-[#e6e8ec] px-1.5 py-0.5"
-                                                                onChange={(e) =>
-                                                                    void patchPlacement(row.placement_id, { slot: e.target.value })
-                                                                }
-                                                            >
-                                                                {ACTION_PLACEMENT_SLOTS.map((s) => (
-                                                                    <option key={s} value={s}>
-                                                                        {s}
-                                                                    </option>
-                                                                ))}
-                                                            </select>
-                                                        </label>
-                                                        {row.surface === "record_section" ? (
-                                                            <label className="flex items-center gap-1.5">
-                                                                <span className="text-alloy-midnight/55">Section key</span>
-                                                                <input
-                                                                    type="text"
-                                                                    defaultValue={row.section_key ?? ""}
+                                                    <div className="mt-2 space-y-2 rounded-lg border border-alloy-forge/10 bg-alloy-stone/[0.02] p-2.5">
+                                                        <p className="text-[10px] font-medium text-alloy-midnight/55">Edit placement</p>
+                                                        <div className="flex flex-wrap gap-2 text-xs">
+                                                            <label className="flex min-w-[8rem] flex-col gap-0.5">
+                                                                <span className="text-alloy-midnight/55">Record type</span>
+                                                                <select
+                                                                    value={row.entity_type ?? ""}
                                                                     disabled={saving}
-                                                                    className="w-36 rounded border border-[#e6e8ec] px-1.5 py-0.5 font-mono text-[11px]"
+                                                                    className="rounded border border-[#e6e8ec] px-1.5 py-0.5"
+                                                                    onChange={(e) =>
+                                                                        void patchPlacement(row.placement_id, {
+                                                                            entity_type: e.target.value.trim() || null,
+                                                                        })
+                                                                    }
+                                                                >
+                                                                    <option value="">Any</option>
+                                                                    {ACTION_PLACEMENT_ENTITY_TYPES.map((et) => (
+                                                                        <option key={et} value={et}>
+                                                                            {et}
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
+                                                            </label>
+                                                            <label className="flex min-w-[10rem] flex-col gap-0.5">
+                                                                <span className="text-alloy-midnight/55">Where</span>
+                                                                <select
+                                                                    value={row.surface}
+                                                                    disabled={saving}
+                                                                    className="rounded border border-[#e6e8ec] px-1.5 py-0.5"
+                                                                    onChange={(e) => {
+                                                                        const next = e.target.value;
+                                                                        const body: Record<string, unknown> = { surface: next };
+                                                                        if (!surfaceRequiresSectionKey(next)) {
+                                                                            body.section_key = null;
+                                                                        }
+                                                                        void patchPlacement(row.placement_id, body);
+                                                                    }}
+                                                                >
+                                                                    {OPERATOR_EDITABLE_ACTION_SURFACES.map((s) => (
+                                                                        <option
+                                                                            key={s}
+                                                                            value={s}
+                                                                            title={
+                                                                                SETTINGS_SURFACE_OPTIONS.find((o) => o.value === s)
+                                                                                    ?.description
+                                                                            }
+                                                                        >
+                                                                            {settingsSurfaceLabel(s)}
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
+                                                            </label>
+                                                            <label className="flex min-w-[8rem] flex-col gap-0.5">
+                                                                <span className="text-alloy-midnight/55">Position</span>
+                                                                <select
+                                                                    value={row.slot}
+                                                                    disabled={saving}
+                                                                    className="rounded border border-[#e6e8ec] px-1.5 py-0.5"
+                                                                    onChange={(e) =>
+                                                                        void patchPlacement(row.placement_id, { slot: e.target.value })
+                                                                    }
+                                                                >
+                                                                    {settingsSlotsForSurface(row.surface).map((s) => (
+                                                                        <option key={s.value} value={s.value} title={s.description}>
+                                                                            {s.label}
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
+                                                            </label>
+                                                            {surfaceRequiresSectionKey(row.surface) ? (
+                                                                <label className="flex min-w-[8rem] flex-col gap-0.5">
+                                                                    <span className="text-alloy-midnight/55">Section key</span>
+                                                                    <input
+                                                                        type="text"
+                                                                        defaultValue={row.section_key ?? ""}
+                                                                        disabled={saving}
+                                                                        className="rounded border border-[#e6e8ec] px-1.5 py-0.5 font-mono text-[11px]"
+                                                                        onBlur={(e) => {
+                                                                            const sk = e.target.value.trim();
+                                                                            if (sk && sk !== (row.section_key ?? "")) {
+                                                                                void patchPlacement(row.placement_id, {
+                                                                                    section_key: sk,
+                                                                                });
+                                                                            }
+                                                                        }}
+                                                                    />
+                                                                </label>
+                                                            ) : null}
+                                                            <label className="flex w-16 flex-col gap-0.5">
+                                                                <span className="text-alloy-midnight/55">Order</span>
+                                                                <input
+                                                                    type="number"
+                                                                    defaultValue={row.order_index}
+                                                                    disabled={saving}
+                                                                    className="rounded border border-[#e6e8ec] px-1.5 py-0.5"
                                                                     onBlur={(e) => {
-                                                                        const sk = e.target.value.trim();
-                                                                        if (sk !== (row.section_key ?? "")) {
+                                                                        const n = Number(e.target.value);
+                                                                        if (Number.isFinite(n) && n !== row.order_index) {
                                                                             void patchPlacement(row.placement_id, {
-                                                                                section_key: sk,
+                                                                                order_index: n,
                                                                             });
                                                                         }
                                                                     }}
                                                                 />
                                                             </label>
-                                                        ) : null}
-                                                        <label className="flex items-center gap-1.5">
-                                                            <span className="text-alloy-midnight/55">Order</span>
-                                                            <input
-                                                                type="number"
-                                                                defaultValue={row.order_index}
-                                                                disabled={saving}
-                                                                className="w-16 rounded border border-[#e6e8ec] px-1.5 py-0.5"
-                                                                onBlur={(e) => {
-                                                                    const n = Number(e.target.value);
-                                                                    if (Number.isFinite(n) && n !== row.order_index) {
-                                                                        void patchPlacement(row.placement_id, {
-                                                                            order_index: n,
-                                                                        });
-                                                                    }
-                                                                }}
-                                                            />
-                                                        </label>
+                                                        </div>
                                                     </div>
                                                 ) : null}
                                             </div>
@@ -372,8 +417,24 @@ export default function ActionPlacementsSettingsClient() {
                                                         }
                                                     />
                                                 </label>
+                                                {!cap.editable && cap.canCloneAsOrgPlacement && isAdmin && canMutate ? (
+                                                    <button
+                                                        type="button"
+                                                        className="text-[10px] font-medium text-alloy-pine hover:underline"
+                                                        onClick={() =>
+                                                            setCreateSeed({
+                                                                definitionId: row.definition_id,
+                                                                entityType: row.entity_type ?? "",
+                                                                surface: row.surface,
+                                                                sectionKey: row.section_key ?? "",
+                                                            })
+                                                        }
+                                                    >
+                                                        Add org placement
+                                                    </button>
+                                                ) : null}
                                                 {!cap.editable ? (
-                                                    <span className="max-w-[12rem] text-right text-[10px] text-alloy-midnight/45">
+                                                    <span className="max-w-[14rem] text-right text-[10px] leading-snug text-alloy-midnight/45">
                                                         {cap.lockedReason}
                                                     </span>
                                                 ) : saving ? (

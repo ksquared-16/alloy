@@ -1,16 +1,21 @@
 import type { ActionSurface, ActionSlot } from "@/lib/admin/actions/types";
 import {
     ACTION_PLACEMENT_DISPLAY_STYLES,
-    ACTION_PLACEMENT_SLOTS,
     OPERATOR_EDITABLE_ACTION_SURFACES,
     actionPlacementEditableInSettings,
     actionPlacementLockedReason,
 } from "@/lib/admin/actions/actionPlacementMutation";
+import {
+    SETTINGS_EDITABLE_SURFACES,
+    settingsSlotLabel,
+    settingsSurfaceLabel,
+} from "@/lib/admin/actions/actionPlacementPresentation";
 
 export type ActionPlacementEditorRow = {
     placement_id: string;
     definition_id: string;
     definition_key: string;
+    definition_org_id: string | null;
     label: string;
     action_type: string;
     entity_type: string | null;
@@ -24,10 +29,12 @@ export type ActionPlacementEditorRow = {
 };
 
 /** Operator-facing summary of where a placement renders. */
-export function formatActionPlacementWhere(row: Pick<ActionPlacementEditorRow, "surface" | "slot" | "section_key" | "entity_type">): string {
-    const surface = actionPlacementSurfaceLabel(row.surface);
+export function formatActionPlacementWhere(
+    row: Pick<ActionPlacementEditorRow, "surface" | "slot" | "section_key" | "entity_type">
+): string {
+    const surface = settingsSurfaceLabel(row.surface);
     const entity = row.entity_type ? ` · ${row.entity_type}` : "";
-    const slot = row.slot ? ` · ${row.slot}` : "";
+    const slot = row.slot ? ` · ${settingsSlotLabel(row.slot)}` : "";
     const section =
         row.surface === "record_section" && row.section_key?.trim()
             ? ` · section “${row.section_key.trim()}”`
@@ -39,32 +46,34 @@ export function actionPlacementOwnershipLabel(orgId: string | null): "org" | "pl
     return orgId ? "org" : "platform";
 }
 
+/** @deprecated Use settingsSurfaceLabel from actionPlacementPresentation */
 export function actionPlacementSurfaceLabel(surface: string): string {
-    switch (surface) {
-        case "record_header":
-            return "Record header";
-        case "record_section":
-            return "Record section";
-        case "queue_row":
-            return "Queue row";
-        default:
-            return surface.replace(/_/g, " ");
-    }
+    return settingsSurfaceLabel(surface);
 }
 
 export function actionPlacementEditorCapabilities(row: ActionPlacementEditorRow, orgId: string) {
     const editable = actionPlacementEditableInSettings(orgId, row.org_id);
+    const isPlatformPlacement = row.org_id == null;
+    const isOrgDefinition = row.definition_org_id != null;
     return {
         editable,
-        lockedReason: editable ? null : actionPlacementLockedReason(row.org_id),
+        isPlatformPlacement,
+        isOrgDefinition,
+        lockedReason: editable
+            ? null
+            : isPlatformPlacement
+              ? "Built-in placement — add your own org placement below to customize where this action appears."
+              : actionPlacementLockedReason(row.org_id),
         canToggleActive: editable,
-        canEditLabel: editable && row.org_id != null,
+        canEditLabel: editable && isOrgDefinition,
+        canEditEntityType: editable,
         canEditSurface: editable,
         canEditSlot: editable,
-        canEditSectionKey: editable && row.surface === "record_section",
+        canEditSectionKey: editable,
         canEditOrder: editable,
-        allowedSurfaces: OPERATOR_EDITABLE_ACTION_SURFACES as readonly ActionSurface[],
-        allowedSlots: ACTION_PLACEMENT_SLOTS as readonly ActionSlot[],
+        canCloneAsOrgPlacement: isPlatformPlacement,
+        allowedSurfaces: SETTINGS_EDITABLE_SURFACES,
+        allowedSurfaceOptions: OPERATOR_EDITABLE_ACTION_SURFACES as readonly ActionSurface[],
         allowedDisplayStyles: ACTION_PLACEMENT_DISPLAY_STYLES,
     };
 }

@@ -63,7 +63,7 @@ const STATUSES_DEFAULT_SUBTITLE =
     "Display names for status keys on schedules, jobs, customers, opportunities, vendors, plan templates, and people. Drawers read options from here. Which status changes are allowed is not configured here — see Status transition rules under Settings diagnostics (read-only) or a future Workflow Status Configuration sprint.";
 
 const STATUSES_ADMINV2_SUBTITLE =
-    "Edit status display names and order. Transition rules (from → to) belong to platform configuration — view the read-only list under Settings → Status transition rules.";
+    "Manage status names and order. When business events should change status (for example, tour date set → Tour Scheduled), that behavior is workflow automation — see Automations and Settings → Workflow automation rules (read-only reference).";
 
 export default function StatusesClient({
     basePath = "/admin/system/statuses",

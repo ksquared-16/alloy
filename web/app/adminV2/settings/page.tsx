@@ -91,17 +91,14 @@ export default function AdminV2SettingsIndexPage() {
                     </SettingsGroup>
 
                     <SettingsGroup label="Records & layouts">
-                        <SettingsLink href="/adminV2/settings/layouts" title="Record layouts" emphasis>
-                            Drawer sections, fields per section, and inquiry order.
-                        </SettingsLink>
-                        <SettingsLink href="/adminV2/settings/actions" title="Action buttons" emphasis>
-                            Where record buttons appear and which are enabled.
+                        <SettingsLink href="/adminV2/settings/layouts" title="Record layouts">
+                            Choose drawer sections and fields.
                         </SettingsLink>
                         <SettingsLink href="/adminV2/settings/fields" title="Fields">
                             Labels, visibility, and required rules.
                         </SettingsLink>
                         <SettingsLink href="/adminV2/settings/statuses" title="Statuses">
-                            Status display names by record type (not transition rules).
+                            Manage status names and order.
                         </SettingsLink>
                         <SettingsLink href="/adminV2/settings/entity-labels" title="Record labels">
                             Family, Inquiry, and other names.
@@ -119,7 +116,10 @@ export default function AdminV2SettingsIndexPage() {
 
                     <SettingsGroup label="Workflows & automation">
                         <SettingsLink href="/adminV2/workflows" title="Automations">
-                            Workflows and triggers.
+                            Workflows, triggers, and status-changing automation.
+                        </SettingsLink>
+                        <SettingsLink href="/adminV2/settings/actions" title="Action buttons">
+                            Create and place operator buttons that trigger approved actions or workflows.
                         </SettingsLink>
                         <SettingsLink href="/adminV2/settings/config-proposals" title="Configuration proposals">
                             Review approved config changes.
@@ -149,8 +149,8 @@ export default function AdminV2SettingsIndexPage() {
                         </p>
                     </div>
                     <div className="space-y-2">
-                        <DiagnosticLink href="/adminV2/settings/status-transition-rules" title="Status transition rules">
-                            Allowed status changes (read-only reference).
+                        <DiagnosticLink href="/adminV2/settings/status-transition-rules" title="Workflow automation rules">
+                            When conditions are met, workflows may update status (read-only reference).
                         </DiagnosticLink>
                         <DiagnosticLink href="/adminV2/settings/field-sections" title="Field grouping (advanced)">
                             Bulk catalog section names — drawer composition uses Record layouts.

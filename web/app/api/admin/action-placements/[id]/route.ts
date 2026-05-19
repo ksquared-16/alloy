@@ -73,6 +73,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     if (patch.slot !== undefined) updates.slot = patch.slot;
     if (patch.section_key !== undefined) updates.section_key = patch.section_key;
     if (patch.display_style !== undefined) updates.display_style = patch.display_style;
+    if (patch.entity_type !== undefined) updates.entity_type = patch.entity_type;
 
     const { data: updated, error: upErr } = await supabase
         .from("action_placements")

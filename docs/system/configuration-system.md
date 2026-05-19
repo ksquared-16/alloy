@@ -23,7 +23,7 @@ Settings hub: `/adminV2/settings` — tiles use **Editable ·**, **Partial ·**,
 | **Fields** | `/adminV2/settings/fields` | Registry: labels, help, required rules, editability, visibility | Drawer section order; button placement |
 | **Field grouping** | `/adminV2/settings/field-sections` | Catalog taxonomy (`field_section_definitions`) | Workflow virtual section titles |
 | **Layouts** | `/adminV2/settings/layouts` | Drawer composition: section order, show/hide, **section names**, field placement, preview (opportunity workflow v1) | Field policies; button placement; status labels/transitions; raw `config_json` |
-| **Actions** | `/adminV2/settings/actions` | Org placement + enablement (`action_placements`): surface, slot, section key, order, label | Execution (`executeAdminAction`, workflows); `condition_config` |
+| **Actions** | `/adminV2/settings/actions` (Workflows & automation group) | Create/edit org `action_placements` from approved catalog; enable; surface, slot, section key, order; org-owned label | New execution handlers; `executeAdminAction` semantics; `condition_config` |
 | **Automations** | `/adminV2/workflows` | Workflow definitions, execution semantics | Placement rows |
 | **Forms** | `/adminV2/forms` | Definitions, versions, packets | Action `payload_schema` in Settings (today) |
 
@@ -42,7 +42,7 @@ Record Experience Builder; BOS/AI config layer (structured PATCH only); linked-r
 | Drawer layout (workflow v1) | **Editable** | Reorder, show/hide, rename workflow virtuals; **Show hidden section** |
 | Layout integrity | **Read-only report** | Settings → Layouts panel; `GET /api/admin/config/layout-integrity` |
 | Action placements (org) | **Editable V1** | Enable, label, surface/slot/section/order |
-| Status transition rules | **Read-only** | `status_transition_rules` — Settings diagnostics; labels on **Statuses** |
+| Workflow automation rules | **Read-only** | `status_transition_rules` — status changes driven by workflow conditions; labels on **Statuses** |
 | Attention & SLA | **Editable** | Department `metadata.opportunity_attention_rules` |
 | Legacy `record_actions` | **Runtime only** | Coexists with registry; migration deferred |
 | Forms / packets | **Related hub** | `/adminV2/forms` |
