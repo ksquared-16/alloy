@@ -38,6 +38,7 @@ import { resolveOpportunityAttention, type OpportunityAttentionEntityInput } fro
 import { buildNeedsAttentionSuggestion } from "@/lib/agent/needsAttentionSuggestion/buildNeedsAttentionSuggestion";
 import type { AttentionSuggestionQueuePreviewV1 } from "@/lib/agent/needsAttentionSuggestion/types";
 import { buildOperationalSummaryDeterministic, toOperationalSummaryQueuePreview } from "@/lib/ai/buildOperationalSummary";
+import { childDesiredStartSummaryFromOcmRows } from "@/lib/ui-v2/childDesiredStartQueuePresentation";
 import { DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1 } from "@/lib/workspace/opportunityAttentionRules";
 import { buildQueueServiceAttentionSemantics } from "@/lib/workspace/opportunityAttentionCountSemantics";
 import { applyPlacementToOpportunityQueueRows } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
@@ -927,7 +928,8 @@ async function enrichOpportunityRows(params: {
         ),
     ];
 
-    const [personsTimed, contactsTimed, customersTimed, membersTimed, defsTimed, tourBookingsTimed, locationsTimed] = await Promise.all([
+    const [personsTimed, contactsTimed, customersTimed, membersTimed, defsTimed, tourBookingsTimed, locationsTimed, ocmDesiredStartTimed] =
+        await Promise.all([
         plan.persons && personIds.length
             ? timedAwait(
                   supabase
@@ -982,6 +984,15 @@ async function enrichOpportunityRows(params: {
                       .in("id", locationIds as any)
               )
             : timedAwait(emptyRel),
+        opportunityIds.length
+            ? timedAwait(
+                  supabase
+                      .from("opportunity_customer_members")
+                      .select("opportunity_id, desired_start_date")
+                      .eq("org_id", orgId)
+                      .in("opportunity_id", opportunityIds as any)
+              )
+            : timedAwait(emptyRel),
     ]);
     const parallelMainMs = Date.now() - tParallel0;
 
@@ -993,6 +1004,16 @@ async function enrichOpportunityRows(params: {
         if (!id) continue;
         const label = locationDisplayLabelFromRow(row);
         if (label) locationLabelById.set(id, label);
+    }
+
+    const ocmDesiredStartByOpportunityId = new Map<string, { desired_start_date?: string | null }[]>();
+    for (const raw of (ocmDesiredStartTimed.v as { data?: unknown[] | null }).data ?? []) {
+        const row = raw as { opportunity_id?: string; desired_start_date?: string | null };
+        const oid = String(row.opportunity_id ?? "").trim();
+        if (!oid) continue;
+        const list = ocmDesiredStartByOpportunityId.get(oid) ?? [];
+        list.push({ desired_start_date: row.desired_start_date ?? null });
+        ocmDesiredStartByOpportunityId.set(oid, list);
     }
 
     const tourBookingByOppId = new Map<string, { start_at: string; timezone: string }>();
@@ -1250,6 +1271,11 @@ async function enrichOpportunityRows(params: {
         const locId = (r as { location_id?: string | null }).location_id;
         const locationLabel = locId ? locationLabelById.get(String(locId)) ?? null : null;
 
+        const oppIdStr = String(r.id ?? "").trim();
+        const childDesiredStartSummary = childDesiredStartSummaryFromOcmRows(
+            ocmDesiredStartByOpportunityId.get(oppIdStr) ?? []
+        );
+
         return {
             ...r,
             title: r.name ?? null,
@@ -1262,6 +1288,7 @@ async function enrichOpportunityRows(params: {
             _crm_compact_children: crmCompactChildrenStructured,
             _requested_program: programsDisplay ?? programCombined,
             _desired_start_date: desiredStart,
+            _child_desired_start_summary: childDesiredStartSummary,
             _tour_context: tourContext,
             _tour_queue_display: tourQueueDisplay,
             _notes_preview: notesPreview,

@@ -259,15 +259,14 @@ function computeCrmTimingSegments(
 
     const tourDirect = typeof row._tour_queue_display === "string" ? row._tour_queue_display.trim() : "";
 
-    const desiredRaw =
-        typeof row._desired_start_date === "string" ? row._desired_start_date.trim() : "";
-    const desiredFormatted = wantD && desiredRaw ? formatDateUsShortHyphenUtc(desiredRaw) : null;
+    const childStartSummary =
+        typeof row._child_desired_start_summary === "string" ? row._child_desired_start_summary.trim() : "";
     const desiredVal =
-        wantD && desiredFormatted && desiredFormatted !== "—" && desiredFormatted.trim()
-            ? desiredFormatted
-            : wantD
-              ? "—"
-              : "";
+        wantD && childStartSummary ?
+            childStartSummary.includes("dates") ?
+                `Starts: ${childStartSummary}`
+            :   formatDateUsShortHyphenUtc(childStartSummary)
+        :   "";
 
     const tourPrimary = typeof row._tour_context === "string" ? row._tour_context.trim() : "";
     const tourAlt = typeof row._tour_timing === "string" ? row._tour_timing.trim() : "";
@@ -278,7 +277,7 @@ function computeCrmTimingSegments(
     const tourVal = wantT ? (tourDirect || (tourFormatted.trim() ? tourFormatted : "—")) : "";
 
     const segments: WorkUnitQueueCrmTimingSegmentVm[] = [];
-    if (wantD && labels.desired_start_date) {
+    if (wantD && desiredVal && labels.desired_start_date) {
         segments.push({ label: labels.desired_start_date, value: desiredVal });
     }
     if (wantT && labels.tour_date) {
@@ -480,15 +479,14 @@ export function buildCrmQueueRowPreviewPresentation(
 
     const tourDirect = typeof row._tour_queue_display === "string" ? row._tour_queue_display.trim() : "";
 
-    const desiredRaw =
-        typeof row._desired_start_date === "string" ? row._desired_start_date.trim() : "";
-    const desiredFormatted = wantD && desiredRaw ? formatDateUsShortHyphenUtc(desiredRaw) : null;
+    const childStartSummary =
+        typeof row._child_desired_start_summary === "string" ? row._child_desired_start_summary.trim() : "";
     const desiredVal =
-        wantD && desiredFormatted && desiredFormatted !== "—" && desiredFormatted.trim()
-            ? desiredFormatted
-            : wantD
-              ? "—"
-              : null;
+        wantD && childStartSummary ?
+            childStartSummary.includes("dates") ?
+                `Starts: ${childStartSummary}`
+            :   formatDateUsShortHyphenUtc(childStartSummary)
+        :   null;
 
     const ageBandRaw = typeof row._age_band === "string" ? row._age_band.trim() : "";
     const ageBandContext = ageBandRaw || null;
@@ -508,7 +506,7 @@ export function buildCrmQueueRowPreviewPresentation(
 
     return {
         ...contact,
-        desiredStartDateDisplay: wantD ? desiredVal : null,
+        desiredStartDateDisplay: wantD && desiredVal ? desiredVal : null,
         ageBandContext,
         tourContext: wantT ? tourVal : null,
         crmCompactTimingValueLine,

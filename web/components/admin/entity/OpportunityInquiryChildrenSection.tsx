@@ -8,15 +8,30 @@ import {
     patchCustomerMemberFromInquiryChild,
     patchOpportunityCustomerMemberFromInquiryChild,
     resolveInquiryChildOcmId,
+    type InquiryChildOcmPatch,
 } from "@/lib/admin/drawer/inquiryChildFieldEdit";
 import { loadWorkspaceChildcareInquiryOptionSets } from "@/lib/workspace/workspaceChildcareInquiryOptionSets";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { logInquiryChildrenDebug, summarizeInquiryChildrenRows } from "@/lib/admin/drawer/inquiryChildrenDebug";
+import {
+    INQUIRY_CHILD_ENTITY_TYPE,
+    inquiryChildDrawerShowsDesiredStart,
+    isInquiryChildNativeFieldKey,
+    labelForInquiryChildFieldKey,
+    normalizeIsoDateOnly,
+    resolveInquiryChildDesiredStartDisplay,
+    type InquiryChildFieldDefLike,
+} from "@/lib/fields/inquiryChildFieldRegistry";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const INQUIRY_CHILD_ROW_GRID =
-    "grid min-w-[58rem] grid-cols-[minmax(7rem,1.1fr)_minmax(6.5rem,6.75rem)_minmax(5rem,0.85fr)_minmax(5rem,0.85fr)_minmax(4.5rem,0.75fr)_minmax(6rem,1fr)_auto] gap-x-2 gap-y-0.5 items-center";
+function inquiryChildRowGridClass(showDesiredStart: boolean, customColumnCount: number): string {
+    const parts = ["minmax(7rem,1.1fr)", "minmax(6.5rem,6.75rem)"];
+    if (showDesiredStart) parts.push("minmax(6rem,0.85fr)");
+    for (let i = 0; i < customColumnCount; i++) parts.push("minmax(5rem,0.8fr)");
+    parts.push("minmax(5rem,0.85fr)", "minmax(5rem,0.85fr)", "minmax(4.5rem,0.75fr)", "minmax(6rem,1fr)", "auto");
+    return `grid min-w-[58rem] grid-cols-[${parts.join("_")}] gap-x-2 gap-y-0.5 items-center`;
+}
 const INQUIRY_CHILD_COL_HDR = "text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/45";
 
 export type InquiryChildRow = {
@@ -37,6 +52,8 @@ export type InquiryChildRow = {
     outcome_status_key: string | null;
     outcome_status_label: string | null;
     notes: string | null;
+    desired_start_date?: string | null;
+    custom_fields?: Record<string, unknown>;
 };
 
 type OptionItem = { item_key: string; label: string | null };
@@ -115,10 +132,20 @@ function useDebouncedPatch(ms: number) {
 
 type IdentityLocal = { first_name: string; last_name: string; dob: string };
 
+type OcmLocalState = {
+    desired_program_type: string;
+    desired_schedule_type: string;
+    outcome_status_key: string;
+    notes: string;
+    desired_start_edit: string;
+    custom: Record<string, string>;
+};
+
 export default function OpportunityInquiryChildrenSection({
     rows,
     canEdit,
     opportunityId,
+    opportunityDesiredStartDate = null,
     onOpenChild,
     onChildrenMutated,
     /** When true and rows are empty, show a loading shell (full inquiry payload still fetching). */
@@ -129,6 +156,8 @@ export default function OpportunityInquiryChildrenSection({
     rows: InquiryChildRow[];
     canEdit: boolean;
     opportunityId?: string;
+    /** Household/inquiry-level desired start for inheritance display when child OCM value is null. */
+    opportunityDesiredStartDate?: string | null;
     onOpenChild?: (row: Pick<InquiryChildRow, "person_id" | "customer_member_id" | "display_name">) => void;
     onChildrenMutated?: () => void;
     recordDetailPending?: boolean;
@@ -144,9 +173,8 @@ export default function OpportunityInquiryChildrenSection({
     const [statusItems, setStatusItems] = useState<StatusRow[]>([]);
     const [loadErr, setLoadErr] = useState<string | null>(null);
 
-    const [local, setLocal] = useState<Record<string, { desired_program_type: string; desired_schedule_type: string; outcome_status_key: string; notes: string }>>(
-        {}
-    );
+    const [fieldDefs, setFieldDefs] = useState<InquiryChildFieldDefLike[]>([]);
+    const [local, setLocal] = useState<Record<string, OcmLocalState>>({});
     const [identityLocal, setIdentityLocal] = useState<Record<string, IdentityLocal>>({});
     const [ocmIdByRowKey, setOcmIdByRowKey] = useState<Record<string, string>>({});
     const [savingById, setSavingById] = useState<Record<string, boolean>>({});
@@ -158,11 +186,23 @@ export default function OpportunityInquiryChildrenSection({
             const next = { ...prev };
             for (const r of rows) {
                 if (!r.id) continue;
+                const startDisplay = resolveInquiryChildDesiredStartDisplay(
+                    r.desired_start_date,
+                    opportunityDesiredStartDate
+                );
+                const custom: Record<string, string> = {};
+                for (const [k, v] of Object.entries(r.custom_fields ?? {})) {
+                    if (v == null) custom[k] = "";
+                    else if (typeof v === "string") custom[k] = v;
+                    else custom[k] = String(v);
+                }
                 next[r.id] = {
                     desired_program_type: normalizeKey(r.desired_program_type),
                     desired_schedule_type: normalizeKey(r.desired_schedule_type),
                     outcome_status_key: normalizeKey(r.outcome_status_key),
                     notes: (r.notes ?? "").toString(),
+                    desired_start_edit: startDisplay.inputValue,
+                    custom,
                 };
             }
             return next;
@@ -237,6 +277,47 @@ export default function OpportunityInquiryChildrenSection({
         };
     }, [rows.length]);
 
+    useEffect(() => {
+        let cancelled = false;
+        async function loadDefs() {
+            try {
+                const res = await fetch(
+                    `/api/admin/field-definitions?entity_type=${encodeURIComponent(INQUIRY_CHILD_ENTITY_TYPE)}`,
+                    { credentials: "include" }
+                );
+                const json = (await res.json().catch(() => ({}))) as {
+                    field_definitions?: InquiryChildFieldDefLike[];
+                };
+                if (!res.ok || cancelled) return;
+                setFieldDefs((json.field_definitions ?? []).filter((d) => d.is_active !== false));
+            } catch {
+                if (!cancelled) setFieldDefs([]);
+            }
+        }
+        void loadDefs();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    const showDesiredStartColumn = inquiryChildDrawerShowsDesiredStart(fieldDefs);
+    const desiredStartLabel = labelForInquiryChildFieldKey(fieldDefs, "desired_start_date", "Desired start");
+    const customDrawerDefs = useMemo(
+        () =>
+            fieldDefs.filter(
+                (d) =>
+                    !d.is_system &&
+                    !isInquiryChildNativeFieldKey(d.field_key) &&
+                    d.is_visible_in_drawer !== false &&
+                    (d.field_type === "text" || d.field_type === "date")
+            ),
+        [fieldDefs]
+    );
+    const rowGridClass = useMemo(
+        () => inquiryChildRowGridClass(showDesiredStartColumn, customDrawerDefs.length),
+        [showDesiredStartColumn, customDrawerDefs.length]
+    );
+
     const programLabelByKey = useMemo(() => new Map(programItems.map((i) => [i.item_key, i.label ?? i.item_key])), [programItems]);
     const scheduleLabelByKey = useMemo(() => new Map(scheduleItems.map((i) => [i.item_key, i.label ?? i.item_key])), [scheduleItems]);
     const statusLabelByKey = useMemo(
@@ -278,7 +359,7 @@ export default function OpportunityInquiryChildrenSection({
         if (phase === "error") setErrorById((p) => ({ ...p, [rowKey]: message ?? "Save failed" }));
     };
 
-    const saveOcmPatch = async (row: InquiryChildRow, patch: Record<string, unknown>) => {
+    const saveOcmPatch = async (row: InquiryChildRow, patch: InquiryChildOcmPatch) => {
         markRowSaveState(row.id, "saving");
         try {
             const ocmId = await resolveOcmIdForRow(row);
@@ -370,9 +451,15 @@ export default function OpportunityInquiryChildrenSection({
         <div className={rootCol} data-inquiry-children-section="OpportunityInquiryChildrenSection">
             {loadErr ? <p className="mb-2 text-sm text-red-700">{loadErr}</p> : null}
             <div className={`${listWrap} overflow-x-auto`}>
-                <div className={`${INQUIRY_CHILD_ROW_GRID} border-b border-alloy-stone/12 bg-alloy-stone/[0.03] px-2 py-1.5 max-md:hidden`}>
+                <div className={`${rowGridClass} border-b border-alloy-stone/12 bg-alloy-stone/[0.03] px-2 py-1.5 max-md:hidden`}>
                     <div className={INQUIRY_CHILD_COL_HDR}>Child name</div>
                     <div className={INQUIRY_CHILD_COL_HDR}>DOB / Age</div>
+                    {showDesiredStartColumn ? <div className={INQUIRY_CHILD_COL_HDR}>{desiredStartLabel}</div> : null}
+                    {customDrawerDefs.map((d) => (
+                        <div key={d.field_key} className={INQUIRY_CHILD_COL_HDR}>
+                            {(d.label ?? d.field_key).trim()}
+                        </div>
+                    ))}
                     <div className={INQUIRY_CHILD_COL_HDR}>Program</div>
                     <div className={INQUIRY_CHILD_COL_HDR}>Schedule</div>
                     <div className={INQUIRY_CHILD_COL_HDR}>Outcome</div>
@@ -389,12 +476,26 @@ export default function OpportunityInquiryChildrenSection({
                             age ? `${formatDate(r.dob)} · ${age}`
                             :   formatDate(r.dob)
                         :   age || "—";
-                    const st = local[r.id] ?? {
+                    const startFallback = resolveInquiryChildDesiredStartDisplay(
+                        r.desired_start_date,
+                        opportunityDesiredStartDate
+                    );
+                    const st: OcmLocalState = local[r.id] ?? {
                         desired_program_type: normalizeKey(r.desired_program_type),
                         desired_schedule_type: normalizeKey(r.desired_schedule_type),
                         outcome_status_key: normalizeKey(r.outcome_status_key),
                         notes: (r.notes ?? "").toString(),
+                        desired_start_edit: startFallback.inputValue,
+                        custom: Object.fromEntries(
+                            Object.entries(r.custom_fields ?? {}).map(([k, v]) => [
+                                k,
+                                v == null ? "" : typeof v === "string" ? v : String(v),
+                            ])
+                        ),
                     };
+                    const desiredStartInherited =
+                        !normalizeIsoDateOnly(r.desired_start_date) &&
+                        !!normalizeIsoDateOnly(opportunityDesiredStartDate);
                     const saving = !!savingById[r.id];
                     const rowCanEdit = canEdit && !isMetadataOnly;
                     const identity = identityLocal[r.id] ?? {
@@ -439,7 +540,7 @@ export default function OpportunityInquiryChildrenSection({
                                     Not on inquiry — saving program/schedule/outcome/notes links this child.
                                 </p>
                             ) : null}
-                            <div className={`${INQUIRY_CHILD_ROW_GRID} max-md:grid-cols-1 max-md:gap-y-1.5 max-md:min-w-0`}>
+                            <div className={`${rowGridClass} max-md:grid-cols-1 max-md:gap-y-1.5 max-md:min-w-0`}>
                                 <div className="min-w-0">
                                     <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/40 md:hidden">
                                         Child name
@@ -523,6 +624,129 @@ export default function OpportunityInquiryChildrenSection({
                                         <span className="text-[12px] tabular-nums text-alloy-midnight/65">{dobAge}</span>
                                     )}
                                 </div>
+                                {showDesiredStartColumn ? (
+                                    <div className="min-w-0">
+                                        <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/40 md:hidden">
+                                            {desiredStartLabel}
+                                        </div>
+                                        {rowCanEdit ? (
+                                            <>
+                                                <input
+                                                    type="date"
+                                                    value={st.desired_start_edit}
+                                                    disabled={saving}
+                                                    title={
+                                                        desiredStartInherited ?
+                                                            `Inherited: ${formatDate(st.desired_start_edit)}`
+                                                        :   undefined
+                                                    }
+                                                    className={`${fieldInput}${desiredStartInherited ? " text-alloy-midnight/55" : ""}`}
+                                                    onChange={(e) => {
+                                                        const v = e.target.value;
+                                                        setLocal((p) => ({
+                                                            ...p,
+                                                            [r.id]: { ...st, desired_start_edit: v },
+                                                        }));
+                                                        const oppNorm = normalizeIsoDateOnly(opportunityDesiredStartDate);
+                                                        const patchVal = !v.trim() || v === oppNorm ? null : v;
+                                                        debounced.schedule(
+                                                            r.id,
+                                                            { desired_start_date: patchVal },
+                                                            (_id, patch) => {
+                                                                void saveOcmPatch(r, patch as InquiryChildOcmPatch);
+                                                            }
+                                                        );
+                                                    }}
+                                                    aria-label={`${desiredStartLabel} for ${displayName}`}
+                                                />
+                                                {desiredStartInherited ? (
+                                                    <p className="mt-0.5 text-[10px] text-alloy-midnight/45">
+                                                        Inherited: {formatDate(st.desired_start_edit)}
+                                                    </p>
+                                                ) : null}
+                                            </>
+                                        ) : (
+                                            <span
+                                                className={`text-[12px] tabular-nums ${desiredStartInherited ? "text-alloy-midnight/55" : "text-alloy-midnight/70"}`}
+                                            >
+                                                {desiredStartInherited ?
+                                                    <>Inherited: {formatDate(st.desired_start_edit)}</>
+                                                : st.desired_start_edit ?
+                                                    formatDate(st.desired_start_edit)
+                                                :   "—"}
+                                            </span>
+                                        )}
+                                    </div>
+                                ) : null}
+                                {customDrawerDefs.map((def) => {
+                                    const customVal = st.custom[def.field_key] ?? "";
+                                    return (
+                                        <div key={def.field_key} className="min-w-0">
+                                            <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/40 md:hidden">
+                                                {(def.label ?? def.field_key).trim()}
+                                            </div>
+                                            {rowCanEdit ? (
+                                                def.field_type === "date" ? (
+                                                    <input
+                                                        type="date"
+                                                        value={customVal}
+                                                        disabled={saving}
+                                                        className={fieldInput}
+                                                        onChange={(e) => {
+                                                            const v = e.target.value;
+                                                            setLocal((p) => ({
+                                                                ...p,
+                                                                [r.id]: {
+                                                                    ...st,
+                                                                    custom: { ...st.custom, [def.field_key]: v },
+                                                                },
+                                                            }));
+                                                    debounced.schedule(
+                                                        r.id,
+                                                        { [def.field_key]: v || null },
+                                                        (_id, patch) => {
+                                                            void saveOcmPatch(r, patch as InquiryChildOcmPatch);
+                                                        }
+                                                    );
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <input
+                                                        type="text"
+                                                        value={customVal}
+                                                        disabled={saving}
+                                                        className={fieldInput}
+                                                        onChange={(e) => {
+                                                            const v = e.target.value;
+                                                            setLocal((p) => ({
+                                                                ...p,
+                                                                [r.id]: {
+                                                                    ...st,
+                                                                    custom: { ...st.custom, [def.field_key]: v },
+                                                                },
+                                                            }));
+                                                    debounced.schedule(
+                                                        r.id,
+                                                        { [def.field_key]: v || null },
+                                                        (_id, patch) => {
+                                                            void saveOcmPatch(r, patch as InquiryChildOcmPatch);
+                                                        }
+                                                    );
+                                                        }}
+                                                    />
+                                                )
+                                            ) : (
+                                                <span className="text-[12px] text-alloy-midnight/70">
+                                                    {customVal ?
+                                                        def.field_type === "date" ?
+                                                            formatDate(customVal)
+                                                        :   customVal
+                                                    :   "—"}
+                                                </span>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                                 <div className="min-w-0">
                                     <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/40 md:hidden">
                                         Program
@@ -535,7 +759,7 @@ export default function OpportunityInquiryChildrenSection({
                                                 const v = e.target.value;
                                                 setLocal((p) => ({ ...p, [r.id]: { ...st, desired_program_type: v } }));
                                                 debounced.schedule(r.id, { desired_program_type: v || null }, (_id, patch) => {
-                                                    void saveOcmPatch(r, patch);
+                                                    void saveOcmPatch(r, patch as InquiryChildOcmPatch);
                                                 });
                                             }}
                                             className={fieldSelect}
@@ -564,7 +788,7 @@ export default function OpportunityInquiryChildrenSection({
                                                 const v = e.target.value;
                                                 setLocal((p) => ({ ...p, [r.id]: { ...st, desired_schedule_type: v } }));
                                                 debounced.schedule(r.id, { desired_schedule_type: v || null }, (_id, patch) => {
-                                                    void saveOcmPatch(r, patch);
+                                                    void saveOcmPatch(r, patch as InquiryChildOcmPatch);
                                                 });
                                             }}
                                             className={fieldSelect}
@@ -593,7 +817,7 @@ export default function OpportunityInquiryChildrenSection({
                                                 const v = e.target.value;
                                                 setLocal((p) => ({ ...p, [r.id]: { ...st, outcome_status_key: v } }));
                                                 debounced.schedule(r.id, { outcome_status_key: v || null }, (_id, patch) => {
-                                                    void saveOcmPatch(r, patch);
+                                                    void saveOcmPatch(r, patch as InquiryChildOcmPatch);
                                                 });
                                             }}
                                             className={`${fieldSelect} ${outcomeSelectAttention}`}
@@ -622,12 +846,12 @@ export default function OpportunityInquiryChildrenSection({
                                                 const v = e.target.value;
                                                 setLocal((p) => ({ ...p, [r.id]: { ...st, notes: v } }));
                                                 debounced.schedule(r.id, { notes: v }, (_id, patch) => {
-                                                    void saveOcmPatch(r, patch);
+                                                    void saveOcmPatch(r, patch as InquiryChildOcmPatch);
                                                 });
                                             }}
                                             onBlur={() =>
                                                 debounced.flush(r.id, (_id, patch) => {
-                                                    void saveOcmPatch(r, patch);
+                                                    void saveOcmPatch(r, patch as InquiryChildOcmPatch);
                                                 })
                                             }
                                             className={fieldInput}

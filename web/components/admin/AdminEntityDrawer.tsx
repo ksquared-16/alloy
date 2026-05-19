@@ -7009,6 +7009,12 @@ export default function AdminEntityDrawer() {
                                       : null,
                               outcome_status_label: r.outcome_status_label != null ? String(r.outcome_status_label) : null,
                               notes: r.notes != null ? String(r.notes) : null,
+                              desired_start_date:
+                                  r.desired_start_date != null ? String(r.desired_start_date).slice(0, 10) : null,
+                              custom_fields:
+                                  r.custom_fields && typeof r.custom_fields === "object"
+                                      ? (r.custom_fields as Record<string, unknown>)
+                                      : {},
                               first_name: r.first_name != null ? String(r.first_name) : null,
                               last_name: r.last_name != null ? String(r.last_name) : null,
                               linked_on_inquiry: r.linked_on_inquiry === true,
@@ -7036,6 +7042,12 @@ export default function AdminEntityDrawer() {
                     <OpportunityInquiryChildrenSection
                         rows={drawerChildRows}
                         opportunityId={drawer.id ?? undefined}
+                        opportunityDesiredStartDate={(() => {
+                            const raw =
+                                d.desired_start_date ??
+                                (d.metadata as Record<string, unknown> | null)?.desired_start_date;
+                            return typeof raw === "string" && raw.trim() ? raw.trim().slice(0, 10) : null;
+                        })()}
                         canEdit={!!canMutate}
                         embeddedInPremiumSection={oppCfg?.inquiry_drawer_mode === "workflow_v1"}
                         recordDetailPending={detailPending}
@@ -10946,27 +10958,6 @@ export default function AdminEntityDrawer() {
                                                                     <div className="mt-2.5 border-t border-alloy-stone/10 pt-2">
                                                                         <div className={tinyLabel}>What matters for this inquiry</div>
                                                                         <div className="mt-1.5 space-y-2">
-                                                                            <div>
-                                                                                <div className={tinyLabel}>Desired start</div>
-                                                                                <input
-                                                                                    type="date"
-                                                                                    value={toDateInputValue(formData.desired_start_date ?? d.desired_start_date)}
-                                                                                    onChange={(e) =>
-                                                                                        setFormData((prev) => ({
-                                                                                            ...prev,
-                                                                                            desired_start_date: e.target.value || null,
-                                                                                        }))
-                                                                                    }
-                                                                                    onBlur={() => {
-                                                                                        if (nonJobFormDirty) saveEdit();
-                                                                                    }}
-                                                                                    disabled={!canMutate}
-                                                                                    className={`${oppInqFieldInput} w-full`}
-                                                                                />
-                                                                                <p className="mt-0.5 text-[10px] text-alloy-midnight/45">
-                                                                                    Saves on blur to this inquiry.
-                                                                                </p>
-                                                                            </div>
                                                                             <div>
                                                                                 {drawer.id && drawer.id !== "new" ? (
                                                                                     <OpportunityInquiryTourDateBlock
