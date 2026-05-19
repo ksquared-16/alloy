@@ -217,6 +217,7 @@ function computeOpportunityOverviewSectionsLikeDrawer(
                 defaultExpanded: true,
                 collapsible: true,
                 gridCols: 1,
+                contentLayout: "block",
                 fields: [],
                 locked: true,
             },

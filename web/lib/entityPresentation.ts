@@ -83,6 +83,11 @@ export interface EntityDrawerSectionConfig {
   collapsible?: boolean;
   /** Grid columns for this section (1 or 2). */
   gridCols?: 1 | 2;
+  /**
+   * `block` — section body is not wrapped in the default field grid (custom tables, inquiry children).
+   * `fields-grid` (default) — children laid out with `gridCols`.
+   */
+  contentLayout?: "fields-grid" | "block";
   /** Ordered list of field keys (or full field configs) to show in this section. */
   fields: EntityDrawerFieldConfig[];
   /**

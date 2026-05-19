@@ -23,30 +23,34 @@ import {
     resolveInquiryChildDesiredStartDisplay,
     type InquiryChildFieldDefLike,
 } from "@/lib/fields/inquiryChildFieldRegistry";
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-/** Column template for one header/data row (inline style — dynamic Tailwind grid-cols is not compiled). */
-function inquiryChildRowGridTemplateColumns(showDesiredStart: boolean, customColumnCount: number): string {
-    const parts = ["minmax(6.5rem,1.05fr)", "minmax(6.25rem,6.5rem)"];
-    if (showDesiredStart) parts.push("minmax(5.75rem,6.25rem)");
-    for (let i = 0; i < customColumnCount; i++) parts.push("minmax(4.75rem,5.5rem)");
-    parts.push(
-        "minmax(4.75rem,5.5rem)",
-        "minmax(4.75rem,5.5rem)",
-        "minmax(4.25rem,5rem)",
-        "minmax(7rem,1.35fr)",
-        "minmax(2.75rem,auto)"
-    );
-    return parts.join(" ");
+/**
+ * Literal Tailwind grid templates (must not be built at runtime — JIT will not emit dynamic grid-cols).
+ * Child | DOB | Desired start | Program | Schedule | Outcome | Notes | View
+ */
+const INQUIRY_CHILD_DESKTOP_GRID_8 =
+    "grid grid-cols-[220px_120px_140px_150px_150px_130px_minmax(220px,1fr)_70px] items-center gap-2";
+const INQUIRY_CHILD_DESKTOP_GRID_7 =
+    "grid grid-cols-[220px_120px_150px_150px_130px_minmax(220px,1fr)_70px] items-center gap-2";
+const INQUIRY_CHILD_DESKTOP_GRID_8_CUSTOM_1 =
+    "grid grid-cols-[220px_120px_140px_120px_150px_150px_130px_minmax(200px,1fr)_70px] items-center gap-2";
+const INQUIRY_CHILD_DESKTOP_GRID_8_CUSTOM_2 =
+    "grid grid-cols-[220px_120px_140px_120px_120px_150px_150px_130px_minmax(180px,1fr)_70px] items-center gap-2";
+
+function inquiryChildDesktopGridClass(showDesiredStart: boolean, customColumnCount: number): string {
+    if (customColumnCount >= 2) return INQUIRY_CHILD_DESKTOP_GRID_8_CUSTOM_2;
+    if (customColumnCount === 1) return INQUIRY_CHILD_DESKTOP_GRID_8_CUSTOM_1;
+    if (showDesiredStart) return INQUIRY_CHILD_DESKTOP_GRID_8;
+    return INQUIRY_CHILD_DESKTOP_GRID_7;
 }
 
-const INQUIRY_CHILD_ROW_GRID_CLASS = "grid w-full min-w-[52rem] gap-x-1.5 gap-y-0 items-center";
-
 const INQUIRY_CHILD_COL_HDR =
-    "truncate text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/45 leading-none";
-/** Header row supplies labels; per-field labels stay hidden to keep one compact row. */
-const INQUIRY_CHILD_MOBILE_LABEL = "hidden";
-const INQUIRY_CHILD_CELL = "min-w-0 self-center";
+    "truncate text-[10px] font-semibold uppercase tracking-wide text-slate-400 leading-none";
+const INQUIRY_CHILD_MOBILE_LABEL =
+    "mb-0.5 text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/40 sm:hidden";
+/** One grid column — min-width only; no block stacking styles. */
+const INQUIRY_CHILD_CELL = "min-w-0";
 
 export type InquiryChildRow = {
     id: string;
@@ -327,15 +331,24 @@ export default function OpportunityInquiryChildrenSection({
             ),
         [fieldDefs]
     );
-    const rowGridStyle = useMemo<CSSProperties>(
-        () => ({
-            gridTemplateColumns: inquiryChildRowGridTemplateColumns(
-                showDesiredStartColumn,
-                customDrawerDefs.length
-            ),
-        }),
+    const desktopGridClass = useMemo(
+        () => inquiryChildDesktopGridClass(showDesiredStartColumn, customDrawerDefs.length),
         [showDesiredStartColumn, customDrawerDefs.length]
     );
+
+    const layoutDebugLoggedRef = useRef(false);
+    useEffect(() => {
+        if (process.env.NODE_ENV === "production" || layoutDebugLoggedRef.current) return;
+        layoutDebugLoggedRef.current = true;
+        console.info("[inquiry-children-layout] render mode", {
+            component: "OpportunityInquiryChildrenSection",
+            childCount: rows.length,
+            rowClassName: desktopGridClass,
+            gridTemplate: "static-tailwind",
+            showDesiredStart: showDesiredStartColumn,
+            customColumnCount: customDrawerDefs.length,
+        });
+    }, [rows.length, desktopGridClass, showDesiredStartColumn, customDrawerDefs.length]);
 
     const programLabelByKey = useMemo(() => new Map(programItems.map((i) => [i.item_key, i.label ?? i.item_key])), [programItems]);
     const scheduleLabelByKey = useMemo(() => new Map(scheduleItems.map((i) => [i.item_key, i.label ?? i.item_key])), [scheduleItems]);
@@ -468,14 +481,19 @@ export default function OpportunityInquiryChildrenSection({
     };
 
     return (
-        <div className={rootCol} data-inquiry-children-section="OpportunityInquiryChildrenSection">
+        <div
+            className={rootCol}
+            data-component="OpportunityInquiryChildrenSection"
+            data-inquiry-children-section="OpportunityInquiryChildrenSection"
+        >
             {loadErr ? <p className="mb-2 text-sm text-red-700">{loadErr}</p> : null}
             <div className={`${listWrap} overflow-x-auto`} role="region" aria-label="Inquiry children">
-                <div
-                    className={`${INQUIRY_CHILD_ROW_GRID_CLASS} sticky left-0 z-[1] border-b border-alloy-stone/15 bg-alloy-stone/[0.04] px-1.5 py-1`}
-                    style={rowGridStyle}
-                    role="row"
-                >
+                <div className="min-w-[1100px]" data-inquiry-children-desktop-table="true">
+                    <div
+                        className={`${desktopGridClass} sticky left-0 z-[1] border-b border-alloy-stone/15 bg-alloy-stone/[0.04] px-3 py-2`}
+                        data-inquiry-children-header-row="true"
+                        role="row"
+                    >
                     <div className={INQUIRY_CHILD_COL_HDR}>Child</div>
                     <div className={INQUIRY_CHILD_COL_HDR}>DOB / Age</div>
                     {showDesiredStartColumn ? <div className={INQUIRY_CHILD_COL_HDR}>{desiredStartLabel}</div> : null}
@@ -489,9 +507,8 @@ export default function OpportunityInquiryChildrenSection({
                     <div className={INQUIRY_CHILD_COL_HDR}>Outcome</div>
                     <div className={INQUIRY_CHILD_COL_HDR}>Notes</div>
                     <div className={`${INQUIRY_CHILD_COL_HDR} text-right`}>View</div>
-                </div>
-                <div>
-                {rows.map((r) => {
+                    </div>
+                    {rows.map((r) => {
                     const name = (r.display_name ?? "").trim() || "—";
                     const isMetadataOnly = (r.customer_member_id ?? "").startsWith("metadata_child:");
                     const age = (r.age ?? "").trim();
@@ -560,18 +577,16 @@ export default function OpportunityInquiryChildrenSection({
                     return (
                         <div
                             key={r.id}
-                            className={`border-b border-alloy-stone/8 px-1.5 py-0.5 last:border-b-0 ${rowAttentionClass}`}
+                            className={`${desktopGridClass} border-t border-alloy-stone/8 px-3 py-2 ${rowAttentionClass}`}
+                            data-inquiry-child-row="true"
                             data-inquiry-child-card="true"
                             role="row"
                         >
-                            <div className={INQUIRY_CHILD_ROW_GRID_CLASS} style={rowGridStyle}>
                             {!r.linked_on_inquiry && rowCanEdit ? (
                                 <p className="col-span-full pb-0.5 text-[9px] font-medium leading-tight text-alloy-midnight/45">
                                     Not on inquiry — saving program/schedule/outcome/notes links this child.
                                 </p>
                             ) : null}
-                                <div className={INQUIRY_CHILD_CELL}>
-                                    <div className={INQUIRY_CHILD_MOBILE_LABEL}>Child</div>
                                     {rowCanEdit ? (
                                         <div className="flex min-w-0 gap-1">
                                             <input
@@ -622,12 +637,7 @@ export default function OpportunityInquiryChildrenSection({
                                             {displayName}
                                         </span>
                                     )}
-                                </div>
-                                <div className={INQUIRY_CHILD_CELL}>
-                                    <div className={INQUIRY_CHILD_MOBILE_LABEL}>
-                                        DOB / Age
-                                    </div>
-                                    {rowCanEdit ? (
+                            {rowCanEdit ? (
                                         <div className="flex min-w-0 items-center gap-1">
                                             <input
                                                 type="date"
@@ -652,15 +662,9 @@ export default function OpportunityInquiryChildrenSection({
                                     ) : (
                                         <span className={`${readOnlyText} tabular-nums`}>{dobAge}</span>
                                     )}
-                                </div>
-                                {showDesiredStartColumn ? (
-                                    <div className={INQUIRY_CHILD_CELL}>
-                                        <div className={INQUIRY_CHILD_MOBILE_LABEL}>
-                                            {desiredStartLabel}
-                                        </div>
-                                        {rowCanEdit ? (
-                                            <>
-                                                <input
+                            {showDesiredStartColumn ? (
+                                rowCanEdit ? (
+                                    <input
                                                     type="date"
                                                     value={st.desired_start_edit}
                                                     disabled={saving}
@@ -688,9 +692,8 @@ export default function OpportunityInquiryChildrenSection({
                                                     }}
                                                     aria-label={`${desiredStartLabel} for ${displayName}`}
                                                 />
-                                            </>
-                                        ) : (
-                                            <span
+                                ) : (
+                                    <span
                                                 className={`${readOnlyText} tabular-nums ${desiredStartInherited ? "text-alloy-midnight/55" : ""}`}
                                                 title={
                                                     desiredStartInherited ?
@@ -703,17 +706,13 @@ export default function OpportunityInquiryChildrenSection({
                                                 : st.desired_start_edit ?
                                                     formatDate(st.desired_start_edit)
                                                 :   "—"}
-                                            </span>
-                                        )}
-                                    </div>
-                                ) : null}
+                                    </span>
+                                )
+                            ) : null}
                                 {customDrawerDefs.map((def) => {
                                     const customVal = st.custom[def.field_key] ?? "";
                                     return (
                                         <div key={def.field_key} className={INQUIRY_CHILD_CELL}>
-                                            <div className={INQUIRY_CHILD_MOBILE_LABEL}>
-                                                {(def.label ?? def.field_key).trim()}
-                                            </div>
                                             {rowCanEdit ? (
                                                 def.field_type === "date" ? (
                                                     <input
@@ -776,11 +775,7 @@ export default function OpportunityInquiryChildrenSection({
                                         </div>
                                     );
                                 })}
-                                <div className={INQUIRY_CHILD_CELL}>
-                                    <div className={INQUIRY_CHILD_MOBILE_LABEL}>
-                                        Program
-                                    </div>
-                                    {rowCanEdit ? (
+                            {rowCanEdit ? (
                                         <select
                                             value={st.desired_program_type}
                                             disabled={saving}
@@ -804,12 +799,7 @@ export default function OpportunityInquiryChildrenSection({
                                     ) : (
                                         <span className={readOnlyText}>{fallbackProgram}</span>
                                     )}
-                                </div>
-                                <div className={INQUIRY_CHILD_CELL}>
-                                    <div className={INQUIRY_CHILD_MOBILE_LABEL}>
-                                        Schedule
-                                    </div>
-                                    {rowCanEdit ? (
+                            {rowCanEdit ? (
                                         <select
                                             value={st.desired_schedule_type}
                                             disabled={saving}
@@ -833,12 +823,7 @@ export default function OpportunityInquiryChildrenSection({
                                     ) : (
                                         <span className={readOnlyText}>{fallbackSchedule}</span>
                                     )}
-                                </div>
-                                <div className={INQUIRY_CHILD_CELL}>
-                                    <div className={INQUIRY_CHILD_MOBILE_LABEL}>
-                                        Outcome
-                                    </div>
-                                    {rowCanEdit ? (
+                            {rowCanEdit ? (
                                         <select
                                             value={st.outcome_status_key}
                                             disabled={saving}
@@ -862,12 +847,7 @@ export default function OpportunityInquiryChildrenSection({
                                     ) : (
                                         <span className={readOnlyText}>{fallbackOutcome}</span>
                                     )}
-                                </div>
-                                <div className={INQUIRY_CHILD_CELL}>
-                                    <div className={INQUIRY_CHILD_MOBILE_LABEL}>
-                                        Notes
-                                    </div>
-                                    {rowCanEdit ? (
+                            {rowCanEdit ? (
                                         <input
                                             value={st.notes}
                                             disabled={saving}
@@ -892,8 +872,7 @@ export default function OpportunityInquiryChildrenSection({
                                             {normalizeKey(r.notes) ? String(r.notes).trim() : "—"}
                                         </span>
                                     )}
-                                </div>
-                                <div className={`${INQUIRY_CHILD_CELL} flex flex-col items-end justify-center gap-0`}>
+                            <div className="flex min-w-0 flex-col items-end justify-center gap-0">
                                     {onOpenChild ? (
                                         <button
                                             type="button"
@@ -912,7 +891,6 @@ export default function OpportunityInquiryChildrenSection({
                                     {rowCanEdit ? (
                                         <div className="min-h-[0.75rem] text-right leading-none">{rowStatus(r.id)}</div>
                                     ) : null}
-                                </div>
                             </div>
                         </div>
                     );
