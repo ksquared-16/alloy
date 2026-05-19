@@ -16,7 +16,7 @@ For any merge that changes behavior, include `docs/execution/operating-doctrine.
 |--------|-------|
 | `core/` | `system-overview.md`, `glossary.md` |
 | `system/` | `entity-model.md`, `actions-and-workflows.md`, `record-system.md`, `workspace-system.md`, `roles-and-permissions.md`, `configuration-system.md`, `api-contracts.md` |
-| `product/` | `crm-system.md`, `communications.md`, `documents-and-forms.md`, `billing-and-financials.md`, `ai-system.md` |
+| `product/` | `crm-system.md`, `communications.md`, `documents-and-forms.md`, `billing-and-financials.md`, `bos-foundation.md`, `ai-system.md` (stub) |
 | `execution/` | `operating-doctrine.md`, `roadmap-and-gaps.md` |
 
 **Consolidated (May 2026):** Former `execution/admin-settings-config-parity.md`, `execution/crm-opportunity-needs-attention-count-semantics.md`, `execution/crm-go-live-gap-analysis.md`, and `strategy/*` were merged into `system/configuration-system.md`, `system/workspace-system.md`, and `product/crm-system.md` / `documents-and-forms.md` to stay within the 16-topic cap. Historical copies may exist under `docs/archive/` if exported.
@@ -39,7 +39,8 @@ For any merge that changes behavior, include `docs/execution/operating-doctrine.
 - `product/communications.md` — Threads, canonical enqueue, worker delivery, webhooks, provider bindings (lead loop + workflows).
 - `product/documents-and-forms.md` — Document upload + **forms engine** (definitions, submissions, packets); long-term forms vision; **Enrollment Packet Phase 1 shipped**; Phase 2 **partially implemented**.
 - `product/billing-and-financials.md`
-- `product/ai-system.md` — Assistive AI groundwork (Orchestrator, Task Assist, etc.); **expansion paused** — human-in-the-loop only.
+- `product/bos-foundation.md` — **BOS** (orchestration intelligence layer): capabilities, lifecycle, safety doctrine, implementation inventory; **expansion paused** — human-in-the-loop only.
+- `product/ai-system.md` — Stub redirect to `bos-foundation.md` (preserves legacy links).
 
 **Execution / change management:**
 

@@ -1,0 +1,348 @@
+# BOS — Business Orchestration System
+
+## Purpose
+
+Define **BOS** as Alloy’s unified **orchestration intelligence layer**: how assistive capabilities are named, bounded, proposed, applied, and audited. This document preserves existing **AI safety doctrine** (configuration-not-execution, org scope, human-in-the-loop) while reframing product and engineering vocabulary from scattered “AI agent” labels to **BOS capabilities**.
+
+**This is not a rebuild.** BOS names and unifies what already ships: Orchestrator routing, specialist assists, deterministic insight, and audited config commits.
+
+**Implementation inventory** (routes, env gates, staging SQL) remains in this file under **§ Implementation inventory** (formerly `ai-system.md`).
+
+## Program status (execution)
+
+**May 2026:** **Deeper BOS capability expansion is paused.** Shipped surfaces are **assistive groundwork** — narrow, policy-gated, **human-in-the-loop**. Operational product loops take precedence — see **`docs/execution/roadmap-and-gaps.md`**.
+
+| Category | Status |
+|----------|--------|
+| **Shipped BOS capabilities** | Orchestrator, Task Assist, Workflow Assist (narrow), Needs Attention insight, Config/Layout Assist foundation, legacy `admin/agent` config commits |
+| **Config/Layout Assist expansion** | **Partially implemented** — apply catalog incomplete; **paused** |
+| **Autonomous orchestration** (enrollment, subsidy, director, monitoring) | **Not implemented** — **later** |
+
+## What BOS is
+
+| Term | Definition |
+|------|------------|
+| **BOS** | Alloy’s **orchestration intelligence layer** — routing, drafting, proposing, and explaining operator intent **through existing platform paths** (admin APIs, workflows, communications enqueue, config PATCH helpers, resolver reads). |
+| **BOS capability** | A **registered, bounded** assist function with a stable `capability_key`, explicit read/write class, and proposal/apply rules. Former “agents” (Task Assist, Workflow Assist, etc.) are **capabilities**, not parallel platforms. |
+| **Orchestrator** | The **single AdminV2 command-bar entry** that parses NL, resolves context, and **routes** to a capability. It **never** executes operational or config side effects itself. |
+| **Human operator** | Always the **delegating actor** for mutating applies; audit attributes `actor_user_id` + org. |
+
+**One-line doctrine (unchanged):** BOS **configures meaning and proposes operational drafts within guardrails**; the **platform** owns truth, authorization, workflows, ledger semantics, and execution.
+
+### Hard prohibitions (system-enforced)
+
+| Boundary | Rule |
+|----------|------|
+| **Data plane** | No direct DB writes from browser; no service role on client; no raw SQL from BOS paths. |
+| **Operational truth** | No silent PATCH to jobs, schedules, invoices, ledger, payments via BOS “config” shortcuts — use **canonical admin routes** after human approval. |
+| **Workflow execution** | No bypass of `emitEvent` / `executeWorkflowRun` / `executeAdminAction` for standardized side effects. |
+| **Queues** | Queue rows and drawer previews are **not** authoritative; resolve through entity APIs / RRS. |
+| **Cross-org** | All capabilities are **`org_id`-scoped** per request context. |
+| **Semantics** | No new resolver fields, `event_key` handlers, or visual-context families without **code** registration. |
+
+### Configuration vs operational capabilities
+
+| Class | May propose | May apply (after approval) | Examples |
+|-------|-------------|----------------------------|----------|
+| **Config** | Structured layout/field/queue/workflow-definition deltas | Same validation as Settings/admin PATCH or **DEFINER RPC** commits | Config/Layout Assist, `admin/agent/v0–v2`, Workflow Assist (workflow CRUD) |
+| **Operational** | Draft SMS/email, follow-ups, scheduled sends | `executeCommunicationsSend`, operational-tasks, scheduled-send APIs | Task Assist |
+| **Insight** | Deterministic suggestion + optional enrich | **No apply** (copy-only enrich) or **no persist** | Needs Attention suggestion, attention enrich |
+| **Orchestration** | Route, clarify, entity search | **None** | Orchestrator (`routeCommandSurface`) |
+
+## BOS capability map (shipped)
+
+| `capability_key` | Role | Route / module family | Apply path |
+|------------------|------|------------------------|------------|
+| `orchestrator` | NL → route → thread/cards | `web/lib/adminV2/aiCommandSurface/*`, `AICommandSurfaceShell` | None |
+| `task_assist` | One-off comms / follow-up drafts | `/api/admin/ai/task-assist/**` | `task-assist/apply`, communications send |
+| `workflow_assist` | Workflow definition propose/apply (disabled-by-default creates) | `/api/admin/ai/workflow-assist/**` | Workflow CRUD (`requireAdmin`) |
+| `config_layout_assist` | `ConfigurationProposalV1` for fields/sections/layout | `/api/admin/ai/config-layout-assist/**`, `config_layout_assist_proposals` | Partial apply catalog |
+| `needs_attention_suggestion` | Deterministic attention + draft templates | Resolver attach on opportunity GET | None (insight); enrich is separate |
+| `attention_enrich` | Optional LLM polish of deterministic draft | `POST …/enrich-attention-suggestion` | None (preview only) |
+| `job_overview_layout` | Job overview layout preview/apply (product route, not a “specialist agent”) | Orchestrator `job_layout` route + planner | `admin/agent/v1` pattern / layout cards |
+| `agent_v0_queue_definition` | Queue definition commit | `/api/admin/agent/v0/queue-definition` | `agent_v0_commit_queue_definition_apply` RPC |
+| `agent_v1_record_overview_layout` | Record overview layout commit | `/api/admin/agent/v1/record-overview-layout` | `agent_v1_commit_record_overview_layout_apply` RPC |
+| `agent_v2_field_visibility` | Field visibility flags | `/api/admin/agent/v2/field-visibility` | `agent_v2_commit_field_visibility_apply` RPC (env-gated) |
+
+**Product language:** Use **Orchestrator** and capability names in UX copy. **Code may retain** `commandSurface*`, `TaskAssist*`, `routeCommandSurface`, and `/api/admin/ai/*` until a phased rename (see sprint migration plan).
+
+## Shared lifecycle: intent → proposal → apply → audit
+
+All mutating BOS capabilities SHOULD converge on this lifecycle (implementation maturity varies).
+
+```
+Operator input (NL or structured)
+  → Intent / slots (capability-specific)
+  → Proposal (immutable candidate; versioned payload)
+  → Validation (intent + policy + platform/API)
+  → Review (human and/or RBAC + org ai_policy)
+  → Apply (canonical HTTP or DEFINER RPC only)
+  → Audit (proposal_id, actor, correlation_id, result)
+```
+
+### Lifecycle invariants
+
+1. **No apply before validation** for the target mutation class.
+2. **Orchestrator** stops at **route + propose-request**; it does not call apply endpoints.
+3. **Proposal IDs** are stable for idempotency, support, and rollback correlation.
+4. **Optimistic concurrency** on config commits (`expected_version` / `expected_updated_at`) — stale proposals MUST fail closed.
+5. **Insight capabilities** MAY skip persist/propose tables but MUST NOT imply execution without an explicit operator action on a separate capability.
+
+### Proposal status model (target standard)
+
+| Status | Meaning |
+|--------|---------|
+| `draft` | Built, not yet validated for apply |
+| `validated` | Passed server validation; await approval |
+| `approved` | Human/policy gate cleared (where required) |
+| `applied` | Canonical apply succeeded |
+| `rejected` | Operator or policy declined |
+| `superseded` | Newer proposal replaced this one |
+| `failed` | Apply attempted and failed (retain audit) |
+| `expired` | TTL or stale version (optional policy) |
+
+**Today:** Config/Layout Assist and `task_assist_proposals` use DB-backed statuses; Task Assist ephemeral suggestions use deterministic `suggestion_id`; Workflow Assist uses in-memory/response proposals; `agent_v0/v1/v2` use `agent_*_proposals` + apply audit tables. Phase 2 should align **names and transitions** without mandatory table merge.
+
+## `BosCapability` contract (TypeScript target)
+
+Introduce a **shared types module** (Phase 2 — do not mass-rename yet):
+
+**Target path:** `web/lib/bos/bosCapability.ts` (re-export from `web/lib/bos/index.ts`)
+
+```typescript
+/** Stable registry key — matches product capability_key. */
+export type BosCapabilityKey =
+    | "orchestrator"
+    | "task_assist"
+    | "workflow_assist"
+    | "config_layout_assist"
+    | "needs_attention_suggestion"
+    | "attention_enrich"
+    | "job_overview_layout"
+    | "agent_v0_queue_definition"
+    | "agent_v1_record_overview_layout"
+    | "agent_v2_field_visibility";
+
+export type BosCapabilityClass = "orchestration" | "config" | "operational" | "insight";
+
+export type BosReadClass =
+    | "config_inventory"
+    | "resolver_entity"
+    | "workspace_metadata"
+    | "workflow_read"
+    | "communications_context";
+
+export type BosWriteClass =
+    | "none"
+    | "config_api"
+    | "definer_rpc"
+    | "operational_api"
+    | "workflow_crud";
+
+export type BosCapabilityDefinition = {
+    capability_key: BosCapabilityKey;
+    capability_class: BosCapabilityClass;
+    display_name: string;
+    /** Maps legacy agent_key where different. */
+    legacy_agent_keys?: readonly string[];
+    read_classes: readonly BosReadClass[];
+    write_class: BosWriteClass;
+    /** Org metadata.ai_policy feature flags required to propose (empty = none). */
+    org_policy_features: readonly string[];
+    /** Permission keys for propose (empty = route-specific defaults). */
+    propose_permission_keys: readonly string[];
+    /** Permission keys for apply (empty = route-specific defaults). */
+    apply_permission_keys: readonly string[];
+    proposal_persistence: "none" | "ephemeral" | "durable_table";
+    durable_table?: string;
+    apply_route_family?: string;
+    requires_human_approval: boolean;
+};
+
+export type BosProposalEnvelopeV1 = {
+    version: 1;
+    capability_key: BosCapabilityKey;
+    proposal_id: string;
+    org_id: string;
+    actor_user_id: string;
+    generated_at_iso: string;
+    source_surface: string;
+    status: /* BosProposalStatus */ string;
+    payload: unknown; // capability-specific; typed per capability module
+    correlation_id?: string | null;
+    request_id?: string | null;
+};
+```
+
+**Mapping rule:** Each capability module keeps its **strongly typed** proposal (`TaskAssistSuggestionV1`, `WorkflowAssistSuggestionV1`, `ConfigurationProposalV1`, …) and implements `toBosProposalEnvelopeV1()` when crossing Orchestrator or audit boundaries.
+
+## Capability boundaries (by domain)
+
+### Config capabilities
+
+- **May** read admin config inventories and integrity reports (`configuration-system.md` four-plane model).
+- **May** write only through validated PATCH helpers or DEFINER RPC commits.
+- **Must not** invent `event_key`, overview keys, or exception predicates outside code catalogs.
+- **Representatives:** `config_layout_assist`, `agent_v0_*`, `agent_v1_*`, `agent_v2_*`.
+
+### Workflow capabilities
+
+- **May** propose/create/edit/pause **workflow definitions** (metadata, scaffolds) — default **disabled** on create.
+- **Must** use existing `POST/PATCH/DELETE /api/admin/workflows` on apply.
+- **Must not** run `executeWorkflowRun` from propose paths.
+- **Representative:** `workflow_assist`.
+
+### Task / operational capabilities
+
+- **May** draft one-off communications and operational tasks for **approved** entities.
+- **Must** re-resolve recipients and channels server-side on apply.
+- **Must** use `executeCommunicationsSend` / scheduled-send / operational-task services.
+- **Representative:** `task_assist`.
+
+### Communication-related insight
+
+- **May** enrich copy for operator preview only.
+- **Must not** enqueue or persist sends from enrich routes.
+- **Representative:** `attention_enrich` (extends `needs_attention_suggestion` drafts).
+
+### Insight capabilities
+
+- **May** derive structured suggestions from resolver output (deterministic).
+- **Must not** reorder queues or mutate records without operator action elsewhere.
+- **Representative:** `needs_attention_suggestion`.
+
+## Proposed folder / module standard (Phase 2 target)
+
+**Principle:** Add **`web/lib/bos/`** as a thin **registry + lifecycle + types** layer; **do not** move all specialist logic in Phase 1.
+
+| Layer | Current (keep) | Phase 2 target |
+|-------|----------------|----------------|
+| Orchestrator UI | `web/app/adminV2/components/aiCommandSurface/` | Same path; import from `@/lib/bos/orchestrator` barrel |
+| Orchestrator routing | `web/lib/adminV2/aiCommandSurface/` | Re-export `routeCommandSurface` from `web/lib/bos/orchestrator/` |
+| Capability logic | `web/lib/agent/{taskAssist,workflowAssist,configLayoutAssist,needsAttentionSuggestion,v0,v1,v2,planner}/` | Unchanged; add `capabilityKey` in registry pointing here |
+| Shared AI provider | `web/lib/ai/` | Unchanged; BOS capabilities call into `lib/ai` for gated LLM |
+| HTTP — operational AI | `web/app/api/admin/ai/` | Keep URL prefix (**no blind rename**); handlers import `@/lib/bos/auth` helpers |
+| HTTP — config commits | `web/app/api/admin/agent/` | Keep; document as **BOS config commit** family |
+| Tests | `web/tests/agent/`, `web/tests/adminV2/commandSurface*` | Add `web/tests/bos/` for registry + envelope only |
+
+**Docs:** Active doctrine = this file. Sprint audits = `docs/sprints/05_2026/bos_standardization_*.md`. Archived AI agent contracts = `docs/archive/2026-05-02-docs-reset/architecture/ai-agent-*.md` (historical shapes; prefer BOS sections here for new work).
+
+## Orchestrator + specialists (AdminV2)
+
+The bottom **command bar** is the **Orchestrator** surface. Operators use one input; Orchestrator parses intent, resolves entity/context, routes to a capability, and shows clarification or candidates in a **thread**.
+
+| Capability | Shipped | Notes |
+|------------|---------|-------|
+| **Orchestrator** | Yes | `AICommandSurfaceShell`, `routeCommandSurface` |
+| **Task Assist** | Yes | Human approval before send/apply |
+| **Workflow Assist** | Yes (narrow) | Deterministic propose; admin apply |
+| **Config / Layout Assist** | Partial | Durable proposals; partial apply |
+| **Job overview layout** | Yes | Routed as `job_layout` |
+
+## Policy and permissions
+
+**Doctrine:** `metadata.ai_policy` = org capability switch. `role_permission_grants` + portal `admin`/`ops` = user may call routes. Orchestrator **never** executes side effects.
+
+See **§ Implementation inventory — Agent permission matrix** for the full route table.
+
+## Guardrails (safety doctrine preserved)
+
+- No direct client DB secrets; no training on production PII without policy.
+- Configuration updates use the same validation as human admins (DEFINER RPC + stale-check + audit where implemented).
+- Do not bypass `executeAdminAction` / events when standardized there.
+- LLM calls: redaction, org policy, env gates, permission keys — see `web/lib/ai/**`.
+
+## Relationship to platform docs
+
+| Topic | Doc |
+|-------|-----|
+| Config control plane | `docs/system/configuration-system.md` § BOS readiness |
+| Workflows / events | `docs/system/actions-and-workflows.md` |
+| API families | `docs/system/api-contracts.md` |
+| Workspace / queues | `docs/system/workspace-system.md` |
+| Execution pause | `docs/execution/roadmap-and-gaps.md` |
+| Historical typed contract | `docs/archive/.../architecture/ai-agent-system-contract.md` |
+
+## When this doc must be updated
+
+New BOS capabilities, lifecycle/status changes, permission matrix changes, or when `web/lib/bos` registry ships.
+
+---
+
+## Implementation inventory
+
+*The following sections document **actual** routes and env gates in `web/` (formerly the standalone AI system topic file).*
+
+### AdminV2 agent model (Orchestrator + specialists)
+
+The bottom **command bar** is the **Orchestrator Agent** surface — not Task Assist. Operators talk to one input; the Orchestrator parses intent, resolves entity/context, routes to a specialist, and shows clarification or candidate selection in a **thread**. The Orchestrator **never directly executes** operational side effects (no auto-send, no workflow writes).
+
+| Agent | Role | Shipped today |
+|-------|------|----------------|
+| **Orchestrator** | Owns **`AICommandSurfaceShell`**, **`routeCommandSurface`** (`commandSurfaceRouter.ts`), slot extract, entity-search orchestration, thread + action-card shell | **Yes** (Interaction Layer V1) |
+| **Task Assist (Agent #2)** | One-off operational actions: draft SMS/email, scheduled sends, reminders/tasks, proposal lifecycle — **human approval required** | **Yes** — routed destination; UI in action cards + **`TaskAssistOpportunityWorkspace`**; APIs under **`/api/admin/ai/task-assist/**`**, **`communication-scheduled-sends`**, **`operational-tasks`** |
+| **Workflow Assist (Agent #3)** | Workflow configuration, oversight summaries, deterministic **propose** + admin-only **apply** over existing workflow CRUD — **no LLM** in default path; human approval before apply | **Yes (narrow)** — workflow-like NL → **`workflow_assist`** route → read **`workflow_assist_read`** cards and/or **create** commands → **`workflow_assist_proposal`** (disabled draft templates: tour reminder, when/move stub) → **`POST …/workflow-assist/propose`** / **`apply`**; Explain v1 + optional name lookup via Task Assist entity search |
+| **Config / Layout Assist** | Audited **`ConfigurationProposalV1`** for field/section/drawer/queue changes — propose via Orchestrator; lifecycle on **`config_layout_assist_proposals`** | **Partially implemented** — **`POST …/config-layout-assist/propose`**, proposal GET/state routes, **partial** apply catalog; permissions **`config_assist.review`** / **`config_assist.apply`** (seed **`20260523150000`**) |
+
+**Also routed (non-agent product):** **Job overview layout** commands use the same Orchestrator input → layout preview/apply card (`job_layout` route) — distinct from Task Assist, Workflow Assist, and Config/Layout Assist.
+
+**Implementation names:** Product language uses **Orchestrator** for the command bar. Code may retain **`commandSurface*`**, **`TaskAssist*`**, and **`routeCommandSurface`** — those modules implement Orchestrator routing and Task Assist execution respectively.
+
+### Current state (routes)
+
+- **Agent APIs (Implemented):** All under **`web/app/api/admin/agent/`**:
+  - **`.../v0/queue-definition`** — queue definition updates (tests reference this family).
+  - **`.../v1/record-overview-layout`**, **`.../v1/activity`**.
+  - **`.../v2/field-visibility`** — structured apply path; **disabled unless** **`AGENT_V2_FIELD_VISIBILITY_ENABLED`** is `true`/`1`/`yes` (see `web/app/api/admin/agent/v2/field-visibility/route.ts`).
+- **Admin V2 UI** may surface AI/command UX under **`web/app/adminV2/`** (search `ai`, `agent` in subtree).
+- **AI enrichment (stub + OpenAI-compatible + telemetry):** **`POST /api/admin/ai/enrich-attention-suggestion`** — see route validation in **`web/lib/ai/enrichAttentionSuggestionRouteValidation.ts`**; tests **`web/tests/ai/enrichAttentionSuggestionRoute.test.ts`**.
+- **Task Assist V1 / V1.1:** **`POST /api/admin/ai/task-assist/propose`**, **`apply`**, proposals routes; spec sprints **`task_assist_v1.md`**, **`task_assist_v1_1.md`**.
+- **Workflow Assist V1:** **`POST /api/admin/ai/workflow-assist/propose`**, **`apply`**, **`explain`**, **`capabilities`**; spec **`workflow_assist_v1.md`**.
+- **Orchestrator:** **`NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED`**; sprints **`agent_interaction_layer_v1.md`**.
+
+### Agent permission matrix (org policy vs user RBAC)
+
+| Surface / API | Org policy | User capability | Implementation |
+|---------------|------------|-----------------|----------------|
+| **Orchestrator** (client parse, thread) | — | Portal **`admin` or `ops`** (same shell as AdminV2) | UI + downstream APIs |
+| **Entity search** | — | **`requireAdminOrOps`** + access scope | `GET /api/admin/ai/task-assist/entity-search` |
+| **Task Assist propose** | `ai_policy` + **`task_assist_draft`** + provider + env | **`resolveAiEnrichmentPortalAccess`**: strict → **`ai.enrichment.use`**; legacy → portal **admin or ops** | `POST /api/admin/ai/task-assist/propose` |
+| **Workflow Assist propose** | `ai_policy` + **`workflow_assist_draft`** + provider + env | **`requireAdmin`** + same portal resolution as Task Assist propose | `POST /api/admin/ai/workflow-assist/propose` |
+| **Attention enrich (stub/OpenAI)** | `draft_enrichment`, provider | Same **`resolveAiEnrichmentPortalAccess`** | `POST /api/admin/ai/enrich-attention-suggestion` |
+| **Task Assist send / composer send** | — | **`requireAdminOrOps`** + **`assertCommunicationsSendAllowed`** | `POST .../task-assist/apply`, `POST .../communications/send` |
+| **Workflow CRUD (mutations)** | — | **`requireAdmin`** (admin-only) | `POST/PATCH/DELETE .../workflows` |
+
+### Agent #1 — Needs attention suggestion + Enhance draft
+
+- **Deterministic suggestion + drafts:** **`buildNeedsAttentionSuggestion`** + **`suggestedContentTemplates.ts`**. Drawer: **`OperationalAttentionHeaderStrip`** + **`OperationalAttentionEnhanceDraft`**.
+- **Token / live model:** Only on explicit **Enhance draft** → **`POST /api/admin/ai/enrich-attention-suggestion`**.
+
+### SECURITY DEFINER RPCs (config mutations)
+
+| Function | Config target |
+|----------|----------------|
+| **`agent_v0_commit_queue_definition_apply`** | **`work_units.queue_definition`** |
+| **`agent_v1_commit_record_overview_layout_apply`** | Record overview layout JSON |
+| **`agent_v2_commit_field_visibility_apply`** | **`field_definitions`** visibility flags |
+
+### Source of truth / key files
+
+| Concern | Location |
+|---------|----------|
+| BOS registry (Phase 2) | `web/lib/bos/` (planned) |
+| Agent routes | `web/app/api/admin/agent/**`, `web/app/api/admin/ai/**` |
+| Agent logic | `web/lib/agent/**` |
+| Orchestrator | `web/lib/adminV2/aiCommandSurface/**` |
+| AI provider | `web/lib/ai/**` |
+| Tests | `web/tests/agent/`, `web/tests/adminV2/commandSurface*` |
+
+### Known gaps / risks
+
+- Model logging/redaction beyond current `web/lib/ai` gates.
+- Config/Layout Assist apply catalog incomplete.
+- Autonomous capabilities not implemented.
+- **Paused:** New capabilities and Orchestrator growth beyond maintenance.
+
+### Manual staging validation checklist
+
+See prior **`ai-system.md`** staging SQL and env tables — unchanged for pilots. Prefer migration **`20260522180000_staging_demo_org_ai_policy_task_assist_draft.sql`** for Task Assist stub policy merges.
