@@ -15,6 +15,7 @@ import type { FieldRegistryAttachMeta } from "@/lib/admin/entityFieldRegistryAtt
 import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
 import { batchOptionItemLabelsForOrg, optionLabelFromBatchMap } from "@/lib/admin/optionItemLabelForOrg";
 import {
+  isActiveChildCustomerMemberForInquiry,
   mergeHouseholdActiveChildrenIntoInquiryChildren,
   type InquiryChildHydrateRow,
 } from "@/lib/admin/drawer/inquiryChildrenHydration";
@@ -488,7 +489,7 @@ async function respondOpportunityRelationshipMemberOverlay(
         const r = await supabase
           .from("customer_members")
           .select(
-            "id, display_name, relationship, dob, person_id, first_name, last_name, metadata",
+            "id, display_name, relationship, dob, person_id, first_name, last_name, metadata, is_active",
           )
           .eq("org_id", orgId)
           .eq("customer_id", householdId)
@@ -1410,7 +1411,7 @@ export async function respondOpportunityEntityGet(
         const r = await supabase
           .from("customer_members")
           .select(
-            "id, display_name, relationship, dob, person_id, first_name, last_name, metadata",
+            "id, display_name, relationship, dob, person_id, first_name, last_name, metadata, is_active",
           )
           .eq("org_id", orgId)
           .eq("customer_id", householdId)
@@ -1637,6 +1638,21 @@ export async function respondOpportunityEntityGet(
   );
   const inquiryChildrenOut = applyInquiryChildrenMetadataFallbacks(inquiryChildrenMerged, oppMeta, id);
   out._inquiry_children = inquiryChildrenOut;
+  if (process.env.NODE_ENV !== "production") {
+    out._debug_inquiry_children = {
+      opportunity_id: id,
+      customer_id: householdId,
+      bootstrap_customer_member_rows: bootstrapList.length,
+      bootstrap_active_child_rows: bootstrapList.filter((m) =>
+        isActiveChildCustomerMemberForInquiry(m as Record<string, unknown>)
+      ).length,
+      ocm_join_rows: jrows.length,
+      after_ocm_map: inquiryBlocks.length,
+      after_household_merge: inquiryChildrenMerged.length,
+      after_metadata_fallback: inquiryChildrenOut.length,
+      child_customer_member_ids: inquiryChildrenOut.map((c) => c.customer_member_id),
+    };
+  }
   markPhase("after_inquiry_children_resolved");
   lapSegment("inquiry_children_metadata_fallbacks");
 

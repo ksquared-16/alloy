@@ -14,6 +14,11 @@ describe("inquiryChildrenHydration", () => {
         expect(isActiveChildCustomerMemberForInquiry({ relationship: "child", is_active: false })).toBe(false);
     });
 
+    it("treats bootstrap rows without is_active column as active children (drawer SELECT parity)", () => {
+        expect(isActiveChildCustomerMemberForInquiry({ relationship: "child" })).toBe(true);
+        expect(isActiveChildCustomerMemberForInquiry({ relationship: "child", is_active: null })).toBe(true);
+    });
+
     it("merges household children missing from OCM join rows (drawer count matches work-unit active-child rule)", () => {
         const linked: InquiryChildHydrateRow[] = [
             {

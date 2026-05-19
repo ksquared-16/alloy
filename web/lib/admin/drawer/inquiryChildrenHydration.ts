@@ -84,11 +84,16 @@ function ageFromDobIso(dobIso: string | null | undefined): { label: string } | n
     return { label };
 }
 
-/** Matches work-unit queue child membership filter (`QueueService.isActiveChildCustomerMemberRow`). */
+/**
+ * Matches work-unit queue child membership filter (`QueueService.isActiveChildCustomerMemberRow`).
+ * Drawer bootstrap queries use `.eq("is_active", true)` but historically omitted `is_active` from SELECT;
+ * treat omitted/null as active for `relationship=child` so merge matches queue row counts.
+ */
 export function isActiveChildCustomerMemberForInquiry(row: Record<string, unknown>): boolean {
     const rel = String(row.relationship ?? "").trim().toLowerCase();
     if (rel !== "child") return false;
-    return row.is_active === true;
+    if (row.is_active === false) return false;
+    return row.is_active === true || row.is_active === undefined || row.is_active === null;
 }
 
 export const UNLINKED_INQUIRY_CHILD_ID_PREFIX = "unlinked:";
