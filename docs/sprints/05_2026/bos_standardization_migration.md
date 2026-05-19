@@ -18,63 +18,29 @@
 
 ---
 
-## Phase 2 — Minimal repo changes (ordered)
+## Phase 2 — Registry + proposal envelope — Done (2026-05-18)
 
-### Step 1 — Registry (no moves)
+| Step | Status | Notes |
+|------|--------|-------|
+| Registry | **Done** | `web/lib/bos/bosCapabilityRegistry.ts` — 10 capabilities |
+| Envelope types | **Done** | `web/lib/bos/bosProposalEnvelope.ts` |
+| Adapters | **Done** | Task, Workflow, Config, Needs Attention (`web/lib/bos/adapters/`) |
+| Command metadata | **Done** | Optional `capability_key` on action cards; `withCommandSurfaceCardCapabilityKey()` |
+| Tests | **Done** | `web/tests/bos/**` (12 tests) |
+| Docs | **Done** | `bos-foundation.md`, this file, `bos_registry_proposal_envelope_phase_2.md` |
+| Auth barrel | **Deferred** | Phase 3 — no behavior change required yet |
 
-Create:
+Sprint detail: **`docs/sprints/05_2026/bos_registry_proposal_envelope_phase_2.md`**.
 
-```
-web/lib/bos/
-  index.ts
-  bosCapability.ts          # BosCapabilityKey, BosCapabilityDefinition, registry array
-  bosProposalLifecycle.ts   # BosProposalStatus, transition helpers (validate only)
-  bosProposalEnvelope.ts    # BosProposalEnvelopeV1 type + narrow helpers
-```
+### Phase 2 checklist (acceptance)
 
-Populate registry from audit §3 with `legacy_agent_keys` mapping:
-
-| `capability_key` | `legacy_agent_keys` |
-|------------------|---------------------|
-| `task_assist` | `task_assist` |
-| `workflow_assist` | `workflow_assist` |
-| `config_layout_assist` | `config_layout_assist` |
-| `needs_attention_suggestion` | `needs_attention_suggestion` |
-| `agent_v0_queue_definition` | (none) |
-| … | … |
-
-**Tests:** `web/tests/bos/bosCapabilityRegistry.test.ts` — snapshot registry keys and `requires_human_approval`.
-
-### Step 2 — Envelope adapters (optional per capability)
-
-| Module | Adapter |
-|--------|---------|
-| `web/lib/agent/taskAssist/types.ts` | `taskAssistSuggestionToBosEnvelope()` |
-| `web/lib/agent/workflowAssist/workflowAssistProposalV1.ts` | `workflowAssistSuggestionToBosEnvelope()` |
-| `web/lib/agent/configLayoutAssist/configurationProposalV1.ts` | `configurationProposalToBosEnvelope()` |
-
-Use in **audit logging / future Orchestrator metadata only** — do not change API response shapes yet.
-
-### Step 3 — Auth helper barrel (optional)
-
-`web/lib/bos/auth/resolveBosPortalAccess.ts` — re-export `resolveAiEnrichmentPortalAccess` + document capability-specific gates. **No behavior change.**
-
-### Step 4 — Active doc cross-links
-
-Update **active topic files only** (not every sprint archive):
-
-- `docs/README.md` — load `product/bos-foundation.md`
-- `docs/core/system-overview.md`
-- `docs/execution/roadmap-and-gaps.md`
-- `docs/system/configuration-system.md` — link BOS foundation § config capabilities
-
-Leave `docs/sprints/**` references to `ai-system.md` (stub redirects).
-
-### Step 5 — Orchestrator metadata (optional UX)
-
-Thread cards: add `capability_key` field alongside existing `agent_key` in **new** responses only (backward compatible).
-
-**Do not rename** `AICommandSurfaceShell` file in Phase 2 unless paired with grep-driven import pass and test run.
+- [x] `cd web && npx tsc --noEmit` passes
+- [x] `npm run test -- tests/bos` passes
+- [x] No route/folder rename
+- [x] No new mutation path
+- [x] Registry importable from `@/lib/bos`
+- [x] ≥2 proposal families normalize via adapters (4 shipped)
+- [x] `raw_payload` preserves native objects
 
 ---
 
@@ -139,7 +105,7 @@ Thread cards: add `capability_key` field alongside existing `agent_key` in **new
 
 ---
 
-## Phase 2 readiness checklist
+## Phase 3 readiness checklist
 
 Use before starting **new** BOS capabilities or resuming paused expansion.
 

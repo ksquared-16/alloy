@@ -101,80 +101,52 @@ Operator input (NL or structured)
 | `failed` | Apply attempted and failed (retain audit) |
 | `expired` | TTL or stale version (optional policy) |
 
-**Today:** Config/Layout Assist and `task_assist_proposals` use DB-backed statuses; Task Assist ephemeral suggestions use deterministic `suggestion_id`; Workflow Assist uses in-memory/response proposals; `agent_v0/v1/v2` use `agent_*_proposals` + apply audit tables. Phase 2 should align **names and transitions** without mandatory table merge.
+**Today:** Native proposal tables and lifecycles remain separate. Adapters map config-assist states via `mapConfigLayoutAssistStateToBosStatus` without merging tables.
 
-## `BosCapability` contract (TypeScript target)
+## Capability registry (Phase 2 — shipped)
 
-Introduce a **shared types module** (Phase 2 — do not mass-rename yet):
+**Source of truth:** `web/lib/bos/bosCapabilityRegistry.ts` — `BOS_CAPABILITY_REGISTRY` (10 audited capabilities).
 
-**Target path:** `web/lib/bos/bosCapability.ts` (re-export from `web/lib/bos/index.ts`)
+| Field | Purpose |
+|-------|---------|
+| `capability_key` | Stable registry id |
+| `label` | Operator-facing name |
+| `domain` | `orchestration` \| `config` \| `operational` \| `insight` |
+| `proposal_mode` | `none` \| `ephemeral` \| `durable` |
+| `apply_policy` | e.g. `human_approved_operational_api`, `none`, `preview_only` |
+| `default_risk_level` | `none` \| `low` \| `medium` \| `high` |
+| `requires_human_approval` | Mutating apply expects explicit operator gate |
+| `legacy_agent_keys` | Native `agent_key` strings |
+| `source_modules` | Implementation path hints |
 
-```typescript
-/** Stable registry key — matches product capability_key. */
-export type BosCapabilityKey =
-    | "orchestrator"
-    | "task_assist"
-    | "workflow_assist"
-    | "config_layout_assist"
-    | "needs_attention_suggestion"
-    | "attention_enrich"
-    | "job_overview_layout"
-    | "agent_v0_queue_definition"
-    | "agent_v1_record_overview_layout"
-    | "agent_v2_field_visibility";
+**Import:** `import { BOS_CAPABILITY_REGISTRY, getBosCapabilityDefinition } from "@/lib/bos"`.
 
-export type BosCapabilityClass = "orchestration" | "config" | "operational" | "insight";
+## Proposal envelope (Phase 2 — shipped)
 
-export type BosReadClass =
-    | "config_inventory"
-    | "resolver_entity"
-    | "workspace_metadata"
-    | "workflow_read"
-    | "communications_context";
+**Types:** `web/lib/bos/bosProposalEnvelope.ts` — `BosProposalEnvelopeV1`.
 
-export type BosWriteClass =
-    | "none"
-    | "config_api"
-    | "definer_rpc"
-    | "operational_api"
-    | "workflow_crud";
+| Field | Purpose |
+|-------|---------|
+| `proposal_id`, `capability_key`, `agent_key` | Identity (+ legacy) |
+| `domain`, `status`, `risk_level`, `requires_approval` | Policy / lifecycle |
+| `summary`, `affected_surfaces`, `validation`, `warnings`, `diff` | Review UX |
+| `source`, `created_at` | Provenance |
+| `raw_payload` | **Unmodified** native proposal (authoritative for apply) |
 
-export type BosCapabilityDefinition = {
-    capability_key: BosCapabilityKey;
-    capability_class: BosCapabilityClass;
-    display_name: string;
-    /** Maps legacy agent_key where different. */
-    legacy_agent_keys?: readonly string[];
-    read_classes: readonly BosReadClass[];
-    write_class: BosWriteClass;
-    /** Org metadata.ai_policy feature flags required to propose (empty = none). */
-    org_policy_features: readonly string[];
-    /** Permission keys for propose (empty = route-specific defaults). */
-    propose_permission_keys: readonly string[];
-    /** Permission keys for apply (empty = route-specific defaults). */
-    apply_permission_keys: readonly string[];
-    proposal_persistence: "none" | "ephemeral" | "durable_table";
-    durable_table?: string;
-    apply_route_family?: string;
-    requires_human_approval: boolean;
-};
+### Adapters (wrap only)
 
-export type BosProposalEnvelopeV1 = {
-    version: 1;
-    capability_key: BosCapabilityKey;
-    proposal_id: string;
-    org_id: string;
-    actor_user_id: string;
-    generated_at_iso: string;
-    source_surface: string;
-    status: /* BosProposalStatus */ string;
-    payload: unknown; // capability-specific; typed per capability module
-    correlation_id?: string | null;
-    request_id?: string | null;
-};
-```
+| Native type | Function |
+|-------------|----------|
+| `TaskAssistSuggestionV1` | `taskAssistSuggestionToBosProposalEnvelope()` |
+| `WorkflowAssistSuggestionV1` | `workflowAssistSuggestionToBosProposalEnvelope()` |
+| `ConfigurationProposalV1` | `configurationProposalToBosProposalEnvelope()` |
+| `AttentionSuggestionV1` | `needsAttentionSuggestionToBosProposalEnvelope()` |
 
-**Mapping rule:** Each capability module keeps its **strongly typed** proposal (`TaskAssistSuggestionV1`, `WorkflowAssistSuggestionV1`, `ConfigurationProposalV1`, …) and implements `toBosProposalEnvelopeV1()` when crossing Orchestrator or audit boundaries.
+Existing APIs keep native shapes. Envelopes are for metadata, logging, and future admin views.
+
+### Command surface metadata
+
+Optional `capability_key` on action cards (`CommandSurfaceCardBosMetadata`). Helper: `withCommandSurfaceCardCapabilityKey()`.
 
 ## Capability boundaries (by domain)
 
@@ -211,19 +183,17 @@ export type BosProposalEnvelopeV1 = {
 - **Must not** reorder queues or mutate records without operator action elsewhere.
 - **Representative:** `needs_attention_suggestion`.
 
-## Proposed folder / module standard (Phase 2 target)
+## Folder / module standard (as-built)
 
-**Principle:** Add **`web/lib/bos/`** as a thin **registry + lifecycle + types** layer; **do not** move all specialist logic in Phase 1.
-
-| Layer | Current (keep) | Phase 2 target |
-|-------|----------------|----------------|
-| Orchestrator UI | `web/app/adminV2/components/aiCommandSurface/` | Same path; import from `@/lib/bos/orchestrator` barrel |
-| Orchestrator routing | `web/lib/adminV2/aiCommandSurface/` | Re-export `routeCommandSurface` from `web/lib/bos/orchestrator/` |
-| Capability logic | `web/lib/agent/{taskAssist,workflowAssist,configLayoutAssist,needsAttentionSuggestion,v0,v1,v2,planner}/` | Unchanged; add `capabilityKey` in registry pointing here |
-| Shared AI provider | `web/lib/ai/` | Unchanged; BOS capabilities call into `lib/ai` for gated LLM |
-| HTTP — operational AI | `web/app/api/admin/ai/` | Keep URL prefix (**no blind rename**); handlers import `@/lib/bos/auth` helpers |
-| HTTP — config commits | `web/app/api/admin/agent/` | Keep; document as **BOS config commit** family |
-| Tests | `web/tests/agent/`, `web/tests/adminV2/commandSurface*` | Add `web/tests/bos/` for registry + envelope only |
+| Layer | Path | Notes |
+|-------|------|-------|
+| BOS registry + envelope | `web/lib/bos/` | `bosCapabilityRegistry.ts`, `bosProposalEnvelope.ts`, `adapters/` |
+| Orchestrator UI / routing | `web/lib/adminV2/aiCommandSurface/` | Unchanged |
+| Capability logic | `web/lib/agent/**` | Unchanged — registry `source_modules` points here |
+| Shared AI provider | `web/lib/ai/` | Enrich + gated LLM |
+| HTTP — operational | `web/app/api/admin/ai/` | **No rename** |
+| HTTP — config commits | `web/app/api/admin/agent/` | BOS config-commit family |
+| Tests | `web/tests/bos/` | Registry + adapters + command metadata |
 
 **Docs:** Active doctrine = this file. Sprint audits = `docs/sprints/05_2026/bos_standardization_*.md`. Archived AI agent contracts = `docs/archive/2026-05-02-docs-reset/architecture/ai-agent-*.md` (historical shapes; prefer BOS sections here for new work).
 
@@ -329,7 +299,7 @@ The bottom **command bar** is the **Orchestrator Agent** surface — not Task As
 
 | Concern | Location |
 |---------|----------|
-| BOS registry (Phase 2) | `web/lib/bos/` (planned) |
+| BOS registry + envelope | `web/lib/bos/` |
 | Agent routes | `web/app/api/admin/agent/**`, `web/app/api/admin/ai/**` |
 | Agent logic | `web/lib/agent/**` |
 | Orchestrator | `web/lib/adminV2/aiCommandSurface/**` |

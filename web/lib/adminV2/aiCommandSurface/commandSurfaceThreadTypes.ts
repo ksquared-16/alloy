@@ -18,6 +18,12 @@ import type {
 import type { ConfigLayoutAssistTraceV1 } from "@/lib/agent/configLayoutAssist/configLayoutAssistTypes";
 import type { WorkflowAssistSuggestionV1 } from "@/lib/agent/workflowAssist/workflowAssistProposalV1";
 import type { AIStatusBadge, ResponseKind } from "@/lib/adminV2/aiCommandSurface/aiCommandSurfaceModel";
+import type { BosCapabilityKey } from "@/lib/bos/bosCapability";
+
+/** Optional BOS metadata on action cards — does not replace native payloads or `agent_key`. */
+export type CommandSurfaceCardBosMetadata = {
+    capability_key?: BosCapabilityKey;
+};
 
 export type CommandSurfaceThreadTurn =
     | {
@@ -54,7 +60,7 @@ export type CommandSurfaceThreadTurn =
           id: string;
           kind: "action_card";
           card:
-              | {
+              | ({
                     type: "task_assist";
                     entityId: string;
                     entityLabel: string;
@@ -66,8 +72,8 @@ export type CommandSurfaceThreadTurn =
                     uiPhase: "draft" | "workspace" | "reminder";
                     chosenAction?: TaskAssistCompactAction | null;
                     showMoreOptions?: boolean;
-                }
-              | {
+                } & CommandSurfaceCardBosMetadata)
+              | ({
                     type: "job_layout";
                     submittedCommand: string;
                     headline: string;
@@ -77,32 +83,32 @@ export type CommandSurfaceThreadTurn =
                     plannerOk: JobOverviewPlannerSuccess | null;
                     structuredOverrideJson: string;
                     expanded: boolean;
-                }
-              | {
+                } & CommandSurfaceCardBosMetadata)
+              | ({
                     type: "workflow_assist_proposal";
                     suggestion: WorkflowAssistSuggestionV1;
                     /** Present for NL create commands — extra proposal UX (not in suggestion hash). */
                     createInterpreted?: import("@/lib/agent/workflowAssist/workflowAssistCreateFromCommandV1").WorkflowAssistCreateProposeBuildV1["interpreted"];
-                }
-              | {
+                } & CommandSurfaceCardBosMetadata)
+              | ({
                     type: "config_layout_assist_proposal";
                     proposal: ConfigurationProposalV1;
                     trace: ConfigLayoutAssistTraceV1;
                     persistedProposalId: string | null;
-                }
-              | {
+                } & CommandSurfaceCardBosMetadata)
+              | ({
                     type: "config_layout_assist_field_setup";
                     introMessage: string;
                     draft: ConfigLayoutAssistFieldSetupDraftV1;
                     sectionOptions: ConfigLayoutAssistSectionOptionV1[];
-                }
-              | {
+                } & CommandSurfaceCardBosMetadata)
+              | ({
                     type: "config_layout_assist_ready";
                     proposal: ConfigurationProposalV1;
                     trace: ConfigLayoutAssistTraceV1;
                     persistedProposalId: string;
                     readySummary: ConfigLayoutAssistReadySummaryV1;
-                };
+                } & CommandSurfaceCardBosMetadata);
           at: string;
       }
     | {

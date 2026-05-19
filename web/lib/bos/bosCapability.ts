@@ -1,5 +1,5 @@
 /**
- * BOS capability registry types — contracts only (Phase 2 registry population).
+ * BOS capability registry types.
  * @see docs/product/bos-foundation.md
  */
 
@@ -15,7 +15,20 @@ export type BosCapabilityKey =
     | "agent_v1_record_overview_layout"
     | "agent_v2_field_visibility";
 
-export type BosCapabilityClass = "orchestration" | "config" | "operational" | "insight";
+/** Product domain for routing, policy, and UI grouping. */
+export type BosCapabilityDomain = "orchestration" | "config" | "operational" | "insight";
+
+export type BosProposalMode = "none" | "ephemeral" | "durable";
+
+export type BosApplyPolicy =
+    | "none"
+    | "preview_only"
+    | "human_approved_operational_api"
+    | "human_approved_workflow_crud"
+    | "human_approved_config_api"
+    | "human_approved_definer_rpc";
+
+export type BosRiskLevel = "none" | "low" | "medium" | "high";
 
 export type BosReadClass =
     | "config_inventory"
@@ -31,23 +44,33 @@ export type BosWriteClass =
     | "operational_api"
     | "workflow_crud";
 
+/** @deprecated Use BosCapabilityDomain — retained for registry consumers migrating from Phase 1. */
+export type BosCapabilityClass = BosCapabilityDomain;
+
+/** @deprecated Use BosProposalMode — retained for Phase 1 imports. */
 export type BosProposalPersistence = "none" | "ephemeral" | "durable_table";
 
 export type BosCapabilityDefinition = {
     capability_key: BosCapabilityKey;
-    capability_class: BosCapabilityClass;
-    display_name: string;
-    /** Legacy `agent_key` values emitted in proposal payloads. */
-    legacy_agent_keys?: readonly string[];
+    /** Operator-facing label. */
+    label: string;
+    domain: BosCapabilityDomain;
+    proposal_mode: BosProposalMode;
+    apply_policy: BosApplyPolicy;
+    /** Default risk when proposal does not specify (insight/orchestration → none). */
+    default_risk_level: BosRiskLevel;
+    requires_human_approval: boolean;
+    /** Legacy `agent_key` values in native proposal payloads. */
+    legacy_agent_keys: readonly string[];
     read_classes: readonly BosReadClass[];
     write_class: BosWriteClass;
     org_policy_features: readonly string[];
     propose_permission_keys: readonly string[];
     apply_permission_keys: readonly string[];
-    proposal_persistence: BosProposalPersistence;
     durable_table?: string;
     apply_route_family?: string;
-    requires_human_approval: boolean;
+    /** Implementation modules (documentation / future UI drill-down). */
+    source_modules: readonly string[];
 };
 
 export type BosProposalStatus =
@@ -59,17 +82,3 @@ export type BosProposalStatus =
     | "superseded"
     | "failed"
     | "expired";
-
-export type BosProposalEnvelopeV1 = {
-    version: 1;
-    capability_key: BosCapabilityKey;
-    proposal_id: string;
-    org_id: string;
-    actor_user_id: string;
-    generated_at_iso: string;
-    source_surface: string;
-    status: BosProposalStatus;
-    payload: unknown;
-    correlation_id?: string | null;
-    request_id?: string | null;
-};
