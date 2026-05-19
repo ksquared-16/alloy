@@ -657,16 +657,17 @@ export default function AdminV2OpportunityWorkUnitPage() {
         userLaneTouchedRef.current = false;
     }, [departmentId, workUnitId]);
 
+    const setWorkspaceScope = globalAssistant?.setWorkspaceScope;
     useEffect(() => {
-        if (!globalAssistant || !departmentId) return;
-        globalAssistant.setWorkspaceScope({
+        if (!setWorkspaceScope || !departmentId) return;
+        setWorkspaceScope({
             department_id: departmentId,
             department_name: dept?.name ?? null,
             work_unit_id: workUnitId || null,
             work_unit_name: workUnit?.name ?? null,
         });
-        return () => globalAssistant.setWorkspaceScope(null);
-    }, [globalAssistant, departmentId, workUnitId, dept?.name, workUnit?.name]);
+        return () => setWorkspaceScope(null);
+    }, [setWorkspaceScope, departmentId, workUnitId, dept?.name, workUnit?.name]);
 
     const refreshWorkflowPanels = useCallback(async () => {
         if (!departmentId || !workUnitId) return;

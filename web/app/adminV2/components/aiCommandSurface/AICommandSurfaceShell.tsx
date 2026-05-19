@@ -571,7 +571,7 @@ export default function AICommandSurfaceShell() {
   const [configLayoutAssistCaps, setConfigLayoutAssistCaps] = useState<ConfigLayoutAssistCapabilitiesV1 | null>(
     null
   );
-  const [viewportH, setViewportH] = useState<number>(typeof window !== "undefined" ? window.innerHeight : 900);
+  const [viewportH, setViewportH] = useState(900);
   const threadScrollRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
   const pendingClarificationRef = useRef<{
@@ -1794,6 +1794,7 @@ export default function AICommandSurfaceShell() {
 
   useEffect(() => {
     const onResize = () => setViewportH(window.innerHeight);
+    onResize();
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);

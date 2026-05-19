@@ -84,26 +84,46 @@ type GlobalAssistantContextValue = {
 
 const GlobalAssistantContext = createContext<GlobalAssistantContextValue | null>(null);
 
+function workspaceScopeEqual(
+    a: GlobalAssistantWorkspaceScope | null,
+    b: GlobalAssistantWorkspaceScope | null
+): boolean {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    return (
+        a.department_id === b.department_id &&
+        (a.department_name ?? null) === (b.department_name ?? null) &&
+        (a.work_unit_id ?? null) === (b.work_unit_id ?? null) &&
+        (a.work_unit_name ?? null) === (b.work_unit_name ?? null)
+    );
+}
+
 export function GlobalAssistantProvider({ children }: { children: ReactNode }) {
     const [commandSurfaceMode, setCommandSurfaceMode] = useState<CommandSurfaceMode>("job_overview");
     const [currentContext, setCurrentContext] = useState<GlobalAssistantEntityContext | null>(null);
     const [workspaceScope, setWorkspaceScopeState] = useState<GlobalAssistantWorkspaceScope | null>(null);
 
-    const [sessionLoaded] = useState(() => loadPersistedCommandSurfaceSession());
-    const [commandSurfaceThread, setCommandSurfaceThreadState] = useState<CommandSurfaceThreadState>(
-        () => sessionLoaded.thread
+    const [commandSurfaceThread, setCommandSurfaceThreadState] = useState<CommandSurfaceThreadState>(() =>
+        createEmptyThreadState()
     );
-    const [commandSurfaceThreadExpanded, setCommandSurfaceThreadExpandedState] = useState(
-        () => sessionLoaded.threadExpanded
-    );
+    const [commandSurfaceThreadExpanded, setCommandSurfaceThreadExpandedState] = useState(true);
     const [commandSurfaceJobCardUi, setCommandSurfaceJobCardUiState] = useState<CommandSurfaceJobCardUiState>({});
+    const [commandSurfaceSessionRestored, setCommandSurfaceSessionRestored] = useState(false);
 
     useEffect(() => {
+        const session = loadPersistedCommandSurfaceSession();
+        setCommandSurfaceThreadState(session.thread);
+        setCommandSurfaceThreadExpandedState(session.threadExpanded);
+        setCommandSurfaceSessionRestored(true);
+    }, []);
+
+    useEffect(() => {
+        if (!commandSurfaceSessionRestored) return;
         persistCommandSurfaceSession({
             thread: commandSurfaceThread,
             threadExpanded: commandSurfaceThreadExpanded,
         });
-    }, [commandSurfaceThread, commandSurfaceThreadExpanded]);
+    }, [commandSurfaceSessionRestored, commandSurfaceThread, commandSurfaceThreadExpanded]);
 
     const setCommandSurfaceThread = useCallback(
         (updater: CommandSurfaceThreadState | ((prev: CommandSurfaceThreadState) => CommandSurfaceThreadState)) => {
@@ -158,7 +178,7 @@ export function GlobalAssistantProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const setWorkspaceScope = useCallback((scope: GlobalAssistantWorkspaceScope | null) => {
-        setWorkspaceScopeState(scope);
+        setWorkspaceScopeState((prev) => (workspaceScopeEqual(prev, scope) ? prev : scope));
     }, []);
 
     const openAssistantWithContext = useCallback(

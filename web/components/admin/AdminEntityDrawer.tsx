@@ -8105,6 +8105,18 @@ export default function AdminEntityDrawer() {
         );
     }, [drawer.type, overviewData, opportunityActivitySignal, opportunityActivitySignalLoading]);
 
+    const opportunityQueuePreviewSeed = drawer.opportunityQueuePreviewSeed;
+    const opportunityDrawerPreviewSubtitle = useMemo(() => {
+        const seed = opportunityQueuePreviewSeed;
+        if (!seed) return undefined;
+        const previewSub = seed.subtitle?.trim();
+        const recordHint = seed.recordNumberHint?.trim();
+        if (previewSub && recordHint) return `${previewSub} · ${recordHint}`;
+        if (previewSub) return previewSub;
+        if (recordHint) return recordHint;
+        return undefined;
+    }, [opportunityQueuePreviewSeed]);
+
     if (!drawer.type || !drawer.id) return null;
 
     const drawerStatusBadge = overviewData &&
@@ -8350,17 +8362,6 @@ export default function AdminEntityDrawer() {
                   .filter(Boolean)
                   .join(" · ") || undefined
             : undefined;
-    const opportunityQueuePreviewSeed = drawer.opportunityQueuePreviewSeed;
-    const opportunityDrawerPreviewSubtitle = useMemo(() => {
-        const seed = opportunityQueuePreviewSeed;
-        if (!seed) return undefined;
-        const previewSub = seed.subtitle?.trim();
-        const recordHint = seed.recordNumberHint?.trim();
-        if (previewSub && recordHint) return `${previewSub} · ${recordHint}`;
-        if (previewSub) return previewSub;
-        if (recordHint) return recordHint;
-        return undefined;
-    }, [opportunityQueuePreviewSeed]);
     const drawerTitleResolved =
         isOpportunityRecordModalTarget &&
         drawer.type === "opportunities" &&
