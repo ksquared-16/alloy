@@ -4,16 +4,12 @@ import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import SettingsEntityTabBar from "@/components/adminV2/settings/SettingsEntityTabBar";
-import EffectiveDrawerLayoutPreviewPanel from "@/components/adminV2/settings/EffectiveDrawerLayoutPreviewPanel";
 import LayoutIntegrityReportPanel from "@/components/adminV2/settings/LayoutIntegrityReportPanel";
-import OpportunityWorkflowV1SectionsEditor from "@/components/adminV2/settings/OpportunityWorkflowV1SectionsEditor";
+import RecordDrawerCompositionWorkspace from "@/components/adminV2/settings/RecordDrawerCompositionWorkspace";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { adminFieldEntitySingularLabel } from "@/lib/admin/adminFieldEntityDisplayLabel";
-import { layoutSectionEditorCapability } from "@/lib/adminV2/layoutSettingsCapabilities";
 import {
     LAYOUT_SETTINGS_ENTITY_ORDER,
-    layoutSettingsAddSectionUnavailableCopy,
-    layoutSettingsSupportsSectionConfig,
     normalizeLayoutSettingsEntity,
     type LayoutSettingsEntityKey,
 } from "@/lib/adminV2/layoutsSettingsEntities";
@@ -29,7 +25,6 @@ export default function LayoutsSettingsHubClient({ initialEntity }: { initialEnt
     const pathname = usePathname();
     const { labels } = useEntityLabels();
     const entity = useMemo(() => normalizeLayoutSettingsEntity(initialEntity), [initialEntity]);
-    const [previewRefresh, setPreviewRefresh] = useState(0);
     const [integrityOpen, setIntegrityOpen] = useState(false);
 
     const entityTabs = useMemo(
@@ -49,8 +44,6 @@ export default function LayoutsSettingsHubClient({ initialEntity }: { initialEnt
     );
 
     const entityLabel = adminFieldEntitySingularLabel(labels, entity);
-    const sectionCap = layoutSectionEditorCapability(entity);
-    const canConfigureSections = layoutSettingsSupportsSectionConfig(entity);
 
     return (
         <div className="w-full max-w-6xl space-y-5">
@@ -62,27 +55,14 @@ export default function LayoutsSettingsHubClient({ initialEntity }: { initialEnt
             />
 
             <p className="text-xs leading-relaxed text-alloy-midnight/55">
-                Drawer composition for <span className="font-medium text-alloy-midnight/75">{entityLabel}</span> records.
-                Field rules are on{" "}
+                Use Layouts to choose which sections appear in the <span className="font-medium text-alloy-midnight/75">{entityLabel}</span> drawer and which fields appear in each section. Use{" "}
                 <Link href="/adminV2/settings/fields" className="font-medium text-alloy-pine hover:underline">
                     Fields
-                </Link>
-                ; catalog group labels are on{" "}
-                <Link href="/adminV2/settings/field-sections" className="font-medium text-alloy-pine hover:underline">
-                    Field grouping
-                </Link>
-                .
+                </Link>{" "}
+                to create fields or edit field rules.
             </p>
 
-            {canConfigureSections ? (
-                <OpportunityWorkflowV1SectionsEditor onSaved={() => setPreviewRefresh((n) => n + 1)} />
-            ) : (
-                <div className="rounded-lg border border-alloy-forge/12 bg-alloy-stone/[0.04] px-3 py-2.5 text-xs text-alloy-midnight/60">
-                    {sectionCap.unavailableReason ?? layoutSettingsAddSectionUnavailableCopy(entity)}
-                </div>
-            )}
-
-            <EffectiveDrawerLayoutPreviewPanel entityType={entity} refreshToken={previewRefresh} hideEntitySelect />
+            <RecordDrawerCompositionWorkspace entity={entity} />
 
             <details
                 className="rounded-xl border border-dashed border-alloy-forge/20 bg-alloy-stone/[0.03]"

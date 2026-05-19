@@ -22,7 +22,7 @@ Settings hub: `/adminV2/settings` — tiles use **Editable ·**, **Partial ·**,
 |-------|-------|------|------------------|
 | **Fields** | `/adminV2/settings/fields` | Registry: labels, help, required rules, editability, visibility | Drawer section order; button placement |
 | **Field grouping** | `/adminV2/settings/field-sections` | Catalog taxonomy (`field_section_definitions`) | Workflow virtual section titles |
-| **Layouts** | `/adminV2/settings/layouts` | Drawer composition; opportunity workflow v1 section order/show/hide/titles | Field policies; net-new workflow virtuals with arbitrary `field_keys` |
+| **Layouts** | `/adminV2/settings/layouts` | Drawer composition workspace (sections, catalog sections, field placement, preview); opportunity workflow v1 | Field policies; net-new workflow virtuals with arbitrary `field_keys`; raw `config_json` |
 | **Actions** | `/adminV2/settings/actions` | Org placement + enablement (`action_placements`) | Execution (`executeAdminAction`, workflows) |
 | **Automations** | `/adminV2/workflows` | Workflow definitions, execution semantics | Placement rows |
 | **Forms** | `/adminV2/forms` | Definitions, versions, packets | Action `payload_schema` in Settings (today) |
@@ -47,6 +47,19 @@ Record Experience Builder; BOS/AI config layer (structured PATCH only); linked-r
 | Legacy `record_actions` | **Runtime only** | Coexists with registry; migration deferred |
 | Forms / packets | **Related hub** | `/adminV2/forms` |
 
+### Layout composition mutation classes (Record Experience Builder Phase 1)
+
+Human operators and BOS **`config_layout_assist`** use the same admin APIs — no parallel AI storage:
+
+| Class | Store | Settings entry |
+|-------|--------|----------------|
+| **A — Drawer chrome** | `record_drawer_layouts.config_json` | `PATCH …/opportunity-workflow-v1-sections` |
+| **B — Field placement** | `field_definitions.section_key`, `sort_order` | `PATCH …/field-definitions/batch-placement` |
+| **C — Catalog section** | `field_section_definitions` | `POST/PATCH …/field-sections` |
+| **D — Actions** | `action_placements` (read-only on Layouts until Card 5) | Actions hub |
+
+Capability gates: `web/lib/adminV2/layouts/layoutCompositionCapabilities.ts` (`primaryBosCapability: config_layout_assist`).
+
 ### Drawer layout and field policy (source of truth)
 
 - **Tables:** `record_drawer_layouts` (org), `record_layouts` (templates). Effective `config_json` drives drawer body; opportunity workflow v1 uses `overview_section_order`, `overview_hidden_sections`, `inquiry_workflow_sections`.
@@ -63,7 +76,7 @@ Record Experience Builder; BOS/AI config layer (structured PATCH only); linked-r
 | Domain | Structured entry points |
 |--------|-------------------------|
 | Fields | `PATCH /api/admin/field-definitions/:id`; `fieldSettingsOperatorUi.ts`, `drawerFieldPolicyAdapter.ts` |
-| Layouts | Opportunity workflow v1 PATCH routes; `opportunityWorkflowV1SectionConfig.ts` |
+| Layouts | Opportunity workflow v1 PATCH routes; `opportunityWorkflowV1SectionConfig.ts`; composition capabilities `web/lib/adminV2/layouts/layoutCompositionCapabilities.ts`; field batch placement `PATCH /api/admin/field-definitions/batch-placement` |
 | Actions | `actionPlacementMutation.ts`; placement PATCH/POST |
 | Integrity | `GET /api/admin/config/layout-integrity`; effective-preview `editor_sections` |
 | Proposals | `config_layout_assist_proposals` — apply catalog expansion **paused** |

@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import { uniqueAdminKey } from "@/lib/admin/slugifyAdminKey";
+import { drawerSectionTypeLabel } from "@/lib/adminV2/layouts/sectionTypePresentation";
 
 type EditorSection = {
     section_key: string;
@@ -28,6 +29,8 @@ type SectionRowState = {
     titleEditable: boolean;
 };
 
+const SECTION_KEY_REGEX = /^[a-z0-9_]{2,64}$/;
+
 function move<T>(arr: T[], index: number, delta: number): T[] {
     const next = index + delta;
     if (next < 0 || next >= arr.length) return arr;
@@ -37,7 +40,22 @@ function move<T>(arr: T[], index: number, delta: number): T[] {
     return copy;
 }
 
-export default function OpportunityWorkflowV1SectionsEditor({ onSaved }: { onSaved?: () => void }) {
+async function readApiError(res: Response): Promise<string> {
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    return typeof json.error === "string" && json.error.trim() ? json.error.trim() : `Request failed (${res.status})`;
+}
+
+export default function OpportunityWorkflowV1SectionsEditor({
+    onSaved,
+    embedded = false,
+    selectedSectionKey = null,
+    onSelectSection,
+}: {
+    onSaved?: () => void;
+    embedded?: boolean;
+    selectedSectionKey?: string | null;
+    onSelectSection?: (sectionKey: string) => void;
+}) {
     const { canMutate } = useAdminAuth();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -48,7 +66,10 @@ export default function OpportunityWorkflowV1SectionsEditor({ onSaved }: { onSav
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
     const [saveOk, setSaveOk] = useState<string | null>(null);
-    const [addKey, setAddKey] = useState("");
+    const [restoreKey, setRestoreKey] = useState("");
+    const [newSectionLabel, setNewSectionLabel] = useState("");
+    const [addingSection, setAddingSection] = useState(false);
+    const [addSectionError, setAddSectionError] = useState<string | null>(null);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -85,28 +106,34 @@ export default function OpportunityWorkflowV1SectionsEditor({ onSaved }: { onSav
 
     const eligible = preview?.workflow?.workflow_v1_configured === true && preview.entity_type === "opportunity";
 
-    const availableToShow = useMemo(() => {
-        return hiddenCatalog.filter((k) => !rows.some((r) => r.section_key === k));
+    /** Sections hidden from this drawer layout (overview_hidden_sections), not every catalog group. */
+    const restorableHiddenKeys = useMemo(() => {
+        return hiddenCatalog.filter((k) => {
+            const row = rows.find((r) => r.section_key === k);
+            return !row || !row.visible;
+        });
     }, [hiddenCatalog, rows]);
 
-    const dirty = useMemo(() => {
-        return JSON.stringify(initialRows) !== JSON.stringify(rows);
-    }, [initialRows, rows]);
+    const dirty = useMemo(() => JSON.stringify(initialRows) !== JSON.stringify(rows), [initialRows, rows]);
 
-    const addHiddenSection = () => {
-        const key = addKey.trim();
-        if (!key || !availableToShow.includes(key)) return;
-        setRows((prev) => [
-            ...prev,
-            {
-                section_key: key,
-                title: key.replace(/_/g, " "),
-                kind: "field_section_ref",
-                visible: true,
-                titleEditable: false,
-            },
-        ]);
-        setAddKey("");
+    const persistRows = async (nextRows: SectionRowState[]) => {
+        const res = await fetch("/api/admin/record-drawer-layouts/opportunity-workflow-v1-sections", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                overview_section_order: nextRows.map((r) => r.section_key),
+                section_visibility: nextRows.map((r) => ({
+                    section_key: r.section_key,
+                    visible: r.visible,
+                })),
+                workflow_section_titles: nextRows
+                    .filter((r) => r.titleEditable)
+                    .map((r) => ({ section_key: r.section_key, title: r.title })),
+            }),
+        });
+        const json = (await res.json().catch(() => ({}))) as { error?: string; created_org_override?: boolean };
+        if (!res.ok) throw new Error(json.error ?? "Save failed");
+        return json;
     };
 
     const save = async () => {
@@ -115,22 +142,7 @@ export default function OpportunityWorkflowV1SectionsEditor({ onSaved }: { onSav
         setSaveError(null);
         setSaveOk(null);
         try {
-            const res = await fetch("/api/admin/record-drawer-layouts/opportunity-workflow-v1-sections", {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    overview_section_order: rows.map((r) => r.section_key),
-                    section_visibility: rows.map((r) => ({
-                        section_key: r.section_key,
-                        visible: r.visible,
-                    })),
-                    workflow_section_titles: rows
-                        .filter((r) => r.titleEditable)
-                        .map((r) => ({ section_key: r.section_key, title: r.title })),
-                }),
-            });
-            const json = (await res.json().catch(() => ({}))) as { error?: string; created_org_override?: boolean };
-            if (!res.ok) throw new Error(json.error ?? "Save failed");
+            const json = await persistRows(rows);
             setSaveOk(json.created_org_override ? "Saved — created org drawer override." : "Saved.");
             await load();
             onSaved?.();
@@ -138,6 +150,113 @@ export default function OpportunityWorkflowV1SectionsEditor({ onSaved }: { onSav
             setSaveError((e as Error).message);
         } finally {
             setSaving(false);
+        }
+    };
+
+    const restoreHiddenSection = (key: string) => {
+        const k = key.trim();
+        if (!k) return;
+        let nextRows: SectionRowState[];
+        const existing = rows.find((r) => r.section_key === k);
+        if (existing) {
+            nextRows = rows.map((r) => (r.section_key === k ? { ...r, visible: true } : r));
+        } else {
+            nextRows = [
+                ...rows,
+                {
+                    section_key: k,
+                    title: k.replace(/_/g, " "),
+                    kind: "field_section_ref",
+                    visible: true,
+                    titleEditable: false,
+                },
+            ];
+        }
+        setRows(nextRows);
+        onSelectSection?.(k);
+        setRestoreKey("");
+    };
+
+    const addSection = async () => {
+        if (!canMutate || !eligible) return;
+        const label = newSectionLabel.trim();
+        if (!label) return;
+        setAddingSection(true);
+        setAddSectionError(null);
+        try {
+            const secRes = await fetch("/api/admin/field-sections?entity_type=opportunity", { cache: "no-store" });
+            const secJson = (await secRes.json().catch(() => ({}))) as {
+                sections?: { section_key: string }[];
+            };
+            const reserved = new Set((secJson.sections ?? []).map((s) => s.section_key));
+            const section_key = uniqueAdminKey(label, reserved);
+            if (!SECTION_KEY_REGEX.test(section_key)) {
+                throw new Error("Could not derive a valid section key from label");
+            }
+
+            const postRes = await fetch("/api/admin/field-sections", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    entity_type: "opportunity",
+                    section_key,
+                    label,
+                    sort_order: (reserved.size + 1) * 10,
+                }),
+            });
+            if (!postRes.ok) throw new Error(await readApiError(postRes));
+
+            const previewRes = await fetch("/api/admin/record-layouts/effective-preview?entity_type=opportunity");
+            const previewJson = (await previewRes.json().catch(() => ({}))) as PreviewPayload & { error?: string };
+            if (!previewRes.ok) throw new Error(previewJson.error ?? "Failed to reload sections");
+
+            const editorRows: SectionRowState[] = (previewJson.editor_sections ?? []).map((s) => ({
+                section_key: s.section_key,
+                title: s.title,
+                kind: s.kind,
+                visible: s.visible,
+                titleEditable: s.title_editable,
+            }));
+
+            const newRow: SectionRowState = {
+                section_key,
+                title: label,
+                kind: "field_section_ref",
+                visible: true,
+                titleEditable: false,
+            };
+
+            const merged = editorRows.some((r) => r.section_key === section_key)
+                ? editorRows.map((r) =>
+                      r.section_key === section_key ? { ...r, visible: true, title: label } : r
+                  )
+                : [...editorRows, newRow];
+
+            await persistRows(merged);
+
+            const reloadRes = await fetch("/api/admin/record-layouts/effective-preview?entity_type=opportunity");
+            const reloadJson = (await reloadRes.json().catch(() => ({}))) as PreviewPayload & { error?: string };
+            if (!reloadRes.ok) throw new Error(reloadJson.error ?? "Failed to reload sections");
+
+            const reloadedRows: SectionRowState[] = (reloadJson.editor_sections ?? []).map((s) => ({
+                section_key: s.section_key,
+                title: s.title,
+                kind: s.kind,
+                visible: s.visible,
+                titleEditable: s.title_editable,
+            }));
+
+            setPreview(reloadJson);
+            setHiddenCatalog(reloadJson.overview_hidden_sections ?? []);
+            setInitialRows(reloadedRows);
+            setRows(reloadedRows);
+            setNewSectionLabel("");
+            onSelectSection?.(section_key);
+            onSaved?.();
+        } catch (e) {
+            setAddSectionError((e as Error).message);
+        } finally {
+            setAddingSection(false);
         }
     };
 
@@ -151,53 +270,82 @@ export default function OpportunityWorkflowV1SectionsEditor({ onSaved }: { onSav
         );
     }
 
-    return (
-        <div
-            className="rounded-xl border border-alloy-pine/25 bg-white/85 p-4 shadow-sm"
-            data-testid="opportunity-workflow-v1-sections-editor"
-        >
-            <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                    <h2 className="text-sm font-semibold text-alloy-midnight">Drawer sections</h2>
-                    <p className="mt-1 max-w-2xl text-xs leading-snug text-alloy-midnight/60">
-                        Reorder, show or hide, and rename workflow section titles here. To rename catalog group labels, use{" "}
-                        <Link href="/adminV2/settings/field-sections" className="font-medium text-alloy-pine hover:underline">
-                            Field grouping
-                        </Link>
-                        .
-                    </p>
-                </div>
-                {preview?.layout_resolution?.source === "global_template" ? (
-                    <span className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-medium text-amber-950">
-                        First save creates an org override
-                    </span>
-                ) : null}
-            </div>
+    const shellClass = embedded ? "" : "rounded-xl border border-alloy-pine/25 bg-white/85 p-4 shadow-sm";
 
-            {availableToShow.length > 0 && canMutate ? (
-                <div className="mt-3 flex flex-wrap items-end gap-2 rounded-lg border border-dashed border-alloy-forge/20 bg-alloy-stone/[0.03] px-3 py-2">
+    return (
+        <div className={shellClass} data-testid="opportunity-workflow-v1-sections-editor">
+            {!embedded ? (
+                <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
                     <div>
-                        <label className="mb-0.5 block text-[10px] font-medium text-alloy-midnight/55">Show hidden section</label>
+                        <h2 className="text-sm font-semibold text-alloy-midnight">Drawer sections</h2>
+                        <p className="mt-1 max-w-2xl text-xs leading-snug text-alloy-midnight/60">
+                            Reorder sections and choose which appear in the drawer. Select a section to manage its fields.
+                        </p>
+                    </div>
+                    {preview?.layout_resolution?.source === "global_template" ? (
+                        <span className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-medium text-amber-950">
+                            First save creates an org override
+                        </span>
+                    ) : null}
+                </div>
+            ) : null}
+
+            {canMutate ? (
+                <div className="mb-3 flex flex-wrap items-end gap-2 rounded-lg border border-dashed border-alloy-pine/25 bg-alloy-pine/[0.03] px-3 py-2">
+                    <div className="min-w-[10rem] flex-1">
+                        <label className="mb-0.5 block text-[10px] font-medium text-alloy-midnight/55">Add section</label>
+                        <input
+                            value={newSectionLabel}
+                            onChange={(e) => setNewSectionLabel(e.target.value)}
+                            placeholder="Section name"
+                            className="w-full rounded border border-[#e6e8ec] px-2 py-1 text-xs"
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") void addSection();
+                            }}
+                        />
+                    </div>
+                    <button
+                        type="button"
+                        disabled={!newSectionLabel.trim() || addingSection || saving}
+                        className="rounded-lg bg-alloy-pine px-2.5 py-1 text-xs font-medium text-white disabled:opacity-45"
+                        onClick={() => void addSection()}
+                    >
+                        {addingSection ? "Adding…" : "Add section"}
+                    </button>
+                </div>
+            ) : null}
+            {addSectionError ? <p className="mb-2 text-xs text-red-600">{addSectionError}</p> : null}
+
+            {restorableHiddenKeys.length > 0 && canMutate ? (
+                <div className="mb-3 flex flex-wrap items-end gap-2 rounded-lg border border-dashed border-alloy-forge/20 bg-alloy-stone/[0.03] px-3 py-2">
+                    <div>
+                        <label className="mb-0.5 block text-[10px] font-medium text-alloy-midnight/55">
+                            Restore hidden section
+                        </label>
                         <select
-                            value={addKey}
-                            onChange={(e) => setAddKey(e.target.value)}
+                            value={restoreKey}
+                            onChange={(e) => setRestoreKey(e.target.value)}
                             className="rounded border border-[#e6e8ec] px-2 py-1 text-xs"
                         >
                             <option value="">Choose hidden section…</option>
-                            {availableToShow.map((k) => (
-                                <option key={k} value={k}>
-                                    {k.replace(/_/g, " ")}
-                                </option>
-                            ))}
+                            {restorableHiddenKeys.map((k) => {
+                                const row = rows.find((r) => r.section_key === k);
+                                const label = row?.title ?? k.replace(/_/g, " ");
+                                return (
+                                    <option key={k} value={k}>
+                                        {label}
+                                    </option>
+                                );
+                            })}
                         </select>
                     </div>
                     <button
                         type="button"
-                        disabled={!addKey || saving}
+                        disabled={!restoreKey || saving}
                         className="rounded-lg border border-alloy-pine/40 px-2.5 py-1 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/5 disabled:opacity-45"
-                        onClick={addHiddenSection}
+                        onClick={() => restoreHiddenSection(restoreKey)}
                     >
-                        Show in drawer
+                        Restore to list
                     </button>
                 </div>
             ) : null}
@@ -205,12 +353,27 @@ export default function OpportunityWorkflowV1SectionsEditor({ onSaved }: { onSav
             {saveError ? <p className="mt-2 text-xs text-red-600">{saveError}</p> : null}
             {saveOk ? <p className="mt-2 text-xs text-alloy-pine">{saveOk}</p> : null}
 
-            <ol className="mt-3 space-y-2">
+            <p className="mb-1.5 text-[10px] text-alloy-midnight/50">Click a section to manage fields on the right.</p>
+
+            <ol className="space-y-2">
                 {rows.map((row, i) => (
                     <li
                         key={row.section_key}
-                        className="rounded-lg border border-admin-border/60 bg-white px-3 py-2 text-xs"
+                        role="button"
+                        tabIndex={0}
+                        className={`rounded-lg border px-3 py-2 text-xs ${
+                            selectedSectionKey === row.section_key
+                                ? "border-alloy-pine/50 bg-alloy-pine/5 ring-1 ring-alloy-pine/25"
+                                : "border-admin-border/60 bg-white"
+                        } cursor-pointer hover:border-alloy-pine/30`}
                         data-testid={`layout-section-row-${row.section_key}`}
+                        onClick={() => onSelectSection?.(row.section_key)}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                onSelectSection?.(row.section_key);
+                            }
+                        }}
                     >
                         <div className="flex flex-wrap items-center gap-2">
                             <span className="w-6 text-[10px] text-alloy-midnight/45">{i + 1}</span>
@@ -218,6 +381,7 @@ export default function OpportunityWorkflowV1SectionsEditor({ onSaved }: { onSav
                                 <input
                                     type="text"
                                     value={row.title}
+                                    onClick={(e) => e.stopPropagation()}
                                     onChange={(e) =>
                                         setRows((prev) =>
                                             prev.map((r) =>
@@ -230,7 +394,10 @@ export default function OpportunityWorkflowV1SectionsEditor({ onSaved }: { onSav
                             ) : (
                                 <span className="min-w-0 flex-1 font-medium text-alloy-midnight">{row.title}</span>
                             )}
-                            <label className="flex items-center gap-1.5 text-[11px] text-alloy-midnight/65">
+                            <label
+                                className="flex items-center gap-1.5 text-[11px] text-alloy-midnight/65"
+                                onClick={(e) => e.stopPropagation()}
+                            >
                                 <input
                                     type="checkbox"
                                     checked={row.visible}
@@ -246,7 +413,7 @@ export default function OpportunityWorkflowV1SectionsEditor({ onSaved }: { onSav
                                 Show in drawer
                             </label>
                             {canMutate ? (
-                                <span className="flex gap-1">
+                                <span className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                                     <button
                                         type="button"
                                         className="rounded border border-admin-border px-2 py-0.5 text-[11px] hover:bg-alloy-stone/15 disabled:opacity-40"
@@ -267,8 +434,8 @@ export default function OpportunityWorkflowV1SectionsEditor({ onSaved }: { onSav
                             ) : null}
                         </div>
                         <p className="mt-1 pl-8 text-[10px] text-alloy-midnight/45">
-                            {row.kind === "workflow_virtual" ? "Workflow section" : "Field group section"}
-                            {!row.visible ? " · Hidden in drawer" : ""}
+                            {drawerSectionTypeLabel(row.kind)}
+                            {!row.visible ? " · Hidden from drawer" : ""}
                         </p>
                     </li>
                 ))}

@@ -86,11 +86,8 @@ export async function PATCH(request: NextRequest) {
     const fieldSectionLabels: Record<string, string> = {};
     for (const r of secs ?? []) {
         const sk = String((r as { section_key?: string }).section_key ?? "").trim();
-        const lb = String((r as { label?: string }).label ?? "").trim();
-        if (sk && lb) fieldSectionLabels[sk] = lb;
+        if (sk) fieldSectionLabels[sk] = String((r as { label?: string }).label ?? "").trim();
     }
-
-    const canonicalKeys = listOpportunityWorkflowV1CanonicalSectionKeys(baseCfg, fieldDefinitions, fieldSectionLabels);
 
     let overview_section_order: string[] | undefined;
     if (hasOrder) {
@@ -99,6 +96,16 @@ export async function PATCH(request: NextRequest) {
             return NextResponse.json({ error: "overview_section_order must be an array of strings" }, { status: 400 });
         }
         overview_section_order = orderRaw.map((s) => s.trim()).filter(Boolean);
+    }
+
+    const canonicalKeys = listOpportunityWorkflowV1CanonicalSectionKeys(
+        baseCfg,
+        fieldDefinitions,
+        fieldSectionLabels,
+        { proposedOrder: overview_section_order }
+    );
+
+    if (hasOrder && overview_section_order) {
         const validated = validateOpportunityWorkflowV1SectionOrder(overview_section_order, canonicalKeys);
         if (!validated.ok) {
             return NextResponse.json({ error: validated.error }, { status: 400 });

@@ -65,6 +65,66 @@ function defaultSectionTitle(sectionKey: string): string {
     return sectionKey.charAt(0).toUpperCase() + sectionKey.slice(1).replace(/_/g, " ");
 }
 
+const DRAWER_INJECTED_SECTION_KEYS = new Set(["inquiry_children", "inquiry_tuition", "__unified_status"]);
+
+/**
+ * Catalog sections explicitly placed on this drawer layout (overview order or hidden list),
+ * not every field_section_definitions row org-wide.
+ */
+export function mergeExplicitCatalogSectionsInDrawerLayout(
+    sections: EntityDrawerSectionConfig[],
+    cfg: RecordLayoutConfigJson | null | undefined,
+    fieldSectionLabels: Record<string, string>
+): EntityDrawerSectionConfig[] {
+    if (!cfg) return sections;
+    const byKey = new Set(sections.map((s) => s.key));
+    const wfKeys = new Set((cfg.inquiry_workflow_sections ?? []).map((w) => w.key));
+    const layoutKeys = new Set<string>([
+        ...(cfg.overview_section_order ?? []),
+        ...(cfg.overview_hidden_sections ?? []),
+    ]);
+    const extras: EntityDrawerSectionConfig[] = [];
+    for (const sk of layoutKeys) {
+        const key = sk.trim();
+        if (!key || byKey.has(key) || wfKeys.has(key) || DRAWER_INJECTED_SECTION_KEYS.has(key)) continue;
+        if (!Object.prototype.hasOwnProperty.call(fieldSectionLabels, key)) continue;
+        const label = (fieldSectionLabels[key] ?? "").trim();
+        extras.push({
+            key,
+            title: label || defaultSectionTitle(key),
+            defaultExpanded: false,
+            collapsible: true,
+            gridCols: 2 as const,
+            fields: [],
+        });
+    }
+    if (!extras.length) return sections;
+    return [...sections, ...extras];
+}
+
+function resolveDrawerCompositionSectionOrder(
+    allSections: EntityDrawerSectionConfig[],
+    cfg: RecordLayoutConfigJson
+): string[] {
+    const byKey = new Map(allSections.map((s) => [s.key, s]));
+    const saved = cfg.overview_section_order;
+    if (saved?.length) {
+        const seen = new Set<string>();
+        const order: string[] = [];
+        for (const k of saved) {
+            const key = k.trim();
+            if (!key || seen.has(key) || !byKey.has(key)) continue;
+            order.push(key);
+            seen.add(key);
+        }
+        for (const s of allSections) {
+            if (!seen.has(s.key)) order.push(s.key);
+        }
+        return order;
+    }
+    return allSections.map((s) => s.key);
+}
+
 function oppRelFieldOverride(fieldKey: string): Partial<EntityDrawerFieldConfig> | null {
     if (fieldKey === "primary_person_id") {
         return { renderHint: "link", linkTarget: { idField: "primary_person_id", entityType: "persons" } };
@@ -272,16 +332,14 @@ export function buildOpportunityWorkflowV1EditorSections(
     fieldDefs: PreviewFieldDef[],
     fieldSectionLabels: Record<string, string>
 ): OpportunityWorkflowV1EditorSectionRow[] {
-    const allSections = computeOpportunityOverviewSectionsLikeDrawer(cfg, fieldDefs, fieldSectionLabels, {
+    const computed = computeOpportunityOverviewSectionsLikeDrawer(cfg, fieldDefs, fieldSectionLabels, {
         applyHiddenFilter: false,
     });
+    const allSections = mergeExplicitCatalogSectionsInDrawerLayout(computed, cfg, fieldSectionLabels);
     const hidden = new Set(cfg.overview_hidden_sections ?? []);
     const wfKeys = new Set((cfg.inquiry_workflow_sections ?? []).map((w) => w.key));
     const byKey = new Map(allSections.map((s) => [s.key, s]));
-    const order =
-        cfg.overview_section_order?.length && cfg.overview_section_order.length === allSections.length
-            ? cfg.overview_section_order
-            : allSections.map((s) => s.key);
+    const order = resolveDrawerCompositionSectionOrder(allSections, cfg);
 
     return order.map((key) => {
         const s = byKey.get(key);
@@ -427,13 +485,22 @@ export function buildEffectiveDrawerLayoutPreview(params: {
 export function listOpportunityWorkflowV1CanonicalSectionKeys(
     cfg: RecordLayoutConfigJson,
     fieldDefs: PreviewFieldDef[],
-    fieldSectionLabels: Record<string, string>
+    fieldSectionLabels: Record<string, string>,
+    options?: { proposedOrder?: string[] }
 ): string[] {
     if (cfg.inquiry_drawer_mode !== "workflow_v1") return [];
-    const sections = computeOpportunityOverviewSectionsLikeDrawer(
+    const computed = computeOpportunityOverviewSectionsLikeDrawer(
         { ...cfg, overview_section_order: undefined },
         fieldDefs,
-        fieldSectionLabels
+        fieldSectionLabels,
+        { applyHiddenFilter: false }
     );
-    return sections.map((s) => s.key);
+    const merged = mergeExplicitCatalogSectionsInDrawerLayout(computed, cfg, fieldSectionLabels);
+    const keys = new Set(merged.map((s) => s.key));
+    for (const raw of options?.proposedOrder ?? []) {
+        const k = raw.trim();
+        if (!k || keys.has(k)) continue;
+        if (fieldSectionLabels[k]) keys.add(k);
+    }
+    return [...keys];
 }

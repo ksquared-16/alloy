@@ -16,7 +16,8 @@ describe("layoutsSettingsEntities", () => {
         expect(layoutSettingsSupportsSectionOrder("job")).toBe(false);
     });
 
-    it("add section not supported yet", () => {
-        expect(layoutSettingsSupportsAddSection("opportunity")).toBe(false);
+    it("catalog add section supported on opportunity", () => {
+        expect(layoutSettingsSupportsAddSection("opportunity")).toBe(true);
+        expect(layoutSettingsSupportsAddSection("job")).toBe(false);
     });
 });

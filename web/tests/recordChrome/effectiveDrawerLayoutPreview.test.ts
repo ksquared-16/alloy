@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     buildEffectiveDrawerLayoutPreview,
+    buildOpportunityWorkflowV1EditorSections,
     listOpportunityWorkflowV1CanonicalSectionKeys,
 } from "@/lib/recordChrome/effectiveDrawerLayoutPreview";
 
@@ -112,5 +113,55 @@ describe("buildEffectiveDrawerLayoutPreview", () => {
         const a = listOpportunityWorkflowV1CanonicalSectionKeys(withSaved, fieldDefs, {});
         const b = listOpportunityWorkflowV1CanonicalSectionKeys(cfgBase, fieldDefs, {});
         expect(a.sort()).toEqual(b.sort());
+    });
+
+    it("does not list catalog sections unless explicitly on drawer layout", () => {
+        const cfg = {
+            inquiry_drawer_mode: "workflow_v1" as const,
+            inquiry_workflow_sections: [{ key: "inq_a", title: "A", field_keys: ["name"] }],
+        };
+        const fieldDefs = [
+            {
+                field_key: "name",
+                field_type: "text",
+                label: "Name",
+                section_key: "details",
+                sort_order: 0,
+                is_visible_in_drawer: true,
+            },
+        ];
+        const labels = { details: "Details", new_group: "New group" };
+        const withoutLayout = buildOpportunityWorkflowV1EditorSections(cfg, fieldDefs, labels);
+        expect(withoutLayout.some((s) => s.section_key === "new_group")).toBe(false);
+
+        const withExplicit = buildOpportunityWorkflowV1EditorSections(
+            { ...cfg, overview_section_order: ["inq_a", "new_group", "details", "inquiry_children", "inquiry_tuition"] },
+            fieldDefs,
+            labels
+        );
+        expect(withExplicit.some((s) => s.section_key === "new_group")).toBe(true);
+        expect(withExplicit.find((s) => s.section_key === "new_group")?.kind).toBe("field_section_ref");
+    });
+
+    it("accepts proposed catalog keys in canonical validation", () => {
+        const fieldDefs = [
+            {
+                field_key: "name",
+                field_type: "text",
+                label: "Name",
+                section_key: "details",
+                sort_order: 0,
+                is_visible_in_drawer: true,
+            },
+        ];
+        const cfg = {
+            inquiry_drawer_mode: "workflow_v1" as const,
+            inquiry_workflow_sections: [{ key: "inq_a", title: "A", field_keys: ["name"] }],
+        };
+        const labels = { new_group: "New group" };
+        const keys = listOpportunityWorkflowV1CanonicalSectionKeys(cfg, fieldDefs, labels, {
+            proposedOrder: ["inq_a", "new_group", "details", "inquiry_children", "inquiry_tuition"],
+        });
+        expect(keys).toContain("new_group");
     });
 });
