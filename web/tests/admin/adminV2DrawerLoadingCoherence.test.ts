@@ -71,13 +71,20 @@ describe("AdminV2 drawer outside click", () => {
     });
 });
 
-describe("Dept paired oper queue skeleton alignment", () => {
-    it("uses the same row count for throughput and attention panels", () => {
+describe("Dept paired oper loading alignment", () => {
+    it("legacy row skeleton keeps matched row count for throughput and attention", () => {
         expect(DEPT_PAIRED_OPER_QUEUE_SKELETON_ROW_COUNT).toBe(5);
         const src = read("components/admin/workspace/DepartmentPairedOperQueuesSkeleton.tsx");
         expect(src).toContain('variant="throughput"');
         expect(src).toContain('variant="attention"');
         expect((src.match(/count=\{rowCount\}/g) ?? []).length).toBe(2);
+        expect(src).toContain("DeptPairedOperQuietReserve");
+    });
+
+    it("route cold shell uses quiet reserve not row skeleton", () => {
+        const cold = read("components/admin/workspace/DepartmentWorkspaceColdShell.tsx");
+        expect(cold).toContain("DeptPairedOperQuietReserve");
+        expect(cold).not.toContain("DeptPairedOperQueuesSkeleton");
     });
 });
 
@@ -128,13 +135,50 @@ describe("Drawer opportunity header grouped loading", () => {
 });
 
 describe("Dept operational panel render-state", () => {
-    it("holds paired panels until throughput shape and attention are ready", () => {
+    it("locks throughput presentation before reveal (no live pipeline vs WU swap)", () => {
         const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
-        expect(src).toContain("deptOperPanelsRevealReady");
+        expect(src).toContain("deptThroughputPresentation");
+        expect(src).toContain("DeptThroughputPresentation");
+        expect(src).toContain("deptOperPanelTitleLocked");
+        expect(src).toMatch(/showPipelineLanes = deptThroughputPresentation === "pipeline_lanes"/);
+        expect(src).toMatch(/showWuThroughputRows = deptThroughputPresentation === "wu_summaries"/);
+        expect(src).not.toMatch(
+            /showWuThroughputRows[\s\S]*?!deptExpectsPipelineLanes/,
+        );
+    });
+
+    it("holds paired panels until throughput body, attention body, and shape lock are ready (PR-4.5)", () => {
+        const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
+        expect(src).toContain("deptOperationalSurfaceReady");
+        expect(src).toContain("deptThroughputBodyReady");
+        expect(src).toContain("deptAttentionBodyReady");
         expect(src).toContain("deptExpectsPipelineLanes");
-        expect(src).toContain("showPipelineLanes");
+        expect(src).not.toContain("deptOperPanelsRevealReady");
+        expect(src).not.toContain("deptThroughputRevealReady");
+        expect(src).not.toContain("deptThroughputPanelReady");
         expect(src).not.toContain("totalPending=");
-        expect(src).toMatch(/deptOperPanelsRevealReady \? \([\s\S]*?throughputPairedPanels[\s\S]*?DeptPairedOperQuietReserve/);
+        expect(src).toMatch(
+            /deptOperationalSurfaceReady \? \([\s\S]*?throughputPairedPanels[\s\S]*?DeptPairedOperQuietReserve/,
+        );
+        expect(src).toMatch(/deptAttentionBuckets !== null[\s\S]*?No Needs Attention types configured/);
+        expect(src).toMatch(/setDeptAttentionBuckets\(null\)/);
+    });
+
+    it("defers enrollment actions rail until operational surface is ready", () => {
+        const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
+        expect(src).toContain("deptEnrollmentRailRevealReady");
+        expect(src).toMatch(
+            /!deptOperationalSurfaceReady \|\| !deptEnrollmentRailRevealReady \? \([\s\S]*?WorkspaceActionsRailPlaceholder/,
+        );
+        expect(src).not.toMatch(
+            /railSlot[\s\S]*?adminv2-ws-soft-content-reveal[\s\S]*?ActionsBlock/,
+        );
+    });
+
+    it("defers KPI strip until operational block is ready (PERF-B-02)", () => {
+        const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
+        expect(src).toContain("deptOperationalBlockReady");
+        expect(src).toMatch(/!deptOperationalBlockReady \|\| deptKpiPlacementPending/);
     });
 
     it("fetches attention once after work units resolve (no early parallel refetch)", () => {

@@ -57,6 +57,9 @@ import { compareNeedsAttentionBuckets } from "@/lib/opportunities/needsAttention
 
 const WORKSPACE_BASE = "/adminV2/workspace";
 
+/** Locked before oper reveal — never flips after `deptOperationalSurfaceReady` (PERF-B-01 / PR-4.5). */
+type DeptThroughputPresentation = "pipeline_lanes" | "wu_summaries" | "empty";
+
 type WorkflowKpis = {
     runs_today: number;
     runs_last_7d: number;
@@ -254,6 +257,10 @@ export default function AdminV2WorkspaceDepartmentPage() {
 
     const [deptPipelineExecSurface, setDeptPipelineExecSurface] = useState<DeptPipelineExecSurface | null>(null);
     const [deptPipelineExecLoading, setDeptPipelineExecLoading] = useState(false);
+    /** One-shot per dept/site navigation — throughput UI family does not change after oper reveal. */
+    const [deptThroughputPresentation, setDeptThroughputPresentation] =
+        useState<DeptThroughputPresentation | null>(null);
+    const [deptOperPanelTitleLocked, setDeptOperPanelTitleLocked] = useState("Work Unit Queue");
 
     const primaryWorkUnit = useMemo(() => {
         const list = deptWorkUnits ?? [];
@@ -281,6 +288,11 @@ export default function AdminV2WorkspaceDepartmentPage() {
         setDeptWorkUnitSummaries({});
         setDeptQueueSummariesLoading(true);
         setDeptQueueSummariesError(null);
+        setDeptAttentionBuckets(null);
+        setDeptAttentionBucketsLoading(false);
+        setDeptAttentionBucketsError(null);
+        setDeptAttentionPreviewTotal(null);
+        setEnrollmentDeptRightRail(null);
         setDeptLoading(false);
         perfDeptLoad({
             phase: "shell_seed",
@@ -386,6 +398,11 @@ export default function AdminV2WorkspaceDepartmentPage() {
         setDeptWorkUnitsError(null);
         setDeptQueueSummariesLoading(true);
         setDeptQueueSummariesError(null);
+        setDeptAttentionBuckets(null);
+        setDeptAttentionBucketsLoading(false);
+        setDeptAttentionBucketsError(null);
+        setDeptAttentionPreviewTotal(null);
+        setEnrollmentDeptRightRail(null);
 
         const summariesRoute = appendWorkspaceSiteToUrl(
             `/api/admin/departments/${encodeURIComponent(departmentId)}/work-unit-queue-summaries?include_previews=false&count_mode=exact&summary_mode=priority&priority_budget=5`,
@@ -718,6 +735,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     })();
                 } else if (!cancelled) {
                     setDeptQueueSummariesLoading(false);
+                    setDeptAttentionBuckets([]);
+                    setDeptAttentionBucketsLoading(false);
                 }
 
                 if (typeof performance !== "undefined" && typeof window !== "undefined") {
@@ -732,6 +751,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     setDeptWorkUnitSummaries({});
                     setDeptQueueSummariesError(e instanceof Error ? e.message : "Failed to load queue summaries");
                     setDeptQueueSummariesLoading(false);
+                    setDeptAttentionBuckets([]);
+                    setDeptAttentionBucketsLoading(false);
                     setDeptLoading(false);
                 }
             }
@@ -747,7 +768,6 @@ export default function AdminV2WorkspaceDepartmentPage() {
         return deptLoading;
     }, [departmentId, deptLoading]);
 
-    /** KPI strip only — operational panels use a separate readiness gate. */
     const deptKpiPlacementPending = !dept || departmentPageBlockingLoad || deptPlacementRows === undefined;
 
     const deptExpectsPipelineLanes = useMemo(() => {
@@ -756,35 +776,127 @@ export default function AdminV2WorkspaceDepartmentPage() {
         return list.some((w) => (w.key ?? "").trim().toLowerCase() === "enrollment_pipeline");
     }, [deptWorkUnits]);
 
-    const deptThroughputPanelReady = useMemo(() => {
-        if (!dept || departmentPageBlockingLoad) return false;
-        const list = deptWorkUnits ?? [];
-        if (!list.length) return true;
-        if (deptExpectsPipelineLanes) {
-            return !deptPipelineExecLoading;
+    useEffect(() => {
+        setDeptThroughputPresentation(null);
+        setDeptOperPanelTitleLocked("Work Unit Queue");
+    }, [departmentId, selectedSiteId]);
+
+    /** Decide throughput row family before oper reveal (pipeline lanes vs per-WU summaries). */
+    useEffect(() => {
+        if (!departmentId || !dept?.id || departmentPageBlockingLoad) return;
+        if (deptThroughputPresentation != null) return;
+        if (deptWorkUnits === null) {
+            if (deptWorkUnitsError) {
+                setDeptThroughputPresentation("empty");
+                setDeptOperPanelTitleLocked("Work Unit Queue");
+            }
+            return;
         }
-        return !deptQueueSummariesLoading;
+
+        const list = deptWorkUnits;
+        if (!list.length) {
+            setDeptThroughputPresentation("empty");
+            setDeptOperPanelTitleLocked("Work Unit Queue");
+            return;
+        }
+
+        if (deptExpectsPipelineLanes) {
+            if (deptPipelineExecLoading) return;
+            if (deptPipelineExecSurface?.lanes?.length) {
+                setDeptThroughputPresentation("pipeline_lanes");
+                setDeptOperPanelTitleLocked(
+                    deptPipelineExecSurface.panelTitle?.trim() || "Work Unit Queue"
+                );
+            } else {
+                setDeptThroughputPresentation("wu_summaries");
+                setDeptOperPanelTitleLocked("Work Unit Queue");
+            }
+            return;
+        }
+
+        if (deptQueueSummariesLoading) return;
+        setDeptThroughputPresentation("wu_summaries");
+        setDeptOperPanelTitleLocked("Work Unit Queue");
+    }, [
+        departmentId,
+        dept?.id,
+        departmentPageBlockingLoad,
+        deptThroughputPresentation,
+        deptWorkUnits,
+        deptExpectsPipelineLanes,
+        deptPipelineExecLoading,
+        deptPipelineExecSurface,
+        deptQueueSummariesLoading,
+        deptWorkUnitsError,
+    ]);
+
+    const deptThroughputWuRows = useMemo(() => {
+        return (deptWorkUnits ?? []).filter((w) => (w.key ?? "").trim().toLowerCase() !== "needs_attention");
+    }, [deptWorkUnits]);
+
+    /** Throughput panel has real rows or a confirmed final empty — not an unresolved blank list (PERF-B-02 tighten). */
+    const deptThroughputBodyReady = useMemo(() => {
+        if (!dept || departmentPageBlockingLoad) return false;
+        if (deptWorkUnits === null) return Boolean(deptWorkUnitsError);
+        if (!deptThroughputPresentation) return false;
+
+        if (deptThroughputPresentation === "empty") {
+            return deptThroughputWuRows.length === 0;
+        }
+
+        if (deptThroughputPresentation === "pipeline_lanes") {
+            return Boolean(deptPipelineExecSurface?.lanes?.length);
+        }
+
+        if (deptQueueSummariesLoading && !deptQueueSummariesError) return false;
+        if (deptWorkUnitsError || deptQueueSummariesError) return true;
+        if (deptThroughputWuRows.length === 0) return true;
+
+        return deptThroughputWuRows.every((wu) => {
+            const s = deptWorkUnitSummaries[wu.id];
+            return s !== undefined && !deptQueueSummariesLoading;
+        });
     }, [
         dept,
         departmentPageBlockingLoad,
         deptWorkUnits,
-        deptExpectsPipelineLanes,
-        deptPipelineExecLoading,
+        deptThroughputPresentation,
+        deptThroughputWuRows,
+        deptPipelineExecSurface,
         deptQueueSummariesLoading,
+        deptQueueSummariesError,
+        deptWorkUnitsError,
+        deptWorkUnitSummaries,
     ]);
 
-    const deptAttentionPanelReady = useMemo(() => {
+    /** Needs Attention: fetch settled with a definitive buckets array (empty allowed) — not `null` while unresolved. */
+    const deptAttentionBodyReady = useMemo(() => {
         if (!dept || departmentPageBlockingLoad) return false;
-        return !deptAttentionBucketsLoading;
-    }, [dept, departmentPageBlockingLoad, deptAttentionBucketsLoading]);
+        if (deptWorkUnits === null) return deptWorkUnitsError != null;
+        if (deptAttentionBucketsLoading) return false;
+        if (deptAttentionBucketsError) return true;
+        return deptAttentionBuckets !== null;
+    }, [
+        dept,
+        departmentPageBlockingLoad,
+        deptWorkUnits,
+        deptAttentionBucketsLoading,
+        deptAttentionBucketsError,
+        deptAttentionBuckets,
+        deptWorkUnitsError,
+    ]);
 
-    /** One operational reveal — avoid WU rows swapping to pipeline lanes or attention refetch thrash. */
-    const deptOperPanelsRevealReady = deptThroughputPanelReady && deptAttentionPanelReady;
+    /**
+     * One operational surface reveal — shape, throughput body, and attention body all ready (PR-4.5).
+     * Replaces early reveal of empty panel chrome with `—` placeholder rows.
+     */
+    const deptOperationalSurfaceReady =
+        deptThroughputBodyReady && deptAttentionBodyReady && deptThroughputPresentation != null;
 
-    const deptOperPanelTitle =
-        deptOperPanelsRevealReady && deptPipelineExecSurface?.panelTitle
-            ? deptPipelineExecSurface.panelTitle
-            : "Work Unit Queue";
+    /** KPI and automations share the oper surface gate; enrollment actions also wait for rail fetch to settle. */
+    const deptOperationalBlockReady = deptOperationalSurfaceReady;
+    const deptEnrollmentRailRevealReady =
+        !isEnrollmentLikeDepartmentKey(deptKey) || enrollmentDeptRightRail !== null;
 
     useEffect(() => {
         if (!isEnrollmentLikeDepartmentKey(deptKey) || !departmentId || !primaryWorkUnit?.id) {
@@ -916,10 +1028,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
         [departmentId, enrollmentRightRailByKey, needsAttentionHref, openDrawer, primaryWorkUnit?.id, router]
     );
 
-    const showPipelineLanes =
-        Boolean(deptPipelineExecSurface && deptPipelineExecSurface.lanes.length > 0);
-    const showWuThroughputRows =
-        !deptExpectsPipelineLanes || (!deptPipelineExecLoading && !showPipelineLanes);
+    const showPipelineLanes = deptThroughputPresentation === "pipeline_lanes";
+    const showWuThroughputRows = deptThroughputPresentation === "wu_summaries";
 
     const throughputLaneBody = (
         <ul className="adminv2-ws-queue-list" role="list">
@@ -986,7 +1096,9 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             </div>
                         </li>
                     ) : null}
-                    {!deptAttentionBucketsLoading && !deptAttentionBucketsError && sortedDeptAttentionBuckets.length === 0 ? (
+                    {deptAttentionBuckets !== null &&
+                    !deptAttentionBucketsError &&
+                    sortedDeptAttentionBuckets.length === 0 ? (
                         <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                             <div className="rounded-lg border border-admin-border bg-white/50 px-3 py-3 text-xs text-alloy-midnight/60">
                                 No Needs Attention types configured.
@@ -1023,9 +1135,13 @@ export default function AdminV2WorkspaceDepartmentPage() {
     );
 
     const throughputPairedPanels = (
-        <div className="adminv2-ws-soft-content-reveal">
+        <div data-adminv2-dept-oper-revealed="true">
             <WorkspacePairedOperPanelsGrid>
-                <WorkspacePairedOperPanel tone="throughput" ariaLabel={deptOperPanelTitle} title={deptOperPanelTitle}>
+                <WorkspacePairedOperPanel
+                    tone="throughput"
+                    ariaLabel={deptOperPanelTitleLocked}
+                    title={deptOperPanelTitleLocked}
+                >
                     {throughputLaneBody}
                 </WorkspacePairedOperPanel>
                 <WorkspacePairedOperPanel
@@ -1071,19 +1187,17 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     briefSubtitle=""
                     signalsSlot={null}
                     kpiSlot={
-                        deptKpiPlacementPending ? (
+                        !deptOperationalBlockReady || deptKpiPlacementPending ? (
                             <WorkspaceQuietKpiReserve id="dept-kpi-quiet-reserve" />
                         ) : kpis.length ? (
-                            <div className="adminv2-ws-soft-content-reveal">
-                                <KPIBlock kpis={kpis} maxVisible={5} />
-                            </div>
+                            <KPIBlock kpis={kpis} maxVisible={5} />
                         ) : null
                     }
                     throughputSlot={
-                        deptOperPanelsRevealReady ? (
+                        deptOperationalSurfaceReady ? (
                             throughputPairedPanels
                         ) : (
-                            <DeptPairedOperQuietReserve throughputTitle="Work Unit Queue" />
+                            <DeptPairedOperQuietReserve throughputTitle={deptOperPanelTitleLocked} />
                         )
                     }
                     attentionSlot={null}
@@ -1094,7 +1208,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         >
                             <AutomationWorkflowsBlock
                                 title="Automations"
-                                kpisLoading={workflowKpisLoading && deptOperPanelsRevealReady}
+                                kpisLoading={!deptOperationalBlockReady || workflowKpisLoading}
                                 kpis={{
                                     runs_today: workflowKpis.runs_today,
                                     failed_last_7d: workflowKpis.failed_last_7d,
@@ -1109,15 +1223,15 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     }
                     railSlot={
                         isEnrollmentLikeDepartmentKey(deptKey) && primaryWorkUnit ? (
-                            (enrollmentDepartmentRailModel?.systemActions?.length ?? 0) > 0 ? (
-                                <div className="adminv2-ws-soft-content-reveal">
-                                    <ActionsBlock
-                                        model={enrollmentDepartmentRailModel!}
-                                        onAction={onEnrollmentDeptRailAction}
-                                        title="Actions"
-                                        surface="department"
-                                    />
-                                </div>
+                            !deptOperationalSurfaceReady || !deptEnrollmentRailRevealReady ? (
+                                <WorkspaceActionsRailPlaceholder />
+                            ) : (enrollmentDepartmentRailModel?.systemActions?.length ?? 0) > 0 ? (
+                                <ActionsBlock
+                                    model={enrollmentDepartmentRailModel!}
+                                    onAction={onEnrollmentDeptRailAction}
+                                    title="Actions"
+                                    surface="department"
+                                />
                             ) : (
                                 <WorkspaceActionsRailPlaceholder />
                             )
