@@ -36,7 +36,7 @@ Forms, public booking, workflow status-transition enforcement, inquiry_child/OCM
 | Card | Status | Summary |
 |------|--------|---------|
 | 0 | **Done** | Types, parser, `resolveEffectiveFieldBehavior`, unit tests |
-| 1 | Pending | Persist placement via layout PATCH API |
+| 1 | **Done** | `PATCH …/opportunity-workflow-v1-field-placements` |
 | 2 | Pending | Drawer GET effective `_field_policy_resolved` |
 | 3 | Pending | Opportunity PATCH enforcement |
 | 4 | Pending | Placement-aware layout integrity |
