@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import { isAdminV2OperNavigationActive } from "@/lib/perf/alloyPerfGlobal";
 
 const CACHE_KEY = "entity_labels_cache";
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -114,7 +115,8 @@ export function EntityLabelsProvider({
     const refreshEntityLabels = useCallback(async () => {
         try {
             const fetchInit = workspaceDataFetchInit() ?? {};
-            const res = await dedupeAdminFetchWithTtl("/api/admin/entity-labels", fetchInit, 4500);
+            const ttlMs = seeded ? 120_000 : 4500;
+            const res = await dedupeAdminFetchWithTtl("/api/admin/entity-labels", fetchInit, ttlMs);
             const json = await res.json().catch(() => ({}));
             if (!res.ok) return;
             const effective = (json as { effective?: { entity_type: string; singular: string | null; plural: string | null }[] }).effective ?? [];
@@ -126,11 +128,18 @@ export function EntityLabelsProvider({
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [seeded]);
 
     useEffect(() => {
+        const navActive = isAdminV2OperNavigationActive(12_000);
+        const idleTimeoutMs = seeded ? (navActive ? 20_000 : 8_000) : 3500;
+        const fallbackMs = seeded ? (navActive ? 12_000 : 3_000) : 400;
+
         if (seeded) {
-            return scheduleAdminV2BackgroundWork(() => refreshEntityLabels(), { idleTimeoutMs: 4000, fallbackMs: 2000 });
+            return scheduleAdminV2BackgroundWork(() => {
+                if (isAdminV2OperNavigationActive(12_000)) return;
+                void refreshEntityLabels();
+            }, { idleTimeoutMs, fallbackMs });
         }
         const cached = loadFromCache();
         if (Object.keys(cached ?? {}).length > 0) {

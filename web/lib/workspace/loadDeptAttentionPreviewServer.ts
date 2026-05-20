@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
+import type { AdminAccessScopeDimensions, RecordScopeConstraints } from "@/lib/admin/accessScope";
+import type { StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
 import { buildOpportunityAttentionQueueItems } from "@/lib/workspace/buildOpportunityAttentionQueueItems";
 import { resolveOpportunityAttentionConfigFromMetadata } from "@/lib/opportunities/opportunityAttentionConfig";
 import {
@@ -52,6 +53,9 @@ export async function loadDeptAttentionPreviewServer(params: {
     workUnitIdParam?: string | null;
     /** When set (e.g. dept operational bootstrap), avoids a second work-units list query. */
     workUnitRows?: WorkUnitRowLite[];
+    recordScopeImpossible?: boolean;
+    recordScopeConstraints?: RecordScopeConstraints | null;
+    opportunityStatusDefs?: StatusDefinitionRow[];
 }): Promise<DeptAttentionPreviewPayload> {
     const { supabase, orgId, departmentId, departmentMetadata, accessDim } = params;
 
@@ -88,14 +92,17 @@ export async function loadDeptAttentionPreviewServer(params: {
         const wuDept = String((wuRow as { department_id?: string | null } | null)?.department_id ?? "").trim();
         if (wuRow && wuDept === departmentId) {
             const wuMeta = (wuRow as { metadata?: unknown }).metadata ?? null;
-            const scoped = await buildWorkUnitScopedNeedsAttentionLaneBuckets({
-                supabase,
-                orgId,
-                workUnitId: targetWuId,
-                workUnitMetadata: wuMeta,
-                departmentMetadata,
-                accessDim,
-            });
+                const scoped = await buildWorkUnitScopedNeedsAttentionLaneBuckets({
+                    supabase,
+                    orgId,
+                    workUnitId: targetWuId,
+                    workUnitMetadata: wuMeta,
+                    departmentMetadata,
+                    accessDim,
+                    recordScopeImpossible: params.recordScopeImpossible,
+                    recordScopeConstraints: params.recordScopeConstraints,
+                    opportunityStatusDefs: params.opportunityStatusDefs,
+                });
 
             const attnCfg = resolveOpportunityAttentionConfigFromMetadata(wuMeta);
             const rules = {

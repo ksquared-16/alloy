@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import { accessScopeRestrictsData, resolveRecordScopeConstraints, type RecordScopeConstraints } from "@/lib/admin/accessScope";
-import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
+import { fetchEffectiveStatusDefinitions, type StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
 import { resolveOpportunityAttentionConfigFromMetadata } from "@/lib/opportunities/opportunityAttentionConfig";
 import { resolveOpportunityAttention, type OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
 import {
@@ -30,6 +30,10 @@ export async function buildWorkUnitScopedNeedsAttentionLaneBuckets(params: {
     workUnitMetadata: unknown | null;
     departmentMetadata: unknown | null;
     accessDim?: AdminAccessScopeDimensions | null;
+    /** Dept bootstrap: reuse scope resolution from the route. */
+    recordScopeImpossible?: boolean;
+    recordScopeConstraints?: RecordScopeConstraints | null;
+    opportunityStatusDefs?: StatusDefinitionRow[];
 }): Promise<{
     needs_attention_buckets: NeedsAttentionBucketWithCount[];
     /** Unique inquiries matching resolver membership (same set as unfiltered needs_attention tab head). */
@@ -40,8 +44,27 @@ export async function buildWorkUnitScopedNeedsAttentionLaneBuckets(params: {
 }> {
     const { supabase, orgId, workUnitId, workUnitMetadata, departmentMetadata, accessDim = null } = params;
 
-    let scopeFilter: RecordScopeConstraints | null = null;
-    if (accessDim && accessScopeRestrictsData(accessDim)) {
+    let scopeFilter: RecordScopeConstraints | null = params.recordScopeConstraints ?? null;
+    if (params.recordScopeImpossible === true) {
+        const semantics = buildQueueServiceAttentionSemantics({
+            candidateFetchCap: NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP,
+            rawCandidatesFetched: 0,
+            fetchMode: "list_cap",
+        });
+        const cfg = resolveOpportunityAttentionConfigFromMetadata(workUnitMetadata ?? null);
+        const bucketDefs = resolveNeedsAttentionBucketsWithPrecedence(workUnitMetadata, departmentMetadata);
+        return {
+            needs_attention_buckets: applyAttentionConfigLabelsToBuckets(
+                bucketCountsFromResolverMatches(bucketDefs, []),
+                cfg,
+            ),
+            total_matches: 0,
+            attention_reason_counts: [],
+            opportunity_needs_attention_semantics: semantics,
+            resolver_matches: [],
+        };
+    }
+    if (scopeFilter == null && accessDim && accessScopeRestrictsData(accessDim)) {
         const c = await resolveRecordScopeConstraints(supabase, orgId, accessDim);
         if (c.impossible) {
             const semantics = buildQueueServiceAttentionSemantics({
@@ -65,7 +88,9 @@ export async function buildWorkUnitScopedNeedsAttentionLaneBuckets(params: {
         scopeFilter = c;
     }
 
-    const oppDefs = await fetchEffectiveStatusDefinitions(supabase, orgId, "opportunities", { activeOnly: true });
+    const oppDefs =
+        params.opportunityStatusDefs ??
+        (await fetchEffectiveStatusDefinitions(supabase, orgId, "opportunities", { activeOnly: true }));
     const attentionConfig = resolveOpportunityAttentionConfigFromMetadata(workUnitMetadata ?? null);
     const refUtc = new Date();
     const nowMs = refUtc.getTime();

@@ -10,6 +10,7 @@ import { ADMIN_V2_OPEN_TASKS_MODAL, fetchOperationalTasksSummary, readJson } fro
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
 import { neutral } from "@/styles/tokens/colors";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
+import { isAdminV2OperNavigationActive } from "@/lib/perf/alloyPerfGlobal";
 
 type TaskCounts = { open: number; due_soon: number; overdue: number };
 
@@ -25,6 +26,7 @@ export default function OperationalTasksNavBadge({
 
     const load = useCallback(async () => {
         if (!enabled) return;
+        if (isAdminV2OperNavigationActive(10_000)) return;
         try {
             const res = await fetchOperationalTasksSummary();
             const json = await readJson<{ ok?: boolean; counts?: TaskCounts }>(res);

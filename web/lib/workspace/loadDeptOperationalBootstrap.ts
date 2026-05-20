@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AdminAccessScopeDimensions, RecordScopeConstraints } from "@/lib/admin/accessScope";
 import { departmentIdAllowed } from "@/lib/admin/accessScope";
 import {
+    buildQueueSummariesSharedBootstrap,
     getDepartmentWorkUnitQueueSummaries,
     type QueueSummaryRequestMode,
 } from "@/lib/queues/QueueService";
@@ -9,6 +10,8 @@ import type { QueueViewerTimezoneMeta } from "@/lib/queues/types";
 import { loadDeptAttentionPreviewServer, type DeptAttentionPreviewPayload } from "@/lib/workspace/loadDeptAttentionPreviewServer";
 import { resolveDeptPipelineExecSurfaceServer } from "@/lib/workspace/resolveDeptPipelineExecSurfaceServer";
 import type { DeptPipelineExecSurface } from "@/lib/workspace/resolveDeptPipelineExecSurface";
+import { logDeptOperationalBootstrapPerf, type DeptBootstrapPerfPhases } from "@/lib/workspace/deptOperationalBootstrapPerf";
+import { pickDeptPipelineWorkUnit } from "@/lib/workspace/pickDeptPipelineWorkUnit";
 
 export type DeptOperationalBootstrapPayload = {
     department: {
@@ -43,11 +46,14 @@ export async function loadDeptOperationalBootstrap(params: {
     attentionWorkUnitIdParam?: string | null;
 }): Promise<DeptOperationalBootstrapPayload | { error: string; status: number }> {
     const { supabase, orgId, departmentId, accessDim } = params;
+    const loaderT0 = Date.now();
+    const phases: DeptBootstrapPerfPhases = {};
 
     if (!departmentIdAllowed(accessDim, departmentId)) {
         return { error: "Not found", status: 404 };
     }
 
+    const tFetch0 = Date.now();
     const [deptRes, wuRes] = await Promise.all([
         supabase
             .from("departments")
@@ -62,6 +68,8 @@ export async function loadDeptOperationalBootstrap(params: {
             .eq("department_id", departmentId)
             .order("sort_order", { ascending: true }),
     ]);
+    phases.dept_fetch_ms = Date.now() - tFetch0;
+    phases.work_units_fetch_ms = phases.dept_fetch_ms;
 
     if (deptRes.error) {
         return { error: deptRes.error.message, status: 500 };
@@ -79,58 +87,125 @@ export async function loadDeptOperationalBootstrap(params: {
     }));
     const workUnitIds = workUnits.map((w) => w.id);
 
-    const pipelineCandidates = wuRows
-        .filter((w) => String((w as { key?: string | null }).key ?? "").trim().toLowerCase() !== "needs_attention")
-        .map((w) => ({
+    const pipelineWorkUnit = pickDeptPipelineWorkUnit(
+        wuRows.map((w) => ({
             id: String((w as { id: string }).id),
             key: (w as { key?: string | null }).key ?? null,
             queue_definition: (w as { queue_definition?: unknown }).queue_definition,
             department_id: (w as { department_id?: string | null }).department_id ?? null,
-        }));
+            metadata: (w as { metadata?: unknown }).metadata,
+        })),
+        departmentId
+    );
+
+    const summaryWorkUnitIds = workUnitIds.filter((id) => {
+        if (pipelineWorkUnit && id === pipelineWorkUnit.id) return false;
+        const wu = workUnits.find((w) => w.id === id);
+        const key = (wu?.key ?? "").trim().toLowerCase();
+        if (key === "needs_attention") return false;
+        return true;
+    });
+    phases.skipped_summary_wu_ids = workUnitIds.length - summaryWorkUnitIds.length;
+    phases.summary_wu_count = summaryWorkUnitIds.length;
+    phases.pipeline_wu_count = pipelineWorkUnit ? 1 : 0;
+
+    const workUnitPreloadById = new Map(
+        wuRows.map((w) => [
+            String((w as { id: string }).id),
+            {
+                queue_definition: (w as { queue_definition?: unknown }).queue_definition,
+                metadata: (w as { metadata?: unknown }).metadata ?? null,
+                department_id: (w as { department_id?: string | null }).department_id ?? null,
+            },
+        ])
+    );
 
     const departmentMetadata = (deptRow as { metadata?: unknown }).metadata ?? null;
 
-    const [summaries, attention, pipeline_surface] = await Promise.all([
-        getDepartmentWorkUnitQueueSummaries({
-            orgId,
-            departmentId,
-            workUnitIds,
-            limit: params.summaries.limit,
-            workUnitConcurrency: params.summaries.workUnitConcurrency,
-            includePreviews: params.summaries.includePreviews,
-            countAccuracy: params.summaries.countAccuracy,
-            summaryMode: params.summaries.summaryMode,
-            focusQueueKey: params.summaries.focusQueueKey,
-            priorityBudget: params.summaries.priorityBudget,
-            viewerDisplayTimeZone: params.viewerDisplayTimeZone,
-            recordScopeImpossible: params.recordScopeImpossible,
-            recordScopeConstraints: params.recordScopeConstraints,
-        }),
-        loadDeptAttentionPreviewServer({
+    const tShared0 = Date.now();
+    const sharedBootstrap = await buildQueueSummariesSharedBootstrap(orgId);
+    phases.shared_bootstrap_ms = Date.now() - tShared0;
+
+    const wuRowsLite = wuRows.map((w) => ({
+        id: String((w as { id: string }).id),
+        key: (w as { key?: string | null }).key ?? null,
+        metadata: (w as { metadata?: unknown }).metadata,
+        department_id: (w as { department_id?: string | null }).department_id ?? null,
+    }));
+
+    const tParallel0 = Date.now();
+    const summariesP = (async () => {
+        const t0 = Date.now();
+        const out =
+            summaryWorkUnitIds.length === 0
+                ? { work_units: [] as Awaited<ReturnType<typeof getDepartmentWorkUnitQueueSummaries>>["work_units"] }
+                : await getDepartmentWorkUnitQueueSummaries({
+                      orgId,
+                      departmentId,
+                      workUnitIds: summaryWorkUnitIds,
+                      workUnitPreloadById,
+                      limit: params.summaries.limit,
+                      workUnitConcurrency: params.summaries.workUnitConcurrency,
+                      includePreviews: params.summaries.includePreviews,
+                      countAccuracy: params.summaries.countAccuracy,
+                      summaryMode: params.summaries.summaryMode,
+                      focusQueueKey: params.summaries.focusQueueKey,
+                      priorityBudget: params.summaries.priorityBudget,
+                      viewerDisplayTimeZone: params.viewerDisplayTimeZone,
+                      recordScopeImpossible: params.recordScopeImpossible,
+                      recordScopeConstraints: params.recordScopeConstraints,
+                  });
+        phases.queue_summaries_ms = Date.now() - t0;
+        return out;
+    })();
+
+    const attentionP = (async () => {
+        const t0 = Date.now();
+        const out = await loadDeptAttentionPreviewServer({
             supabase,
             orgId,
             departmentId,
             departmentMetadata,
             accessDim,
             workUnitIdParam: params.attentionWorkUnitIdParam,
-            workUnitRows: wuRows.map((w) => ({
+            workUnitRows: wuRowsLite,
+            recordScopeImpossible: params.recordScopeImpossible,
+            recordScopeConstraints: params.recordScopeConstraints,
+            opportunityStatusDefs: sharedBootstrap.opportunityStatusDefs,
+        });
+        phases.attention_ms = Date.now() - t0;
+        return out;
+    })();
+
+    const pipelineP = (async () => {
+        const t0 = Date.now();
+        const pipelineCandidates = wuRows
+            .filter((w) => String((w as { key?: string | null }).key ?? "").trim().toLowerCase() !== "needs_attention")
+            .map((w) => ({
                 id: String((w as { id: string }).id),
                 key: (w as { key?: string | null }).key ?? null,
-                metadata: (w as { metadata?: unknown }).metadata,
+                queue_definition: (w as { queue_definition?: unknown }).queue_definition,
                 department_id: (w as { department_id?: string | null }).department_id ?? null,
-            })),
-        }),
-        resolveDeptPipelineExecSurfaceServer({
+                metadata: (w as { metadata?: unknown }).metadata,
+            }));
+        const out = await resolveDeptPipelineExecSurfaceServer({
             departmentId,
             candidates: pipelineCandidates,
             orgId,
+            pipelineWorkUnit,
+            sharedBootstrap,
             recordScopeImpossible: params.recordScopeImpossible,
             recordScopeConstraints: params.recordScopeConstraints,
             viewerDisplayTimeZone: params.viewerDisplayTimeZone,
-        }),
-    ]);
+        });
+        phases.pipeline_ms = Date.now() - t0;
+        return out;
+    })();
 
-    return {
+    const [summaries, attention, pipeline_surface] = await Promise.all([summariesP, attentionP, pipelineP]);
+    phases.serialize_ms = Date.now() - tParallel0;
+
+    const payload: DeptOperationalBootstrapPayload = {
         department: {
             id: String((deptRow as { id: string }).id),
             name: (deptRow as { name?: string | null }).name ?? null,
@@ -142,4 +217,13 @@ export async function loadDeptOperationalBootstrap(params: {
         attention,
         pipeline_surface,
     };
+
+    logDeptOperationalBootstrapPerf({
+        departmentId,
+        totalMs: Date.now() - loaderT0,
+        loaderMs: Date.now() - loaderT0,
+        phases,
+    });
+
+    return payload;
 }

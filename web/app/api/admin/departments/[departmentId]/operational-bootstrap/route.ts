@@ -9,6 +9,7 @@ import {
 import { fetchEffectiveUserDisplayTimezone } from "@/lib/admin/timezoneContract";
 import { QueueServiceError, type QueueSummaryRequestMode } from "@/lib/queues/QueueService";
 import { loadDeptOperationalBootstrap } from "@/lib/workspace/loadDeptOperationalBootstrap";
+import { logDeptOperationalBootstrapPerf } from "@/lib/workspace/deptOperationalBootstrapPerf";
 
 function parseLimit(searchParams: URLSearchParams): number | undefined {
     const raw = (searchParams.get("limit") ?? "").trim();
@@ -64,34 +65,36 @@ function parsePriorityBudget(searchParams: URLSearchParams): number | undefined 
  * department, work units, queue summaries, needs-attention preview, pipeline surface.
  */
 export async function GET(request: NextRequest, context: { params: Promise<{ departmentId: string }> }) {
+    const routeT0 = Date.now();
+    const tGate0 = Date.now();
     const gate = await loadAdminRouteGate();
+    const routeGateMs = Date.now() - tGate0;
     if (!gate.ok) return adminRouteGateFailureResponse(gate);
 
     const { departmentId } = await context.params;
     if (!departmentId) return NextResponse.json({ error: "Missing department id" }, { status: 400 });
 
     const supabase = createAdminClient();
-    if (!(await assertRowOrg(supabase, "departments", departmentId, gate.orgId)).ok) {
-        return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-
-    const t0 = Date.now();
+    const tPrep0 = Date.now();
     try {
         const workspaceSiteId = parseWorkspaceSiteIdFromSearchParams(request.nextUrl.searchParams);
-        const { recordScopeImpossible, recordScopeConstraints } = await resolveQueueRecordScopeConstraints(
-            supabase,
-            gate.orgId,
-            gate.dim,
-            workspaceSiteId
-        );
-
-        const viewerDisplayTimeZone = await fetchEffectiveUserDisplayTimezone(supabase, {
-            orgId: gate.orgId,
-            userId: gate.userId,
-        });
+        const [rowOrg, scopeBundle, viewerDisplayTimeZone] = await Promise.all([
+            assertRowOrg(supabase, "departments", departmentId, gate.orgId),
+            resolveQueueRecordScopeConstraints(supabase, gate.orgId, gate.dim, workspaceSiteId),
+            fetchEffectiveUserDisplayTimezone(supabase, {
+                orgId: gate.orgId,
+                userId: gate.userId,
+            }),
+        ]);
+        const routePrepMs = Date.now() - tPrep0;
+        if (!rowOrg.ok) {
+            return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
+        const { recordScopeImpossible, recordScopeConstraints } = scopeBundle;
 
         const attentionWorkUnitIdParam = (request.nextUrl.searchParams.get("work_unit_id") ?? "").trim() || null;
 
+        const tLoader0 = Date.now();
         const payload = await loadDeptOperationalBootstrap({
             supabase,
             orgId: gate.orgId,
@@ -116,15 +119,15 @@ export async function GET(request: NextRequest, context: { params: Promise<{ dep
             return NextResponse.json({ error: payload.error }, { status: payload.status });
         }
 
-        const ms = Date.now() - t0;
-        if (ms > 400) {
-            console.warn("[admin-timing] GET /api/admin/departments/[id]/operational-bootstrap", {
-                ms,
-                department_id: departmentId,
-                work_units: payload.work_units.length,
-                summary_mode: request.nextUrl.searchParams.get("summary_mode") || "priority",
-            });
-        }
+        const loaderMs = Date.now() - tLoader0;
+        const totalMs = Date.now() - routeT0;
+        logDeptOperationalBootstrapPerf({
+            departmentId,
+            totalMs,
+            routeGateMs,
+            prepMs: routePrepMs,
+            loaderMs,
+        });
 
         return NextResponse.json(payload);
     } catch (e) {

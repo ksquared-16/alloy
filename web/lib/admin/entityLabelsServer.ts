@@ -24,11 +24,28 @@ export async function getAdminOrgIdForUser(userId: string): Promise<string | nul
     return core.orgId;
 }
 
+const ORG_ENTITY_LABELS_SERVER_CACHE = new Map<string, { at: number; map: EntityLabelsBootstrapMap }>();
+const ORG_ENTITY_LABELS_TTL_MS = 90_000;
+
+/** Server-only: org-scoped label map with short in-process TTL (layout + routes). */
+export async function loadEntityLabelsMapForOrgId(orgId: string): Promise<EntityLabelsBootstrapMap> {
+    const key = orgId.trim();
+    if (!key) return {};
+    const now = Date.now();
+    const hit = ORG_ENTITY_LABELS_SERVER_CACHE.get(key);
+    if (hit && now - hit.at < ORG_ENTITY_LABELS_TTL_MS) {
+        return hit.map;
+    }
+    const supabase = createAdminClient();
+    const { effective } = await resolveEntityLabelsForOrg(supabase, key);
+    const map = entityLabelsMapFromEffective(effective);
+    ORG_ENTITY_LABELS_SERVER_CACHE.set(key, { at: now, map });
+    return map;
+}
+
 /** Server-only: hydrated label map for admin shell (no raw entity_type flash on first paint). */
 export async function loadEntityLabelsMapForUser(userId: string): Promise<EntityLabelsBootstrapMap> {
     const orgId = await getAdminOrgIdForUser(userId);
     if (!orgId) return {};
-    const supabase = createAdminClient();
-    const { effective } = await resolveEntityLabelsForOrg(supabase, orgId);
-    return entityLabelsMapFromEffective(effective);
+    return loadEntityLabelsMapForOrgId(orgId);
 }

@@ -22,6 +22,19 @@ describe("dept operational bootstrap runtime hardening", () => {
         expect(src).toContain("workUnitIds");
         expect(src).toContain("resolveDeptPipelineExecSurfaceServer");
         expect(src).toContain("loadDeptAttentionPreviewServer");
+        expect(src).toContain("pickDeptPipelineWorkUnit");
+        expect(src).toContain("logDeptOperationalBootstrapPerf");
+        expect(src).toContain("summaryWorkUnitIds");
+    });
+
+    it("pipeline server probe uses partial lane counts and preloaded definition", () => {
+        const src = fs.readFileSync(
+            path.join(repoRoot, "web/lib/workspace/resolveDeptPipelineExecSurfaceServer.ts"),
+            "utf8"
+        );
+        expect(src).toContain('summaryMode: "partial"');
+        expect(src).toContain("preloadedQueueDefinition");
+        expect(src).toContain("pipelineWorkUnit");
     });
 
     it("dept page prefers operational-bootstrap over legacy fan-out", () => {
@@ -40,5 +53,7 @@ describe("dept operational bootstrap runtime hardening", () => {
         const src = fs.readFileSync(svcPath, "utf8");
         expect(src).toContain("workUnitIds?: string[]");
         expect(src).toContain("skipWuListQuery");
+        expect(src).toContain("preloadedQueueDefinition");
+        expect(src).toContain("workUnitPreloadById");
     });
 });

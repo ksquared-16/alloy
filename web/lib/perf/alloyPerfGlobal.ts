@@ -38,3 +38,15 @@ export function ensureAlloyPerf(): AlloyPerfGlobal | null {
 export function alloyPerfSet(name: string, value: number): void {
     ensureAlloyPerf()?.set(name, value);
 }
+
+export function alloyPerfGet(name: string): number | undefined {
+    return ensureAlloyPerf()?.get(name);
+}
+
+/** True while a workspace drill-in (dept tile, queue row) is in flight — defer background polls. */
+export function isAdminV2OperNavigationActive(maxAgeMs = 10_000): boolean {
+    if (typeof window === "undefined" || typeof performance === "undefined") return false;
+    const nav = alloyPerfGet("work_unit_navigation_start");
+    if (nav == null) return false;
+    return performance.now() - nav < maxAgeMs;
+}

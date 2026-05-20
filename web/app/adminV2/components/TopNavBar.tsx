@@ -11,6 +11,7 @@ import OperationalTasksNavBadge from "@/app/adminV2/components/OperationalTasksN
 import QuickMessageModal from "@/app/adminV2/components/QuickMessageModal";
 import { MessageSquare } from "lucide-react";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
+import { isAdminV2OperNavigationActive } from "@/lib/perf/alloyPerfGlobal";
 
 function normalizeAdminPath(pathname: string): string {
   if (pathname === "/admin/v2" || pathname.startsWith("/admin/v2/")) {
@@ -87,6 +88,7 @@ export default function TopNavBar() {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      if (isAdminV2OperNavigationActive(10_000)) return;
       try {
         const r = await fetch("/api/admin/communications/unread-count", { credentials: "include" });
         if (cancelled) return;

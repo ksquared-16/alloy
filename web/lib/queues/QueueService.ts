@@ -1820,9 +1820,29 @@ export type QueueSummariesSharedBootstrap = {
     opportunityStatusDefs: StatusDefinitionRow[];
 };
 
+/** One operational-day + opportunity status-def fetch per dept bootstrap / batch. */
+export async function buildQueueSummariesSharedBootstrap(orgId: string): Promise<QueueSummariesSharedBootstrap> {
+    const supabase = createAdminClient();
+    const refUtc = new Date();
+    const [operationalDay, opportunityStatusDefs] = await Promise.all([
+        resolveOperationalDayPlanContext(supabase, orgId, refUtc),
+        fetchEffectiveStatusDefinitions(supabase as never, orgId, "opportunities", { activeOnly: true }),
+    ]);
+    return { operationalDay, opportunityStatusDefs };
+}
+
 export async function getWorkUnitQueueSummaries(params: {
     orgId: string;
     workUnitId: string;
+    /**
+     * When set (e.g. dept operational bootstrap already loaded `work_units.queue_definition`),
+     * skip the per-request work_units row fetch.
+     */
+    preloadedQueueDefinition?: {
+        queue_definition: unknown;
+        workUnitMetadata?: unknown | null;
+        departmentId?: string | null;
+    };
     limit?: number;
     /**
      * When false, omit preview rows and skip enrichment (department KPI cards only need counts).
@@ -1859,12 +1879,27 @@ export async function getWorkUnitQueueSummaries(params: {
     const viewerPreviewIana = viewerTimeZoneMeta?.iana?.trim() ? viewerTimeZoneMeta.iana.trim() : UTC_FALLBACK_IANA;
     const viewerTimeZonePayload = viewerTimeZoneMeta ? { viewer_timezone: viewerTimeZoneMeta } : {};
     const tParallelBoot0 = Date.now();
-    const [{ def, workUnitMetadata }, operationalDay] = await Promise.all([
-        loadWorkUnitQueueDefinitionWithMeta({ orgId: params.orgId, workUnitId: params.workUnitId }),
-        sharedBootstrap
-            ? Promise.resolve(sharedBootstrap.operationalDay)
-            : resolveOperationalDayPlanContext(supabase, params.orgId, refUtc),
-    ]);
+    const preloaded = params.preloadedQueueDefinition;
+    const operationalDayPromise = sharedBootstrap
+        ? Promise.resolve(sharedBootstrap.operationalDay)
+        : resolveOperationalDayPlanContext(supabase, params.orgId, refUtc);
+
+    let def: QueueDefinitionV1;
+    let workUnitMetadata: unknown | null;
+    let operationalDay: OperationalDayPlanContext;
+    if (preloaded?.queue_definition != null) {
+        operationalDay = await operationalDayPromise;
+        def = loadQueueDefinitionOrThrow(preloaded.queue_definition);
+        workUnitMetadata = preloaded.workUnitMetadata ?? null;
+    } else {
+        const [loaded, od] = await Promise.all([
+            loadWorkUnitQueueDefinitionWithMeta({ orgId: params.orgId, workUnitId: params.workUnitId }),
+            operationalDayPromise,
+        ]);
+        def = loaded.def;
+        workUnitMetadata = loaded.workUnitMetadata;
+        operationalDay = od;
+    }
     const loadDefMs = Date.now() - tParallelBoot0;
     assertSupportedEntityType(def);
 
@@ -2276,6 +2311,11 @@ export async function getDepartmentWorkUnitQueueSummaries(params: {
      * When set (e.g. dept operational bootstrap), skip re-querying work_units for this department.
      */
     workUnitIds?: string[];
+    /** Preloaded rows from dept bootstrap — avoids per-WU `queue_definition` refetch. */
+    workUnitPreloadById?: ReadonlyMap<
+        string,
+        { queue_definition?: unknown; metadata?: unknown | null; department_id?: string | null }
+    >;
     /** Preview rows per queue (same semantics as GET .../queues limit). */
     limit?: number;
     workUnitConcurrency?: number;
@@ -2333,6 +2373,9 @@ export async function getDepartmentWorkUnitQueueSummaries(params: {
     const ids = skipWuListQuery
         ? presetIds
         : (wuListRes.data ?? []).map((r) => String((r as { id: string }).id ?? "").trim()).filter(Boolean);
+    if (!ids.length) {
+        return { work_units: [] };
+    }
     const previewLimit = clampLimit(params.limit ?? 50, 1, 100);
     const wuConc = clampLimit(params.workUnitConcurrency ?? DEPARTMENT_WU_SUMMARY_CONCURRENCY, 1, 8);
 
@@ -2341,6 +2384,7 @@ export async function getDepartmentWorkUnitQueueSummaries(params: {
         (workUnitId) => async (): Promise<DepartmentWorkUnitQueueSummaryRow> => {
             const tWu0 = Date.now();
             try {
+                const preload = params.workUnitPreloadById?.get(workUnitId);
                 const { queues, work_unit_scope_total, work_unit_scope_queue_key } = await getWorkUnitQueueSummaries({
                     orgId: params.orgId,
                     workUnitId,
@@ -2355,6 +2399,14 @@ export async function getDepartmentWorkUnitQueueSummaries(params: {
                     viewerDisplayTimeZone: params.viewerDisplayTimeZone,
                     recordScopeImpossible,
                     recordScopeConstraints,
+                    preloadedQueueDefinition:
+                        preload?.queue_definition != null
+                            ? {
+                                  queue_definition: preload.queue_definition,
+                                  workUnitMetadata: preload.metadata ?? null,
+                                  departmentId: preload.department_id ?? null,
+                              }
+                            : undefined,
                 });
                 const ms = Date.now() - tWu0;
                 console.warn("[queue-perf] getDepartmentWorkUnitQueueSummaries work_unit", {
