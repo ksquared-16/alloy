@@ -33,7 +33,7 @@ export const ADMINV2_DRAWER_OPPORTUNITY_BOOTSTRAP_BODY_MIN_H = "10.5rem";
 export const ADMINV2_DRAWER_OPPORTUNITY_WORKFLOW_BODY_MIN_H = "13.5rem";
 
 /** Workflow timeline strip height in opportunity inquiry header. */
-export const ADMINV2_DRAWER_OPPORTUNITY_TIMELINE_MIN_H = "44px";
+export const ADMINV2_DRAWER_OPPORTUNITY_TIMELINE_MIN_H = "36px";
 
 export function adminV2DeptPairedOperPanelReserveStyle(): { minHeight: string } {
     return { minHeight: ADMINV2_DEPT_PAIRED_OPER_PANEL_MIN_H };
