@@ -4,6 +4,7 @@ import {
     buildOpportunityOperationalContext,
     entityOperationalContextEqual,
     isStaleOperationalProposalEntity,
+    orchestratorHandoffSeedCommand,
     resolveOpportunityOperationalContextLabel,
 } from "@/lib/adminV2/bos/activeOperationalContext";
 
@@ -57,5 +58,24 @@ describe("activeOperationalContext", () => {
         expect(isStaleOperationalProposalEntity("a", "a")).toBe(false);
         expect(isStaleOperationalProposalEntity("a", null)).toBe(false);
         expect(isStaleOperationalProposalEntity(null, "a")).toBe(false);
+    });
+
+    it("orchestratorHandoffSeedCommand uses suggestion next_action when present", () => {
+        const seed = orchestratorHandoffSeedCommand({
+            entityLabel: "Mitchell Family",
+            overviewData: {
+                _attention_suggestion: { next_action: { label: "Send tour confirmation" } },
+            },
+        });
+        expect(seed).toContain("Mitchell Family");
+        expect(seed).toContain("Send tour confirmation");
+    });
+
+    it("orchestratorHandoffSeedCommand falls back to draft message label", () => {
+        const seed = orchestratorHandoffSeedCommand({
+            entityLabel: null,
+            overviewData: {},
+        });
+        expect(seed).toBe("Draft message for this inquiry");
     });
 });

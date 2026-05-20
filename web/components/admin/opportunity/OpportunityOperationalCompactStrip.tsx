@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
+import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
+import {
+    buildOpportunityOperationalContext,
+    orchestratorHandoffSeedCommand,
+} from "@/lib/adminV2/bos/activeOperationalContext";
 import OperationalTaskDetailPopover, {
     type OperationalTaskDetail,
 } from "@/components/admin/opportunity/OperationalTaskDetailPopover";
@@ -102,6 +107,7 @@ export default function OpportunityOperationalCompactStrip({
 }: OpportunityOperationalCompactStripProps) {
     const v11 = isTaskAssistV1UiEnabled();
     const adminDrawer = useAdminDrawerOptional();
+    const globalAssistant = useGlobalAssistantOptional();
     const [tasks, setTasks] = useState<OperationalTaskRow[]>([]);
     const [scheduledSends, setScheduledSends] = useState<ScheduledSendRow[]>([]);
     const [loading, setLoading] = useState(false);
@@ -248,6 +254,29 @@ export default function OpportunityOperationalCompactStrip({
             taskChipRefs.current.get(popoverTaskId)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
         });
     }, [popoverTaskId, openTasks]);
+
+    const handoffSeedCommand = useMemo(
+        () => orchestratorHandoffSeedCommand({ entityLabel, overviewData }),
+        [entityLabel, overviewData]
+    );
+
+    const onContinueInOrchestrator = useCallback(() => {
+        if (!globalAssistant || !opportunityId) return;
+        globalAssistant.setAssistantContext(
+            buildOpportunityOperationalContext({
+                entityId: opportunityId,
+                overviewData,
+                queuePreviewSeed: null,
+                opportunitySingular: "Opportunity",
+                sourceSurface: "opportunity_drawer",
+            })
+        );
+        globalAssistant.focusCommandBar({
+            expandThread: true,
+            seedCommand: handoffSeedCommand,
+            preferMode: "task_assist",
+        });
+    }, [globalAssistant, opportunityId, entityLabel, overviewData, handoffSeedCommand]);
 
     if (!v11) return null;
 
@@ -440,6 +469,31 @@ export default function OpportunityOperationalCompactStrip({
                     {renderTaskChips()}
                 </div>
             )}
+            {globalAssistant ? (
+                <div
+                    className={
+                        inquirySummary ?
+                            "mt-1 border-t border-alloy-stone/10 pt-2"
+                        :   "mt-1 flex w-full justify-end border-t border-alloy-stone/10 pt-1.5"
+                    }
+                    data-drawer-slot="operational_orchestrator_handoff"
+                >
+                    <button
+                        type="button"
+                        data-operational-orchestrator-handoff="true"
+                        className="rounded-md border border-alloy-stone/25 bg-white/80 px-2.5 py-1 text-[10px] font-semibold text-alloy-blue hover:bg-alloy-stone/[0.04] focus:outline-none focus-visible:ring-1 focus-visible:ring-alloy-blue/35"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onContinueInOrchestrator();
+                        }}
+                    >
+                        Continue in Orchestrator
+                    </button>
+                    <p className="mt-1 text-[9px] leading-snug text-alloy-midnight/50">
+                        Uses the active record in the command bar. Review and approve before anything sends.
+                    </p>
+                </div>
+            ) : null}
         </div>
     );
 }

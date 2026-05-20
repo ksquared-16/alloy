@@ -894,7 +894,7 @@ cd web && npm run test -- \
 
 **Tests:** `tests/adminV2/activeOperationalContext.test.ts`, `tests/admin/adminEntityDrawerBosContext.contract.test.ts`, `globalAssistantContext.test.tsx` (equal helper).
 
-**GATE A:** Partial — Cards 1–4 done; Cards 5–6 not started.
+**GATE A:** Partial — Cards 1–2 (Loop 1); see Loop 3 readiness table after Cards 5–6.
 
 ### Loop 2 — Cards 3–4 (2026-05-20)
 
@@ -910,14 +910,72 @@ cd web && npm run test -- \
 
 **Tests:** `operationalAttentionSuggestionUi.test.tsx` updated; `adminEntityDrawerBosContext.contract.test.ts` Loop 2 block.
 
+### Loop 3 — Cards 5–6 (2026-05-20) — Phase 1 closeout
+
+**Card 5 — Operational strip → command bar handoff**
+
+- `OpportunityOperationalCompactStrip.tsx`: **Continue in Orchestrator** CTA (`data-drawer-slot="operational_orchestrator_handoff"`).
+- On click: `setAssistantContext(buildOpportunityOperationalContext(...))` then `focusCommandBar({ expandThread: true, seedCommand, preferMode: "task_assist" })`.
+- Seed from `orchestratorHandoffSeedCommand` in `activeOperationalContext.ts` (uses `_attention_suggestion.next_action.label` when present).
+- Calm subcopy: review/approve before send; no auto-mutation; no chatbot language.
+- Preserves Loop 1 context seeding from drawer; handoff re-affirms same `entity_id` so operator does not re-search.
+
+**Card 6 — Dead drawer section cleanup**
+
+- **Deleted** `OperationalAttentionDrawerSection.tsx` (was never mounted in `AdminEntityDrawer`).
+- **Retained** `OperationalAttentionDrawerPanel.tsx` — still used by dev gallery `web/app/dev/p1c-operational-attention-review/P1cReviewGallery.tsx` for factor/timing fixtures; not a production drawer entry point.
+- Tests: `operationalAttentionSuggestionUi.test.tsx` panel-only block; drawer contract still asserts no section import.
+
+**Deviations / constraints**
+
+- Did not delete panel variant (dev review only).
+- Did not add header-strip handoff CTA (Card 5 scoped to compact strip per sprint).
+- No new Orchestrator routes, Task Assist rewrite, or workflow changes.
+
+**Files changed (Loop 3)**
+
+- `web/lib/adminV2/bos/activeOperationalContext.ts`
+- `web/components/admin/opportunity/OpportunityOperationalCompactStrip.tsx`
+- `web/components/admin/drawer/OperationalAttentionDrawerSection.tsx` (deleted)
+- `web/tests/adminV2/activeOperationalContext.test.ts`
+- `web/tests/agent/taskAssist/opportunityOperationalCompactStrip.contract.test.ts`
+- `web/tests/admin/drawer/operationalAttentionSuggestionUi.test.tsx`
+
+**Tests run (Loop 3)**
+
+```bash
+cd web && npm run test -- tests/adminV2/activeOperationalContext.test.ts \
+  tests/agent/taskAssist/opportunityOperationalCompactStrip.contract.test.ts \
+  tests/admin/drawer/operationalAttentionSuggestionUi.test.ts \
+  tests/admin/adminEntityDrawerBosContext.contract.test.ts \
+  tests/agent/taskAssist/globalAssistantContext.test.tsx
+```
+
+**GATE A readiness (Phase 1 — not full sprint closeout)**
+
+| Criterion | Status |
+|-----------|--------|
+| Drawer seeds `GlobalAssistantContext` | ☑ Loop 1 |
+| Close clears context | ☑ Loop 1 |
+| Active record chip | ☑ Loop 1 |
+| Single premium attention (chrome) | ☑ Loop 2 |
+| No Future/placeholder chrome | ☑ Loop 2 |
+| Ops strip handoff → command bar + context | ☑ Loop 3 |
+| Dead drawer section removed / panel documented | ☑ Loop 3 |
+| Contract tests green | ☑ 29 tests (Loop 1–3 bundle) 2026-05-20 |
+| Manual: Workflow Assist ambient without re-search | ☐ GATE A demo |
+| Manual: handoff chip matches drawer record | ☐ GATE A demo |
+
+**GATE A:** Ready for review — Phase 1 cards 1–6 implemented; human demo + test bundle required before Phase 2 (Card 7+).
+
 | Card | Status | PR / notes |
 |------|--------|------------|
 | 1 | ☑ | Drawer → `GlobalAssistantContext` |
 | 2 | ☑ | Active record chip + stale guard |
 | 3 | ☑ | Single chrome attention; inquiry reference only |
 | 4 | ☑ | No Future placeholder in attention strip |
-| 5 | ☐ | |
-| 6 | ☐ | |
+| 5 | ☑ | Ops strip → Orchestrator handoff |
+| 6 | ☑ | Dead drawer section removed |
 | 7 | ☐ | |
 | 8 | ☐ | |
 | 9 | ☐ | |
@@ -937,7 +995,7 @@ cd web && npm run test -- \
 | 23 | ☐ | |
 | 24 | ☐ optional | |
 
-**Gates:** A ☐ · B ☐ · C ☐
+**Gates:** A ☐ (Phase 1 ready for review) · B ☐ · C ☐
 
 ---
 

@@ -61,6 +61,19 @@ describe("OpportunityOperationalCompactStrip", () => {
         expect(src).toContain("OperationalTaskDetailPopover");
         expect(src).toContain("setPopoverTaskId");
     });
+
+    it("operational strip handoff focuses Orchestrator with active drawer context", () => {
+        const src = readFileSync(stripPath, "utf8");
+        expect(src).toContain("Continue in Orchestrator");
+        expect(src).toContain("data-operational-orchestrator-handoff");
+        expect(src).toContain("data-drawer-slot=\"operational_orchestrator_handoff\"");
+        expect(src).toContain("focusCommandBar");
+        expect(src).toContain("buildOpportunityOperationalContext");
+        expect(src).toContain("orchestratorHandoffSeedCommand");
+        expect(src).toContain("setAssistantContext");
+        expect(src).not.toContain("Ask AI");
+        expect(src).not.toContain("Chat with AI");
+    });
 });
 
 describe("ScheduledSendDetailPopover", () => {

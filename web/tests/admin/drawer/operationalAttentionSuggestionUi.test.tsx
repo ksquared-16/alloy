@@ -1,8 +1,11 @@
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { CrmCompactQueuePreview } from "@/app/adminV2/components/workspace/blocks/QueueBlock";
-import OperationalAttentionDrawerSection from "@/components/admin/drawer/OperationalAttentionDrawerSection";
+import OperationalAttentionDrawerPanel from "@/components/admin/drawer/OperationalAttentionDrawerPanel";
 import OperationalAttentionHeaderStrip from "@/components/admin/drawer/OperationalAttentionHeaderStrip";
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
 import { suggestedContentForReason } from "@/lib/agent/needsAttentionSuggestion/suggestedContentTemplates";
@@ -159,32 +162,36 @@ describe("OperationalAttentionHeaderStrip", () => {
     });
 });
 
-describe("OperationalAttentionDrawerSection", () => {
-    it("keeps body as secondary detail without duplicating header suggestion blocks", () => {
+describe("OperationalAttentionDrawerSection removal (Card 6)", () => {
+    it("drawer section component file is removed from production tree", () => {
+        const sectionPath = join(
+            dirname(fileURLToPath(import.meta.url)),
+            "../../../components/admin/drawer/OperationalAttentionDrawerSection.tsx"
+        );
+        expect(existsSync(sectionPath)).toBe(false);
+    });
+});
+
+describe("OperationalAttentionDrawerPanel (panel variant retained)", () => {
+    it("omitPrimaryAndNext hides duplicate primary/next when header shows suggestion", () => {
         const html = renderToStaticMarkup(
-            <OperationalAttentionDrawerSection
-                overviewData={{
-                    _operational_attention: minimalAttention(),
-                    _operational_attention_error: null,
-                    _attention_suggestion: minimalSuggestion(),
-                }}
+            <OperationalAttentionDrawerPanel
+                payload={minimalAttention()}
+                error={null}
+                omitPrimaryAndNext
             />,
         );
-        expect(html).toContain("Operational detail");
-        expect(html).toContain("<details");
         expect(html).not.toContain("Respond to new request");
         expect(html).not.toContain("Primary ·");
         expect(html).not.toContain("Draft · not sent");
     });
 
-    it("shows full operational panel in body when no suggestion", () => {
+    it("shows full operational panel when omitPrimaryAndNext is false", () => {
         const html = renderToStaticMarkup(
-            <OperationalAttentionDrawerSection
-                overviewData={{
-                    _operational_attention: minimalAttention(),
-                    _operational_attention_error: null,
-                    _attention_suggestion: null,
-                }}
+            <OperationalAttentionDrawerPanel
+                payload={minimalAttention()}
+                error={null}
+                omitPrimaryAndNext={false}
             />,
         );
         expect(html).toContain("Primary ·");

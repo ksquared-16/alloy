@@ -120,3 +120,24 @@ export function isStaleOperationalProposalEntity(
 
 export const STALE_OPERATIONAL_PROPOSAL_MESSAGE =
     "This proposal is for a different record than the active operational context. Open that record or confirm the target again.";
+
+type AttentionSuggestionHandoff = {
+    next_action?: { label?: string | null } | null;
+} | null;
+
+/**
+ * Optional Orchestrator seed from drawer operational context (awareness → recommendation surface).
+ * Does not trigger mutations — prefill only.
+ */
+export function orchestratorHandoffSeedCommand(args: {
+    entityLabel: string | null | undefined;
+    overviewData: Record<string, unknown> | null | undefined;
+}): string | undefined {
+    const label = args.entityLabel?.trim() || "this inquiry";
+    const suggestion = args.overviewData?._attention_suggestion as AttentionSuggestionHandoff | undefined;
+    const nextLabel = suggestion?.next_action?.label?.trim();
+    if (nextLabel) {
+        return `Follow up with ${label} — ${nextLabel}`;
+    }
+    return `Draft message for ${label}`;
+}
