@@ -5,6 +5,7 @@
 import type { EntityDrawerSectionConfig } from "@/lib/entityPresentation";
 import type { DrawerFieldPolicyResolved } from "@/lib/fields/drawerFieldPolicyAdapter";
 import { resolveFieldEditability } from "@/lib/fields/fieldInteractionPolicy";
+import type { FieldRequirementPolicyV1 } from "@/lib/fields/fieldRequirementPolicy";
 import { resolveFieldRequirementPolicy } from "@/lib/fields/fieldRequirementPolicy";
 import { isAdvancedRequirementPolicyForSettings } from "@/lib/fields/fieldPolicySettingsUi";
 import { resolveOpportunityLinkedFieldSources } from "@/lib/admin/drawer/linkedRecordFieldEditing";
@@ -27,6 +28,28 @@ type FieldDefRow = {
     interaction_policy?: unknown | null;
     label?: string | null;
 };
+
+function showRequiredFromRequirementPolicy(policy: FieldRequirementPolicyV1): boolean {
+    return (
+        !isAdvancedRequirementPolicyForSettings(policy) &&
+        (policy.mode === "required" || policy.mode === "required_on_save")
+    );
+}
+
+function effectiveRequirementFromResolved(
+    map: DrawerFieldPolicyResolved | undefined,
+    def: FieldDefRow
+): FieldRequirementPolicyV1 {
+    return map?.requirement ?? resolveFieldRequirementPolicy(def);
+}
+
+function effectiveInteractionPolicyFromResolved(
+    map: DrawerFieldPolicyResolved | undefined,
+    def: FieldDefRow,
+    canon: "opportunity" | "job"
+): FieldDefRow["interaction_policy"] {
+    return map?.interaction ?? def.interaction_policy;
+}
 
 function normalizeDrawerPolicyEntityType(entityType: string): "opportunity" | "job" | null {
     const t = entityType.trim().toLowerCase();
@@ -55,17 +78,15 @@ export function buildDrawerFieldPolicyChromeFromEntityData(
         const map = resolved[def.field_key];
         if (!map || map.policyMode !== "enforceable") continue;
 
-        const reqPolicy = resolveFieldRequirementPolicy(def);
-        const showRequired =
-            !isAdvancedRequirementPolicyForSettings(reqPolicy) &&
-            (reqPolicy.mode === "required" || reqPolicy.mode === "required_on_save");
+        const reqPolicy = effectiveRequirementFromResolved(map, def);
+        const showRequired = showRequiredFromRequirementPolicy(reqPolicy);
 
         const editability = resolveFieldEditability(
             {
                 field_key: def.field_key,
                 entity_type: canon,
                 is_system: def.is_system,
-                interaction_policy: def.interaction_policy,
+                interaction_policy: effectiveInteractionPolicyFromResolved(map, def, canon),
             },
             { permission_keys: ["__drawer_display__"] }
         );

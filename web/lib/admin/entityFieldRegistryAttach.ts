@@ -6,6 +6,7 @@ import {
     attachDrawerFieldPolicyResolution,
     type DrawerFieldDefinitionAttachRow,
 } from "@/lib/fields/drawerFieldPolicyAdapter";
+import type { RecordLayoutConfigJson } from "@/lib/recordChrome/types";
 
 export type { DrawerFieldDefinitionAttachRow } from "@/lib/fields/drawerFieldPolicyAdapter";
 
@@ -239,12 +240,18 @@ export function hasMeaningfulNativeFieldValue(v: unknown): boolean {
  * System fields must come from native columns on `out`; field_values rows tied to system definitions are ignored.
  * Org-wide definitions + sections are cached (short process TTL + Next `unstable_cache`); per-record field_values remain live.
  */
+export type AttachFieldDefinitionsAndValuesOptions = {
+    mergeValues?: boolean;
+    /** Card 2 — single layout fetch for opportunity placement-aware `_field_policy_resolved`. */
+    layoutConfig?: RecordLayoutConfigJson | null;
+};
+
 export async function attachFieldDefinitionsAndValues(
     supabase: AdminClient,
     out: Record<string, unknown>,
     drawerType: string,
     entityId: string,
-    options?: { mergeValues?: boolean }
+    options?: AttachFieldDefinitionsAndValuesOptions
 ): Promise<FieldRegistryAttachMeta> {
     const emptyMeta: FieldRegistryAttachMeta = {};
     const mergeValues = options?.mergeValues !== false;
@@ -278,7 +285,9 @@ export async function attachFieldDefinitionsAndValues(
 
     out._field_definitions = fieldDefs;
     out._field_sections = fieldSections;
-    attachDrawerFieldPolicyResolution(out, drawerType);
+    attachDrawerFieldPolicyResolution(out, drawerType, {
+        layoutConfig: drawerType === "opportunities" ? options?.layoutConfig ?? null : undefined,
+    });
 
     if (fieldDefs.length === 0) return mergedDefsMeta;
 

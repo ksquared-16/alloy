@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { attachDirectFkRelationshipDisplays } from "@/lib/admin/relationshipDisplayAttach";
 import { attachFieldDefinitionsAndValues } from "@/lib/admin/entityFieldRegistryAttach";
+import { fetchEffectiveRecordDrawerLayout } from "@/lib/admin/effectiveRecordDrawerLayout";
 import {
   buildOpportunityLifecycleFields,
   effectiveOpportunityQuoteDollars,
@@ -1181,8 +1182,17 @@ export async function respondOpportunityEntityGet(
   markPhase("after_status_defs_and_financial");
   lapSegment("status_resolve_and_lifecycle_shell");
   const drawerInitial = surfaceParamEarly === "drawer_initial";
+  const layoutForFieldPolicy =
+    orgId != null
+      ? await fetchEffectiveRecordDrawerLayout(supabase, orgId, "opportunity")
+      : { ok: false as const, error: "missing org" };
+  const opportunityLayoutConfig =
+    layoutForFieldPolicy.ok && layoutForFieldPolicy.layout
+      ? layoutForFieldPolicy.layout.config_json
+      : null;
   const fieldRegistryMetaFull = await attachFieldDefinitionsAndValues(supabase, out, "opportunities", id, {
     mergeValues: !drawerInitial,
+    layoutConfig: opportunityLayoutConfig,
   });
   markPhase("after_field_definitions_values");
   lapSegment("field_definitions_and_values_attach");

@@ -132,6 +132,44 @@ describe("drawerFieldPolicyAdapter", () => {
         expect(summarizeDrawerFieldPolicyMap(map).enforceable).toBe(2);
     });
 
+    it("buildDrawerFieldPolicyResolvedMap attaches effective behavior from placement", () => {
+        const map = buildDrawerFieldPolicyResolvedMap(
+            "opportunity",
+            [
+                {
+                    field_key: "custom_notes",
+                    is_system: false,
+                    is_required: true,
+                    requirement_policy: { version: 1, mode: "required" },
+                },
+            ],
+            {
+                layoutConfig: {
+                    field_placements_v1: [
+                        {
+                            field_key: "custom_notes",
+                            surfaces: {
+                                drawer_overview: {
+                                    requirement: { version: 1, mode: "optional" },
+                                },
+                            },
+                        },
+                    ],
+                },
+            }
+        );
+        expect(map.custom_notes?.requirement?.mode).toBe("optional");
+        expect(map.custom_notes?.requirement_source).toBe("placement");
+    });
+
+    it("job map omits effective behavior fields", () => {
+        const map = buildDrawerFieldPolicyResolvedMap("job", [
+            { field_key: "title", is_system: true, is_required: true },
+        ]);
+        expect(map.title?.requirement).toBeUndefined();
+        expect(map.title?.interaction).toBeUndefined();
+    });
+
     it("attachDrawerFieldPolicyResolution enriches opportunity payload", () => {
         const out: Record<string, unknown> = {
             _field_definitions: [
@@ -150,7 +188,7 @@ describe("drawerFieldPolicyAdapter", () => {
                 },
             ],
         };
-        attachDrawerFieldPolicyResolution(out, "opportunities");
+        attachDrawerFieldPolicyResolution(out, "opportunities", { layoutConfig: null });
         const resolved = out._field_policy_resolved as Record<string, { policyMode: string }>;
         expect(resolved.name.policyMode).toBe("enforceable");
     });

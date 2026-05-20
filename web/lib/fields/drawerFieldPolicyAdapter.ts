@@ -3,6 +3,14 @@
  * for opportunity and job records. Read-side only; no enforcement.
  */
 
+import {
+    resolveEffectiveFieldBehavior,
+    type EffectiveFieldBehaviorSource,
+} from "@/lib/fields/resolveEffectiveFieldBehavior";
+import type { FieldInteractionPolicyV1 } from "@/lib/fields/fieldInteractionPolicy";
+import type { FieldRequirementPolicyV1 } from "@/lib/fields/fieldRequirementPolicy";
+import type { RecordLayoutConfigJson } from "@/lib/recordChrome/types";
+
 export type DrawerPolicyEntityType = "opportunity" | "job";
 
 export type DrawerFieldStorage =
@@ -26,6 +34,16 @@ export type DrawerFieldPolicyResolved = {
     requirementSupported: boolean;
     interactionSupported: boolean;
     reason: string;
+    /** Card 2 — effective policies for opportunity drawer (placement → definition → preset). */
+    requirement?: FieldRequirementPolicyV1;
+    interaction?: FieldInteractionPolicyV1;
+    requirement_source?: EffectiveFieldBehaviorSource;
+    interaction_source?: EffectiveFieldBehaviorSource;
+};
+
+export type BuildDrawerFieldPolicyResolvedMapOptions = {
+    /** When set (including `null`), opportunity fields get placement-aware effective behavior. */
+    layoutConfig?: RecordLayoutConfigJson | null;
 };
 
 /** Minimal field_definition row needed for policy mapping (attach + tests). */
@@ -368,14 +386,36 @@ export function resolveDrawerFieldPolicy(
 
 export function buildDrawerFieldPolicyResolvedMap(
     entityTypeInput: string,
-    defs: DrawerFieldDefinitionForPolicy[]
+    defs: DrawerFieldDefinitionForPolicy[],
+    options?: BuildDrawerFieldPolicyResolvedMapOptions
 ): Record<string, DrawerFieldPolicyResolved> {
     const entityType = normalizeEntityType(entityTypeInput);
     if (!entityType) return {};
+    const usePlacementAware =
+        entityType === "opportunity" && options !== undefined && "layoutConfig" in options;
+
     const out: Record<string, DrawerFieldPolicyResolved> = {};
     for (const def of defs) {
         const resolved = resolveDrawerFieldPolicy(entityType, def);
-        if (resolved) out[def.field_key] = resolved;
+        if (!resolved) continue;
+
+        const entry: DrawerFieldPolicyResolved = { ...resolved };
+
+        if (usePlacementAware) {
+            const effective = resolveEffectiveFieldBehavior({
+                entityType,
+                fieldDef: { ...def, entity_type: entityType },
+                layoutConfig: options?.layoutConfig ?? null,
+            });
+            if (effective) {
+                entry.requirement = effective.requirement;
+                entry.interaction = effective.interaction;
+                entry.requirement_source = effective.requirement_source;
+                entry.interaction_source = effective.interaction_source;
+            }
+        }
+
+        out[def.field_key] = entry;
     }
     return out;
 }
@@ -401,9 +441,14 @@ const DRAWER_TYPE_TO_FIELD_ENTITY_TYPE: Record<string, string> = {
  * Read-side enrichment for opportunity/job entity GET payloads.
  * Does not change drawer edit behavior.
  */
+export type AttachDrawerFieldPolicyResolutionOptions = {
+    layoutConfig?: RecordLayoutConfigJson | null;
+};
+
 export function attachDrawerFieldPolicyResolution(
     out: Record<string, unknown>,
-    drawerType: string
+    drawerType: string,
+    options?: AttachDrawerFieldPolicyResolutionOptions
 ): void {
     if (!drawerTypeSupportsFieldPolicyResolution(drawerType)) return;
 
@@ -414,7 +459,12 @@ export function attachDrawerFieldPolicyResolution(
         return;
     }
 
-    out._field_policy_resolved = buildDrawerFieldPolicyResolvedMap(entityType, defs);
+    const mapOptions: BuildDrawerFieldPolicyResolvedMapOptions | undefined =
+        drawerType === "opportunities"
+            ? { layoutConfig: options?.layoutConfig ?? null }
+            : undefined;
+
+    out._field_policy_resolved = buildDrawerFieldPolicyResolvedMap(entityType, defs, mapOptions);
 }
 
 /** Counts for diagnostics / tests. */
