@@ -1,15 +1,29 @@
 /**
- * Shared AdminV2 loading placeholder geometry — keep skeletons aligned with final layout.
+ * Shared AdminV2 loading placeholder geometry — keep reserves/skeletons aligned with final layout.
  * Visual-only constants; does not change fetch timing or data ownership.
+ *
+ * **Vocabulary (PERF-A-01):**
+ * - `quiet_reserve` — non-pulsing bordered hold (dept oper, dept KPI band, WU lane)
+ * - `row_skeleton` — compact pulsing queue rows (work-unit lane only; not dept cold nav)
  */
 
 /** Default in-lane queue row placeholders (matches typical first viewport). */
 export const ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT = 6;
 
-/** Orientation KPI strip cells (`KpiStripSkeleton` / premium-loading strip). */
+/** Orientation KPI strip cells (`KpiStripSkeleton` when pulse skeleton is intentional). */
 export const ADMINV2_KPI_STRIP_CELL_COUNT = 5;
 
-/** Dept paired oper panels — throughput + attention columns. */
+/** Dept paired oper panel inner reserve height (throughput + attention). */
+export const ADMINV2_DEPT_PAIRED_OPER_PANEL_MIN_H = "11.5rem";
+
+/** Dept / workspace KPI quiet reserve band (`WorkspaceQuietKpiReserve`). */
+export const ADMINV2_DEPT_KPI_QUIET_RESERVE_MIN_H = "4.25rem";
+
+/** Shared calm reserve panel surface (dept oper columns). */
+export const ADMINV2_QUIET_RESERVE_PANEL_CLASS =
+    "rounded-lg border border-alloy-stone/12 bg-white/45";
+
+/** @deprecated Row-pulse skeleton count — prefer {@link ADMINV2_DEPT_PAIRED_OPER_PANEL_MIN_H} quiet reserve on dept route load. */
 export const ADMINV2_DEPT_ATTENTION_LOADING_ROW_COUNT = 3;
 
 /** Opportunity drawer body reserve while queue preview seed is active (sidebar bootstrap). */
@@ -19,4 +33,12 @@ export const ADMINV2_DRAWER_OPPORTUNITY_BOOTSTRAP_BODY_MIN_H = "10.5rem";
 export const ADMINV2_DRAWER_OPPORTUNITY_WORKFLOW_BODY_MIN_H = "13.5rem";
 
 /** Workflow timeline strip height in opportunity inquiry header. */
-export const ADMINV2_DRAWER_OPPORTUNITY_TIMELINE_MIN_H = "52px";
+export const ADMINV2_DRAWER_OPPORTUNITY_TIMELINE_MIN_H = "44px";
+
+export function adminV2DeptPairedOperPanelReserveStyle(): { minHeight: string } {
+    return { minHeight: ADMINV2_DEPT_PAIRED_OPER_PANEL_MIN_H };
+}
+
+export function adminV2DeptKpiQuietReserveStyle(): { minHeight: string } {
+    return { minHeight: ADMINV2_DEPT_KPI_QUIET_RESERVE_MIN_H };
+}
