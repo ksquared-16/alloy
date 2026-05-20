@@ -34,6 +34,8 @@ export async function buildWorkUnitScopedNeedsAttentionLaneBuckets(params: {
     recordScopeImpossible?: boolean;
     recordScopeConstraints?: RecordScopeConstraints | null;
     opportunityStatusDefs?: StatusDefinitionRow[];
+    /** Dept bootstrap perf attribution (optional). */
+    perf?: { candidate_fetch_ms?: number; resolver_ms?: number; bucket_merge_ms?: number };
 }): Promise<{
     needs_attention_buckets: NeedsAttentionBucketWithCount[];
     /** Unique inquiries matching resolver membership (same set as unfiltered needs_attention tab head). */
@@ -96,6 +98,7 @@ export async function buildWorkUnitScopedNeedsAttentionLaneBuckets(params: {
     const nowMs = refUtc.getTime();
     const sort = [{ column: "updated_at", ascending: true as const }];
 
+    const tFetch0 = Date.now();
     const loadOut = await loadOpportunityNeedsAttentionRows({
         supabase,
         orgId,
@@ -106,7 +109,9 @@ export async function buildWorkUnitScopedNeedsAttentionLaneBuckets(params: {
         attentionConfig,
         recordScopeConstraints: scopeFilter,
     });
+    if (params.perf) params.perf.candidate_fetch_ms = Date.now() - tFetch0;
 
+    const tResolver0 = Date.now();
     const resolver_matches: { resolved: OpportunityAttentionResult }[] = [];
     for (const row of loadOut.filtered) {
         const resolved = resolveOpportunityAttention({
@@ -121,6 +126,9 @@ export async function buildWorkUnitScopedNeedsAttentionLaneBuckets(params: {
         }
     }
 
+    if (params.perf) params.perf.resolver_ms = Date.now() - tResolver0;
+
+    const tBucket0 = Date.now();
     const attention_reason_counts = summarizeAttentionReasonCounts(
         resolver_matches.flatMap(({ resolved }) => resolved.reasons.map((rr) => ({ reason_key: rr.code, label: rr.label }))),
     );
@@ -136,6 +144,7 @@ export async function buildWorkUnitScopedNeedsAttentionLaneBuckets(params: {
         rawCandidatesFetched: loadOut.raw_candidates_fetched,
         fetchMode: "list_cap",
     });
+    if (params.perf) params.perf.bucket_merge_ms = Date.now() - tBucket0;
 
     return {
         needs_attention_buckets,

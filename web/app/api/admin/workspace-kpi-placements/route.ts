@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
+import { loadDepartmentKpiPlacementsServer } from "@/lib/kpi/loadDepartmentKpiPlacementsServer";
 import {
     PlacementValidationError,
     validatePlacementCreateBody,
@@ -20,8 +22,9 @@ const SELECT_COLS =
  * - Otherwise — surface-scoped list for workspace KPI strips (visible only unless extended later).
  */
 export async function GET(request: NextRequest) {
-    const ctx = await getAdminContextCached();
-    if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const gate = await loadAdminRouteGate();
+    if (!gate.ok) return adminRouteGateFailureResponse(gate);
+    const ctx = { ok: true as const, orgId: gate.orgId, role: gate.role, userId: gate.userId };
 
     const listOrg = request.nextUrl.searchParams.get("list")?.trim() === "org";
     if (listOrg) {
@@ -65,6 +68,17 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "workspace surface must not include department_id or work_unit_id" }, { status: 400 });
     }
 
+    if (surface === "department") {
+        const supabase = createAdminClient();
+        const deptOk = await assertRowOrg(supabase, "departments", departmentId, ctx.orgId);
+        if (!deptOk.ok) return NextResponse.json({ error: "Not found" }, { status: 404 });
+        const { items, scope_has_placements } = await loadDepartmentKpiPlacementsServer({
+            orgId: ctx.orgId,
+            departmentId,
+        });
+        return NextResponse.json({ items, scope_has_placements });
+    }
+
     const supabase = createAdminClient();
 
     let countBuilder = supabase
@@ -85,9 +99,6 @@ export async function GET(request: NextRequest) {
     if (surface === "workspace") {
         q = q.is("department_id", null).is("work_unit_id", null);
         countBuilder = countBuilder.is("department_id", null).is("work_unit_id", null);
-    } else if (surface === "department") {
-        q = q.eq("department_id", departmentId).is("work_unit_id", null);
-        countBuilder = countBuilder.eq("department_id", departmentId).is("work_unit_id", null);
     } else {
         q = q.eq("department_id", departmentId).eq("work_unit_id", workUnitId);
         countBuilder = countBuilder.eq("department_id", departmentId).eq("work_unit_id", workUnitId);

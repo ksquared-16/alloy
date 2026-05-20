@@ -51,6 +51,7 @@ import { resolveKpisForDepartment } from "@/lib/kpi/resolver";
 import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
+import { isAdminV2OperNavigationActive } from "@/lib/perf/alloyPerfGlobal";
 import { isEnrollmentLikeDepartmentKey } from "@/lib/workspace/enrollmentDepartmentKey";
 import { resolveDeptPipelineExecSurface } from "@/lib/workspace/resolveDeptPipelineExecSurface";
 import { WorkspaceOperIcon } from "@/components/admin/workspace/WorkspaceOperIcon";
@@ -219,6 +220,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
     const seededDeptShellRef = useRef(false);
     const deptActionsPerfKeyRef = useRef<string | null>(null);
     const deptKpisPerfKeyRef = useRef<string | null>(null);
+    const enrollmentRightRailPrefetchRef = useRef<ResolvedActionForClient[] | null>(null);
 
     const [dept, setDept] = useState<DeptRow | null>(null);
     const [deptLoading, setDeptLoading] = useState(true);
@@ -279,6 +281,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         seededDeptShellRef.current = false;
         deptActionsPerfKeyRef.current = null;
         deptKpisPerfKeyRef.current = null;
+        enrollmentRightRailPrefetchRef.current = null;
         setDeptThroughputPresentation(null);
         setDeptOperPanelTitleLocked("Work Unit Queue");
         setDeptPipelineExecSurface(null);
@@ -355,27 +358,15 @@ export default function AdminV2WorkspaceDepartmentPage() {
         });
     }, [globalAssistant, dept?.name]);
 
-    /** Workflow KPIs deferred until department shell geometry has committed — off the navigation critical path. */
+    /** Workflow panels — far off critical path; never compete with dept bootstrap. */
     useEffect(() => {
         if (!departmentId || deptLoading || !dept?.id || deptWorkUnits === null) return;
-        let cancelled = false;
-        let idleId = 0;
-        const run = () => {
-            if (!cancelled) void refreshWorkflowPanels();
-        };
-        if (typeof window !== "undefined" && typeof requestIdleCallback !== "undefined") {
-            idleId = requestIdleCallback(run, { timeout: 2000 });
-        } else {
-            idleId = window.setTimeout(run, 160);
-        }
-        return () => {
-            cancelled = true;
-            if (typeof window !== "undefined" && typeof cancelIdleCallback !== "undefined") {
-                cancelIdleCallback(idleId);
-            } else if (typeof window !== "undefined") {
-                window.clearTimeout(idleId);
-            }
-        };
+        return scheduleAdminV2BackgroundWork(
+            () => {
+                if (!isAdminV2OperNavigationActive(12_000)) void refreshWorkflowPanels();
+            },
+            { idleTimeoutMs: 10_000, fallbackMs: 4000 }
+        );
     }, [departmentId, deptLoading, dept?.id, deptWorkUnits, refreshWorkflowPanels]);
 
     useEffect(() => {
@@ -406,6 +397,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         let cancelled = false;
         deptActionsPerfKeyRef.current = null;
         deptKpisPerfKeyRef.current = null;
+        enrollmentRightRailPrefetchRef.current = null;
         const tAnchor =
             typeof performance !== "undefined" && typeof window !== "undefined" ? performance.now() : 0;
         if (!seededDeptShellRef.current) {
@@ -429,8 +421,27 @@ export default function AdminV2WorkspaceDepartmentPage() {
         setDeptPlacementRows(undefined);
         setDeptScopeHasPlacements(false);
 
+        const init = workspaceDataFetchInit() ?? {};
+        const cacheHit =
+            orgId && departmentId
+                ? readDepartmentPageCache(orgId, departmentId, principalUserId, accessScopeFingerprint)
+                : null;
+        const cacheWuList =
+            cacheHit && cacheHit.dept.id === departmentId ? (cacheHit.workUnits ?? []) : [];
+        const cacheNaWuId =
+            cacheWuList.find((w) => (w.key ?? "").trim().toLowerCase() === "needs_attention")?.id ?? null;
+
+        const railWuFromCache =
+            cacheWuList.find((w) => (w.key ?? "").trim().toLowerCase() === "enrollment_pipeline")?.id ?? "";
+        const bootstrapQs = new URLSearchParams({
+            include_previews: "false",
+            count_mode: "exact",
+            summary_mode: "priority",
+            priority_budget: "5",
+        });
+        if (railWuFromCache) bootstrapQs.set("right_rail_work_unit_id", railWuFromCache);
         const bootstrapRoute = appendWorkspaceSiteToUrl(
-            `/api/admin/departments/${encodeURIComponent(departmentId)}/operational-bootstrap?include_previews=false&count_mode=exact&summary_mode=priority&priority_budget=5`,
+            `/api/admin/departments/${encodeURIComponent(departmentId)}/operational-bootstrap?${bootstrapQs.toString()}`,
             selectedSiteId
         );
         const summariesRoute = appendWorkspaceSiteToUrl(
@@ -493,16 +504,6 @@ export default function AdminV2WorkspaceDepartmentPage() {
             setDeptBucketCountScope(typeof j.bucket_count_scope === "string" ? j.bucket_count_scope : null);
             setDeptAttentionBucketsError(null);
         };
-
-        const init = workspaceDataFetchInit() ?? {};
-        const cacheHit =
-            orgId && departmentId
-                ? readDepartmentPageCache(orgId, departmentId, principalUserId, accessScopeFingerprint)
-                : null;
-        const cacheWuList =
-            cacheHit && cacheHit.dept.id === departmentId ? (cacheHit.workUnits ?? []) : [];
-        const cacheNaWuId =
-            cacheWuList.find((w) => (w.key ?? "").trim().toLowerCase() === "needs_attention")?.id ?? null;
 
         let pipelineProbeStarted = false;
 
@@ -734,6 +735,11 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             summaries?: Parameters<typeof applySummariesJson>[1];
                             attention?: Parameters<typeof applyAttentionPayload>[0];
                             pipeline_surface?: DeptPipelineExecSurface | null;
+                            kpi_placements?: {
+                                items?: WorkspaceKpiPlacementRow[];
+                                scope_has_placements?: boolean;
+                            };
+                            right_rail_actions?: ResolvedActionForClient[];
                         };
                         const deptCommit =
                             b.department?.id != null
@@ -778,6 +784,27 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         setDeptQueueSummariesLoading(false);
                         setDeptAttentionBucketsLoading(false);
                         setDeptLoading(false);
+                        if (b.kpi_placements) {
+                            setDeptPlacementRows(b.kpi_placements.items ?? []);
+                            setDeptScopeHasPlacements(b.kpi_placements.scope_has_placements === true);
+                            if (
+                                typeof performance !== "undefined" &&
+                                typeof window !== "undefined" &&
+                                deptKpisPerfKeyRef.current !== departmentId
+                            ) {
+                                deptKpisPerfKeyRef.current = departmentId;
+                                perfDeptLoad({
+                                    phase: "kpis_ready",
+                                    ms: Math.round((typeof performance !== "undefined" ? performance.now() : 0) - tAnchor),
+                                    source: "network",
+                                    org_id: orgId,
+                                    department_id: departmentId,
+                                });
+                            }
+                        }
+                        if (Array.isArray(b.right_rail_actions)) {
+                            enrollmentRightRailPrefetchRef.current = b.right_rail_actions;
+                        }
                         if (orgId && deptCommit) {
                             writeDepartmentPageCache(orgId, principalUserId, accessScopeFingerprint, {
                                 dept: deptCommit,
@@ -807,7 +834,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             org_id: orgId,
                             department_id: departmentId,
                         });
-                        if (deptCommit) {
+                        if (deptCommit && !b.kpi_placements) {
                             runDeferredKpiPlacements();
                         }
                         if (typeof performance !== "undefined" && typeof window !== "undefined") {
@@ -1131,6 +1158,13 @@ export default function AdminV2WorkspaceDepartmentPage() {
             return;
         }
         if (!deptOperationalRegionReady) return;
+
+        const prefetched = enrollmentRightRailPrefetchRef.current;
+        if (prefetched) {
+            enrollmentRightRailPrefetchRef.current = null;
+            setEnrollmentDeptRightRail(prefetched);
+            return;
+        }
 
         let cancelled = false;
         (async () => {

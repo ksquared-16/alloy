@@ -22,6 +22,13 @@ describe("Workspace → dept transition (no root skeleton flash)", () => {
         expect(deptLoading).toContain("DepartmentWorkspaceColdShell");
     });
 
+    it("dept bootstrap requests bundled KPI and right-rail extras", () => {
+        const page = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
+        expect(page).toContain("right_rail_work_unit_id");
+        expect(page).toContain("kpi_placements");
+        expect(page).toContain("enrollmentRightRailPrefetchRef");
+    });
+
     it("workspace root dept tiles use Link soft nav (not location.assign)", () => {
         const grid = read("components/admin/workspace/WorkspaceRootDepartmentGrid.tsx");
         expect(grid).toContain('from "next/link"');

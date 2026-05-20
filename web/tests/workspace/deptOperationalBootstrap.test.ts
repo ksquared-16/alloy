@@ -25,6 +25,27 @@ describe("dept operational bootstrap runtime hardening", () => {
         expect(src).toContain("pickDeptPipelineWorkUnit");
         expect(src).toContain("logDeptOperationalBootstrapPerf");
         expect(src).toContain("summaryWorkUnitIds");
+        expect(src).toContain("attention_candidate_fetch_ms");
+    });
+
+    it("bootstrap route bundles KPI placements and right-rail actions", () => {
+        const routePath = path.join(
+            repoRoot,
+            "web/app/api/admin/departments/[departmentId]/operational-bootstrap/route.ts"
+        );
+        const src = fs.readFileSync(routePath, "utf8");
+        expect(src).toContain("loadDepartmentKpiPlacementsServer");
+        expect(src).toContain("loadRightRailActionsBundleServer");
+        expect(src).toContain("right_rail_work_unit_id");
+    });
+
+    it("right rail client fetch uses single bundle route", () => {
+        const src = fs.readFileSync(
+            path.join(repoRoot, "web/lib/workspace/fetchWorkspaceRightRailResolvedActions.ts"),
+            "utf8"
+        );
+        expect(src).toContain("right-rail-bundle");
+        expect(src).not.toContain('surface",');
     });
 
     it("pipeline server probe uses partial lane counts and preloaded definition", () => {

@@ -12,6 +12,8 @@ import { resolveDeptPipelineExecSurfaceServer } from "@/lib/workspace/resolveDep
 import type { DeptPipelineExecSurface } from "@/lib/workspace/resolveDeptPipelineExecSurface";
 import { logDeptOperationalBootstrapPerf, type DeptBootstrapPerfPhases } from "@/lib/workspace/deptOperationalBootstrapPerf";
 import { pickDeptPipelineWorkUnit } from "@/lib/workspace/pickDeptPipelineWorkUnit";
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
+import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
 
 export type DeptOperationalBootstrapPayload = {
     department: {
@@ -24,6 +26,11 @@ export type DeptOperationalBootstrapPayload = {
     summaries: { work_units: Array<{ id: string; queues: unknown[]; error?: string; work_unit_scope_total?: number | null; work_unit_scope_queue_key?: string | null }> };
     attention: DeptAttentionPreviewPayload;
     pipeline_surface: DeptPipelineExecSurface | null;
+};
+
+export type DeptOperationalBootstrapExtras = {
+    kpi_placements?: { items: WorkspaceKpiPlacementRow[]; scope_has_placements: boolean };
+    right_rail_actions?: ResolvedActionForClient[];
 };
 
 export async function loadDeptOperationalBootstrap(params: {
@@ -44,7 +51,10 @@ export async function loadDeptOperationalBootstrap(params: {
         priorityBudget?: number;
     };
     attentionWorkUnitIdParam?: string | null;
-}): Promise<DeptOperationalBootstrapPayload | { error: string; status: number }> {
+}): Promise<
+    | { payload: DeptOperationalBootstrapPayload; phases: DeptBootstrapPerfPhases }
+    | { error: string; status: number }
+> {
     const { supabase, orgId, departmentId, accessDim } = params;
     const loaderT0 = Date.now();
     const phases: DeptBootstrapPerfPhases = {};
@@ -161,6 +171,11 @@ export async function loadDeptOperationalBootstrap(params: {
 
     const attentionP = (async () => {
         const t0 = Date.now();
+        const attentionPerf: {
+            candidate_fetch_ms?: number;
+            resolver_ms?: number;
+            bucket_merge_ms?: number;
+        } = {};
         const out = await loadDeptAttentionPreviewServer({
             supabase,
             orgId,
@@ -172,8 +187,12 @@ export async function loadDeptOperationalBootstrap(params: {
             recordScopeImpossible: params.recordScopeImpossible,
             recordScopeConstraints: params.recordScopeConstraints,
             opportunityStatusDefs: sharedBootstrap.opportunityStatusDefs,
+            attentionPerf,
         });
         phases.attention_ms = Date.now() - t0;
+        phases.attention_candidate_fetch_ms = attentionPerf.candidate_fetch_ms;
+        phases.attention_resolver_ms = attentionPerf.resolver_ms;
+        phases.attention_bucket_merge_ms = attentionPerf.bucket_merge_ms;
         return out;
     })();
 
@@ -188,6 +207,7 @@ export async function loadDeptOperationalBootstrap(params: {
                 department_id: (w as { department_id?: string | null }).department_id ?? null,
                 metadata: (w as { metadata?: unknown }).metadata,
             }));
+        const pipelinePerf: { lane_queues_ms?: number } = {};
         const out = await resolveDeptPipelineExecSurfaceServer({
             departmentId,
             candidates: pipelineCandidates,
@@ -197,13 +217,16 @@ export async function loadDeptOperationalBootstrap(params: {
             recordScopeImpossible: params.recordScopeImpossible,
             recordScopeConstraints: params.recordScopeConstraints,
             viewerDisplayTimeZone: params.viewerDisplayTimeZone,
+            pipelinePerf,
         });
         phases.pipeline_ms = Date.now() - t0;
+        phases.pipeline_lane_queues_ms = pipelinePerf.lane_queues_ms;
         return out;
     })();
 
     const [summaries, attention, pipeline_surface] = await Promise.all([summariesP, attentionP, pipelineP]);
-    phases.serialize_ms = Date.now() - tParallel0;
+    phases.parallel_oper_ms = Date.now() - tParallel0;
+    phases.serialize_ms = 0;
 
     const payload: DeptOperationalBootstrapPayload = {
         department: {
@@ -218,12 +241,5 @@ export async function loadDeptOperationalBootstrap(params: {
         pipeline_surface,
     };
 
-    logDeptOperationalBootstrapPerf({
-        departmentId,
-        totalMs: Date.now() - loaderT0,
-        loaderMs: Date.now() - loaderT0,
-        phases,
-    });
-
-    return payload;
+    return { payload, phases };
 }

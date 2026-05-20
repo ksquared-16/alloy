@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
+import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
 import { adminActionsOrgTag } from "@/lib/admin/actions/cacheTags";
 import { resolveActionsForContext } from "@/lib/admin/actions/resolveActionsForContext";
 import type { ActionSurface } from "@/lib/admin/actions/types";
@@ -20,10 +19,9 @@ const SURFACES = new Set<ActionSurface>([
 
 /** GET /api/admin/actions — resolve config-driven actions for a UI surface. */
 export async function GET(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
-    const ctx = await getAdminContextCached();
-    if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const gate = await loadAdminRouteGate();
+    if (!gate.ok) return adminRouteGateFailureResponse(gate);
+    const ctx = { ok: true as const, orgId: gate.orgId, userId: gate.userId };
 
     const { searchParams } = new URL(request.url);
     const surface = (searchParams.get("surface") ?? "").trim() as ActionSurface;

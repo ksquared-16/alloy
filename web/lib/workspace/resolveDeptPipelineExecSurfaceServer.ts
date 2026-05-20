@@ -25,6 +25,7 @@ async function probePipelineWorkUnit(params: {
     recordScopeImpossible?: boolean;
     recordScopeConstraints?: RecordScopeConstraints | null;
     viewerDisplayTimeZone?: QueueViewerTimezoneMeta;
+    laneQueuesMsOut?: { value: number };
 }): Promise<DeptPipelineExecSurface | null> {
     const { departmentId, wu, orgId, sharedBootstrap, recordScopeImpossible, recordScopeConstraints, viewerDisplayTimeZone } =
         params;
@@ -39,6 +40,7 @@ async function probePipelineWorkUnit(params: {
         const panelTitle = pipeSection?.label?.trim() || "Pipeline";
         const laneKeySet = new Set(lanes.map((lane) => lane.key));
 
+        const tLanes0 = Date.now();
         const { queues } = await getWorkUnitQueueSummaries({
             orgId,
             workUnitId: wu.id,
@@ -57,6 +59,7 @@ async function probePipelineWorkUnit(params: {
                 departmentId: wu.department_id ?? null,
             },
         });
+        if (params.laneQueuesMsOut) params.laneQueuesMsOut.value = Date.now() - tLanes0;
         const byKey = new Map(queues.map((q) => [q.key, q]));
         const merged = lanes.map((lane) => {
             const q = byKey.get(lane.key);
@@ -94,6 +97,7 @@ export async function resolveDeptPipelineExecSurfaceServer(params: {
     recordScopeImpossible?: boolean;
     recordScopeConstraints?: RecordScopeConstraints | null;
     viewerDisplayTimeZone?: QueueViewerTimezoneMeta;
+    pipelinePerf?: { lane_queues_ms?: number };
 }): Promise<DeptPipelineExecSurface | null> {
     const {
         departmentId,
@@ -107,7 +111,8 @@ export async function resolveDeptPipelineExecSurfaceServer(params: {
     } = params;
 
     if (pipelineWorkUnit) {
-        return probePipelineWorkUnit({
+        const laneMs = { value: 0 };
+        const surface = await probePipelineWorkUnit({
             departmentId,
             wu: pipelineWorkUnit,
             orgId,
@@ -115,7 +120,10 @@ export async function resolveDeptPipelineExecSurfaceServer(params: {
             recordScopeImpossible,
             recordScopeConstraints,
             viewerDisplayTimeZone,
+            laneQueuesMsOut: laneMs,
         });
+        if (params.pipelinePerf) params.pipelinePerf.lane_queues_ms = laneMs.value;
+        return surface;
     }
 
     if (!candidates.length) return null;
@@ -129,6 +137,7 @@ export async function resolveDeptPipelineExecSurfaceServer(params: {
     });
 
     for (const wu of ordered) {
+        const laneMs = { value: 0 };
         const surface = await probePipelineWorkUnit({
             departmentId,
             wu,
@@ -137,8 +146,12 @@ export async function resolveDeptPipelineExecSurfaceServer(params: {
             recordScopeImpossible,
             recordScopeConstraints,
             viewerDisplayTimeZone,
+            laneQueuesMsOut: laneMs,
         });
-        if (surface) return surface;
+        if (surface) {
+            if (params.pipelinePerf) params.pipelinePerf.lane_queues_ms = laneMs.value;
+            return surface;
+        }
     }
     return null;
 }

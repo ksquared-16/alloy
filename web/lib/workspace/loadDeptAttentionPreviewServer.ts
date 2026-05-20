@@ -56,6 +56,7 @@ export async function loadDeptAttentionPreviewServer(params: {
     recordScopeImpossible?: boolean;
     recordScopeConstraints?: RecordScopeConstraints | null;
     opportunityStatusDefs?: StatusDefinitionRow[];
+    attentionPerf?: { candidate_fetch_ms?: number; resolver_ms?: number; bucket_merge_ms?: number };
 }): Promise<DeptAttentionPreviewPayload> {
     const { supabase, orgId, departmentId, departmentMetadata, accessDim } = params;
 
@@ -102,6 +103,7 @@ export async function loadDeptAttentionPreviewServer(params: {
                     recordScopeImpossible: params.recordScopeImpossible,
                     recordScopeConstraints: params.recordScopeConstraints,
                     opportunityStatusDefs: params.opportunityStatusDefs,
+                    perf: params.attentionPerf,
                 });
 
             const attnCfg = resolveOpportunityAttentionConfigFromMetadata(wuMeta);

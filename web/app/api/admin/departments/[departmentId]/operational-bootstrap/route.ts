@@ -7,9 +7,11 @@ import {
     resolveQueueRecordScopeConstraints,
 } from "@/lib/admin/resolveQueueRecordScopeConstraints";
 import { fetchEffectiveUserDisplayTimezone } from "@/lib/admin/timezoneContract";
+import { loadDepartmentKpiPlacementsServer } from "@/lib/kpi/loadDepartmentKpiPlacementsServer";
 import { QueueServiceError, type QueueSummaryRequestMode } from "@/lib/queues/QueueService";
 import { loadDeptOperationalBootstrap } from "@/lib/workspace/loadDeptOperationalBootstrap";
 import { logDeptOperationalBootstrapPerf } from "@/lib/workspace/deptOperationalBootstrapPerf";
+import { loadRightRailActionsBundleServer } from "@/lib/workspace/loadRightRailActionsBundleServer";
 
 function parseLimit(searchParams: URLSearchParams): number | undefined {
     const raw = (searchParams.get("limit") ?? "").trim();
@@ -61,8 +63,7 @@ function parsePriorityBudget(searchParams: URLSearchParams): number | undefined 
 }
 
 /**
- * GET — Single auth pass + shared DB reads for dept oper critical path:
- * department, work units, queue summaries, needs-attention preview, pipeline surface.
+ * GET — Single auth pass for dept oper critical path + parallel KPI placements + right-rail actions bundle.
  */
 export async function GET(request: NextRequest, context: { params: Promise<{ departmentId: string }> }) {
     const routeT0 = Date.now();
@@ -93,9 +94,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ dep
         const { recordScopeImpossible, recordScopeConstraints } = scopeBundle;
 
         const attentionWorkUnitIdParam = (request.nextUrl.searchParams.get("work_unit_id") ?? "").trim() || null;
+        const rightRailWorkUnitId = (request.nextUrl.searchParams.get("right_rail_work_unit_id") ?? "").trim() || "";
 
         const tLoader0 = Date.now();
-        const payload = await loadDeptOperationalBootstrap({
+        const bootstrapP = loadDeptOperationalBootstrap({
             supabase,
             orgId: gate.orgId,
             departmentId,
@@ -115,21 +117,69 @@ export async function GET(request: NextRequest, context: { params: Promise<{ dep
             },
         });
 
-        if ("status" in payload && "error" in payload) {
-            return NextResponse.json({ error: payload.error }, { status: payload.status });
+        const kpiP = (async () => {
+            const t0 = Date.now();
+            try {
+                const r = await loadDepartmentKpiPlacementsServer({ orgId: gate.orgId, departmentId });
+                return { ...r, ms: Date.now() - t0 };
+            } catch {
+                return {
+                    items: [],
+                    scope_has_placements: false,
+                    cache_hit: false,
+                    ms: Date.now() - t0,
+                };
+            }
+        })();
+
+        const actionsP = rightRailWorkUnitId
+            ? (async () => {
+                  const t0 = Date.now();
+                  try {
+                      const actions = await loadRightRailActionsBundleServer({
+                          orgId: gate.orgId,
+                          departmentId,
+                          workUnitId: rightRailWorkUnitId,
+                      });
+                      return { actions, ms: Date.now() - t0 };
+                  } catch {
+                      return { actions: [], ms: Date.now() - t0 };
+                  }
+              })()
+            : Promise.resolve({ actions: [], ms: 0 });
+
+        const [bootstrapResult, kpiResult, actionsResult] = await Promise.all([bootstrapP, kpiP, actionsP]);
+        const loaderMs = Date.now() - tLoader0;
+
+        if ("error" in bootstrapResult && "status" in bootstrapResult) {
+            return NextResponse.json({ error: bootstrapResult.error }, { status: bootstrapResult.status });
         }
 
-        const loaderMs = Date.now() - tLoader0;
+        const { payload, phases } = bootstrapResult;
         const totalMs = Date.now() - routeT0;
+
         logDeptOperationalBootstrapPerf({
             departmentId,
             totalMs,
             routeGateMs,
             prepMs: routePrepMs,
             loaderMs,
+            phases: {
+                ...phases,
+                kpi_placements_ms: kpiResult.ms,
+                kpi_placements_cache_hit: kpiResult.cache_hit,
+                right_rail_actions_ms: actionsResult.ms,
+            },
         });
 
-        return NextResponse.json(payload);
+        return NextResponse.json({
+            ...payload,
+            kpi_placements: {
+                items: kpiResult.items,
+                scope_has_placements: kpiResult.scope_has_placements,
+            },
+            right_rail_actions: actionsResult.actions,
+        });
     } catch (e) {
         if (e instanceof QueueServiceError) {
             return NextResponse.json({ error: e.message, code: e.code }, { status: e.status });
