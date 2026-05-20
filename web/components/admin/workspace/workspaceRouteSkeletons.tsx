@@ -1,5 +1,6 @@
 import "@/app/adminV2/components/workspace/workspace.css";
 import { adminV2WorkUnitQueueLaneReserveStyle } from "@/lib/ui-v2/adminV2LoadingGeometry";
+import { WorkspaceQuietKpiReserve } from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
 
 /** Thin indeterminate ribbon — route transition affordance without blocking the layout. */
 export function WsRouteLoadingRibbon({ label = "Loading" }: { label?: string }) {
@@ -39,7 +40,7 @@ function QueueCardSkeleton({ variant }: { variant: "standard" | "attention" }) {
             ? "adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--attention adminv2-ws-wu-queue-card--tier-warning"
             : "adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-standard";
     return (
-        <div className={`${cardClass} flex flex-col items-stretch`} aria-hidden>
+        <div className={`${cardClass} flex flex-col items-stretch border-alloy-stone/20 shadow-sm`} aria-hidden>
             <div className="adminv2-ws-wu-queue-card-compact-text">
                 <div className="h-3 w-40 adminv2-shimmer-bar rounded bg-alloy-stone/20" />
                 <div className="mt-2 h-3 w-56 adminv2-shimmer-bar rounded bg-alloy-stone/12" style={{ animationDelay: "70ms" }} />
@@ -215,26 +216,12 @@ function DualKpiRailsSkeleton() {
     );
 }
 
-function QueueRowSkeleton() {
-    return (
-        <div className="adminv2-ws-wu-queue-row" aria-hidden>
-            <div className="adminv2-ws-wu-queue-row-main">
-                <div className="h-3 w-44 adminv2-shimmer-bar rounded bg-alloy-stone/20" />
-                <div className="mt-2 h-3 w-64 adminv2-shimmer-bar rounded bg-alloy-stone/12" style={{ animationDelay: "70ms" }} />
-            </div>
-            <div className="adminv2-ws-wu-queue-row-meta">
-                <div className="h-3 w-16 adminv2-shimmer-bar rounded bg-alloy-stone/10" style={{ animationDelay: "110ms" }} />
-            </div>
-        </div>
-    );
-}
-
 function WorkUnitQueuePickerPillsReserve() {
     const pillClass =
-        "inline-flex shrink-0 h-6 min-w-[4.5rem] rounded-full border border-alloy-stone/14 bg-white/55 adminv2-shimmer-bar";
+        "inline-flex shrink-0 h-7 min-w-[5rem] rounded-full border border-alloy-stone/20 bg-white shadow-sm ring-1 ring-alloy-stone/10 adminv2-shimmer-bar";
     return (
         <div className="adminv2-ws-wu-header-queue-picker mt-2 min-w-0" aria-hidden>
-            <div className="adminv2-ws-queue-pill-scroll flex gap-1.5 py-0.5" role="group" aria-label="Loading queue filters">
+            <div className="adminv2-ws-queue-pill-scroll flex gap-2 py-0.5" role="group" aria-label="Loading queue filters">
                 {Array.from({ length: 4 }).map((_, i) => (
                     <span key={i} className={pillClass} style={{ animationDelay: `${i * 45}ms` }} />
                 ))}
@@ -245,20 +232,33 @@ function WorkUnitQueuePickerPillsReserve() {
 
 function WorkUnitLaneStripReserve() {
     return (
-        <div className="adminv2-ws-wu-lane-strip mb-2 space-y-1.5" aria-hidden>
-            <div className="h-3 w-[min(100%,14rem)] adminv2-shimmer-bar rounded bg-alloy-stone/12" />
-            <div className="h-3 w-[min(100%,18rem)] adminv2-shimmer-bar rounded bg-alloy-stone/10" style={{ animationDelay: "70ms" }} />
+        <div
+            className="adminv2-ws-wu-lane-strip mb-2.5 rounded-lg border border-alloy-stone/14 bg-white/90 px-2.5 py-2 shadow-sm"
+            aria-hidden
+        >
+            <div className="h-3 w-[min(100%,10rem)] adminv2-shimmer-bar rounded bg-alloy-stone/18" />
+            <div
+                className="mt-1.5 h-3 w-[min(100%,16rem)] adminv2-shimmer-bar rounded bg-alloy-stone/12"
+                style={{ animationDelay: "70ms" }}
+            />
         </div>
     );
 }
 
-function WorkUnitOperLaneSpinner() {
+function WorkUnitOperLaneStatusChip() {
     return (
         <div
-            className="h-9 w-9 rounded-full border-[3px] border-alloy-forge/12 border-t-alloy-forge/70 border-r-alloy-forge/35 animate-spin motion-reduce:animate-none"
-            style={{ animationDuration: "0.95s" }}
-            aria-hidden
-        />
+            className="pointer-events-none absolute bottom-3 right-3 z-[2] flex items-center gap-2 rounded-full border border-alloy-stone/18 bg-white/95 px-2.5 py-1 shadow-sm"
+            aria-live="polite"
+            aria-label="Loading queue"
+        >
+            <div
+                className="h-4 w-4 rounded-full border-2 border-alloy-forge/15 border-t-alloy-forge/65 animate-spin motion-reduce:animate-none"
+                style={{ animationDuration: "0.95s" }}
+                aria-hidden
+            />
+            <span className="text-[11px] font-medium text-alloy-forge/75">Loading queue…</span>
+        </div>
     );
 }
 
@@ -289,7 +289,7 @@ export function WorkUnitRouteSkeletonBody({
                                 </div>
                             </div>
                             <div data-workspace-zone="kpi-banner">
-                                <DualKpiRailsSkeleton />
+                                <WorkspaceQuietKpiReserve id="wu-route-kpi-quiet-reserve" />
                             </div>
                         </div>
 
@@ -301,20 +301,29 @@ export function WorkUnitRouteSkeletonBody({
                         >
                             <div className="adminv2-ws-dept-v2-lane adminv2-ws-dept-v2-lane--throughput" data-ws-lane-kind="lane_queue">
                                 <div className="adminv2-ws-dept-v2-lane-chrome adminv2-ws-dept-v2-lane-chrome--throughput-deck">
-                                    <WorkUnitLaneStripReserve />
-                                    <div
-                                        className="adminv2-ws-wu-queue-shell relative rounded-xl border border-alloy-stone/12 bg-white/40"
-                                        style={queueLaneStyle}
+                                    <section
+                                        className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--primary adminv2-ws-dept-throughput-panel rounded-xl border border-alloy-stone/18 bg-white shadow-sm"
+                                        aria-label="Lane queue"
                                     >
-                                        <div className="adminv2-ws-wu-queue px-2 py-2" aria-hidden>
-                                            {Array.from({ length: 6 }).map((_, i) => (
-                                                <QueueRowSkeleton key={i} />
-                                            ))}
+                                        <header className="adminv2-ws-queue-header border-b border-alloy-stone/12 px-2.5 py-2">
+                                            <div className="adminv2-ws-queue-title-row">
+                                                <h3 className="adminv2-ws-queue-title text-alloy-forge/90">Queue</h3>
+                                            </div>
+                                        </header>
+                                        <div className="relative px-2 py-2" style={queueLaneStyle}>
+                                            <WorkUnitLaneStripReserve />
+                                            <div className="adminv2-ws-wu-v2" data-ws-surface="work_unit">
+                                                <ul className="adminv2-ws-queue-list space-y-2" role="list" aria-hidden>
+                                                    {Array.from({ length: 5 }).map((_, i) => (
+                                                        <li key={i} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
+                                                            <QueueCardSkeleton variant="standard" />
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                            <WorkUnitOperLaneStatusChip />
                                         </div>
-                                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                                            <WorkUnitOperLaneSpinner />
-                                        </div>
-                                    </div>
+                                    </section>
                                 </div>
                             </div>
                             <div
@@ -331,8 +340,8 @@ export function WorkUnitRouteSkeletonBody({
                                 data-adminv2-workspace-command-rail
                                 aria-label="Decisions and actions"
                             >
-                                <section className="adminv2-ws-actions-rail adminv2-ws-actions-rail--dept-panel px-3 pb-3 pt-3">
-                                    <div className="h-4 w-20 adminv2-shimmer-bar rounded bg-alloy-stone/15" aria-hidden />
+                                <section className="adminv2-ws-actions-rail adminv2-ws-actions-rail--dept-panel rounded-xl border border-alloy-stone/16 bg-white px-3 pb-3 pt-3 shadow-sm">
+                                    <div className="h-4 w-20 adminv2-shimmer-bar rounded bg-alloy-stone/20" aria-hidden />
                                     <div className="mt-3 space-y-2" aria-hidden>
                                         <div className="h-8 w-full adminv2-shimmer-bar rounded-md bg-alloy-stone/10" />
                                         <div

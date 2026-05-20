@@ -994,7 +994,7 @@ function DrawerOpportunityQueueBootstrapBodySkeleton() {
 function DrawerOpportunityOperationalLoadingComposition() {
     return (
         <div
-            className="flex min-h-[min(100%,26rem)] w-full flex-col items-center justify-center px-4 py-10"
+            className="flex min-h-[min(100%,26rem)] w-full flex-col items-center justify-center rounded-xl border border-alloy-stone/12 bg-gradient-to-b from-alloy-stone/[0.07] via-white to-alloy-stone/[0.04] px-5 py-10"
             aria-busy="true"
             data-opportunity-drawer-operational-loading="true"
         >
@@ -1002,7 +1002,8 @@ function DrawerOpportunityOperationalLoadingComposition() {
                 title="Loading record"
                 description="Preparing inquiry workspace…"
                 density="panel"
-                className="w-full max-w-md"
+                tone="record"
+                className="w-full max-w-md shadow-md"
             />
         </div>
     );

@@ -61,33 +61,59 @@ export function buildOpportunityDrawerBootstrapUrl(
     return buildOpportunityDrawerBootstrapCanonicalUrl(opportunityId, workspaceContext);
 }
 
-const drawerBootstrapPayloadInflight = new Map<
-    string,
-    Promise<OpportunityDrawerOperationalBootstrapResponse>
->();
+const DRAWER_BOOTSTRAP_CACHE_TTL_MS = 8_000;
 
-/** One in-flight bootstrap payload per canonical URL (survives Strict Mode remounts; pairs with dedupeAdminFetch). */
+type DrawerBootstrapCacheEntry = {
+    promise: Promise<OpportunityDrawerOperationalBootstrapResponse>;
+};
+
+/** One bootstrap GET per opportunity id (intent prefetch + drawer open + Strict Mode share this). */
+const drawerBootstrapByOpportunityId = new Map<string, DrawerBootstrapCacheEntry>();
+
+function drawerBootstrapCacheKey(opportunityId: string): string {
+    return opportunityId.trim();
+}
+
+/** One in-flight bootstrap payload per opportunity (survives Strict Mode; coalesces prefetch vs open). */
 export async function fetchOpportunityDrawerOperationalBootstrap(
     opportunityId: string,
     workspaceContext: OpportunityWorkspaceContext | null | undefined,
     init?: RequestInit
 ): Promise<OpportunityDrawerOperationalBootstrapResponse> {
-    const url = buildOpportunityDrawerBootstrapCanonicalUrl(opportunityId, workspaceContext);
-    let p = drawerBootstrapPayloadInflight.get(url);
-    if (!p) {
-        p = dedupeAdminFetch(url, init ?? workspaceDataFetchInit())
-            .then((res) => {
-                if (!res.ok) {
-                    throw new Error(res.status === 404 ? "Not found" : "bootstrap_failed");
-                }
-                return res.json() as Promise<OpportunityDrawerOperationalBootstrapResponse>;
-            })
-            .finally(() => {
-                drawerBootstrapPayloadInflight.delete(url);
-            });
-        drawerBootstrapPayloadInflight.set(url, p);
+    const cacheKey = drawerBootstrapCacheKey(opportunityId);
+    if (!cacheKey) {
+        throw new Error("missing_opportunity_id");
     }
-    return p;
+
+    const cached = drawerBootstrapByOpportunityId.get(cacheKey);
+    if (cached) {
+        return cached.promise;
+    }
+
+    const url = buildOpportunityDrawerBootstrapCanonicalUrl(opportunityId, workspaceContext);
+    const promise = dedupeAdminFetch(url, init ?? workspaceDataFetchInit())
+        .then((res) => {
+            if (!res.ok) {
+                throw new Error(res.status === 404 ? "Not found" : "bootstrap_failed");
+            }
+            return res.json() as Promise<OpportunityDrawerOperationalBootstrapResponse>;
+        })
+        .catch((err) => {
+            drawerBootstrapByOpportunityId.delete(cacheKey);
+            throw err;
+        });
+
+    drawerBootstrapByOpportunityId.set(cacheKey, { promise });
+
+    void promise.finally(() => {
+        setTimeout(() => {
+            if (drawerBootstrapByOpportunityId.get(cacheKey)?.promise === promise) {
+                drawerBootstrapByOpportunityId.delete(cacheKey);
+            }
+        }, DRAWER_BOOTSTRAP_CACHE_TTL_MS);
+    });
+
+    return promise;
 }
 
 export function mapBootstrapLayoutToRecordLayoutRow(

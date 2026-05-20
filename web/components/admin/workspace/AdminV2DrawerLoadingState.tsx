@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import "@/app/adminV2/components/workspace/workspace.css";
 
 type DrawerLoadingDensity = "panel" | "inline" | "micro";
+type DrawerLoadingTone = "default" | "record";
 
 /**
  * Drawer-local loading surface — same motion language as `AdminV2RouteLoadingState` (spinner + track), scaled for panels.
@@ -11,6 +12,7 @@ export function AdminV2DrawerLoadingState({
     title,
     description,
     density = "panel",
+    tone = "default",
     showTrack = true,
     children,
     className = "",
@@ -18,6 +20,8 @@ export function AdminV2DrawerLoadingState({
     title: string;
     description?: string;
     density?: DrawerLoadingDensity;
+    /** Record drawer — stronger contrast on modal white. */
+    tone?: DrawerLoadingTone;
     showTrack?: boolean;
     children?: ReactNode;
     className?: string;
@@ -25,15 +29,24 @@ export function AdminV2DrawerLoadingState({
     const isMicro = density === "micro";
     const isInline = density === "inline";
     const spinnerLg = !isMicro && !isInline;
+    const isRecordTone = tone === "record";
     return (
         <div
-            className={`rounded-lg border border-admin-border/50 bg-gradient-to-b from-white to-alloy-stone/[0.03] shadow-sm ring-1 ring-alloy-stone/[0.06] ${
-                isMicro ? "px-3 py-3" : isInline ? "px-4 py-4" : "px-5 py-6"
-            } ${className}`}
+            className={`relative overflow-hidden rounded-xl border shadow-sm ${
+                isRecordTone
+                    ? "border-alloy-stone/22 bg-gradient-to-br from-white via-alloy-stone/[0.05] to-alloy-forge/[0.07] ring-1 ring-alloy-forge/12"
+                    : "border-admin-border/50 bg-gradient-to-b from-white to-alloy-stone/[0.03] ring-1 ring-alloy-stone/[0.06]"
+            } ${isMicro ? "px-3 py-3" : isInline ? "px-4 py-4" : "px-5 py-6"} ${className}`}
             aria-busy="true"
             aria-live="polite"
             aria-label={title}
         >
+            {isRecordTone ? (
+                <div
+                    className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-alloy-blue/55 via-alloy-forge/35 to-alloy-pine/40"
+                    aria-hidden
+                />
+            ) : null}
             <div className={`flex ${isMicro ? "items-center gap-3" : "items-start gap-3"}`}>
                 <div
                     className={`flex shrink-0 items-center justify-center rounded-full bg-alloy-forge/[0.06] ${

@@ -130,9 +130,18 @@ describe("Drawer opportunity header grouped loading", () => {
         const src = read("components/admin/AdminEntityDrawer.tsx");
         expect(src).toContain("DrawerOpportunityOperationalLoadingComposition");
         expect(src).toContain("AdminV2DrawerLoadingState");
+        expect(src).toContain('tone="record"');
         expect(src).toMatch(
             /opportunityDrawerBootstrapPending[\s\S]*DrawerOpportunityOperationalLoadingComposition/,
         );
+    });
+
+    it("WU route skeleton uses dept-like queue cards and corner status chip", () => {
+        const src = read("components/admin/workspace/workspaceRouteSkeletons.tsx");
+        expect(src).toContain("QueueCardSkeleton");
+        expect(src).toContain("WorkUnitOperLaneStatusChip");
+        expect(src).toContain("adminv2-ws-dept-qsec");
+        expect(src).not.toContain("WorkUnitOperLaneSpinner");
     });
 
     it("uses section-shaped bootstrap body and title-rail action reserves when queue preview is active", () => {
@@ -298,7 +307,8 @@ describe("Drawer single-reveal bootstrap body", () => {
         expect(drawer).toContain("AdminV2DrawerLoadingState");
         expect(drawer).toContain("fetchOpportunityDrawerOperationalBootstrap");
         expect(bootstrapClient).toContain("buildOpportunityDrawerBootstrapCanonicalUrl");
-        expect(bootstrapClient).toContain("drawerBootstrapPayloadInflight");
+        expect(bootstrapClient).toContain("drawerBootstrapByOpportunityId");
+        expect(bootstrapClient).toContain("drawerBootstrapCacheKey");
         expect(drawer).toMatch(
             /opportunityDrawerBootstrapInflightRef\.current === entityOpenKey[\s\S]*?return;/,
         );
