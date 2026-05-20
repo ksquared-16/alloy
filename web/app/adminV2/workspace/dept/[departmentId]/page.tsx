@@ -468,33 +468,88 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         ? needsRow.count
                         : null;
                 next[id] = { total, needs_attention: needs };
-                if (typeof window !== "undefined") {
-                    console.warn("[pipeline-count-unify]", {
-                        source: "department",
-                        department_id: deptIdStr,
-                        work_unit_id: id,
-                        queue_key: row.work_unit_scope_queue_key ?? null,
-                        count: total,
-                    });
-                }
             }
             setDeptWorkUnitSummaries(next);
             setDeptQueueSummariesError(null);
             return next;
         };
 
+        const init = workspaceDataFetchInit() ?? {};
+        const cacheHit =
+            orgId && departmentId
+                ? readDepartmentPageCache(orgId, departmentId, principalUserId, accessScopeFingerprint)
+                : null;
+        const cacheWuList =
+            cacheHit && cacheHit.dept.id === departmentId ? (cacheHit.workUnits ?? []) : [];
+        const cacheNaWuId =
+            cacheWuList.find((w) => (w.key ?? "").trim().toLowerCase() === "needs_attention")?.id ?? null;
+
+        let pipelineProbeStarted = false;
+
+        async function runDeptPipelineProbe(
+            wuCommit: Array<{ id: string; name: string | null; key: string | null }>
+        ) {
+            const pipelineCandidates = wuCommit.filter(
+                (w) => (w.key ?? "").trim().toLowerCase() !== "needs_attention"
+            );
+            if (!pipelineCandidates.length) {
+                if (!cancelled) {
+                    setDeptPipelineExecSurface(null);
+                    setDeptPipelineExecLoading(false);
+                }
+                return;
+            }
+            if (pipelineProbeStarted) return;
+            pipelineProbeStarted = true;
+            if (!cancelled) setDeptPipelineExecLoading(true);
+            try {
+                const enroll = pipelineCandidates.find(
+                    (w) => (w.key ?? "").trim().toLowerCase() === "enrollment_pipeline"
+                );
+                const detailMap = new Map<
+                    string,
+                    { queue_definition?: unknown; department_id?: string | null }
+                >();
+                if (enroll) {
+                    const detailRes = await dedupeAdminFetch(
+                        `/api/admin/work-units/${encodeURIComponent(enroll.id)}`,
+                        init
+                    );
+                    if (detailRes.ok) {
+                        detailMap.set(
+                            enroll.id,
+                            (await detailRes.json().catch(() => ({}))) as {
+                                queue_definition?: unknown;
+                                department_id?: string | null;
+                            }
+                        );
+                    }
+                }
+                const surface = await resolveDeptPipelineExecSurface({
+                    departmentId,
+                    candidates: pipelineCandidates,
+                    init,
+                    workUnitDetailById: detailMap,
+                });
+                if (!cancelled) setDeptPipelineExecSurface(surface);
+            } catch {
+                if (!cancelled) setDeptPipelineExecSurface(null);
+            } finally {
+                if (!cancelled) setDeptPipelineExecLoading(false);
+            }
+        }
+
         async function fetchDeptAttentionPreview(naWuId: string | null) {
             if (cancelled) return;
             setDeptAttentionBucketsLoading(true);
             setDeptAttentionBucketsError(null);
             try {
-                const init = workspaceDataFetchInit();
                 const baseUrl = `/api/admin/departments/${encodeURIComponent(departmentId)}/opportunity-attention-preview`;
                 const url =
                     naWuId != null
                         ? `${baseUrl}?work_unit_id=${encodeURIComponent(naWuId)}`
                         : baseUrl;
-                const res = await dedupeAdminFetch(url, init ?? {});
+                const res = await dedupeAdminFetch(url, init);
                 const j = (await res.json().catch(() => ({}))) as {
                     error?: string;
                     total?: number;
@@ -535,8 +590,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         async function refreshQueueSummaries(deptCommit: DeptRow | null, wuCommit: Array<{ id: string; name: string | null; key: string | null }>) {
             if (cancelled) return;
             try {
-                const init = workspaceDataFetchInit();
-                const sumRes = await dedupeAdminFetch(summariesRoute, init ?? {}).catch(() => null as Response | null);
+                const sumRes = await dedupeAdminFetch(summariesRoute, init).catch(() => null as Response | null);
                 const j = (await (sumRes?.json().catch(() => ({})) ?? Promise.resolve({}))) as Parameters<
                     typeof applySummariesJson
                 >[1];
@@ -575,6 +629,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
             }
         }
 
+        /** Overlap attention + summaries with dept/wu fetch — not gated on oper-region reveal. */
+        void fetchDeptAttentionPreview(cacheNaWuId);
         const summariesFetchPromise = refreshQueueSummaries(null, []);
 
         void (async () => {
@@ -583,7 +639,6 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 alloyPerfSet("department_start", routeStart);
             }
             try {
-                const init = workspaceDataFetchInit() ?? {};
                 deptKpisPerfKeyRef.current = null;
                 if (!cancelled) {
                     setDeptPlacementRows(undefined);
@@ -673,54 +728,13 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 }
 
                 if (deptCommit && deptRes.ok && wuRes.ok) {
-                    const pipelineCandidates = wuCommit.filter(
-                        (w) => (w.key ?? "").trim().toLowerCase() !== "needs_attention"
-                    );
-                    if (pipelineCandidates.length) {
-                        setDeptPipelineExecLoading(true);
-                        void (async () => {
-                            try {
-                                const enroll = pipelineCandidates.find(
-                                    (w) => (w.key ?? "").trim().toLowerCase() === "enrollment_pipeline"
-                                );
-                                const detailMap = new Map<string, { queue_definition?: unknown; department_id?: string | null }>();
-                                if (enroll) {
-                                    const detailRes = await dedupeAdminFetch(
-                                        `/api/admin/work-units/${encodeURIComponent(enroll.id)}`,
-                                        workspaceDataFetchInit() ?? {}
-                                    );
-                                    if (detailRes.ok) {
-                                        detailMap.set(
-                                            enroll.id,
-                                            (await detailRes.json().catch(() => ({}))) as {
-                                                queue_definition?: unknown;
-                                                department_id?: string | null;
-                                            }
-                                        );
-                                    }
-                                }
-                                const surface = await resolveDeptPipelineExecSurface({
-                                    departmentId,
-                                    candidates: pipelineCandidates,
-                                    init: workspaceDataFetchInit() ?? {},
-                                    workUnitDetailById: detailMap,
-                                });
-                                if (!cancelled) {
-                                    setDeptPipelineExecSurface(surface);
-                                }
-                            } catch {
-                                if (!cancelled) setDeptPipelineExecSurface(null);
-                            } finally {
-                                if (!cancelled) setDeptPipelineExecLoading(false);
-                            }
-                        })();
-                    } else {
-                        setDeptPipelineExecSurface(null);
-                        setDeptPipelineExecLoading(false);
-                    }
+                    void runDeptPipelineProbe(wuCommit);
 
                     const naWu = wuCommit.find((w) => (w.key ?? "").trim().toLowerCase() === "needs_attention");
-                    void fetchDeptAttentionPreview(naWu?.id ?? null);
+                    const naWuId = naWu?.id ?? null;
+                    if (naWuId && naWuId !== cacheNaWuId) {
+                        void fetchDeptAttentionPreview(naWuId);
+                    }
 
                     void (async () => {
                         if (cancelled) return;
@@ -970,6 +984,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
     const deptConfirmedNoWorkUnits =
         deptWorkUnits !== null && deptWorkUnits.length === 0 && !deptWorkUnitsError;
 
+    /** Defer actions/rail until oper region is authoritative — frees bandwidth for pipeline + attention. */
     useEffect(() => {
         if (
             !isEnrollmentLikeDepartmentKey(deptKey) ||
@@ -980,14 +995,15 @@ export default function AdminV2WorkspaceDepartmentPage() {
             setEnrollmentDeptRightRail(null);
             return;
         }
+        if (!deptOperationalRegionReady) return;
+
         let cancelled = false;
         (async () => {
             try {
-                const init = workspaceDataFetchInit();
                 const list = await fetchWorkspaceRightRailResolvedActions({
                     departmentId,
                     workUnitId: primaryWorkUnit.id,
-                    fetchInit: init,
+                    fetchInit: workspaceDataFetchInit(),
                 });
                 if (!cancelled) setEnrollmentDeptRightRail(list);
             } catch {
@@ -997,7 +1013,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         return () => {
             cancelled = true;
         };
-    }, [deptKey, departmentId, primaryWorkUnit?.id, deptWorkUnitsResolved]);
+    }, [deptKey, departmentId, primaryWorkUnit?.id, deptWorkUnitsResolved, deptOperationalRegionReady]);
 
     useEffect(() => {
         if (!isEnrollmentLikeDepartmentKey(deptKey) || !departmentId || enrollmentDeptRightRail === null) return;

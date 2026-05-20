@@ -181,11 +181,27 @@ describe("Dept operational panel render-state", () => {
         );
     });
 
-    it("fetches attention once after work units resolve (no early parallel refetch)", () => {
+    it("starts attention and summaries before dept/wu Promise.all (PERF-B-04)", () => {
         const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
         expect(src).toContain("summariesFetchPromise");
-        expect(src).not.toContain("attentionFetchPromise");
-        expect(src).toMatch(/void fetchDeptAttentionPreview\(naWu\?\.id/);
+        expect(src).toMatch(/void fetchDeptAttentionPreview\(cacheNaWuId\)/);
+        expect(src).toMatch(
+            /fetchDeptAttentionPreview\(cacheNaWuId\)[\s\S]*?summariesFetchPromise[\s\S]*?Promise\.all\(\[[\s\S]*?deptRoute/,
+        );
+        expect(src).toMatch(/if \(!deptOperationalRegionReady\) return/);
+        const operReadyGate =
+            src.match(/const deptOperationalRegionReady = useMemo\([\s\S]*?\]\);/)?.[0] ?? "";
+        expect(operReadyGate).not.toContain("deptKpiPlacementPending");
+        expect(operReadyGate).not.toContain("deptRailReady");
+        expect(operReadyGate).not.toContain("enrollmentDeptRightRail");
+        expect(operReadyGate).not.toContain("workflowKpis");
+    });
+
+    it("defers right-rail actions until oper region is ready", () => {
+        const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
+        expect(src).toMatch(
+            /fetchWorkspaceRightRailResolvedActions[\s\S]*?deptOperationalRegionReady/,
+        );
     });
 });
 

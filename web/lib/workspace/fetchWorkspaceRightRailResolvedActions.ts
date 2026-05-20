@@ -26,7 +26,7 @@ export async function fetchWorkspaceRightRailResolvedActions(params: {
                     department_id: departmentId,
                     work_unit_id: workUnitId,
                 }).toString();
-            return dedupeAdminFetchWithTtl(route, init, 1500);
+            return dedupeAdminFetchWithTtl(route, init, 8000);
         })
     );
     const parts: ResolvedActionsBySlot[] = [];

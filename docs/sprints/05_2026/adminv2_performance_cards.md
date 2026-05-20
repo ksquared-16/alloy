@@ -374,6 +374,33 @@ Lanes B and C can overlap **after A** if two implementers — do not start B bef
 
 **PR-4.6+ (dept loading reset + oper-region loader):** Split readiness: `deptShellReady` / `deptTopSummaryReady` / `deptRailReady` / `deptOperationalRegionReady`. Bridge shell renders when shell ready; only paired oper region uses `DeptOperationalRegionLoader` until throughput+attention authoritative. Pipeline probe sets `deptPipelineExecLoading(true)` before WU commit; presentation may upgrade `wu_summaries` → `pipeline_lanes` before reveal; `enrollment_pipeline` excluded from WU summary rows.
 
+#### Settled dept UX contract (do not regress)
+
+| Phase | Operator sees |
+|-------|----------------|
+| 1 | Chrome / bridge shell quickly (`deptShellReady`) |
+| 2 | Today's Focus quiet reserve → values (`deptTopSummaryReady`, independent of oper region) |
+| 3 | Actions rail placeholder → actions (`deptRailReady`, **after** `deptOperationalRegionReady`) |
+| 4 | `DeptOperationalRegionLoader` in paired oper region only |
+| 5 | Pipeline / Work Unit Queue + Needs Attention reveal **together** when authoritative |
+
+**Never:** blank oper panel bodies, `Total —`, wrong enrollment WU row, stale prior-dept content, full-page oper blocker.
+
+**`deptOperationalRegionReady` only:** dept + work units resolved, pipeline probe settled, throughput presentation locked, throughput body ready, attention body ready (not KPI placements, not workflow summary, not right-rail actions).
+
+---
+
+### PERF-B-04 — Dept oper-region critical path trim
+
+| Field | Content |
+|-------|---------|
+| **Lane** | B |
+| **Goal** | Cut perceived oper-region wait ~50% without changing settled UX contract above. |
+| **Changes** | Start `opportunity-attention-preview` + `work-unit-queue-summaries` **before** `Promise.all(dept, work-units)`; single shared `workspaceDataFetchInit()` per effect; extract `runDeptPipelineProbe`; defer `fetchWorkspaceRightRailResolvedActions` until `deptOperationalRegionReady`; actions TTL 8s via existing dedupe helper. |
+| **Critical path (enrollment pipeline)** | `max(work-units, attention-preview, pipeline-probe)` — summaries **not** on oper reveal path when `pipeline_lanes`. |
+| **Files** | `dept/[departmentId]/page.tsx`, `fetchWorkspaceRightRailResolvedActions.ts` (TTL only). |
+| **Out** | Server auth dedupe, combined API, drawer/WU changes. |
+
 ---
 
 ### PERF-B-03 — Dept revisit & site-scope calm revalidation
