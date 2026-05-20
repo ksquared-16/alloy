@@ -4,6 +4,7 @@ import {
     ADMINV2_QUIET_RESERVE_PANEL_CLASS,
     adminV2DeptKpiQuietReserveStyle,
     adminV2DeptPairedOperPanelReserveStyle,
+    adminV2WorkUnitQueueLaneReserveStyle,
 } from "@/lib/ui-v2/adminV2LoadingGeometry";
 import {
     WorkspacePairedOperPanel,
@@ -107,7 +108,8 @@ export function WorkspaceQuietQueueLaneReserve() {
     return (
         <div
             className="adminv2-ws-wu-queue-shell rounded-xl border border-alloy-stone/12 bg-white/40"
-            style={{ minHeight: "14rem" }}
+            style={adminV2WorkUnitQueueLaneReserveStyle()}
+            data-adminv2-wu-queue-lane-reserve="true"
             aria-busy="true"
             aria-label="Loading queue"
         />

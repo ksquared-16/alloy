@@ -19,6 +19,9 @@ export const ADMINV2_DEPT_PAIRED_OPER_PANEL_MIN_H = "11.5rem";
 /** Dept / workspace KPI quiet reserve band (`WorkspaceQuietKpiReserve`). */
 export const ADMINV2_DEPT_KPI_QUIET_RESERVE_MIN_H = "4.25rem";
 
+/** Work-unit queue lane quiet reserve (`WorkspaceQuietQueueLaneReserve`). */
+export const ADMINV2_WORK_UNIT_QUEUE_LANE_MIN_H = "14rem";
+
 /** Shared calm reserve panel surface (dept oper columns). */
 export const ADMINV2_QUIET_RESERVE_PANEL_CLASS =
     "rounded-lg border border-alloy-stone/12 bg-white/45";
@@ -41,4 +44,8 @@ export function adminV2DeptPairedOperPanelReserveStyle(): { minHeight: string } 
 
 export function adminV2DeptKpiQuietReserveStyle(): { minHeight: string } {
     return { minHeight: ADMINV2_DEPT_KPI_QUIET_RESERVE_MIN_H };
+}
+
+export function adminV2WorkUnitQueueLaneReserveStyle(): { minHeight: string } {
+    return { minHeight: ADMINV2_WORK_UNIT_QUEUE_LANE_MIN_H };
 }

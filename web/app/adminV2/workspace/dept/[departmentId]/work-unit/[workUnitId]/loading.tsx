@@ -1,9 +1,12 @@
-import { AdminV2RouteLoadingState } from "@/components/admin/workspace/AdminV2RouteLoadingState";
+import { WorkspaceQuietQueueLaneReserve } from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
 
 export default function Loading() {
     return (
         <div className="w-full max-w-none mx-0 px-0 pt-2 pb-0 space-y-4 relative">
-            <nav className="text-sm text-alloy-midnight/60 flex flex-wrap items-center gap-1 px-1" aria-label="Breadcrumb">
+            <nav
+                className="text-sm text-alloy-midnight/60 flex flex-wrap items-center gap-1 px-1"
+                aria-label="Breadcrumb"
+            >
                 <span className="flex items-center gap-1">
                     <span className="text-alloy-midnight/80 font-medium">Workspace</span>
                 </span>
@@ -20,7 +23,7 @@ export default function Loading() {
                     …
                 </span>
             </nav>
-            <AdminV2RouteLoadingState variant="work_unit" />
+            <WorkspaceQuietQueueLaneReserve />
         </div>
     );
 }

@@ -41,6 +41,12 @@ describe("work-unit queue stability (PERF-C-01 / C-02)", () => {
         expect(pageSource).toMatch(/seededWorkUnitShellRef\.current = true[\s\S]*?setWorkUnit/);
     });
 
+    it("prefers operational-bootstrap for critical oper data", () => {
+        expect(pageSource).toContain("operational-bootstrap");
+        expect(pageSource).toContain("work_unit_bootstrap_ready");
+        expect(pageSource).toContain("setWuBootstrapAttentionBuckets");
+    });
+
     it("uses single bootstrap primary row fetch authority", () => {
         expect(pageSource).toContain("resolveBootstrapPrimaryQueueKey");
         expect(pageSource).toContain("runBootstrapPrimaryRowFetch");

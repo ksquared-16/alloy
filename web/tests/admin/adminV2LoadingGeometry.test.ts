@@ -9,9 +9,11 @@ import {
     ADMINV2_DRAWER_OPPORTUNITY_BOOTSTRAP_BODY_MIN_H,
     ADMINV2_KPI_STRIP_CELL_COUNT,
     ADMINV2_QUIET_RESERVE_PANEL_CLASS,
+    ADMINV2_WORK_UNIT_QUEUE_LANE_MIN_H,
     ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT,
     adminV2DeptKpiQuietReserveStyle,
     adminV2DeptPairedOperPanelReserveStyle,
+    adminV2WorkUnitQueueLaneReserveStyle,
 } from "@/lib/ui-v2/adminV2LoadingGeometry";
 
 const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -37,6 +39,29 @@ describe("adminV2LoadingGeometry", () => {
 
     it("uses drawer bootstrap body reserve shorter than legacy workflow block", () => {
         expect(ADMINV2_DRAWER_OPPORTUNITY_BOOTSTRAP_BODY_MIN_H).toBe("10.5rem");
+    });
+
+    it("exports work-unit queue lane quiet reserve geometry (PERF-A-03)", () => {
+        expect(ADMINV2_WORK_UNIT_QUEUE_LANE_MIN_H).toBe("14rem");
+        expect(adminV2WorkUnitQueueLaneReserveStyle()).toEqual({ minHeight: "14rem" });
+    });
+});
+
+describe("Work-unit loader alignment (PERF-A-03)", () => {
+    it("route loading.tsx uses WorkspaceQuietQueueLaneReserve", () => {
+        const loading = read(
+            "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/loading.tsx"
+        );
+        expect(loading).toContain("WorkspaceQuietQueueLaneReserve");
+        expect(loading).not.toContain("AdminV2RouteLoadingState");
+    });
+
+    it("in-page blocking load uses shared WU lane reserve style", () => {
+        const reserve = read("components/admin/workspace/WorkspaceQuietLoadingReserve.tsx");
+        expect(reserve).toContain("adminV2WorkUnitQueueLaneReserveStyle");
+        expect(reserve).toContain('data-adminv2-wu-queue-lane-reserve="true"');
+        const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
+        expect(page).toContain("WorkspaceQuietQueueLaneReserve");
     });
 });
 

@@ -11,7 +11,11 @@ import {
     resolveNeedsAttentionBucketsWithPrecedence,
     type NeedsAttentionBucketWithCount,
 } from "@/lib/opportunities/needsAttentionBuckets";
-import { loadOpportunityNeedsAttentionRows, NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP } from "@/lib/queues/QueueService";
+import {
+    loadOpportunityNeedsAttentionRows,
+    NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP,
+    type OpportunityNeedsAttentionLoadResult,
+} from "@/lib/queues/QueueService";
 import { summarizeAttentionReasonCounts, type AttentionReasonCountSummary } from "@/lib/workspace/attentionReasonCountsSummary";
 import { buildQueueServiceAttentionSemantics, type QueueServiceOpportunityNeedsAttentionSemantics } from "@/lib/workspace/opportunityAttentionCountSemantics";
 
@@ -31,6 +35,8 @@ export async function buildWorkUnitScopedNeedsAttentionLaneBuckets(params: {
     recordScopeImpossible?: boolean;
     recordScopeConstraints?: RecordScopeConstraints | null;
     opportunityStatusDefs?: StatusDefinitionRow[];
+    /** When set, skips a second {@link loadOpportunityNeedsAttentionRows} (WU/dept bootstrap). */
+    preloadedAttention?: OpportunityNeedsAttentionLoadResult;
     /** Dept bootstrap perf attribution (optional). */
     perf?: {
         rules_ms?: number;
@@ -118,23 +124,30 @@ export async function buildWorkUnitScopedNeedsAttentionLaneBuckets(params: {
     const sort = [{ column: "updated_at", ascending: true as const }];
 
     const loadPerf: { query_ms?: number; resolver_ms?: number; membership_filter_ms?: number } = {};
-    const loadOut = await loadOpportunityNeedsAttentionRows({
-        supabase,
-        orgId,
-        workUnitId,
-        sort,
-        now: refUtc,
-        opportunityStatusDefs: oppDefs,
-        attentionConfig,
-        recordScopeConstraints: scopeFilter,
-        columnSelect: "resolver_minimal",
-        skipPostFilterSort: true,
-        perf: loadPerf,
-    });
-    if (params.perf) {
+    const loadOut =
+        params.preloadedAttention ??
+        (await loadOpportunityNeedsAttentionRows({
+            supabase,
+            orgId,
+            workUnitId,
+            sort,
+            now: refUtc,
+            opportunityStatusDefs: oppDefs,
+            attentionConfig,
+            recordScopeConstraints: scopeFilter,
+            columnSelect: "resolver_minimal",
+            skipPostFilterSort: true,
+            perf: loadPerf,
+        }));
+    if (params.perf && !params.preloadedAttention) {
         params.perf.query_ms = loadPerf.query_ms;
         params.perf.resolver_ms = loadPerf.resolver_ms;
         params.perf.membership_filter_ms = loadPerf.membership_filter_ms;
+        params.perf.candidate_count = loadOut.raw_candidates_fetched;
+    } else if (params.perf && params.preloadedAttention) {
+        params.perf.query_ms = 0;
+        params.perf.resolver_ms = 0;
+        params.perf.membership_filter_ms = 0;
         params.perf.candidate_count = loadOut.raw_candidates_fetched;
     }
 
