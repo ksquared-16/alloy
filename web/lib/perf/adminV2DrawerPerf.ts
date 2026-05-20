@@ -12,6 +12,8 @@ const VISIBLE_REQ_MARK = "drawer_opportunity_visible_req";
 const VISIBLE_APPLIED_MARK = "drawer_opportunity_visible_applied";
 const PRIMARY_READY_MARK = "drawer_primary_ready_at";
 const FULL_APPLIED_MARK = "drawer_opportunity_full_applied";
+const BOOTSTRAP_REQ_MARK = "drawer_bootstrap_request_start";
+const BOOTSTRAP_APPLIED_MARK = "drawer_bootstrap_applied";
 
 function msBetween(startMark: string, endMark: string): number | undefined {
     const perf = ensureAlloyPerf();
@@ -31,6 +33,20 @@ export function markDrawerRowClickStart(): void {
 export function markDrawerOpenStart(): void {
     if (typeof performance === "undefined") return;
     alloyPerfSet(OPEN_START_MARK, performance.now());
+}
+
+export function markDrawerBootstrapRequestStart(): void {
+    if (typeof performance === "undefined") return;
+    alloyPerfSet(BOOTSTRAP_REQ_MARK, performance.now());
+}
+
+export function markDrawerBootstrapApplied(opportunityId: string): void {
+    if (typeof performance === "undefined") return;
+    const t = performance.now();
+    alloyPerfSet(BOOTSTRAP_APPLIED_MARK, t);
+    alloyPerfSet(VISIBLE_APPLIED_MARK, t);
+    alloyPerfSet("drawer_opportunity_visible_applied", t);
+    reportDrawerVisibleApplied(opportunityId);
 }
 
 export function reportDrawerVisibleApplied(opportunityId: string): void {

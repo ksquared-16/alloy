@@ -32,6 +32,7 @@ describe("AdminEntityDrawer BOS context contract (Loop 1)", () => {
         expect(src).toContain("setAssistantContext");
         expect(src).toContain('drawer.type !== "opportunities"');
         expect(src).toContain("setAssistantContext(null)");
+        expect(src).toContain("opportunityBootstrapAppliedId");
     });
 
     it("AICommandSurfaceShell shows active record chip and context switch notice", () => {

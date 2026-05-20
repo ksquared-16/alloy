@@ -21,6 +21,8 @@ import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import {
+    markDrawerBootstrapApplied,
+    markDrawerBootstrapRequestStart,
     reportDrawerFullHydrated,
     reportDrawerPrimaryReady,
     reportDrawerVisibleApplied,
@@ -28,7 +30,9 @@ import {
 import {
     ADMINV2_DRAWER_OPPORTUNITY_BOOTSTRAP_BODY_MIN_H,
     ADMINV2_DRAWER_OPPORTUNITY_TIMELINE_MIN_H,
+    ADMINV2_DRAWER_OPPORTUNITY_TITLE_RAIL_MIN_H,
     ADMINV2_DRAWER_OPPORTUNITY_WORKFLOW_BODY_MIN_H,
+    ADMINV2_DRAWER_SHELL_INSTANT_ATTR,
 } from "@/lib/ui-v2/adminV2LoadingGeometry";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import EntityDocumentsSection from "@/components/admin/EntityDocumentsSection";
@@ -159,6 +163,16 @@ import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { prefetchWorkspaceChildcareInquiryOptionSets } from "@/lib/workspace/workspaceChildcareInquiryOptionSets";
 import { adminEntityRefetchShouldBlockDrawerShell } from "@/lib/ui-v2/adminV2EntityDrawerLoading";
 import { fetchAdminWorkUnitDrawerJson } from "@/lib/admin/adminWorkUnitDrawerFetch";
+import {
+    adminV2DrawerBootstrapEnabled,
+    buildOpportunityDrawerBootstrapUrl,
+    mapBootstrapLayoutToRecordLayoutRow,
+    operTrustHintsFromQueueSeed,
+} from "@/lib/admin/opportunityDrawerBootstrapClient";
+import type { DrawerOperTrustPreviewV1 } from "@/lib/admin/opportunityDrawerOperationalBootstrapTypes";
+import type { OpportunityDrawerOperationalBootstrapResponse } from "@/lib/admin/opportunityDrawerOperationalBootstrapTypes";
+import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
+import type { RecordLayoutRow } from "@/lib/recordChrome/types";
 import { getSectionOrderFromScheduleLayoutBlocks } from "@/lib/recordChrome/scheduleLayoutConfig";
 import {
     applyOverviewSectionOrder,
@@ -1230,6 +1244,11 @@ export default function AdminEntityDrawer() {
     /** `/admin/workspace` uses the same V2 record surfaces as `/adminV2/workspace` (modal + schedule/job chrome). */
     const drawerShellVariant =
         pathname?.startsWith("/adminV2") || pathname?.startsWith("/admin/workspace") ? "adminV2" : "legacy";
+    const opportunityDrawerShellInstant =
+        drawerShellVariant === "adminV2" &&
+        drawer.type === "opportunities" &&
+        !!drawer.id &&
+        drawer.id !== "new";
     const [data, setData] = useState<Record<string, unknown> | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -1299,11 +1318,8 @@ export default function AdminEntityDrawer() {
     const [opportunityActionLoading, setOpportunityActionLoading] = useState<string | null>(null);
     const [opportunityResolvedHeaderActions, setOpportunityResolvedHeaderActions] = useState<ResolvedActionsBySlot | null>(null);
     const [opportunityResolvedHeaderLoading, setOpportunityResolvedHeaderLoading] = useState(false);
-    const opportunityRecordHeaderTourOpportunityId =
-        drawer.type === "opportunities" && drawer.id && drawer.id !== "new" ? drawer.id : null;
-    const { activeBookings: opportunityRecordHeaderActiveTours } = useOpportunityActiveTourBookings(
-        opportunityRecordHeaderTourOpportunityId
-    );
+    const [opportunityTourBookingsId, setOpportunityTourBookingsId] = useState<string | null>(null);
+    const { activeBookings: opportunityRecordHeaderActiveTours } = useOpportunityActiveTourBookings(opportunityTourBookingsId);
     const opportunityRecordHeaderActionsForUi = useMemo(() => {
         const base = opportunityResolvedHeaderActions;
         if (!base || !opportunityRecordHeaderActiveTours.length) return base;
@@ -1486,6 +1502,12 @@ export default function AdminEntityDrawer() {
     const opportunityInteractiveMarkedRef = useRef<string | null>(null);
     /** Dedupes identical `record_header` resolutions on refetch. */
     const opportunityHeaderResolvedSigRef = useRef<string | null>(null);
+    const opportunityDrawerBootstrapAppliedRef = useRef<string | null>(null);
+    const [opportunityBootstrapAppliedId, setOpportunityBootstrapAppliedId] = useState<string | null>(null);
+    const [opportunityBootstrapLayoutRow, setOpportunityBootstrapLayoutRow] = useState<RecordLayoutRow | null>(null);
+    const [opportunityOperTrustPreview, setOpportunityOperTrustPreview] = useState<DrawerOperTrustPreviewV1 | null>(
+        null
+    );
     const drawerLoadStartRef = useRef<{ key: string; at: number } | null>(null);
     const drawerReadyLoggedKeyRef = useRef<string | null>(null);
     const opportunityDrawerShellSettledPerfRef = useRef(false);
@@ -1993,6 +2015,10 @@ export default function AdminEntityDrawer() {
             setOpportunityWorkflowRunsLoading(false);
             setOpportunityWorkflowRunsError(null);
             setOpportunityFullHydrateFailed(false);
+            opportunityDrawerBootstrapAppliedRef.current = null;
+            setOpportunityBootstrapAppliedId(null);
+            setOpportunityBootstrapLayoutRow(null);
+            setOpportunityOperTrustPreview(null);
             return;
         }
         const entityOpenKey = `${drawer.type}:${drawer.id}`;
@@ -2014,6 +2040,21 @@ export default function AdminEntityDrawer() {
             memberPersonGraphOverlayInFlightRef.current = null;
             memberPersonGraphOverlayDoneRef.current = null;
             setOpportunityFullHydrateFailed(false);
+            opportunityDrawerBootstrapAppliedRef.current = null;
+            setOpportunityBootstrapAppliedId(null);
+            setOpportunityBootstrapLayoutRow(null);
+            const seedTrust = operTrustHintsFromQueueSeed(drawer.opportunityQueuePreviewSeed);
+            setOpportunityOperTrustPreview(
+                seedTrust.headline ?
+                    {
+                        headline: seedTrust.headline.slice(0, 140),
+                        risk_urgency_hint:
+                            seedTrust.urgency === "high" || seedTrust.urgency === "low" || seedTrust.urgency === "medium"
+                                ? seedTrust.urgency
+                                :   "medium",
+                    }
+                :   null
+            );
         }
         if ((drawer.type === "locations" || drawer.type === "customers" || drawer.type === "opportunities" || drawer.type === "vendors" || drawer.type === "jobs" || drawer.type === "persons") && drawer.id === "new") {
             setData({ _create: true });
@@ -2021,50 +2062,111 @@ export default function AdminEntityDrawer() {
             setIsEditing(true);
             return;
         }
-        const url = buildAdminEntityFetchUrl(drawer.type, drawer.id, drawer.jobRecordSurface);
-        if (!url) return;
-        if (typeof window !== "undefined" && typeof performance !== "undefined") {
-            const now = performance.now();
-            alloyPerfSet("drawer_entity_request_start", now);
-            if (drawer.type === "opportunities") alloyPerfSet("drawer_opportunity_visible_req", now);
-        }
-        dedupeAdminFetch(url, workspaceDataFetchInit())
-            .then((res) => {
-                captureDrawerEntityResponsePerf(res);
-                if (!res.ok) throw new Error(res.status === 404 ? "Not found" : "Failed to load");
-                if (drawer.type === "opportunities") logOpportunityEnrichHeaderFromResponse(res);
-                return res.json();
-            })
-            .then((json) => {
-                if (typeof window !== "undefined" && typeof performance !== "undefined") {
-                    alloyPerfSet("drawer_entity_response", performance.now());
-                }
-                setData(json);
-                if (typeof window !== "undefined" && typeof performance !== "undefined") {
-                    requestAnimationFrame(() => {
+
+        const applyOpportunityBootstrap = (boot: OpportunityDrawerOperationalBootstrapResponse) => {
+            if (String((boot.entity as { id?: unknown }).id ?? "") !== String(drawer.id)) return;
+            opportunityDrawerBootstrapAppliedRef.current = drawer.id;
+            setOpportunityBootstrapAppliedId(drawer.id);
+            setOpportunityBootstrapLayoutRow(mapBootstrapLayoutToRecordLayoutRow(boot));
+            setOpportunityOperTrustPreview(boot.oper_trust_preview);
+            setData(boot.entity);
+            if (boot.record_header_actions) {
+                setOpportunityResolvedHeaderActions(boot.record_header_actions);
+                opportunityHeaderResolvedSigRef.current = "bootstrap";
+            }
+            setOpportunityResolvedHeaderLoading(false);
+            if (boot.work_unit?.queue_definition) {
+                setOpportunityQueueDefinition(boot.work_unit.queue_definition);
+            } else {
+                setOpportunityQueueDefinition(null);
+            }
+            setOpportunityWorkUnitDepartmentId(boot.work_unit?.department_id ?? boot.workspace_scope.department_id);
+            markDrawerBootstrapApplied(String(drawer.id));
+        };
+
+        const runLegacyEntityFetch = () => {
+            const url = buildAdminEntityFetchUrl(drawer.type, drawer.id, drawer.jobRecordSurface);
+            if (!url) return;
+            if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                const now = performance.now();
+                alloyPerfSet("drawer_entity_request_start", now);
+                if (drawer.type === "opportunities") alloyPerfSet("drawer_opportunity_visible_req", now);
+            }
+            if (process.env.NODE_ENV === "development" && drawer.type === "opportunities") {
+                console.info("[drawer-bootstrap-fallback]", { id: drawer.id });
+            }
+            dedupeAdminFetch(url, workspaceDataFetchInit())
+                .then((res) => {
+                    captureDrawerEntityResponsePerf(res);
+                    if (!res.ok) throw new Error(res.status === 404 ? "Not found" : "Failed to load");
+                    if (drawer.type === "opportunities") logOpportunityEnrichHeaderFromResponse(res);
+                    return res.json();
+                })
+                .then((json) => {
+                    if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                        alloyPerfSet("drawer_entity_response", performance.now());
+                    }
+                    setData(json);
+                    if (typeof window !== "undefined" && typeof performance !== "undefined") {
                         requestAnimationFrame(() => {
-                            const t = performance.now();
-                            alloyPerfSet("drawer_entity_applied", t);
-                            if (
-                                drawer.type === "opportunities" &&
-                                (json as { _record_surface?: string })._record_surface === "drawer_visible"
-                            ) {
-                                alloyPerfSet("drawer_opportunity_visible_applied", t);
-                                reportDrawerVisibleApplied(String(drawer.id));
-                            }
+                            requestAnimationFrame(() => {
+                                const t = performance.now();
+                                alloyPerfSet("drawer_entity_applied", t);
+                                if (
+                                    drawer.type === "opportunities" &&
+                                    (json as { _record_surface?: string })._record_surface === "drawer_visible"
+                                ) {
+                                    alloyPerfSet("drawer_opportunity_visible_applied", t);
+                                    reportDrawerVisibleApplied(String(drawer.id));
+                                }
+                            });
                         });
-                    });
-                }
-            })
-            .catch((e) => setError(e.message))
-            .finally(() => setLoading(false));
+                    }
+                })
+                .catch((e) => setError(e.message))
+                .finally(() => setLoading(false));
+        };
+
+        if (
+            drawer.type === "opportunities" &&
+            drawer.id !== "new" &&
+            drawerShellVariant === "adminV2" &&
+            adminV2DrawerBootstrapEnabled()
+        ) {
+            markDrawerBootstrapRequestStart();
+            const trust = operTrustHintsFromQueueSeed(drawer.opportunityQueuePreviewSeed);
+            const bootstrapUrl = buildOpportunityDrawerBootstrapUrl(
+                drawer.id,
+                drawer.opportunityWorkspaceContext,
+                null,
+                trust
+            );
+            dedupeAdminFetch(bootstrapUrl, workspaceDataFetchInit())
+                .then((res) => {
+                    if (!res.ok) throw new Error(res.status === 404 ? "Not found" : "bootstrap_failed");
+                    return res.json() as Promise<OpportunityDrawerOperationalBootstrapResponse>;
+                })
+                .then((boot) => {
+                    applyOpportunityBootstrap(boot);
+                })
+                .catch(() => {
+                    opportunityDrawerBootstrapAppliedRef.current = null;
+                    setOpportunityBootstrapAppliedId(null);
+                    setOpportunityBootstrapLayoutRow(null);
+                    runLegacyEntityFetch();
+                })
+                .finally(() => setLoading(false));
+            return;
+        }
+
+        runLegacyEntityFetch();
     // pathname read only when entity identity changes (see entityDrawerTabInitKeyRef); omit from deps so tab is not reset on SPA navigation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [drawer.type, drawer.id, drawer.jobRecordSurface]);
 
-    useEffect(() => {
+    const runOpportunityFullHydrate = useCallback(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
-        if (!opportunityRecordHydrationPending) return;
+        if (!opportunityRecordHydrationPending && opportunityDrawerBootstrapAppliedRef.current !== drawer.id) return;
         if (opportunityFullHydrateDoneRef.current === drawer.id) return;
         if (opportunityFullHydrateInFlightRef.current === drawer.id) return;
         const url = buildAdminEntityFetchUrl(drawer.type, drawer.id, drawer.jobRecordSurface, "full");
@@ -2111,12 +2213,6 @@ export default function AdminEntityDrawer() {
                 opportunityFullHydrateDoneRef.current = drawer.id;
                 setOpportunityFullHydrateFailed(true);
             });
-        return () => {
-            ac.abort();
-            if (opportunityFullHydrateInFlightRef.current === drawer.id) {
-                opportunityFullHydrateInFlightRef.current = null;
-            }
-        };
     }, [drawer.type, drawer.id, drawer.jobRecordSurface, opportunityRecordHydrationPending]);
 
     useEffect(() => {
@@ -3080,6 +3176,9 @@ export default function AdminEntityDrawer() {
             opportunityHeaderResolvedSigRef.current = null;
             return;
         }
+        if (opportunityDrawerBootstrapAppliedRef.current === drawer.id) {
+            return;
+        }
         const ctxWu = (drawer.opportunityWorkspaceContext?.work_unit_id ?? "").trim();
         const ctxDept = (drawer.opportunityWorkspaceContext?.department_id ?? "").trim();
         const dataIdMatchesDrawer =
@@ -3273,6 +3372,9 @@ export default function AdminEntityDrawer() {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
             setOpportunityQueueDefinition(null);
             setOpportunityWorkUnitDepartmentId(null);
+            return;
+        }
+        if (opportunityDrawerBootstrapAppliedRef.current === drawer.id) {
             return;
         }
         const ctxWu = (drawer.opportunityWorkspaceContext?.work_unit_id ?? "").trim();
@@ -5236,9 +5338,16 @@ export default function AdminEntityDrawer() {
     const isJobDrawerV2 = drawerShellVariant === "adminV2" && isJobExistingView;
     const recordChromeJob = useRecordChromeConfig(isJobDrawerV2 ? "job" : null, recordChromeOrgScope);
     const recordChromeSchedule = useRecordChromeConfig(drawer.type === "schedules" ? "schedule" : null, recordChromeOrgScope);
+    const opportunityBootstrapSeeded =
+        drawerShellVariant === "adminV2" &&
+        opportunityBootstrapAppliedId === drawer.id &&
+        drawer.type === "opportunities";
     const recordChromeOpportunity = useRecordChromeConfig(
         drawer.type === "opportunities" && drawer.id && drawer.id !== "new" ? "opportunity" : null,
-        recordChromeOrgScope
+        recordChromeOrgScope,
+        opportunityBootstrapSeeded ?
+            { bootstrapSeeded: true, seededLayout: opportunityBootstrapLayoutRow }
+        :   undefined
     );
     const opportunityInquiryWorkflowDrawer =
         drawer.type === "opportunities" &&
@@ -5659,12 +5768,16 @@ export default function AdminEntityDrawer() {
             return;
         }
 
-        const sourceSurface = drawer.opportunityQueuePreviewSeed ? ("queue" as const) : ("opportunity_drawer" as const);
+        const sourceSurface =
+            opportunityBootstrapAppliedId === drawer.id ? ("opportunity_drawer" as const)
+            : drawer.opportunityQueuePreviewSeed ? ("queue" as const)
+            : ("opportunity_drawer" as const);
         globalAssistant.setAssistantContext(
             buildOpportunityOperationalContext({
                 entityId: drawer.id,
                 overviewData: overviewData as Record<string, unknown> | null,
-                queuePreviewSeed: drawer.opportunityQueuePreviewSeed ?? null,
+                queuePreviewSeed:
+                    opportunityBootstrapAppliedId === drawer.id ? null : (drawer.opportunityQueuePreviewSeed ?? null),
                 opportunitySingular,
                 sourceSurface,
             })
@@ -5674,6 +5787,7 @@ export default function AdminEntityDrawer() {
         drawer.type,
         drawer.id,
         drawer.opportunityQueuePreviewSeed,
+        opportunityBootstrapAppliedId,
         overviewData,
         opportunitySingular,
     ]);
@@ -6142,9 +6256,20 @@ export default function AdminEntityDrawer() {
 
     /** One primary overview reveal — no per-field hydrate skeletons in the inquiry summary. */
     const opportunityDrawerOverviewRevealReady =
-        opportunityDrawerShellSettled && !opportunityFullHydratePending;
+        opportunityDrawerShellSettled && !error;
 
     const opportunityDrawerPrimaryCoherent = opportunityDrawerOverviewRevealReady;
+
+    useEffect(() => {
+        if (!opportunityDrawerOverviewRevealReady) return;
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        return scheduleAdminV2BackgroundWork(
+            () => {
+                runOpportunityFullHydrate();
+            },
+            { idleTimeoutMs: 400, fallbackMs: 120 }
+        );
+    }, [drawer.type, drawer.id, opportunityDrawerOverviewRevealReady, runOpportunityFullHydrate]);
 
     /** Inquiry drawer: one pre-overview shell (bootstrap body) until primary overview is coherent. */
     const opportunityDrawerPreOverviewShell =
@@ -6192,6 +6317,18 @@ export default function AdminEntityDrawer() {
             cancelAnimationFrame(id);
         };
     }, [drawer.type, drawer.id, opportunityDrawerOverviewRevealReady]);
+
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
+            setOpportunityTourBookingsId(null);
+            return;
+        }
+        if (!opportunityDrawerSecondaryReady) {
+            setOpportunityTourBookingsId(null);
+            return;
+        }
+        setOpportunityTourBookingsId(drawer.id);
+    }, [drawer.type, drawer.id, opportunityDrawerSecondaryReady]);
 
     const opportunityDrawerTabsPending = false;
 
@@ -8145,14 +8282,16 @@ export default function AdminEntityDrawer() {
     const opportunityQueuePreviewSeed = drawer.opportunityQueuePreviewSeed;
     const opportunityDrawerPreviewSubtitle = useMemo(() => {
         const seed = opportunityQueuePreviewSeed;
-        if (!seed) return undefined;
-        const previewSub = seed.subtitle?.trim();
-        const recordHint = seed.recordNumberHint?.trim();
-        if (previewSub && recordHint) return `${previewSub} · ${recordHint}`;
-        if (previewSub) return previewSub;
-        if (recordHint) return recordHint;
+        const trustLine = opportunityOperTrustPreview?.headline?.trim() ?? "";
+        const previewSub = seed?.subtitle?.trim();
+        const recordHint = seed?.recordNumberHint?.trim();
+        const metaParts = [previewSub, recordHint].filter(Boolean);
+        const meta = metaParts.length ? metaParts.join(" · ") : "";
+        if (trustLine && meta) return `${trustLine} · ${meta}`;
+        if (trustLine) return trustLine;
+        if (meta) return meta;
         return undefined;
-    }, [opportunityQueuePreviewSeed]);
+    }, [opportunityQueuePreviewSeed, opportunityOperTrustPreview]);
 
     if (!drawer.type || !drawer.id) return null;
 
@@ -8493,12 +8632,18 @@ export default function AdminEntityDrawer() {
                         Location: {opportunityHeaderLocationLabel}
                     </div>
                 ) : null}
-                {overviewData && !(overviewData as { _create?: boolean })._create ? (
+                {overviewData &&
+                !(overviewData as { _create?: boolean })._create &&
+                (overviewData as Record<string, unknown>)._operational_attention != null ? (
                     <OperationalAttentionHeaderStrip
                         key={`attn-hdr-${String((overviewData as { id?: string }).id ?? "")}`}
                         variant="chrome"
                         overviewData={overviewData as Record<string, unknown>}
                     />
+                ) : opportunityOperTrustPreview?.headline?.trim() && !opportunityFullHydrateApplied ? (
+                    <p className="text-[11px] leading-snug text-alloy-midnight/70" data-drawer-oper-trust-preview="true">
+                        {opportunityOperTrustPreview.headline.trim()}
+                    </p>
                 ) : null}
                 {opportunityActivityHeaderLine}
             </div>
@@ -8635,7 +8780,10 @@ export default function AdminEntityDrawer() {
                     : undefined
             }
         >
-            <div className="">
+            <div
+                className=""
+                {...(opportunityDrawerShellInstant ? { [ADMINV2_DRAWER_SHELL_INSTANT_ATTR]: "true" } : {})}
+            >
             {error && <p className="text-alloy-ember">Error: {error}</p>}
             {opportunityDrawerUsesBootstrapBodyShell ? (
                 <div

@@ -2890,7 +2890,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 ? opportunityDrawerSeedFromQueueItem(previewRow)
                 : undefined;
             markDrawerRowClickStart();
-            prefetchOpportunityDrawerOnRowIntent(id, opportunityWorkspaceContext ?? undefined);
+            prefetchOpportunityDrawerOnRowIntent(id, opportunityWorkspaceContext ?? undefined, opportunityQueuePreviewSeed);
             openDrawer({
                 type: "opportunities",
                 id,

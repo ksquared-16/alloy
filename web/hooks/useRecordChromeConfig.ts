@@ -14,16 +14,36 @@ export type RecordChromeEntityKind = "job" | "schedule" | "opportunity";
  * `configResolved` becomes true after the first fetch attempt for the current `entityKind` finishes
  * (so callers can avoid rendering classic vs workflow layout before org/global config is known).
  */
-export function useRecordChromeConfig(entityKind: RecordChromeEntityKind | null, orgScopeKey?: string | null) {
+export type RecordChromeConfigOptions = {
+    /** AdminV2 opportunity drawer bootstrap supplies layout — skip record-layouts/actions fetch. */
+    bootstrapSeeded?: boolean;
+    seededLayout?: RecordLayoutRow | null;
+};
+
+export function useRecordChromeConfig(
+    entityKind: RecordChromeEntityKind | null,
+    orgScopeKey?: string | null,
+    options?: RecordChromeConfigOptions
+) {
     const [layout, setLayout] = useState<RecordLayoutRow | null>(null);
     const [actions, setActions] = useState<RecordActionRow[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [configResolved, setConfigResolved] = useState(() => entityKind == null);
 
+    const bootstrapSeeded = Boolean(options?.bootstrapSeeded && options.seededLayout);
+
     useLayoutEffect(() => {
         if (!entityKind) {
             setLayout(null);
+            setActions([]);
+            setError(null);
+            setLoading(false);
+            setConfigResolved(true);
+            return;
+        }
+        if (bootstrapSeeded) {
+            setLayout(options?.seededLayout ?? null);
             setActions([]);
             setError(null);
             setLoading(false);
@@ -35,10 +55,10 @@ export function useRecordChromeConfig(entityKind: RecordChromeEntityKind | null,
         setError(null);
         setLoading(true);
         setConfigResolved(false);
-    }, [entityKind, orgScopeKey]);
+    }, [entityKind, orgScopeKey, bootstrapSeeded, options?.seededLayout]);
 
     useEffect(() => {
-        if (!entityKind) {
+        if (!entityKind || bootstrapSeeded) {
             return;
         }
         let cancelled = false;
@@ -93,7 +113,7 @@ export function useRecordChromeConfig(entityKind: RecordChromeEntityKind | null,
         return () => {
             cancelled = true;
         };
-    }, [entityKind, orgScopeKey]);
+    }, [entityKind, orgScopeKey, bootstrapSeeded]);
 
     return { layout, actions, loading, error, configResolved };
 }

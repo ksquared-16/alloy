@@ -670,6 +670,163 @@ async function respondOpportunityRelationshipMemberOverlay(
 }
 
 /**
+ * Fast drawer shell payload — no `_operational_attention` (attaches on `surface=full` only).
+ * Used by drawer operational bootstrap and `GET ?surface=drawer_visible`.
+ */
+export async function buildOpportunityDrawerVisiblePayload(
+  supabase: AdminSupabase,
+  orgId: string,
+  data: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const opp = data as Record<string, unknown> & {
+    status_key?: string | null;
+    status?: string | null;
+    customer_id?: string | null;
+    primary_contact_id?: string | null;
+    primary_person_id?: string | null;
+    location_id?: string | null;
+    pipeline_stage_id?: string | null;
+    work_unit_id?: string | null;
+    org_id?: string;
+    name?: string | null;
+    title?: string | null;
+  };
+  const wuidForDept = trimOrNull(opp.work_unit_id);
+  const oppPipelineStageId = opp.pipeline_stage_id ?? null;
+  const oppOrgIdForDefs = opp.org_id;
+  const primaryPersonContactP = fetchPrimaryPersonContactHydrate(supabase, orgId, opp);
+  const [wuDeptRowV, customerRowV, stRowV, primaryHydrV, opportunityDefsVisible] = await Promise.all([
+    wuidForDept
+      ? supabase
+          .from("work_units")
+          .select("department_id, metadata")
+          .eq("id", wuidForDept)
+          .eq("org_id", orgId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    opp.customer_id
+      ? supabase
+          .from("customers")
+          .select("name")
+          .eq("id", opp.customer_id)
+          .eq("org_id", orgId)
+          .single()
+      : Promise.resolve({ data: null }),
+    oppPipelineStageId
+      ? supabase
+          .from("pipeline_stages")
+          .select("name")
+          .eq("id", oppPipelineStageId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    primaryPersonContactP,
+    oppOrgIdForDefs
+      ? fetchEffectiveStatusDefinitionsTagged(supabase, oppOrgIdForDefs, "opportunities", {
+          activeOnly: true,
+        }).then((p) => p.rows)
+      : Promise.resolve([]),
+  ]);
+  const vis: Record<string, unknown> = { ...data };
+  vis._work_unit_department_id = wuidForDept
+    ? trimOrNull((wuDeptRowV.data as { department_id?: string | null } | null)?.department_id ?? null)
+    : null;
+  vis._customer_name = (customerRowV.data as { name?: string | null } | null)?.name ?? null;
+  if (oppPipelineStageId) {
+    const stName = (stRowV.data as { name?: string | null } | null)?.name ?? null;
+    vis._pipeline_stage_name = stName;
+    vis._stage_name = stName;
+  } else {
+    vis._pipeline_stage_name = null;
+    vis._stage_name = null;
+  }
+  vis._pipeline_name = null;
+  vis._discount_program_label = null;
+  vis._vertical_name = null;
+  if (opp.location_id) {
+    vis._location_id = opp.location_id;
+    vis._location_name = null;
+    vis._location_label = null;
+  } else {
+    vis._location_id = null;
+    vis._location_name = null;
+    vis._location_label = null;
+  }
+  Object.assign(vis, primaryHydrV.patch);
+  const oppLegacyStatusV = opp.status;
+  const oppSkRawV =
+    opp.status_key != null && String(opp.status_key).trim() !== ""
+      ? String(opp.status_key).trim()
+      : oppLegacyStatusV != null && String(oppLegacyStatusV).trim() !== ""
+        ? String(oppLegacyStatusV).trim()
+        : null;
+  const stageLabelV =
+    vis._pipeline_stage_name != null && String(vis._pipeline_stage_name).trim() !== ""
+      ? String(vis._pipeline_stage_name).trim()
+      : null;
+  let oppStatusDisplayV: string | null = null;
+  if (
+    oppPipelineStageId &&
+    oppSkRawV &&
+    String(oppSkRawV) === String(oppPipelineStageId) &&
+    stageLabelV
+  ) {
+    oppStatusDisplayV = stageLabelV;
+  } else if (oppSkRawV && !isUuidLike(oppSkRawV)) {
+    oppStatusDisplayV = oppSkRawV;
+  } else if (stageLabelV) {
+    oppStatusDisplayV = stageLabelV;
+  } else {
+    oppStatusDisplayV = oppSkRawV;
+  }
+  vis._status_display = oppStatusDisplayV;
+  const qtV = effectiveOpportunityQuoteDollars(opp as Parameters<typeof effectiveOpportunityQuoteDollars>[0]);
+  vis._quote_total_display = qtV;
+  Object.assign(
+    vis,
+    buildOpportunityLifecycleFields({
+      statusKey: oppSkRawV,
+      quoteTotalDollars: qtV,
+      defs: opportunityDefsVisible,
+    }),
+  );
+  vis._field_definitions = [];
+  vis._record_surface = "drawer_visible";
+  vis._inquiry_children = [];
+  vis._opportunity_persons = [];
+  vis._relationship_displays = {};
+  const householdIdV =
+    typeof opp.customer_id === "string" && opp.customer_id.trim() ? opp.customer_id.trim() : null;
+  const householdLabelV = trimOrNull(vis._customer_name) ?? "—";
+  const inquiryTitleEarlyV = trimOrNull(vis.name) ?? trimOrNull(vis.title) ?? "—";
+  vis._identity = {
+    household: householdIdV ? { id: householdIdV, label: householdLabelV } : null,
+    primary_person: opp.primary_person_id
+      ? {
+          id: String(opp.primary_person_id),
+          label: trimOrNull(vis._primary_person_name) ?? "—",
+          email: trimOrNull(vis._primary_person_email),
+          phone: trimOrNull(vis._primary_person_phone),
+          role_key: null,
+          role_label: null,
+        }
+      : null,
+    primary_contact: opp.primary_contact_id
+      ? {
+          id: String(opp.primary_contact_id),
+          label: trimOrNull(vis._primary_contact_name) ?? "—",
+          email: trimOrNull(vis._primary_contact_email),
+          phone: trimOrNull(vis._primary_contact_phone),
+          role_key: null,
+          role_label: null,
+        }
+      : null,
+    primary_child: null,
+    inquiry: { title: inquiryTitleEarlyV, lines: [], section_key: "quote" },
+  };
+  return vis;
+}
+
+/**
  * Opportunity record resolution for `GET /api/admin/entity/opportunities/:id`.
  * Centralizes enrichment, surfaces, lifecycle + quote parity (drawer_visible vs full).
  *
@@ -758,187 +915,9 @@ export async function respondOpportunityEntityGet(
   if (surfaceParamEarly === "drawer_visible") {
     const enrichStartedAt = Date.now();
     const enrichPhaseMs: Record<string, number> = {};
-    const markVisiblePhase = (key: string) => {
-      enrichPhaseMs[key] = Date.now() - enrichStartedAt;
-    };
-    const tParVis0 = Date.now();
-    const [
-      wuDeptRowV,
-      customerRowV,
-      stRowV,
-      primaryHydrV,
-      opportunityDefsVisible,
-    ] = await Promise.all([
-      wuidForDept
-        ? supabase
-            .from("work_units")
-            .select("department_id, metadata")
-            .eq("id", wuidForDept)
-            .eq("org_id", orgId)
-            .maybeSingle()
-        : Promise.resolve({ data: null }),
-      opp.customer_id
-        ? supabase
-            .from("customers")
-            .select("name")
-            .eq("id", opp.customer_id)
-            .eq("org_id", orgId)
-            .single()
-        : Promise.resolve({ data: null }),
-      oppPipelineStageId
-        ? supabase
-            .from("pipeline_stages")
-            .select("name")
-            .eq("id", oppPipelineStageId)
-            .maybeSingle()
-        : Promise.resolve({ data: null }),
-      primaryPersonContactP,
-      oppOrgIdForDefs
-        ? fetchEffectiveStatusDefinitionsTagged(supabase, oppOrgIdForDefs, "opportunities", {
-            activeOnly: true,
-          }).then((p) => p.rows)
-        : Promise.resolve([]),
-    ]);
-    logDbTiming("opportunityEntity.drawer_visible_parallel", Date.now() - tParVis0, {
-      orgId,
-      id,
-    });
-    markVisiblePhase("visible_after_parallel");
-    const vis: Record<string, unknown> = { ...data };
-    vis._work_unit_department_id = wuidForDept
-      ? trimOrNull(
-          (wuDeptRowV.data as { department_id?: string | null } | null)
-            ?.department_id ?? null,
-        )
-      : null;
-    vis._customer_name =
-      (customerRowV.data as { name?: string | null } | null)?.name ?? null;
-    if (oppPipelineStageId) {
-      const stName =
-        (stRowV.data as { name?: string | null } | null)?.name ?? null;
-      vis._pipeline_stage_name = stName;
-      vis._stage_name = stName;
-    } else {
-      vis._pipeline_stage_name = null;
-      vis._stage_name = null;
-    }
-    vis._pipeline_name = null;
-    vis._discount_program_label = null;
-    vis._vertical_name = null;
-    if (opp.location_id) {
-      vis._location_id = opp.location_id;
-      vis._location_name = null;
-      vis._location_label = null;
-    } else {
-      vis._location_id = null;
-      vis._location_name = null;
-      vis._location_label = null;
-    }
-    Object.assign(vis, primaryHydrV.patch);
-    markVisiblePhase("visible_after_primary_person_contact");
-    const oppLegacyStatusV = (opp as { status?: string | null }).status;
-    const oppSkRawV =
-      opp.status_key != null && String(opp.status_key).trim() !== ""
-        ? String(opp.status_key).trim()
-        : oppLegacyStatusV != null && String(oppLegacyStatusV).trim() !== ""
-          ? String(oppLegacyStatusV).trim()
-          : null;
-    const stageLabelV =
-      vis._pipeline_stage_name != null &&
-      String(vis._pipeline_stage_name).trim() !== ""
-        ? String(vis._pipeline_stage_name).trim()
-        : null;
-    let oppStatusDisplayV: string | null = null;
-    if (
-      oppPipelineStageId &&
-      oppSkRawV &&
-      String(oppSkRawV) === String(oppPipelineStageId) &&
-      stageLabelV
-    ) {
-      oppStatusDisplayV = stageLabelV;
-    } else if (oppSkRawV && !isUuidLike(oppSkRawV)) {
-      oppStatusDisplayV = oppSkRawV;
-    } else if (stageLabelV) {
-      oppStatusDisplayV = stageLabelV;
-    } else {
-      oppStatusDisplayV = oppSkRawV;
-    }
-    vis._status_display = oppStatusDisplayV;
-    const qtV = effectiveOpportunityQuoteDollars(opp);
-    vis._quote_total_display = qtV;
-    Object.assign(
-      vis,
-      buildOpportunityLifecycleFields({
-        statusKey: oppSkRawV,
-        quoteTotalDollars: qtV,
-        defs: opportunityDefsVisible,
-      }),
-    );
-    markVisiblePhase("visible_after_status_shell");
-    vis._field_definitions = [];
-    vis._record_surface = "drawer_visible";
-    vis._inquiry_children = [];
-    vis._opportunity_persons = [];
-    vis._relationship_displays = {};
-    const householdIdV =
-      typeof opp.customer_id === "string" && opp.customer_id.trim()
-        ? opp.customer_id.trim()
-        : null;
-    const householdLabelV = trimOrNull(vis._customer_name) ?? "—";
-    const inquiryTitleEarlyV =
-      trimOrNull(vis.name) ?? trimOrNull(vis.title) ?? "—";
-    vis._identity = {
-      household: householdIdV
-        ? { id: householdIdV, label: householdLabelV }
-        : null,
-      primary_person: opp.primary_person_id
-        ? {
-            id: String(opp.primary_person_id),
-            label: trimOrNull(vis._primary_person_name) ?? "—",
-            email: trimOrNull(vis._primary_person_email),
-            phone: trimOrNull(vis._primary_person_phone),
-            role_key: null,
-            role_label: null,
-          }
-        : null,
-      primary_contact: opp.primary_contact_id
-        ? {
-            id: String(opp.primary_contact_id),
-            label: trimOrNull(vis._primary_contact_name) ?? "—",
-            email: trimOrNull(vis._primary_contact_email),
-            phone: trimOrNull(vis._primary_contact_phone),
-            role_key: null,
-            role_label: null,
-          }
-        : null,
-      primary_child: null,
-      inquiry: { title: inquiryTitleEarlyV, lines: [], section_key: "quote" },
-    };
-    markVisiblePhase("visible_after_identity_block");
-    const wuMetaVisible =
-      wuidForDept && wuDeptRowV.data
-        ? (wuDeptRowV.data as { metadata?: unknown }).metadata ?? null
-        : null;
-    const deptMetaVisible = await fetchDepartmentMetadataForActivity(
-      supabase,
-      orgId,
-      (wuDeptRowV.data as { department_id?: string | null } | null)?.department_id,
-    );
-    const attnVisible = await attachOpportunityAttentionSuggestionBundle({
-      supabase,
-      orgId,
-      opportunityRow: vis as Record<string, unknown>,
-      defs: opportunityDefsVisible,
-      attentionConfigMetadata: wuMetaVisible,
-      workUnitId: wuidForDept,
-      statusKey: oppSkRawV,
-      preloadedActivityOrgMetadata: {
-        workUnitMetadata: (wuDeptRowV.data as { metadata?: unknown } | null)?.metadata ?? null,
-        departmentMetadata: deptMetaVisible,
-      },
-      nowMs: Date.now(),
-    });
-    Object.assign(vis, attnVisible);
+    const tVis0 = Date.now();
+    const vis = await buildOpportunityDrawerVisiblePayload(supabase, orgId, data);
+    enrichPhaseMs.visible_build_ms = Date.now() - tVis0;
     const enrichTotalMsV = Date.now() - enrichStartedAt;
     const enrichHeaderV =
       JSON.stringify({ total_ms: enrichTotalMsV, phases_ms: enrichPhaseMs })

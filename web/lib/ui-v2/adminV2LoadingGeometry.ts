@@ -38,6 +38,12 @@ export const ADMINV2_DRAWER_OPPORTUNITY_WORKFLOW_BODY_MIN_H = "13.5rem";
 /** Workflow timeline strip height in opportunity inquiry header. */
 export const ADMINV2_DRAWER_OPPORTUNITY_TIMELINE_MIN_H = "36px";
 
+/** Opportunity drawer title-rail quick-action reserve (workflow v1). */
+export const ADMINV2_DRAWER_OPPORTUNITY_TITLE_RAIL_MIN_H = "2.75rem";
+
+/** Drawer panel opens immediately on `openDrawer` — geometry locked before bootstrap returns. */
+export const ADMINV2_DRAWER_SHELL_INSTANT_ATTR = "data-adminv2-drawer-shell-instant";
+
 export function adminV2DeptPairedOperPanelReserveStyle(): { minHeight: string } {
     return { minHeight: ADMINV2_DEPT_PAIRED_OPER_PANEL_MIN_H };
 }

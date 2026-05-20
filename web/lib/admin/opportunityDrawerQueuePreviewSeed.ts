@@ -13,6 +13,10 @@ export type OpportunityDrawerQueuePreviewSeed = {
     activityStaleLabel?: string | null;
     /** Display-only hint (e.g. meta line with record #) — not authoritative record number. */
     recordNumberHint?: string | null;
+    /** Queue row operational summary headline (client-hint for bootstrap `oper_trust_preview` echo). */
+    operTrustHeadline?: string | null;
+    /** Queue row urgency echo (`low` | `medium` | `high`) when not using `urgencyTier` alone. */
+    operTrustUrgency?: string | null;
 };
 
 function pickLocationLabel(crm: QueuePreviewItemVm["semanticCrmCompact"]): string | null {
@@ -49,6 +53,9 @@ export function opportunityDrawerSeedFromQueueItem(item: QueuePreviewItemVm): Op
     const urgencyTier = item.urgencyTier;
     const activityStaleLabel = crm?.activityStale?.label?.trim() || null;
     const recordNumberHint = pickRecordNumberHint(item);
+    const summaryPreview = item.semanticCrmCompact?.operationalSummaryPreview;
+    const operTrustHeadline = summaryPreview?.headline?.trim() || null;
+    const operTrustUrgency = summaryPreview?.risk_urgency_hint?.trim() || null;
     return {
         title,
         subtitle,
@@ -59,6 +66,8 @@ export function opportunityDrawerSeedFromQueueItem(item: QueuePreviewItemVm): Op
         urgencyTier,
         activityStaleLabel,
         recordNumberHint,
+        operTrustHeadline,
+        operTrustUrgency,
     };
 }
 

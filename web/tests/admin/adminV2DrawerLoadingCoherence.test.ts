@@ -227,8 +227,40 @@ describe("Work-unit queue-first loading coherence", () => {
     });
 });
 
+describe("Drawer operational bootstrap (Cards 4–7)", () => {
+    it("uses drawer-operational-bootstrap on AdminV2 opportunity happy path", () => {
+        const src = read("components/admin/AdminEntityDrawer.tsx");
+        expect(src).toContain("buildOpportunityDrawerBootstrapUrl");
+        expect(src).toContain("applyOpportunityBootstrap");
+        expect(src).toContain("runLegacyEntityFetch");
+        expect(src).toContain("adminV2DrawerBootstrapEnabled()");
+    });
+
+    it("primary oper reveal does not wait on surface=full hydrate", () => {
+        const src = read("components/admin/AdminEntityDrawer.tsx");
+        expect(src).toMatch(/opportunityDrawerOverviewRevealReady[\s\S]*opportunityDrawerShellSettled/);
+        expect(src).not.toMatch(
+            /opportunityDrawerOverviewRevealReady[\s\S]*!opportunityFullHydratePending/,
+        );
+    });
+
+    it("defers full hydrate via scheduleAdminV2BackgroundWork after oper reveal", () => {
+        const src = read("components/admin/AdminEntityDrawer.tsx");
+        expect(src).toContain("runOpportunityFullHydrate");
+        expect(src).toMatch(
+            /scheduleAdminV2BackgroundWork[\s\S]*runOpportunityFullHydrate/,
+        );
+    });
+
+    it("shell instant geometry attribute on opportunity drawer body", () => {
+        const src = read("components/admin/AdminEntityDrawer.tsx");
+        expect(src).toContain("opportunityDrawerShellInstant");
+        expect(src).toContain("ADMINV2_DRAWER_SHELL_INSTANT_ATTR");
+    });
+});
+
 describe("Drawer single-reveal bootstrap body", () => {
-    it("holds inquiry overview on bootstrap until full hydrate and defers secondary surfaces", () => {
+    it("holds pre-overview shell until oper reveal and defers secondary surfaces", () => {
         const src = read("components/admin/AdminEntityDrawer.tsx");
         expect(src).toContain("opportunityDrawerOverviewRevealReady");
         expect(src).toContain("opportunityDrawerPreOverviewShell");
