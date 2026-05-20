@@ -28,6 +28,7 @@ describe("dept operational bootstrap runtime hardening", () => {
         expect(src).toContain("attention_query_ms");
         expect(src).toContain("attention_candidate_count");
         expect(src).toContain("attention_rules_ms");
+        expect(src).toContain("attention_membership_filter_ms");
     });
 
     it("dept attention lane reuses single resolver pass (no double resolve in bucket builder)", () => {
@@ -38,6 +39,8 @@ describe("dept operational bootstrap runtime hardening", () => {
         const src = fs.readFileSync(bucketPath, "utf8");
         expect(src).toContain("resolved_by_id");
         expect(src).toContain('columnSelect: "resolver_minimal"');
+        expect(src).toContain("skipPostFilterSort: true");
+        expect(src).toContain("collectNeedsAttentionResolverMatches");
         expect(src).not.toContain("resolveOpportunityAttention(");
     });
 
@@ -47,6 +50,7 @@ describe("dept operational bootstrap runtime hardening", () => {
         expect(src).toContain("resolved_by_id");
         expect(src).toContain("createOpportunityAttentionResolverBatchContext");
         expect(src).toContain("NEEDS_ATTENTION_OPPORTUNITY_SELECT_RESOLVER_MINIMAL");
+        expect(src).toContain("membership_filter_ms");
     });
 
     it("bootstrap route bundles KPI placements and right-rail actions", () => {

@@ -165,23 +165,57 @@ export type NeedsAttentionBucketWithCount = NeedsAttentionBucketConfig & { count
  * **Work-unit execution alignment:** count unique inquiries whose resolver `reasons[]` intersects the bucket’s
  * `reason_codes`. Matches filtered queue semantics better than summing histogram bins (especially for multi-code buckets).
  */
+function normalizedReasonCodeSet(codes: readonly string[]): Set<string> {
+    const out = new Set<string>();
+    for (const c of codes) {
+        const t = c.trim();
+        if (t) out.add(t);
+    }
+    return out;
+}
+
 export function bucketCountsFromResolverMatches(
     buckets: readonly NeedsAttentionBucketConfig[],
     matches: ReadonlyArray<{ resolved: OpportunityAttentionResult }>,
 ): NeedsAttentionBucketWithCount[] {
-    return buckets
-        .filter((b) => b.enabled)
-        .map((b) => {
-            const codes = new Set(b.reason_codes.map((c) => c.trim()).filter(Boolean));
-            let count = 0;
-            for (const m of matches) {
-                const r = m.resolved;
-                if (!r.needs_attention || !r.primary_reason) continue;
-                if (r.reasons.some((rr) => codes.has(rr.code))) count++;
+    const enabled = buckets.filter((b) => b.enabled);
+    const bucketCodeSets = enabled.map((b) => normalizedReasonCodeSet(b.reason_codes));
+    const counts = new Array<number>(enabled.length).fill(0);
+    for (const m of matches) {
+        const r = m.resolved;
+        if (!r.needs_attention || !r.primary_reason) continue;
+        const reasonCodes = new Set<string>();
+        for (const rr of r.reasons) {
+            const code = String(rr.code ?? "").trim();
+            if (code) reasonCodes.add(code);
+        }
+        for (let i = 0; i < bucketCodeSets.length; i++) {
+            const codes = bucketCodeSets[i]!;
+            for (const code of reasonCodes) {
+                if (codes.has(code)) {
+                    counts[i]!++;
+                    break;
+                }
             }
-            return { ...b, count };
-        })
+        }
+    }
+    return enabled
+        .map((b, i) => ({ ...b, count: counts[i] ?? 0 }))
         .sort(compareNeedsAttentionBuckets);
+}
+
+/** Collect membership matches from a single-pass `resolved_by_id` map (dept lane bucket path). */
+export function collectNeedsAttentionResolverMatches(
+    resolvedById: Readonly<Record<string, OpportunityAttentionResult>>,
+): { resolved: OpportunityAttentionResult }[] {
+    const out: { resolved: OpportunityAttentionResult }[] = [];
+    for (const id in resolvedById) {
+        const resolved = resolvedById[id];
+        if (resolved?.needs_attention && resolved.primary_reason != null) {
+            out.push({ resolved });
+        }
+    }
+    return out;
 }
 
 /**

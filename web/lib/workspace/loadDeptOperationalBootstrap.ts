@@ -174,6 +174,7 @@ export async function loadDeptOperationalBootstrap(params: {
         const attentionPerf: {
             rules_ms?: number;
             query_ms?: number;
+            membership_filter_ms?: number;
             resolver_ms?: number;
             bucket_merge_ms?: number;
             candidate_count?: number;
@@ -196,6 +197,7 @@ export async function loadDeptOperationalBootstrap(params: {
         phases.attention_query_ms = attentionPerf.query_ms;
         phases.attention_candidate_fetch_ms = attentionPerf.query_ms;
         phases.attention_candidate_count = attentionPerf.candidate_count;
+        phases.attention_membership_filter_ms = attentionPerf.membership_filter_ms;
         phases.attention_resolver_ms = attentionPerf.resolver_ms;
         phases.attention_bucket_merge_ms = attentionPerf.bucket_merge_ms;
         return out;

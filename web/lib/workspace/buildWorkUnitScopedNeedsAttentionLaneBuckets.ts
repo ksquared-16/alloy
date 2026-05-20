@@ -7,6 +7,7 @@ import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunity
 import {
     applyAttentionConfigLabelsToBuckets,
     bucketCountsFromResolverMatches,
+    collectNeedsAttentionResolverMatches,
     resolveNeedsAttentionBucketsWithPrecedence,
     type NeedsAttentionBucketWithCount,
 } from "@/lib/opportunities/needsAttentionBuckets";
@@ -34,6 +35,7 @@ export async function buildWorkUnitScopedNeedsAttentionLaneBuckets(params: {
     perf?: {
         rules_ms?: number;
         query_ms?: number;
+        membership_filter_ms?: number;
         resolver_ms?: number;
         bucket_merge_ms?: number;
         candidate_count?: number;
@@ -99,10 +101,11 @@ export async function buildWorkUnitScopedNeedsAttentionLaneBuckets(params: {
     if (params.perf) params.perf.rules_ms = Date.now() - tRules0;
 
     const attentionConfig = resolveOpportunityAttentionConfigFromMetadata(workUnitMetadata ?? null);
+    const bucketDefs = resolveNeedsAttentionBucketsWithPrecedence(workUnitMetadata, departmentMetadata);
     const refUtc = new Date();
     const sort = [{ column: "updated_at", ascending: true as const }];
 
-    const loadPerf: { query_ms?: number; resolver_ms?: number } = {};
+    const loadPerf: { query_ms?: number; resolver_ms?: number; membership_filter_ms?: number } = {};
     const loadOut = await loadOpportunityNeedsAttentionRows({
         supabase,
         orgId,
@@ -113,28 +116,26 @@ export async function buildWorkUnitScopedNeedsAttentionLaneBuckets(params: {
         attentionConfig,
         recordScopeConstraints: scopeFilter,
         columnSelect: "resolver_minimal",
+        skipPostFilterSort: true,
         perf: loadPerf,
     });
     if (params.perf) {
         params.perf.query_ms = loadPerf.query_ms;
         params.perf.resolver_ms = loadPerf.resolver_ms;
+        params.perf.membership_filter_ms = loadPerf.membership_filter_ms;
         params.perf.candidate_count = loadOut.raw_candidates_fetched;
     }
 
-    const resolver_matches: { resolved: OpportunityAttentionResult }[] = [];
-    for (const row of loadOut.filtered) {
-        const resolved = loadOut.resolved_by_id[String(row.id)];
-        if (resolved?.needs_attention && resolved.primary_reason != null) {
-            resolver_matches.push({ resolved });
-        }
-    }
+    const resolver_matches = collectNeedsAttentionResolverMatches(loadOut.resolved_by_id);
 
     const tBucket0 = Date.now();
-    const attention_reason_counts = summarizeAttentionReasonCounts(
-        resolver_matches.flatMap(({ resolved }) => resolved.reasons.map((rr) => ({ reason_key: rr.code, label: rr.label }))),
-    );
-
-    const bucketDefs = resolveNeedsAttentionBucketsWithPrecedence(workUnitMetadata, departmentMetadata);
+    const reasonPairs: { reason_key: string; label: string }[] = [];
+    for (const { resolved } of resolver_matches) {
+        for (const rr of resolved.reasons) {
+            reasonPairs.push({ reason_key: rr.code, label: rr.label });
+        }
+    }
+    const attention_reason_counts = summarizeAttentionReasonCounts(reasonPairs);
     const needs_attention_buckets = applyAttentionConfigLabelsToBuckets(
         bucketCountsFromResolverMatches(bucketDefs, resolver_matches),
         attentionConfig,

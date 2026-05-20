@@ -3,6 +3,7 @@ import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunity
 import {
     DEFAULT_NEEDS_ATTENTION_BUCKETS,
     bucketCountsFromResolverMatches,
+    collectNeedsAttentionResolverMatches,
     compareNeedsAttentionBuckets,
     hydrateNeedsAttentionBucketCounts,
     pickMetadataForNeedsAttentionBuckets,
@@ -86,6 +87,21 @@ describe("needsAttentionBuckets", () => {
         ]);
         expect(withCounts.find((x) => x.key === "follow_up_overdue")?.count).toBe(2);
         expect(withCounts.find((x) => x.key === "quote_follow_up_overdue")?.count).toBe(1);
+    });
+
+    it("collectNeedsAttentionResolverMatches skips non-membership rows", () => {
+        const member = mockMatch(["waiting_on_staff"]).resolved;
+        const nonMember = {
+            needs_attention: false,
+            primary_reason: null,
+            reasons: [],
+        } as unknown as OpportunityAttentionResult;
+        const matches = collectNeedsAttentionResolverMatches({
+            a: member,
+            b: nonMember,
+        });
+        expect(matches).toHaveLength(1);
+        expect(matches[0]!.resolved).toBe(member);
     });
 
     it("counts unique inquiries per bucket from resolver matches", () => {

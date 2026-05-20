@@ -59,6 +59,7 @@ export async function loadDeptAttentionPreviewServer(params: {
     attentionPerf?: {
         rules_ms?: number;
         query_ms?: number;
+        membership_filter_ms?: number;
         resolver_ms?: number;
         bucket_merge_ms?: number;
         candidate_count?: number;

@@ -438,15 +438,17 @@ function truncateAttentionSuggestionQueueWhyLine(text: string, maxChars: number)
     return `${t.slice(0, maxChars - 1)}…`;
 }
 
+function opportunityMetadataForResolver(md: OpportunityRowPreview["metadata"]): Record<string, unknown> | null {
+    return md && typeof md === "object" && !Array.isArray(md) ? (md as Record<string, unknown>) : null;
+}
+
 export function opportunityPreviewToResolverEntity(row: OpportunityRowPreview): OpportunityAttentionEntityInput {
-    const md = row.metadata;
     return {
         id: row.id,
         status_key: row.status_key,
         created_at: row.created_at ?? null,
         updated_at: row.updated_at ?? null,
-        metadata:
-            md && typeof md === "object" && !Array.isArray(md) ? (md as Record<string, unknown>) : null,
+        metadata: opportunityMetadataForResolver(row.metadata),
         customer_id: row.customer_id,
         primary_person_id: row.primary_person_id ?? null,
         primary_contact_id: row.primary_contact_id ?? null,
@@ -1449,7 +1451,14 @@ export async function loadOpportunityNeedsAttentionRows(params: {
     recordScopeConstraints?: RecordScopeConstraints | null;
     /** Smaller SELECT for bucket/count paths that only run the attention resolver. */
     columnSelect?: "default" | "resolver_minimal";
-    perf?: { query_ms?: number; resolver_ms?: number };
+    /** Dept lane bucket counts do not need queue list ordering — skips priority sort pass. */
+    skipPostFilterSort?: boolean;
+    perf?: {
+        query_ms?: number;
+        resolver_ms?: number;
+        membership_filter_ms?: number;
+        sort_ms?: number;
+    };
 }): Promise<{
     filtered: OpportunityRowPreview[];
     raw_candidates_fetched: number;
@@ -1491,27 +1500,56 @@ export async function loadOpportunityNeedsAttentionRows(params: {
         attentionConfig,
         nowMs
     );
-    const tResolver0 = Date.now();
     const attentionByRowId = new Map<string, OpportunityAttentionResult>();
     const resolved_by_id: Record<string, OpportunityAttentionResult> = {};
     const filtered: OpportunityRowPreview[] = [];
+    let resolverAccum = 0;
+    let membershipAccum = 0;
     for (const r of rawRows) {
+        const rowId = String(r.id);
+        const md = opportunityMetadataForResolver(r.metadata);
+        const tResolve0 = Date.now();
         const attention = resolveOpportunityAttention({
-            opportunity: opportunityPreviewToResolverEntity(r),
+            opportunity: {
+                id: rowId,
+                status_key: r.status_key,
+                created_at: r.created_at ?? null,
+                updated_at: r.updated_at ?? null,
+                metadata: md,
+                customer_id: r.customer_id,
+                primary_person_id: r.primary_person_id ?? null,
+                primary_contact_id: r.primary_contact_id ?? null,
+                quote_total: r.quote_total ?? null,
+                estimated_price_cents: r.estimated_price_cents ?? null,
+                monetary_value_cents: r.monetary_value_cents ?? null,
+            },
             defs: params.opportunityStatusDefs,
             config: attentionConfig,
             nowMs,
             optionalSignals: null,
             batch,
         });
-        resolved_by_id[String(r.id)] = attention;
-        if (!attention.needs_attention) continue;
-        attentionByRowId.set(String(r.id), attention);
-        filtered.push(r);
+        resolverAccum += Date.now() - tResolve0;
+        resolved_by_id[rowId] = attention;
+        const tMembership0 = Date.now();
+        if (attention.needs_attention) {
+            attentionByRowId.set(rowId, attention);
+            filtered.push(r);
+        }
+        membershipAccum += Date.now() - tMembership0;
     }
-    if (params.perf) params.perf.resolver_ms = Date.now() - tResolver0;
+    if (params.perf) {
+        params.perf.resolver_ms = resolverAccum;
+        params.perf.membership_filter_ms = membershipAccum;
+    }
+    let sorted = filtered;
+    if (!params.skipPostFilterSort && filtered.length > 0) {
+        const tSort0 = Date.now();
+        sorted = sortNeedsAttentionFilteredRows(filtered, attentionByRowId, params.sort);
+        if (params.perf) params.perf.sort_ms = Date.now() - tSort0;
+    }
     return {
-        filtered: sortNeedsAttentionFilteredRows(filtered, attentionByRowId, params.sort),
+        filtered: sorted,
         raw_candidates_fetched: rawRows.length,
         fetch_cap: cap,
         resolved_by_id,

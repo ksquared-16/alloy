@@ -391,13 +391,37 @@ Optional **fast-follow bucket** (still out of sprint unless scope amended): serv
 
 Dept **`attention_ms`** is dominated by **`loadOpportunityNeedsAttentionRows`** (SQL candidate OR + cap) + **`resolveOpportunityAttention`** per fetched row. Optimizations **must not** change qualification, bucket totals, or reason categories.
 
-**Allowed (implemented):** one resolver pass per row (reuse `resolved_by_id` for bucket merge); request-local **`createOpportunityAttentionResolverBatchContext`** (terminal keys, lifecycle rules, stale/tour day cuts); **`resolver_minimal`** SELECT for dept lane counts; finer `[dept-bootstrap-perf]` fields: `attention_query_ms`, `attention_resolver_ms`, `attention_rules_ms`, `attention_candidate_count`, `attention_bucket_merge_ms`.
+**Implemented (final /dept pass):**
 
-**Still costly / next only with schema or index work:** wide PostgREST `.or(candidateOr)` over `opportunities` up to **5000** rows; per-row metadata parse + SLA/priority in resolver. Do **not** lower the list cap or use approximate counts for dept oper reveal.
+- One resolver pass; bucket merge reads **`resolved_by_id`** via **`collectNeedsAttentionResolverMatches`** (no second resolve).
+- Request-local **`createOpportunityAttentionResolverBatchContext`** (terminal keys, lifecycle rules, stale/tour day cuts once).
+- **`resolver_minimal`** SELECT; **`skipPostFilterSort`** on dept lane (counts do not need queue list ordering).
+- Single-pass bucket merge: precomputed reason-code **`Set`** per bucket; one reason-code set per inquiry.
+- `[dept-bootstrap-perf]` breakdown: `attention_rules_ms`, `attention_query_ms`, `attention_candidate_count`, `attention_resolver_ms`, `attention_membership_filter_ms`, `attention_bucket_merge_ms`.
 
-### Dept readiness
+**Interpret logs:** if `attention_query_ms` ≫ `attention_resolver_ms`, the bottleneck is **SQL** (wide `.or` on `opportunities`), not CPU. If `attention_resolver_ms` dominates with high `attention_candidate_count`, resolver cost scales with candidates (cap 5000).
 
-**`/dept` is ready to use as the canonical AdminV2 runtime template** for work-unit, pending staging sign-off on: Today's Focus digits, no triple actions on happy path, `[dept-bootstrap-perf]` attention breakdown (`attention_query_ms` vs `attention_resolver_ms`).
+**DB/index debt (propose separately — do not auto-migrate):**
+
+Candidate fetch: `org_id` + `work_unit_id` + `.or(buildOpportunityNeedsAttentionCandidateOrExpr)` + `order(updated_at)` + `limit(5000)`.
+
+| Recommendation | Rationale |
+|----------------|-----------|
+| `CREATE INDEX … ON opportunities (org_id, work_unit_id, updated_at)` | Base filter + sort for capped fetch |
+| Partial: `(org_id, work_unit_id) WHERE customer_id IS NULL` | `customer_id.is.null` OR branch |
+| Partial: `(org_id, work_unit_id) WHERE primary_person_id IS NULL OR primary_contact_id IS NULL` | Identity-missing branches |
+| Expression / GIN on `(metadata->'enrollment_operational'->>'wait_bucket')` | Wait-bucket OR branches |
+| Expression on `(metadata->>'next_follow_up_at')`, `(metadata->>'commitment_due_at')` | Commitment / follow-up branches |
+| Partial: `(org_id, work_unit_id, updated_at) WHERE status_key = 'tour_scheduled'` + expression on `metadata->>'tour_date'` | Tour-date branch |
+| Partial on `updated_at` / `created_at` for stale cuts | `updated_at.lt.*` / `created_at.lt.*` branches |
+
+Validate with `EXPLAIN (ANALYZE, BUFFERS)` on the exact PostgREST-equivalent query before shipping indexes.
+
+**Do not:** lower `NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP`, approximate bucket counts, or narrow SQL OR without resolver parity proof.
+
+### Dept readiness — premium standard
+
+**`/dept` may be locked as the AdminV2 premium runtime template** when staging confirms: Today's Focus digits, no triple actions on happy path, and `[dept-bootstrap-perf]` shows bootstrap **~900–1100ms** total with **`attention_ms` ~400–550ms** (or `attention_query_ms` identified as the only remaining debt with index plan queued). Replicate to **`/work-unit`** using the same bootstrap + perf breakdown pattern; do not change drawer/nav/loading UX in that replication.
 
 ---
 

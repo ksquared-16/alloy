@@ -9,6 +9,7 @@ export type DeptBootstrapPerfPhases = {
     attention_candidate_fetch_ms?: number;
     attention_query_ms?: number;
     attention_candidate_count?: number;
+    attention_membership_filter_ms?: number;
     attention_resolver_ms?: number;
     attention_rules_ms?: number;
     attention_bucket_merge_ms?: number;
