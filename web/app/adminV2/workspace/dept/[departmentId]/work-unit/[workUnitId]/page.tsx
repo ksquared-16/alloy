@@ -687,7 +687,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
         seededWorkUnitShellRef.current = true;
         setDept(hit.dept);
         setWorkUnit(hit.workUnit as WorkUnitRow);
-        setLoading(false);
         setError(null);
     }, [
         departmentId,
@@ -1298,8 +1297,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             if (typeof performance !== "undefined" && typeof window !== "undefined") {
                 alloyPerfSet("work_unit_start", routeStart);
             }
-            const preserveShell = seededWorkUnitShellRef.current;
-            setLoading(!preserveShell);
+            setLoading(true);
             setError(null);
             const init = workspaceDataFetchInit();
             workUnitDeferredScheduledRef.current = false;
@@ -1311,7 +1309,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             bootstrapPrimaryRowKeyRef.current = null;
             bootstrapPrimaryRowFetchScheduledRef.current = false;
             suppressQueueFetchEffectOnceRef.current = false;
-            if (!preserveShell) {
+            if (!seededWorkUnitShellRef.current) {
                 firstUsefulPaintMarkedRef.current = false;
                 setWorkUnit(null);
                 setDept(null);
@@ -3212,7 +3210,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
             (wuPlacementRows !== undefined && queueSummaries === null && !queueSummariesError));
     /** Shell + header render after WU + dept; queue summaries and rows stay in-lane (Phase 3.1). */
     const workUnitShellReady = Boolean(workUnit) && Boolean(dept) && !error;
-    const workUnitPageBlockingLoad = loading && !workUnitShellReady;
+    const workUnitOperLanePending = workUnitShellReady && !wuQueueLaneAuthorityReady;
+    const workUnitPageBlockingLoad =
+        (loading && !workUnitShellReady) || workUnitOperLanePending;
 
     /** Queue-first reveal — KPI strip and automation footer defer until the lane is useful. */
     const workUnitQueueRevealReady = useMemo(() => {

@@ -225,6 +225,14 @@ describe("Work-unit queue-first loading coherence", () => {
         expect(src).toMatch(/primaryFooterSlot=\{[\s\S]*?workUnitQueueRevealReady/);
         expect(src).not.toContain("wu-blocking-kpi-skeleton");
     });
+
+    it("keeps oper lane in quiet reserve until bootstrap authority (no stale rows on nav)", () => {
+        const src = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
+        expect(src).toContain("workUnitOperLanePending");
+        expect(src).toMatch(/workUnitPageBlockingLoad[\s\S]*workUnitOperLanePending/);
+        expect(src).not.toMatch(/readWorkUnitPageCache[\s\S]{0,400}setLoading\(false\)/);
+        expect(src).toMatch(/setLoading\(true\)/);
+    });
 });
 
 describe("Drawer operational bootstrap (Cards 4–7)", () => {
@@ -269,6 +277,26 @@ describe("Drawer single-reveal bootstrap body", () => {
             /opportunityDrawerPreOverviewShell[\s\S]*?DrawerOpportunityQueueBootstrapBodySkeleton/,
         );
         expect(src).toMatch(/reportDrawerPrimaryReady[\s\S]*?opportunityDrawerPrimaryCoherent/);
+    });
+
+    it("dedupes drawer bootstrap per entity open and suppresses legacy chrome fetches on happy path", () => {
+        const drawer = read("components/admin/AdminEntityDrawer.tsx");
+        const chrome = read("hooks/useRecordChromeConfig.ts");
+        expect(drawer).toContain("opportunityDrawerBootstrapInflightRef");
+        expect(drawer).toContain("opportunityDrawerBootstrapEntityKeyRef");
+        expect(drawer).toContain("opportunityBootstrapChromeSuppressed");
+        expect(drawer).toContain("DrawerOpportunityOperationalLoadingComposition");
+        expect(drawer).toMatch(
+            /opportunityDrawerBootstrapInflightRef\.current === entityOpenKey[\s\S]*?return;/,
+        );
+        expect(drawer).toMatch(
+            /adminV2DrawerBootstrapEnabled\(\)[\s\S]*?opportunityDrawerBootstrapLegacy[\s\S]*?setOpportunityResolvedHeaderLoading\(true\)/,
+        );
+        expect(drawer).toMatch(
+            /adminV2DrawerBootstrapEnabled\(\)[\s\S]*!opportunityDrawerBootstrapLegacy[\s\S]*?fetchAdminWorkUnitDrawerJson/,
+        );
+        expect(chrome).toMatch(/bootstrapSeeded = options\?\.bootstrapSeeded === true/);
+        expect(chrome).not.toMatch(/bootstrapSeeded = Boolean\(options\?\.bootstrapSeeded && options\.seededLayout\)/);
     });
 
     it("reveals inquiry tabs with overview and keeps preview title until primary reveal", () => {

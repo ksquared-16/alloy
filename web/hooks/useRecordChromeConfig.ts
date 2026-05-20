@@ -31,7 +31,7 @@ export function useRecordChromeConfig(
     const [error, setError] = useState<string | null>(null);
     const [configResolved, setConfigResolved] = useState(() => entityKind == null);
 
-    const bootstrapSeeded = Boolean(options?.bootstrapSeeded && options.seededLayout);
+    const bootstrapSeeded = options?.bootstrapSeeded === true;
 
     useLayoutEffect(() => {
         if (!entityKind) {
