@@ -10,6 +10,7 @@ import MyTasksModal from "@/app/adminV2/components/MyTasksModal";
 import OperationalTasksNavBadge from "@/app/adminV2/components/OperationalTasksNavBadge";
 import QuickMessageModal from "@/app/adminV2/components/QuickMessageModal";
 import { MessageSquare } from "lucide-react";
+import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 
 function normalizeAdminPath(pathname: string): string {
   if (pathname === "/admin/v2" || pathname.startsWith("/admin/v2/")) {
@@ -95,12 +96,13 @@ export default function TopNavBar() {
         /* ignore */
       }
     };
-    void load();
+    const cancelDefer = scheduleAdminV2BackgroundWork(() => load(), { idleTimeoutMs: 4000, fallbackMs: 500 });
     const id = window.setInterval(() => void load(), 120_000);
     const onRefresh = () => void load();
     window.addEventListener("alloy-comms-unread-refresh", onRefresh);
     return () => {
       cancelled = true;
+      cancelDefer();
       window.clearInterval(id);
       window.removeEventListener("alloy-comms-unread-refresh", onRefresh);
     };

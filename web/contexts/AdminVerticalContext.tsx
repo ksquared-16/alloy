@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from "react";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
 const STORAGE_KEY = "admin_selected_vertical_id";
@@ -34,11 +35,20 @@ export function AdminVerticalProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         const init = workspaceDataFetchInit() ?? {};
-        void dedupeAdminFetchWithTtl("/api/admin/verticals", init, 8000)
-            .then((res) => (res.ok ? res.json() : []))
-            .then((data: Vertical[]) => setVerticals(Array.isArray(data) ? data : []))
-            .catch(() => setVerticals([]))
-            .finally(() => setLoading(false));
+        return scheduleAdminV2BackgroundWork(
+            async () => {
+                try {
+                    const res = await dedupeAdminFetchWithTtl("/api/admin/verticals", init, 8000);
+                    const data = (await (res.ok ? res.json() : [])) as Vertical[];
+                    setVerticals(Array.isArray(data) ? data : []);
+                } catch {
+                    setVerticals([]);
+                } finally {
+                    setLoading(false);
+                }
+            },
+            { idleTimeoutMs: 3500, fallbackMs: 300 }
+        );
     }, []);
 
     useEffect(() => {

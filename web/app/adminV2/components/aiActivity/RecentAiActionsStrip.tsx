@@ -6,6 +6,7 @@ import { neutral, derived, brand } from "@/styles/tokens/colors";
 import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
 import { activitySummaryLine, type ActivityItem } from "@/lib/adminV2/aiActivity/activityTypes";
 import AiActivityDetailModal from "./AiActivityDetailModal";
+import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 
 const REFRESH_EVENT = "adminv2-ai-activity-refresh";
 
@@ -44,7 +45,7 @@ export default function RecentAiActionsStrip() {
     }, []);
 
     useEffect(() => {
-        void load();
+        return scheduleAdminV2BackgroundWork(() => load(), { idleTimeoutMs: 4000, fallbackMs: 450 });
     }, [load]);
 
     useEffect(() => {

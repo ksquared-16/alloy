@@ -46,6 +46,7 @@
 1. **Dept operational panel stabilization** — eliminate post-reveal throughput morph (WU rows ↔ pipeline lanes); one intentional panel shape per dept configuration.
 2. **Work-unit queue loading consolidation** — one visible row-load authority per navigation; no stale lane flash from shell seed.
 3. **Needs attention loading coherence** — paired with throughput under **one oper reveal**; no independent “recalculating” feel. Attention fetch may start in parallel with dept/work-unit GET (not after WU list returns).
+4. **Workspace → dept nav prioritization (PERF-B-05)** — non-critical shell polls deferred via `scheduleAdminV2BackgroundWork`; entity labels server-hydrated in workspace layout; dept oper critical path unchanged.
 4. **Drawer open choreography** — fewer visible beats; stable header/frame; defer secondary surfaces without giant body placeholders.
 5. **Drawer loading philosophy** — compact reserves / chrome-led loading; **no** large fake white content deserts (per product direction).
 6. **Skeleton / reserve alignment** — `loading.tsx`, session seed, and final layout share **one geometry family** (quiet anchored reserves, not mismatched row-skeleton → blank-box → content).

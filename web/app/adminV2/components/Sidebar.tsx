@@ -6,6 +6,7 @@ import { Building2, Boxes, GitBranch, LayoutGrid, PanelLeftClose, PanelLeft, Set
 import { neutral, brand } from "@/styles/tokens/colors";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 
 const WORKSPACE = "/adminV2/workspace";
@@ -52,26 +53,31 @@ export default function Sidebar({
     useEffect(() => {
         if (collapsed) return;
         let cancelled = false;
-        (async () => {
-            try {
-                const init = workspaceDataFetchInit();
-                const [dRes, wRes] = await Promise.all([
-                    dedupeAdminFetch("/api/admin/departments", init),
-                    dedupeAdminFetch("/api/admin/work-units", init),
-                ]);
-                const dj = (await dRes.json().catch(() => ({}))) as { items?: Dept[] };
-                const wj = (await wRes.json().catch(() => ({}))) as { items?: WU[] };
+        const cancelDefer = scheduleAdminV2BackgroundWork(
+            async () => {
                 if (cancelled) return;
-                setTreeError(null);
-                if (dRes.ok) setDepts(dj.items ?? []);
-                else setTreeError("Departments unavailable");
-                if (wRes.ok) setWus(wj.items ?? []);
-            } catch {
-                if (!cancelled) setTreeError("Navigation data unavailable");
-            }
-        })();
+                try {
+                    const init = workspaceDataFetchInit();
+                    const [dRes, wRes] = await Promise.all([
+                        dedupeAdminFetch("/api/admin/departments", init),
+                        dedupeAdminFetch("/api/admin/work-units", init),
+                    ]);
+                    const dj = (await dRes.json().catch(() => ({}))) as { items?: Dept[] };
+                    const wj = (await wRes.json().catch(() => ({}))) as { items?: WU[] };
+                    if (cancelled) return;
+                    setTreeError(null);
+                    if (dRes.ok) setDepts(dj.items ?? []);
+                    else setTreeError("Departments unavailable");
+                    if (wRes.ok) setWus(wj.items ?? []);
+                } catch {
+                    if (!cancelled) setTreeError("Navigation data unavailable");
+                }
+            },
+            { idleTimeoutMs: 4500, fallbackMs: 600 }
+        );
         return () => {
             cancelled = true;
+            cancelDefer();
         };
     }, [collapsed]);
 

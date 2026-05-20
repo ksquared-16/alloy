@@ -9,6 +9,7 @@ import {
 import { ADMIN_V2_OPEN_TASKS_MODAL, fetchOperationalTasksSummary, readJson } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
 import { neutral } from "@/styles/tokens/colors";
+import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 
 type TaskCounts = { open: number; due_soon: number; overdue: number };
 
@@ -37,13 +38,14 @@ export default function OperationalTasksNavBadge({
 
     useEffect(() => {
         if (!enabled) return;
-        void load();
+        const cancelDefer = scheduleAdminV2BackgroundWork(() => load(), { idleTimeoutMs: 4000, fallbackMs: 500 });
         const id = window.setInterval(() => void load(), 120_000);
         const onRefresh = () => void load();
         const onOpen = () => onOpenModal();
         window.addEventListener(ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH, onRefresh);
         window.addEventListener(ADMIN_V2_OPEN_TASKS_MODAL, onOpen);
         return () => {
+            cancelDefer();
             window.clearInterval(id);
             window.removeEventListener(ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH, onRefresh);
             window.removeEventListener(ADMIN_V2_OPEN_TASKS_MODAL, onOpen);

@@ -7,6 +7,7 @@ import AdminV2WorkspaceClientProviders from "./AdminV2WorkspaceClientProviders";
 import type { AdminViewerTimezoneValue } from "@/contexts/AdminViewerTimezoneContext";
 import { loadAdminViewerTimezoneBootstrap } from "@/lib/admin/viewerTimezoneBootstrap";
 import { loadOperationalOrgTimezoneIana } from "@/lib/admin/loadOperationalOrgTimezoneServer";
+import { loadEntityLabelsMapForUser, type EntityLabelsBootstrapMap } from "@/lib/admin/entityLabelsServer";
 
 export const dynamic = "force-dynamic";
 
@@ -65,11 +66,12 @@ export default async function AdminV2WorkspaceLayout({
         );
     }
 
-    const [orgName, viewerTimezone, operationalTimezoneIana, access] = await Promise.all([
+    const [orgName, viewerTimezone, operationalTimezoneIana, access, initialEntityLabels] = await Promise.all([
         loadOrgDisplayName(orgId),
         loadViewerTimezoneSafe(auth.user.id),
         loadOperationalTimezoneSafe(orgId),
         getAdminAccessContextCached(),
+        loadEntityLabelsMapForUser(auth.user.id).catch((): EntityLabelsBootstrapMap => ({})),
     ]);
 
     if (!access.ok) {
@@ -97,6 +99,7 @@ export default async function AdminV2WorkspaceLayout({
             orgName={orgName}
             orgId={orgId}
             accessScopeFingerprint={accessScopeFingerprint}
+            initialEntityLabels={initialEntityLabels}
             initialViewerTimezone={viewerTimezone}
             initialOperationalTimezoneIana={operationalTimezoneIana}
         >

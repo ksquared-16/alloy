@@ -15,6 +15,7 @@ import {
   type ResponseKind,
 } from "@/lib/adminV2/aiCommandSurface/aiCommandSurfaceModel";
 import { dispatchAiActivityRefresh } from "@/app/adminV2/components/aiActivity/RecentAiActionsStrip";
+import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import { looksLikeAmbientOnlyCommand } from "@/lib/agent/taskAssist/taskAssistCommandBarResolution";
@@ -1497,41 +1498,52 @@ export default function AICommandSurfaceShell() {
 
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch("/api/admin/ai/workflow-assist/capabilities", {
-          credentials: "include",
-          headers: { Accept: "application/json" },
-        });
-        const j = (await res.json()) as { ok?: boolean; can_propose_and_apply_workflow_assist?: boolean };
-        if (cancelled) return;
-        if (res.ok && j.ok === true && typeof j.can_propose_and_apply_workflow_assist === "boolean") {
-          setWorkflowAssistMutationCapable(j.can_propose_and_apply_workflow_assist);
-        } else {
-          setWorkflowAssistMutationCapable(false);
+    const cancelDefer = scheduleAdminV2BackgroundWork(
+      async () => {
+        try {
+          const res = await fetch("/api/admin/ai/workflow-assist/capabilities", {
+            credentials: "include",
+            headers: { Accept: "application/json" },
+          });
+          const j = (await res.json()) as { ok?: boolean; can_propose_and_apply_workflow_assist?: boolean };
+          if (cancelled) return;
+          if (res.ok && j.ok === true && typeof j.can_propose_and_apply_workflow_assist === "boolean") {
+            setWorkflowAssistMutationCapable(j.can_propose_and_apply_workflow_assist);
+          } else {
+            setWorkflowAssistMutationCapable(false);
+          }
+        } catch {
+          if (!cancelled) setWorkflowAssistMutationCapable(false);
         }
-      } catch {
-        if (!cancelled) setWorkflowAssistMutationCapable(false);
-      }
-    })();
+      },
+      { idleTimeoutMs: 5000, fallbackMs: 700 }
+    );
     return () => {
       cancelled = true;
+      cancelDefer();
     };
   }, []);
 
   useEffect(() => {
     let cancelled = false;
-    void fetch("/api/admin/ai/config-layout-assist/capabilities", {
-      credentials: "include",
-      headers: { Accept: "application/json" },
-    })
-      .then((r) => r.json())
-      .then((j) => {
-        if (!cancelled && j.ok) setConfigLayoutAssistCaps(j as ConfigLayoutAssistCapabilitiesV1);
-      })
-      .catch(() => undefined);
+    const cancelDefer = scheduleAdminV2BackgroundWork(
+      async () => {
+        try {
+          const res = await fetch("/api/admin/ai/config-layout-assist/capabilities", {
+            credentials: "include",
+            headers: { Accept: "application/json" },
+          });
+          const j = (await res.json()) as { ok?: boolean };
+          if (!cancelled && j.ok) setConfigLayoutAssistCaps(j as ConfigLayoutAssistCapabilitiesV1);
+        } catch {
+          /* non-fatal */
+        }
+      },
+      { idleTimeoutMs: 5000, fallbackMs: 800 }
+    );
     return () => {
       cancelled = true;
+      cancelDefer();
     };
   }, []);
 

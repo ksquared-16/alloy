@@ -390,6 +390,20 @@ Lanes B and C can overlap **after A** if two implementers — do not start B bef
 
 ---
 
+### PERF-B-05 — Workspace → dept nav request prioritization
+
+| Field | Content |
+|-------|---------|
+| **Lane** | B |
+| **Goal** | ~2× faster perceived workspace → dept by reducing request competition on the oper critical path. |
+| **UX contract** | Unchanged — shell-first, oper-region loader, paired oper reveal (see settled contract under PERF-B-02). |
+| **Deferred (idle / post-ready)** | Sidebar tree (`/departments` + all `/work-units`), entity-labels client refresh (server-hydrated first), verticals, AI capabilities (×2), agent activity strip, operational-tasks summary, communications unread-count, KPI placements (short fallback), right-rail actions (after oper region). |
+| **Critical (dept oper)** | `dept` + scoped `work-units`, `work-unit-queue-summaries`, `opportunity-attention-preview`, pipeline probe, then oper-region reveal. |
+| **Mechanisms** | `scheduleAdminV2BackgroundWork`, `dedupeAdminFetchWithTtl`, server `loadEntityLabelsMapForUser` in workspace layout. |
+| **Files** | `adminV2DeferBackgroundWork.ts`, workspace layout, shell providers/components, `dept/page.tsx` (placement defer only). |
+
+---
+
 ### PERF-B-04 — Dept oper-region critical path trim
 
 | Field | Content |

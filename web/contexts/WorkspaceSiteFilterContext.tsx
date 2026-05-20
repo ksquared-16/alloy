@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
 export type WorkspaceSiteFilterBootstrap = {
@@ -30,7 +31,7 @@ export function WorkspaceSiteFilterProvider({ children }: { children: ReactNode 
         (async () => {
             try {
                 const init = workspaceDataFetchInit();
-                const res = await fetch("/api/admin/workspace/site-filter", init);
+                const res = await dedupeAdminFetchWithTtl("/api/admin/workspace/site-filter", init ?? {}, 15000);
                 const j = (await res.json().catch(() => ({}))) as WorkspaceSiteFilterBootstrap & { error?: string };
                 if (cancelled) return;
                 if (!res.ok) {

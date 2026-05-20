@@ -50,6 +50,7 @@ import type { WorkflowScopePartitionV1 } from "@/lib/workflows/workflowScopeMeta
 import { resolveKpisForDepartment } from "@/lib/kpi/resolver";
 import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
+import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { isEnrollmentLikeDepartmentKey } from "@/lib/workspace/enrollmentDepartmentKey";
 import { resolveDeptPipelineExecSurface } from "@/lib/workspace/resolveDeptPipelineExecSurface";
 import { WorkspaceOperIcon } from "@/components/admin/workspace/WorkspaceOperIcon";
@@ -647,7 +648,17 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 const placementT0 =
                     typeof performance !== "undefined" && typeof window !== "undefined" ? performance.now() : 0;
                 const placementUrl = `/api/admin/workspace-kpi-placements?surface=department&department_id=${encodeURIComponent(departmentId)}`;
-                const placementP = dedupeAdminFetchWithTtl(placementUrl, { ...(init ?? {}), cache: "no-store" }, 8000);
+                let placementP: ReturnType<typeof dedupeAdminFetchWithTtl> | undefined;
+                const cancelPlacementDefer = scheduleAdminV2BackgroundWork(
+                    () => {
+                        placementP = dedupeAdminFetchWithTtl(
+                            placementUrl,
+                            { ...(init ?? {}), cache: "no-store" },
+                            8000
+                        );
+                    },
+                    { idleTimeoutMs: 3000, fallbackMs: 120 }
+                );
                 const deptRoute = `/api/admin/departments/${encodeURIComponent(departmentId)}`;
                 const wuRoute = `/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`;
                 const [deptRes, wuRes] = await Promise.all([
@@ -738,8 +749,14 @@ export default function AdminV2WorkspaceDepartmentPage() {
 
                     void (async () => {
                         if (cancelled) return;
+                        cancelPlacementDefer();
                         try {
-                            const res = await placementP;
+                            const res = await (placementP ??
+                                dedupeAdminFetchWithTtl(
+                                    placementUrl,
+                                    { ...(init ?? {}), cache: "no-store" },
+                                    8000
+                                ));
                             if (!res.ok) {
                                 if (!cancelled) {
                                     setDeptPlacementRows([]);

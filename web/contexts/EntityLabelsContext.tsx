@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
@@ -129,20 +130,13 @@ export function EntityLabelsProvider({
 
     useEffect(() => {
         if (seeded) {
-            // Server already hydrated labels; avoid doubling GET /api/admin/entity-labels on mount.
-            if (typeof requestIdleCallback !== "undefined") {
-                const id = requestIdleCallback(() => void refreshEntityLabels());
-                return () => cancelIdleCallback(id);
-            }
-            const t = window.setTimeout(() => void refreshEntityLabels(), 2500);
-            return () => window.clearTimeout(t);
+            return scheduleAdminV2BackgroundWork(() => refreshEntityLabels(), { idleTimeoutMs: 4000, fallbackMs: 2000 });
         }
         const cached = loadFromCache();
         if (Object.keys(cached ?? {}).length > 0) {
             setLabels(cached!);
             setLoading(false);
-            void refreshEntityLabels();
-            return;
+            return scheduleAdminV2BackgroundWork(() => refreshEntityLabels(), { idleTimeoutMs: 3500, fallbackMs: 400 });
         }
         void refreshEntityLabels();
     }, [seeded, refreshEntityLabels]);
