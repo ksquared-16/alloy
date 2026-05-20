@@ -81,11 +81,12 @@ describe("Dept paired oper loading alignment", () => {
         expect(src).toContain("DeptPairedOperQuietReserve");
     });
 
-    it("route cold shell uses blocking route loader, not partial bridge (PR-4.6)", () => {
+    it("route cold shell uses bridge shell with oper-region loader (PR-4.6+)", () => {
         const cold = read("components/admin/workspace/DepartmentWorkspaceColdShell.tsx");
-        expect(cold).toContain("AdminV2RouteLoadingState");
-        expect(cold).not.toContain("DepartmentWorkspaceBridgeShell");
-        expect(cold).not.toContain("DeptPairedOperQuietReserve");
+        expect(cold).toContain("DepartmentWorkspaceBridgeShell");
+        expect(cold).toContain("DeptOperationalRegionLoader");
+        expect(cold).toContain("WorkspaceQuietKpiReserve");
+        expect(cold).not.toContain("AdminV2RouteLoadingState");
         expect(cold).not.toContain("DeptPairedOperQueuesSkeleton");
     });
 });
@@ -149,29 +150,32 @@ describe("Dept operational panel render-state", () => {
         );
     });
 
-    it("blocks entire operational bridge until deptPageOperationalReady (PR-4.6)", () => {
+    it("gates paired oper region only; shell/KPI/rail render under split readiness (PR-4.6+)", () => {
         const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
-        expect(src).toContain("deptPageOperationalReady");
-        expect(src).toContain("deptOperationalSurfaceReady");
-        expect(src).toContain("deptThroughputBodyReady");
-        expect(src).toContain("deptAttentionBodyReady");
-        expect(src).not.toContain("deptOperPanelsRevealReady");
-        expect(src).not.toContain("deptThroughputRevealReady");
-        expect(src).not.toContain("deptOperationalBlockReady");
+        expect(src).toContain("deptShellReady");
+        expect(src).toContain("deptTopSummaryReady");
+        expect(src).toContain("deptRailReady");
+        expect(src).toContain("deptOperationalRegionReady");
+        expect(src).toContain("deptPipelineProbeSettled");
+        expect(src).toContain("DeptOperationalRegionLoader");
+        expect(src).not.toContain("deptPageOperationalReady");
+        expect(src).not.toContain("AdminV2RouteLoadingState");
         expect(src).not.toContain("DeptPairedOperQuietReserve");
-        expect(src).not.toContain("WorkspaceQuietKpiReserve");
         expect(src).not.toContain("totalPending=");
-        expect(src).toMatch(/!deptPageOperationalReady \? \([\s\S]*?AdminV2RouteLoadingState/);
-        expect(src).toMatch(/deptPageOperationalReady \? \([\s\S]*?DepartmentWorkspaceBridgeShell/);
-        expect(src).toMatch(/throughputSlot=\{throughputPairedPanels\}/);
+        expect(src).toMatch(/deptShellReady \? \([\s\S]*?DepartmentWorkspaceBridgeShell/);
+        expect(src).toMatch(
+            /deptOperationalRegionReady \? \([\s\S]*?throughputPairedPanels[\s\S]*?DeptOperationalRegionLoader/,
+        );
+        expect(src).toMatch(/enrollment_pipeline/);
+        expect(src).toMatch(/canUpgradeToPipeline/);
+        expect(src).toMatch(/setDeptPipelineExecLoading\(true\)/);
+        expect(src).toMatch(/deptThroughputWuRows\.map/);
         expect(src).toMatch(/deptAttentionBuckets !== null[\s\S]*?No Needs Attention types configured/);
-        expect(src).toMatch(/setDeptAttentionBuckets\(null\)/);
-        expect(src).toMatch(/setDeptWorkUnits\(null\)/);
     });
 
     it("does not soft-reveal enrollment actions rail on dept page", () => {
         const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
-        expect(src).toContain("deptEnrollmentRailResolved");
+        expect(src).toContain("deptRailReady");
         expect(src).not.toMatch(
             /railSlot[\s\S]*?adminv2-ws-soft-content-reveal[\s\S]*?ActionsBlock/,
         );

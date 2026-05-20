@@ -372,7 +372,7 @@ Lanes B and C can overlap **after A** if two implementers — do not start B bef
 
 **PR-4.5 tighten (PERF-B-02):** `deptOperationalSurfaceReady` = throughput body + attention body + locked presentation; no `—` placeholder rows; attention empty only when `deptAttentionBuckets !== null`.
 
-**PR-4.6 (dept loading reset):** `deptPageOperationalReady` gates the entire `DepartmentWorkspaceBridgeShell` (KPI, paired oper, automations, actions). Until ready: stable `WorkspaceChrome` + `AdminV2RouteLoadingState` only (cold shell aligned). Nav resets clear work units, pipeline, attention, placements, and rail before re-seed.
+**PR-4.6+ (dept loading reset + oper-region loader):** Split readiness: `deptShellReady` / `deptTopSummaryReady` / `deptRailReady` / `deptOperationalRegionReady`. Bridge shell renders when shell ready; only paired oper region uses `DeptOperationalRegionLoader` until throughput+attention authoritative. Pipeline probe sets `deptPipelineExecLoading(true)` before WU commit; presentation may upgrade `wu_summaries` → `pipeline_lanes` before reveal; `enrollment_pipeline` excluded from WU summary rows.
 
 ---
 

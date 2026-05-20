@@ -41,14 +41,21 @@ describe("adminV2LoadingGeometry", () => {
 });
 
 describe("Dept loader alignment (PERF-A-02 / PR-4.6)", () => {
-    it("cold shell uses route loading card, not partial bridge reserves", () => {
+    it("cold shell uses bridge + oper-region loader + KPI quiet reserve", () => {
         const cold = read("components/admin/workspace/DepartmentWorkspaceColdShell.tsx");
-        expect(cold).toContain("AdminV2RouteLoadingState");
-        expect(cold).not.toContain("DepartmentWorkspaceBridgeShell");
-        expect(cold).not.toContain("DeptPairedOperQuietReserve");
-        expect(cold).not.toContain("WorkspaceQuietKpiReserve");
+        expect(cold).toContain("DepartmentWorkspaceBridgeShell");
+        expect(cold).toContain("DeptOperationalRegionLoader");
+        expect(cold).toContain("WorkspaceQuietKpiReserve");
+        expect(cold).not.toContain("AdminV2RouteLoadingState");
         expect(cold).not.toContain("DeptPairedOperQueuesSkeleton");
         expect(cold).not.toContain("KpiStripSkeleton");
+    });
+
+    it("exports DeptOperationalRegionLoader with paired panel geometry", () => {
+        const reserve = read("components/admin/workspace/WorkspaceQuietLoadingReserve.tsx");
+        expect(reserve).toContain("DeptOperationalRegionLoader");
+        expect(reserve).toContain('data-adminv2-dept-oper-region-loading="true"');
+        expect(reserve).toContain("adminV2DeptPairedOperPanelReserveStyle");
     });
 
     it("quiet reserve uses shared geometry constants", () => {
@@ -67,14 +74,14 @@ describe("Dept loader alignment (PERF-A-02 / PR-4.6)", () => {
         expect(page).not.toContain("deptThroughputRevealReady");
     });
 
-    it("dept page blocks operational bridge until deptPageOperationalReady (PR-4.6)", () => {
+    it("dept page uses oper-region loader under split readiness gates (PR-4.6+)", () => {
         const page = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
-        expect(page).toContain("deptPageOperationalReady");
-        expect(page).toContain("AdminV2RouteLoadingState");
-        expect(page).not.toContain("DeptPairedOperQuietReserve");
+        expect(page).toContain("deptOperationalRegionReady");
+        expect(page).toContain("DeptOperationalRegionLoader");
+        expect(page).not.toContain("deptPageOperationalReady");
+        expect(page).not.toContain("AdminV2RouteLoadingState");
         expect(page).toContain("data-adminv2-dept-oper-revealed");
         const operBlock = page.match(/const throughputPairedPanels = [\s\S]*?;\n\n    if \(departmentPageBlockingLoad\)/)?.[0] ?? "";
         expect(operBlock).not.toContain("adminv2-ws-soft-content-reveal");
-        expect(page).not.toMatch(/deptKpiPlacementPending \? \([\s\S]*?KPIBlock/);
     });
 });
