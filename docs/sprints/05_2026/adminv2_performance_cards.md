@@ -370,7 +370,9 @@ Lanes B and C can overlap **after A** if two implementers — do not start B bef
 | **Dependencies** | B-01. |
 | **Rollout** | PR-3 with B-01. |
 
-**PR-4.5 tighten (PERF-B-02):** Replace shape-only `deptOperPanelsRevealReady` with `deptOperationalSurfaceReady` = `deptThroughputBodyReady` + `deptAttentionBodyReady` + locked presentation. Hold paired quiet reserve until throughput rows have real summaries (no `Total —` WU placeholders), pipeline lanes exist, or confirmed empty; attention empty copy only when `deptAttentionBuckets !== null`. KPI/automations/actions rail share `deptOperationalBlockReady`; enrollment actions also wait for `enrollmentDeptRightRail` fetch settle.
+**PR-4.5 tighten (PERF-B-02):** `deptOperationalSurfaceReady` = throughput body + attention body + locked presentation; no `—` placeholder rows; attention empty only when `deptAttentionBuckets !== null`.
+
+**PR-4.6 (dept loading reset):** `deptPageOperationalReady` gates the entire `DepartmentWorkspaceBridgeShell` (KPI, paired oper, automations, actions). Until ready: stable `WorkspaceChrome` + `AdminV2RouteLoadingState` only (cold shell aligned). Nav resets clear work units, pipeline, attention, placements, and rail before re-seed.
 
 ---
 

@@ -81,9 +81,11 @@ describe("Dept paired oper loading alignment", () => {
         expect(src).toContain("DeptPairedOperQuietReserve");
     });
 
-    it("route cold shell uses quiet reserve not row skeleton", () => {
+    it("route cold shell uses blocking route loader, not partial bridge (PR-4.6)", () => {
         const cold = read("components/admin/workspace/DepartmentWorkspaceColdShell.tsx");
-        expect(cold).toContain("DeptPairedOperQuietReserve");
+        expect(cold).toContain("AdminV2RouteLoadingState");
+        expect(cold).not.toContain("DepartmentWorkspaceBridgeShell");
+        expect(cold).not.toContain("DeptPairedOperQuietReserve");
         expect(cold).not.toContain("DeptPairedOperQueuesSkeleton");
     });
 });
@@ -147,38 +149,32 @@ describe("Dept operational panel render-state", () => {
         );
     });
 
-    it("holds paired panels until throughput body, attention body, and shape lock are ready (PR-4.5)", () => {
+    it("blocks entire operational bridge until deptPageOperationalReady (PR-4.6)", () => {
         const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
+        expect(src).toContain("deptPageOperationalReady");
         expect(src).toContain("deptOperationalSurfaceReady");
         expect(src).toContain("deptThroughputBodyReady");
         expect(src).toContain("deptAttentionBodyReady");
-        expect(src).toContain("deptExpectsPipelineLanes");
         expect(src).not.toContain("deptOperPanelsRevealReady");
         expect(src).not.toContain("deptThroughputRevealReady");
-        expect(src).not.toContain("deptThroughputPanelReady");
+        expect(src).not.toContain("deptOperationalBlockReady");
+        expect(src).not.toContain("DeptPairedOperQuietReserve");
+        expect(src).not.toContain("WorkspaceQuietKpiReserve");
         expect(src).not.toContain("totalPending=");
-        expect(src).toMatch(
-            /deptOperationalSurfaceReady \? \([\s\S]*?throughputPairedPanels[\s\S]*?DeptPairedOperQuietReserve/,
-        );
+        expect(src).toMatch(/!deptPageOperationalReady \? \([\s\S]*?AdminV2RouteLoadingState/);
+        expect(src).toMatch(/deptPageOperationalReady \? \([\s\S]*?DepartmentWorkspaceBridgeShell/);
+        expect(src).toMatch(/throughputSlot=\{throughputPairedPanels\}/);
         expect(src).toMatch(/deptAttentionBuckets !== null[\s\S]*?No Needs Attention types configured/);
         expect(src).toMatch(/setDeptAttentionBuckets\(null\)/);
+        expect(src).toMatch(/setDeptWorkUnits\(null\)/);
     });
 
-    it("defers enrollment actions rail until operational surface is ready", () => {
+    it("does not soft-reveal enrollment actions rail on dept page", () => {
         const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
-        expect(src).toContain("deptEnrollmentRailRevealReady");
-        expect(src).toMatch(
-            /!deptOperationalSurfaceReady \|\| !deptEnrollmentRailRevealReady \? \([\s\S]*?WorkspaceActionsRailPlaceholder/,
-        );
+        expect(src).toContain("deptEnrollmentRailResolved");
         expect(src).not.toMatch(
             /railSlot[\s\S]*?adminv2-ws-soft-content-reveal[\s\S]*?ActionsBlock/,
         );
-    });
-
-    it("defers KPI strip until operational block is ready (PERF-B-02)", () => {
-        const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
-        expect(src).toContain("deptOperationalBlockReady");
-        expect(src).toMatch(/!deptOperationalBlockReady \|\| deptKpiPlacementPending/);
     });
 
     it("fetches attention once after work units resolve (no early parallel refetch)", () => {

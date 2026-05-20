@@ -40,11 +40,13 @@ describe("adminV2LoadingGeometry", () => {
     });
 });
 
-describe("Dept loader alignment (PERF-A-02)", () => {
-    it("cold shell uses quiet oper reserve and quiet KPI reserve, not row skeletons", () => {
+describe("Dept loader alignment (PERF-A-02 / PR-4.6)", () => {
+    it("cold shell uses route loading card, not partial bridge reserves", () => {
         const cold = read("components/admin/workspace/DepartmentWorkspaceColdShell.tsx");
-        expect(cold).toContain("DeptPairedOperQuietReserve");
-        expect(cold).toContain("WorkspaceQuietKpiReserve");
+        expect(cold).toContain("AdminV2RouteLoadingState");
+        expect(cold).not.toContain("DepartmentWorkspaceBridgeShell");
+        expect(cold).not.toContain("DeptPairedOperQuietReserve");
+        expect(cold).not.toContain("WorkspaceQuietKpiReserve");
         expect(cold).not.toContain("DeptPairedOperQueuesSkeleton");
         expect(cold).not.toContain("KpiStripSkeleton");
     });
@@ -65,12 +67,14 @@ describe("Dept loader alignment (PERF-A-02)", () => {
         expect(page).not.toContain("deptThroughputRevealReady");
     });
 
-    it("dept page does not soft-reveal oper panels or KPI strip (single swap reserve → content)", () => {
+    it("dept page blocks operational bridge until deptPageOperationalReady (PR-4.6)", () => {
         const page = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
-        expect(page).toContain("DeptPairedOperQuietReserve");
+        expect(page).toContain("deptPageOperationalReady");
+        expect(page).toContain("AdminV2RouteLoadingState");
+        expect(page).not.toContain("DeptPairedOperQuietReserve");
         expect(page).toContain("data-adminv2-dept-oper-revealed");
         const operBlock = page.match(/const throughputPairedPanels = [\s\S]*?;\n\n    if \(departmentPageBlockingLoad\)/)?.[0] ?? "";
         expect(operBlock).not.toContain("adminv2-ws-soft-content-reveal");
-        expect(page).not.toMatch(/deptKpiPlacementPending \? \([\s\S]*?adminv2-ws-soft-content-reveal[\s\S]*?KPIBlock/);
+        expect(page).not.toMatch(/deptKpiPlacementPending \? \([\s\S]*?KPIBlock/);
     });
 });

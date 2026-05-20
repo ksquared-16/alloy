@@ -16,10 +16,7 @@ import { DepartmentWorkspaceBridgeShell } from "@/components/admin/workspace/Dep
 import { WorkspaceActionsRailPlaceholder } from "@/components/admin/workspace/WorkspaceActionsRailPlaceholder";
 import KPIBlock from "@/app/adminV2/components/workspace/blocks/KPIBlock";
 import { DepartmentWorkspaceColdShell } from "@/components/admin/workspace/DepartmentWorkspaceColdShell";
-import {
-    DeptPairedOperQuietReserve,
-    WorkspaceQuietKpiReserve,
-} from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
+import { AdminV2RouteLoadingState } from "@/components/admin/workspace/AdminV2RouteLoadingState";
 import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
 import ActionsBlock from "@/app/adminV2/components/workspace/blocks/ActionsBlock";
 import { useAdminDrawer, useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
@@ -57,7 +54,7 @@ import { compareNeedsAttentionBuckets } from "@/lib/opportunities/needsAttention
 
 const WORKSPACE_BASE = "/adminV2/workspace";
 
-/** Locked before oper reveal — never flips after `deptOperationalSurfaceReady` (PERF-B-01 / PR-4.5). */
+/** Locked before page operational reveal — never flips after `deptPageOperationalReady` (PERF-B-01 / PR-4.6). */
 type DeptThroughputPresentation = "pipeline_lanes" | "wu_summaries" | "empty";
 
 type WorkflowKpis = {
@@ -273,18 +270,17 @@ export default function AdminV2WorkspaceDepartmentPage() {
         return first ? { id: first.id } : null;
     }, [deptWorkUnits]);
 
-    /** Session cache → shell before paint (revisit dept/workspace round-trips feel instant). */
+    /** Session cache → title only before paint; operational state clears until network confirms (PR-4.6). */
     useLayoutEffect(() => {
         seededDeptShellRef.current = false;
         deptActionsPerfKeyRef.current = null;
         deptKpisPerfKeyRef.current = null;
-        if (!departmentId || !orgId) return;
-        const hit = readDepartmentPageCache(orgId, departmentId, principalUserId, accessScopeFingerprint);
-        if (!hit || hit.dept.id !== departmentId) return;
-        seededDeptShellRef.current = true;
-        setDept(hit.dept);
-        setDeptWorkUnits(hit.workUnits);
-        /** Never hydrate numeric summaries from sessionStorage — avoids stale org-wide counts when scope narrows. */
+        setDeptThroughputPresentation(null);
+        setDeptOperPanelTitleLocked("Work Unit Queue");
+        setDeptPipelineExecSurface(null);
+        setDeptPipelineExecLoading(false);
+        setDeptWorkUnits(null);
+        setDeptWorkUnitsError(null);
         setDeptWorkUnitSummaries({});
         setDeptQueueSummariesLoading(true);
         setDeptQueueSummariesError(null);
@@ -292,7 +288,18 @@ export default function AdminV2WorkspaceDepartmentPage() {
         setDeptAttentionBucketsLoading(false);
         setDeptAttentionBucketsError(null);
         setDeptAttentionPreviewTotal(null);
+        setDeptAttentionSemantics(null);
+        setDeptBucketCountScope(null);
         setEnrollmentDeptRightRail(null);
+        setDeptPlacementRows(undefined);
+        setDeptScopeHasPlacements(false);
+
+        if (!departmentId || !orgId) return;
+        const hit = readDepartmentPageCache(orgId, departmentId, principalUserId, accessScopeFingerprint);
+        if (!hit || hit.dept.id !== departmentId) return;
+        seededDeptShellRef.current = true;
+        setDept(hit.dept);
+        setDeptWorkUnits(hit.workUnits);
         setDeptLoading(false);
         perfDeptLoad({
             phase: "shell_seed",
@@ -302,7 +309,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
             department_id: departmentId,
             client_cache_hit: true,
         });
-    }, [departmentId, orgId, principalUserId, accessScopeFingerprint]);
+    }, [departmentId, orgId, principalUserId, accessScopeFingerprint, selectedSiteId]);
 
     useEffect(() => {
         if (!globalAssistant || !departmentId) return;
@@ -402,7 +409,15 @@ export default function AdminV2WorkspaceDepartmentPage() {
         setDeptAttentionBucketsLoading(false);
         setDeptAttentionBucketsError(null);
         setDeptAttentionPreviewTotal(null);
+        setDeptAttentionSemantics(null);
+        setDeptBucketCountScope(null);
         setEnrollmentDeptRightRail(null);
+        setDeptThroughputPresentation(null);
+        setDeptOperPanelTitleLocked("Work Unit Queue");
+        setDeptPipelineExecSurface(null);
+        setDeptPipelineExecLoading(false);
+        setDeptPlacementRows(undefined);
+        setDeptScopeHasPlacements(false);
 
         const summariesRoute = appendWorkspaceSiteToUrl(
             `/api/admin/departments/${encodeURIComponent(departmentId)}/work-unit-queue-summaries?include_previews=false&count_mode=exact&summary_mode=priority&priority_budget=5`,
@@ -886,20 +901,50 @@ export default function AdminV2WorkspaceDepartmentPage() {
         deptWorkUnitsError,
     ]);
 
-    /**
-     * One operational surface reveal — shape, throughput body, and attention body all ready (PR-4.5).
-     * Replaces early reveal of empty panel chrome with `—` placeholder rows.
-     */
     const deptOperationalSurfaceReady =
         deptThroughputBodyReady && deptAttentionBodyReady && deptThroughputPresentation != null;
 
-    /** KPI and automations share the oper surface gate; enrollment actions also wait for rail fetch to settle. */
-    const deptOperationalBlockReady = deptOperationalSurfaceReady;
-    const deptEnrollmentRailRevealReady =
-        !isEnrollmentLikeDepartmentKey(deptKey) || enrollmentDeptRightRail !== null;
+    const deptWorkUnitsResolved = deptWorkUnits !== null || deptWorkUnitsError != null;
+
+    const deptEnrollmentRailResolved =
+        !isEnrollmentLikeDepartmentKey(deptKey) ||
+        !primaryWorkUnit?.id ||
+        enrollmentDeptRightRail !== null;
+
+    /**
+     * Conservative gate — entire operational bridge hidden until all inputs settle (PR-4.6).
+     * No partial KPI/panel/action chrome; one loader then full `DepartmentWorkspaceBridgeShell`.
+     */
+    const deptPageOperationalReady = useMemo(() => {
+        if (!departmentId || !dept?.id || departmentPageBlockingLoad) return false;
+        if (!deptWorkUnitsResolved) return false;
+        if (deptExpectsPipelineLanes && deptPipelineExecLoading) return false;
+        if (!deptOperationalSurfaceReady) return false;
+        if (deptKpiPlacementPending) return false;
+        if (!deptEnrollmentRailResolved) return false;
+        return true;
+    }, [
+        departmentId,
+        dept?.id,
+        departmentPageBlockingLoad,
+        deptWorkUnitsResolved,
+        deptExpectsPipelineLanes,
+        deptPipelineExecLoading,
+        deptOperationalSurfaceReady,
+        deptKpiPlacementPending,
+        deptEnrollmentRailResolved,
+    ]);
+
+    const deptConfirmedNoWorkUnits =
+        deptWorkUnits !== null && deptWorkUnits.length === 0 && !deptWorkUnitsError;
 
     useEffect(() => {
-        if (!isEnrollmentLikeDepartmentKey(deptKey) || !departmentId || !primaryWorkUnit?.id) {
+        if (
+            !isEnrollmentLikeDepartmentKey(deptKey) ||
+            !departmentId ||
+            !primaryWorkUnit?.id ||
+            !deptWorkUnitsResolved
+        ) {
             setEnrollmentDeptRightRail(null);
             return;
         }
@@ -920,7 +965,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         return () => {
             cancelled = true;
         };
-    }, [deptKey, departmentId, primaryWorkUnit?.id]);
+    }, [deptKey, departmentId, primaryWorkUnit?.id, deptWorkUnitsResolved]);
 
     useEffect(() => {
         if (!isEnrollmentLikeDepartmentKey(deptKey) || !departmentId || enrollmentDeptRightRail === null) return;
@@ -1037,6 +1082,13 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                             <div className="rounded-lg border border-admin-border bg-white/50 px-3 py-2 text-xs text-alloy-ember">
                                 Failed to load work units: {deptWorkUnitsError}
+                            </div>
+                        </li>
+                    ) : null}
+                    {deptQueueSummariesError ? (
+                        <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
+                            <div className="rounded-lg border border-admin-border bg-white/50 px-3 py-2 text-xs text-alloy-ember">
+                                {deptQueueSummariesError}
                             </div>
                         </li>
                     ) : null}
@@ -1170,8 +1222,6 @@ export default function AdminV2WorkspaceDepartmentPage() {
             title={title}
             subtitle=""
         >
-            {deptWorkUnitsError && dept ? <p className="text-sm text-alloy-ember px-1">{deptWorkUnitsError}</p> : null}
-            {deptQueueSummariesError && dept ? <p className="text-sm text-alloy-ember px-1">{deptQueueSummariesError}</p> : null}
             {!dept ? (
                 <div
                     className="rounded-xl border px-4 py-10 text-center text-sm text-alloy-ember/90"
@@ -1180,26 +1230,28 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     {deptError ??
                         "This department could not be loaded. Use the workspace link above to pick another department."}
                 </div>
+            ) : deptConfirmedNoWorkUnits ? (
+                <div
+                    className="rounded-xl border px-4 py-10 text-center text-sm text-alloy-midnight/55"
+                    style={{ borderColor: "var(--d-border, rgba(39,63,82,0.14))" }}
+                >
+                    No configured Work Unit UI was found for this department.
+                </div>
+            ) : !deptPageOperationalReady ? (
+                <AdminV2RouteLoadingState
+                    variant="department"
+                    showRibbon={false}
+                    title="Loading department operations"
+                    description="Fetching queues, attention, and metrics…"
+                />
             ) : primaryWorkUnit ? (
                 <DepartmentWorkspaceBridgeShell
                     departmentKey={deptKey}
                     briefTitle={title}
                     briefSubtitle=""
                     signalsSlot={null}
-                    kpiSlot={
-                        !deptOperationalBlockReady || deptKpiPlacementPending ? (
-                            <WorkspaceQuietKpiReserve id="dept-kpi-quiet-reserve" />
-                        ) : kpis.length ? (
-                            <KPIBlock kpis={kpis} maxVisible={5} />
-                        ) : null
-                    }
-                    throughputSlot={
-                        deptOperationalSurfaceReady ? (
-                            throughputPairedPanels
-                        ) : (
-                            <DeptPairedOperQuietReserve throughputTitle={deptOperPanelTitleLocked} />
-                        )
-                    }
+                    kpiSlot={kpis.length ? <KPIBlock kpis={kpis} maxVisible={5} /> : null}
+                    throughputSlot={throughputPairedPanels}
                     attentionSlot={null}
                     contextSlot={
                         <div
@@ -1208,7 +1260,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         >
                             <AutomationWorkflowsBlock
                                 title="Automations"
-                                kpisLoading={!deptOperationalBlockReady || workflowKpisLoading}
+                                kpisLoading={workflowKpisLoading}
                                 kpis={{
                                     runs_today: workflowKpis.runs_today,
                                     failed_last_7d: workflowKpis.failed_last_7d,
@@ -1223,9 +1275,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     }
                     railSlot={
                         isEnrollmentLikeDepartmentKey(deptKey) && primaryWorkUnit ? (
-                            !deptOperationalSurfaceReady || !deptEnrollmentRailRevealReady ? (
-                                <WorkspaceActionsRailPlaceholder />
-                            ) : (enrollmentDepartmentRailModel?.systemActions?.length ?? 0) > 0 ? (
+                            (enrollmentDepartmentRailModel?.systemActions?.length ?? 0) > 0 ? (
                                 <ActionsBlock
                                     model={enrollmentDepartmentRailModel!}
                                     onAction={onEnrollmentDeptRailAction}
