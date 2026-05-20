@@ -25,7 +25,28 @@ describe("dept operational bootstrap runtime hardening", () => {
         expect(src).toContain("pickDeptPipelineWorkUnit");
         expect(src).toContain("logDeptOperationalBootstrapPerf");
         expect(src).toContain("summaryWorkUnitIds");
-        expect(src).toContain("attention_candidate_fetch_ms");
+        expect(src).toContain("attention_query_ms");
+        expect(src).toContain("attention_candidate_count");
+        expect(src).toContain("attention_rules_ms");
+    });
+
+    it("dept attention lane reuses single resolver pass (no double resolve in bucket builder)", () => {
+        const bucketPath = path.join(
+            repoRoot,
+            "web/lib/workspace/buildWorkUnitScopedNeedsAttentionLaneBuckets.ts"
+        );
+        const src = fs.readFileSync(bucketPath, "utf8");
+        expect(src).toContain("resolved_by_id");
+        expect(src).toContain('columnSelect: "resolver_minimal"');
+        expect(src).not.toContain("resolveOpportunityAttention(");
+    });
+
+    it("loadOpportunityNeedsAttentionRows exposes resolved_by_id for bucket filters", () => {
+        const svcPath = path.join(repoRoot, "web/lib/queues/QueueService.ts");
+        const src = fs.readFileSync(svcPath, "utf8");
+        expect(src).toContain("resolved_by_id");
+        expect(src).toContain("createOpportunityAttentionResolverBatchContext");
+        expect(src).toContain("NEEDS_ATTENTION_OPPORTUNITY_SELECT_RESOLVER_MINIMAL");
     });
 
     it("bootstrap route bundles KPI placements and right-rail actions", () => {

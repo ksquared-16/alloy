@@ -78,12 +78,39 @@ export type OpportunityAttentionEntityInput = {
     monetary_value_cents?: number | string | null;
 };
 
+/** Per-request shared defs/config/time cuts — avoids recomputing terminal keys and stale thresholds per row. */
+export type OpportunityAttentionResolverBatchContext = {
+    terminalStatusKeys: Set<string>;
+    rulesV1: OpportunityAttentionRuleConfigV1;
+    nowDate: Date;
+    startTodayUtcMs: number;
+    stale2dCutMs: number;
+    stale7dCutMs: number;
+};
+
+export function createOpportunityAttentionResolverBatchContext(
+    defs: StatusDefinitionRow[],
+    config: OpportunityAttentionResolvedConfig,
+    nowMs: number
+): OpportunityAttentionResolverBatchContext {
+    const nowDate = new Date(nowMs);
+    return {
+        terminalStatusKeys: terminalOpportunityStatusKeysFromDefs(defs),
+        rulesV1: { version: 1, thresholdsHours: { ...config.thresholdsHours } },
+        nowDate,
+        startTodayUtcMs: Date.UTC(nowDate.getUTCFullYear(), nowDate.getUTCMonth(), nowDate.getUTCDate()),
+        stale2dCutMs: subtractDays(nowDate, config.highValueStaleDays).getTime(),
+        stale7dCutMs: subtractDays(nowDate, config.midFunnelStaleDays).getTime(),
+    };
+}
+
 export type OpportunityAttentionResolverInput = {
     opportunity: OpportunityAttentionEntityInput;
     nowMs: number;
     defs: StatusDefinitionRow[];
     config?: OpportunityAttentionResolvedConfig;
     optionalSignals?: OpportunityAttentionSignalInput | null;
+    batch?: OpportunityAttentionResolverBatchContext;
     /**
      * Optional row context for SLA clock fallback (status transition time when available).
      * QueueService standalone paths omit this in GATE 3.
@@ -222,8 +249,9 @@ function collectQueueLaneCodes(input: {
     row: OpportunityAttentionEntityInput;
     now: Date;
     config: OpportunityAttentionResolvedConfig;
+    batch?: OpportunityAttentionResolverBatchContext;
 }): OpportunityAttentionReasonCode[] {
-    const { row, now, config } = input;
+    const { row, now, config, batch } = input;
     const out: OpportunityAttentionReasonCode[] = [];
 
     const updatedAt = row.updated_at ? new Date(row.updated_at) : null;
@@ -237,31 +265,32 @@ function collectQueueLaneCodes(input: {
     }
 
     const md = opportunityMetadataRecord(row.metadata);
+    const nowMs = batch?.nowDate.getTime() ?? now.getTime();
 
     const nfu = parseMetadataInstantMs(md, "next_follow_up_at");
-    if (nfu != null && nfu < now.getTime()) {
+    if (nfu != null && nfu < nowMs) {
         out.push("follow_up_date_passed");
     }
 
     const commitmentDue = parseMetadataInstantMs(md, "commitment_due_at");
-    if (commitmentDue != null && commitmentDue < now.getTime()) {
+    if (commitmentDue != null && commitmentDue < nowMs) {
         out.push("overdue_commitment");
     }
 
     if (sk === "tour_scheduled") {
         const tourMs = md ? parseTourDateYmdUtcMs(md.tour_date) : null;
-        const startTodayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+        const startTodayUtc = batch?.startTodayUtcMs ?? Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
         if (tourMs != null && tourMs < startTodayUtc) {
             out.push("tour_date_passed");
         }
     }
 
-    const stale2dCut = subtractDays(now, config.highValueStaleDays).getTime();
+    const stale2dCut = batch?.stale2dCutMs ?? subtractDays(now, config.highValueStaleDays).getTime();
     if (OPPORTUNITY_HIGH_VALUE_STALE_STATUS_KEY_SET.has(sk) && updatedAt.getTime() < stale2dCut) {
         out.push("high_value_stale");
     }
 
-    const stale7dCut = subtractDays(now, config.midFunnelStaleDays).getTime();
+    const stale7dCut = batch?.stale7dCutMs ?? subtractDays(now, config.midFunnelStaleDays).getTime();
     if (QUEUE_LANE_MID_FUNNEL_STALE_STATUS_KEYS.has(sk) && updatedAt.getTime() < stale7dCut) {
         out.push("mid_funnel_stale");
     }
@@ -276,8 +305,7 @@ function collectQueueLaneCodes(input: {
     return [...new Set(out)];
 }
 
-function collectWaitingCodes(md: Record<string, unknown> | null): OpportunityAttentionReasonCode[] {
-    const eo = parseEnrollmentOperationalFromMetadata(md);
+function collectWaitingCodesFromEo(eo: EnrollmentOperationalValidated): OpportunityAttentionReasonCode[] {
     if (eo.wait_bucket === "none") return [];
     return [waitBucketToAttentionReasonCode(eo.wait_bucket)];
 }
@@ -343,11 +371,10 @@ function toResolvedList(
  * Single implementation for QueueService + workspace + APIs.
  */
 export function resolveOpportunityAttention(input: OpportunityAttentionResolverInput): OpportunityAttentionResult {
-    const now = new Date(input.nowMs);
     const cfg = input.config ?? createDefaultOpportunityAttentionResolvedConfig();
-
-    const rulesV1: OpportunityAttentionRuleConfigV1 = { version: 1, thresholdsHours: { ...cfg.thresholdsHours } };
-    const terminalStatusKeys = terminalOpportunityStatusKeysFromDefs(input.defs);
+    const batch =
+        input.batch ?? createOpportunityAttentionResolverBatchContext(input.defs, cfg, input.nowMs);
+    const now = batch.nowDate;
 
     const md = opportunityMetadataRecord(input.opportunity.metadata);
     const eo = parseEnrollmentOperationalFromMetadata(md);
@@ -356,17 +383,18 @@ export function resolveOpportunityAttention(input: OpportunityAttentionResolverI
         row: input.opportunity,
         now,
         config: cfg,
+        batch,
     });
 
     const life = collectLifecycleCode({
         row: input.opportunity,
         defs: input.defs,
-        terminalStatusKeys,
-        rules: rulesV1,
+        terminalStatusKeys: batch.terminalStatusKeys,
+        rules: batch.rulesV1,
         nowMs: input.nowMs,
     });
 
-    const waitingCodes = collectWaitingCodes(md);
+    const waitingCodes = collectWaitingCodesFromEo(eo);
 
     const merged: OpportunityAttentionReasonCode[] = [...queueCodes];
     if (life) merged.push(life);

@@ -5,8 +5,12 @@ export type DeptBootstrapPerfPhases = {
     shared_bootstrap_ms?: number;
     queue_summaries_ms?: number;
     attention_ms?: number;
+    /** @deprecated Use attention_query_ms — kept for log continuity. */
     attention_candidate_fetch_ms?: number;
+    attention_query_ms?: number;
+    attention_candidate_count?: number;
     attention_resolver_ms?: number;
+    attention_rules_ms?: number;
     attention_bucket_merge_ms?: number;
     pipeline_ms?: number;
     pipeline_lane_queues_ms?: number;

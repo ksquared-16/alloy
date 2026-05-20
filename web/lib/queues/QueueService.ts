@@ -34,7 +34,12 @@ import {
     opportunityAttentionResultMatchesBucket,
     resolveNeedsAttentionBucketsWithPrecedence,
 } from "@/lib/opportunities/needsAttentionBuckets";
-import { resolveOpportunityAttention, type OpportunityAttentionEntityInput } from "@/lib/opportunities/opportunityAttentionResolver";
+import {
+    createOpportunityAttentionResolverBatchContext,
+    resolveOpportunityAttention,
+    type OpportunityAttentionEntityInput,
+    type OpportunityAttentionResult,
+} from "@/lib/opportunities/opportunityAttentionResolver";
 import { buildNeedsAttentionSuggestion } from "@/lib/agent/needsAttentionSuggestion/buildNeedsAttentionSuggestion";
 import type { AttentionSuggestionQueuePreviewV1 } from "@/lib/agent/needsAttentionSuggestion/types";
 import { buildOperationalSummaryDeterministic, toOperationalSummaryQueuePreview } from "@/lib/ai/buildOperationalSummary";
@@ -1401,6 +1406,13 @@ function buildOpportunityNeedsAttentionCandidateOrExpr(now: Date, minLifecycleSt
 /** Cap for in-memory needs_attention evaluation (avoids fragile nested `or`/`and` PostgREST URL parsing). */
 export const NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP = 5000;
 
+const NEEDS_ATTENTION_OPPORTUNITY_SELECT_DEFAULT =
+    "id, name, status_key, quote_total, estimated_price_cents, monetary_value_cents, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at";
+
+/** Dept bucket / count paths — same resolver fields, smaller row payload. */
+export const NEEDS_ATTENTION_OPPORTUNITY_SELECT_RESOLVER_MINIMAL =
+    "id, status_key, quote_total, estimated_price_cents, monetary_value_cents, customer_id, primary_person_id, primary_contact_id, metadata, created_at, updated_at";
+
 /**
  * When queue summaries only need counts (department cards), use a smaller cap so we do not pull 5k rows
  * per work unit. Count may under-count if more opportunities match than this cap (same class as the 5k cap).
@@ -1435,21 +1447,28 @@ export async function loadOpportunityNeedsAttentionRows(params: {
     /** Default full cap; use {@link NEEDS_ATTENTION_COUNT_ONLY_FETCH_CAP} for count-only summaries. */
     fetchCap?: number;
     recordScopeConstraints?: RecordScopeConstraints | null;
+    /** Smaller SELECT for bucket/count paths that only run the attention resolver. */
+    columnSelect?: "default" | "resolver_minimal";
+    perf?: { query_ms?: number; resolver_ms?: number };
 }): Promise<{
     filtered: OpportunityRowPreview[];
     raw_candidates_fetched: number;
     fetch_cap: number;
+    /** One resolver pass per fetched row — reuse for bucket merge / bucket filters. */
+    resolved_by_id: Record<string, OpportunityAttentionResult>;
 }> {
     const cap = params.fetchCap ?? NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP;
     const attentionConfig = params.attentionConfig;
     const minLifecycleH = minLifecycleStaleHoursFromResolvedConfig(attentionConfig.thresholdsHours);
     const candidateOr = buildOpportunityNeedsAttentionCandidateOrExpr(params.now, minLifecycleH);
     const nowMs = params.now.getTime();
+    const selectCols: string =
+        params.columnSelect === "resolver_minimal"
+            ? NEEDS_ATTENTION_OPPORTUNITY_SELECT_RESOLVER_MINIMAL
+            : NEEDS_ATTENTION_OPPORTUNITY_SELECT_DEFAULT;
     let q = params.supabase
         .from("opportunities")
-        .select(
-            "id, name, status_key, quote_total, estimated_price_cents, monetary_value_cents, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at"
-        )
+        .select(selectCols)
         .eq("org_id", params.orgId)
         .eq("work_unit_id", params.workUnitId)
         .or(candidateOr) as any;
@@ -1460,12 +1479,21 @@ export async function loadOpportunityNeedsAttentionRows(params: {
     for (const p of plans) {
         q = q.order(p.column, { ascending: p.ascending });
     }
+    const tQuery0 = Date.now();
     const { data, error } = await q.limit(cap);
+    if (params.perf) params.perf.query_ms = Date.now() - tQuery0;
     if (error) {
         throw new QueueServiceError(error.message, 400, "DB_ERROR");
     }
     const rawRows = (data ?? []) as OpportunityRowPreview[];
-    const attentionByRowId = new Map<string, ReturnType<typeof resolveOpportunityAttention>>();
+    const batch = createOpportunityAttentionResolverBatchContext(
+        params.opportunityStatusDefs,
+        attentionConfig,
+        nowMs
+    );
+    const tResolver0 = Date.now();
+    const attentionByRowId = new Map<string, OpportunityAttentionResult>();
+    const resolved_by_id: Record<string, OpportunityAttentionResult> = {};
     const filtered: OpportunityRowPreview[] = [];
     for (const r of rawRows) {
         const attention = resolveOpportunityAttention({
@@ -1474,15 +1502,19 @@ export async function loadOpportunityNeedsAttentionRows(params: {
             config: attentionConfig,
             nowMs,
             optionalSignals: null,
+            batch,
         });
+        resolved_by_id[String(r.id)] = attention;
         if (!attention.needs_attention) continue;
         attentionByRowId.set(String(r.id), attention);
         filtered.push(r);
     }
+    if (params.perf) params.perf.resolver_ms = Date.now() - tResolver0;
     return {
         filtered: sortNeedsAttentionFilteredRows(filtered, attentionByRowId, params.sort),
         raw_candidates_fetched: rawRows.length,
         fetch_cap: cap,
+        resolved_by_id,
     };
 }
 
@@ -2710,13 +2742,14 @@ export async function getWorkUnitQueueItems(params: {
             if (bucketCfg) {
                 matched = matched.filter((r) =>
                     opportunityAttentionResultMatchesBucket(
-                        resolveOpportunityAttention({
-                            opportunity: opportunityPreviewToResolverEntity(r),
-                            defs: effectiveStatusDefs,
-                            config: attentionConfigResolved,
-                            nowMs: refUtc.getTime(),
-                            optionalSignals: null,
-                        }),
+                        attentionLoadPack.resolved_by_id[String(r.id)] ??
+                            resolveOpportunityAttention({
+                                opportunity: opportunityPreviewToResolverEntity(r),
+                                defs: effectiveStatusDefs,
+                                config: attentionConfigResolved,
+                                nowMs: refUtc.getTime(),
+                                optionalSignals: null,
+                            }),
                         bucketCfg,
                     ),
                 );

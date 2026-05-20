@@ -56,7 +56,13 @@ export async function loadDeptAttentionPreviewServer(params: {
     recordScopeImpossible?: boolean;
     recordScopeConstraints?: RecordScopeConstraints | null;
     opportunityStatusDefs?: StatusDefinitionRow[];
-    attentionPerf?: { candidate_fetch_ms?: number; resolver_ms?: number; bucket_merge_ms?: number };
+    attentionPerf?: {
+        rules_ms?: number;
+        query_ms?: number;
+        resolver_ms?: number;
+        bucket_merge_ms?: number;
+        candidate_count?: number;
+    };
 }): Promise<DeptAttentionPreviewPayload> {
     const { supabase, orgId, departmentId, departmentMetadata, accessDim } = params;
 

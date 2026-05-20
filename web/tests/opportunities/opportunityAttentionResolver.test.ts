@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
 import {
+    createOpportunityAttentionResolverBatchContext,
     resolveOpportunityAttention,
     OPPORTUNITY_ATTENTION_REASON_PRIORITY_ORDER,
     OPPORTUNITY_ATTENTION_RESOLVER_VERSION,
@@ -382,5 +383,29 @@ describe("resolveOpportunityAttention", () => {
             defs: [defFor("contacted", "qualification")],
         });
         expect(r.primary_reason?.code).toBe("blocked_internal");
+    });
+
+    it("batch context matches per-call resolver output", () => {
+        const nowMs = Date.parse("2026-06-01T12:00:00.000Z");
+        const cfg = createDefaultOpportunityAttentionResolvedConfig();
+        const defs = [defFor("contacted", "qualification")];
+        const opportunity = {
+            id: "1",
+            status_key: "contacted",
+            created_at: "2026-05-01T12:00:00.000Z",
+            updated_at: "2026-05-20T12:00:00.000Z",
+            metadata: {
+                next_follow_up_at: "2026-05-30T12:00:00.000Z",
+                enrollment_operational: { wait_bucket: "waiting_on_staff", wait_since: "2026-05-31T12:00:00.000Z" },
+            },
+            customer_id: "c1",
+            primary_person_id: "p1",
+        };
+        const batch = createOpportunityAttentionResolverBatchContext(defs, cfg, nowMs);
+        const baseline = resolveOpportunityAttention({ opportunity, nowMs, defs, config: cfg });
+        const batched = resolveOpportunityAttention({ opportunity, nowMs, defs, config: cfg, batch });
+        expect(batched.needs_attention).toBe(baseline.needs_attention);
+        expect(batched.primary_reason?.code).toBe(baseline.primary_reason?.code);
+        expect(batched.reasons.map((r) => r.code)).toEqual(baseline.reasons.map((r) => r.code));
     });
 });

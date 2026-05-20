@@ -172,9 +172,11 @@ export async function loadDeptOperationalBootstrap(params: {
     const attentionP = (async () => {
         const t0 = Date.now();
         const attentionPerf: {
-            candidate_fetch_ms?: number;
+            rules_ms?: number;
+            query_ms?: number;
             resolver_ms?: number;
             bucket_merge_ms?: number;
+            candidate_count?: number;
         } = {};
         const out = await loadDeptAttentionPreviewServer({
             supabase,
@@ -190,7 +192,10 @@ export async function loadDeptOperationalBootstrap(params: {
             attentionPerf,
         });
         phases.attention_ms = Date.now() - t0;
-        phases.attention_candidate_fetch_ms = attentionPerf.candidate_fetch_ms;
+        phases.attention_rules_ms = attentionPerf.rules_ms;
+        phases.attention_query_ms = attentionPerf.query_ms;
+        phases.attention_candidate_fetch_ms = attentionPerf.query_ms;
+        phases.attention_candidate_count = attentionPerf.candidate_count;
         phases.attention_resolver_ms = attentionPerf.resolver_ms;
         phases.attention_bucket_merge_ms = attentionPerf.bucket_merge_ms;
         return out;

@@ -387,13 +387,17 @@ Optional **fast-follow bucket** (still out of sprint unless scope amended): serv
 | No stale WU rows | Clear lane rows on WU id change |
 | No duplicate auth storms | Single gate per bootstrap |
 
-### Known remaining bottleneck (dept)
+### Needs Attention perf (dept bootstrap — doctrine-safe)
 
-- **`attention_ms`** inside bootstrap (~60–80% of oper loader): `loadOpportunityNeedsAttentionRows` + resolver — correct; optimize only with queue-preserving backend work later.
+Dept **`attention_ms`** is dominated by **`loadOpportunityNeedsAttentionRows`** (SQL candidate OR + cap) + **`resolveOpportunityAttention`** per fetched row. Optimizations **must not** change qualification, bucket totals, or reason categories.
+
+**Allowed (implemented):** one resolver pass per row (reuse `resolved_by_id` for bucket merge); request-local **`createOpportunityAttentionResolverBatchContext`** (terminal keys, lifecycle rules, stale/tour day cuts); **`resolver_minimal`** SELECT for dept lane counts; finer `[dept-bootstrap-perf]` fields: `attention_query_ms`, `attention_resolver_ms`, `attention_rules_ms`, `attention_candidate_count`, `attention_bucket_merge_ms`.
+
+**Still costly / next only with schema or index work:** wide PostgREST `.or(candidateOr)` over `opportunities` up to **5000** rows; per-row metadata parse + SLA/priority in resolver. Do **not** lower the list cap or use approximate counts for dept oper reveal.
 
 ### Dept readiness
 
-**`/dept` is ready to use as the canonical AdminV2 runtime template** for work-unit, pending staging sign-off on: Today's Focus digits, no triple actions on happy path, `[dept-bootstrap-perf]` attention breakdown.
+**`/dept` is ready to use as the canonical AdminV2 runtime template** for work-unit, pending staging sign-off on: Today's Focus digits, no triple actions on happy path, `[dept-bootstrap-perf]` attention breakdown (`attention_query_ms` vs `attention_resolver_ms`).
 
 ---
 

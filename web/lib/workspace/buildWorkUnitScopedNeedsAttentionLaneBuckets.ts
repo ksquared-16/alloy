@@ -3,18 +3,14 @@ import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import { accessScopeRestrictsData, resolveRecordScopeConstraints, type RecordScopeConstraints } from "@/lib/admin/accessScope";
 import { fetchEffectiveStatusDefinitions, type StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
 import { resolveOpportunityAttentionConfigFromMetadata } from "@/lib/opportunities/opportunityAttentionConfig";
-import { resolveOpportunityAttention, type OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
+import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
 import {
     applyAttentionConfigLabelsToBuckets,
     bucketCountsFromResolverMatches,
     resolveNeedsAttentionBucketsWithPrecedence,
     type NeedsAttentionBucketWithCount,
 } from "@/lib/opportunities/needsAttentionBuckets";
-import {
-    loadOpportunityNeedsAttentionRows,
-    NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP,
-    opportunityPreviewToResolverEntity,
-} from "@/lib/queues/QueueService";
+import { loadOpportunityNeedsAttentionRows, NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP } from "@/lib/queues/QueueService";
 import { summarizeAttentionReasonCounts, type AttentionReasonCountSummary } from "@/lib/workspace/attentionReasonCountsSummary";
 import { buildQueueServiceAttentionSemantics, type QueueServiceOpportunityNeedsAttentionSemantics } from "@/lib/workspace/opportunityAttentionCountSemantics";
 
@@ -35,7 +31,13 @@ export async function buildWorkUnitScopedNeedsAttentionLaneBuckets(params: {
     recordScopeConstraints?: RecordScopeConstraints | null;
     opportunityStatusDefs?: StatusDefinitionRow[];
     /** Dept bootstrap perf attribution (optional). */
-    perf?: { candidate_fetch_ms?: number; resolver_ms?: number; bucket_merge_ms?: number };
+    perf?: {
+        rules_ms?: number;
+        query_ms?: number;
+        resolver_ms?: number;
+        bucket_merge_ms?: number;
+        candidate_count?: number;
+    };
 }): Promise<{
     needs_attention_buckets: NeedsAttentionBucketWithCount[];
     /** Unique inquiries matching resolver membership (same set as unfiltered needs_attention tab head). */
@@ -90,15 +92,17 @@ export async function buildWorkUnitScopedNeedsAttentionLaneBuckets(params: {
         scopeFilter = c;
     }
 
+    const tRules0 = Date.now();
     const oppDefs =
         params.opportunityStatusDefs ??
         (await fetchEffectiveStatusDefinitions(supabase, orgId, "opportunities", { activeOnly: true }));
+    if (params.perf) params.perf.rules_ms = Date.now() - tRules0;
+
     const attentionConfig = resolveOpportunityAttentionConfigFromMetadata(workUnitMetadata ?? null);
     const refUtc = new Date();
-    const nowMs = refUtc.getTime();
     const sort = [{ column: "updated_at", ascending: true as const }];
 
-    const tFetch0 = Date.now();
+    const loadPerf: { query_ms?: number; resolver_ms?: number } = {};
     const loadOut = await loadOpportunityNeedsAttentionRows({
         supabase,
         orgId,
@@ -108,25 +112,22 @@ export async function buildWorkUnitScopedNeedsAttentionLaneBuckets(params: {
         opportunityStatusDefs: oppDefs,
         attentionConfig,
         recordScopeConstraints: scopeFilter,
+        columnSelect: "resolver_minimal",
+        perf: loadPerf,
     });
-    if (params.perf) params.perf.candidate_fetch_ms = Date.now() - tFetch0;
+    if (params.perf) {
+        params.perf.query_ms = loadPerf.query_ms;
+        params.perf.resolver_ms = loadPerf.resolver_ms;
+        params.perf.candidate_count = loadOut.raw_candidates_fetched;
+    }
 
-    const tResolver0 = Date.now();
     const resolver_matches: { resolved: OpportunityAttentionResult }[] = [];
     for (const row of loadOut.filtered) {
-        const resolved = resolveOpportunityAttention({
-            opportunity: opportunityPreviewToResolverEntity(row),
-            defs: oppDefs,
-            config: attentionConfig,
-            nowMs,
-            optionalSignals: null,
-        });
-        if (resolved.needs_attention && resolved.primary_reason != null) {
+        const resolved = loadOut.resolved_by_id[String(row.id)];
+        if (resolved?.needs_attention && resolved.primary_reason != null) {
             resolver_matches.push({ resolved });
         }
     }
-
-    if (params.perf) params.perf.resolver_ms = Date.now() - tResolver0;
 
     const tBucket0 = Date.now();
     const attention_reason_counts = summarizeAttentionReasonCounts(
