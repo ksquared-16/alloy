@@ -445,9 +445,25 @@ BEFORE (client):
 
 AFTER (client):
   [auth] operational-bootstrap ──► apply dept + wu + summaries + attention + pipeline_surface
-  (idle) sidebar, labels, AI, tasks, …
-  (post-oper) actions, KPI placements
+        + kpi_placements + right_rail_actions (server parallel)
+  (idle) sidebar, labels, AI, tasks, workflow, …
+  (UI) oper reveal uses prefetched rail; KPI strip uses placements + synthesized summaries
 ```
+
+---
+
+### PERF-B-07 — Dept closeout (KPI strip + template lock) — **DONE**
+
+| Field | Content |
+|-------|---------|
+| **Lane** | B |
+| **Goal** | Lock `/dept` as canonical runtime template; fix Today's Focus `—` when bootstrap has oper data. |
+| **Root cause of KPI `—`** | Enrollment bootstrap skips per-WU queue summaries; `resolveKpisForDepartment` still read `deptWorkUnitSummaries` → missing keys → `—`. |
+| **Fix** | `synthesizeDeptKpiWorkUnitSummaries` merges attention `total` + pipeline lane counts into KPI summary map after bootstrap apply. |
+| **Right rail** | `right_rail_actions` in bootstrap; `enrollmentRightRailPrefetchRef`; `GET /api/admin/actions/right-rail-bundle` fallback only. |
+| **Docs** | `adminv2_performance_scope_lock.md` — dept closeout + work-unit replication table. |
+| **Tests** | `synthesizeDeptKpiWorkUnitSummaries.test.ts`, navigation contracts. |
+| **Ready for** | Work-unit replication sprint (no WU code in this card). |
 
 ---
 

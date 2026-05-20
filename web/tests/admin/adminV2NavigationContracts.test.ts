@@ -27,6 +27,8 @@ describe("Workspace → dept transition (no root skeleton flash)", () => {
         expect(page).toContain("right_rail_work_unit_id");
         expect(page).toContain("kpi_placements");
         expect(page).toContain("enrollmentRightRailPrefetchRef");
+        expect(page).toContain("synthesizeDeptKpiWorkUnitSummaries");
+        expect(page).toContain("mergeDeptWorkUnitSummariesForKpis");
     });
 
     it("workspace root dept tiles use Link soft nav (not location.assign)", () => {

@@ -332,16 +332,16 @@ Optional **fast-follow bucket** (still out of sprint unless scope amended): serv
 2. Today's Focus + KPI quiet reserve independent of oper region.
 3. **One** `DeptOperationalRegionLoader` inside paired Pipeline + Needs Attention.
 4. Pipeline + Needs Attention reveal **together** when authoritative.
-5. Never: blank oper bodies, `Total —`, wrong enrollment WU row, stale prior-dept content, full-page oper blocker.
+5. Never: blank oper bodies, `Total —` when oper/bootstrap data exists, wrong enrollment WU row, stale prior-dept content, full-page oper blocker.
 
 ### Request-priority philosophy
 
 | Tier | When | Examples |
 |------|------|----------|
-| **P0 — oper critical** | First network round trip after dept nav | `operational-bootstrap` (preferred) or legacy: dept + work-units + summaries + attention + server pipeline probe |
-| **P1 — shell chrome** | Same navigation, non-blocking oper reveal | Session dept shell cache, bridge layout |
-| **P2 — deferred** | `requestIdleCallback` / post-oper-ready | Sidebar tree, entity-labels refresh, verticals, AI capabilities, agent activity, operational tasks, unread count |
-| **P3 — post-oper** | After `deptOperationalRegionReady` | Right-rail resolved actions, KPI placements (~120ms idle fallback) |
+| **P0 — dept bootstrap** | First network round trip after dept nav | `GET .../operational-bootstrap` — oper data + `kpi_placements` + `right_rail_actions` (one auth) |
+| **P1 — shell chrome** | Same navigation, non-blocking oper reveal | Session dept shell cache, bridge layout; workspace page stays mounted (no `workspace/loading.tsx` flash) |
+| **P2 — deferred** | `requestIdleCallback` / after nav settles | Sidebar tree, entity-labels refresh, verticals, AI capabilities, agent activity, operational tasks, unread count, workflow panels |
+| **P3 — post-oper UI only** | After `deptOperationalRegionReady` | Show prefetched right-rail actions (no new fetch on happy path); legacy KPI placements fetch only if bootstrap omits `kpi_placements` |
 
 ### Runtime hardening rules
 
@@ -359,9 +359,41 @@ Optional **fast-follow bucket** (still out of sprint unless scope amended): serv
 - Entity labels: server-hydrate in workspace layout; client refresh deferred and TTL-bounded.
 - **No `workspace/loading.tsx`** — that segment `loading.tsx` wrapped all nested routes and flashed `WorkspaceRootColdShell` on soft nav to dept. Workspace cold shell is **client-only** (`workspace/page.tsx` when `loading` and no session seed). Dept cold shell remains `dept/[departmentId]/loading.tsx` for hard refresh and dept segment Suspense.
 
-### Reuse targets (later, not this PR)
+### KPI strip data contract (dept closeout, locked)
 
-Same P0/P2 split applies to **work-unit page**, **drawer open**, and **workspace root** — use dept bootstrap pattern as template (combined server bundle + single client fetch), not a new framework.
+- Bootstrap returns `kpi_placements: { items, scope_has_placements }` — **same shape** as `GET /api/admin/workspace-kpi-placements?surface=department`.
+- Client sets `deptPlacementRows` from bootstrap before `deptTopSummaryReady`.
+- When queue summaries are **skipped** for enrollment (`enrollment_pipeline` + `needs_attention`), client **synthesizes** `deptWorkUnitSummaries` from `attention` + `pipeline_surface` via `synthesizeDeptKpiWorkUnitSummaries` so Today's Focus metrics (`ctx.dept.*`, `dept.wu_queue.total_per_work_unit`) do not show `—`.
+- Quiet reserve (`WorkspaceQuietKpiReserve`) only while `deptPlacementRows === undefined` (unresolved placements), not while summaries are empty.
+
+### Right-rail actions contract (dept closeout, locked)
+
+- Bootstrap optional query `right_rail_work_unit_id` (enrollment pipeline WU when known from cache).
+- Response includes `right_rail_actions: ResolvedActionForClient[]` from server bundle (`loadRightRailActionsBundleServer` — one auth, three surfaces).
+- Client stores in `enrollmentRightRailPrefetchRef`; applies at `deptOperationalRegionReady` without `fetchWorkspaceRightRailResolvedActions`.
+- Fallback: single `GET /api/admin/actions/right-rail-bundle` (not three `?surface=` calls).
+
+### Replication template for `/work-unit` (do not implement in dept closeout)
+
+| Dept (locked) | Work-unit target |
+|---------------|------------------|
+| Workspace stable on nav | Parent layout stable; no segment `loading.tsx` that replaces active page |
+| Dept shell + bridge immediate | WU shell + lane chrome immediate |
+| `DeptOperationalRegionLoader` only in oper region | Lane/queue loader only in oper region — not full page |
+| `operational-bootstrap` one HTTP | `work-unit-operational-bootstrap` (or equivalent) one HTTP |
+| Bundled KPI + actions + queue summaries | Bundled placements + rail actions + primary lane preview |
+| `synthesizeDeptKpiWorkUnitSummaries` pattern if summaries deferred | WU KPI synthesis from lane rows if summaries deferred |
+| Background shell deferred | Same P2 list |
+| No stale WU rows | Clear lane rows on WU id change |
+| No duplicate auth storms | Single gate per bootstrap |
+
+### Known remaining bottleneck (dept)
+
+- **`attention_ms`** inside bootstrap (~60–80% of oper loader): `loadOpportunityNeedsAttentionRows` + resolver — correct; optimize only with queue-preserving backend work later.
+
+### Dept readiness
+
+**`/dept` is ready to use as the canonical AdminV2 runtime template** for work-unit, pending staging sign-off on: Today's Focus digits, no triple actions on happy path, `[dept-bootstrap-perf]` attention breakdown.
 
 ---
 

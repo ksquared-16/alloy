@@ -48,6 +48,10 @@ import {
 import { fetchWorkflowAutomationWorkspacePanels } from "@/lib/workspace/fetchWorkflowAutomationWorkspacePanels";
 import type { WorkflowScopePartitionV1 } from "@/lib/workflows/workflowScopeMetadata";
 import { resolveKpisForDepartment } from "@/lib/kpi/resolver";
+import {
+    mergeDeptWorkUnitSummariesForKpis,
+    synthesizeDeptKpiWorkUnitSummaries,
+} from "@/lib/workspace/synthesizeDeptKpiWorkUnitSummaries";
 import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
@@ -781,6 +785,15 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         }
                         setDeptPipelineExecSurface(b.pipeline_surface ?? null);
                         setDeptPipelineExecLoading(false);
+                        const kpiSummaries = mergeDeptWorkUnitSummariesForKpis(
+                            nextSummaries,
+                            synthesizeDeptKpiWorkUnitSummaries({
+                                workUnits: wuCommit,
+                                attention: b.attention,
+                                pipelineSurface: b.pipeline_surface ?? null,
+                            })
+                        );
+                        setDeptWorkUnitSummaries(kpiSummaries);
                         setDeptQueueSummariesLoading(false);
                         setDeptAttentionBucketsLoading(false);
                         setDeptLoading(false);
@@ -809,7 +822,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             writeDepartmentPageCache(orgId, principalUserId, accessScopeFingerprint, {
                                 dept: deptCommit,
                                 workUnits: wuCommit,
-                                workUnitSummaries: nextSummaries,
+                                workUnitSummaries: kpiSummaries,
                                 summariesComplete: true,
                             });
                         }
