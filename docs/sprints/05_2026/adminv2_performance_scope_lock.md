@@ -397,7 +397,9 @@ Dept **`attention_ms`** is dominated by **`loadOpportunityNeedsAttentionRows`** 
 - Request-local **`createOpportunityAttentionResolverBatchContext`** (terminal keys, lifecycle rules, stale/tour day cuts once).
 - **`resolver_minimal`** SELECT; **`skipPostFilterSort`** on dept lane (counts do not need queue list ordering).
 - Single-pass bucket merge: precomputed reason-code **`Set`** per bucket; one reason-code set per inquiry.
-- `[dept-bootstrap-perf]` breakdown: `attention_rules_ms`, `attention_query_ms`, `attention_candidate_count`, `attention_resolver_ms`, `attention_membership_filter_ms`, `attention_bucket_merge_ms`.
+- `[dept-bootstrap-perf]` breakdown: `attention_source`, `attention_rules_ms`, `attention_query_ms`, `attention_candidate_count`, `attention_resolver_ms`, `attention_membership_filter_ms`, `attention_bucket_merge_ms`.
+
+**Log hygiene:** subtimings are stamped **only** when `attention.source === work_unit_needs_attention_lane`. Fallback `department_attention_preview` logs `attention_source` without query/resolver fields (not `undefined` noise). Check bootstrap JSON `attention.source` if server logs look wrong.
 
 **Interpret logs:** if `attention_query_ms` ≫ `attention_resolver_ms`, the bottleneck is **SQL** (wide `.or` on `opportunities`), not CPU. If `attention_resolver_ms` dominates with high `attention_candidate_count`, resolver cost scales with candidates (cap 5000).
 

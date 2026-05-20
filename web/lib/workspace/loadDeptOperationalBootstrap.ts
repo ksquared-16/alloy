@@ -193,13 +193,16 @@ export async function loadDeptOperationalBootstrap(params: {
             attentionPerf,
         });
         phases.attention_ms = Date.now() - t0;
-        phases.attention_rules_ms = attentionPerf.rules_ms;
-        phases.attention_query_ms = attentionPerf.query_ms;
-        phases.attention_candidate_fetch_ms = attentionPerf.query_ms;
-        phases.attention_candidate_count = attentionPerf.candidate_count;
-        phases.attention_membership_filter_ms = attentionPerf.membership_filter_ms;
-        phases.attention_resolver_ms = attentionPerf.resolver_ms;
-        phases.attention_bucket_merge_ms = attentionPerf.bucket_merge_ms;
+        phases.attention_source = out.source ?? "unknown";
+        if (out.source === "work_unit_needs_attention_lane") {
+            phases.attention_rules_ms = attentionPerf.rules_ms;
+            phases.attention_query_ms = attentionPerf.query_ms;
+            phases.attention_candidate_fetch_ms = attentionPerf.query_ms;
+            phases.attention_candidate_count = attentionPerf.candidate_count;
+            phases.attention_membership_filter_ms = attentionPerf.membership_filter_ms;
+            phases.attention_resolver_ms = attentionPerf.resolver_ms;
+            phases.attention_bucket_merge_ms = attentionPerf.bucket_merge_ms;
+        }
         return out;
     })();
 

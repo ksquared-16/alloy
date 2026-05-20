@@ -50,8 +50,19 @@ export async function buildWorkUnitScopedNeedsAttentionLaneBuckets(params: {
 }> {
     const { supabase, orgId, workUnitId, workUnitMetadata, departmentMetadata, accessDim = null } = params;
 
+    const stampEmptyAttentionPerf = () => {
+        if (!params.perf) return;
+        params.perf.rules_ms = 0;
+        params.perf.query_ms = 0;
+        params.perf.membership_filter_ms = 0;
+        params.perf.resolver_ms = 0;
+        params.perf.bucket_merge_ms = 0;
+        params.perf.candidate_count = 0;
+    };
+
     let scopeFilter: RecordScopeConstraints | null = params.recordScopeConstraints ?? null;
     if (params.recordScopeImpossible === true) {
+        stampEmptyAttentionPerf();
         const semantics = buildQueueServiceAttentionSemantics({
             candidateFetchCap: NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP,
             rawCandidatesFetched: 0,
@@ -73,6 +84,7 @@ export async function buildWorkUnitScopedNeedsAttentionLaneBuckets(params: {
     if (scopeFilter == null && accessDim && accessScopeRestrictsData(accessDim)) {
         const c = await resolveRecordScopeConstraints(supabase, orgId, accessDim);
         if (c.impossible) {
+            stampEmptyAttentionPerf();
             const semantics = buildQueueServiceAttentionSemantics({
                 candidateFetchCap: NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP,
                 rawCandidatesFetched: 0,
