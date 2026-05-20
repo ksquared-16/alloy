@@ -1,7 +1,7 @@
 # AdminV2 Performance + Premium UX Sprint — Step 2 Scope Lock
 
-**Date:** 2026-05-19  
-**Status:** Locked for execution (no implementation in this document)  
+**Date:** 2026-05-19 (dept runtime **closed** 2026-05-20)  
+**Status:** Locked for execution — **Lane B `/dept` runtime is the canonical reference implementation** (work-unit replication next; drawer deferred)  
 **Prior step:** Step 0 operational audit (conversation + [`adminv2_performance_rebuild_audit.md`](./adminv2_performance_rebuild_audit.md), [`adminv2_performance_deep_dive_phase0_audit.md`](./adminv2_performance_deep_dive_phase0_audit.md))
 
 **Binding governance (must not regress):**
@@ -36,7 +36,7 @@
 | Surface | Path / component | In-scope work |
 |---------|------------------|---------------|
 | Workspace root | `/adminV2/workspace` | KPI/rollup **reveal** calmness; tile refinement without flicker; loading vocabulary alignment |
-| Department | `/adminV2/workspace/dept/[departmentId]` | **Settled UX:** shell-first → oper-region loader → paired oper reveal; oper critical path trim (PERF-B-04); no full-page oper block; KPI/rail/workflow must not hold oper region |
+| Department | `/adminV2/workspace/dept/[departmentId]` | **CLOSED — canonical runtime reference:** shell-first, no root skeleton flash, oper-region reveal, single `operational-bootstrap`, bundled KPI + right rail, deferred P2 shell, nav-aware poll suppression, no duplicate queue/resolver work, synthesized KPI when summaries skipped — see Appendix closeout |
 | Work unit | `.../work-unit/[workUnitId]` | Single-authority queue load; stale-state prevention; tab/badge stability; row refresh quietness |
 | Record drawer | `AdminEntityDrawer` + `Drawer.tsx` | Open choreography; **stable chrome** load philosophy; opportunity-first premium path; reduce resize/shift |
 | Shared workspace chrome | `WorkspaceChrome`, paired oper panels, quiet reserves, `workspace.css` | Geometry alignment; animation simplification; one loading vocabulary |
@@ -373,19 +373,62 @@ Optional **fast-follow bucket** (still out of sprint unless scope amended): serv
 - Client stores in `enrollmentRightRailPrefetchRef`; applies at `deptOperationalRegionReady` without `fetchWorkspaceRightRailResolvedActions`.
 - Fallback: single `GET /api/admin/actions/right-rail-bundle` (not three `?surface=` calls).
 
-### Replication template for `/work-unit` (do not implement in dept closeout)
+### Replication template for `/work-unit` (next sprint — copy `/dept` exactly)
 
-| Dept (locked) | Work-unit target |
+**Posture:** `/work-unit` should **reuse `/dept` runtime patterns verbatim** where applicable. Smaller surface area → expect **equal or better** timings; do **not** invent a parallel client fan-out.
+
+| Dept (locked reference) | Work-unit target |
 |---------------|------------------|
 | Workspace stable on nav | Parent layout stable; no segment `loading.tsx` that replaces active page |
 | Dept shell + bridge immediate | WU shell + lane chrome immediate |
-| `DeptOperationalRegionLoader` only in oper region | Lane/queue loader only in oper region — not full page |
-| `operational-bootstrap` one HTTP | `work-unit-operational-bootstrap` (or equivalent) one HTTP |
-| Bundled KPI + actions + queue summaries | Bundled placements + rail actions + primary lane preview |
-| `synthesizeDeptKpiWorkUnitSummaries` pattern if summaries deferred | WU KPI synthesis from lane rows if summaries deferred |
-| Background shell deferred | Same P2 list |
-| No stale WU rows | Clear lane rows on WU id change |
-| No duplicate auth storms | Single gate per bootstrap |
+| `DeptOperationalRegionLoader` only in oper region | Queue-region loader only in oper region — not full page |
+| `operational-bootstrap` one HTTP | `work-unit-operational-bootstrap` (or equivalent) — **one auth**, bundled oper payload |
+| Bundled KPI + actions + queue data | Placements + rail actions + primary lane rows/summaries as needed |
+| `resolveDeptNeedsAttentionWorkUnit` doctrine | On WU page: execution WU is usually **known** (`workUnitId`); still use queue-definition awareness for NA queue tab |
+| `synthesizeDeptKpiWorkUnitSummaries` pattern | WU KPI synthesis from lane rows if summaries deferred |
+| `[dept-bootstrap-perf]`-style phases | Add `work-unit-bootstrap-perf` with oper/queue/attention breakdown |
+| Background shell deferred | Same P2 + nav suppression rules |
+| No stale lane rows | Clear queue rows/buffers on WU id change (PERF-C) |
+| No duplicate auth storms | Single `loadAdminRouteGate` per bootstrap request |
+| Drawer | **Later** — inherit work-unit runtime doctrine; out of WU replication PR |
+
+**Explicit non-goals for WU replication:** UX contract changes, drawer work, schema migrations, new global orchestrator.
+
+### `/dept` canonical runtime reference (CLOSED 2026-05-20)
+
+**`/adminV2/workspace/dept/[departmentId]` is the AdminV2 premium runtime reference implementation.** Work-unit replication should copy these patterns exactly; drawer inherits WU doctrine later.
+
+| Pillar | Locked behavior |
+|--------|-----------------|
+| Navigation | Workspace parent stays mounted — **no** `workspace/loading.tsx` root skeleton flash on soft nav |
+| Shell | `deptShellReady` bridge first; Today's Focus / KPI quiet reserve independent of oper region |
+| Oper reveal | **One** `DeptOperationalRegionLoader`; pipeline + Needs Attention reveal **together** when authoritative |
+| Network | **One** `GET …/operational-bootstrap` (P0); legacy fan-out fallback only |
+| Bundling | `kpi_placements`, `right_rail_actions`, summaries + attention + `pipeline_surface` server-parallel under one auth |
+| Dedup | No duplicate queue summary work for skipped enrollment WUs; **no duplicate resolver passes** on attention lane |
+| KPI | `synthesizeDeptKpiWorkUnitSummaries` when summaries intentionally skipped |
+| Background | P2 deferred via `scheduleAdminV2BackgroundWork`; entity labels server-hydrated; nav suppression ~600ms |
+| Premium target | Calm, authoritative oper console — not multi-phase public hydration |
+
+**Code anchors:** `loadDeptOperationalBootstrap.ts`, `loadDeptAttentionPreviewServer.ts`, `resolveDeptNeedsAttentionWorkUnit.ts`, `dept/[departmentId]/page.tsx`, `deptOperationalBootstrapPerf.ts`.
+
+---
+
+### Needs Attention execution work unit (architecture — locked)
+
+**Critical learning:** Enrollment (and `pipeline_with_attention` depts) commonly model **`needs_attention` as a queue inside `enrollment_pipeline`**, not as a standalone work unit (`work_units.key === needs_attention`).
+
+| Rule | Detail |
+|------|--------|
+| Resolver | **`resolveDeptNeedsAttentionWorkUnit`** — reads `queue_definition` on dept work units (bootstrap passes `queue_definition` on preloaded rows) |
+| Order | (1) explicit `work_unit_id` if standalone NA WU or pipeline WU with NA queue; (2) standalone `needs_attention` WU; (3) pipeline WU preferring `enrollment_pipeline` with NA queue in definition |
+| Happy path counts | **`buildWorkUnitScopedNeedsAttentionLaneBuckets`** on resolved execution WU id — same cap/resolver as `GET …/queues/{workUnitId}/needs_attention` |
+| Response | `source: work_unit_needs_attention_lane`, `bucket_count_scope: work_unit_needs_attention_list_cap` |
+| Fallback | **`department_attention_preview`** only when **no** queue-backed execution WU exists — org 500-row preview; **not** enrollment happy path |
+
+**Do not** assume a standalone `needs_attention` work unit exists when wiring dept or work-unit attention.
+
+---
 
 ### Needs Attention perf (dept bootstrap — doctrine-safe)
 
@@ -423,9 +466,33 @@ Validate with `EXPLAIN (ANALYZE, BUFFERS)` on the exact PostgREST-equivalent que
 
 **Do not:** lower `NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP`, approximate bucket counts, or narrow SQL OR without resolver parity proof.
 
-### Dept readiness — premium standard
+### Staging perf baseline (enrollment dept, post-closeout — 2026-05-20)
 
-**`/dept` may be locked as the AdminV2 premium runtime template** when staging confirms: Today's Focus digits, no triple actions on happy path, and `[dept-bootstrap-perf]` shows bootstrap **~900–1100ms** total with **`attention_ms` ~400–550ms** (or `attention_query_ms` identified as the only remaining debt with index plan queued). Replicate to **`/work-unit`** using the same bootstrap + perf breakdown pattern; do not change drawer/nav/loading UX in that replication.
+Observed `[dept-bootstrap-perf]` on enrollment happy path after WU resolution + resolver hardening (`attention_source: work_unit_needs_attention_lane`):
+
+| Phase | ms (approx) |
+|-------|-------------|
+| `total_ms` | **~1110** |
+| `loader_ms` | **~529** |
+| `attention_ms` | **~264** |
+| `attention_query_ms` | **~247** |
+| `attention_resolver_ms` | **~7** |
+| `attention_candidate_count` | **~141** |
+
+**Interpretation:** Resolver CPU on dept lane is **effectively solved** (single pass + batch context). Remaining cost is **bounded hotspot optimization**, not architecture failure.
+
+| Remaining hotspot tier | Examples (future / index debt only) |
+|------------------------|-------------------------------------|
+| Auth / context | `route_gate_ms`, `getAdminAuth` / bundle resolve per request |
+| Pipeline | `pipeline_ms`, lane queue probes inside bootstrap |
+| SQL / index | `attention_query_ms` when candidate count grows — see index table above |
+| Shell / labels | Entity-label route overhead; P2 polls (already deferred) |
+
+**No doctrine changes required** for these — measure, index, or reuse auth opportunistically in later sprints.
+
+### Dept readiness — **LOCKED** (premium standard)
+
+**`/dept` is locked** as the AdminV2 premium runtime template (staging: Today's Focus digits, single right-rail bundle on happy path, `work_unit_needs_attention_lane` + subtimings above). **Next:** replicate to **`/work-unit`** (smaller scope — generally faster); preserve shell-first + oper reveal + bootstrap bundling + nav suppression; drawer choreography remains Lane D / post-WU.
 
 ---
 

@@ -39,7 +39,9 @@ All authoritative reads must come from:
 
 - **Enrollment Pipeline (`work_unit.key === enrollment_pipeline`):** The canonical **execution** surface for childcare enrollment CRM. **Status progression** is expressed as **pipeline queue pills** driven solely by `work_units.queue_definition` (validated v1 JSON). Source of truth for the default pill set and ordering: **`web/lib/config/enrollmentPipelineQueueDefinitionV1.ts`** (mirrors enrollment department migrations). Legacy/demo workspaces may still expose older work unit keys (`pipeline_overview`, etc.) until migrated — **do not** treat those as the canonical model for new product docs.
 
-- **Needs Attention:** A **resolver-backed operational overlay** (`needs_attention` queue + configurable **`metadata.opportunity_attention_rules.needs_attention_buckets`**). It **does not** replace pipeline stages; lenses may overlap **any** lifecycle stage. **Reason codes** are platform-owned; **visible bucket lenses** are metadata-owned (no global enrollment fallback — see **`docs/product/crm-system.md`**).
+- **Needs Attention:** A **resolver-backed operational overlay** (`needs_attention` **queue** + configurable **`metadata.opportunity_attention_rules.needs_attention_buckets`**). It **does not** replace pipeline stages; lenses may overlap **any** lifecycle stage. **Reason codes** are platform-owned; **visible bucket lenses** are metadata-owned (no global enrollment fallback — see **`docs/product/crm-system.md`**). On enrollment depts the queue usually lives **inside** `enrollment_pipeline`’s `queue_definition`, not on a separate work unit — see **`resolveDeptNeedsAttentionWorkUnit`** (`web/lib/workspace/resolveDeptNeedsAttentionWorkUnit.ts`).
+
+**AdminV2 dept runtime reference (2026-05-20):** `/adminV2/workspace/dept/[departmentId]` is the locked premium runtime pattern — single `operational-bootstrap`, shell-first nav, paired oper reveal, bundled KPI/actions. Replication target for work-unit; details in **`docs/sprints/05_2026/adminv2_performance_scope_lock.md`** Appendix.
 
 ## Operational attention (Needs attention) — filtered lens
 
@@ -60,7 +62,7 @@ Org/work-unit tuning for visible buckets: `metadata.opportunity_attention_rules.
 **Department lane buckets:**
 
 - **Work-unit aligned (`bucket_count_scope: work_unit_needs_attention_list_cap`):** Pass `work_unit_id` on preview API. Counts are **unique inquiries** whose `reasons[]` intersects bucket `reason_codes` — same cap as `loadOpportunityNeedsAttentionRows` (`NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP`, default **5000**). If `candidate_window_saturated`, true matches may exceed reported totals.
-- **Org preview fallback (`org_preview_cap_500`):** Histogram sums over **500**-row org window — **not** comparable to work-unit tab counts.
+- **Org preview fallback (`org_preview_cap_500`):** `source: department_attention_preview` — histogram sums over **500**-row org window when **no** execution work unit with a `needs_attention` queue exists. **Explicit fallback only**; not the enrollment happy path.
 
 **Deep links:** Prefer `attention_reason_code`; legacy `attention_reason` (label) supported. Combine with `queue=needs_attention` for work-unit URLs.
 

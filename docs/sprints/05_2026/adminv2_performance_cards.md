@@ -418,7 +418,7 @@ Lanes B and C can overlap **after A** if two implementers — do not start B bef
 
 ---
 
-### PERF-B-06 — Dept operational runtime hardening (bootstrap)
+### PERF-B-06 — Dept operational runtime hardening (bootstrap) — **DONE**
 
 | Field | Content |
 |-------|---------|
@@ -428,10 +428,11 @@ Lanes B and C can overlap **after A** if two implementers — do not start B bef
 | **Before (browser)** | ~5–7 parallel requests × auth: dept, work-units, summaries, attention, pipeline probe (+ optional enroll WU GET + queue GET per candidate). |
 | **After (browser)** | **1** `operational-bootstrap` request (+ deferred P2/P3). Server runs dept + WU list once; parallel summaries + attention + `resolveDeptPipelineExecSurfaceServer`. |
 | **APIs** | `GET .../operational-bootstrap`; `loadAdminRouteGate`; `loadDeptOperationalBootstrap`; `getDepartmentWorkUnitQueueSummaries({ workUnitIds })`; legacy routes unchanged for refresh/fallback. |
-| **Files** | `operational-bootstrap/route.ts`, `loadDeptOperationalBootstrap.ts`, `resolveDeptPipelineExecSurfaceServer.ts`, `loadDeptAttentionPreviewServer.ts`, `adminRouteGate.ts`, `dept/page.tsx`, `QueueService.ts`, `opportunity-attention-preview/route.ts` |
-| **Tests** | `web/tests/workspace/deptOperationalBootstrap.test.ts` |
-| **Perf phase** | `[perf.dept] bootstrap_ready` |
-| **Next target** | Work-unit page: single bootstrap for queue summaries + primary lane rows. |
+| **Files** | `operational-bootstrap/route.ts`, `loadDeptOperationalBootstrap.ts`, `resolveDeptPipelineExecSurfaceServer.ts`, `loadDeptAttentionPreviewServer.ts`, `adminRouteGate.ts`, `dept/page.tsx`, `QueueService.ts` |
+| **Tests** | `deptOperationalBootstrap.test.ts`, `deptAttentionBootstrapPerfWiring.test.ts`, `resolveDeptNeedsAttentionWorkUnit.test.ts` |
+| **Perf** | `[dept-bootstrap-perf]` — staging ~1110ms total, ~529ms loader, ~264ms attention (post attention-WU fix) |
+| **Status** | **Dept lane closed** — canonical runtime reference; see scope lock Appendix |
+| **Next target** | Work-unit replication (PERF-C + bootstrap), not further dept feature work |
 
 #### Critical-path diagram
 
@@ -464,6 +465,22 @@ AFTER (client):
 | **Docs** | `adminv2_performance_scope_lock.md` — dept closeout + work-unit replication table. |
 | **Tests** | `synthesizeDeptKpiWorkUnitSummaries.test.ts`, navigation contracts. |
 | **Ready for** | Work-unit replication sprint (no WU code in this card). |
+
+---
+
+### PERF-B-08 — Needs Attention execution WU resolution (enrollment) — **DONE**
+
+| Field | Content |
+|-------|---------|
+| **Lane** | B |
+| **Goal** | Stop dept bootstrap falling back to `department_attention_preview` on enrollment happy path. |
+| **Root cause** | `loadDeptAttentionPreviewServer` only matched `work_units.key === needs_attention`; enrollment canonical model puts **`needs_attention` queue on `enrollment_pipeline`**. |
+| **Fix** | **`resolveDeptNeedsAttentionWorkUnit`** — pipeline WU with NA queue in `queue_definition`; bootstrap preloads `queue_definition` on WU rows. |
+| **Before / after** | `attention_source`: `department_attention_preview` (~975ms attention) → **`work_unit_needs_attention_lane`** (~264ms attention, subtimings populated). |
+| **Resolver perf** | Single pass + `resolved_by_id` + batch context; staging `attention_resolver_ms` ~7ms vs `attention_query_ms` ~247ms. |
+| **Files** | `resolveDeptNeedsAttentionWorkUnit.ts`, `loadDeptAttentionPreviewServer.ts`, `loadDeptOperationalBootstrap.ts`, `synthesizeDeptKpiWorkUnitSummaries.ts` |
+| **Tests** | `resolveDeptNeedsAttentionWorkUnit.test.ts`, `deptOperationalBootstrap.test.ts` |
+| **Future only** | SQL/index debt on attention candidate OR — not a runtime doctrine change |
 
 ---
 
