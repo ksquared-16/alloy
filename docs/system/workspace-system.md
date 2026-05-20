@@ -96,6 +96,7 @@ Work-unit **CRM compact** queue rows show **Child** and **Program** columns usin
 - **`QueueService`** (`web/lib/queues/QueueService.ts`) interprets queue definitions, applies org timezone bounds, status definitions, filters/sorts allowlists, and returns summaries + item lists for opportunities/jobs/etc. For **opportunities**, preview enrichment may **read** active **`tour_bookings`** (alongside mirrored **`metadata.tour_date`**) to improve tour labels — still **preview-only**; authoritative scheduling state is on the opportunity entity GET + **`tour_bookings`** tables, not the queue row JSON.
 - **Waitlist placement priority (opt-in):** When **`placement_priority_v1`** is enabled on a work unit, opportunity queue rows may include **`_placement_priority`** and optional reorder within cap — **preview/triage only**; do not use for promotion decisions without entity GET. Settings: **`/adminV2/settings/placement-priority`**. See **`docs/product/crm-system.md`** (waitlist) and sprint **`docs/sprints/05_2026/priority_placement_orchestration_may_2026.md`**.
 - **`AdminV2PerfOverlay`** (`web/components/admin/AdminV2PerfOverlay.tsx`) exposes client perf markers (`window.__alloyPerf` per `web/lib/perf/alloyPerfGlobal.ts`).
+- **Orchestrator workspace scope:** Department and work-unit pages publish **`GlobalAssistantContext.workspaceScope`** (`department_id`, optional `work_unit_id`, display names) so Workflow Assist **create** proposals inherit route context; cleared on page unmount. **`setWorkspaceScope`** is idempotent (shallow compare) — route effects must not depend on the full context object reference. See **`docs/sprints/05_2026/workflow_assist_v1.md`** and **`docs/product/bos-foundation.md`** (session state).
 - Hooks such as **`useDepartmentQueueData`** fetch schedules and related lists for department views.
 
 ## How it works
@@ -124,7 +125,7 @@ Work-unit **CRM compact** queue rows show **Child** and **Program** columns usin
 
 ## Known gaps / risks
 
-- **Queue ordering:** Needs-attention list order and **placement priority** (when enabled) are **deterministic** in server code — **not** LLM-driven; see **`docs/product/ai-system.md`** (agent expansion **paused**).
+- **Queue ordering:** Needs-attention list order and **placement priority** (when enabled) are **deterministic** in server code — **not** LLM-driven; see **`docs/product/bos-foundation.md`** (BOS capability expansion **paused**).
 - **Needs verification:** Full map of all workspace API routes vs UI entry points for each vertical.
 - **Needs verification:** Attendance/staffing depth (may be thin or vertical-specific — see **Scheduling** in `product/crm-system.md`).
 

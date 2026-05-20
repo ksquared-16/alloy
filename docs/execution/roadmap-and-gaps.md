@@ -76,6 +76,7 @@ Capabilities below exist in **`web/` / `supabase/`**; “complete” means **fou
 - **AI — Orchestrator + Task Assist** — command bar, propose/apply comms, proposals API, scheduled sends (**`20260522140000`** claim-due), operational tasks — migrations **`20260521103000`**, **`20260522180000`** (staging `task_assist_draft` policy); **~2026-05-17 → 2026-05-23**.
 - **AI — Workflow Assist V1** — propose/apply/explain, read cards, draft enrichment review — **`workflow_assist_draft`** staging policy **`20260523170000`**; **~2026-05-20 → 2026-05-23**.
 - **Config / Layout Assist foundation** — **`config_layout_assist_proposals`**, field/section policy columns **`20260523120000`**, propose + lifecycle APIs — migration **`20260523140000`**; full apply catalog **partial**.
+- **Record + Orchestrator hardening (May 2026)** — Inquiry children drawer **horizontal row grid**; `EntityDrawerSection` **`contentLayout: "block"`** for custom bodies; command-surface **SSR/hydration** fix (session restore after mount); **`setWorkspaceScope`** loop guard; drawer hooks ordered before early return (`opportunityDrawerPreviewSubtitle`). See **`settings_control_plane_closeout.md`** (follow-on shipped), **`linked_record_field_editing_v1.md`**, **`agent_interaction_layer_v1.md`**.
 
 ---
 
@@ -155,11 +156,11 @@ Use this block for **velocity / stakeholder summaries**. Dates are **repo anchor
 
 ---
 
-## AI / agent roadmap (current vs future)
+## BOS / assistive roadmap (current vs future)
 
-**Program status (May 2026):** **Deeper AI-agent work is paused.** Shipped surfaces remain **assistive groundwork** — narrow, env- and policy-gated, **human-in-the-loop**. **Do not overstate maturity.** **Near-future AI** (assistive layer expansion) runs **after** operational items 1–9 in **Recommended next sprint sequence** unless a pilot explicitly requires hardening (item 10). **Autonomous agents are later, not now.** Full route detail: **`docs/product/ai-system.md`**.
+**Program status (May 2026):** **Deeper BOS capability expansion is paused.** Shipped surfaces remain **assistive groundwork** — narrow, env- and policy-gated, **human-in-the-loop**. **Do not overstate maturity.** **Near-future assistive expansion** runs **after** operational items 1–9 in **Recommended next sprint sequence** unless a pilot explicitly requires hardening (item 10). **Autonomous agents are later, not now.** Registry, routes, and permission matrix: **`docs/product/bos-foundation.md`** (implementation inventory + `web/lib/bos/`).
 
-### 1. AI assistive layer
+### 1. BOS assistive layer
 
 | Capability | Today | Future (planned) |
 |------------|--------|------------------|
@@ -386,7 +387,7 @@ When verified in code or DB, fold conclusions into **`docs/system/entity-model.m
 ### Documents / forms / AI
 
 - **Forms:** **`documents-and-forms.md`** — engine **partially implemented**; **Enrollment Packet E2E Phase 1 shipped**; Phase 2 sprint doc.
-- **AI:** **`product/ai-system.md`** — assistive groundwork **shipped narrow**; **expansion paused**; autonomous catalog **later** (see **AI / agent roadmap**, **Paused / deprioritized**).
+- **BOS:** **`product/bos-foundation.md`** — registry + envelopes shipped (Phases 1–3); assistive groundwork **narrow**; **expansion paused**; autonomous catalog **later** (see **BOS / assistive roadmap**, **Paused / deprioritized**).
 
 ### Billing / payments
 
@@ -412,7 +413,7 @@ When verified in code or DB, fold conclusions into **`docs/system/entity-model.m
 - **Waitlist actions:** Placeholder mutator — **not implemented**; placement priority V1 — **shipped opt-in** (`crm-system.md`, placement sprint).
 - **Tour Scheduling V1:** **shipped**; **Phase 2** open.
 - **Reporting V1:** KPI strips exist; **full reporting** — **not implemented**.
-- **AI:** Assistive groundwork **partially shipped**; **deeper agent work paused** — see **`ai-system.md`**; **no** autonomous enrollment/subsidy/monitoring agents in execution.
+- **BOS:** Assistive groundwork **partially shipped**; **deeper capability expansion paused** — see **`bos-foundation.md`**; **no** autonomous enrollment/subsidy/monitoring agents in execution.
 - **Config/Layout Assist:** Foundation only; apply catalog expansion **paused**.
 - **Stripe webhooks:** May be **backend** URL — verify (`billing-and-financials.md`).
 
@@ -444,7 +445,7 @@ When verified in code or DB, fold conclusions into **`docs/system/entity-model.m
 3. **Queue vs entity parity** — Document preview-only fields per queue type.
 4. **Stripe webhooks → payment state** — Map actual handler deployment.
 5. **Documents storage** — RLS/retention facts.
-6. **AI routes & flags** — Org `ai_policy`, RBAC, env matrix in `ai-system.md`; pilot checklist per org.
+6. **BOS routes & flags** — Org `ai_policy`, RBAC, env matrix in **`bos-foundation.md`** § Implementation inventory; registry in `web/lib/bos/bosCapabilityRegistry.ts`; pilot checklist per org.
 7. **Config/Layout Assist apply catalog** — **Paused** until operational core advances; resume with settings/field parity.
 8. **RRS expansion** — If/when entities move off flat selects.
 

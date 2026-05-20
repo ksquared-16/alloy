@@ -11,7 +11,7 @@
 |-------------|----------|
 | Audit report | `docs/sprints/05_2026/bos_standardization_audit.md` |
 | BOS foundation + contracts | `docs/product/bos-foundation.md` |
-| `ai-system.md` stub | `docs/product/ai-system.md` → points to bos-foundation |
+| `bos-foundation.md` stub | `docs/product/bos-foundation.md` → points to bos-foundation |
 | Migration plan (this file) | `docs/sprints/05_2026/bos_standardization_migration.md` |
 
 **No application code changes** in Phase 1.
@@ -176,6 +176,12 @@ Use before starting **new** BOS capabilities or resuming paused expansion.
 - Unified proposal admin UI across durable tables
 - `AgentIdentity` / `AgentCapabilityProfile` DB model (only if multi-tenant agent configs needed)
 - Record Experience Builder integration
+
+---
+
+## Active docs refresh (post–Phase 3)
+
+Active topic files now reference **`docs/product/bos-foundation.md`** and BOS route/registry language (`api-contracts.md`, `roadmap-and-gaps.md`, glossary, CRM/communications/configuration/record/workspace/roles). **`bos-foundation.md`** remains a redirect stub. See **`bos_foundation_closeout_phase_3.md`** § Documentation refresh.
 
 ---
 

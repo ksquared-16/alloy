@@ -12,11 +12,15 @@ import {
 import { resolveFieldEditability } from "@/lib/fields/fieldInteractionPolicy";
 import {
     evaluateFieldRequirementViolations,
+    legacyIsRequiredFromPolicy,
     resolveFieldRequirementPolicy,
+    type FieldDefinitionRequirementSource,
     type FieldRequirementPolicyV1,
 } from "@/lib/fields/fieldRequirementPolicy";
+import { resolveFieldInteractionPolicy } from "@/lib/fields/fieldInteractionPolicy";
 import { isAdvancedRequirementPolicyForSettings } from "@/lib/fields/fieldPolicySettingsUi";
 import { displayFromFieldValueRow } from "@/lib/admin/typedFieldValues";
+import type { RecordLayoutConfigJson } from "@/lib/recordChrome/types";
 
 export const FIELD_POLICY_VALIDATION_ERROR = "Field validation failed";
 
@@ -138,6 +142,38 @@ function requirementPolicyEnforceableOnSave(policy: FieldRequirementPolicyV1): b
     return policy.mode === "required" || policy.mode === "required_on_save";
 }
 
+function buildResolvedMapForEnforcement(
+    entityType: DrawerPolicyEntityType,
+    defs: FieldDefRow[],
+    layoutConfig?: RecordLayoutConfigJson | null
+): Record<string, DrawerFieldPolicyResolved> {
+    if (entityType === "opportunity" && layoutConfig !== undefined) {
+        return buildDrawerFieldPolicyResolvedMap(entityType, defs, {
+            layoutConfig: layoutConfig ?? null,
+        });
+    }
+    return buildDrawerFieldPolicyResolvedMap(entityType, defs);
+}
+
+function effectiveRequirementPolicy(
+    def: FieldDefRow,
+    resolved: DrawerFieldPolicyResolved
+): FieldRequirementPolicyV1 {
+    return resolved.requirement ?? resolveFieldRequirementPolicy(def);
+}
+
+function requirementSourceForEvaluation(
+    def: FieldDefRow,
+    resolved: DrawerFieldPolicyResolved
+): FieldDefinitionRequirementSource {
+    const policy = effectiveRequirementPolicy(def, resolved);
+    return {
+        field_key: def.field_key,
+        requirement_policy: policy,
+        is_required: legacyIsRequiredFromPolicy(policy),
+    };
+}
+
 /**
  * Pure evaluation — used by tests and async loader.
  */
@@ -147,10 +183,12 @@ export function evaluateDrawerFieldPoliciesOnPatch(params: {
     body: Record<string, unknown>;
     persisted: Record<string, unknown>;
     customValuesByFieldKey?: Record<string, unknown>;
+    /** Card 3 — opportunity only: placement-aware effective policies when provided. */
+    layoutConfig?: RecordLayoutConfigJson | null;
 }): EnforceDrawerFieldPoliciesResult {
     const { entityType, defs, body, persisted } = params;
     const customValuesByFieldKey = params.customValuesByFieldKey ?? {};
-    const resolvedMap = buildDrawerFieldPolicyResolvedMap(entityType, defs);
+    const resolvedMap = buildResolvedMapForEnforcement(entityType, defs, params.layoutConfig);
     const merged = mergeValuesForPolicyCheck(entityType, persisted, body, resolvedMap, customValuesByFieldKey);
     const touched = bodyKeysAttemptingPatch(body, resolvedMap);
     const violations: FieldPolicyPatchViolation[] = [];
@@ -159,12 +197,19 @@ export function evaluateDrawerFieldPoliciesOnPatch(params: {
         const resolved = resolvedMap[def.field_key];
         if (!resolved || resolved.policyMode !== "enforceable") continue;
 
-        const reqPolicy = resolveFieldRequirementPolicy(def);
+        const reqPolicy = effectiveRequirementPolicy(def, resolved);
         const intSource = {
             field_key: def.field_key,
             entity_type: entityType,
             is_system: def.is_system,
-            interaction_policy: def.interaction_policy,
+            interaction_policy:
+                resolved.interaction ??
+                resolveFieldInteractionPolicy({
+                    field_key: def.field_key,
+                    entity_type: entityType,
+                    is_system: def.is_system,
+                    interaction_policy: def.interaction_policy,
+                }),
         };
         const editability = resolveFieldEditability(intSource, { permission_keys: ["__admin_patch__"] });
 
@@ -193,7 +238,7 @@ export function evaluateDrawerFieldPoliciesOnPatch(params: {
         if (!requirementPolicyEnforceableOnSave(reqPolicy)) continue;
 
         const reqViolations = evaluateFieldRequirementViolations(
-            def,
+            requirementSourceForEvaluation(def, resolved),
             { phase: "save", values: merged },
             merged[def.field_key]
         );
@@ -256,6 +301,7 @@ export async function enforceDrawerFieldPoliciesOnPatch(params: {
     entityId: string;
     body: Record<string, unknown>;
     persistedRow: Record<string, unknown>;
+    layoutConfig?: RecordLayoutConfigJson | null;
 }): Promise<EnforceDrawerFieldPoliciesResult> {
     const entityType = normalizeEntityType(params.entityType);
     if (!entityType) return { ok: true };
@@ -284,12 +330,18 @@ export async function enforceDrawerFieldPoliciesOnPatch(params: {
     );
     const persisted = extractPersistedValuesForPolicy(entityType, params.persistedRow);
 
+    const layoutConfig =
+        entityType === "opportunity" && params.layoutConfig !== undefined
+            ? params.layoutConfig
+            : undefined;
+
     return evaluateDrawerFieldPoliciesOnPatch({
         entityType,
         defs,
         body: params.body,
         persisted,
         customValuesByFieldKey: customValues,
+        layoutConfig,
     });
 }
 

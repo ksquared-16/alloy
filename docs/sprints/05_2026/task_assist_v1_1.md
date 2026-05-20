@@ -5,7 +5,7 @@
 **Prerequisite (shipped):** `docs/sprints/05_2026/task_assist_v1.md` (V1 — ephemeral proposal, send-now, opportunities, SMS/email, **`executeCommunicationsSend`**).  
 **Non-goals:** Workflow configuration (Agent #3), bulk/mass send, autonomous agents, legacy **`public.messages`** / **`messages_outbox`**, bypassing **`enqueueCanonicalOutboundMessage`**.
 
-**Sources of truth:** `docs/product/communications.md`, `docs/product/ai-system.md`, `docs/system/actions-and-workflows.md`, `docs/execution/operating-doctrine.md`, `web/lib/communications/executeCommunicationsSend.ts`, `web/lib/communications/canonicalOutboundEnqueue.ts`, `web/lib/communications/communicationScheduledSendsService.ts`, `docs/supabase/reference/*.csv`.
+**Sources of truth:** `docs/product/communications.md`, `docs/product/bos-foundation.md`, `docs/system/actions-and-workflows.md`, `docs/execution/operating-doctrine.md`, `web/lib/communications/executeCommunicationsSend.ts`, `web/lib/communications/canonicalOutboundEnqueue.ts`, `web/lib/communications/communicationScheduledSendsService.ts`, `docs/supabase/reference/*.csv`.
 
 ### V1.1 shipped behavior summary (operator-facing)
 
@@ -26,7 +26,7 @@
 ### Staging / demo org policy (reproducible)
 
 - **Migration:** `supabase/migrations/20260522180000_staging_demo_org_ai_policy_task_assist_draft.sql` merges **`task_assist_draft`** into **`org_settings.metadata.ai_policy.allowed_features`**, sets **`enabled: true`**, and sets **`provider: stub`** only when provider is absent/blank — for org **`93667019-bd28-49b5-a688-acc9bb1e0a19`** (same staging tenant as other repo seeds). **Skips** if no **`org_settings`** row exists (no INSERT).
-- **Env (stub path):** deployments must set **`AI_ENRICHMENT_STUB_ENABLED=true`** for **`POST .../task-assist/propose`** when org policy uses **`provider: stub`**; see **`docs/product/ai-system.md`** (Vercel / runtime env table).
+- **Env (stub path):** deployments must set **`AI_ENRICHMENT_STUB_ENABLED=true`** for **`POST .../task-assist/propose`** when org policy uses **`provider: stub`**; see **`docs/product/bos-foundation.md`** (Vercel / runtime env table).
 
 ### Permission matrix (Task Assist specialist)
 
@@ -40,7 +40,7 @@
 | Process due (worker / admin) | — | **`x-cron-token`** **or** **`requireAdminOrOps`** + org filter | `POST .../communication-scheduled-sends/process-due` |
 | Operational tasks | — | **`requireAdminOrOps`** only (no separate task permission key yet) | `GET/POST .../operational-tasks`, `PATCH .../[id]` |
 
-Full cross-agent matrix: **`docs/product/ai-system.md`**.
+Full cross-agent matrix: **`docs/product/bos-foundation.md`**.
 
 ---
 
@@ -317,7 +317,7 @@ If the worker **crashes after claim** and **before** enqueue, or the success-pat
 | **4** | **Scheduled send HTTP** | **Done** — GET/POST **`/api/admin/communication-scheduled-sends`**, PATCH cancel **`pending`** only; **no send** on create. |
 | **5** | **Scheduled send worker** | **Done** — RPC claim + **`processDueCommunicationScheduledSends`** + **`POST …/process-due`**; tests; **Card 5 hardening** adds **`releaseStaleClaimedCommunicationScheduledSends`** + sprint §6 recovery notes. |
 | **6** | **UI extension** | **Done (drawer-embedded)** — Full panel in **`AdminEntityDrawer`**; superseded by **Card 8** placement. Logic + tests remain valid; **mount point moves**. |
-| **7** | **Docs + references** | **Done** — This sprint doc completion checklist, **`docs/product/ai-system.md`**, **`docs/product/communications.md`**, **`docs/product/crm-system.md`** pointer, **`task_assist_v1.md`** V1.1 forward pointer; Supabase reference CSVs verified for V1.1 tables + claim RPC. |
+| **7** | **Docs + references** | **Done** — This sprint doc completion checklist, **`docs/product/bos-foundation.md`**, **`docs/product/communications.md`**, **`docs/product/crm-system.md`** pointer, **`task_assist_v1.md`** V1.1 forward pointer; Supabase reference CSVs verified for V1.1 tables + claim RPC. |
 | **8** | **Global assistant shell pivot** | **Superseded (UI)** by **Card 9** — shipped **`GlobalAssistantShell`** then removed; context provider retained. See §Card 8 (historical) + §Card 9. |
 | **9** | **Command bar assistant pivot** | **Done** — Task Assist home = **`AICommandSurfaceShell`**; **`focusCommandBar`** event; drawer launcher; no right rail. **No backend changes** in the pivot. See §Card 9 (§9.1–9.7). |
 | **9a** | **Command bar — ambient + confirm** | **Done (merged into 9b/9c)** — Ambient pronoun path + mandatory **Confirm target** before workspace; drawer launcher sets context. See §9.8–9.11. |
@@ -346,7 +346,7 @@ If the worker **crashes after claim** and **before** enqueue, or the success-pat
 | **`NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED`** | Client + **`isTaskAssistV1UiEnabled()`** — Task Assist mode tabs + tray + drawer launcher + header focus control. |
 | **`metadata.ai_policy`** on **`org_settings`** | **`enabled`**, **`provider`** (`stub` \| `openai`), **`allowed_features`** must include **`task_assist_draft`** for **`POST /api/admin/ai/task-assist/propose`** (and the same portal / permission pattern as AI enrichment where applicable). |
 | **`AI_ENRICHMENT_STUB_ENABLED`** | Required **`true`** when org policy uses **`provider: stub`** for routes that use the stub guard (including Task Assist **propose** on the stub branch). |
-| **`AI_ENRICHMENT_USE_PERMISSION_REQUIRED`** + **`ai.enrichment.use`** | When strict enrichment permission mode is on, Task Assist **propose** follows the same **`computeOpenAiLiveInvocationPermitted`** / portal checks as enrichment (see **`docs/product/ai-system.md`**). |
+| **`AI_ENRICHMENT_USE_PERMISSION_REQUIRED`** + **`ai.enrichment.use`** | When strict enrichment permission mode is on, Task Assist **propose** follows the same **`computeOpenAiLiveInvocationPermitted`** / portal checks as enrichment (see **`docs/product/bos-foundation.md`**). |
 | **`OPENAI_API_KEY`**, **`OPENAI_MODEL`** (optional **`OPENAI_BASE_URL`**) | Needed for orgs with **`provider: openai`** on **other** gated live routes; **propose** still does **not** invoke OpenAI (deterministic body only). |
 | **`INTERNAL_CRON_TOKEN`** | Must match **`x-cron-token`** on **`POST /api/admin/communication-scheduled-sends/process-due`** for **cross-org** scheduled-send processing; without it, callers need admin session and runs are **org-scoped**. |
 
@@ -401,7 +401,7 @@ Use after migrations **`20260521103000_task_assist_v1_1_foundation.sql`** and **
 - [ ] **`NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED`** is **`true`** / **`1`** on the web deployment under test.
 - [ ] Pilot org **`org_settings.metadata.ai_policy`** includes **`task_assist_draft`** in **`allowed_features`**, with **`provider: stub`** or **`openai`** as intended.
 - [ ] If **`provider: stub`**, **`AI_ENRICHMENT_STUB_ENABLED=true`** in server env.
-- [ ] If using strict enrichment RBAC, confirm portal user can pass **`resolveAiEnrichmentPortalAccess`** for **propose** (same pattern as **`docs/product/ai-system.md`** staging checklist).
+- [ ] If using strict enrichment RBAC, confirm portal user can pass **`resolveAiEnrichmentPortalAccess`** for **propose** (same pattern as **`docs/product/bos-foundation.md`** staging checklist).
 
 **B. Command bar + header (Card 9)**
 
@@ -594,7 +594,7 @@ AdminV2WorkspaceClientProviders
 3. **Add launcher**; wire drawer to **`openAssistantWithContext`** using **`useAdminDrawer()`** + entity GET label (or existing header title).
 4. **Remove** drawer panel mounts; verify comms tab layout without duplicate Task Assist block.
 5. **Update tests:** move panel markup tests to workspace component; add context + launcher + shell contract tests; keep API client tests unchanged.
-6. **Docs pass:** update **`docs/product/ai-system.md`**, **`docs/product/crm-system.md`**, Card 6 §5 wording (drawer → global shell).
+6. **Docs pass:** update **`docs/product/bos-foundation.md`**, **`docs/product/crm-system.md`**, Card 6 §5 wording (drawer → global shell).
 7. **Optional phase 2:** shared provider wrapper for legacy **`AdminLayout`** if `/admin` drawer must keep parity.
 
 ### 8.7 Tests needed (Card 8)
@@ -820,7 +820,7 @@ flowchart TD
 
 ### 9.15 Doc / QA (shipped)
 
-- [x] **`docs/product/ai-system.md`**, **`crm-system.md`**, **`communications.md`** — command bar Task Assist + **`entity-search`**.
+- [x] **`docs/product/bos-foundation.md`**, **`crm-system.md`**, **`communications.md`** — command bar Task Assist + **`entity-search`**.
 - [x] **§13 Manual QA** — example NL commands (§I).
 
 ### 9.16 Extension — test plan (9b + 9c — shipped)
@@ -852,7 +852,7 @@ flowchart TD
 ## 14. Card 7 exit checklist
 
 - [x] Sprint doc: Card **6** marked complete; **V1.1 summary**, **routes**, **env/policy**, **limitations**, **manual QA** recorded (§1 header + §10–§13).
-- [x] **`docs/product/ai-system.md`** — Task Assist V1.1 routes, flags, propose deterministic note.
+- [x] **`docs/product/bos-foundation.md`** — Task Assist V1.1 routes, flags, propose deterministic note.
 - [x] **`docs/product/communications.md`** — scheduled sends + **`process-due`** + canonical send link.
 - [x] **`docs/product/crm-system.md`** — one-line pointer for opportunity-scoped tasks (optional file touch).
 - [x] **`docs/sprints/05_2026/task_assist_v1.md`** — forward pointer to V1.1 sprint.
@@ -865,7 +865,7 @@ flowchart TD
 - `docs/sprints/05_2026/task_assist_v1.md`
 - `docs/sprints/05_2026/ai_agents_v1.md` §8
 - `docs/product/communications.md`
-- `docs/product/ai-system.md`
+- `docs/product/bos-foundation.md`
 - `supabase/migrations/20260413100000_agent_v1_record_overview_layout_audit.sql` (RLS / proposal pattern)
 - `supabase/migrations/20260430254100_communications_v1_foundation.sql`
 - `supabase/migrations/20260521103000_task_assist_v1_1_foundation.sql`

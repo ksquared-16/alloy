@@ -20,6 +20,7 @@ import {
 } from "@/lib/opportunities/enrollmentOperationalMetadata";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { assertExistingOpportunityMutableInAdminScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { fetchEffectiveRecordDrawerLayout } from "@/lib/admin/effectiveRecordDrawerLayout";
 import {
     enforceDrawerFieldPoliciesOnPatch,
     fieldPolicyValidationResponse,
@@ -123,6 +124,10 @@ export async function PATCH(
             return NextResponse.json({ error: "Not found" }, { status: 404 });
         }
 
+        const layoutResolved = await fetchEffectiveRecordDrawerLayout(supabase, ctx.orgId, "opportunity");
+        const opportunityLayoutConfig =
+            layoutResolved.ok && layoutResolved.layout ? layoutResolved.layout.config_json : null;
+
         const policyCheck = await enforceDrawerFieldPoliciesOnPatch({
             supabase,
             orgId: ctx.orgId,
@@ -130,6 +135,7 @@ export async function PATCH(
             entityId: id,
             body,
             persistedRow: existingRow as Record<string, unknown>,
+            layoutConfig: opportunityLayoutConfig,
         });
         if (!policyCheck.ok) {
             return NextResponse.json(fieldPolicyValidationResponse(policyCheck.violations), { status: 400 });

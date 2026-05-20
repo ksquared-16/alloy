@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
+import { SETTINGS_INDEX_SUBTITLE } from "@/lib/adminV2/settingsPageSubtitles";
 
 export const dynamic = "force-dynamic";
 
@@ -62,9 +63,7 @@ export default function AdminV2SettingsIndexPage() {
         <div className="w-full max-w-6xl space-y-6 pb-6">
             <header>
                 <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">Settings</h1>
-                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-alloy-midnight/60">
-                    Configure how your organization runs in Alloy — teams, records, layouts, vocabulary, and automation.
-                </p>
+                <p className="mt-0.5 max-w-2xl text-sm text-alloy-midnight/60">{SETTINGS_INDEX_SUBTITLE}</p>
             </header>
 
             <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(240px,280px)] lg:items-start">

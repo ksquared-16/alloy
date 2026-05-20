@@ -237,7 +237,7 @@ export default function Drawer({
                 }
             >
                 <div
-                    className={`${cleaningRecordModalTone ? "px-6 pt-5 pb-1.5" : "px-6 pt-4 pb-2"} ${
+                    className={`${cleaningRecordModalTone ? "px-6 pt-3.5 pb-1" : "px-6 pt-4 pb-2"} ${
                         headerTitleRight != null && headerTitleRight !== false ? "flex items-start justify-between gap-4" : ""
                     }`}
                 >
@@ -256,7 +256,9 @@ export default function Drawer({
                         {renderHeaderSubtitle()}
                     </div>
                     {headerTitleRight != null && headerTitleRight !== false ? (
-                        <div className="flex shrink-0 items-start gap-3">
+                        <div
+                            className={`flex shrink-0 items-start gap-3 ${cleaningRecordModalTone ? "py-0.5" : ""}`}
+                        >
                             {headerTitleRight}
                             <button
                                 type="button"
@@ -273,7 +275,7 @@ export default function Drawer({
                 {headerRecordContext != null && headerRecordContext !== false && (
                     <div
                         data-adminv2-drawer-header-record-context
-                        className={`border-t border-b px-6 py-2 ${cleaningRecordModalTone ? "border-[var(--vc-drawer-hairline,rgba(39,63,82,0.12))] bg-[color-mix(in_srgb,var(--vc-drawer-header-bg,#fff)_92%,rgba(39,63,82,0.04))]" : "border-alloy-stone/15 bg-alloy-stone/[0.035]"}`}
+                        className={`border-t border-b px-6 ${cleaningRecordModalTone ? "py-1.5" : "py-1"} ${cleaningRecordModalTone ? "border-[var(--vc-drawer-hairline,rgba(39,63,82,0.12))] bg-[color-mix(in_srgb,var(--vc-drawer-header-bg,#fff)_92%,rgba(39,63,82,0.04))]" : "border-alloy-stone/15 bg-alloy-stone/[0.035]"}`}
                         style={
                             isV2 && !cleaningRecordModalTone
                                 ? {
@@ -289,7 +291,7 @@ export default function Drawer({
                 )}
                 {headerTitleRight == null || headerTitleRight === false ? (
                     <div
-                        className={`px-6 flex items-center justify-between ${cleaningRecordModalTone ? "pb-3 gap-3" : "pb-4 gap-4"}`}
+                        className={`px-6 flex items-center justify-between ${cleaningRecordModalTone ? "py-1 pb-2 gap-2" : "pb-4 gap-4"}`}
                     >
                         <div className={`flex items-center min-w-0 ${cleaningRecordModalTone ? "gap-2" : "gap-3"}`}>
                             {statusBadge != null && statusBadge !== false && statusBadge}
@@ -309,7 +311,7 @@ export default function Drawer({
                 {headerSignals != null && headerSignals !== false && (
                     <div
                         data-adminv2-record-modal-signals-wrap
-                        className={`px-6 ${cleaningRecordModalTone ? "pb-2.5 pt-0" : "pb-3"}`}
+                        className={`px-6 ${cleaningRecordModalTone ? "pb-1.5 pt-0.5" : "pb-3"}`}
                         style={
                             isV2
                                 ? {
@@ -329,7 +331,7 @@ export default function Drawer({
                 {headerExtra != null && headerExtra !== false && (
                     <div
                         data-adminv2-record-modal-tabs-wrap
-                        className={`px-6 pb-2.5 pt-2 ${cleaningRecordModalTone ? "border-t border-solid" : `border-t ${isV2 ? "" : "border-admin-border border-t-alloy-blue/30"}`}`}
+                        className={`px-6 ${cleaningRecordModalTone ? "pb-2 pt-1" : "pb-1 pt-0"} ${cleaningRecordModalTone ? "border-t border-solid" : `border-t ${isV2 ? "" : "border-admin-border border-t-alloy-blue/30"}`}`}
                         style={
                             isV2
                                 ? {

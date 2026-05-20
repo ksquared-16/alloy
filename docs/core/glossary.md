@@ -38,10 +38,12 @@ Use these meanings in code review and prompts.
 | **Communication message (canonical)** | Row in **`communication_messages`**: inbound/outbound message in a thread; outbound enqueue sets `status: queued` and may emit **`message_queued`**. |
 | **Legacy message / outbox** | **`public.messages`**, **`messages_outbox`** — still produced by workflow **`send_message`** paths; distinguish from canonical **`communication_*`** tables. |
 | **Config** | Org or global settings that steer labels, statuses, layouts, and queue shape — within platform validation. |
-| **Orchestrator** | AdminV2 bottom command bar agent — parses intent, routes to specialists; **does not** execute side effects. |
-| **Task Assist** | Specialist agent for one-off comms drafts, scheduled sends, and operational tasks — **propose → human approve → apply** via canonical APIs. |
-| **Workflow Assist** | Specialist for workflow read/explain and gated propose/apply over existing workflow CRUD — default path **deterministic** (no LLM on apply). |
-| **Config / Layout Assist** | Specialist for audited configuration proposals (`ConfigurationProposalV1`) — lifecycle on **`config_layout_assist_proposals`**. |
+| **BOS** | **Business Orchestration System** — Alloy’s unified orchestration intelligence layer (routing, proposals, assist); not a parallel platform. See **`docs/product/bos-foundation.md`**. |
+| **BOS capability** | Registered assist function with stable `capability_key` in `web/lib/bos/bosCapabilityRegistry.ts` (e.g. `task_assist`, `config_layout_assist`). |
+| **Orchestrator** | BOS capability `orchestrator` — AdminV2 command bar; parses intent, routes to specialists; **does not** execute side effects. Thread state in **`GlobalAssistantContext`** with tab-session **`sessionStorage`** restore (client-only after mount — see **`agent_interaction_layer_v1.md`**). |
+| **Task Assist** | BOS capability `task_assist` — one-off comms drafts, scheduled sends, operational tasks — **propose → human approve → apply**. |
+| **Workflow Assist** | BOS capability `workflow_assist` — workflow read/explain and gated propose/apply — default path **deterministic**. |
+| **Config / Layout Assist** | BOS capability `config_layout_assist` — `ConfigurationProposalV1` on **`config_layout_assist_proposals`**. |
 | **Placement priority** | Opt-in waitlist ordering layer (`placement_priority_v1` metadata) producing queue **`_placement_priority`** previews — not global waitlist truth. |
 | **AI policy** | Org setting in **`org_settings.metadata.ai_policy`** — feature allow list, provider (`stub` / `openai`), logging mode; complements RBAC permission keys. |
 
@@ -49,6 +51,7 @@ Use these meanings in code review and prompts.
 
 - Schema: `supabase/migrations/`, `prod_baseline.sql` (or baselines under `supabase/baselines/`)
 - Queue schema: `web/lib/config/queueDefinitionSchema.ts`
+- BOS registry: `web/lib/bos/bosCapabilityRegistry.ts`
 
 ## Guardrails
 

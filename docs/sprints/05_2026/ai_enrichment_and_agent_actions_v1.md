@@ -43,9 +43,9 @@ The next phases add **optional** intelligence and **optional** durability while 
 |---|-----------|---------|
 | 1 | AI provider abstraction? | **No** shared first-class abstraction (e.g. no unified `AiProvider` module) for LLM calls in `web/`. Agent work is route-scoped + lib modules (`web/lib/agent/**`). |
 | 2 | OpenAI / LLM utilities? | **`web/package.json`** has **no** `openai`, `@anthropic-ai/*`, or Vercel AI SDK dependencies at audit time. Docs and archived specs discuss future LLM bridges; production agent routes are **structured / deterministic**. |
-| 3 | Env vars for AI providers? | **No** `OPENAI_*` / `ANTHROPIC_*` style vars found in active `web` agent paths. **Existing gates:** `AGENT_V0_ENABLED`, `AGENT_V1_RECORD_LAYOUT_ENABLED`, `AGENT_V2_FIELD_VISIBILITY_ENABLED` (per-route `FEATURE_DISABLED` pattern). See `docs/product/ai-system.md`. |
+| 3 | Env vars for AI providers? | **No** `OPENAI_*` / `ANTHROPIC_*` style vars found in active `web` agent paths. **Existing gates:** `AGENT_V0_ENABLED`, `AGENT_V1_RECORD_LAYOUT_ENABLED`, `AGENT_V2_FIELD_VISIBILITY_ENABLED` (per-route `FEATURE_DISABLED` pattern). See `docs/product/bos-foundation.md`. |
 | 4 | Server-only AI routes? | **Yes — admin agent family:** `web/app/api/admin/agent/v0/queue-definition`, `v1/record-overview-layout`, `v1/activity`, `v2/field-visibility`. All gated; use `getAdminContextCached` / admin auth as implemented. **No** generic “chat completion” route. |
-| 5 | Privacy / redaction utilities? | **Partial:** e.g. `web/lib/bookingResolver.ts` (`redactEmailForLog`), `web/lib/workflowRun.ts` log redaction patterns, `docs/product/ai-system.md` and `docs/forms/future_ai_hooks_v1.md` guardrails. **No** dedicated “prompt redaction pipeline” module for LLM-bound payloads. |
+| 5 | Privacy / redaction utilities? | **Partial:** e.g. `web/lib/bookingResolver.ts` (`redactEmailForLog`), `web/lib/workflowRun.ts` log redaction patterns, `docs/product/bos-foundation.md` and `docs/forms/future_ai_hooks_v1.md` guardrails. **No** dedicated “prompt redaction pipeline” module for LLM-bound payloads. |
 
 ### 3.2 Config / policy readiness
 
@@ -63,7 +63,7 @@ The next phases add **optional** intelligence and **optional** durability while 
 | 10 | Audit / event tables for AI logs? | **`workflow_events`** — generic insert via `web/lib/emitEvent.ts` (`event_type`, `entity_*`, `payload` jsonb). **Agent apply audit:** `agent_v0_proposals` / `agent_v0_apply_audit`, `agent_v1_record_layout_proposals` / `agent_v1_record_layout_apply_audit`, `agent_v2_field_visibility_proposals` / `agent_v2_field_visibility_apply_audit` (see `supabase/migrations/20260412100000_agent_v0_audit.sql`, `20260413100000_agent_v1_record_overview_layout_audit.sql`, `20260414100000_agent_v2_field_visibility_audit.sql`). |
 | 11 | Can `workflow_events` record AI enrichment usage? | **Yes, cautiously:** emit dedicated `event_type` values with **minimized** payloads (hashes, counts, template keys — not raw prompts). Risk: `payload` jsonb growth and accidental PII if not schema-controlled. |
 | 12 | New `ai_usage_events` / `agent_events` table? | **Not required** for first telemetry if `workflow_events` + structured payload contract suffice. **Recommended later** if query volume, retention, or compliance requires a dedicated index-friendly table separate from business workflow noise. |
-| 13 | Sensitive data standards? | `docs/product/ai-system.md`, `docs/execution/operating-doctrine.md` (logging), `docs/forms/future_ai_hooks_v1.md`, archived `ai-agent-system-contract.md` (hashed/redacted references). **Needs formalization** for LLM-bound payloads in this sprint’s design phase. |
+| 13 | Sensitive data standards? | `docs/product/bos-foundation.md`, `docs/execution/operating-doctrine.md` (logging), `docs/forms/future_ai_hooks_v1.md`, archived `ai-agent-system-contract.md` (hashed/redacted references). **Needs formalization** for LLM-bound payloads in this sprint’s design phase. |
 
 ### 3.4 Operational summaries readiness
 
@@ -220,7 +220,7 @@ The next phases add **optional** intelligence and **optional** durability while 
 
 | Card | Name | Deliverable |
 |------|------|----------------|
-| **0** | Audit AI/provider/privacy readiness | **Done (2026-05-13):** Inventory in §3; `docs/product/ai-system.md` updated with `web/lib/ai` pointer. |
+| **0** | Audit AI/provider/privacy readiness | **Done (2026-05-13):** Inventory in §3; `docs/product/bos-foundation.md` updated with `web/lib/ai` pointer. |
 | **1** | AI provider abstraction design | **Done:** `web/lib/ai/providerTypes.ts`, `disabledProvider.ts` — interface + disabled implementation; **no** vendor SDK. |
 | **2** | Privacy / redaction boundary | **Done (first pass):** `web/lib/ai/redaction.ts` — deterministic redaction + step metadata; expandable. |
 | **3** | Org AI policy / config design | **Done:** `web/lib/ai/aiPolicy.ts` — `metadata.ai_policy` parser; **disabled by default**; no migration. |
@@ -276,7 +276,7 @@ The next phases add **optional** intelligence and **optional** durability while 
 
 ## 15. References (repo)
 
-- `docs/product/ai-system.md` — agent routes, DEFINER RPC pattern, env gates.  
+- `docs/product/bos-foundation.md` — agent routes, DEFINER RPC pattern, env gates.  
 - `web/app/api/admin/agent/**` — v0/v1/v2 routes.  
 - `web/lib/emitEvent.ts` — `workflow_events` insert.  
 - `supabase/migrations/20260412100000_agent_v0_audit.sql`, `20260413100000_agent_v1_record_overview_layout_audit.sql`, `20260414100000_agent_v2_field_visibility_audit.sql` — proposal/apply audit precedent.  

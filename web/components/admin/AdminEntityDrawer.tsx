@@ -892,7 +892,7 @@ function DrawerQuietSkeletonBar({
 
 function DrawerSubtitleGateSkeleton({ lines = 2 }: { lines?: number }) {
     return (
-        <div className="mt-0.5 space-y-2 min-h-[2.75rem]" aria-busy="true">
+        <div className="mt-0 space-y-1.5 min-h-[2rem]" aria-busy="true">
             <DrawerQuietSkeletonBar className="h-4 w-[min(18rem,100%)]" />
             {lines > 1 ? <DrawerQuietSkeletonBar className="h-3 w-[min(14rem,100%)]" /> : null}
         </div>
@@ -901,7 +901,7 @@ function DrawerSubtitleGateSkeleton({ lines = 2 }: { lines?: number }) {
 
 function DrawerOpportunityWorkflowSubtitleGateSkeleton() {
     return (
-        <div className="mt-0.5 space-y-2 min-h-[52px]" aria-busy="true">
+        <div className="mt-0 space-y-1.5 min-h-[40px]" aria-busy="true">
             <div className="flex flex-wrap items-center gap-2">
                 <DrawerQuietSkeletonBar className="h-6 w-20 rounded-full" />
                 <DrawerQuietSkeletonBar className="h-9 flex-1 min-w-[10rem] max-w-[240px] rounded-full" />
@@ -5540,7 +5540,7 @@ export default function AdminEntityDrawer() {
                       className={`flex flex-wrap gap-2 items-center justify-end ${
                           drawerShellVariant === "adminV2"
                               ? opportunityInquiryWorkflowDrawer
-                                  ? "rounded-xl border border-admin-border/45 bg-white/80 px-2.5 py-2 shadow-sm ring-1 ring-alloy-stone/10"
+                                  ? "rounded-xl border border-admin-border/45 bg-white/80 px-3 py-2.5 shadow-sm ring-1 ring-alloy-stone/10"
                                   : "rounded-lg border border-admin-border/45 bg-white/70 px-2.5 py-1.5 shadow-sm"
                               : ""
                       }`}
@@ -8315,13 +8315,13 @@ export default function AdminEntityDrawer() {
           opportunityInquiryWorkflowDrawer &&
           opportunityDrawerOverviewRevealReady &&
           drawerTabStripKeys.length > 0 ? (
-            <div className="flex min-h-[2.875rem] flex-wrap gap-0.5 rounded-lg border border-admin-border bg-white p-0.5">
+            <div className="flex min-h-0 flex-wrap gap-0.5 rounded-lg border border-admin-border bg-white py-1.5 px-1.5">
                 {drawerTabStripKeys.map((tab) => (
                     <button
                         key={tab}
                         type="button"
                         onClick={() => setDrawerTab(tab)}
-                        className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors adminv2-record-modal-tab ${drawerTab === tab ? "adminv2-record-modal-tab--active" : "text-alloy-forge/80 hover:bg-alloy-stone/50"}`}
+                        className={`rounded-md px-3 py-1.5 text-xs font-medium leading-snug transition-colors adminv2-record-modal-tab ${drawerTab === tab ? "adminv2-record-modal-tab--active" : "text-alloy-forge/80 hover:bg-alloy-stone/50"}`}
                     >
                         {tabLabels[tab] ?? tab}
                     </button>
@@ -8334,7 +8334,7 @@ export default function AdminEntityDrawer() {
           ) &&
           !(overviewData && (overviewData as { _create?: boolean })._create) &&
           drawerTabStripKeys.length > 0 ? (
-            <div className="flex min-h-[2.875rem] flex-wrap gap-0.5 rounded-lg border border-admin-border bg-white p-0.5">
+            <div className="flex min-h-0 flex-wrap gap-0.5 rounded-lg border border-admin-border bg-white py-1.5 px-1.5">
                 {drawerTabStripKeys.map((tab) => (
                     <button
                         key={tab}
@@ -8343,7 +8343,7 @@ export default function AdminEntityDrawer() {
                         onClick={() => {
                             if (!drawerGateLoading) setDrawerTab(tab);
                         }}
-                        className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors adminv2-record-modal-tab ${drawerTab === tab ? "adminv2-record-modal-tab--active" : "text-alloy-forge/80 hover:bg-alloy-stone/50"} ${drawerGateLoading ? "opacity-85 cursor-default" : ""}`}
+                        className={`rounded-md px-3 py-1.5 text-xs font-medium leading-snug transition-colors adminv2-record-modal-tab ${drawerTab === tab ? "adminv2-record-modal-tab--active" : "text-alloy-forge/80 hover:bg-alloy-stone/50"} ${drawerGateLoading ? "opacity-85 cursor-default" : ""}`}
                         aria-busy={drawerGateLoading}
                     >
                         {tabLabels[tab] ?? tab}
@@ -8557,7 +8557,7 @@ export default function AdminEntityDrawer() {
         : drawerGateLoading || opportunityHeaderActionsPending
           ? (
                 <div
-                    className="flex min-h-[40px] w-full flex-wrap items-center justify-end gap-2"
+                    className="flex min-h-0 w-full flex-wrap items-center justify-end gap-2"
                     aria-busy="true"
                 >
                     <DrawerQuietSkeletonBar className="h-9 w-28" />

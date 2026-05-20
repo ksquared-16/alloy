@@ -36,7 +36,7 @@ Execution constraint: **Cards 1+ must not contradict this section without a new 
 | **Single-recipient draft** | SMS **or** email body (and email subject when channel is email), anchored to an **`opportunities`** row (**`jobs` deferred** per Card 0). |
 | **Human-editable draft** | All outbound text is shown in UI and editable **before** any server-side enqueue. |
 | **Explicit approval** | **Send now** only after operator confirms a final payload; server runs **full deterministic validation** again on apply (never trust client-only checks). |
-| **Context-aware generation** | Proposal `draft_body` / `draft_subject` may be produced from **read-only** record context (entity GET fields, activity summary, drawer recipients list) — deterministic templates first; optional gated LLM **only** behind same class of policy gates as Agent #1 enrichment (`docs/product/ai-system.md`). |
+| **Context-aware generation** | Proposal `draft_body` / `draft_subject` may be produced from **read-only** record context (entity GET fields, activity summary, drawer recipients list) — deterministic templates first; optional gated LLM **only** behind same class of policy gates as Agent #1 enrichment (`docs/product/bos-foundation.md`). |
 | **Recipient transparency** | `recipient_candidates` + operator-**selected** single recipient; no hidden BCC, no multi-send in V1. |
 
 ### 1.2 Explicitly out of scope (V1)
@@ -269,7 +269,7 @@ Run **after** operator clicks Apply, on **server**, on the **final** body (post-
 | **4** | **Apply route** | `POST /api/admin/ai/task-assist/apply` (or under `/api/admin/communications/task-assist/apply`): validates §4, then **delegates** to shared `send` handler or internal `fetch` to self — **prefer** extracting shared function from `communications/send/route.ts` to avoid drift. **No** migration. |
 | **5** | **UI — proposal panel** | **`TaskAssistV1OpportunityPanel`** in **`AdminEntityDrawer`** (communications tab + opportunity overview comms block). Gated by **`NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED`** (`web/lib/agent/taskAssist/taskAssistV1UiGate.ts`). |
 | **6** | **Tests** | Route + validation tests under **`web/tests/agent/taskAssist/`**; legacy-stack guard (no `.from('messages')` / `messages_outbox` in Task Assist sources); UI gate + panel source contracts. |
-| **7** | **Docs + anti-drift** | This file + cross-links in **`ai_agents_v1.md`**, **`docs/product/ai-system.md`**, **`docs/product/communications.md`**. |
+| **7** | **Docs + anti-drift** | This file + cross-links in **`ai_agents_v1.md`**, **`docs/product/bos-foundation.md`**, **`docs/product/communications.md`**. |
 
 **Shipped HTTP routes**
 
@@ -334,7 +334,7 @@ Run **after** operator clicks Apply, on **server**, on the **final** body (post-
 - `docs/product/communications.md`
 - `docs/system/actions-and-workflows.md` (boundary: Task Assist does **not** create workflows)
 - `docs/execution/operating-doctrine.md`
-- `docs/product/ai-system.md`
+- `docs/product/bos-foundation.md`
 - `web/app/api/admin/communications/send/route.ts`
 - **`web/lib/communications/executeCommunicationsSend.ts`**
 - `web/lib/communications/canonicalOutboundEnqueue.ts`

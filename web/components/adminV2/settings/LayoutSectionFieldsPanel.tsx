@@ -5,16 +5,16 @@ import Link from "next/link";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { isEligibleForLayoutFieldPicker } from "@/lib/adminV2/layouts/layoutFieldPickerEligibility";
 import {
-    drawerSectionFieldsAssignable,
-    drawerSectionFieldsHereLabel,
-    drawerSectionTypeDetail,
-    drawerSectionTypeLabel,
-} from "@/lib/adminV2/layouts/sectionTypePresentation";
+    buildLayoutSectionDisplayFieldRows,
+    resolveLayoutSectionOperatorProfile,
+    type LayoutSectionDisplayFieldRow,
+} from "@/lib/adminV2/layouts/layoutSectionOperatorUi";
 import { operatorFieldDisplayLabel, type OperatorFieldRow } from "@/lib/fields/fieldSettingsOperatorUi";
 import { normalizeSortOrdersInSection } from "@/lib/fields/fieldPlacementBatch";
 import type { LayoutCompositionCapabilities } from "@/lib/adminV2/layouts/layoutCompositionCapabilities";
 import {
     buildLayoutFieldBehaviorView,
+    LAYOUT_FIELD_BEHAVIOR_HELPER,
     layoutFieldBehaviorControlsEnabled,
 } from "@/lib/adminV2/layouts/layoutFieldBehaviorUi";
 import LayoutFieldBehaviorControls from "@/components/adminV2/settings/LayoutFieldBehaviorControls";
@@ -63,17 +63,24 @@ async function readApiError(res: Response): Promise<string> {
     return typeof json.error === "string" && json.error.trim() ? json.error.trim() : `Request failed (${res.status})`;
 }
 
+function displayLabelForRow(entityType: string, row: LayoutSectionDisplayFieldRow): string {
+    if (row.label?.trim()) return row.label.trim();
+    return operatorFieldDisplayLabel(entityType, row as OperatorFieldRow);
+}
+
 export default function LayoutSectionFieldsPanel({
     entityType,
     section,
     capabilities,
     workflowV1Configured,
+    layoutPlacements: layoutPlacementsProp,
     onSaved,
 }: {
     entityType: string;
     section: LayoutSectionDetail | null;
     capabilities: LayoutCompositionCapabilities;
     workflowV1Configured: boolean;
+    layoutPlacements?: FieldPlacementV1[];
     onSaved?: () => void;
 }) {
     const { canMutate } = useAdminAuth();
@@ -90,13 +97,22 @@ export default function LayoutSectionFieldsPanel({
     const [saveOk, setSaveOk] = useState(false);
     const [layoutPlacements, setLayoutPlacements] = useState<FieldPlacementV1[] | undefined>(undefined);
 
-    const fieldsAssignable = section ? drawerSectionFieldsAssignable(section.kind) : false;
+    const sectionProfile = useMemo(
+        () =>
+            section
+                ? resolveLayoutSectionOperatorProfile(section.kind, section.section_key, {
+                      previewFieldKeys: section.field_keys,
+                  })
+                : null,
+        [section]
+    );
+    const fieldsAssignable = sectionProfile?.canAssignFields === true;
     const showLayoutBehavior = layoutFieldBehaviorControlsEnabled({
         entityType,
         workflowV1Configured,
         canMutate,
         isReadOnly: capabilities.isReadOnly,
-        canAssignFields: capabilities.canAssignFields,
+        canConfigureFieldBehavior: sectionProfile?.canConfigureFieldBehavior === true,
     });
     const canEditPlacement =
         canMutate && capabilities.canAssignFields && fieldsAssignable && !capabilities.isReadOnly;
@@ -145,8 +161,7 @@ export default function LayoutSectionFieldsPanel({
     }, [entityType]);
 
     const loadLayoutPlacements = useCallback(async () => {
-        if (entityType !== "opportunity" || !workflowV1Configured) {
-            setLayoutPlacements(undefined);
+        if (layoutPlacementsProp !== undefined || entityType !== "opportunity" || !workflowV1Configured) {
             return;
         }
         try {
@@ -162,15 +177,19 @@ export default function LayoutSectionFieldsPanel({
         } catch {
             setLayoutPlacements(undefined);
         }
-    }, [entityType, workflowV1Configured]);
+    }, [entityType, workflowV1Configured, layoutPlacementsProp]);
 
     useEffect(() => {
         void loadFields();
     }, [loadFields]);
 
     useEffect(() => {
+        if (layoutPlacementsProp !== undefined) {
+            setLayoutPlacements(layoutPlacementsProp);
+            return;
+        }
         void loadLayoutPlacements();
-    }, [loadLayoutPlacements]);
+    }, [layoutPlacementsProp, loadLayoutPlacements]);
 
     useEffect(() => {
         if (section) {
@@ -178,20 +197,24 @@ export default function LayoutSectionFieldsPanel({
         }
     }, [section?.section_key, section?.title]);
 
-    const sectionFields = useMemo(() => {
+    const displayRows = useMemo(() => {
         if (!section) return [];
-        if (section.kind === "field_section_ref") {
-            return allFields
-                .filter((f) => (f.section_key ?? "custom") === section.section_key)
-                .filter((f) => isEligibleForLayoutFieldPicker(entityType, f))
-                .sort((a, b) => a.sort_order - b.sort_order || a.field_key.localeCompare(b.field_key));
-        }
-        const keys = new Set(section.field_keys ?? []);
+        return buildLayoutSectionDisplayFieldRows({
+            entityType,
+            sectionKey: section.section_key,
+            sectionKind: section.kind,
+            catalogFields: allFields,
+            previewFieldKeys: section.field_keys,
+        });
+    }, [allFields, section, entityType]);
+
+    const sectionFields = useMemo(() => {
+        if (!section || sectionProfile?.fieldsPanelMode !== "custom_catalog") return [];
         return allFields
-            .filter((f) => keys.has(f.field_key))
+            .filter((f) => (f.section_key ?? "custom") === section.section_key)
             .filter((f) => isEligibleForLayoutFieldPicker(entityType, f))
             .sort((a, b) => a.sort_order - b.sort_order || a.field_key.localeCompare(b.field_key));
-    }, [allFields, section, entityType]);
+    }, [allFields, section, entityType, sectionProfile?.fieldsPanelMode]);
 
     useEffect(() => {
         setLocalRows(sectionFields);
@@ -306,8 +329,17 @@ export default function LayoutSectionFieldsPanel({
         setPickFieldId("");
     };
 
-    const removeFromSection = (fieldId: string) => {
-        setLocalRows((prev) => prev.filter((r) => r.id !== fieldId));
+    const removeFromLayout = (row: FieldRow, displayLabel: string) => {
+        if (
+            !window.confirm(
+                `Remove "${displayLabel}" from this section on the layout?\n\nThe field definition is not deleted — it stays in Fields and moves to the default catalog group when you save.`
+            )
+        ) {
+            return;
+        }
+        setLocalRows((prev) => prev.filter((r) => r.id !== row.id));
+        setSaveOk(false);
+        setSaveError(null);
     };
 
     if (!section) {
@@ -318,15 +350,23 @@ export default function LayoutSectionFieldsPanel({
         );
     }
 
+    const isCustomCatalog = sectionProfile?.fieldsPanelMode === "custom_catalog";
+    const rowsToRender = isCustomCatalog ? localRows : displayRows;
+    const hasBehaviorRows = displayRows.some((r) => !r.displayOnly);
+
     return (
         <section className="rounded-lg border border-alloy-forge/12 bg-white/80 p-3" data-testid="layout-section-fields">
             <h3 className="text-sm font-semibold text-alloy-midnight">Section detail</h3>
+
+            {sectionProfile?.sectionHint ? (
+                <p className="mt-1 text-[11px] leading-snug text-alloy-midnight/55">{sectionProfile.sectionHint}</p>
+            ) : null}
 
             <dl className="mt-2 space-y-1.5 text-xs">
                 <div className="flex flex-wrap gap-x-2">
                     <dt className="text-alloy-midnight/50">Section name</dt>
                     <dd className="min-w-0 flex-1 font-medium text-alloy-midnight">
-                        {fieldsAssignable && canMutate ? (
+                        {sectionProfile?.canRenameTitle && canMutate ? (
                             <input
                                 value={sectionLabel}
                                 onChange={(e) => setSectionLabel(e.target.value)}
@@ -339,52 +379,76 @@ export default function LayoutSectionFieldsPanel({
                         )}
                     </dd>
                 </div>
-                <div className="flex flex-wrap gap-x-2">
-                    <dt className="text-alloy-midnight/50">Section key</dt>
-                    <dd className="font-mono text-[11px] text-alloy-midnight/75">{section.section_key}</dd>
-                </div>
-                <div className="flex flex-wrap gap-x-2">
+                <div className="flex flex-wrap gap-x-2 items-center">
                     <dt className="text-alloy-midnight/50">Type</dt>
-                    <dd>{drawerSectionTypeLabel(section.kind)}</dd>
+                    <dd>
+                        <span
+                            className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                sectionProfile?.operatorClass === "custom"
+                                    ? "bg-alloy-pine/10 text-alloy-pine"
+                                    : sectionProfile?.operatorClass === "header"
+                                      ? "bg-alloy-blue/10 text-alloy-blue"
+                                      : "bg-alloy-stone/15 text-alloy-midnight/60"
+                            }`}
+                        >
+                            {sectionProfile?.operatorClassLabel}
+                        </span>
+                    </dd>
                 </div>
                 <div className="flex flex-wrap gap-x-2">
-                    <dt className="text-alloy-midnight/50">Fields here</dt>
-                    <dd>{drawerSectionFieldsHereLabel(section.kind)}</dd>
+                    <dt className="text-alloy-midnight/50">You can</dt>
+                    <dd className="text-alloy-midnight/75">{sectionProfile?.capabilitySummary}</dd>
                 </div>
             </dl>
 
-            <p className="mt-3 rounded-md border border-alloy-forge/10 bg-alloy-stone/[0.04] px-2.5 py-2 text-[11px] leading-snug text-alloy-midnight/65">
-                {drawerSectionTypeDetail(section.kind)}
-            </p>
-
-            <p className="mt-2 text-[10px] text-alloy-midnight/45">
-                Buttons in this drawer are configured on{" "}
-                <Link
-                    href={`/adminV2/settings/actions?entity_type=${encodeURIComponent(entityType)}&section_key=${encodeURIComponent(section.section_key)}`}
-                    className="font-medium text-alloy-pine hover:underline"
-                >
-                    Action buttons
-                </Link>
-                .
-            </p>
+            {sectionProfile?.actionsLinkHref && sectionProfile.actionsLinkLabel ? (
+                <p className="mt-1.5 text-[10px] text-alloy-midnight/45">
+                    <Link href={sectionProfile.actionsLinkHref} className="font-medium text-alloy-pine hover:underline">
+                        {sectionProfile.actionsLinkLabel}
+                    </Link>
+                </p>
+            ) : null}
 
             {loading ? <p className="mt-3 text-xs text-alloy-midnight/55">Loading fields…</p> : null}
-            {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : null}
+            {error ? (
+                <p className="mt-2 text-xs text-red-600" role="alert">
+                    {error}
+                </p>
+            ) : null}
 
-            <h4 className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Fields in this section</h4>
+            <h4 className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                Fields in this section
+            </h4>
+            {isCustomCatalog ? (
+                <p className="mt-0.5 text-[10px] text-alloy-midnight/45">
+                    Remove from layout moves the field to the default catalog group — it does not delete the field
+                    definition.
+                </p>
+            ) : sectionProfile?.fixedFieldsNote ? (
+                <p className="mt-0.5 text-[10px] text-alloy-midnight/45">{sectionProfile.fixedFieldsNote}</p>
+            ) : !fieldsAssignable ? (
+                <p className="mt-0.5 text-[10px] text-alloy-midnight/45">
+                    Add and remove catalog fields is not supported for this section.
+                </p>
+            ) : null}
 
-            {!loading && localRows.length === 0 ? (
+            {!loading && rowsToRender.length === 0 ? (
                 <p className="mt-1 text-xs text-alloy-midnight/55">
-                    {canEditPlacement ? "No fields yet — add an existing field below." : "No fields shown for this section."}
+                    {canEditPlacement ? "No fields yet — add an existing field below." : "No fields listed for this section."}
                 </p>
             ) : null}
 
             <ol className="mt-2 space-y-1.5">
-                {localRows.map((row, i) => {
-                    const displayLabel = operatorFieldDisplayLabel(entityType, row as OperatorFieldRow);
-                    const behaviorView = showLayoutBehavior
-                        ? buildLayoutFieldBehaviorView(row, layoutConfigForBehavior)
-                        : null;
+                {(isCustomCatalog ? localRows : displayRows).map((row, i) => {
+                    const displayRow = row as LayoutSectionDisplayFieldRow & FieldRow;
+                    const displayOnly = "displayOnly" in displayRow && displayRow.displayOnly === true;
+                    const displayLabel = isCustomCatalog
+                        ? operatorFieldDisplayLabel(entityType, row as OperatorFieldRow)
+                        : displayLabelForRow(entityType, displayRow);
+                    const behaviorView =
+                        showLayoutBehavior && !displayOnly
+                            ? buildLayoutFieldBehaviorView(row, layoutConfigForBehavior)
+                            : null;
                     return (
                         <li
                             key={row.id}
@@ -393,7 +457,11 @@ export default function LayoutSectionFieldsPanel({
                             <div className="flex flex-wrap items-center gap-2">
                                 <span className="w-5 text-[10px] text-alloy-midnight/40">{i + 1}</span>
                                 <span className="min-w-0 flex-1 font-medium text-alloy-midnight">{displayLabel}</span>
-                                {canEditPlacement ? (
+                                {displayOnly ? (
+                                    <span className="text-[10px] text-alloy-midnight/45" title={displayRow.displayOnlyReason}>
+                                        Fixed
+                                    </span>
+                                ) : canEditPlacement ? (
                                     <span className="flex gap-0.5">
                                         <button
                                             type="button"
@@ -415,14 +483,13 @@ export default function LayoutSectionFieldsPanel({
                                             type="button"
                                             className="rounded border border-admin-border px-1.5 py-0.5 text-[10px] text-alloy-midnight/55 hover:bg-alloy-stone/10"
                                             disabled={saving}
-                                            onClick={() => removeFromSection(row.id)}
+                                            title="Remove from this section on the layout (field definition stays in Fields)"
+                                            onClick={() => removeFromLayout(row as FieldRow, displayLabel)}
                                         >
-                                            Remove
+                                            Remove from layout
                                         </button>
                                     </span>
-                                ) : (
-                                    <span className="text-[10px] text-alloy-midnight/45">{row.field_key}</span>
-                                )}
+                                ) : null}
                             </div>
                             {behaviorView ? (
                                 <LayoutFieldBehaviorControls
@@ -431,10 +498,12 @@ export default function LayoutSectionFieldsPanel({
                                     view={behaviorView}
                                     disabled={!canMutate}
                                     onPlacementsSaved={(placements) => {
-                                        setLayoutPlacements(placements);
+                                        if (placements) setLayoutPlacements(placements);
                                         onSaved?.();
                                     }}
                                 />
+                            ) : displayOnly ? (
+                                <p className="mt-1 text-[10px] text-alloy-midnight/40">Fixed on this drawer.</p>
                             ) : null}
                         </li>
                     );
@@ -474,7 +543,8 @@ export default function LayoutSectionFieldsPanel({
 
             {canEditPlacement && pickerExcludedCount > 0 ? (
                 <p className="mt-2 text-[10px] text-alloy-midnight/45">
-                    {pickerExcludedCount} field{pickerExcludedCount === 1 ? "" : "s"} not shown here because they are inactive, hidden from the drawer, or reserved for system use. Edit them on Fields.
+                    {pickerExcludedCount} field{pickerExcludedCount === 1 ? "" : "s"} not shown here because they are
+                    inactive, hidden from the drawer, or reserved for system use. Edit them on Fields.
                 </p>
             ) : null}
 
@@ -486,31 +556,38 @@ export default function LayoutSectionFieldsPanel({
                         className="rounded-lg bg-alloy-pine px-3 py-1 text-xs font-medium text-white disabled:opacity-45"
                         onClick={() => void savePlacement()}
                     >
-                        {saving ? "Saving…" : "Save fields"}
+                        {saving ? "Saving field order…" : "Save field order"}
                     </button>
                     <button
                         type="button"
                         className="text-xs text-alloy-pine hover:underline"
-                        onClick={() => setLocalRows(sectionFields)}
+                        onClick={() => {
+                            setLocalRows(sectionFields);
+                            setSaveError(null);
+                            setSaveOk(false);
+                        }}
                     >
-                        Reset
+                        Undo changes
                     </button>
                 </div>
             ) : null}
-            {saveError ? <p className="mt-1 text-[10px] text-red-600">{saveError}</p> : null}
-            {saveOk ? <p className="mt-1 text-[10px] text-alloy-pine">Saved.</p> : null}
-
-            {showLayoutBehavior ? (
-                <p className="mt-3 text-[10px] text-alloy-midnight/45">
-                    Required and editability on this layout apply to the opportunity drawer only. Global field rules are on{" "}
-                    <Link href="/adminV2/settings/fields" className="font-medium text-alloy-pine hover:underline">
-                        Fields
-                    </Link>
-                    .
+            {saveError ? (
+                <p className="mt-1 text-[10px] font-medium text-red-600" role="alert">
+                    Could not save field order: {saveError}
                 </p>
+            ) : null}
+            {saveOk ? (
+                <p className="mt-1 text-[10px] font-medium text-alloy-pine">Field order saved for this section.</p>
+            ) : null}
+            {canEditPlacement && dirty && !saving ? (
+                <p className="mt-1 text-[10px] text-amber-800/80">Unsaved field order — save or undo before leaving.</p>
+            ) : null}
+
+            {showLayoutBehavior && hasBehaviorRows ? (
+                <p className="mt-3 text-[10px] text-alloy-midnight/45">{LAYOUT_FIELD_BEHAVIOR_HELPER}</p>
             ) : (
                 <p className="mt-3 text-[10px] text-alloy-midnight/45">
-                    To create new fields or edit policies, use{" "}
+                    Create new fields on{" "}
                     <Link href="/adminV2/settings/fields" className="font-medium text-alloy-pine hover:underline">
                         Fields
                     </Link>

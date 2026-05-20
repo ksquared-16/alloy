@@ -46,7 +46,7 @@ export default function LayoutsSettingsHubClient({ initialEntity }: { initialEnt
     const entityLabel = adminFieldEntitySingularLabel(labels, entity);
 
     return (
-        <div className="w-full max-w-6xl space-y-5">
+        <div className="w-full max-w-6xl space-y-3">
             <SettingsEntityTabBar
                 tabs={entityTabs}
                 activeKey={entity}
@@ -54,15 +54,7 @@ export default function LayoutsSettingsHubClient({ initialEntity }: { initialEnt
                 aria-label="Record type for layouts"
             />
 
-            <p className="text-xs leading-relaxed text-alloy-midnight/55">
-                Use Layouts to choose which sections appear in the <span className="font-medium text-alloy-midnight/75">{entityLabel}</span> drawer and which fields appear in each section. Use{" "}
-                <Link href="/adminV2/settings/fields" className="font-medium text-alloy-pine hover:underline">
-                    Fields
-                </Link>{" "}
-                to create fields or edit field rules.
-            </p>
-
-            <RecordDrawerCompositionWorkspace entity={entity} />
+            <RecordDrawerCompositionWorkspace entity={entity} entityLabel={entityLabel} />
 
             <details
                 className="rounded-xl border border-dashed border-alloy-forge/20 bg-alloy-stone/[0.03]"

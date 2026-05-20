@@ -4,6 +4,7 @@ import {
     actionControlledFieldInteractionPolicy,
     personFieldOnOpportunityInteractionPolicy,
 } from "@/lib/fields/fieldInteractionPolicy";
+import { buildSimpleRequirementPolicy } from "@/lib/fields/fieldPolicySettingsUi";
 
 const BASE = "2026-01-01T00:00:00.000Z";
 
@@ -36,7 +37,7 @@ describe("layoutIntegrityValidator", () => {
         expect(codes(r).filter((c) => c === "required_field_not_visible")).toHaveLength(0);
     });
 
-    it("detects required field not visible", () => {
+    it("detects required field not visible (definition default, no placement)", () => {
         const r = report({
             entity_type: "opportunity",
             field_definitions: [
@@ -45,6 +46,7 @@ describe("layoutIntegrityValidator", () => {
                     entity_type: "opportunity",
                     field_type: "text",
                     is_required: true,
+                    requirement_policy: buildSimpleRequirementPolicy("required_on_save"),
                     is_visible_in_drawer: false,
                     is_visible_in_form: false,
                     is_visible_in_table: false,
@@ -53,6 +55,96 @@ describe("layoutIntegrityValidator", () => {
             ],
             sections: [{ section_key: "custom", entity_type: "opportunity" }],
             layout_config_json: {},
+        });
+        expect(codes(r)).toContain("required_field_not_visible");
+        expect(codes(r)).not.toContain("required_on_layout_not_visible");
+    });
+
+    it("placement required_on_save + missing from layout preview reports layout issue", () => {
+        const r = report({
+            entity_type: "opportunity",
+            field_definitions: [
+                {
+                    field_key: "campus_pref",
+                    entity_type: "opportunity",
+                    field_type: "text",
+                    is_required: false,
+                    requirement_policy: buildSimpleRequirementPolicy("optional"),
+                    is_visible_in_drawer: false,
+                    is_visible_in_form: false,
+                    section_key: "custom",
+                },
+            ],
+            sections: [{ section_key: "custom", entity_type: "opportunity" }],
+            layout_config_json: {
+                field_placements_v1: [
+                    {
+                        field_key: "campus_pref",
+                        surfaces: {
+                            drawer_overview: {
+                                requirement: buildSimpleRequirementPolicy("required_on_save"),
+                            },
+                        },
+                    },
+                ],
+            },
+        });
+        const issue = r.issues.find((i) => i.field_key === "campus_pref");
+        expect(issue?.code).toBe("required_on_layout_not_visible");
+        expect(issue?.message).toContain("required on this layout");
+    });
+
+    it("placement optional overrides definition required — no required-missing issue", () => {
+        const r = report({
+            entity_type: "opportunity",
+            field_definitions: [
+                {
+                    field_key: "campus_pref",
+                    entity_type: "opportunity",
+                    field_type: "text",
+                    is_required: true,
+                    requirement_policy: buildSimpleRequirementPolicy("required_on_save"),
+                    is_visible_in_drawer: false,
+                    is_visible_in_form: false,
+                    section_key: "custom",
+                },
+            ],
+            sections: [{ section_key: "custom", entity_type: "opportunity" }],
+            layout_config_json: {
+                field_placements_v1: [
+                    {
+                        field_key: "campus_pref",
+                        surfaces: {
+                            drawer_overview: {
+                                requirement: buildSimpleRequirementPolicy("optional"),
+                            },
+                        },
+                    },
+                ],
+            },
+        });
+        expect(codes(r).filter((c) => c.startsWith("required_"))).toHaveLength(0);
+    });
+
+    it("malformed field_placements_v1 does not crash integrity", () => {
+        const r = report({
+            entity_type: "opportunity",
+            field_definitions: [
+                {
+                    field_key: "hidden_required",
+                    entity_type: "opportunity",
+                    field_type: "text",
+                    is_required: true,
+                    requirement_policy: buildSimpleRequirementPolicy("required_on_save"),
+                    is_visible_in_drawer: false,
+                    is_visible_in_form: false,
+                    section_key: "custom",
+                },
+            ],
+            sections: [{ section_key: "custom", entity_type: "opportunity" }],
+            layout_config_json: {
+                field_placements_v1: [null, "bad", { field_key: 1 }] as unknown as [],
+            },
         });
         expect(codes(r)).toContain("required_field_not_visible");
     });

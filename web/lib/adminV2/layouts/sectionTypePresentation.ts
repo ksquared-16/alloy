@@ -4,15 +4,17 @@ export type DrawerSectionKind = "field_section_ref" | "workflow_virtual" | "inje
 
 export function drawerSectionTypeLabel(kind: string): string {
     switch (kind) {
+        case "header_region":
+            return "Header";
         case "workflow_virtual":
-            return "Workflow-controlled";
+            return "Workflow section";
         case "injected_system":
-            return "Built-in";
+            return "Standard section";
         case "layout_static":
-            return "Template";
+            return "Standard section";
         case "field_section_ref":
         default:
-            return "Custom";
+            return "Custom section";
     }
 }
 
@@ -22,13 +24,15 @@ export function drawerSectionFieldsAssignable(kind: string): boolean {
 
 export function drawerSectionTypeDetail(kind: string): string {
     switch (kind) {
+        case "header_region":
+            return "Title, status, summary fields, and header actions.";
         case "workflow_virtual":
-            return "Workflow-controlled section: you can rename, show or hide, and reorder it where supported. Its fields are controlled by workflow configuration.";
+            return "Workflow section: show, hide, reorder, and set field behavior where supported.";
         case "injected_system":
-            return "Built-in section: this section is part of the standard drawer structure. You can show or hide or reorder it where supported, but its fields may be controlled by the record system.";
+            return "Standard section: show, hide, reorder, and set field behavior where supported.";
         case "field_section_ref":
         default:
-            return "Custom section: you can move eligible fields into this section.";
+            return "Custom section: add or remove fields and set field behavior.";
     }
 }
 
@@ -37,7 +41,10 @@ export function drawerSectionFieldsHereLabel(kind: string): string {
         return "You can move eligible fields into this section.";
     }
     if (kind === "workflow_virtual") {
-        return "Fields are controlled by workflow configuration.";
+        return "Fields come from workflow configuration.";
     }
-    return "Fields may be controlled by the record system.";
+    if (kind === "header_region") {
+        return "Header summary fields and actions.";
+    }
+    return "Some fields are fixed; others support layout behavior where listed.";
 }

@@ -60,10 +60,10 @@ Verified **2026-05** for Cards 1–6 (field policy, drawer validation, layout in
 
 - **Capability keys (seeded):** Migration **`supabase/migrations/20260520100000_ai_enrichment_permission_keys_seed.sql`** inserts **`ai.enrichment.use`** (default grant: org **`admin`**) and catalog-only **`ai.provider.config.manage`**, **`ai.telemetry.review`** (no default grants). Code: **`web/lib/ai/aiEnrichmentPermissions.ts`**.
 - **Portal vs strict:** **`resolveAiEnrichmentPortalAccess`** gates **`POST /api/admin/ai/enrich-attention-suggestion`** and **`POST /api/admin/ai/task-assist/propose`**. When **`AI_ENRICHMENT_USE_PERMISSION_REQUIRED=false`** (legacy), any portal **`admin` or `ops`** org role may call stub routes (aligned with **`requireAdminOrOps`** on other Task Assist APIs). When **`true`**, callers must have **`ai.enrichment.use`** in **`permissionKeys`** (union of grants for all role_keys in the org).
-- **Org policy (separate from user grants):** Routes also evaluate **`org_settings.metadata.ai_policy`** (`enabled`, `provider`, `allowed_features` such as **`draft_enrichment`** or **`task_assist_draft`**). See **`docs/product/ai-system.md`** — *Agent permission matrix*.
+- **Org policy (separate from user grants):** Routes also evaluate **`org_settings.metadata.ai_policy`** (`enabled`, `provider`, `allowed_features` such as **`draft_enrichment`** or **`task_assist_draft`**). See **`docs/product/bos-foundation.md`** — *Agent permission matrix* (§ Implementation inventory).
 - **Communications sends (Task Assist apply, composer, scheduled send mutations):** **`assertCommunicationsSendAllowed`** in **`web/lib/communications/communicationPermissions.ts`** — **`communications.send`** or legacy **`ops.messaging.write`**, or **`admin` / `ops`** role bypass.
 - **Operational tasks (Task Assist):** **`requireAdminOrOps`** only today — no dedicated task permission key.
-- **Workflow mutations:** **`requireAdmin`** on workflow CRUD routes — **not** ops-only; Workflow Assist apply must remain **admin** or a future **`workflows.manage`** key (see **`docs/product/ai-system.md`**).
+- **Workflow mutations:** **`requireAdmin`** on workflow CRUD routes — **not** ops-only; Workflow Assist apply must remain **admin** or a future **`workflows.manage`** key (see **`docs/product/bos-foundation.md`**).
 
 ## When this doc must be updated
 

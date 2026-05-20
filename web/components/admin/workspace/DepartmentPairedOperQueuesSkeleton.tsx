@@ -6,10 +6,13 @@ import {
 } from "@/components/admin/workspace/WorkspacePairedOperPanels";
 import { WorkUnitQueueCompactRowSkeletonList } from "@/components/admin/workspace/WorkUnitQueueCompactRowSkeleton";
 
-/** Matched row count for throughput + needs-attention paired panels (stable paired reveal). */
+/** Matched row count for throughput + needs-attention paired panels (legacy row-pulse skeleton). */
 export const DEPT_PAIRED_OPER_QUEUE_SKELETON_ROW_COUNT = 5;
 
-/** Dual-panel placeholder until pipeline lanes + attention preview both settle. */
+/**
+ * Row-pulse paired oper skeleton — **not** used for dept route `loading.tsx` or cold shell (see `DeptPairedOperQuietReserve`).
+ * Retained for tests and any future explicit pulse loading; dept cold path uses quiet reserve per PERF-A-02.
+ */
 export function DeptPairedOperQueuesSkeleton(props: { throughputTitle: string }) {
     const { throughputTitle } = props;
     const rowCount = DEPT_PAIRED_OPER_QUEUE_SKELETON_ROW_COUNT;

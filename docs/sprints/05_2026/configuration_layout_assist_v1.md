@@ -2,7 +2,7 @@
 
 **Path:** `docs/sprints/05_2026/configuration_layout_assist_v1.md`  
 **Status:** **Cards 1–10 implemented (vertical slice)** — primitives, proposal contract, persistence, permissions, Orchestrator routing, review UX, apply adapters. Cards 11–12 deferred.  
-**Prerequisites:** `docs/sprints/05_2026/agent_interaction_layer_v1.md` (Orchestrator + thread + action cards), `docs/sprints/05_2026/workflow_assist_v1.md` (propose/apply + permission patterns), `docs/system/configuration-system.md`, `docs/system/record-system.md`, `docs/product/ai-system.md`.
+**Prerequisites:** `docs/sprints/05_2026/agent_interaction_layer_v1.md` (Orchestrator + thread + action cards), `docs/sprints/05_2026/workflow_assist_v1.md` (propose/apply + permission patterns), `docs/system/configuration-system.md`, `docs/system/record-system.md`, `docs/product/bos-foundation.md`.
 
 **Non-goals for this document:** Autonomous config mutation; raw SQL from agents; service-role bypass; childcare-only field keys in platform code; replacing human Settings UI; merging Task Assist or Workflow Assist responsibilities.
 
@@ -554,7 +554,7 @@ All UX lives in the **Orchestrator thread** — proposal action cards, no separa
 
 **Goal:** Lock this document’s §2 audit and §Card 0 table; confirm no implementation contradicts proposal-only doctrine.
 
-**Files likely touched:** This doc only; optional cross-links in `docs/product/ai-system.md` when first route ships.
+**Files likely touched:** This doc only; optional cross-links in `docs/product/bos-foundation.md` when first route ships.
 
 **Acceptance criteria:**
 
@@ -725,7 +725,7 @@ All UX lives in the **Orchestrator thread** — proposal action cards, no separa
 
 - `supabase/migrations/*_config_assist_permissions.sql`
 - Propose/apply routes (new under `web/app/api/admin/ai/config-layout-assist/`)
-- `docs/system/roles-and-permissions.md`, `docs/product/ai-system.md`
+- `docs/system/roles-and-permissions.md`, `docs/product/bos-foundation.md`
 
 **Acceptance criteria:**
 
@@ -842,7 +842,7 @@ All UX lives in the **Orchestrator thread** — proposal action cards, no separa
 **Files likely touched:**
 
 - `web/tests/agent/configLayoutAssist/**`
-- `docs/product/ai-system.md`
+- `docs/product/bos-foundation.md`
 - Optional: `AGENT_CONFIG_LAYOUT_ASSIST_ENABLED` env
 
 **Acceptance criteria:**
@@ -899,7 +899,7 @@ cd web && npm run test -- web/tests/adminV2/commandSurfaceRouter.test.ts
 ## 12. Sources of truth
 
 - `docs/system/configuration-system.md`, `docs/system/record-system.md`
-- `docs/system/roles-and-permissions.md`, `docs/product/ai-system.md`
+- `docs/system/roles-and-permissions.md`, `docs/product/bos-foundation.md`
 - `docs/sprints/05_2026/agent_interaction_layer_v1.md`, `workflow_assist_v1.md`, `task_assist_v1.md`
 - `docs/sprints/05_2026/ai_enrichment_and_agent_actions_v1.md` (agent proposal/audit precedent)
 - Schema: `docs/supabase/reference/supabase_tables.csv`, `supabase_schema_columns.csv`

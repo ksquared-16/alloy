@@ -230,6 +230,12 @@ The bottom **command bar** is the **Orchestrator** surface. Operators use one in
 | **Config / Layout Assist** | Partial | Durable proposals; partial apply |
 | **Job overview layout** | Yes | Routed as `job_layout` |
 
+**Session state (`GlobalAssistantContext`, May 2026):**
+
+- **Thread + UI chrome:** `commandSurfaceThread`, `commandSurfaceThreadExpanded`, `commandSurfaceJobCardUi` — backed by **`sessionStorage`** (`commandSurfaceThreadPersistence.ts`) for AdminV2 navigation within a tab session; **Clear** resets explicitly.
+- **SSR / hydration:** First paint uses an **empty thread** on server and client; **`loadPersistedCommandSurfaceSession()`** runs in a mount **`useEffect`** only. Persist writes are gated until restore completes. **Do not** read `sessionStorage` in `useState` initializers (caused `AICommandSurfaceShell` hydration mismatch). Detail: **`docs/sprints/05_2026/agent_interaction_layer_v1.md`**.
+- **Workspace route context:** `workspaceScope` (`department_id`, optional `work_unit_id`, names) is set from department/work-unit pages for Workflow Assist create proposals; **`setWorkspaceScope`** shallow-compares before updating to avoid render loops. Detail: **`docs/sprints/05_2026/workflow_assist_v1.md`** § Workspace panels.
+
 ## Policy and permissions
 
 **Doctrine:** `metadata.ai_policy` = org capability switch. `role_permission_grants` + portal `admin`/`ops` = user may call routes. Orchestrator **never** executes side effects.
@@ -256,7 +262,7 @@ See **§ Implementation inventory — Agent permission matrix** for the full rou
 
 ## When this doc must be updated
 
-New BOS capabilities, lifecycle/status changes, permission matrix changes, or when `web/lib/bos` registry ships.
+New BOS capabilities, lifecycle/status changes, permission matrix changes, new route families in **`api-contracts.md`**, or changes to `web/lib/bos/` registry/adapters/auth.
 
 ---
 

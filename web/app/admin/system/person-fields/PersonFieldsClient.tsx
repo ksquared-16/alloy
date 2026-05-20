@@ -66,7 +66,8 @@ function toFieldDef(r: Record<string, unknown>): FieldDef {
 export default function PersonFieldsClient({
     manageOptionSetsHref,
     adminV2Chrome = false,
-}: { manageOptionSetsHref?: string; adminV2Chrome?: boolean } = {}) {
+    hideSettingsHeader = false,
+}: { manageOptionSetsHref?: string; adminV2Chrome?: boolean; hideSettingsHeader?: boolean } = {}) {
     const { canMutate } = useAdminAuth();
     const { labels } = useEntityLabels();
     const personEntityLabel = useMemo(() => adminFieldEntitySingularLabel(labels, "person"), [labels]);
@@ -345,8 +346,10 @@ export default function PersonFieldsClient({
 
     return (
         <>
-            {adminV2Chrome ? (
+            {adminV2Chrome && !hideSettingsHeader ? (
                 <SettingsPageHeader title={pageTitle} subtitle={compactSubtitle} actions={addFieldButton} />
+            ) : adminV2Chrome ? (
+                addFieldButton ? <div className="mb-3 flex flex-wrap justify-end gap-2">{addFieldButton}</div> : null
             ) : (
                 <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
                     <AdminPageHeader title={pageTitle} subtitle={pageSubtitle} />

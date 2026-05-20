@@ -5,7 +5,7 @@
 **Prerequisite (shipped):** `docs/sprints/05_2026/task_assist_v1_1.md` (Cards **0–9** — Task Assist backend + command bar pivot, entity-search, intent routing).  
 **Non-goals (V1 interaction layer):** New backend send/schema routes; autonomous agents; bulk send; **Workflow Assist execution** (Agent #3); LLM-required parsing (optional gated extract-only is a **later** card, not V1 default).
 
-**Product doctrine (2026-05):** The bottom command bar is the **Orchestrator Agent** — not Task Assist. Task Assist and Workflow Assist are **specialist agents** the Orchestrator routes to. See **`docs/product/ai-system.md`** (AdminV2 agent model).
+**Product doctrine (2026-05):** The bottom command bar is the **Orchestrator Agent** — not Task Assist. Task Assist and Workflow Assist are **specialist agents** the Orchestrator routes to. See **`docs/product/bos-foundation.md`** (AdminV2 agent model).
 
 | Agent | Owns | Does **not** do |
 |-------|------|------------------|
@@ -19,7 +19,7 @@
 
 ### Permission matrix (org policy vs user capability)
 
-Orchestrator **never** performs sends, schedules, or workflow writes — it only calls read/search routes and mounts specialist UIs. **Org `metadata.ai_policy`** gates whether **AI draft/propose** features are enabled for the tenant; **role / `role_permission_grants`** gates whether the **signed-in user** may invoke the corresponding admin APIs. Canonical matrix: **`docs/product/ai-system.md`** § *Agent permission matrix*; summary in **`docs/system/roles-and-permissions.md`**.
+Orchestrator **never** performs sends, schedules, or workflow writes — it only calls read/search routes and mounts specialist UIs. **Org `metadata.ai_policy`** gates whether **AI draft/propose** features are enabled for the tenant; **role / `role_permission_grants`** gates whether the **signed-in user** may invoke the corresponding admin APIs. Canonical matrix: **`docs/product/bos-foundation.md`** § *Agent permission matrix*; summary in **`docs/system/roles-and-permissions.md`**.
 
 ---
 
@@ -38,7 +38,7 @@ Orchestrator **never** performs sends, schedules, or workflow writes — it only
 | **Header** | `web/app/adminV2/components/TopNavBar.tsx` | **Assistant** button → **`focusCommandBar()`** only; redundant if bar is universal home. |
 | **Shell mount** | `web/app/adminV2/components/AdminV2Shell.tsx` | **`GlobalAssistantProvider`** + persistent bottom bar + **`pb-[96px]`** reserve. |
 | **Tests** | `web/tests/agent/taskAssist/*`, `web/tests/agent/adminV2AiCommandSurfaceModel.test.ts` | Contract tests **assert mode tabs** and **Find target** — will need rewrite in Card 4+. |
-| **Docs** | `docs/sprints/05_2026/task_assist_v1_1.md`, `docs/product/ai-system.md`, `communications.md`, `crm-system.md` | Describe **Card 9** accurately but **mode tabs**, **Find target**, header **Assistant** — stale relative to this sprint goal. |
+| **Docs** | `docs/sprints/05_2026/task_assist_v1_1.md`, `docs/product/bos-foundation.md`, `communications.md`, `crm-system.md` | Describe **Card 9** accurately but **mode tabs**, **Find target**, header **Assistant** — stale relative to this sprint goal. |
 
 ### 0.2 UX / architecture gaps (summary)
 
@@ -152,6 +152,8 @@ type CommandSurfaceActionCard =
 ```
 
 **Persistence V1 (shipped polish):** Thread state lives in **`GlobalAssistantContext`** (`commandSurfaceThread`, `commandSurfaceJobCardUi`, `commandSurfaceThreadExpanded`) with **`sessionStorage`** backup (`commandSurfaceThreadPersistence.ts`). Survives **AdminV2 route changes within the tab session**; **Clear** resets explicitly. Full browser reload restores from `sessionStorage` until tab close. No server thread table in V1.
+
+**SSR / hydration contract (May 2026):** Server and first client paint both start from an **empty thread** (`createEmptyThreadState`). **`loadPersistedCommandSurfaceSession()`** runs only in a mount **`useEffect`** — not in a `useState` initializer. Persist writes to `sessionStorage` are **gated** until that restore completes so an empty first paint does not wipe a saved session. **Do not** read `sessionStorage` during SSR or initial render: doing so made `AICommandSurfaceShell` server HTML (input-only footer) disagree with the client (expanded thread panel) and triggered React hydration errors. Viewport sizing for the thread panel uses a fixed initial height and updates in `resize` after mount.
 
 **Confirmed entity** lives on thread session: `{ entity_type, entity_id, label }` — merges with **`GlobalAssistantContext.currentContext`** (drawer may seed; thread is authoritative after confirm).
 
@@ -287,7 +289,7 @@ When workflow regex matches, the **Orchestrator** shows a **Workflow Assist noti
 ## References
 
 - `docs/sprints/05_2026/task_assist_v1_1.md` (Card 9 shipped behavior — baseline)
-- `docs/product/ai-system.md`
+- `docs/product/bos-foundation.md`
 - `web/app/adminV2/components/aiCommandSurface/AICommandSurfaceShell.tsx`
 - `web/lib/agent/taskAssist/taskAssistCommandIntent.ts`
 - `web/lib/agent/taskAssist/taskAssistEntitySearchService.ts`

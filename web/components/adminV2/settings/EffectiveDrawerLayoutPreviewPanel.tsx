@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { drawerSectionTypeLabel } from "@/lib/adminV2/layouts/sectionTypePresentation";
 
 type LayoutResolution = {
     source: "org_drawer_override" | "global_template";
@@ -14,8 +15,8 @@ type PreviewSection = {
     position: number;
     section_key: string;
     title: string;
-    kind: "workflow_virtual" | "field_section_ref" | "layout_static" | "injected_system";
-    structural_provenance: string;
+    kind: string;
+    structural_provenance?: string;
     detail?: string;
     field_keys?: string[];
 };
@@ -41,21 +42,6 @@ const ENTITY_OPTIONS: { value: string; label: string }[] = [
     { value: "schedule", label: "Schedule" },
 ];
 
-function kindBadgeClasses(kind: PreviewSection["kind"]): string {
-    switch (kind) {
-        case "workflow_virtual":
-            return "bg-violet-100 text-violet-900 border-violet-200";
-        case "field_section_ref":
-            return "bg-sky-100 text-sky-900 border-sky-200";
-        case "layout_static":
-            return "bg-alloy-stone/25 text-alloy-forge border-alloy-forge/15";
-        case "injected_system":
-            return "bg-amber-100 text-amber-950 border-amber-200";
-        default:
-            return "bg-alloy-stone/20 text-alloy-forge border-admin-border";
-    }
-}
-
 function layoutSourceLabel(source: LayoutResolution["source"]): string {
     return source === "org_drawer_override" ? "Org drawer override" : "Global template fallback";
 }
@@ -64,11 +50,13 @@ export default function EffectiveDrawerLayoutPreviewPanel({
     refreshToken = 0,
     entityType: entityTypeProp,
     hideEntitySelect = false,
+    developerMode = false,
 }: {
     refreshToken?: number;
-    /** When set, entity is controlled by parent (e.g. layouts hub tabs). */
     entityType?: string;
     hideEntitySelect?: boolean;
+    /** When false, panel is omitted from operator surfaces (use inside Developer details). */
+    developerMode?: boolean;
 }) {
     const [entityTypeInternal, setEntityTypeInternal] = useState("opportunity");
     const entityType = entityTypeProp ?? entityTypeInternal;
@@ -96,14 +84,17 @@ export default function EffectiveDrawerLayoutPreviewPanel({
         void load(entityType);
     }, [entityType, load, refreshToken]);
 
+    if (!developerMode) {
+        return null;
+    }
+
     return (
         <section className="rounded-xl border border-alloy-forge/15 bg-white/75 p-4 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                    <h2 className="text-sm font-semibold text-alloy-midnight">Current drawer sections</h2>
+                    <h2 className="text-sm font-semibold text-alloy-midnight">Resolved drawer layout (debug)</h2>
                     <p className="mt-1 max-w-2xl text-xs leading-snug text-alloy-midnight/60">
-                        Resolved order and labels as staff see them in the record drawer. Reorder inquiry sections above when workflow
-                        mode is enabled.
+                        Internal provenance and section resolution — not shown to operators in the main layout editor.
                     </p>
                 </div>
                 {!hideEntitySelect ? (
@@ -166,31 +157,20 @@ export default function EffectiveDrawerLayoutPreviewPanel({
 
                     <div className="rounded-lg border border-alloy-forge/12 bg-white/80 p-3 text-[11px]">
                         <div className="font-semibold text-alloy-midnight/85">Workflow mode (opportunity)</div>
-                        <p className="mt-1 text-alloy-midnight/65">
-                            <span className="font-medium text-alloy-midnight/80">inquiry_drawer_mode:</span>{" "}
-                            <span className="font-mono text-[10px]">{data.workflow.inquiry_drawer_mode ?? "—"}</span>
-                            {" · "}
-                            <span className="font-medium text-alloy-midnight/80">workflow v1 configured:</span>{" "}
-                            {data.workflow.workflow_v1_configured ? "yes" : "no"}
-                            {" · "}
-                            <span className="font-medium text-alloy-midnight/80">body transform:</span>{" "}
+                        <p className="mt-1 font-mono text-[10px] text-alloy-midnight/65">
+                            inquiry_drawer_mode={data.workflow.inquiry_drawer_mode ?? "—"} · workflow_v1=
+                            {data.workflow.workflow_v1_configured ? "yes" : "no"} · body_transform=
                             {data.workflow.workflow_v1_body_transform_active ? "active" : "inactive"}
                         </p>
                     </div>
 
                     <div>
                         <div className="flex flex-wrap items-baseline gap-2">
-                            <span className="text-[11px] font-semibold text-alloy-midnight/80">Overview sections (resolved order)</span>
-                            <span className="rounded border border-alloy-forge/15 bg-alloy-stone/10 px-1.5 py-0.5 text-[10px] text-alloy-midnight/60">
-                                Fidelity: {data.preview_fidelity}
+                            <span className="text-[11px] font-semibold text-alloy-midnight/80">Resolved sections</span>
+                            <span className="rounded border border-alloy-forge/15 bg-alloy-stone/10 px-1.5 py-0.5 font-mono text-[10px] text-alloy-midnight/60">
+                                fidelity={data.preview_fidelity}
                             </span>
                         </div>
-                        {data.preview_fidelity === "presentation_ordered_skeleton" && data.entity_type !== "opportunity" ? (
-                            <p className="mt-1 text-[10px] leading-snug text-alloy-midnight/50">
-                                Skeleton: presentation template + config ordering only — runtime job/schedule merges (pricing blocks, property rows,
-                                etc.) may reorder further in the drawer.
-                            </p>
-                        ) : null}
                         {data.empty_reason ? (
                             <p className="mt-2 text-xs text-amber-800">{data.empty_reason}</p>
                         ) : (
@@ -201,20 +181,24 @@ export default function EffectiveDrawerLayoutPreviewPanel({
                                         className="rounded-lg border border-admin-border/70 bg-white/90 px-3 py-2 text-xs"
                                     >
                                         <div className="flex flex-wrap items-center gap-2">
-                                            <span className="text-alloy-midnight/45 font-mono text-[10px]">{s.position}.</span>
+                                            <span className="font-mono text-[10px] text-alloy-midnight/45">{s.position}.</span>
                                             <span className="font-semibold text-alloy-midnight">{s.title}</span>
                                             <span className="font-mono text-[10px] text-alloy-midnight/55">{s.section_key}</span>
-                                            <span
-                                                className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${kindBadgeClasses(s.kind)}`}
-                                            >
-                                                {s.kind.replace(/_/g, " ")}
+                                            <span className="rounded border border-alloy-forge/15 bg-alloy-stone/10 px-1.5 py-0.5 text-[10px]">
+                                                {drawerSectionTypeLabel(s.kind)}
                                             </span>
-                                            <span className="text-[10px] text-alloy-midnight/45">{s.structural_provenance}</span>
+                                            {s.structural_provenance ? (
+                                                <span className="font-mono text-[10px] text-alloy-midnight/45">
+                                                    {s.structural_provenance}
+                                                </span>
+                                            ) : null}
                                         </div>
-                                        {s.detail ? <p className="mt-1 text-[10px] leading-snug text-alloy-midnight/55">{s.detail}</p> : null}
+                                        {s.detail ? (
+                                            <p className="mt-1 text-[10px] leading-snug text-alloy-midnight/55">{s.detail}</p>
+                                        ) : null}
                                         {s.field_keys?.length ? (
                                             <p className="mt-1 font-mono text-[10px] leading-relaxed text-alloy-midnight/50">
-                                                Fields: {s.field_keys.join(", ")}
+                                                field_keys: {s.field_keys.join(", ")}
                                             </p>
                                         ) : null}
                                     </li>

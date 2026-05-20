@@ -312,7 +312,7 @@ Do **not** reintroduce blindly:
 ### Remaining deferred polish
 
 - Communications/Notes section still lazy-load with local loading UI inside the hydrated drawer body.
-- Command-surface thread panel has its own loading states (not part of record drawer gate).
+- Command-surface thread panel has its own loading states (not part of record drawer gate). Thread restore from `sessionStorage` is client-only after mount — see **`agent_interaction_layer_v1.md`** (SSR / hydration contract).
 - Server-side combined workspace rollup endpoint (unchanged from Pass 1).
 
 ### Tests run

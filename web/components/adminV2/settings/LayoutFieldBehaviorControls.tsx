@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+    LAYOUT_FIELD_BEHAVIOR_HELPER,
     LAYOUT_INTERACTION_CONTROL_LABEL,
     LAYOUT_INTERACTION_INLINE_OPTIONS,
     LAYOUT_REQUIREMENT_CONTROL_LABEL,
+    LAYOUT_REQUIREMENT_PRESET_OPTIONS,
+    layoutRequirementPresetLabel,
     type LayoutFieldBehaviorView,
 } from "@/lib/adminV2/layouts/layoutFieldBehaviorUi";
-import { OPERATOR_REQUIREMENT_INLINE_OPTIONS } from "@/lib/fields/fieldSettingsOperatorUi";
 import type { FieldPolicyInteractionPreset, FieldPolicyRequirementPreset } from "@/lib/fields/fieldPolicySettingsUi";
 import type { FieldPlacementV1 } from "@/lib/fields/fieldPlacementV1";
 
@@ -31,7 +33,13 @@ export default function LayoutFieldBehaviorControls({
 }) {
     const [saving, setSaving] = useState<"requirement" | "interaction" | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [saved, setSaved] = useState(false);
+    const [savedKind, setSavedKind] = useState<"requirement" | "interaction" | null>(null);
+
+    useEffect(() => {
+        if (!savedKind) return;
+        const t = window.setTimeout(() => setSavedKind(null), 4000);
+        return () => window.clearTimeout(t);
+    }, [savedKind]);
 
     const patchBehavior = async (
         patch: { requirement_preset?: FieldPolicyRequirementPreset; interaction_preset?: FieldPolicyInteractionPreset },
@@ -40,7 +48,7 @@ export default function LayoutFieldBehaviorControls({
         if (disabled || view.kind !== "editable") return;
         setSaving(kind);
         setError(null);
-        setSaved(false);
+        setSavedKind(null);
         try {
             const res = await fetch("/api/admin/record-drawer-layouts/opportunity-workflow-v1-field-placements", {
                 method: "PATCH",
@@ -55,7 +63,7 @@ export default function LayoutFieldBehaviorControls({
             };
             if (!res.ok) throw new Error(json.error ?? (await readApiError(res)));
             onPlacementsSaved?.(json.field_placements_v1);
-            setSaved(true);
+            setSavedKind(kind);
         } catch (e) {
             setError((e as Error).message);
         } finally {
@@ -74,7 +82,9 @@ export default function LayoutFieldBehaviorControls({
                 {view.requirementSummary || view.interactionSummary ? (
                     <p className="mt-0.5 text-alloy-midnight/45">
                         {[
-                            view.requirementSummary ? `Required: ${view.requirementSummary}` : null,
+                            view.requirementSummary
+                                ? `On layout: ${view.requirementSummary}`
+                                : null,
                             view.interactionSummary ? `Editability: ${view.interactionSummary}` : null,
                         ]
                             .filter(Boolean)
@@ -85,11 +95,30 @@ export default function LayoutFieldBehaviorControls({
         );
     }
 
+    const statusLine =
+        error != null ? (
+            <p className="sm:col-span-2 text-[10px] font-medium text-red-600" role="alert">
+                Save failed: {error}
+            </p>
+        ) : saving ? (
+            <p className="sm:col-span-2 text-[10px] text-alloy-midnight/55">
+                Saving {saving === "requirement" ? "required" : "editability"}…
+            </p>
+        ) : savedKind ? (
+            <p className="sm:col-span-2 text-[10px] font-medium text-alloy-pine">
+                Saved {savedKind === "requirement" ? layoutRequirementPresetLabel(view.requirementPreset) : "editability"} for{" "}
+                {displayLabel}.
+            </p>
+        ) : null;
+
     return (
         <div
             className="mt-1.5 grid w-full gap-2 sm:grid-cols-2"
             data-testid={`layout-field-behavior-${fieldKey}`}
         >
+            <div className="min-w-0 sm:col-span-2">
+                <p className="text-[9px] text-alloy-midnight/45">{LAYOUT_FIELD_BEHAVIOR_HELPER}</p>
+            </div>
             <div className="min-w-0">
                 <label className="mb-0.5 block text-[10px] font-medium text-alloy-midnight/55">
                     {LAYOUT_REQUIREMENT_CONTROL_LABEL}
@@ -99,6 +128,9 @@ export default function LayoutFieldBehaviorControls({
                     disabled={disabled || saving !== null || !view.requirementEditable}
                     className="w-full rounded border border-[#e6e8ec] px-2 py-1 text-[11px] disabled:opacity-50"
                     aria-label={`${LAYOUT_REQUIREMENT_CONTROL_LABEL} for ${displayLabel}`}
+                    title={
+                        LAYOUT_REQUIREMENT_PRESET_OPTIONS.find((o) => o.value === view.requirementPreset)?.title ?? ""
+                    }
                     onChange={(e) =>
                         void patchBehavior(
                             { requirement_preset: e.target.value as FieldPolicyRequirementPreset },
@@ -106,8 +138,8 @@ export default function LayoutFieldBehaviorControls({
                         )
                     }
                 >
-                    {OPERATOR_REQUIREMENT_INLINE_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>
+                    {LAYOUT_REQUIREMENT_PRESET_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value} title={o.title}>
                             {o.label}
                         </option>
                     ))}
@@ -142,12 +174,7 @@ export default function LayoutFieldBehaviorControls({
                     <p className="mt-0.5 text-[9px] text-alloy-midnight/40">{view.interactionHint}</p>
                 ) : null}
             </div>
-            {error ? <p className="sm:col-span-2 text-[10px] text-red-600">{error}</p> : null}
-            {saving ? (
-                <p className="sm:col-span-2 text-[10px] text-alloy-midnight/45">Saving…</p>
-            ) : saved ? (
-                <p className="sm:col-span-2 text-[10px] font-medium text-alloy-pine">Layout behavior saved.</p>
-            ) : null}
+            {statusLine}
         </div>
     );
 }

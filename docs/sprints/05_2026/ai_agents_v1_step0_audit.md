@@ -15,7 +15,7 @@ AI Agents V1 starts with **Needs Attention Suggestion (Agent 1)**, **Task Assist
 - `docs/product/crm-system.md`
 - `docs/system/actions-and-workflows.md`
 - `docs/system/record-system.md`
-- `docs/product/ai-system.md`
+- `docs/product/bos-foundation.md`
 - `web/lib/opportunities/opportunityAttentionResolver.ts`
 - `web/lib/opportunities/opportunityAttentionConfig.ts`
 - `web/lib/opportunities/attentionPlatformCatalog.ts`

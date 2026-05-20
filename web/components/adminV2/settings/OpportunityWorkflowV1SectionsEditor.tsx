@@ -1,9 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { uniqueAdminKey } from "@/lib/admin/slugifyAdminKey";
-import { drawerSectionTypeLabel } from "@/lib/adminV2/layouts/sectionTypePresentation";
+import {
+    isLayoutDrawerHeaderSection,
+    layoutEditorRowsForPersist,
+    resolveLayoutSectionOperatorProfile,
+    withDrawerHeaderEditorSection,
+} from "@/lib/adminV2/layouts/layoutSectionOperatorUi";
+import type { FieldPlacementV1 } from "@/lib/fields/fieldPlacementV1";
 
 type EditorSection = {
     section_key: string;
@@ -13,12 +19,14 @@ type EditorSection = {
     title_editable: boolean;
 };
 
-type PreviewPayload = {
+export type LayoutPreviewBundle = {
     entity_type: string;
     workflow: { workflow_v1_configured: boolean };
     layout_resolution?: { source?: string };
     editor_sections?: EditorSection[];
     overview_hidden_sections?: string[];
+    sections?: Array<{ section_key: string; title: string; kind: string; field_keys?: string[] }>;
+    field_placements_v1?: FieldPlacementV1[];
 };
 
 type SectionRowState = {
@@ -45,21 +53,40 @@ async function readApiError(res: Response): Promise<string> {
     return typeof json.error === "string" && json.error.trim() ? json.error.trim() : `Request failed (${res.status})`;
 }
 
+function editorRowsFromBundle(bundle: LayoutPreviewBundle): SectionRowState[] {
+    return withDrawerHeaderEditorSection(
+        (bundle.editor_sections ?? []).map((s) => ({
+            section_key: s.section_key,
+            title: s.title,
+            kind: s.kind,
+            visible: s.visible,
+            titleEditable: s.title_editable,
+        }))
+    );
+}
+
 export default function OpportunityWorkflowV1SectionsEditor({
     onSaved,
     embedded = false,
     selectedSectionKey = null,
     onSelectSection,
+    previewBundle = undefined,
+    bundleLoading = false,
 }: {
     onSaved?: () => void;
     embedded?: boolean;
     selectedSectionKey?: string | null;
     onSelectSection?: (sectionKey: string) => void;
+    /** Parent-owned preview payload — avoids duplicate fetch and selection flicker. */
+    previewBundle?: LayoutPreviewBundle | null;
+    bundleLoading?: boolean;
 }) {
     const { canMutate } = useAdminAuth();
-    const [loading, setLoading] = useState(true);
+    const useParentBundle = previewBundle !== undefined;
+    const initialSelectDone = useRef(false);
+    const [loading, setLoading] = useState(!useParentBundle);
     const [error, setError] = useState<string | null>(null);
-    const [preview, setPreview] = useState<PreviewPayload | null>(null);
+    const [preview, setPreview] = useState<LayoutPreviewBundle | null>(previewBundle ?? null);
     const [initialRows, setInitialRows] = useState<SectionRowState[]>([]);
     const [rows, setRows] = useState<SectionRowState[]>([]);
     const [hiddenCatalog, setHiddenCatalog] = useState<string[]>([]);
@@ -71,38 +98,47 @@ export default function OpportunityWorkflowV1SectionsEditor({
     const [addingSection, setAddingSection] = useState(false);
     const [addSectionError, setAddSectionError] = useState<string | null>(null);
 
+    const applyBundle = useCallback(
+        (bundle: LayoutPreviewBundle) => {
+            const editorRows = editorRowsFromBundle(bundle);
+            setPreview(bundle);
+            setHiddenCatalog(bundle.overview_hidden_sections ?? []);
+            setInitialRows(editorRows);
+            setRows(editorRows);
+            if (!initialSelectDone.current && !selectedSectionKey && editorRows[0]) {
+                onSelectSection?.(editorRows[0].section_key);
+                initialSelectDone.current = true;
+            }
+        },
+        [onSelectSection, selectedSectionKey]
+    );
+
     const load = useCallback(async () => {
         setLoading(true);
         setError(null);
-        setSaveOk(null);
         try {
             const res = await fetch("/api/admin/record-layouts/effective-preview?entity_type=opportunity");
-            const json = (await res.json().catch(() => ({}))) as PreviewPayload & { error?: string };
+            const json = (await res.json().catch(() => ({}))) as LayoutPreviewBundle & { error?: string };
             if (!res.ok) throw new Error(json.error ?? "Failed to load layout preview");
-
-            const editorRows: SectionRowState[] = (json.editor_sections ?? []).map((s) => ({
-                section_key: s.section_key,
-                title: s.title,
-                kind: s.kind,
-                visible: s.visible,
-                titleEditable: s.title_editable,
-            }));
-
-            setPreview(json);
-            setHiddenCatalog(json.overview_hidden_sections ?? []);
-            setInitialRows(editorRows);
-            setRows(editorRows);
+            applyBundle(json);
         } catch (e) {
             setError((e as Error).message);
             setPreview(null);
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [applyBundle]);
 
     useEffect(() => {
-        void load();
-    }, [load]);
+        if (!useParentBundle) {
+            void load();
+            return;
+        }
+        if (previewBundle) {
+            applyBundle(previewBundle);
+            setError(null);
+        }
+    }, [useParentBundle, previewBundle, load, applyBundle]);
 
     const eligible = preview?.workflow?.workflow_v1_configured === true && preview.entity_type === "opportunity";
 
@@ -121,12 +157,12 @@ export default function OpportunityWorkflowV1SectionsEditor({
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                overview_section_order: nextRows.map((r) => r.section_key),
-                section_visibility: nextRows.map((r) => ({
+                overview_section_order: layoutEditorRowsForPersist(nextRows).map((r) => r.section_key),
+                section_visibility: layoutEditorRowsForPersist(nextRows).map((r) => ({
                     section_key: r.section_key,
                     visible: r.visible,
                 })),
-                workflow_section_titles: nextRows
+                workflow_section_titles: layoutEditorRowsForPersist(nextRows)
                     .filter((r) => r.titleEditable)
                     .map((r) => ({ section_key: r.section_key, title: r.title })),
             }),
@@ -142,9 +178,8 @@ export default function OpportunityWorkflowV1SectionsEditor({
         setSaveError(null);
         setSaveOk(null);
         try {
-            const json = await persistRows(rows);
+            const json = await persistRows(layoutEditorRowsForPersist(rows));
             setSaveOk(json.created_org_override ? "Saved — created org drawer override." : "Saved.");
-            await load();
             onSaved?.();
         } catch (e) {
             setSaveError((e as Error).message);
@@ -206,18 +241,6 @@ export default function OpportunityWorkflowV1SectionsEditor({
             });
             if (!postRes.ok) throw new Error(await readApiError(postRes));
 
-            const previewRes = await fetch("/api/admin/record-layouts/effective-preview?entity_type=opportunity");
-            const previewJson = (await previewRes.json().catch(() => ({}))) as PreviewPayload & { error?: string };
-            if (!previewRes.ok) throw new Error(previewJson.error ?? "Failed to reload sections");
-
-            const editorRows: SectionRowState[] = (previewJson.editor_sections ?? []).map((s) => ({
-                section_key: s.section_key,
-                title: s.title,
-                kind: s.kind,
-                visible: s.visible,
-                titleEditable: s.title_editable,
-            }));
-
             const newRow: SectionRowState = {
                 section_key,
                 title: label,
@@ -226,30 +249,11 @@ export default function OpportunityWorkflowV1SectionsEditor({
                 titleEditable: false,
             };
 
-            const merged = editorRows.some((r) => r.section_key === section_key)
-                ? editorRows.map((r) =>
-                      r.section_key === section_key ? { ...r, visible: true, title: label } : r
-                  )
-                : [...editorRows, newRow];
+            const merged = rows.some((r) => r.section_key === section_key)
+                ? rows.map((r) => (r.section_key === section_key ? { ...r, visible: true, title: label } : r))
+                : [...rows, newRow];
 
             await persistRows(merged);
-
-            const reloadRes = await fetch("/api/admin/record-layouts/effective-preview?entity_type=opportunity");
-            const reloadJson = (await reloadRes.json().catch(() => ({}))) as PreviewPayload & { error?: string };
-            if (!reloadRes.ok) throw new Error(reloadJson.error ?? "Failed to reload sections");
-
-            const reloadedRows: SectionRowState[] = (reloadJson.editor_sections ?? []).map((s) => ({
-                section_key: s.section_key,
-                title: s.title,
-                kind: s.kind,
-                visible: s.visible,
-                titleEditable: s.title_editable,
-            }));
-
-            setPreview(reloadJson);
-            setHiddenCatalog(reloadJson.overview_hidden_sections ?? []);
-            setInitialRows(reloadedRows);
-            setRows(reloadedRows);
             setNewSectionLabel("");
             onSelectSection?.(section_key);
             onSaved?.();
@@ -260,7 +264,8 @@ export default function OpportunityWorkflowV1SectionsEditor({
         }
     };
 
-    if (loading) return <p className="text-xs text-alloy-midnight/55">Loading drawer sections…</p>;
+    const showListLoading = (useParentBundle ? bundleLoading : loading) && rows.length === 0;
+    if (showListLoading) return <p className="text-xs text-alloy-midnight/55">Loading drawer sections…</p>;
     if (error) return <p className="text-xs text-red-600">{error}</p>;
     if (!eligible) {
         return (
@@ -353,10 +358,13 @@ export default function OpportunityWorkflowV1SectionsEditor({
             {saveError ? <p className="mt-2 text-xs text-red-600">{saveError}</p> : null}
             {saveOk ? <p className="mt-2 text-xs text-alloy-pine">{saveOk}</p> : null}
 
-            <p className="mb-1.5 text-[10px] text-alloy-midnight/50">Click a section to manage fields on the right.</p>
-
             <ol className="space-y-2">
-                {rows.map((row, i) => (
+                {rows.map((row, i) => {
+                    const profile = resolveLayoutSectionOperatorProfile(row.kind, row.section_key, {
+                        titleEditable: row.titleEditable,
+                    });
+                    const headerRow = isLayoutDrawerHeaderSection(row.section_key);
+                    return (
                     <li
                         key={row.section_key}
                         role="button"
@@ -394,30 +402,34 @@ export default function OpportunityWorkflowV1SectionsEditor({
                             ) : (
                                 <span className="min-w-0 flex-1 font-medium text-alloy-midnight">{row.title}</span>
                             )}
-                            <label
-                                className="flex items-center gap-1.5 text-[11px] text-alloy-midnight/65"
-                                onClick={(e) => e.stopPropagation()}
-                            >
-                                <input
-                                    type="checkbox"
-                                    checked={row.visible}
-                                    disabled={!canMutate || saving}
-                                    onChange={(e) =>
-                                        setRows((prev) =>
-                                            prev.map((r) =>
-                                                r.section_key === row.section_key ? { ...r, visible: e.target.checked } : r
+                            {profile.canShowHide ? (
+                                <label
+                                    className="flex items-center gap-1.5 text-[11px] text-alloy-midnight/65"
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={row.visible}
+                                        disabled={!canMutate || saving}
+                                        onChange={(e) =>
+                                            setRows((prev) =>
+                                                prev.map((r) =>
+                                                    r.section_key === row.section_key
+                                                        ? { ...r, visible: e.target.checked }
+                                                        : r
+                                                )
                                             )
-                                        )
-                                    }
-                                />
-                                Show in drawer
-                            </label>
-                            {canMutate ? (
+                                        }
+                                    />
+                                    Show in drawer
+                                </label>
+                            ) : null}
+                            {canMutate && profile.canReorder ? (
                                 <span className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                                     <button
                                         type="button"
                                         className="rounded border border-admin-border px-2 py-0.5 text-[11px] hover:bg-alloy-stone/15 disabled:opacity-40"
-                                        disabled={i === 0 || saving}
+                                        disabled={i === 0 || saving || headerRow}
                                         onClick={() => setRows((prev) => move(prev, i, -1))}
                                     >
                                         Up
@@ -425,7 +437,7 @@ export default function OpportunityWorkflowV1SectionsEditor({
                                     <button
                                         type="button"
                                         className="rounded border border-admin-border px-2 py-0.5 text-[11px] hover:bg-alloy-stone/15 disabled:opacity-40"
-                                        disabled={i >= rows.length - 1 || saving}
+                                        disabled={i >= rows.length - 1 || saving || headerRow}
                                         onClick={() => setRows((prev) => move(prev, i, 1))}
                                     >
                                         Down
@@ -433,12 +445,30 @@ export default function OpportunityWorkflowV1SectionsEditor({
                                 </span>
                             ) : null}
                         </div>
-                        <p className="mt-1 pl-8 text-[10px] text-alloy-midnight/45">
-                            {drawerSectionTypeLabel(row.kind)}
-                            {!row.visible ? " · Hidden from drawer" : ""}
-                        </p>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 pl-8">
+                            <span
+                                className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                    profile.operatorClass === "custom"
+                                        ? "bg-alloy-pine/10 text-alloy-pine"
+                                        : profile.operatorClass === "header"
+                                          ? "bg-alloy-blue/10 text-alloy-blue"
+                                          : "bg-alloy-stone/15 text-alloy-midnight/55"
+                                }`}
+                            >
+                                {profile.operatorClassLabel}
+                            </span>
+                            {!row.visible && profile.canShowHide ? (
+                                <span className="text-[10px] text-alloy-midnight/45">Hidden from drawer</span>
+                            ) : null}
+                        </div>
+                        {profile.sectionHint ? (
+                            <p className="mt-0.5 pl-8 text-[10px] text-alloy-midnight/45">{profile.sectionHint}</p>
+                        ) : (
+                            <p className="mt-0.5 pl-8 text-[10px] text-alloy-midnight/40">{profile.capabilitySummary}</p>
+                        )}
                     </li>
-                ))}
+                    );
+                })}
             </ol>
 
             {canMutate ? (
@@ -451,14 +481,16 @@ export default function OpportunityWorkflowV1SectionsEditor({
                     >
                         {saving ? "Saving…" : "Save sections"}
                     </button>
-                    <button
-                        type="button"
-                        disabled={saving}
-                        className="rounded-lg border border-transparent px-3 py-1.5 text-xs text-alloy-pine hover:underline"
-                        onClick={() => void load()}
-                    >
-                        Reload
-                    </button>
+                    {!useParentBundle ? (
+                        <button
+                            type="button"
+                            disabled={saving}
+                            className="rounded-lg border border-transparent px-3 py-1.5 text-xs text-alloy-pine hover:underline"
+                            onClick={() => void load()}
+                        >
+                            Reload
+                        </button>
+                    ) : null}
                 </div>
             ) : (
                 <p className="mt-3 text-[11px] text-alloy-midnight/55">Admin role required to save section configuration.</p>

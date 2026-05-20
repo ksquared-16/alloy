@@ -644,6 +644,8 @@ cd web && npm run test -- tests/sprints/settingsRecordUxParityRegression.test.ts
 | Field list | Operator labels only; workflow/relationship/computed keys hidden by default |
 | Not in pass | Person/Location modal unification; Layouts/Actions builder expansion |
 
+**Post-closeout follow-on (May 2026, after sprint close):** Linked-record person card + inquiry children row grid + Orchestrator session hydration + workspace scope stability — not counted as Cards 0–9 scope; tracked in **`settings_control_plane_closeout.md`** (follow-on shipped) and **`linked_record_field_editing_v1.md`**.
+
 ---
 
 ## 13. Final control-plane doctrine (post-sprint)
@@ -661,7 +663,7 @@ Canonical reference: **`docs/system/configuration-system.md`**.
 
 **Control plane vs runtime:** Settings configures structure/presentation/policies; runtime PATCH and workflows execute operational logic. **BOS/AI** should orchestrate via structured PATCH helpers — not raw JSON mutation.
 
-**Next strategic layers (deferred):** Record Experience Builder; BOS/AI config layer; linked-record editing; structured condition builders; workflow-driven actions/forms wiring from Settings.
+**Next strategic layers (deferred):** Record Experience Builder; BOS/AI config layer; linked-record editing beyond opportunity V1/V1b (job/schedule); structured condition builders; workflow-driven actions/forms wiring from Settings.
 
 ---
 

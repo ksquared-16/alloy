@@ -108,4 +108,17 @@ describe("layoutIntegrityPresentation", () => {
         });
         expect(links.some((l) => l.href.includes("/layouts"))).toBe(true);
     });
+
+    it("maps required_on_layout_not_visible to layout-specific operator title", () => {
+        const issue = {
+            severity: "error" as const,
+            code: "required_on_layout_not_visible" as const,
+            message: 'Field "campus_pref" is required on this layout (required_on_save) but is not present in the drawer layout preview.',
+            field_key: "campus_pref",
+            entity_type: "opportunity",
+        };
+        expect(issueCategory(issue)).toBe("visibility");
+        expect(issueOperatorTitle(issue)).toContain("layout");
+        expect(issueOperatorTitle(issue)).not.toBe(issue.code);
+    });
 });

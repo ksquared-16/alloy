@@ -1,7 +1,7 @@
 # Sprint: Linked Record Field Editing V1 (May 2026)
 
 **Path:** `docs/sprints/05_2026/linked_record_field_editing_v1.md`  
-**Status:** **In progress — V1 person card shipped; V1b inquiry children + source fields + summary layout (May 2026)**  
+**Status:** **V1 person card shipped; V1b inquiry children + source fields + summary layout + horizontal child-row grid shipped (May 2026).** Remaining: broader linked-record surfaces (job/schedule), Record Experience Builder parity.  
 **Parent:** Settings control plane closeout; record UX parity.
 
 ---
@@ -75,6 +75,8 @@ If a field is shown on a drawer surface and **`field_definitions.interaction_pol
 **Desired start doctrine:** **Canonical:** `inquiry_child.desired_start_date` on **`opportunity_customer_members`** (Inquiry children rows). **Legacy/fallback:** opportunity-level `desired_start_date` (`field_values` / metadata) — used for placement/queue enrichment and shown as muted **Inherited: {date}** on child rows when OCM is null; **removed** from inquiry summary “What matters” (tour date only there).
 
 **Inquiry child configurable surface (shipped):** Settings → Fields tab **`inquiry_child`** (`inquiryChildFieldRegistry.ts`). Native allowlist: `desired_start_date`, `desired_program_type`, `desired_schedule_type`, `outcome_status_key`, `notes`. Custom defs → `field_values` on OCM id. Drawer: `OpportunityInquiryChildrenSection` loads defs and renders **Desired start** + visible custom text/date columns.
+
+**Inquiry children grid layout (May 2026):** Drawer shows **one horizontal row per child** (not a stacked form): Child | DOB/Age | Desired start | Program | Schedule | Outcome | Notes | View, plus optional custom field columns when configured. Implementation uses **static** Tailwind `grid-cols-[…]` literals (`inquiryChildDesktopGridClass` in `OpportunityInquiryChildrenSection.tsx`) — runtime-built class strings are not emitted by Tailwind JIT. Section config sets **`contentLayout: "block"`** on `EntityDrawerSection` (and in `effectiveDrawerLayoutPreview` for `inquiry_children`) so the default parent `grid-cols-1` wrapper does not collapse rows. Narrow drawer: horizontal scroll via `min-w-[1100px]` row container; very narrow viewports may stack. **Unchanged:** OCM linking, PATCH routes, hydration merge (`inquiryChildrenHydration.ts`), work-unit queue logic.
 
 **Tests:** `inquiryChildrenHydration.test.ts`, `inquiryChildFieldEdit.test.ts`, `inquiryChildFieldRegistry.test.ts`, `opportunityDrawerFieldSave.test.ts`, `primaryPersonCardEdit.test.ts`, `enrollmentPacketSummaryPresentation.test.ts`
 

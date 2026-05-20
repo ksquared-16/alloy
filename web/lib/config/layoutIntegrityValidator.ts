@@ -8,7 +8,14 @@ import {
     type PreviewFieldDef,
 } from "@/lib/recordChrome/effectiveDrawerLayoutPreview";
 import type { RecordLayoutConfigJson } from "@/lib/recordChrome/types";
+import {
+    buildDrawerFieldPolicyResolvedMap,
+    type DrawerFieldDefinitionForPolicy,
+    type DrawerFieldPolicyResolved,
+} from "@/lib/fields/drawerFieldPolicyAdapter";
 import { resolveFieldRequirementPolicy, isFieldRequiredInContext } from "@/lib/fields/fieldRequirementPolicy";
+import type { FieldRequirementPolicyV1 } from "@/lib/fields/fieldRequirementPolicy";
+import { isAdvancedRequirementPolicyForSettings } from "@/lib/fields/fieldPolicySettingsUi";
 import {
     hasValidWriteTarget,
     parseFieldInteractionPolicy,
@@ -84,6 +91,60 @@ function fieldIsVisibleAnywhere(f: LayoutIntegrityFieldInput): boolean {
 
 function fieldIsExposedInDrawerPreview(fieldKeys: Set<string>, field_key: string): boolean {
     return fieldKeys.has(field_key);
+}
+
+function toDrawerPolicyDef(f: LayoutIntegrityFieldInput): DrawerFieldDefinitionForPolicy {
+    return {
+        field_key: f.field_key,
+        is_system: f.is_system === true,
+        is_required: f.is_required,
+        requirement_policy: f.requirement_policy,
+        interaction_policy: f.interaction_policy,
+    };
+}
+
+function buildOpportunityPolicyResolvedMap(
+    field_definitions: LayoutIntegrityFieldInput[],
+    layout_config_json: RecordLayoutConfigJson | null
+): Record<string, DrawerFieldPolicyResolved> {
+    const defs = field_definitions.map(toDrawerPolicyDef);
+    return buildDrawerFieldPolicyResolvedMap("opportunity", defs, {
+        layoutConfig: layout_config_json ?? null,
+    });
+}
+
+function isEffectivelyRequiredOnLayout(policy: FieldRequirementPolicyV1): boolean {
+    if (isAdvancedRequirementPolicyForSettings(policy)) return false;
+    return policy.mode === "required" || policy.mode === "required_on_save";
+}
+
+function effectiveRequirementForIntegrity(
+    f: LayoutIntegrityFieldInput,
+    entity_type: string,
+    opportunityResolved: Record<string, DrawerFieldPolicyResolved> | null
+): { required: boolean; policy: FieldRequirementPolicyV1; usesPlacementLayer: boolean } {
+    if (entity_type === "opportunity" && opportunityResolved) {
+        const resolved = opportunityResolved[f.field_key];
+        if (!resolved || resolved.policyMode !== "enforceable" || !resolved.requirementSupported) {
+            return {
+                required: false,
+                policy: resolveFieldRequirementPolicy(f),
+                usesPlacementLayer: false,
+            };
+        }
+        const policy = resolved.requirement ?? resolveFieldRequirementPolicy(f);
+        return {
+            required: isEffectivelyRequiredOnLayout(policy),
+            policy,
+            usesPlacementLayer: resolved.requirement_source === "placement",
+        };
+    }
+    const policy = resolveFieldRequirementPolicy(f);
+    return {
+        required: isFieldRequiredInContext(f, { phase: "save", values: {} }),
+        policy,
+        usesPlacementLayer: false,
+    };
 }
 
 function toPreviewFieldDef(f: LayoutIntegrityFieldInput): PreviewFieldDef {
@@ -184,6 +245,11 @@ export function validateLayoutIntegrity(input: ValidateLayoutIntegrityInput): La
         sectionLabels
     );
 
+    const opportunityPolicyResolved =
+        entity_type === "opportunity"
+            ? buildOpportunityPolicyResolvedMap(activeFields, input.layout_config_json)
+            : null;
+
     const optionSetMap = new Map<string, number>();
     for (const os of input.option_sets ?? []) {
         optionSetMap.set(os.set_key, os.active_item_count);
@@ -198,12 +264,30 @@ export function validateLayoutIntegrity(input: ValidateLayoutIntegrityInput): La
             interaction_policy: f.interaction_policy,
         };
 
-        const reqPolicy = resolveFieldRequirementPolicy(f);
-        const required = isFieldRequiredInContext(f, { phase: "save", values: {} });
+        const { required, policy: reqPolicy, usesPlacementLayer } = effectiveRequirementForIntegrity(
+            f,
+            entity_type,
+            opportunityPolicyResolved
+        );
         const visibleAnywhere = fieldIsVisibleAnywhere(f);
         const inDrawer = fieldIsExposedInDrawerPreview(drawerVisibleKeys, f.field_key);
 
-        if (required && !visibleAnywhere && !inDrawer) {
+        if (entity_type === "opportunity" && required && !inDrawer) {
+            const layoutSpecificIssue = usesPlacementLayer || visibleAnywhere;
+            issues.push({
+                severity: "error",
+                code: layoutSpecificIssue ? "required_on_layout_not_visible" : "required_field_not_visible",
+                entity_type,
+                layout_id,
+                field_key: f.field_key,
+                message: layoutSpecificIssue
+                    ? `Field "${f.field_key}" is required on this layout (${reqPolicy.mode}) but is not present in the drawer layout preview.`
+                    : `Field "${f.field_key}" is required (${reqPolicy.mode}) but not visible on any surface.`,
+                recommendation: layoutSpecificIssue
+                    ? "Add the field to this record layout or change requirement on this layout to optional."
+                    : "Expose the field on drawer, form, or table, or relax requirement on this layout.",
+            });
+        } else if (required && !visibleAnywhere && !inDrawer) {
             issues.push({
                 severity: "error",
                 code: "required_field_not_visible",

@@ -16,6 +16,24 @@ Explain how **business facts** become **`workflow_events`**, trigger **workflows
 
 Settings configures **placement + enablement**, not execution semantics. Older **`record_actions`** chrome and dedicated modals (tour, quote, job) remain alongside the registry — see **`docs/system/configuration-system.md`** (Admin Settings capability inventory).
 
+### Settings → Action buttons (May 2026 closeout)
+
+| Operation | API / module | Notes |
+|-----------|--------------|-------|
+| List placements + definitions | `GET /api/admin/actions/inventory` | Org + platform rows for Settings UI |
+| Approved action catalog | `GET /api/admin/actions/definition-catalog` | Active definitions org may place (no new handlers) |
+| Create org placement | `POST /api/admin/action-placements` | Requires existing `action_definition_id`; validates via `actionPlacementMutation.ts` |
+| Edit org placement | `PATCH /api/admin/action-placements/[id]` | `is_active`, `entity_type`, `surface`, `slot`, `section_key`, `order_index` |
+| Edit org-owned label | `PATCH /api/admin/action-definitions/[id]` | Label only; platform definitions locked |
+| Operator copy | `web/lib/admin/actions/actionPlacementPresentation.ts` | Surface/slot labels and inline help |
+| UI | `ActionPlacementsSettingsClient.tsx`, `ActionButtonCreatePanel.tsx`, `ActionPlacementFormFields.tsx` | Under **Workflows & automation** on `/adminV2/settings` |
+
+**Surfaces operators may assign in Settings:** `record_header`, `record_section`, `right_rail` (workspace side panel), `queue_row` (workspace queue row). Schema value `workspace` is not resolved by AdminV2 clients yet.
+
+**Ownership:** Built-in platform placements are view-only; operators use **Add org placement** to add an org-owned row for the same approved action. Does **not** extend `executeAdminAction` or add custom handlers.
+
+Closeout: **`docs/sprints/05_2026/settings_control_plane_closeout.md`**.
+
 ## Current state
 
 - **`emitEvent`** (`web/lib/emitEvent.ts`) inserts into **`workflow_events`** (server-only, canonical layer).

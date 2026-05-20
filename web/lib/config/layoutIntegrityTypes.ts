@@ -6,6 +6,7 @@ export type LayoutIntegritySeverity = "warning" | "error";
 
 export const LAYOUT_INTEGRITY_ISSUE_CODES = [
     "required_field_not_visible",
+    "required_on_layout_not_visible",
     "visible_field_missing_definition",
     "editable_without_write_target",
     "related_record_missing_ownership",

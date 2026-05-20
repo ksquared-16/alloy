@@ -23,6 +23,12 @@ import type { RecordLayoutConfigJson } from "@/lib/recordChrome/types";
 export const LAYOUT_REQUIREMENT_CONTROL_LABEL = "Required on this layout";
 export const LAYOUT_INTERACTION_CONTROL_LABEL = "Editability here";
 
+export {
+    LAYOUT_FIELD_BEHAVIOR_HELPER,
+    LAYOUT_REQUIREMENT_PRESET_OPTIONS,
+    layoutRequirementPresetLabel,
+} from "@/lib/adminV2/layouts/layoutSectionOperatorUi";
+
 export const LAYOUT_INTERACTION_INLINE_OPTIONS: ReadonlyArray<{
     value: FieldPolicyInteractionPreset;
     label: string;
@@ -65,14 +71,14 @@ export function layoutFieldBehaviorControlsEnabled(args: {
     workflowV1Configured: boolean;
     canMutate: boolean;
     isReadOnly: boolean;
-    canAssignFields: boolean;
+    canConfigureFieldBehavior: boolean;
 }): boolean {
     return (
         args.entityType === "opportunity" &&
         args.workflowV1Configured &&
         args.canMutate &&
         !args.isReadOnly &&
-        args.canAssignFields
+        args.canConfigureFieldBehavior
     );
 }
 

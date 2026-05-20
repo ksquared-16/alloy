@@ -23,7 +23,7 @@ Alloy already ships a **multi-capability assistive layer** under AdminV2: an Orc
 
 | File | Role |
 |------|------|
-| `docs/product/ai-system.md` | Route/env inventory (now stub → bos-foundation) |
+| `docs/product/bos-foundation.md` | Route/env inventory (now stub → bos-foundation) |
 | `docs/product/bos-foundation.md` | **New** BOS canonical doc |
 | `docs/system/configuration-system.md` | BOS/config-agent readiness table |
 | `docs/system/actions-and-workflows.md` | Event/workflow guardrails |

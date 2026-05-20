@@ -11,7 +11,7 @@
 
 - `docs/sprints/05_2026/ai_agents_v1.md` (§6.1 per-agent ownership, §8 Task Assist template sketch)
 - `docs/sprints/05_2026/ai_agents_v1_step1_design.md` (Agent 2 section)
-- `docs/product/ai-system.md` (enrichment, permissions, DEFINER RPC patterns)
+- `docs/product/bos-foundation.md` (enrichment, permissions, DEFINER RPC patterns)
 - `docs/sprints/05_2026/ai_enrichment_and_agent_actions_v1.md` (proposal/apply posture)
 - `supabase/migrations/20260430254100_communications_v1_foundation.sql`
 - `supabase/migrations/20260329165048_remote_schema.sql` (excerpts: `messages`, `messages_outbox`, `activity_log`, `opportunities`)
@@ -80,7 +80,7 @@
 **Draft / approval concepts today:**
 
 - **No** first-class `draft_status` / `approved_by` on `communication_messages` in the audited migration — queued outbound is created at enqueue time; “draft” in product is currently **UI state + user intent**, not a separate DB lifecycle for Task Assist.
-- Agent #1 **Enhance draft** is **copy-only preview** via `POST /api/admin/ai/enrich-attention-suggestion` — no persistence (`docs/product/ai-system.md`).
+- Agent #1 **Enhance draft** is **copy-only preview** via `POST /api/admin/ai/enrich-attention-suggestion` — no persistence (`docs/product/bos-foundation.md`).
 
 **Scheduled send:** **`communication_messages` schema (audited) has no `scheduled_at` / `send_after` column.** Scheduled outbound is **not** evidenced as a first-class canonical feature in this pass. **Needs verification:** whether workers honor `metadata` delay or a separate scheduler table exists outside inspected migrations.
 
@@ -119,9 +119,9 @@
 | Pattern | Location | Reuse for Task Assist? |
 |---------|----------|-------------------------|
 | **Structured suggestion DTO** | `AttentionSuggestionV1` (`web/lib/agent/needsAttentionSuggestion/types.ts`) | **Pattern only** — different `agent_key` / fields (`TaskAssistSuggestionV1` per sprint doc). |
-| **Enrichment envelope / telemetry** | `web/lib/ai/enrichmentContracts.ts`, `enrichAttentionSuggestionStub.ts`, telemetry flags in `docs/product/ai-system.md` | **Likely reuse** for optional “polish draft” passes: org policy, `ai.enrichment.use`, redaction, correlation/request ids. |
+| **Enrichment envelope / telemetry** | `web/lib/ai/enrichmentContracts.ts`, `enrichAttentionSuggestionStub.ts`, telemetry flags in `docs/product/bos-foundation.md` | **Likely reuse** for optional “polish draft” passes: org policy, `ai.enrichment.use`, redaction, correlation/request ids. |
 | **Route validation split** | `parseEnrichAttentionSuggestionRequest` style (pure parse module + route) | **Reuse pattern** for Task Assist POST body validation. |
-| **Config agent proposal/apply** | `agent_v1` / `agent_v2` RPC + proposal + audit tables (`docs/product/ai-system.md`) | **Analogous for durable Task Assist proposals later** — **do not** overload field-visibility or queue-definition proposal tables; separate namespace if proposals become rows. |
+| **Config agent proposal/apply** | `agent_v1` / `agent_v2` RPC + proposal + audit tables (`docs/product/bos-foundation.md`) | **Analogous for durable Task Assist proposals later** — **do not** overload field-visibility or queue-definition proposal tables; separate namespace if proposals become rows. |
 | **Human-in-the-loop UI** | `OperationalAttentionEnhanceDraft` (enhance copy only) | **UX precedent** for “preview before commit”; Task Assist apply would target **send/schedule** APIs, not layout RPCs. |
 
 ---

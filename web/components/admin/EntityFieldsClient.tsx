@@ -98,6 +98,8 @@ export type EntityFieldsClientProps = {
     manageOptionSetsHref?: string;
     /** AdminV2 Settings: no AdminPageHeader white card; compact title + elevated section card. */
     adminV2Chrome?: boolean;
+    /** When true, page title/subtitle are rendered by the parent route. */
+    hideSettingsHeader?: boolean;
 };
 
 export default function EntityFieldsClient({
@@ -106,6 +108,7 @@ export default function EntityFieldsClient({
     subtitle,
     manageOptionSetsHref,
     adminV2Chrome = false,
+    hideSettingsHeader = false,
 }: EntityFieldsClientProps) {
     const { canMutate } = useAdminAuth();
     const [items, setItems] = useState<FieldDef[]>([]);
@@ -525,8 +528,12 @@ export default function EntityFieldsClient({
 
     return (
         <>
-            {adminV2Chrome ? (
+            {adminV2Chrome && !hideSettingsHeader ? (
                 <SettingsPageHeader title={title} subtitle={compactDescription} actions={addFieldButton} />
+            ) : adminV2Chrome ? (
+                addFieldButton ? (
+                    <div className="mb-3 flex flex-wrap justify-end gap-2">{addFieldButton}</div>
+                ) : null
             ) : (
                 <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
                     <AdminPageHeader title={title} subtitle={resolvedSubtitle} />
@@ -570,15 +577,14 @@ export default function EntityFieldsClient({
                         </label>
                     </div>
                     {adminV2Chrome && layoutBehaviorOnRecordLayouts && (
-                        <p className="mb-3 text-xs leading-relaxed text-alloy-midnight/55">
-                            {FIELDS_HUB_LAYOUT_BEHAVIOR_NOTE}{" "}
+                        <p className="mb-2 text-[11px] text-alloy-midnight/50">
+                            Drawer required and read-only:{" "}
                             <Link
                                 href={recordLayoutsSettingsHref(entityType)}
                                 className="font-medium text-alloy-pine hover:underline"
                             >
                                 Record layouts
                             </Link>
-                            .
                         </p>
                     )}
                     {adminV2Chrome && showPolicyColumnsInTable && (

@@ -15,18 +15,19 @@ High-level map of **server boundaries** for admin, public booking, and action li
 | Surface | Examples | Notes |
 |---------|-----------|-------|
 | Entity drawer | `GET /api/admin/entity/[type]/[id]` | Many types; jobs/opportunities special surfaces |
-| Admin actions | `POST` paths delegated to `executeAdminAction` | Check router module for exact URLs |
+| Admin actions (runtime) | `GET /api/admin/actions` (resolve by surface), `POST /api/admin/actions/execute` | `resolveActionsForContext.ts` → `executeAdminAction.ts`; does not change execution semantics |
+| Action buttons (Settings) | `GET /api/admin/actions/inventory`, `GET /api/admin/actions/definition-catalog`, `POST /api/admin/action-placements`, `PATCH /api/admin/action-placements/[id]`, `PATCH /api/admin/action-definitions/[id]` | Org **admin**; placement create = catalog row only; see **`docs/system/actions-and-workflows.md`** |
 | Workflows | `web/app/api/admin/workflows/[id]/run/route.ts` | Executes/runs workflows (admin) |
 | Action links | `web/app/api/action/[token]/consume/route.ts`, `action-links/*` | Emit events → workflows |
 | Communications (admin) | `web/app/api/admin/communications/*` | Threads, send, unread, bindings |
 | Webhooks (delivery / lifecycle) | `POST /api/webhooks/twilio/sms-status`, `POST /api/webhooks/resend` | Twilio status callback (signed), Resend lifecycle (Svix); public routes, provider-authenticated |
 | Message dequeue (worker) | Python **`POST /internal/messages/process`** (`backend/`, `x-cron-token`) | Drains **`public.messages`** (legacy SMS) **and** **`communication_messages`** (canonical SMS/email); Next may wake worker via **`INTERNAL_MESSAGES_PROCESS_URL`** after enqueue (see `web/lib/workflowRun.ts` helpers) |
 | Inbound SMS (ingest) | Python backend route (e.g. **`backend/app/routes/sms_inbound.py`**) | Persists inbound into canonical store **person-first**; not a Next `web/app/api` handler |
-| Admin agent (config commits) | `web/app/api/admin/agent/**` | Queue/layout/field-visibility propose+apply; env-gated (e.g. `AGENT_V2_FIELD_VISIBILITY_ENABLED`) |
-| AI — attention enrich | `POST /api/admin/ai/enrich-attention-suggestion` | Org `ai_policy` + RBAC; stub/OpenAI paths |
-| AI — Task Assist | `web/app/api/admin/ai/task-assist/**` | Propose/apply, proposals, entity-search; opportunities-first |
-| AI — Workflow Assist | `web/app/api/admin/ai/workflow-assist/**` | Propose/apply/explain/capabilities; admin-gated mutations |
-| AI — Config/Layout Assist | `web/app/api/admin/ai/config-layout-assist/**`, `web/app/api/admin/config-layout-assist/proposals/**` | Proposal lifecycle + partial apply |
+| BOS — config commits (legacy `admin/agent`) | `web/app/api/admin/agent/v0/**`, `v1/**`, `v2/**` | DEFINER RPC apply + proposal audit; env-gated (`AGENT_V0_ENABLED`, `AGENT_V1_RECORD_LAYOUT_ENABLED`, `AGENT_V2_FIELD_VISIBILITY_ENABLED`) |
+| BOS — attention enrich | `POST /api/admin/ai/enrich-attention-suggestion` | Capability `attention_enrich`; org `ai_policy` + RBAC; stub/OpenAI |
+| BOS — Task Assist | `web/app/api/admin/ai/task-assist/**` | Capability `task_assist`; propose/apply, proposals, entity-search |
+| BOS — Workflow Assist | `web/app/api/admin/ai/workflow-assist/**` | Capability `workflow_assist`; propose/apply/explain; admin-gated mutations |
+| BOS — Config/Layout Assist | `web/app/api/admin/ai/config-layout-assist/**`, `web/app/api/admin/config-layout-assist/proposals/**` | Capability `config_layout_assist`; durable proposals; partial apply catalog |
 | Scheduled sends | `web/app/api/admin/communication-scheduled-sends/**` | Task Assist V1.1; `process-due` worker |
 | Operational tasks | `web/app/api/admin/operational-tasks/**` | Task Assist reminders |
 | Booking v2 | `web/app/api/book-v2/*` | Quote, confirm, specialty flows |
@@ -48,12 +49,14 @@ High-level map of **server boundaries** for admin, public booking, and action li
 - Admin action registry: `web/lib/admin/actions/` (discover exports and callers)
 - Communications canonical enqueue: `web/lib/communications/canonicalOutboundEnqueue.ts`
 - Forms admin handlers: `web/app/api/admin/forms/**`
+- **BOS registry + envelopes:** `web/lib/bos/` (`bosCapabilityRegistry.ts`, `adapters/`, `auth/`) — see **`docs/product/bos-foundation.md`**
+- Orchestrator UI: `web/lib/adminV2/aiCommandSurface/` (URLs remain `/api/admin/ai/*`)
 
 ## Guardrails
 
 - **Do not** expose service-role supabase to the browser.
 - **Do not** widen entity GET responses without considering drawer contracts and RRS consumers.
-- **AI / agents** should prefer these HTTP boundaries over ad hoc DB access.
+- **BOS capabilities** must use these HTTP boundaries (or documented DEFINER RPC commits) — no ad hoc DB access from client or assist paths.
 
 ## Known gaps / risks
 
@@ -61,4 +64,4 @@ High-level map of **server boundaries** for admin, public booking, and action li
 
 ## When this doc must be updated
 
-When new externally visible admin or public families ship, or when auth/org contract changes.
+When new externally visible admin or public families ship, when auth/org contract changes, or when a new **BOS capability** adds a route family (update registry in `bos-foundation.md` in the same change).

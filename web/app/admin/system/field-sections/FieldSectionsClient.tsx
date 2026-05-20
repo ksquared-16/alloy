@@ -56,7 +56,10 @@ async function readApiError(res: Response): Promise<string> {
 
 const SECTION_KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
-export default function FieldSectionsClient({ adminV2Chrome = false }: { adminV2Chrome?: boolean } = {}) {
+export default function FieldSectionsClient({
+    adminV2Chrome = false,
+    hidePageHeader = false,
+}: { adminV2Chrome?: boolean; hidePageHeader?: boolean } = {}) {
     const { canMutate } = useAdminAuth();
     const { labels } = useEntityLabels();
     const [entityType, setEntityType] = useState<EntityType>("person");
@@ -237,15 +240,11 @@ export default function FieldSectionsClient({ adminV2Chrome = false }: { adminV2
 
     return (
         <>
-            {adminV2Chrome ? (
-                <SettingsPageHeader
-                    title="Field grouping"
-                    subtitle={
-                        "Catalog section labels and order for fields. Drawer section order and visibility are on Record layouts; field rules are on Fields."
-                    }
-                    actions={newSectionAction}
-                />
-            ) : (
+            {adminV2Chrome && !hidePageHeader ? (
+                <SettingsPageHeader title="Field grouping" actions={newSectionAction} />
+            ) : adminV2Chrome && hidePageHeader && newSectionAction ? (
+                <div className="mb-3 flex flex-wrap justify-end gap-2">{newSectionAction}</div>
+            ) : adminV2Chrome ? null : (
                 <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
                     <AdminPageHeader
                         title="Field grouping catalog"

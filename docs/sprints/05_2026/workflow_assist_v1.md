@@ -2,7 +2,7 @@
 
 **Path:** `docs/sprints/05_2026/workflow_assist_v1.md`  
 **Status:** **Cards 1–5 + stabilization + Explain v1 (operational trace) shipped** — read-only cards, deterministic propose/apply, role-aware UX, create-template guardrails, **`GET /api/admin/ai/workflow-assist/explain`** returns Explain v1 with **`WorkflowOperationalTraceV1`**. LLM, durable proposals, bulk pause, multi-event disambiguation remain deferred.  
-**Prerequisites:** `docs/sprints/05_2026/agent_interaction_layer_v1.md` (Orchestrator + thread + action cards), `docs/sprints/05_2026/task_assist_v1_1.md` (Task Assist patterns), `docs/sprints/05_2026/ai_agents_v1.md` §9 (`WorkflowAssistSuggestionV1` template), `docs/product/ai-system.md`, `docs/system/actions-and-workflows.md`.
+**Prerequisites:** `docs/sprints/05_2026/agent_interaction_layer_v1.md` (Orchestrator + thread + action cards), `docs/sprints/05_2026/task_assist_v1_1.md` (Task Assist patterns), `docs/sprints/05_2026/ai_agents_v1.md` §9 (`WorkflowAssistSuggestionV1` template), `docs/product/bos-foundation.md`, `docs/system/actions-and-workflows.md`.
 
 **Non-goals for this document:** Task Assist transactional scope; new workflow execution engine; autonomous `executeWorkflowRun` from NL; childcare-only automation rules in platform code.
 
@@ -16,7 +16,7 @@
 | **Mutations** | **No** direct writes from model output. **Apply** uses the same server paths as human admins (`POST`/`PATCH`/`DELETE` on workflow family routes, or future DEFINER proposal+audit if adopted) **after** explicit human approval and re-validation. |
 | **Execution** | **`executeWorkflowRun`** remains the **only** runtime executor for workflow side effects; Assist may **propose** manual test runs only through existing **`POST /api/admin/workflows/[id]/run`** semantics (already `requireAdminOrOps`) — **not** “headless loop from AI.” |
 | **Orchestrator** | Continues to **route** and **never** apply workflow mutations; specialist owns action cards and API calls. |
-| **Determinism** | V1 favors **deterministic** intent classification + template/catalog mapping; optional gated LLM for **draft text only**, behind org policy (pattern: Task Assist / enrichment gates in `docs/product/ai-system.md`). |
+| **Determinism** | V1 favors **deterministic** intent classification + template/catalog mapping; optional gated LLM for **draft text only**, behind org policy (pattern: Task Assist / enrichment gates in `docs/product/bos-foundation.md`). |
 | **Vertical neutrality** | Example intents (“enrollment”, “tours”) are **documentation examples**; catalog keys and templates stay **industry-agnostic** unless expressed as org-local config or seeds. |
 
 ---
@@ -95,7 +95,7 @@ The migration **`supabase/migrations/20260522180000_staging_demo_org_ai_policy_t
 | **Slot detection** | `web/lib/adminV2/aiCommandSurface/commandSurfaceSlotExtract.ts` | `WORKFLOW_RE` — keywords: `workflow`, `automatically`, `when … happens/completes`, `trigger`, `rules`. |
 | **Task Assist guard** | `web/lib/agent/taskAssist/taskAssistCommandIntent.ts` | Duplicate `WORKFLOW_RE`; sets **`workflow_blocked`** so Task Assist does not absorb automation language. |
 | **Audits** | `docs/audits/workflow-execution-consistency-audit.md`, `docs/audits/event-integrity-audit.md` | Intended vs exceptional paths (e.g. manual run without `event_id`). |
-| **Agent config pattern** | `docs/product/ai-system.md` §SECURITY DEFINER RPCs | `agent_v0/v1/v2` proposal + apply audit + stale checks for **queue_definition**, record overview layout, field visibility — **template** for durable AI-mediated config (workflows are **not** yet on this pattern). |
+| **Agent config pattern** | `docs/product/bos-foundation.md` §SECURITY DEFINER RPCs | `agent_v0/v1/v2` proposal + apply audit + stale checks for **queue_definition**, record overview layout, field visibility — **template** for durable AI-mediated config (workflows are **not** yet on this pattern). |
 | **AI policy / RBAC** | `org_settings.metadata.ai_policy`, `ai.enrichment.use`, `docs/system/roles-and-permissions.md` | Task Assist draft gated by policy + permissions; workflow CRUD today is **`requireAdmin`**. |
 
 ### 1.2 What is reusable
@@ -104,7 +104,7 @@ The migration **`supabase/migrations/20260522180000_staging_demo_org_ai_policy_t
 - **Proposal shape:** `WorkflowAssistSuggestionV1` from `ai_agents_v1.md` §9.1 — align TypeScript types when implementing.
 - **Validation:** Reuse admin workflow API contracts (`POST` body shape, `workflow_actions` / `workflow_conditions` payloads) as the **only** structured target for drafts.
 - **Read-only diagnostics:** `GET /api/admin/workflows/summary`, workflow detail + runs APIs and UI data loaders — **no synthetic run ids**.
-- **Permission machinery:** `getAdminContextCached`, `requireAdmin`, `requireAdminOrOps`, future **`permission_key`** (e.g. `ai.workflow.draft.generate` per `docs/product/ai-system.md` matrix stub).
+- **Permission machinery:** `getAdminContextCached`, `requireAdmin`, `requireAdminOrOps`, future **`permission_key`** (e.g. `ai.workflow.draft.generate` per `docs/product/bos-foundation.md` matrix stub).
 - **Org policy:** Extend **`metadata.ai_policy.allowed_features`** with a workflow-assist feature flag (name TBD) following Task Assist / enrichment pattern.
 
 ### 1.3 What should not be rebuilt
@@ -194,11 +194,11 @@ The migration **`supabase/migrations/20260522180000_staging_demo_org_ai_policy_t
 ### 4.5 Audit / logging model
 
 - **Apply:** Prefer same pattern as other AI config: correlation id + actor + result in dedicated audit table or extend existing agent audit namespace — **decision gate Card 1**.
-- **Telemetry:** Optional `ai_enrichment_usage_v1`-style events or minimized `workflow_events` **only** with non-PII payload contract — follow `docs/product/ai-system.md` guardrails.
+- **Telemetry:** Optional `ai_enrichment_usage_v1`-style events or minimized `workflow_events` **only** with non-PII payload contract — follow `docs/product/bos-foundation.md` guardrails.
 
 ### 4.6 Permission model (summary — see §6)
 
-- **Draft generate (LLM or stub):** `ai_policy` + recommended `ai.workflow.draft.generate` (not seeded yet per `ai-system.md`).
+- **Draft generate (LLM or stub):** `ai_policy` + recommended `ai.workflow.draft.generate` (not seeded yet per `bos-foundation.md`).
 - **Read runs / explain:** `requireAdminOrOps` **if** aligned with existing workflow list/run endpoints.
 - **Create/update/delete/enable:** **`requireAdmin`** (or future `workflows.manage`).
 
@@ -286,7 +286,7 @@ All inside **Orchestrator thread** (`CommandSurfaceThread` + action cards) — n
 
 - **Doctrine:** `docs/execution/operating-doctrine.md`, `docs/core/system-overview.md`
 - **Workflows:** `docs/system/actions-and-workflows.md`, `docs/audits/workflow-execution-consistency-audit.md`
-- **Config / AI:** `docs/system/configuration-system.md`, `docs/product/ai-system.md`
+- **Config / AI:** `docs/system/configuration-system.md`, `docs/product/bos-foundation.md`
 - **API map:** `docs/system/api-contracts.md`
 - **RBAC:** `docs/system/roles-and-permissions.md`
 - **Prior agent sprints:** `docs/sprints/05_2026/task_assist_v1.md`, `agent_interaction_layer_v1.md`, `ai_enrichment_and_agent_actions_v1.md`, `ai_agents_v1.md` §9
@@ -424,7 +424,7 @@ Migration: `supabase/migrations/20260516143000_workflows_metadata_scope.sql` add
 
 - `GET /api/admin/workflows/summary?variant=workspace&department_id=&work_unit_id=` returns `partitions` when scope query params are set.
 - `AutomationWorkflowsBlock` sections: **Scoped to this work unit**, **Scoped to this department**, **Org-wide**, **Enrollment-adjacent (fallback)** when no scoped rows exist.
-- `GlobalAssistantContext.workspaceScope` set from department/work-unit pages so create proposals inherit route context.
+- `GlobalAssistantContext.workspaceScope` set from department/work-unit pages so create proposals inherit route context. **`setWorkspaceScope`** shallow-compares before updating state; route effects depend on the stable callback (not the whole context object) to avoid render loops when names/ids are unchanged.
 
 ### Tour reminder scaffold
 
@@ -453,7 +453,7 @@ Migration: `supabase/migrations/20260516143000_workflows_metadata_scope.sql` add
 - `AutomationWorkflowsBlock` **`onAskWorkflowAssist`** → `focusCommandBar({ seedCommand, expandThread: true })` (no separate assistant surface).
 - Department seed: `Show workflows for {department name}`.
 - Work-unit seed: `Create a workflow for {work unit} in {department}`.
-- `workspaceScope` remains set while the page is mounted for create propose context.
+- `workspaceScope` remains set while the page is mounted for create propose context (cleanup on unmount sets scope to `null`).
 
 ### Edit-from-read (narrow v1)
 

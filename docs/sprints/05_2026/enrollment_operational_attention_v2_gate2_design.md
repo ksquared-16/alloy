@@ -456,7 +456,7 @@ type AttentionSurfaceSemantics = {
 
 ### 9.3 Medium-term
 
-- Dedicated table **`attention_policies`** (org_id, scope_type, scope_id, version, json, updated_at) with **optimistic locking** — mirrors agent RPC patterns conceptually (`docs/product/ai-system.md`).  
+- Dedicated table **`attention_policies`** (org_id, scope_type, scope_id, version, json, updated_at) with **optimistic locking** — mirrors agent RPC patterns conceptually (`docs/product/bos-foundation.md`).  
 - AI/agent applies policy **only** through validated apply RPC — **no** raw table patches.
 
 ### 9.4 Resolver-only evaluation

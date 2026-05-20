@@ -57,8 +57,19 @@ Finish the BOS foundation so future capabilities can be added without drift — 
 - Unified proposal inbox UI reading `bos_envelope` from thread or durable tables
 - Optional `bos_envelope` on internal admin API debug responses
 - `job_overview_layout` envelope adapter when inbox needs parity
-- Consolidate `ai-system.md` stub into bos-foundation only (doc cap)
+- Consolidate `bos-foundation.md` stub into bos-foundation only (doc cap)
 - Telemetry events using `buildBosEnvelopeLogSummary()`
+
+## Documentation refresh (post-closeout)
+
+Active topic pack updated to reference **`bos-foundation.md`** and BOS terminology:
+
+- `docs/core/glossary.md`, `docs/system/api-contracts.md`, `configuration-system.md`, `record-system.md`, `roles-and-permissions.md`, `workspace-system.md`
+- `docs/product/crm-system.md`, `communications.md`
+- `docs/execution/roadmap-and-gaps.md`
+- `docs/README.md` load order
+
+Historical sprint docs may still cite `bos-foundation.md` (stub redirects). Prefer **`bos-foundation.md`** for new edits.
 
 ## Verification
 

@@ -18,6 +18,7 @@ export type LayoutIntegrityIssueCategory =
 
 const ISSUE_CATEGORY_BY_CODE: Record<LayoutIntegrityIssueCode, LayoutIntegrityIssueCategory> = {
     required_field_not_visible: "visibility",
+    required_on_layout_not_visible: "visibility",
     visible_field_missing_definition: "field_registry",
     editable_without_write_target: "write_path",
     related_record_missing_ownership: "write_path",
@@ -43,6 +44,7 @@ const CATEGORY_LABEL: Record<LayoutIntegrityIssueCategory, string> = {
 
 const CODE_OPERATOR_TITLE: Partial<Record<LayoutIntegrityIssueCode, string>> = {
     required_field_not_visible: "Required field is hidden",
+    required_on_layout_not_visible: "Required on layout but missing from drawer",
     visible_field_missing_definition: "Layout references unknown field",
     editable_without_write_target: "Editable field has no save path",
     related_record_missing_ownership: "Related-record field misconfigured",
@@ -111,7 +113,12 @@ export function fixLinksForIssue(issue: LayoutIntegrityIssue): LayoutIntegrityFi
         { href: `/adminV2/settings/fields?entity=${encodeURIComponent(entity)}`, label: "Fields" },
         { href: "/adminV2/settings/field-sections", label: "Field grouping" },
     ];
-    if (issue.code === "layout_ordering_conflict" || issue.code === "invalid_section_reference" || issue.code === "duplicate_field_placement") {
+    if (
+        issue.code === "layout_ordering_conflict" ||
+        issue.code === "invalid_section_reference" ||
+        issue.code === "duplicate_field_placement" ||
+        issue.code === "required_on_layout_not_visible"
+    ) {
         links.push({ href: "/adminV2/settings/layouts", label: "Layouts" });
     }
     if (issue.code === "option_field_no_active_options") {

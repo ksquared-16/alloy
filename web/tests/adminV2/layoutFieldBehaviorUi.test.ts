@@ -1,30 +1,41 @@
 import { describe, expect, it } from "vitest";
 import {
     buildLayoutFieldBehaviorView,
+    LAYOUT_FIELD_BEHAVIOR_HELPER,
     LAYOUT_INTERACTION_CONTROL_LABEL,
     LAYOUT_REQUIREMENT_CONTROL_LABEL,
     layoutFieldBehaviorControlsEnabled,
+    layoutRequirementPresetLabel,
 } from "@/lib/adminV2/layouts/layoutFieldBehaviorUi";
 import { buildSimpleRequirementPolicy } from "@/lib/fields/fieldPolicySettingsUi";
 
 describe("layoutFieldBehaviorUi", () => {
-    it("enables controls only for opportunity workflow v1 with assign rights", () => {
+    it("enables controls only for opportunity workflow v1 when section allows behavior", () => {
         expect(
             layoutFieldBehaviorControlsEnabled({
                 entityType: "opportunity",
                 workflowV1Configured: true,
                 canMutate: true,
                 isReadOnly: false,
-                canAssignFields: true,
+                canConfigureFieldBehavior: true,
             })
         ).toBe(true);
+        expect(
+            layoutFieldBehaviorControlsEnabled({
+                entityType: "opportunity",
+                workflowV1Configured: true,
+                canMutate: true,
+                isReadOnly: false,
+                canConfigureFieldBehavior: false,
+            })
+        ).toBe(false);
         expect(
             layoutFieldBehaviorControlsEnabled({
                 entityType: "job",
                 workflowV1Configured: true,
                 canMutate: true,
                 isReadOnly: false,
-                canAssignFields: true,
+                canConfigureFieldBehavior: true,
             })
         ).toBe(false);
         expect(
@@ -33,7 +44,7 @@ describe("layoutFieldBehaviorUi", () => {
                 workflowV1Configured: false,
                 canMutate: true,
                 isReadOnly: false,
-                canAssignFields: true,
+                canConfigureFieldBehavior: true,
             })
         ).toBe(false);
     });
@@ -41,6 +52,8 @@ describe("layoutFieldBehaviorUi", () => {
     it("uses layout-specific control labels", () => {
         expect(LAYOUT_REQUIREMENT_CONTROL_LABEL).toContain("layout");
         expect(LAYOUT_INTERACTION_CONTROL_LABEL.toLowerCase()).toContain("editability");
+        expect(LAYOUT_FIELD_BEHAVIOR_HELPER.toLowerCase()).toContain("drawer");
+        expect(layoutRequirementPresetLabel("required_on_save")).toBe("Required to save");
     });
 
     it("reflects placement required_on_save override", () => {

@@ -17,7 +17,7 @@ Ship an **operational prioritization layer for enrollment**, not a “warning ba
 - Canonical evaluator: `web/lib/opportunities/opportunityAttentionResolver.ts` (**resolver v2**).
 - Count / cohort / histogram semantics: `docs/system/workspace-system.md` § Needs attention count semantics.
 - Settings vs runtime parity: `docs/system/configuration-system.md`.
-- AI agent boundaries: `docs/product/ai-system.md`.
+- AI agent boundaries: `docs/product/bos-foundation.md`.
 - **Canonical enrollment execution vs overlay (pipeline pills + default lenses):** [`canonical_enrollment_operating_model_seed.md`](./canonical_enrollment_operating_model_seed.md).
 
 ---
