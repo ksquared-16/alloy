@@ -33,6 +33,7 @@ import {
     ADMINV2_DRAWER_OPPORTUNITY_TITLE_RAIL_MIN_H,
     ADMINV2_DRAWER_OPPORTUNITY_WORKFLOW_BODY_MIN_H,
     ADMINV2_DRAWER_SHELL_INSTANT_ATTR,
+    ADMINV2_OPPORTUNITY_DRAWER_REVEAL_COORD_MAX_MS,
 } from "@/lib/ui-v2/adminV2LoadingGeometry";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import EntityDocumentsSection from "@/components/admin/EntityDocumentsSection";
@@ -171,7 +172,6 @@ import {
 } from "@/lib/admin/opportunityDrawerBootstrapClient";
 import type { DrawerOperTrustPreviewV1 } from "@/lib/admin/opportunityDrawerOperationalBootstrapTypes";
 import type { OpportunityDrawerOperationalBootstrapResponse } from "@/lib/admin/opportunityDrawerOperationalBootstrapTypes";
-import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { AdminV2DrawerLoadingState } from "@/components/admin/workspace/AdminV2DrawerLoadingState";
 import type { RecordLayoutRow } from "@/lib/recordChrome/types";
 import { getSectionOrderFromScheduleLayoutBlocks } from "@/lib/recordChrome/scheduleLayoutConfig";
@@ -1397,6 +1397,8 @@ export default function AdminEntityDrawer() {
     useEffect(() => {
         setPostDrawerVisibleKey(null);
         setOpportunityDrawerSecondaryReady(false);
+        setOpportunityDrawerRevealCoordTimedOut(false);
+        opportunityDrawerRevealCoordStartedAtRef.current = null;
         opportunityFullHydrateInFlightRef.current = null;
         opportunityFullHydrateDoneRef.current = null;
         memberPersonGraphOverlayInFlightRef.current = null;
@@ -1526,6 +1528,7 @@ export default function AdminEntityDrawer() {
     const opportunityDrawerBootstrapEntityKeyRef = useRef<string | null>(null);
     const opportunityDrawerBootstrapInflightRef = useRef<string | null>(null);
     const [opportunityDrawerBootstrapLegacy, setOpportunityDrawerBootstrapLegacy] = useState(false);
+    const [opportunityDrawerRevealCoordTimedOut, setOpportunityDrawerRevealCoordTimedOut] = useState(false);
     const [opportunityBootstrapAppliedId, setOpportunityBootstrapAppliedId] = useState<string | null>(null);
     const [opportunityBootstrapLayoutRow, setOpportunityBootstrapLayoutRow] = useState<RecordLayoutRow | null>(null);
     const [opportunityOperTrustPreview, setOpportunityOperTrustPreview] = useState<DrawerOperTrustPreviewV1 | null>(
@@ -1534,6 +1537,7 @@ export default function AdminEntityDrawer() {
     const drawerLoadStartRef = useRef<{ key: string; at: number } | null>(null);
     const drawerReadyLoggedKeyRef = useRef<string | null>(null);
     const opportunityDrawerShellSettledPerfRef = useRef(false);
+    const opportunityDrawerRevealCoordStartedAtRef = useRef<number | null>(null);
     const [addInquiryChildState, setAddInquiryChildState] = useState<{ mode: "child" | "sibling" } | null>(null);
     const [collectPaymentOpen, setCollectPaymentOpen] = useState(false);
     const [collectPaymentContext, setCollectPaymentContext] = useState<AdminCollectPaymentModalContext | null>(null);
@@ -2114,6 +2118,10 @@ export default function AdminEntityDrawer() {
             }
             setOpportunityWorkUnitDepartmentId(boot.work_unit?.department_id ?? boot.workspace_scope.department_id);
             markDrawerBootstrapApplied(String(drawer.id));
+            setOpportunityDrawerRevealCoordTimedOut(false);
+            if (typeof performance !== "undefined") {
+                opportunityDrawerRevealCoordStartedAtRef.current = performance.now();
+            }
         };
 
         const runLegacyEntityFetch = () => {
@@ -2249,6 +2257,44 @@ export default function AdminEntityDrawer() {
                 setOpportunityFullHydrateFailed(true);
             });
     }, [drawer.type, drawer.id, drawer.jobRecordSurface, opportunityRecordHydrationPending]);
+
+    /** Start full hydrate as soon as bootstrap applies — coordinated reveal waits for merge (or cap). */
+    useEffect(() => {
+        if (drawerShellVariant !== "adminV2" || !adminV2DrawerBootstrapEnabled()) return;
+        if (opportunityDrawerBootstrapLegacy) return;
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        if (opportunityBootstrapAppliedId !== drawer.id) return;
+        if (!opportunityRecordHydrationPending) return;
+        runOpportunityFullHydrate();
+    }, [
+        drawerShellVariant,
+        drawer.type,
+        drawer.id,
+        opportunityBootstrapAppliedId,
+        opportunityDrawerBootstrapLegacy,
+        opportunityRecordHydrationPending,
+        runOpportunityFullHydrate,
+    ]);
+
+    /** Reveal coordination cap — never block longer than ADMINV2_OPPORTUNITY_DRAWER_REVEAL_COORD_MAX_MS. */
+    useEffect(() => {
+        if (drawerShellVariant !== "adminV2" || !adminV2DrawerBootstrapEnabled()) return;
+        if (opportunityDrawerBootstrapLegacy) return;
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        if (opportunityBootstrapAppliedId !== drawer.id) return;
+        setOpportunityDrawerRevealCoordTimedOut(false);
+        const t = setTimeout(
+            () => setOpportunityDrawerRevealCoordTimedOut(true),
+            ADMINV2_OPPORTUNITY_DRAWER_REVEAL_COORD_MAX_MS
+        );
+        return () => clearTimeout(t);
+    }, [
+        drawerShellVariant,
+        drawer.type,
+        drawer.id,
+        opportunityBootstrapAppliedId,
+        opportunityDrawerBootstrapLegacy,
+    ]);
 
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
@@ -5408,6 +5454,8 @@ export default function AdminEntityDrawer() {
         !!drawer.id &&
         drawer.id !== "new" &&
         adminV2DrawerBootstrapEnabled();
+    const opportunityDrawerRevealCoordActive =
+        opportunityDrawerAdminV2Bootstrap && !opportunityDrawerBootstrapLegacy;
     const opportunityBootstrapChromeSuppressed =
         opportunityDrawerAdminV2Bootstrap && !opportunityDrawerBootstrapLegacy;
     const recordChromeOpportunity = useRecordChromeConfig(
@@ -6331,33 +6379,52 @@ export default function AdminEntityDrawer() {
         !!overviewData &&
         !(overviewData as { _create?: boolean })._create;
 
-    /** One primary overview reveal — no per-field hydrate skeletons in the inquiry summary. */
-    const opportunityDrawerOverviewRevealReady =
-        opportunityDrawerShellSettled && !error;
+    /**
+     * One coordinated overview reveal — bootstrap shell waits for in-flight full hydrate (or cap)
+     * so inquiry sections do not pop in sequentially.
+     */
+    const opportunityDrawerCoordinatedRevealReady = useMemo(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return false;
+        if (!opportunityDrawerShellSettled || error) return false;
+        if (!opportunityDrawerRevealCoordActive) return true;
+        if (!opportunityRecordHydrationPending) return true;
+        if (opportunityFullHydrateApplied) return true;
+        if (opportunityFullHydrateFailed) return true;
+        if (opportunityDrawerRevealCoordTimedOut) return true;
+        return false;
+    }, [
+        drawer.type,
+        drawer.id,
+        opportunityDrawerShellSettled,
+        error,
+        opportunityDrawerRevealCoordActive,
+        opportunityRecordHydrationPending,
+        opportunityFullHydrateApplied,
+        opportunityFullHydrateFailed,
+        opportunityDrawerRevealCoordTimedOut,
+    ]);
+
+    const opportunityDrawerOverviewRevealReady = opportunityDrawerCoordinatedRevealReady;
+
+    const opportunityDrawerPrimaryLoadingVisible =
+        opportunityDrawerRevealCoordActive &&
+        !error &&
+        (opportunityDrawerBootstrapPending ||
+            (opportunityBootstrapAppliedId === drawer.id && !opportunityDrawerCoordinatedRevealReady));
 
     const opportunityDrawerPrimaryCoherent = opportunityDrawerOverviewRevealReady;
 
-    useEffect(() => {
-        if (!opportunityDrawerOverviewRevealReady) return;
-        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
-        return scheduleAdminV2BackgroundWork(
-            () => {
-                runOpportunityFullHydrate();
-            },
-            { idleTimeoutMs: 400, fallbackMs: 120 }
-        );
-    }, [drawer.type, drawer.id, opportunityDrawerOverviewRevealReady, runOpportunityFullHydrate]);
-
-    /** Inquiry drawer: one pre-overview shell (bootstrap body) until primary overview is coherent. */
+    /** Inquiry drawer: branded loading shell until one coordinated overview reveal. */
     const opportunityDrawerPreOverviewShell =
-        opportunityDrawerBootstrapPending ||
-        (drawer.type === "opportunities" &&
+        opportunityDrawerPrimaryLoadingVisible ||
+        (!opportunityDrawerRevealCoordActive &&
+            drawer.type === "opportunities" &&
             !!drawer.id &&
             drawer.id !== "new" &&
             !(overviewData && (overviewData as { _create?: boolean })._create) &&
             !error &&
             opportunityInquiryWorkflowDrawer &&
-            !opportunityDrawerOverviewRevealReady);
+            !opportunityDrawerCoordinatedRevealReady);
 
     const opportunityDrawerUsesBootstrapBodyShell = opportunityDrawerPreOverviewShell;
 
@@ -6380,21 +6447,8 @@ export default function AdminEntityDrawer() {
             setOpportunityDrawerSecondaryReady(false);
             return;
         }
-        if (!opportunityDrawerOverviewRevealReady) {
-            setOpportunityDrawerSecondaryReady(false);
-            return;
-        }
-        let cancelled = false;
-        const id = requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                if (!cancelled) setOpportunityDrawerSecondaryReady(true);
-            });
-        });
-        return () => {
-            cancelled = true;
-            cancelAnimationFrame(id);
-        };
-    }, [drawer.type, drawer.id, opportunityDrawerOverviewRevealReady]);
+        setOpportunityDrawerSecondaryReady(opportunityDrawerCoordinatedRevealReady);
+    }, [drawer.type, drawer.id, opportunityDrawerCoordinatedRevealReady]);
 
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
@@ -8565,7 +8619,7 @@ export default function AdminEntityDrawer() {
                 onSelect={setDrawerTab}
                 tabButtonsDisabled={drawerGateLoading}
             />
-        ) : isOpportunityRecordModalTarget && opportunityDrawerBootstrapPending ? (
+        ) : isOpportunityRecordModalTarget && opportunityDrawerPrimaryLoadingVisible ? (
             <DrawerRecordTabStripGateSkeleton tabCount={4} />
         ) : isOpportunityRecordModalTarget &&
           opportunityInquiryWorkflowDrawer &&
@@ -8742,13 +8796,13 @@ export default function AdminEntityDrawer() {
         opportunityDrawerQueueBootstrap && Boolean(opportunityQueuePreviewSeed?.title?.trim());
 
     const opportunityWorkflowHeaderChromePending =
-        opportunityDrawerBootstrapPending ||
+        opportunityDrawerPrimaryLoadingVisible ||
         (drawer.type === "opportunities" &&
             opportunityInquiryWorkflowDrawerShell &&
             !!drawer.id &&
             drawer.id !== "new" &&
             !(overviewData && (overviewData as { _create?: boolean })._create) &&
-            !opportunityDrawerShellSettled);
+            !opportunityDrawerCoordinatedRevealReady);
 
     const headerSubtitleForDrawer =
         opportunityInquiryWorkflowDrawer &&
@@ -8870,7 +8924,7 @@ export default function AdminEntityDrawer() {
                     className={drawerRecordBodyRootClassName}
                     data-adminv2-opportunity-drawer-body={opportunityRecordChromeBodyShell ? "true" : undefined}
                 >
-                    {opportunityDrawerBootstrapPending ? (
+                    {opportunityDrawerPrimaryLoadingVisible ? (
                         <DrawerOpportunityOperationalLoadingComposition />
                     ) : (
                         <DrawerOpportunityQueueBootstrapBodySkeleton />

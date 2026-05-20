@@ -32,20 +32,26 @@ export function AdminV2DrawerLoadingState({
     const isRecordTone = tone === "record";
     return (
         <div
-            className={`relative overflow-hidden rounded-xl border shadow-sm ${
+            className={`relative overflow-hidden rounded-xl border shadow-md ${
                 isRecordTone
-                    ? "border-alloy-stone/22 bg-gradient-to-br from-white via-alloy-stone/[0.05] to-alloy-forge/[0.07] ring-1 ring-alloy-forge/12"
-                    : "border-admin-border/50 bg-gradient-to-b from-white to-alloy-stone/[0.03] ring-1 ring-alloy-stone/[0.06]"
+                    ? "border-alloy-blue/20 bg-gradient-to-br from-white via-alloy-blue/[0.04] to-alloy-forge/[0.09] ring-1 ring-alloy-blue/15"
+                    : "border-admin-border/50 bg-gradient-to-b from-white to-alloy-stone/[0.03] ring-1 ring-alloy-stone/[0.06] shadow-sm"
             } ${isMicro ? "px-3 py-3" : isInline ? "px-4 py-4" : "px-5 py-6"} ${className}`}
             aria-busy="true"
             aria-live="polite"
             aria-label={title}
         >
             {isRecordTone ? (
-                <div
-                    className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-alloy-blue/55 via-alloy-forge/35 to-alloy-pine/40"
-                    aria-hidden
-                />
+                <>
+                    <div
+                        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(59,130,246,0.07),transparent_55%)]"
+                        aria-hidden
+                    />
+                    <div
+                        className="pointer-events-none absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b from-alloy-blue/70 via-alloy-forge/45 to-alloy-pine/50"
+                        aria-hidden
+                    />
+                </>
             ) : null}
             <div className={`flex ${isMicro ? "items-center gap-3" : "items-start gap-3"}`}>
                 <div

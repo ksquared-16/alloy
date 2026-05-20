@@ -107,10 +107,10 @@ describe("Work-unit KPI and queue picker loading", () => {
 });
 
 describe("Drawer opportunity header grouped loading", () => {
-    it("keeps workflow header chrome in skeleton until shell settles", () => {
+    it("keeps workflow header chrome in skeleton until coordinated reveal", () => {
         const src = read("components/admin/AdminEntityDrawer.tsx");
         expect(src).toMatch(
-            /opportunityWorkflowHeaderChromePending[\s\S]*?!opportunityDrawerShellSettled/,
+            /opportunityWorkflowHeaderChromePending[\s\S]*?!opportunityDrawerCoordinatedRevealReady/,
         );
     });
 
@@ -126,13 +126,13 @@ describe("Drawer opportunity header grouped loading", () => {
         expect(src).toMatch(/opportunityQueuePreviewSeed\?\.title/);
     });
 
-    it("uses centered drawer loading state while bootstrap is pending", () => {
+    it("uses centered drawer loading state until coordinated reveal", () => {
         const src = read("components/admin/AdminEntityDrawer.tsx");
         expect(src).toContain("DrawerOpportunityOperationalLoadingComposition");
         expect(src).toContain("AdminV2DrawerLoadingState");
         expect(src).toContain('tone="record"');
         expect(src).toMatch(
-            /opportunityDrawerBootstrapPending[\s\S]*DrawerOpportunityOperationalLoadingComposition/,
+            /opportunityDrawerPrimaryLoadingVisible[\s\S]*DrawerOpportunityOperationalLoadingComposition/,
         );
     });
 
@@ -262,18 +262,18 @@ describe("Drawer operational bootstrap (Cards 4–7)", () => {
         expect(src).toContain("adminV2DrawerBootstrapEnabled()");
     });
 
-    it("primary oper reveal does not wait on surface=full hydrate", () => {
+    it("coordinates overview reveal with full hydrate before paint", () => {
         const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toMatch(/opportunityDrawerOverviewRevealReady[\s\S]*opportunityDrawerShellSettled/);
-        expect(src).not.toMatch(
-            /opportunityDrawerOverviewRevealReady[\s\S]*!opportunityFullHydratePending/,
-        );
-    });
-
-    it("defers full hydrate via scheduleAdminV2BackgroundWork after oper reveal", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("runOpportunityFullHydrate");
+        expect(src).toContain("opportunityDrawerCoordinatedRevealReady");
+        expect(src).toContain("opportunityDrawerPrimaryLoadingVisible");
+        expect(src).toContain("ADMINV2_OPPORTUNITY_DRAWER_REVEAL_COORD_MAX_MS");
         expect(src).toMatch(
+            /opportunityDrawerOverviewRevealReady = opportunityDrawerCoordinatedRevealReady/,
+        );
+        expect(src).toMatch(
+            /opportunityRecordHydrationPending[\s\S]*runOpportunityFullHydrate/,
+        );
+        expect(src).not.toMatch(
             /scheduleAdminV2BackgroundWork[\s\S]*runOpportunityFullHydrate/,
         );
     });
