@@ -63,7 +63,8 @@ For any merge that changes behavior, include `docs/execution/operating-doctrine.
 - **Archived docs (2026-05-02 reset):** `docs/archive/2026-05-02-docs-reset/` (prior `architecture/`, `audits/`, `implementation/`, `specs/`, root `README`, and former `archive/` shard).
 - **Sprints:** `docs/sprints/` — intentionally **not** moved; not counted in the 16-topic cap.
 - **Settings control plane closeout (May 2026):** **`docs/sprints/05_2026/settings_control_plane_closeout.md`** — completed Layouts composition UX, Action buttons (create/edit placements), and Status vs workflow ownership. Canonical supplement to **`docs/system/configuration-system.md`** § four-plane model.
-- **Layout + field behavior semantics v1 (May 2026):** **`docs/sprints/05_2026/layout_field_behavior_semantics_v1.md`** — `field_placements_v1`, effective policy resolution, opportunity drawer GET/PATCH, layout integrity, Settings split (Layouts = behavior, Fields = structure).
+- **Layout + field behavior semantics v1 (May 2026):** **`docs/sprints/05_2026/layout_field_behavior_semantics_v1.md`** — Phase 1 **complete/paused**; `field_placements_v1`, effective policy resolution, opportunity drawer GET/PATCH, layout integrity, Settings split (Layouts = behavior, Fields = structure).
+- **Layout + field behavior semantics Phase 2 (backlog):** **`docs/sprints/05_2026/layout_field_behavior_semantics_phase_2.md`** — deferred enhancements only (header grid, built-in sections, placement table, multi-surface, forms/workflows reuse).
 - **Supplementary audits** (not counted in the active markdown cap unless you explicitly load them): `docs/audits/` — e.g. **`supabase-schema-alignment-audit.md`**, **`workflow-rbac-alignment-audit.md`**, **`legacy-messages-retirement-plan.md`**, person vs contact, event integrity, workflow consistency, Admin V2 hardening.
 
 ## When this README must be updated

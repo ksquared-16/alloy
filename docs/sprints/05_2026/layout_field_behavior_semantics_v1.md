@@ -1,7 +1,8 @@
-# Layout + field behavior semantics v1
+# Layout + field behavior semantics v1 (Phase 1)
 
 **Path:** `docs/sprints/05_2026/layout_field_behavior_semantics_v1.md`  
-**Status:** Complete through Card 7 (Cards 0–7 shipped; Card 8 UI density polish pending)  
+**Status:** **Phase 1 complete — paused.** Do not continue iterating in this sprint.  
+**Phase 2 backlog:** `docs/sprints/05_2026/layout_field_behavior_semantics_phase_2.md`  
 **Scope lock:** May 2026
 
 ## Sprint goal
@@ -15,82 +16,160 @@ Move operator-facing **Required** and **Editability** configuration from the pri
 | **G0** | Use `record_drawer_layouts.config_json.field_placements_v1` JSON overlay for v1. **No new DB table.** |
 | **G1** | Confirm no new table for v1. |
 | **G2** | Layout placement writes must **NOT** overwrite `field_definitions.requirement_policy` or `interaction_policy`. |
-| **G3** | **No automatic sync** from placement writes to `field_definitions.is_required` in v1. `is_required` remains compatibility/default state on the definition row. Opportunity drawer runtime, PATCH enforcement, layout integrity, and Layouts Settings UI all use **effective** behavior (`placement → definition → preset`). Operators change drawer requiredness on **Record layouts**, not Fields. |
-| **G4** | Baseline tests run before Card 0: `tests/fields/fieldRequirementPolicy.test.ts`, `tests/fields/enforceDrawerFieldPoliciesOnPatch.test.ts`, `tests/config/layoutIntegrityValidator.test.ts` — **27 passed**. |
+| **G3** | **No automatic sync** from placement writes to `field_definitions.is_required` in v1. |
+| **G4** | Baseline policy tests green before Card 0. |
 | **G5** | Hardcoded inquiry summary layout migration remains **out of scope**. |
 
 ## Resolution order (runtime)
 
 For surface `drawer_overview` only (opportunity workflow v1 drawer today):
 
-1. **Placement override** — valid `field_placements_v1` entry for `field_key` on `surfaces.drawer_overview`
-2. **Definition default** — `field_definitions.requirement_policy` / `interaction_policy` (or legacy `is_required` when policy JSON absent)
-3. **System preset** — `drawerFieldPolicyAdapter` caps (e.g. non-enforceable → optional requirement; deferred/action/relationship fields not placement-controlled)
+1. **Placement override** — `field_placements_v1` → `surfaces.drawer_overview`
+2. **Definition default** — `field_definitions` policies / legacy `is_required`
+3. **System preset** — `drawerFieldPolicyAdapter` caps
 
-Implemented in `resolveEffectiveFieldBehavior` + `buildDrawerFieldPolicyResolvedMap` (`web/lib/fields/`). Malformed placement rows are skipped on read (fail closed to definition/preset); resolvers do not throw.
+Implemented in `resolveEffectiveFieldBehavior` + `buildDrawerFieldPolicyResolvedMap` (`web/lib/fields/`).
 
-## OUT of scope (v1)
+## OUT of scope (Phase 1)
 
-Forms, public booking, workflow status-transition enforcement, inquiry_child/OCM field behavior on layouts, config assist new ops, new DB table, inquiry summary migration, advanced conditional requiredness, job drawer layout behavior controls (job PATCH still uses definition-based enforcement only).
+Forms, public booking, workflow status-transition enforcement, inquiry_child/OCM placement behavior, config assist new ops, new DB table, inquiry summary migration, advanced conditional requiredness, job drawer layout behavior controls, unified forms/workflows placement model, configurable drawer header summary grid.
+
+---
 
 ## Implementation cards
 
 | Card | Status | Summary |
 |------|--------|---------|
 | 0 | **Done** | Types, `fieldPlacementV1` parser, `resolveEffectiveFieldBehavior`, unit tests |
-| 1 | **Done** | `PATCH /api/admin/record-drawer-layouts/opportunity-workflow-v1-field-placements` (layout JSON only) |
-| 2 | **Done** | Opportunity drawer GET `_field_policy_resolved` (placement-aware) |
+| 1 | **Done** | `PATCH …/opportunity-workflow-v1-field-placements` (layout JSON only) |
+| 2 | **Done** | Opportunity drawer GET `_field_policy_resolved` |
 | 3 | **Done** | Opportunity PATCH enforcement via effective policies |
-| 4 | **Done** | Placement-aware layout integrity (`required_on_layout_not_visible`) |
-| 5 | **Done** | Layouts Settings UI — Required on this layout / Editability here |
-| 6 | **Done** | Fields Settings de-emphasis (structure-only primary UX for opportunity/job) |
-| 7 | **Done** | Doctrine + sprint documentation |
-| 8 | Pending | UI density polish |
+| 4 | **Done** | Placement-aware layout integrity |
+| 5 | **Done** | Layouts Settings — Required / Editability per field |
+| 5.5 | **Done** | Layouts UX — section labels, save/remove feedback |
+| 5.6 | **Done** | Cohesive drawer model — header as section row, built-in sections useful, shorter settings chrome |
+| 6 | **Done** | Fields Settings de-emphasis (opportunity/job) |
+| 7 | **Done** | Doctrine + active topic docs |
+| 8 | **Paused** | Broad UI density polish — superseded by targeted operational UX + drawer breathing passes |
+| **Ops UX** | **Done** | Settings header simplification, debug metadata behind Developer details, stable section selection, save/remove clarity |
+| **Drawer density** | **Done** | Opportunity modal header compressed vs pre-cleanup; final ~2–4px breathing-room pass on title/actions/tabs (still materially shorter than original) |
 
-## Current implementation summary
+---
+
+## Final implementation summary
 
 | Layer | Behavior |
 |-------|----------|
-| **Storage** | `record_drawer_layouts.config_json.field_placements_v1[]` per org effective drawer layout when `inquiry_drawer_mode === workflow_v1` |
-| **Layouts Settings** | Per-field selects → Card 1 PATCH; reload via `GET …/record-layouts/effective-preview` (`field_placements_v1`) |
-| **Fields Settings** | Opportunity/job: labels, help, type, option sets, visibility — **not** primary Required/editability controls; CTA to Record layouts |
-| **Drawer GET** | `respondOpportunityEntityGet` loads effective layout once; attaches placement-aware `_field_policy_resolved` |
-| **Drawer PATCH** | `PATCH /api/admin/opportunities/:id` loads same effective layout; `enforceDrawerFieldPoliciesOnPatch` uses effective requirement/interaction |
-| **Integrity** | `validateLayoutIntegrity` uses effective requiredness vs drawer preview keys; issue `required_on_layout_not_visible` when required on layout but missing from preview |
-| **Job** | Definition-based policy map and PATCH enforcement **unchanged** (no `layoutConfig` on job paths) |
+| **Storage** | `field_placements_v1[]` on effective org `record_drawer_layouts.config_json` when `inquiry_drawer_mode === workflow_v1` |
+| **Layouts Settings** | One drawer model: **Drawer header** + body sections; per-field Required/Editability → Card 1 PATCH; section order/visibility separate API |
+| **Fields Settings** | Opportunity/job: structure/defaults primary; CTA to Record layouts for drawer behavior |
+| **Drawer GET** | Placement-aware `_field_policy_resolved` on opportunity workflow v1 |
+| **Drawer PATCH** | `enforceDrawerFieldPoliciesOnPatch` uses effective policies + layout config |
+| **Integrity** | `required_on_layout_not_visible` when layout-required field absent from preview |
+| **Job** | Definition-based enforcement unchanged (no layout placement plane) |
 
-**Key modules:** `fieldPlacementV1.ts`, `resolveEffectiveFieldBehavior.ts`, `drawerFieldPolicyAdapter.ts`, `opportunityWorkflowV1FieldPlacements.ts`, `enforceDrawerFieldPoliciesOnPatch.ts`, `layoutIntegrityValidator.ts`, `layoutFieldBehaviorUi.ts`, `LayoutSectionFieldsPanel.tsx`, `SettingsFieldsHubClient.tsx`.
+**Operator UX (Phase 1):** Section types labeled Header / Standard section / Workflow section / Custom section. Built-in sections show fixed rows and behavior controls where field definitions exist. Debug provenance/fidelity/IDs only under collapsed **Developer details** on Layouts. Section selection is local (no left-panel reload flash on click).
 
-**Backend compatibility:** `PATCH /api/admin/field-definitions/:id` still accepts `requirement_policy` / `interaction_policy` for advanced or API callers; v1 operator UX does not treat Fields as the drawer-behavior control plane for opportunity/job.
+**Not done (deferred to Phase 2):** Configurable header summary grid, archive/delete layout sections, inquiry child grid column configuration, forms/workflows reuse of placement model, multi-surface layouts beyond opportunity drawer overview.
 
-## Card 0 — JSON shape (`field_placements_v1`)
+---
+
+## Files / areas changed (Phase 1)
+
+**Policy & API**
+
+- `web/lib/fields/fieldPlacementV1.ts`, `resolveEffectiveFieldBehavior.ts`, `drawerFieldPolicyAdapter.ts`
+- `web/lib/admin/opportunityWorkflowV1FieldPlacements.ts`
+- `web/lib/fields/enforceDrawerFieldPoliciesOnPatch.ts`
+- `web/lib/config/layoutIntegrityValidator.ts`
+- `web/app/api/admin/record-drawer-layouts/opportunity-workflow-v1-field-placements/`
+- Opportunity entity GET/PATCH paths (placement-aware policy map)
+
+**Layouts Settings UI**
+
+- `web/lib/adminV2/layouts/layoutSectionOperatorUi.ts`, `layoutFieldBehaviorUi.ts`, `layoutCompositionCapabilities.ts`, `sectionTypePresentation.ts`
+- `web/components/adminV2/settings/RecordDrawerCompositionWorkspace.tsx`
+- `web/components/adminV2/settings/OpportunityWorkflowV1SectionsEditor.tsx`
+- `web/components/adminV2/settings/LayoutSectionFieldsPanel.tsx`
+- `web/components/adminV2/settings/LayoutFieldBehaviorControls.tsx`
+- `web/components/adminV2/settings/EffectiveDrawerLayoutPreviewPanel.tsx` (developer mode only)
+- `web/app/adminV2/settings/layouts/`, `LayoutsSettingsHubClient.tsx`
+- `web/lib/adminV2/settingsPageSubtitles.ts`
+
+**Fields Settings UI**
+
+- `web/app/adminV2/settings/fields/`, `SettingsFieldsHubClient.tsx`
+- `web/components/admin/EntityFieldsClient.tsx` (+ person/location field clients)
+
+**Drawer chrome (density only — no behavior change)**
+
+- `web/components/admin/Drawer.tsx`
+- `web/components/admin/AdminEntityDrawer.tsx`
+- `web/lib/ui-v2/adminV2LoadingGeometry.ts` (timeline reserve; not expanded in final pass)
+
+**Tests**
+
+- `web/tests/adminV2/layoutSectionOperatorUi.test.ts`
+- `web/tests/adminV2/layoutFieldBehaviorUi.test.ts`
+- Existing field policy / enforcement / integrity tests (baseline + extensions)
+
+**Docs (active topic)**
+
+- `docs/system/configuration-system.md`, `docs/system/record-system.md`, `docs/execution/operating-doctrine.md`
+
+---
+
+## Final acceptance status
+
+| Criterion | Status |
+|-----------|--------|
+| `field_placements_v1` on layout JSON; no new table | **Met** |
+| Placement → definition → preset on opportunity drawer | **Met** |
+| Layout PATCH does not mutate `field_definitions` policies | **Met** |
+| Drawer GET/PATCH use effective behavior | **Met** |
+| Layout integrity placement-aware | **Met** |
+| Layouts owns Required/Editability for opportunity workflow v1 | **Met** |
+| Fields de-emphasized for opportunity/job | **Met** |
+| Cohesive layouts operator model (header row, no debug in main UI) | **Met** |
+| Stable section selection; trustworthy save/remove copy | **Met** |
+| Opportunity modal header compact but not cramped (final breathing pass) | **Met** |
+| Forms/workflows unified with placement model | **Not met** (Phase 2) |
+| Configurable drawer header / child grid columns | **Not met** (Phase 2) |
+
+---
+
+## Known limitations (Phase 1)
+
+- **Drawer header** is a UI section row for behavior on catalog-backed summary keys; **title/status/summary grid composition is not operator-configurable.**
+- **Inquiry children / tuition** built-in sections: fixed grid columns in v1; behavior controls only where keys resolve to opportunity `field_definitions`.
+- **Workflow virtual sections:** behavior only for `field_keys` present in effective preview.
+- **`field_placements_v1` is JSON** on `config_json` — no first-class placement table, no cross-surface editor.
+- **Job / schedule / other entities:** no layout behavior controls in Settings; job PATCH remains definition-based.
+- **Forms, public booking, config assist, BOS** do not read placement overlays.
+- **Status/action “required on phase”** not modeled in placements.
+- **Card 8** large density redesign intentionally not pursued; targeted passes only.
+
+---
+
+## Do not continue iterating in this sprint
+
+Phase 1 delivers a **good enough** operator split: **Fields = structure**, **Layouts = drawer behavior** for opportunity workflow v1. Further work belongs in **Phase 2** (`layout_field_behavior_semantics_phase_2.md`) or unrelated sprints — not additional cards on this doc.
+
+Do **not** reopen Phase 1 for: new schema, enforcement changes, forms/booking integration, header grid configuration, or open-ended UI polish.
+
+---
+
+## JSON shape (`field_placements_v1`)
 
 ```json
 {
   "field_placements_v1": [
     {
       "field_key": "notes",
-      "section_key": "inquiry",
-      "sort_order": 10,
       "surfaces": {
         "drawer_overview": {
-          "requirement": {
-            "version": 1,
-            "mode": "required_on_save",
-            "validation_scope": "save"
-          },
-          "interaction": {
-            "version": 1,
-            "editability_mode": "read_only",
-            "ownership": {
-              "source_entity": "opportunity",
-              "source_field": "notes",
-              "write_target_entity": "opportunity",
-              "write_target_field": "notes",
-              "write_behavior": "none",
-              "lock_reason": "read_only_policy"
-            }
-          }
+          "requirement": { "version": 1, "mode": "required_on_save", "validation_scope": "save" },
+          "interaction": { "version": 1, "editability_mode": "read_only", "ownership": { "…": "…" } }
         }
       }
     }
@@ -98,36 +177,43 @@ Forms, public booking, workflow status-transition enforcement, inquiry_child/OCM
 }
 ```
 
-Presets written by Settings map to full policy objects via `buildSimpleRequirementPolicy` / `buildSimpleInteractionPolicy` (`fieldPolicySettingsUi.ts`). Requirement presets: `optional`, `required`, `required_on_save`. Interaction presets: `editable`, `read_only`.
+Presets: requirement `optional` | `required` | `required_on_save`; interaction `editable` | `read_only`.
 
-## Manual QA checklist
+---
 
-### Layouts → Opportunity (Card 5)
+## Final manual QA checklist
 
-1. Set a supported custom field **Required when saving** on a section row; confirm **Layout behavior saved**.
-2. Reload Layouts (same section); confirm the select still shows **Required when saving**.
-3. Open an opportunity drawer; confirm the field shows a save-time required indicator (asterisk).
-4. Clear the field and save the drawer; confirm validation error (`Field validation failed`).
-5. Set **Optional** on the layout for a definition-required field; confirm drawer/save no longer require it.
-6. Set **Read-only** on the layout; confirm drawer blocks PATCH for that field.
-7. Confirm **status**, **pricing**, and **relationship** fields show locked layout behavior copy, not broken selects.
-8. Confirm section Up/Down/Remove/Add still works unchanged.
+### Layouts → Opportunity
 
-### Fields → Opportunity / Job (Card 6)
+1. **Drawer header** is first section row; no standalone header callout above the list.
+2. Built-in sections (Inquiry children, Tuition/pricing) show useful rows and behavior where supported; fixed columns noted compactly.
+3. Custom section: add/remove fields, **Remove from layout** (not delete), field order save feedback.
+4. Required/Editability: saving / saved / error on dropdown change.
+5. Click sections rapidly — left list does not flash **Loading drawer sections…**
+6. **Developer details** collapsed by default — no provenance/IDs/fidelity in main view.
+7. Settings pages (Layouts, Fields, Actions, Field grouping): one subtitle, work surface high on page.
 
-1. Fields hub copy states **data structure** on Fields and **behavior on Record layouts** with CTA link.
-2. Fields table has **no** Required / Editability columns for opportunity or job.
-3. Field edit modal shows layout behavior note (no Required / Staff can edit for opportunity/job).
-4. Label, help text, visibility, and option set editing still save correctly.
+### Fields → Opportunity / Job
 
-### End-to-end
+1. No Required/Editability columns; layout behavior note + link to Record layouts.
+2. Field structure edits still save.
 
-1. After layout placement change, drawer GET `_field_policy_resolved` reflects effective mode and `requirement_source` / `interaction_source` when inspected in network payload.
-2. Layout integrity reports `required_on_layout_not_visible` when a layout-required field is absent from drawer preview.
-3. Confirm `field_definitions.is_required` does **not** change when saving layout placement behavior only.
+### Drawer (opportunity modal)
+
+1. Header-to-tabs spacing materially shorter than pre-cleanup; tabs not glued to border; text has inner breathing room.
+2. Action buttons and tabs still work.
+3. Placement change reflected in save validation and `_field_policy_resolved` on GET.
+4. `field_definitions.is_required` unchanged after layout-only behavior save.
+
+### Integrity
+
+1. `required_on_layout_not_visible` when layout-required field missing from drawer preview.
+
+---
 
 ## References
 
-- `docs/system/configuration-system.md` — Fields vs Layouts planes, `field_placements_v1`, precedence
-- `docs/system/record-system.md` — `_field_policy_resolved`, PATCH scope, integrity semantics
-- `docs/execution/operating-doctrine.md` — structure vs layout behavior bullet
+- `docs/sprints/05_2026/layout_field_behavior_semantics_phase_2.md` — deferred enhancements
+- `docs/system/configuration-system.md` — Fields vs Layouts planes
+- `docs/system/record-system.md` — `_field_policy_resolved`, integrity
+- `docs/execution/operating-doctrine.md` — structure vs layout behavior
