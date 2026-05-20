@@ -2272,6 +2272,10 @@ export type DepartmentWorkUnitQueueSummaryRow = {
 export async function getDepartmentWorkUnitQueueSummaries(params: {
     orgId: string;
     departmentId: string;
+    /**
+     * When set (e.g. dept operational bootstrap), skip re-querying work_units for this department.
+     */
+    workUnitIds?: string[];
     /** Preview rows per queue (same semantics as GET .../queues limit). */
     limit?: number;
     workUnitConcurrency?: number;
@@ -2297,27 +2301,38 @@ export async function getDepartmentWorkUnitQueueSummaries(params: {
     const supabase = createAdminClient();
     const refUtc = new Date();
 
+    const presetIds = (params.workUnitIds ?? [])
+        .map((id) => String(id ?? "").trim())
+        .filter(Boolean);
+    const skipWuListQuery = presetIds.length > 0;
+
     const [wuListRes, operationalDay, opportunityStatusDefs] = await Promise.all([
-        supabase
-            .from("work_units")
-            .select("id")
-            .eq("org_id", params.orgId)
-            .eq("department_id", params.departmentId)
-            .order("sort_order", { ascending: true }),
+        skipWuListQuery
+            ? Promise.resolve({ data: null as null, error: null as null })
+            : supabase
+                  .from("work_units")
+                  .select("id")
+                  .eq("org_id", params.orgId)
+                  .eq("department_id", params.departmentId)
+                  .order("sort_order", { ascending: true }),
         resolveOperationalDayPlanContext(supabase, params.orgId, refUtc),
         fetchEffectiveStatusDefinitions(supabase as any, params.orgId, "opportunities", { activeOnly: true }),
     ]);
 
-    const { data: rows, error } = wuListRes;
-    if (error) {
-        throw new QueueServiceError(error.message, 400, "DB_ERROR");
+    if (!skipWuListQuery) {
+        const { error } = wuListRes;
+        if (error) {
+            throw new QueueServiceError(error.message, 400, "DB_ERROR");
+        }
     }
 
     const sharedBootstrap: QueueSummariesSharedBootstrap = { operationalDay, opportunityStatusDefs };
     const recordScopeImpossible = params.recordScopeImpossible === true;
     const recordScopeConstraints = params.recordScopeConstraints ?? null;
 
-    const ids = (rows ?? []).map((r) => String((r as { id: string }).id ?? "").trim()).filter(Boolean);
+    const ids = skipWuListQuery
+        ? presetIds
+        : (wuListRes.data ?? []).map((r) => String((r as { id: string }).id ?? "").trim()).filter(Boolean);
     const previewLimit = clampLimit(params.limit ?? 50, 1, 100);
     const wuConc = clampLimit(params.workUnitConcurrency ?? DEPARTMENT_WU_SUMMARY_CONCURRENCY, 1, 8);
 

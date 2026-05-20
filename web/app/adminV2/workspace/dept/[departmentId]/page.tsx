@@ -429,6 +429,10 @@ export default function AdminV2WorkspaceDepartmentPage() {
         setDeptPlacementRows(undefined);
         setDeptScopeHasPlacements(false);
 
+        const bootstrapRoute = appendWorkspaceSiteToUrl(
+            `/api/admin/departments/${encodeURIComponent(departmentId)}/operational-bootstrap?include_previews=false&count_mode=exact&summary_mode=priority&priority_budget=5`,
+            selectedSiteId
+        );
         const summariesRoute = appendWorkspaceSiteToUrl(
             `/api/admin/departments/${encodeURIComponent(departmentId)}/work-unit-queue-summaries?include_previews=false&count_mode=exact&summary_mode=priority&priority_budget=5`,
             selectedSiteId
@@ -473,6 +477,21 @@ export default function AdminV2WorkspaceDepartmentPage() {
             setDeptWorkUnitSummaries(next);
             setDeptQueueSummariesError(null);
             return next;
+        };
+
+        const applyAttentionPayload = (j: {
+            error?: string;
+            total?: number;
+            needs_attention_buckets?: DeptAttentionBucket[];
+            opportunity_needs_attention_semantics?: DeptAttentionSemantics | null;
+            bucket_count_scope?: string | null;
+        }) => {
+            const buckets = Array.isArray(j.needs_attention_buckets) ? j.needs_attention_buckets : [];
+            setDeptAttentionBuckets(buckets);
+            setDeptAttentionPreviewTotal(typeof j.total === "number" ? j.total : null);
+            setDeptAttentionSemantics(j.opportunity_needs_attention_semantics ?? null);
+            setDeptBucketCountScope(typeof j.bucket_count_scope === "string" ? j.bucket_count_scope : null);
+            setDeptAttentionBucketsError(null);
         };
 
         const init = workspaceDataFetchInit() ?? {};
@@ -567,12 +586,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     setDeptAttentionBucketsError(j.error ?? "Needs attention preview failed");
                     return;
                 }
-                const buckets = Array.isArray(j.needs_attention_buckets) ? j.needs_attention_buckets : [];
-                setDeptAttentionBuckets(buckets);
-                setDeptAttentionPreviewTotal(typeof j.total === "number" ? j.total : null);
-                setDeptAttentionSemantics(j.opportunity_needs_attention_semantics ?? null);
-                setDeptBucketCountScope(typeof j.bucket_count_scope === "string" ? j.bucket_count_scope : null);
-                setDeptAttentionBucketsError(null);
+                applyAttentionPayload(j);
             } catch (e) {
                 if (!cancelled) {
                     setDeptAttentionBucketsError(
@@ -630,35 +644,185 @@ export default function AdminV2WorkspaceDepartmentPage() {
             }
         }
 
-        /** Overlap attention + summaries with dept/wu fetch — not gated on oper-region reveal. */
-        void fetchDeptAttentionPreview(cacheNaWuId);
-        const summariesFetchPromise = refreshQueueSummaries(null, []);
+        const runDeferredKpiPlacements = () => {
+            const placementT0 =
+                typeof performance !== "undefined" && typeof window !== "undefined" ? performance.now() : 0;
+            const placementUrl = `/api/admin/workspace-kpi-placements?surface=department&department_id=${encodeURIComponent(departmentId)}`;
+            let placementP: ReturnType<typeof dedupeAdminFetchWithTtl> | undefined;
+            const cancelPlacementDefer = scheduleAdminV2BackgroundWork(
+                () => {
+                    placementP = dedupeAdminFetchWithTtl(
+                        placementUrl,
+                        { ...(init ?? {}), cache: "no-store" },
+                        8000
+                    );
+                },
+                { idleTimeoutMs: 3000, fallbackMs: 120 }
+            );
+            void (async () => {
+                if (cancelled) return;
+                cancelPlacementDefer();
+                try {
+                    const res = await (placementP ??
+                        dedupeAdminFetchWithTtl(placementUrl, { ...(init ?? {}), cache: "no-store" }, 8000));
+                    if (!res.ok) {
+                        if (!cancelled) {
+                            setDeptPlacementRows([]);
+                            setDeptScopeHasPlacements(false);
+                        }
+                    } else {
+                        const j = (await res.json().catch(() => ({}))) as {
+                            items?: WorkspaceKpiPlacementRow[];
+                            scope_has_placements?: boolean;
+                        };
+                        if (!cancelled) {
+                            setDeptPlacementRows(j.items ?? []);
+                            setDeptScopeHasPlacements(j.scope_has_placements === true);
+                        }
+                    }
+                } catch {
+                    if (!cancelled) {
+                        setDeptPlacementRows([]);
+                        setDeptScopeHasPlacements(false);
+                    }
+                }
+                if (
+                    !cancelled &&
+                    typeof performance !== "undefined" &&
+                    typeof window !== "undefined" &&
+                    deptKpisPerfKeyRef.current !== departmentId
+                ) {
+                    deptKpisPerfKeyRef.current = departmentId;
+                    perfDeptLoad({
+                        phase: "kpis_ready",
+                        ms: Math.round(performance.now() - placementT0),
+                        source: "background",
+                        org_id: orgId,
+                        department_id: departmentId,
+                    });
+                }
+            })();
+        };
 
         void (async () => {
             const routeStart = typeof performance !== "undefined" ? performance.now() : 0;
             if (typeof performance !== "undefined" && typeof window !== "undefined") {
                 alloyPerfSet("department_start", routeStart);
             }
+            setDeptAttentionBucketsLoading(true);
             try {
                 deptKpisPerfKeyRef.current = null;
                 if (!cancelled) {
                     setDeptPlacementRows(undefined);
                     setDeptScopeHasPlacements(false);
                 }
-                const placementT0 =
-                    typeof performance !== "undefined" && typeof window !== "undefined" ? performance.now() : 0;
-                const placementUrl = `/api/admin/workspace-kpi-placements?surface=department&department_id=${encodeURIComponent(departmentId)}`;
-                let placementP: ReturnType<typeof dedupeAdminFetchWithTtl> | undefined;
-                const cancelPlacementDefer = scheduleAdminV2BackgroundWork(
-                    () => {
-                        placementP = dedupeAdminFetchWithTtl(
-                            placementUrl,
-                            { ...(init ?? {}), cache: "no-store" },
-                            8000
-                        );
-                    },
-                    { idleTimeoutMs: 3000, fallbackMs: 120 }
+
+                const cachePipelineCandidates = cacheWuList.filter(
+                    (w) => (w.key ?? "").trim().toLowerCase() !== "needs_attention"
                 );
+                if (cachePipelineCandidates.length && !cancelled) {
+                    setDeptPipelineExecLoading(true);
+                }
+
+                try {
+                    const bootstrapRes = await dedupeAdminFetch(bootstrapRoute, init);
+                    if (bootstrapRes.ok && !cancelled) {
+                        const b = (await bootstrapRes.json().catch(() => ({}))) as {
+                            error?: string;
+                            department?: { id?: string; name?: string | null; key?: string | null };
+                            work_units?: Array<{ id: string; name?: string | null; key?: string | null }>;
+                            summaries?: Parameters<typeof applySummariesJson>[1];
+                            attention?: Parameters<typeof applyAttentionPayload>[0];
+                            pipeline_surface?: DeptPipelineExecSurface | null;
+                        };
+                        const deptCommit =
+                            b.department?.id != null
+                                ? {
+                                      id: String(b.department.id),
+                                      name: b.department.name ?? null,
+                                      key: b.department.key ?? null,
+                                  }
+                                : null;
+                        const wuCommit = (b.work_units ?? []).map((w) => ({
+                            id: String(w.id),
+                            name: w.name ?? null,
+                            key: w.key ?? null,
+                        }));
+                        if (deptCommit) {
+                            setDept(deptCommit);
+                            setDeptError(null);
+                        } else {
+                            setDept(null);
+                            setDeptError("Department not found");
+                        }
+                        setDeptWorkUnits(wuCommit);
+                        setDeptWorkUnitsError(null);
+                        const nextSummaries = applySummariesJson(departmentId, b.summaries ?? {}, true);
+                        if (b.attention && !b.attention.error) {
+                            applyAttentionPayload(b.attention);
+                        } else {
+                            setDeptAttentionBuckets([]);
+                            setDeptAttentionPreviewTotal(null);
+                            setDeptAttentionSemantics(null);
+                            setDeptBucketCountScope(null);
+                            setDeptAttentionBucketsError(b.attention?.error ?? null);
+                        }
+                        const pipelineCandidates = wuCommit.filter(
+                            (w) => (w.key ?? "").trim().toLowerCase() !== "needs_attention"
+                        );
+                        if (pipelineCandidates.length) {
+                            setDeptPipelineExecLoading(true);
+                        }
+                        setDeptPipelineExecSurface(b.pipeline_surface ?? null);
+                        setDeptPipelineExecLoading(false);
+                        setDeptQueueSummariesLoading(false);
+                        setDeptAttentionBucketsLoading(false);
+                        setDeptLoading(false);
+                        if (orgId && deptCommit) {
+                            writeDepartmentPageCache(orgId, principalUserId, accessScopeFingerprint, {
+                                dept: deptCommit,
+                                workUnits: wuCommit,
+                                workUnitSummaries: nextSummaries,
+                                summariesComplete: true,
+                            });
+                        }
+                        perfDeptLoad({
+                            phase: "bootstrap_ready",
+                            ms: Math.round((typeof performance !== "undefined" ? performance.now() : 0) - tAnchor),
+                            source: "network",
+                            org_id: orgId,
+                            department_id: departmentId,
+                        });
+                        perfDeptLoad({
+                            phase: "shell_ready",
+                            ms: Math.round((typeof performance !== "undefined" ? performance.now() : 0) - tAnchor),
+                            source: "network",
+                            org_id: orgId,
+                            department_id: departmentId,
+                        });
+                        perfDeptLoad({
+                            phase: "summaries_ready",
+                            ms: Math.round((typeof performance !== "undefined" ? performance.now() : 0) - tAnchor),
+                            source: "network",
+                            org_id: orgId,
+                            department_id: departmentId,
+                        });
+                        if (deptCommit) {
+                            runDeferredKpiPlacements();
+                        }
+                        if (typeof performance !== "undefined" && typeof window !== "undefined") {
+                            alloyPerfSet("department_ready", performance.now());
+                        }
+                        return;
+                    }
+                } catch {
+                    /* fall through to legacy fan-out */
+                }
+
+                /** Legacy fan-out when bootstrap unavailable. */
+                void fetchDeptAttentionPreview(cacheNaWuId);
+                const summariesFetchPromise = refreshQueueSummaries(null, []);
+
                 const deptRoute = `/api/admin/departments/${encodeURIComponent(departmentId)}`;
                 const wuRoute = `/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`;
                 const [deptRes, wuRes] = await Promise.all([
@@ -747,53 +911,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         void fetchDeptAttentionPreview(naWuId);
                     }
 
-                    void (async () => {
-                        if (cancelled) return;
-                        cancelPlacementDefer();
-                        try {
-                            const res = await (placementP ??
-                                dedupeAdminFetchWithTtl(
-                                    placementUrl,
-                                    { ...(init ?? {}), cache: "no-store" },
-                                    8000
-                                ));
-                            if (!res.ok) {
-                                if (!cancelled) {
-                                    setDeptPlacementRows([]);
-                                    setDeptScopeHasPlacements(false);
-                                }
-                            } else {
-                                const j = (await res.json().catch(() => ({}))) as {
-                                    items?: WorkspaceKpiPlacementRow[];
-                                    scope_has_placements?: boolean;
-                                };
-                                if (!cancelled) {
-                                    setDeptPlacementRows(j.items ?? []);
-                                    setDeptScopeHasPlacements(j.scope_has_placements === true);
-                                }
-                            }
-                        } catch {
-                            if (!cancelled) {
-                                setDeptPlacementRows([]);
-                                setDeptScopeHasPlacements(false);
-                            }
-                        }
-                        if (
-                            !cancelled &&
-                            typeof performance !== "undefined" &&
-                            typeof window !== "undefined" &&
-                            deptKpisPerfKeyRef.current !== departmentId
-                        ) {
-                            deptKpisPerfKeyRef.current = departmentId;
-                            perfDeptLoad({
-                                phase: "kpis_ready",
-                                ms: Math.round(performance.now() - placementT0),
-                                source: "background",
-                                org_id: orgId,
-                                department_id: departmentId,
-                            });
-                        }
-                    })();
+                    runDeferredKpiPlacements();
                 } else if (!cancelled) {
                     setDeptQueueSummariesLoading(false);
                     setDeptAttentionBuckets([]);

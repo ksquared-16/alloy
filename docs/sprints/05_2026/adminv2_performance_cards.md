@@ -414,6 +414,40 @@ Lanes B and C can overlap **after A** if two implementers — do not start B bef
 | **Critical path (enrollment pipeline)** | `max(work-units, attention-preview, pipeline-probe)` — summaries **not** on oper reveal path when `pipeline_lanes`. |
 | **Files** | `dept/[departmentId]/page.tsx`, `fetchWorkspaceRightRailResolvedActions.ts` (TTL only). |
 | **Out** | Server auth dedupe, combined API, drawer/WU changes. |
+| **Status** | Superseded for primary nav by **PERF-B-06**; keep parallel-start pattern in legacy fallback only. |
+
+---
+
+### PERF-B-06 — Dept operational runtime hardening (bootstrap)
+
+| Field | Content |
+|-------|---------|
+| **Lane** | B |
+| **Goal** | Major step on workspace → dept: fewer HTTP round trips, one auth pass, no client pipeline HTTP fan-out. |
+| **UX contract** | Unchanged (see PERF-B-02 settled contract). |
+| **Before (browser)** | ~5–7 parallel requests × auth: dept, work-units, summaries, attention, pipeline probe (+ optional enroll WU GET + queue GET per candidate). |
+| **After (browser)** | **1** `operational-bootstrap` request (+ deferred P2/P3). Server runs dept + WU list once; parallel summaries + attention + `resolveDeptPipelineExecSurfaceServer`. |
+| **APIs** | `GET .../operational-bootstrap`; `loadAdminRouteGate`; `loadDeptOperationalBootstrap`; `getDepartmentWorkUnitQueueSummaries({ workUnitIds })`; legacy routes unchanged for refresh/fallback. |
+| **Files** | `operational-bootstrap/route.ts`, `loadDeptOperationalBootstrap.ts`, `resolveDeptPipelineExecSurfaceServer.ts`, `loadDeptAttentionPreviewServer.ts`, `adminRouteGate.ts`, `dept/page.tsx`, `QueueService.ts`, `opportunity-attention-preview/route.ts` |
+| **Tests** | `web/tests/workspace/deptOperationalBootstrap.test.ts` |
+| **Perf phase** | `[perf.dept] bootstrap_ready` |
+| **Next target** | Work-unit page: single bootstrap for queue summaries + primary lane rows. |
+
+#### Critical-path diagram
+
+```text
+BEFORE (client):
+  [auth] dept ─┐
+  [auth] work-units ─┤ parallel storm
+  [auth] summaries ─┤
+  [auth] attention ─┤
+  [auth] WU detail + [auth] queues … pipeline probe
+
+AFTER (client):
+  [auth] operational-bootstrap ──► apply dept + wu + summaries + attention + pipeline_surface
+  (idle) sidebar, labels, AI, tasks, …
+  (post-oper) actions, KPI placements
+```
 
 ---
 

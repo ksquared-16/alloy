@@ -322,6 +322,48 @@ Optional **fast-follow bucket** (still out of sprint unless scope amended): serv
 
 ---
 
+## Appendix — Operational runtime hardening (phase 2, locked)
+
+**Scope amendment (2026-05-19):** One **server** combined endpoint for dept oper critical path is allowed: `GET /api/admin/departments/[id]/operational-bootstrap`. No client orchestrator; legacy fan-out remains as fallback only.
+
+### Settled `/dept` UX contract (do not regress)
+
+1. Chrome / bridge shell first (`deptShellReady`).
+2. Today's Focus + KPI quiet reserve independent of oper region.
+3. **One** `DeptOperationalRegionLoader` inside paired Pipeline + Needs Attention.
+4. Pipeline + Needs Attention reveal **together** when authoritative.
+5. Never: blank oper bodies, `Total —`, wrong enrollment WU row, stale prior-dept content, full-page oper blocker.
+
+### Request-priority philosophy
+
+| Tier | When | Examples |
+|------|------|----------|
+| **P0 — oper critical** | First network round trip after dept nav | `operational-bootstrap` (preferred) or legacy: dept + work-units + summaries + attention + server pipeline probe |
+| **P1 — shell chrome** | Same navigation, non-blocking oper reveal | Session dept shell cache, bridge layout |
+| **P2 — deferred** | `requestIdleCallback` / post-oper-ready | Sidebar tree, entity-labels refresh, verticals, AI capabilities, agent activity, operational tasks, unread count |
+| **P3 — post-oper** | After `deptOperationalRegionReady` | Right-rail resolved actions, KPI placements (~120ms idle fallback) |
+
+### Runtime hardening rules
+
+- **One auth bundle per HTTP request** — routes use `loadAdminRouteGate()` instead of duplicate `getAdminContext` + `getAdminAccessContext` entry calls.
+- **One dept oper HTTP request from browser** when bootstrap succeeds — replaces 4–6 parallel admin API calls each paying ~300–600ms auth.
+- **Shared DB reads inside bootstrap** — single work-units query feeds summaries (`workUnitIds`), attention (`workUnitRows`), and pipeline probe (`queue_definition` on row).
+- **Pipeline probe server-side** — `resolveDeptPipelineExecSurfaceServer` calls `getWorkUnitQueueSummaries` directly; no client HTTP to `/work-units/:id` or `/queues` during dept nav.
+- **No global auth cache** — React `cache()` remains request-scoped only; navigation-local reuse via bootstrap payload + existing `dedupeAdminFetch`.
+- **Legacy fan-out** — retained in `dept/page.tsx` when bootstrap fails; must not change oper reveal gates.
+
+### Navigation contention rules
+
+- Sidebar `/departments` + all `/work-units` must not run in the first ~600ms of dept nav (`scheduleAdminV2BackgroundWork`).
+- Background shell APIs must not share the same burst as P0 oper fetch.
+- Entity labels: server-hydrate in workspace layout; client refresh deferred and TTL-bounded.
+
+### Reuse targets (later, not this PR)
+
+Same P0/P2 split applies to **work-unit page**, **drawer open**, and **workspace root** — use dept bootstrap pattern as template (combined server bundle + single client fetch), not a new framework.
+
+---
+
 ## Document control
 
 | Step | Artifact |
