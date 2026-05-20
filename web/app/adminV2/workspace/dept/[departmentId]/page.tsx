@@ -788,6 +788,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         const kpiSummaries = mergeDeptWorkUnitSummariesForKpis(
                             nextSummaries,
                             synthesizeDeptKpiWorkUnitSummaries({
+                                departmentId,
                                 workUnits: wuCommit,
                                 attention: b.attention,
                                 pipelineSurface: b.pipeline_surface ?? null,

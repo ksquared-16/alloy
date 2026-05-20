@@ -11,6 +11,10 @@ import {
 import { enrichOpportunityQueueRowsWithActivitySignals } from "@/lib/admin/activitySignals";
 import { buildWorkUnitScopedNeedsAttentionLaneBuckets } from "@/lib/workspace/buildWorkUnitScopedNeedsAttentionLaneBuckets";
 import { DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1 } from "@/lib/workspace/opportunityAttentionRules";
+import {
+    resolveDeptNeedsAttentionWorkUnit,
+    type DeptNeedsAttentionWorkUnitRow,
+} from "@/lib/workspace/resolveDeptNeedsAttentionWorkUnit";
 
 export type DeptAttentionPreviewPayload = {
     department_id: string;
@@ -37,12 +41,7 @@ export type DeptAttentionPreviewPayload = {
     error?: string;
 };
 
-type WorkUnitRowLite = {
-    id: string;
-    key?: string | null;
-    metadata?: unknown;
-    department_id?: string | null;
-};
+type WorkUnitRowLite = DeptNeedsAttentionWorkUnitRow;
 
 export async function loadDeptAttentionPreviewServer(params: {
     supabase: SupabaseClient;
@@ -67,75 +66,55 @@ export async function loadDeptAttentionPreviewServer(params: {
 }): Promise<DeptAttentionPreviewPayload> {
     const { supabase, orgId, departmentId, departmentMetadata, accessDim } = params;
 
-    let targetWuId = (params.workUnitIdParam ?? "").trim();
-    if (!targetWuId) {
-        const rows =
-            params.workUnitRows ??
-            (
-                await supabase
-                    .from("work_units")
-                    .select("id, key")
-                    .eq("org_id", orgId)
-                    .eq("department_id", departmentId)
-            ).data ??
-            [];
-        const hit = rows.find(
-            (w) => String((w as { key?: string | null }).key ?? "").trim().toLowerCase() === "needs_attention"
-        );
-        targetWuId =
-            hit && typeof (hit as { id?: string }).id === "string" ? String((hit as { id: string }).id) : "";
+    let rows: WorkUnitRowLite[] = params.workUnitRows ?? [];
+    if (!rows.length) {
+        const { data } = await supabase
+            .from("work_units")
+            .select("id, key, metadata, department_id, queue_definition")
+            .eq("org_id", orgId)
+            .eq("department_id", departmentId);
+        rows = (data ?? []) as WorkUnitRowLite[];
     }
 
-    if (targetWuId) {
-        const wuRow =
-            params.workUnitRows?.find((w) => w.id === targetWuId) ??
-            (
-                await supabase
-                    .from("work_units")
-                    .select("id, metadata, department_id")
-                    .eq("id", targetWuId)
-                    .eq("org_id", orgId)
-                    .maybeSingle()
-            ).data;
-        const wuDept = String((wuRow as { department_id?: string | null } | null)?.department_id ?? "").trim();
-        if (wuRow && wuDept === departmentId) {
-            const wuMeta = (wuRow as { metadata?: unknown }).metadata ?? null;
-                const scoped = await buildWorkUnitScopedNeedsAttentionLaneBuckets({
-                    supabase,
-                    orgId,
-                    workUnitId: targetWuId,
-                    workUnitMetadata: wuMeta,
-                    departmentMetadata,
-                    accessDim,
-                    recordScopeImpossible: params.recordScopeImpossible,
-                    recordScopeConstraints: params.recordScopeConstraints,
-                    opportunityStatusDefs: params.opportunityStatusDefs,
-                    perf: params.attentionPerf,
-                });
+    const resolved = resolveDeptNeedsAttentionWorkUnit(rows, departmentId, params.workUnitIdParam);
 
-            const attnCfg = resolveOpportunityAttentionConfigFromMetadata(wuMeta);
-            const rules = {
-                version: 1 as const,
-                thresholdsHours: {
-                    ...DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1.thresholdsHours,
-                    ...attnCfg.thresholdsHours,
-                },
-            };
+    if (resolved) {
+        const wuMeta = resolved.metadata;
+        const scoped = await buildWorkUnitScopedNeedsAttentionLaneBuckets({
+            supabase,
+            orgId,
+            workUnitId: resolved.id,
+            workUnitMetadata: wuMeta,
+            departmentMetadata,
+            accessDim,
+            recordScopeImpossible: params.recordScopeImpossible,
+            recordScopeConstraints: params.recordScopeConstraints,
+            opportunityStatusDefs: params.opportunityStatusDefs,
+            perf: params.attentionPerf,
+        });
 
-            return {
-                department_id: departmentId,
-                work_unit_id: targetWuId,
-                work_unit_key: "needs_attention",
-                total: scoped.total_matches,
-                needs_attention_buckets: scoped.needs_attention_buckets,
-                attention_reason_counts: scoped.attention_reason_counts,
-                opportunity_needs_attention_semantics: scoped.opportunity_needs_attention_semantics,
-                bucket_count_scope: "work_unit_needs_attention_list_cap",
-                source: "work_unit_needs_attention_lane",
-                items: [],
-                rules,
-            };
-        }
+        const attnCfg = resolveOpportunityAttentionConfigFromMetadata(wuMeta);
+        const rules = {
+            version: 1 as const,
+            thresholdsHours: {
+                ...DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1.thresholdsHours,
+                ...attnCfg.thresholdsHours,
+            },
+        };
+
+        return {
+            department_id: departmentId,
+            work_unit_id: resolved.id,
+            work_unit_key: "needs_attention",
+            total: scoped.total_matches,
+            needs_attention_buckets: scoped.needs_attention_buckets,
+            attention_reason_counts: scoped.attention_reason_counts,
+            opportunity_needs_attention_semantics: scoped.opportunity_needs_attention_semantics,
+            bucket_count_scope: "work_unit_needs_attention_list_cap",
+            source: "work_unit_needs_attention_lane",
+            items: [],
+            rules,
+        };
     }
 
     const { items, rules, attention_reason_counts, attention_evaluation } =

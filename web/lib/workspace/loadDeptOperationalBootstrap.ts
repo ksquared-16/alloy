@@ -141,6 +141,7 @@ export async function loadDeptOperationalBootstrap(params: {
         key: (w as { key?: string | null }).key ?? null,
         metadata: (w as { metadata?: unknown }).metadata,
         department_id: (w as { department_id?: string | null }).department_id ?? null,
+        queue_definition: (w as { queue_definition?: unknown }).queue_definition,
     }));
 
     const tParallel0 = Date.now();

@@ -401,6 +401,8 @@ Dept **`attention_ms`** is dominated by **`loadOpportunityNeedsAttentionRows`** 
 
 **Log hygiene:** subtimings are stamped **only** when `attention.source === work_unit_needs_attention_lane`. Fallback `department_attention_preview` logs `attention_source` without query/resolver fields (not `undefined` noise). Check bootstrap JSON `attention.source` if server logs look wrong.
 
+**Enrollment happy path:** canonical model has **`needs_attention` as a queue on `enrollment_pipeline`**, not a separate work unit. Resolver: **`resolveDeptNeedsAttentionWorkUnit`** (bootstrap passes `queue_definition` on work unit rows). If logs show `department_attention_preview`, the dept had no resolvable execution WU (missing/invalid `queue_definition` or wrong department).
+
 **Interpret logs:** if `attention_query_ms` ≫ `attention_resolver_ms`, the bottleneck is **SQL** (wide `.or` on `opportunities`), not CPU. If `attention_resolver_ms` dominates with high `attention_candidate_count`, resolver cost scales with candidates (cap 5000).
 
 **DB/index debt (propose separately — do not auto-migrate):**

@@ -25,10 +25,25 @@ describe("dept operational bootstrap runtime hardening", () => {
         expect(src).toContain("pickDeptPipelineWorkUnit");
         expect(src).toContain("logDeptOperationalBootstrapPerf");
         expect(src).toContain("summaryWorkUnitIds");
+        expect(src).toContain("queue_definition");
         expect(src).toContain("attention_query_ms");
         expect(src).toContain("attention_candidate_count");
         expect(src).toContain("attention_rules_ms");
         expect(src).toContain("attention_membership_filter_ms");
+    });
+
+    it("resolves needs_attention execution work unit for enrollment pipeline", () => {
+        const src = fs.readFileSync(
+            path.join(repoRoot, "web/lib/workspace/resolveDeptNeedsAttentionWorkUnit.ts"),
+            "utf8"
+        );
+        expect(src).toContain("enrollment_pipeline");
+        expect(src).toContain("workUnitDefinesNeedsAttentionQueue");
+        const loader = fs.readFileSync(
+            path.join(repoRoot, "web/lib/workspace/loadDeptAttentionPreviewServer.ts"),
+            "utf8"
+        );
+        expect(loader).toContain("resolveDeptNeedsAttentionWorkUnit");
     });
 
     it("dept attention lane reuses single resolver pass (no double resolve in bucket builder)", () => {
