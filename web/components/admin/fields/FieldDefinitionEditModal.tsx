@@ -1,12 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import type { FieldDef } from "@/app/api/admin/field-definitions/route";
 import { sectionKeyInOptions } from "@/lib/admin/fieldSectionSelectOptions";
 import {
     buildFieldEditModalCapabilities,
     operatorModalShowsDeveloperDetailsByDefault,
 } from "@/lib/fields/fieldEditModalOperatorUi";
-import { operatorFieldDisplayLabel } from "@/lib/fields/fieldSettingsOperatorUi";
+import {
+    operatorFieldDisplayLabel,
+    recordLayoutsSettingsHref,
+} from "@/lib/fields/fieldSettingsOperatorUi";
 import type {
     FieldPolicyInteractionPreset,
     FieldPolicySettingsView,
@@ -143,6 +147,23 @@ export default function FieldDefinitionEditModal({
                             className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
                         />
                     </div>
+
+                    {cap.showLayoutBehaviorNote ? (
+                        <div
+                            className="rounded-md border border-alloy-pine/25 bg-alloy-pine/[0.06] px-3 py-2 text-xs leading-relaxed text-[#59678b]"
+                            data-testid="field-edit-layout-behavior-note"
+                        >
+                            <p>{cap.layoutBehaviorNote}</p>
+                            <p className="mt-1.5">
+                                <Link
+                                    href={recordLayoutsSettingsHref(entityType)}
+                                    className="font-medium text-alloy-pine hover:underline"
+                                >
+                                    Open Record layouts
+                                </Link>
+                            </p>
+                        </div>
+                    ) : null}
 
                     {cap.showStaffEditabilitySelect ? (
                         <div data-testid="field-edit-staff-editability">

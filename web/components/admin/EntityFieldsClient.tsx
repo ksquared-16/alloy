@@ -36,8 +36,11 @@ import FieldDefinitionEditModal from "@/components/admin/fields/FieldDefinitionE
 import FieldRequiredInlineCell from "@/components/admin/fields/FieldRequiredInlineCell";
 import {
     canOperatorEditRequirementInline,
+    fieldBehaviorConfiguredOnRecordLayouts,
+    FIELDS_HUB_LAYOUT_BEHAVIOR_NOTE,
     isOperatorHiddenField,
     operatorFieldDisplayLabel,
+    recordLayoutsSettingsHref,
 } from "@/lib/fields/fieldSettingsOperatorUi";
 import { resolveInlineRequirementPreset } from "@/lib/fields/fieldRequiredInlineUi";
 
@@ -178,6 +181,9 @@ export default function EntityFieldsClient({
     const hiddenFieldCount = sortedItems.length - visibleItems.length;
 
     const policySettingsSupported = entityTypeSupportsFieldPolicySettings(entityType);
+    const layoutBehaviorOnRecordLayouts = fieldBehaviorConfiguredOnRecordLayouts(entityType);
+    const showPolicyColumnsInTable = policySettingsSupported && !layoutBehaviorOnRecordLayouts;
+    const showRequiredColumn = !policySettingsSupported || !layoutBehaviorOnRecordLayouts;
 
     const policyViewsByFieldKey = useMemo(
         () =>
@@ -245,7 +251,7 @@ export default function EntityFieldsClient({
     }, [entityType]);
 
     const patchRequirementInline = async (row: FieldDef, preset: FieldPolicyRequirementPreset) => {
-        if (!canMutate || !policySettingsSupported) return;
+        if (!canMutate || !policySettingsSupported || layoutBehaviorOnRecordLayouts) return;
         const view = policyViewsByFieldKey.get(row.field_key);
         if (!canOperatorEditRequirementInline(view ?? null)) return;
 
@@ -372,6 +378,7 @@ export default function EntityFieldsClient({
             }
             if (
                 policySettingsSupported &&
+                !layoutBehaviorOnRecordLayouts &&
                 editPolicyView?.policyEditable &&
                 !editPolicyView.requirementAdvanced &&
                 !editPolicyView.interactionAdvanced
@@ -562,7 +569,19 @@ export default function EntityFieldsClient({
                             Show workflow and relationship fields
                         </label>
                     </div>
-                    {adminV2Chrome && policySettingsSupported && (
+                    {adminV2Chrome && layoutBehaviorOnRecordLayouts && (
+                        <p className="mb-3 text-xs leading-relaxed text-alloy-midnight/55">
+                            {FIELDS_HUB_LAYOUT_BEHAVIOR_NOTE}{" "}
+                            <Link
+                                href={recordLayoutsSettingsHref(entityType)}
+                                className="font-medium text-alloy-pine hover:underline"
+                            >
+                                Record layouts
+                            </Link>
+                            .
+                        </p>
+                    )}
+                    {adminV2Chrome && showPolicyColumnsInTable && (
                         <p className="mb-3 text-xs leading-relaxed text-alloy-midnight/50">
                             Required and editability apply when staff save the record drawer for supported fields. Status, tour, and
                             pricing fields are managed elsewhere.
@@ -573,8 +592,12 @@ export default function EntityFieldsClient({
                             <thead>
                                 <tr className="border-b border-[#e6e8ec] text-[#59678b]">
                                     <th className="pb-2 pr-4 font-semibold">Field</th>
-                                    <th className="pb-2 pr-4 font-semibold">Required</th>
-                                    {policySettingsSupported && <th className="pb-2 pr-4 font-semibold">Editability</th>}
+                                    {showRequiredColumn ? (
+                                        <th className="pb-2 pr-4 font-semibold">Required</th>
+                                    ) : null}
+                                    {showPolicyColumnsInTable ? (
+                                        <th className="pb-2 pr-4 font-semibold">Editability</th>
+                                    ) : null}
                                     <th className="pb-2 pr-4 font-semibold">Shows in</th>
                                     {canMutate && <th className="pb-2 font-semibold"> </th>}
                                 </tr>
@@ -583,7 +606,13 @@ export default function EntityFieldsClient({
                                 {visibleItems.length === 0 ? (
                                     <tr>
                                         <td
-                                            colSpan={policySettingsSupported ? (canMutate ? 4 : 3) : canMutate ? 3 : 2}
+                                            colSpan={
+                                                1 +
+                                                (showRequiredColumn ? 1 : 0) +
+                                                (showPolicyColumnsInTable ? 1 : 0) +
+                                                1 +
+                                                (canMutate ? 1 : 0)
+                                            }
                                             className="py-4 text-[#59678b]"
                                         >
                                             {sortedItems.length === 0
@@ -611,21 +640,23 @@ export default function EntityFieldsClient({
                                             <td className="py-2.5 pr-4">
                                                 <div className="font-medium text-[#31394d]">{displayLabel}</div>
                                             </td>
-                                            <td className="py-2.5 pr-4">
-                                                <FieldRequiredInlineCell
-                                                    entityType={entityType}
-                                                    row={row}
-                                                    policyView={policyView ?? null}
-                                                    canMutate={canMutate}
-                                                    displayLabel={displayLabel}
-                                                    presetOverride={inlinePresetOverrides[row.field_key]}
-                                                    saving={inlineSavingKey === row.field_key}
-                                                    saved={inlineSavedKey === row.field_key}
-                                                    rowError={inlineRowErrors[row.field_key]}
-                                                    onPresetChange={(preset) => void patchRequirementInline(row, preset)}
-                                                />
-                                            </td>
-                                            {policySettingsSupported && (
+                                            {showRequiredColumn ? (
+                                                <td className="py-2.5 pr-4">
+                                                    <FieldRequiredInlineCell
+                                                        entityType={entityType}
+                                                        row={row}
+                                                        policyView={policyView ?? null}
+                                                        canMutate={canMutate}
+                                                        displayLabel={displayLabel}
+                                                        presetOverride={inlinePresetOverrides[row.field_key]}
+                                                        saving={inlineSavingKey === row.field_key}
+                                                        saved={inlineSavedKey === row.field_key}
+                                                        rowError={inlineRowErrors[row.field_key]}
+                                                        onPresetChange={(preset) => void patchRequirementInline(row, preset)}
+                                                    />
+                                                </td>
+                                            ) : null}
+                                            {showPolicyColumnsInTable ? (
                                                 <td className="py-2.5 pr-4 text-[#59678b]">
                                                     {policyView?.interactionPreset === "read_only"
                                                         ? "Read-only"
@@ -633,7 +664,7 @@ export default function EntityFieldsClient({
                                                           ? "Staff can edit"
                                                           : "Managed elsewhere"}
                                                 </td>
-                                            )}
+                                            ) : null}
                                             <td className="py-2.5 pr-4 text-[#59678b]">{showsIn || "Hidden"}</td>
                                             {canMutate && (
                                                 <td className="py-2.5 text-right">
@@ -667,11 +698,27 @@ export default function EntityFieldsClient({
                     </div>
                     {adminV2Chrome && (
                         <p className="mt-3 text-xs text-alloy-midnight/45">
-                            Drawer section order and visibility are on{" "}
-                            <Link href="/adminV2/settings/layouts" className="font-medium text-alloy-pine hover:underline">
-                                Record layouts
-                            </Link>
-                            . Catalog group labels are on{" "}
+                            {layoutBehaviorOnRecordLayouts ? (
+                                <>
+                                    Drawer required and read-only behavior are on{" "}
+                                    <Link
+                                        href={recordLayoutsSettingsHref(entityType)}
+                                        className="font-medium text-alloy-pine hover:underline"
+                                    >
+                                        Record layouts
+                                    </Link>
+                                    . Section order and field placement are there too.
+                                </>
+                            ) : (
+                                <>
+                                    Drawer section order and visibility are on{" "}
+                                    <Link href="/adminV2/settings/layouts" className="font-medium text-alloy-pine hover:underline">
+                                        Record layouts
+                                    </Link>
+                                    .
+                                </>
+                            )}{" "}
+                            Catalog group labels are on{" "}
                             <Link href="/adminV2/settings/field-sections" className="font-medium text-alloy-pine hover:underline">
                                 Field grouping
                             </Link>

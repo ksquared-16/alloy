@@ -52,7 +52,7 @@ Forms, public booking, workflow status-transition enforcement, inquiry_child/OCM
 6. Set **Read-only** on the layout; confirm drawer blocks PATCH for that field.
 7. Confirm **status**, **pricing**, and **relationship** fields show locked layout behavior copy, not broken selects.
 8. Confirm section Up/Down/Remove/Add still works unchanged.
-| 6 | Pending | Fields Settings UI de-emphasis |
+| 6 | **Done** | Fields Settings UI de-emphasis |
 | 7 | Pending | Doctrine updates |
 | 8 | Pending | UI density polish |
 

@@ -4,6 +4,8 @@
 
 import {
     canOperatorEditRequirementInline,
+    FIELD_EDIT_LAYOUT_BEHAVIOR_NOTE,
+    fieldBehaviorConfiguredOnRecordLayouts,
     operatorRequirementLockedReason,
 } from "@/lib/fields/fieldSettingsOperatorUi";
 import type { FieldPolicySettingsView } from "@/lib/fields/fieldPolicySettingsUi";
@@ -11,6 +13,7 @@ import type { FieldPolicySettingsView } from "@/lib/fields/fieldPolicySettingsUi
 export type FieldEditModalSectionId =
     | "display_label"
     | "help_text"
+    | "layout_behavior_note"
     | "staff_editability"
     | "staff_editability_locked_note"
     | "where_it_appears"
@@ -18,10 +21,12 @@ export type FieldEditModalSectionId =
     | "developer_details";
 
 export type FieldEditModalContext = {
+    entityType: string;
     policySettingsSupported: boolean;
     hasPolicyView: boolean;
     policyEditable: boolean;
     inlineRequirementEditable: boolean;
+    layoutBehaviorOnRecordLayouts: boolean;
     developerDetailsOpen: boolean;
 };
 
@@ -33,19 +38,27 @@ export type FieldEditModalCapabilities = {
     showStaffEditabilityLockedNote: boolean;
     staffEditabilityLockedNote: string;
     requirementSetInTableNote: boolean;
+    /** Card 6 — behavior on Record layouts; hide policy controls in modal. */
+    showLayoutBehaviorNote: boolean;
+    layoutBehaviorNote: string;
 };
 
 export function buildFieldEditModalContext(params: {
+    entityType: string;
     policySettingsSupported: boolean;
     policyView: FieldPolicySettingsView | null;
 }): FieldEditModalContext {
     const hasPolicyView = Boolean(params.policyView);
     const policyEditable = Boolean(params.policyView?.policyEditable);
+    const layoutBehaviorOnRecordLayouts = fieldBehaviorConfiguredOnRecordLayouts(params.entityType);
     return {
+        entityType: params.entityType,
         policySettingsSupported: params.policySettingsSupported,
         hasPolicyView,
         policyEditable,
+        layoutBehaviorOnRecordLayouts,
         inlineRequirementEditable:
+            !layoutBehaviorOnRecordLayouts &&
             params.policySettingsSupported &&
             hasPolicyView &&
             canOperatorEditRequirementInline(params.policyView),
@@ -63,6 +76,19 @@ export function buildFieldEditModalCapabilities(params: {
     const hasPolicyView = Boolean(policyView);
     const policyEditable = Boolean(policyView?.policyEditable);
 
+    if (fieldBehaviorConfiguredOnRecordLayouts(entityType) && policySettingsSupported) {
+        return {
+            policySettingsSupported: true,
+            showStaffEditabilitySelect: false,
+            showLegacyRequiredCheckbox: false,
+            showStaffEditabilityLockedNote: false,
+            staffEditabilityLockedNote: "",
+            requirementSetInTableNote: false,
+            showLayoutBehaviorNote: true,
+            layoutBehaviorNote: FIELD_EDIT_LAYOUT_BEHAVIOR_NOTE,
+        };
+    }
+
     if (policySettingsSupported && hasPolicyView) {
         const lockedNote = policyEditable
             ? ""
@@ -74,6 +100,8 @@ export function buildFieldEditModalCapabilities(params: {
             showStaffEditabilityLockedNote: !policyEditable && Boolean(lockedNote),
             staffEditabilityLockedNote: lockedNote,
             requirementSetInTableNote: policyEditable,
+            showLayoutBehaviorNote: false,
+            layoutBehaviorNote: "",
         };
     }
 
@@ -84,6 +112,8 @@ export function buildFieldEditModalCapabilities(params: {
         showStaffEditabilityLockedNote: false,
         staffEditabilityLockedNote: "",
         requirementSetInTableNote: false,
+        showLayoutBehaviorNote: false,
+        layoutBehaviorNote: "",
     };
 }
 
@@ -91,7 +121,9 @@ export function buildFieldEditModalCapabilities(params: {
 export function operatorFieldEditModalSections(ctx: FieldEditModalContext): FieldEditModalSectionId[] {
     const sections: FieldEditModalSectionId[] = ["display_label", "help_text"];
 
-    if (ctx.policySettingsSupported && ctx.hasPolicyView && ctx.policyEditable) {
+    if (ctx.layoutBehaviorOnRecordLayouts && ctx.policySettingsSupported) {
+        sections.push("layout_behavior_note");
+    } else if (ctx.policySettingsSupported && ctx.hasPolicyView && ctx.policyEditable) {
         sections.push("staff_editability");
     } else if (ctx.policySettingsSupported && ctx.hasPolicyView && !ctx.policyEditable) {
         sections.push("staff_editability_locked_note");

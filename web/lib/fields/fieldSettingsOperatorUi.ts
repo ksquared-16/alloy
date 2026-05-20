@@ -34,6 +34,33 @@ export function operatorRequirementPresetLabel(preset: FieldPolicyRequirementPre
     return OPERATOR_REQUIREMENT_INLINE_OPTIONS.find((o) => o.value === preset)?.label ?? preset;
 }
 
+/** Card 6 — drawer required/editability is configured on Record layouts, not Fields. */
+export function fieldBehaviorConfiguredOnRecordLayouts(entityType: string): boolean {
+    return entityTypeSupportsFieldPolicySettings(entityType);
+}
+
+export const FIELDS_HUB_DATA_STRUCTURE_INTRO =
+    "Fields define data structure for each record type: labels, help text, field types, option sets, and where fields can appear.";
+
+export const FIELDS_HUB_LAYOUT_BEHAVIOR_NOTE =
+    "Required and read-only behavior for opportunity and job drawers is configured on Record layouts, not on this page.";
+
+export const FIELD_EDIT_LAYOUT_BEHAVIOR_NOTE =
+    "Required on save and read-only behavior for the record drawer are set on Record layouts. Changes here do not update drawer enforcement directly.";
+
+/** Whether Fields table shows Required / Editability columns (legacy non-layout entities only). */
+export function fieldsTableShowsPolicyColumns(entityType: string): boolean {
+    return entityTypeSupportsFieldPolicySettings(entityType) && !fieldBehaviorConfiguredOnRecordLayouts(entityType);
+}
+
+export function recordLayoutsSettingsHref(entityType: string): string {
+    const et = entityType.trim().toLowerCase();
+    if (et === "opportunity" || et === "job") {
+        return `/adminV2/settings/layouts?entity=${encodeURIComponent(et)}`;
+    }
+    return "/adminV2/settings/layouts";
+}
+
 /** Keys that are always hidden from the default operator field list. */
 export function isAlwaysHiddenFieldKey(fieldKey: string): boolean {
     const key = fieldKey.trim();

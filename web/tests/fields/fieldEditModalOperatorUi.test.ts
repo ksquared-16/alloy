@@ -9,9 +9,11 @@ describe("fieldEditModalOperatorUi", () => {
     it("does not show developer details by default", () => {
         expect(operatorModalShowsDeveloperDetailsByDefault()).toBe(false);
         const ctx = {
+            entityType: "customer",
             policySettingsSupported: true,
             hasPolicyView: true,
             policyEditable: true,
+            layoutBehaviorOnRecordLayouts: false,
             inlineRequirementEditable: true,
             developerDetailsOpen: false,
         };
@@ -22,9 +24,11 @@ describe("fieldEditModalOperatorUi", () => {
 
     it("includes developer details only when expanded", () => {
         const ctx = {
+            entityType: "customer",
             policySettingsSupported: true,
             hasPolicyView: true,
             policyEditable: true,
+            layoutBehaviorOnRecordLayouts: false,
             inlineRequirementEditable: true,
             developerDetailsOpen: true,
         };
@@ -33,9 +37,11 @@ describe("fieldEditModalOperatorUi", () => {
 
     it("shows legacy required for non-policy entities", () => {
         const ctx = {
+            entityType: "vendor",
             policySettingsSupported: false,
             hasPolicyView: false,
             policyEditable: false,
+            layoutBehaviorOnRecordLayouts: false,
             inlineRequirementEditable: false,
             developerDetailsOpen: false,
         };

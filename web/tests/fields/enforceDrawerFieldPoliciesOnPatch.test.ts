@@ -158,6 +158,91 @@ describe("enforceDrawerFieldPoliciesOnPatch", () => {
         }
     });
 
+    const placementLayoutOptional = {
+        field_placements_v1: [
+            {
+                field_key: "campus_pref",
+                surfaces: {
+                    drawer_overview: {
+                        requirement: buildSimpleRequirementPolicy("optional"),
+                    },
+                },
+            },
+        ],
+    };
+
+    const placementLayoutReadOnlyName = {
+        field_placements_v1: [
+            {
+                field_key: "name",
+                surfaces: {
+                    drawer_overview: {
+                        interaction: buildSimpleInteractionPolicy("read_only", "opportunity", "name"),
+                    },
+                },
+            },
+        ],
+    };
+
+    it("placement required_on_save rejects empty value", () => {
+        const r = evaluateDrawerFieldPoliciesOnPatch({
+            entityType: "opportunity",
+            defs: [{ ...customDef, is_required: false, requirement_policy: buildSimpleRequirementPolicy("optional") }],
+            body: { campus_pref: "" },
+            persisted: {},
+            customValuesByFieldKey: {},
+            layoutConfig: {
+                field_placements_v1: [
+                    {
+                        field_key: "campus_pref",
+                        surfaces: {
+                            drawer_overview: {
+                                requirement: buildSimpleRequirementPolicy("required_on_save"),
+                            },
+                        },
+                    },
+                ],
+            },
+        });
+        expect(r.ok).toBe(false);
+        if (!r.ok) expect(r.violations[0]?.code).toBe("required_on_save");
+    });
+
+    it("placement optional overrides definition required", () => {
+        const r = evaluateDrawerFieldPoliciesOnPatch({
+            entityType: "opportunity",
+            defs: [customDef],
+            body: { campus_pref: "" },
+            persisted: {},
+            customValuesByFieldKey: {},
+            layoutConfig: placementLayoutOptional,
+        });
+        expect(r.ok).toBe(true);
+    });
+
+    it("placement read_only blocks changed enforceable field", () => {
+        const r = evaluateDrawerFieldPoliciesOnPatch({
+            entityType: "opportunity",
+            defs: [{ ...oppNameDef, interaction_policy: buildSimpleInteractionPolicy("editable", "opportunity", "name") }],
+            body: { name: "Changed" },
+            persisted: { name: "Original" },
+            layoutConfig: placementLayoutReadOnlyName,
+        });
+        expect(r.ok).toBe(false);
+        if (!r.ok) expect(r.violations[0]?.code).toBe("read_only");
+    });
+
+    it("opportunity without layoutConfig uses definition policies", () => {
+        const r = evaluateDrawerFieldPoliciesOnPatch({
+            entityType: "opportunity",
+            defs: [customDef],
+            body: { campus_pref: "" },
+            persisted: {},
+            customValuesByFieldKey: {},
+        });
+        expect(r.ok).toBe(false);
+    });
+
     it("mergeValuesForPolicyCheck overlays metadata notes", () => {
         const map = {
             notes: {

@@ -7,7 +7,10 @@ import {
     entityTypeSupportsFieldPolicySettings,
     type FieldPolicySettingsView,
 } from "@/lib/fields/fieldPolicySettingsUi";
-import { canOperatorEditRequirementInline } from "@/lib/fields/fieldSettingsOperatorUi";
+import {
+    canOperatorEditRequirementInline,
+    fieldBehaviorConfiguredOnRecordLayouts,
+} from "@/lib/fields/fieldSettingsOperatorUi";
 
 export type InlineRequirementCellMode = "editable" | "locked" | "legacy_checkbox";
 
@@ -22,6 +25,9 @@ export function inlineRequirementCellMode(
     canMutate: boolean,
     view: FieldPolicySettingsView | null
 ): InlineRequirementCellMode {
+    if (fieldBehaviorConfiguredOnRecordLayouts(entityType)) {
+        return "locked";
+    }
     const policySupported = entityTypeSupportsFieldPolicySettings(entityType);
     if (!policySupported) {
         return canMutate ? "legacy_checkbox" : "locked";
