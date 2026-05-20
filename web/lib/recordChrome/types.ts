@@ -1,4 +1,5 @@
 import type { EntityDrawerSectionConfig } from "@/lib/entityPresentation";
+import type { FieldPlacementV1 } from "@/lib/fields/fieldPlacementV1";
 import type { ScheduleLayoutBlock } from "@/lib/recordChrome/scheduleLayoutConfig";
 
 /** DB row shape for `record_layouts` (admin API). */
@@ -57,6 +58,12 @@ export type RecordLayoutConfigJson = {
      * When `version === 2` and `layout_blocks` is non-empty, UI prefers blocks; `overview_rows` remains for backward compatibility.
      */
     layout_blocks?: ScheduleLayoutBlock[];
+
+    /**
+     * Opportunity workflow v1: per-field behavior overrides for layout surfaces (Card 0).
+     * @see docs/sprints/05_2026/layout_field_behavior_semantics_v1.md
+     */
+    field_placements_v1?: FieldPlacementV1[];
 };
 
 /** DB row shape for `record_actions` (admin API). */
