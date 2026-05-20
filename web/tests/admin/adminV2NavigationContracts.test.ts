@@ -9,6 +9,28 @@ function read(rel: string): string {
     return readFileSync(join(webRoot, rel), "utf8");
 }
 
+describe("Workspace → dept transition (no root skeleton flash)", () => {
+    it("does not use workspace/loading.tsx — cold shell only from workspace page client gate", () => {
+        const page = read("app/adminV2/workspace/page.tsx");
+        expect(page).toContain("WorkspaceRootColdShell");
+        const loadingPath = join(webRoot, "app/adminV2/workspace/loading.tsx");
+        expect(() => readFileSync(loadingPath, "utf8")).toThrow();
+    });
+
+    it("dept route keeps DepartmentWorkspaceColdShell in dept loading.tsx", () => {
+        const deptLoading = read("app/adminV2/workspace/dept/[departmentId]/loading.tsx");
+        expect(deptLoading).toContain("DepartmentWorkspaceColdShell");
+    });
+
+    it("workspace root dept tiles use Link soft nav (not location.assign)", () => {
+        const grid = read("components/admin/workspace/WorkspaceRootDepartmentGrid.tsx");
+        expect(grid).toContain('from "next/link"');
+        expect(grid).toContain("/dept/");
+        expect(grid).toContain("<Link");
+        expect(grid).not.toContain("adminV2CommitNavigation");
+    });
+});
+
 describe("AdminV2 shell navigation helpers", () => {
     it("adminV2BeforeRouteNavigation never calls preventDefault", () => {
         const src = read("lib/adminV2/shellNavigation.ts");

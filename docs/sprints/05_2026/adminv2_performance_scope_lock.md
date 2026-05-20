@@ -357,6 +357,7 @@ Optional **fast-follow bucket** (still out of sprint unless scope amended): serv
 - Sidebar `/departments` + all `/work-units` must not run in the first ~600ms of dept nav (`scheduleAdminV2BackgroundWork`).
 - Background shell APIs must not share the same burst as P0 oper fetch.
 - Entity labels: server-hydrate in workspace layout; client refresh deferred and TTL-bounded.
+- **No `workspace/loading.tsx`** — that segment `loading.tsx` wrapped all nested routes and flashed `WorkspaceRootColdShell` on soft nav to dept. Workspace cold shell is **client-only** (`workspace/page.tsx` when `loading` and no session seed). Dept cold shell remains `dept/[departmentId]/loading.tsx` for hard refresh and dept segment Suspense.
 
 ### Reuse targets (later, not this PR)
 
