@@ -16,6 +16,8 @@ Normative rules for **documentation**, **GPT/Cursor source-pack usage**, **deplo
 2. When behavior changes, update docs **in the same PR/commit** as the code (preferred).
 3. If reality diverged before docs caught up, either **fix code** or **update docs first** in the same commit — do not leave them contradictory across merges.
 
+- Entity **fields** define structure; **layout field placements** define operator-surface behavior (Required / editability on record surfaces such as the opportunity drawer overview). See **`docs/system/configuration-system.md`** and **`docs/sprints/05_2026/layout_field_behavior_semantics_v1.md`**.
+
 ## Mandatory update rule
 
 **Any code change** that alters:

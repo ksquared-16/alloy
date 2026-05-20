@@ -6,11 +6,11 @@ For any merge that changes behavior, include `docs/execution/operating-doctrine.
 
 ## Source pack (markdown + Supabase reference)
 
-- **Active markdown:** **17** files (this README plus **16** topic files). Limits and growth rules are in `docs/execution/operating-doctrine.md`.
+- **Active markdown:** **18** files (this README plus **17** topic files — includes **`product/bos-foundation.md`** and **`product/ai-system.md`** redirect stub). Limits and growth rules are in `docs/execution/operating-doctrine.md`.
 - **Supabase reference CSVs:** **8** generated files under `docs/supabase/reference/` — **do not edit by hand**; regenerate with `npm run export:supabase-schema` and `DATABASE_URL`.
-- **Total GPT/Cursor stack:** target **25 or fewer** files — **currently 17 + 8 = 25**.
+- **Total GPT/Cursor stack:** target **25 or fewer** files — **currently 18 + 8 = 26** (one over cap due to `ai-system.md` stub; consolidate when links are migrated).
 
-### Active topic files (16)
+### Active topic files (17)
 
 | Folder | Files |
 |--------|-------|
@@ -30,7 +30,7 @@ For any merge that changes behavior, include `docs/execution/operating-doctrine.
 5. **`system/record-system.md`** — Resolver-backed records (RRS), drawer/API truth vs previews.
 6. **`system/workspace-system.md`** — Departments, work units, queues, Admin V2 workspace; needs-attention count semantics.
 7. **`system/roles-and-permissions.md`** — Capabilities (`role_permission_grants`) vs visibility (`user_access_profiles`); API enforcement.
-8. **`system/configuration-system.md`** — Config vs code/workflows; **Admin Settings four-plane control plane** (Fields, Field grouping, Layouts, Actions).
+8. **`system/configuration-system.md`** — Config vs code/workflows; **Admin Settings four-plane control plane** (Fields, Field grouping, Layouts, Actions). Closeout detail: **`docs/sprints/05_2026/settings_control_plane_closeout.md`**.
 9. **`system/api-contracts.md`** — Representative admin/public API boundaries.
 
 **Product (load when touching that area):**
@@ -62,6 +62,8 @@ For any merge that changes behavior, include `docs/execution/operating-doctrine.
 
 - **Archived docs (2026-05-02 reset):** `docs/archive/2026-05-02-docs-reset/` (prior `architecture/`, `audits/`, `implementation/`, `specs/`, root `README`, and former `archive/` shard).
 - **Sprints:** `docs/sprints/` — intentionally **not** moved; not counted in the 16-topic cap.
+- **Settings control plane closeout (May 2026):** **`docs/sprints/05_2026/settings_control_plane_closeout.md`** — completed Layouts composition UX, Action buttons (create/edit placements), and Status vs workflow ownership. Canonical supplement to **`docs/system/configuration-system.md`** § four-plane model.
+- **Layout + field behavior semantics v1 (May 2026):** **`docs/sprints/05_2026/layout_field_behavior_semantics_v1.md`** — `field_placements_v1`, effective policy resolution, opportunity drawer GET/PATCH, layout integrity, Settings split (Layouts = behavior, Fields = structure).
 - **Supplementary audits** (not counted in the active markdown cap unless you explicitly load them): `docs/audits/` — e.g. **`supabase-schema-alignment-audit.md`**, **`workflow-rbac-alignment-audit.md`**, **`legacy-messages-retirement-plan.md`**, person vs contact, event integrity, workflow consistency, Admin V2 hardening.
 
 ## When this README must be updated
