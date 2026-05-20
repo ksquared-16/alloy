@@ -25,6 +25,10 @@ import type { TaskAssistClarificationKind } from "@/lib/agent/taskAssist/taskAss
 import type { TaskAssistCommandIntent } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
 import { formatCandidateDebugLine } from "@/lib/agent/taskAssist/taskAssistEntitySearchDisambiguation";
 import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
+import {
+    isStaleOperationalProposalEntity,
+    STALE_OPERATIONAL_PROPOSAL_MESSAGE,
+} from "@/lib/adminV2/bos/activeOperationalContext";
 import type { WorkflowAssistThreadMutationHandlersV1 } from "@/lib/agent/workflowAssist/workflowAssistReadV1";
 import { neutral, derived, brand, semantic } from "@/styles/tokens/colors";
 
@@ -90,6 +94,8 @@ function AssistantBubble({ children }: { children: ReactNode }) {
 export type CommandSurfaceThreadProps = {
     turns: CommandSurfaceThreadTurn[];
     busy: boolean;
+    /** Active opportunity id from GlobalAssistantContext — blocks stale task assist applies. */
+    activeOperationalEntityId?: string | null;
     onPickCandidate: (
         turnId: string,
         candidate: TaskAssistEntitySearchCandidate,
@@ -131,9 +137,21 @@ export type CommandSurfaceThreadProps = {
     configAssistCanApproveAndApply?: boolean;
 };
 
+function StaleOperationalProposalBanner() {
+    return (
+        <p
+            className="rounded-md border border-amber-200/80 bg-amber-50/60 px-2 py-1 text-[10px] leading-snug text-alloy-midnight/80"
+            data-command-surface-stale-proposal="true"
+        >
+            {STALE_OPERATIONAL_PROPOSAL_MESSAGE}
+        </p>
+    );
+}
+
 export default function CommandSurfaceThread({
     turns,
     busy,
+    activeOperationalEntityId = null,
     onPickCandidate,
     onConfirmCandidate,
     onToggleActionCard,
@@ -374,9 +392,14 @@ export default function CommandSurfaceThread({
                                 uiPhase = "draft",
                                 showMoreOptions = false,
                             } = turn.card;
+                            const staleProposal = isStaleOperationalProposalEntity(
+                                entityId,
+                                activeOperationalEntityId
+                            );
                             return (
                                 <AssistantBubble key={turn.id}>
                                     <div className="space-y-2" data-command-surface-task-assist-action-card="true">
+                                        {staleProposal ? <StaleOperationalProposalBanner /> : null}
                                         {uiPhase === "reminder" ? (
                                             <TaskAssistCompactReminderCard
                                                 entityId={entityId}
@@ -384,6 +407,7 @@ export default function CommandSurfaceThread({
                                                 locationLabel={locationLabel}
                                                 bootstrap={bootstrap}
                                                 bootstrapKey={bootstrapKey}
+                                                mutationsBlocked={staleProposal}
                                             />
                                         ) : null}
                                         {uiPhase === "draft" ? (
@@ -394,6 +418,7 @@ export default function CommandSurfaceThread({
                                                 bootstrap={bootstrap}
                                                 bootstrapKey={bootstrapKey}
                                                 autoPropose
+                                                mutationsBlocked={staleProposal}
                                             />
                                         ) : null}
                                         {uiPhase === "workspace" ? (
@@ -407,14 +432,15 @@ export default function CommandSurfaceThread({
                                                     </div>
                                                     <button
                                                         type="button"
-                                                        className="rounded-md border px-2.5 py-1 text-[11px] font-semibold"
+                                                        className="rounded-md border px-2.5 py-1 text-[11px] font-semibold disabled:opacity-45"
                                                         style={{ borderColor: derived.border, color: CMD.textBody }}
+                                                        disabled={staleProposal}
                                                         onClick={() => onToggleActionCard(turn.id)}
                                                     >
                                                         {expanded ? "Collapse" : "Review & approve"}
                                                     </button>
                                                 </div>
-                                                {expanded ? (
+                                                {expanded && !staleProposal ? (
                                                     <TaskAssistOpportunityWorkspace
                                                         entityId={entityId}
                                                         entity_display_label={entityLabel}
@@ -426,6 +452,10 @@ export default function CommandSurfaceThread({
                                                         show_v11_lists={showMoreOptions}
                                                         className="mb-0 border-0 bg-transparent px-0 py-1 shadow-none"
                                                     />
+                                                ) : expanded && staleProposal ? (
+                                                    <p className="text-[10px]" style={{ color: CMD.textLabel }}>
+                                                        Switch operational context to this record to review and approve.
+                                                    </p>
                                                 ) : (
                                                     <p className="text-[10px]" style={{ color: CMD.textLabel }}>
                                                         Open review to edit the draft, pick a recipient, and approve before anything sends.
@@ -433,7 +463,7 @@ export default function CommandSurfaceThread({
                                                 )}
                                             </>
                                         ) : null}
-                                        {showMoreOptions && uiPhase === "draft" ? (
+                                        {showMoreOptions && uiPhase === "draft" && !staleProposal ? (
                                             <TaskAssistOpportunityWorkspace
                                                 entityId={entityId}
                                                 entity_display_label={entityLabel}

@@ -874,10 +874,32 @@ cd web && npm run test -- \
 
 ## Implementation progress (append during build)
 
+### Loop 1 — Cards 1–2 (2026-05-20)
+
+**Card 1 — Active operational context on drawer open/close**
+
+- `useEffect` in `AdminEntityDrawer.tsx` calls `buildOpportunityOperationalContext` when `drawer.type === "opportunities"`; clears context on close or non-opportunity drawer.
+- `source_surface`: `queue` when `drawer.opportunityQueuePreviewSeed` present, else `opportunity_drawer`.
+- Label from `resolveOpportunityOperationalContextLabel` (customer/household from entity GET; queue seed while hydrating).
+- Helpers: `web/lib/adminV2/bos/activeOperationalContext.ts`.
+- `setAssistantContext` shallow-compares via `entityOperationalContextEqual` in `GlobalAssistantContext.tsx` to avoid redundant renders.
+
+**Card 2 — Orchestrator context chip + stale apply guard**
+
+- `OperationalActiveRecordChip.tsx` — **Active record ·** label, reserved `min-h-[26px]`, surface hint (Drawer/Queue/Command).
+- Replaced legacy **Context:** copy in `AICommandSurfaceShell.tsx`.
+- Context switch: one `assistant_notice` when `entity_id` changes (not on first seed) via `operationalContextSwitchNoticeText`.
+- `CommandSurfaceThread`: `activeOperationalEntityId` prop; stale banner + `mutationsBlocked` on Task Assist compact cards when card `entityId` ≠ active context.
+- `hasAmbientOpportunity` unchanged — now true when drawer seeds context.
+
+**Tests:** `tests/adminV2/activeOperationalContext.test.ts`, `tests/admin/adminEntityDrawerBosContext.contract.test.ts`, `globalAssistantContext.test.tsx` (equal helper).
+
+**GATE A:** Partial — Cards 1–2 done; Cards 3–6 not started.
+
 | Card | Status | PR / notes |
 |------|--------|------------|
-| 1 | ☐ | |
-| 2 | ☐ | |
+| 1 | ☑ | Drawer → `GlobalAssistantContext` |
+| 2 | ☑ | Active record chip + stale guard |
 | 3 | ☐ | |
 | 4 | ☐ | |
 | 5 | ☐ | |

@@ -13,6 +13,7 @@ import {
     loadPersistedCommandSurfaceSession,
     persistCommandSurfaceSession,
 } from "@/lib/adminV2/aiCommandSurface/commandSurfaceThreadPersistence";
+import { entityOperationalContextEqual } from "@/lib/adminV2/bos/activeOperationalContext";
 import { createEmptyThreadState } from "@/lib/adminV2/aiCommandSurface/commandSurfaceThreadState";
 import type { CommandSurfaceThreadState } from "@/lib/adminV2/aiCommandSurface/commandSurfaceThreadTypes";
 
@@ -174,7 +175,7 @@ export function GlobalAssistantProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const setAssistantContext = useCallback((context: GlobalAssistantEntityContext | null) => {
-        setCurrentContext(context);
+        setCurrentContext((prev) => (entityOperationalContextEqual(prev, context) ? prev : context));
     }, []);
 
     const setWorkspaceScope = useCallback((scope: GlobalAssistantWorkspaceScope | null) => {

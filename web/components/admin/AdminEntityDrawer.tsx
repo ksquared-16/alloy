@@ -34,6 +34,8 @@ import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import EntityDocumentsSection from "@/components/admin/EntityDocumentsSection";
 import CommunicationsDrawerSection from "@/components/admin/communications/CommunicationsDrawerSection";
 import OpportunityOperationalCompactStrip from "@/components/admin/opportunity/OpportunityOperationalCompactStrip";
+import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
+import { buildOpportunityOperationalContext } from "@/lib/adminV2/bos/activeOperationalContext";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
 import {
     ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS,
@@ -5640,6 +5642,41 @@ export default function AdminEntityDrawer() {
 
     const dataMatchesDrawer = entityDataMatchesDrawer(data, drawer.id);
     const overviewData = dataMatchesDrawer ? data : null;
+
+    const globalAssistant = useGlobalAssistantOptional();
+
+    /** BOS Loop 1 — seed active operational context when an opportunity drawer is open (Card 1). */
+    useEffect(() => {
+        if (!globalAssistant) return;
+
+        if (!drawer.type || !drawer.id || drawer.id === "new") {
+            globalAssistant.setAssistantContext(null);
+            return;
+        }
+
+        if (drawer.type !== "opportunities") {
+            globalAssistant.setAssistantContext(null);
+            return;
+        }
+
+        const sourceSurface = drawer.opportunityQueuePreviewSeed ? ("queue" as const) : ("opportunity_drawer" as const);
+        globalAssistant.setAssistantContext(
+            buildOpportunityOperationalContext({
+                entityId: drawer.id,
+                overviewData: overviewData as Record<string, unknown> | null,
+                queuePreviewSeed: drawer.opportunityQueuePreviewSeed ?? null,
+                opportunitySingular,
+                sourceSurface,
+            })
+        );
+    }, [
+        globalAssistant,
+        drawer.type,
+        drawer.id,
+        drawer.opportunityQueuePreviewSeed,
+        overviewData,
+        opportunitySingular,
+    ]);
 
     const opportunityQuoteIntakeNode =
         drawer.type === "opportunities" && drawer.id && drawer.id !== "new" && oppQuoteIntakeOpen ? (

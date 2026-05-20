@@ -25,6 +25,7 @@ export type TaskAssistCompactReminderCardProps = {
     locationLabel?: string | null;
     bootstrap: TaskAssistCommandBootstrap;
     bootstrapKey: string;
+    mutationsBlocked?: boolean;
 };
 
 export default function TaskAssistCompactReminderCard({
@@ -33,6 +34,7 @@ export default function TaskAssistCompactReminderCard({
     locationLabel,
     bootstrap,
     bootstrapKey,
+    mutationsBlocked = false,
 }: TaskAssistCompactReminderCardProps) {
     const v11 = isTaskAssistV1UiEnabled();
     const adminDrawer = useAdminDrawerOptional();
@@ -67,8 +69,8 @@ export default function TaskAssistCompactReminderCard({
     }, [entityLabel, locationLabel]);
 
     const reminderDisabled = useMemo(
-        () => computeReminderSubmitDisabled(title, dueLocal) || submitLoading,
-        [title, dueLocal, submitLoading]
+        () => mutationsBlocked || computeReminderSubmitDisabled(title, dueLocal) || submitLoading,
+        [mutationsBlocked, title, dueLocal, submitLoading]
     );
 
     const onSubmit = useCallback(async () => {

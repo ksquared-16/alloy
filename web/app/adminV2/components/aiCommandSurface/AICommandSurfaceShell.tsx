@@ -14,7 +14,9 @@ import {
   type AIStatusBadge,
   type ResponseKind,
 } from "@/lib/adminV2/aiCommandSurface/aiCommandSurfaceModel";
+import OperationalActiveRecordChip from "@/app/adminV2/components/bos/OperationalActiveRecordChip";
 import { dispatchAiActivityRefresh } from "@/app/adminV2/components/aiActivity/RecentAiActionsStrip";
+import { operationalContextSwitchNoticeText } from "@/lib/adminV2/bos/operationalContextSwitchNotice";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
@@ -580,8 +582,31 @@ export default function AICommandSurfaceShell() {
     intent: TaskAssistCommandIntent;
     awaiting: TaskAssistClarificationKind;
   } | null>(null);
+  const prevOperationalEntityIdRef = useRef<string | null>(null);
+
+  const activeOperationalEntityId =
+    globalAssistant?.currentContext?.entity_type === "opportunities" ?
+      (globalAssistant.currentContext.entity_id?.trim() || null)
+    : null;
 
   const panelMaxHeight = useMemo(() => clampExpandedHeightPx(viewportH), [viewportH]);
+
+  /** Card 2 — subtle notice when operational context switches records (not on first seed). */
+  useEffect(() => {
+    if (!globalAssistant) return;
+    const ctx = globalAssistant.currentContext;
+    const nextId = ctx?.entity_type === "opportunities" ? (ctx.entity_id?.trim() || null) : null;
+    const prevId = prevOperationalEntityIdRef.current;
+    if (prevId && nextId && prevId !== nextId && ctx?.label?.trim()) {
+      setThread((p) =>
+        appendThreadTurn(p, {
+          kind: "assistant_notice",
+          text: operationalContextSwitchNoticeText(ctx.label),
+        })
+      );
+    }
+    prevOperationalEntityIdRef.current = nextId;
+  }, [globalAssistant, globalAssistant?.currentContext?.entity_id, globalAssistant?.currentContext?.label, setThread]);
 
   const proceedToTaskAssistAction = useCallback(
     (candidate: TaskAssistEntitySearchCandidate, intent: TaskAssistCommandIntent) => {
@@ -1907,15 +1932,11 @@ export default function AICommandSurfaceShell() {
               Clear
             </button>
           </div>
-          {globalAssistant?.currentContext?.label ? (
-            <div
-              className="border-b px-3 py-1 text-[10px] truncate"
-              style={{ borderColor: derived.border, color: CMD.textSupporting }}
-              data-command-surface-ambient-context="true"
-            >
-              Context: {globalAssistant.currentContext.label}
-            </div>
-          ) : null}
+          <OperationalActiveRecordChip
+            label={globalAssistant?.currentContext?.label}
+            sourceSurface={globalAssistant?.currentContext?.source_surface}
+            variant="thread_header"
+          />
           {threadExpanded ? (
             <div ref={threadScrollRef} className="max-h-[min(52vh,440px)] overflow-y-auto rounded-b-none">
               {busy && thread.turns[thread.turns.length - 1]?.kind === "user_message" ? (
@@ -1926,6 +1947,7 @@ export default function AICommandSurfaceShell() {
               <CommandSurfaceThread
                 turns={thread.turns}
                 busy={busy}
+                activeOperationalEntityId={activeOperationalEntityId}
                 onPickCandidate={(turnId, candidate, intent) => confirmTaskAssistTarget(turnId, candidate, intent)}
                 onConfirmCandidate={confirmTaskAssistTarget}
                 onConfirmFuzzySuggestion={(_turnId, candidate, intent) => confirmTaskAssistTarget("", candidate, intent)}
@@ -1951,15 +1973,13 @@ export default function AICommandSurfaceShell() {
             </div>
           ) : null}
         </div>
-      ) : globalAssistant?.currentContext?.label ? (
-        <div
-          className="mb-2 rounded-xl border px-3 py-1.5 text-[10px] truncate"
-          style={{ borderColor: derived.border, color: CMD.textSupporting, backgroundColor: neutral.surface }}
-          data-command-surface-ambient-context="true"
-        >
-          Context: {globalAssistant.currentContext.label}
-        </div>
-      ) : null}
+      ) : (
+        <OperationalActiveRecordChip
+          label={globalAssistant?.currentContext?.label}
+          sourceSurface={globalAssistant?.currentContext?.source_surface}
+          variant="collapsed_rail"
+        />
+      )}
 
       <div className={`flex items-end gap-2 ${hasThread ? "mt-0" : "mt-2"}`}>
         <div

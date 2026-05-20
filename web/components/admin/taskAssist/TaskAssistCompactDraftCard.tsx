@@ -40,6 +40,8 @@ export type TaskAssistCompactDraftCardProps = {
     /** When true, call propose on mount (command bar flow). */
     autoPropose?: boolean;
     onSchedulePrompt?: () => void;
+    /** Block send/schedule when command surface active record differs from this card. */
+    mutationsBlocked?: boolean;
 };
 
 const LABEL = "block text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/55";
@@ -54,6 +56,7 @@ export default function TaskAssistCompactDraftCard({
     bootstrapKey,
     autoPropose = true,
     onSchedulePrompt,
+    mutationsBlocked = false,
 }: TaskAssistCompactDraftCardProps) {
     const v11 = isTaskAssistV1UiEnabled();
     const proposedRef = useRef<string | null>(null);
@@ -157,6 +160,7 @@ export default function TaskAssistCompactDraftCard({
 
     const sendDisabled = useMemo(
         () =>
+            mutationsBlocked ||
             computeTaskAssistSendDisabled({
                 proposal,
                 proposalValid,
@@ -167,11 +171,22 @@ export default function TaskAssistCompactDraftCard({
                 finalSubject,
                 channel,
             }),
-        [proposal, proposalValid, proposeLoading, applyLoading, selectedPersonId, finalBody, finalSubject, channel]
+        [
+            mutationsBlocked,
+            proposal,
+            proposalValid,
+            proposeLoading,
+            applyLoading,
+            selectedPersonId,
+            finalBody,
+            finalSubject,
+            channel,
+        ]
     );
 
     const scheduleDisabled = useMemo(
         () =>
+            mutationsBlocked ||
             computeScheduleSendDisabled({
                 proposalValid,
                 selectedPersonId,
@@ -179,8 +194,18 @@ export default function TaskAssistCompactDraftCard({
                 finalSubject,
                 channel,
                 scheduledForLocal,
-            }) || scheduleSubmitLoading,
-        [proposalValid, selectedPersonId, finalBody, finalSubject, channel, scheduledForLocal, scheduleSubmitLoading]
+            }) ||
+            scheduleSubmitLoading,
+        [
+            mutationsBlocked,
+            proposalValid,
+            selectedPersonId,
+            finalBody,
+            finalSubject,
+            channel,
+            scheduledForLocal,
+            scheduleSubmitLoading,
+        ]
     );
 
     const onApply = useCallback(async () => {

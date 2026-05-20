@@ -32,6 +32,7 @@ describe("GlobalAssistantContext", () => {
         expect(src).toContain("commandSurfaceThread");
         expect(src).toContain("clearCommandSurfaceConversation");
         expect(src).toContain("commandSurfaceThreadExpanded");
+        expect(src).toContain("entityOperationalContextEqual");
     });
 
     it("defaults to job_overview mode with no context", () => {
