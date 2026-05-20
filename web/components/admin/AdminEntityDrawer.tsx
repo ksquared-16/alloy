@@ -165,13 +165,14 @@ import { adminEntityRefetchShouldBlockDrawerShell } from "@/lib/ui-v2/adminV2Ent
 import { fetchAdminWorkUnitDrawerJson } from "@/lib/admin/adminWorkUnitDrawerFetch";
 import {
     adminV2DrawerBootstrapEnabled,
-    buildOpportunityDrawerBootstrapUrl,
+    fetchOpportunityDrawerOperationalBootstrap,
     mapBootstrapLayoutToRecordLayoutRow,
     operTrustHintsFromQueueSeed,
 } from "@/lib/admin/opportunityDrawerBootstrapClient";
 import type { DrawerOperTrustPreviewV1 } from "@/lib/admin/opportunityDrawerOperationalBootstrapTypes";
 import type { OpportunityDrawerOperationalBootstrapResponse } from "@/lib/admin/opportunityDrawerOperationalBootstrapTypes";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
+import { AdminV2DrawerLoadingState } from "@/components/admin/workspace/AdminV2DrawerLoadingState";
 import type { RecordLayoutRow } from "@/lib/recordChrome/types";
 import { getSectionOrderFromScheduleLayoutBlocks } from "@/lib/recordChrome/scheduleLayoutConfig";
 import {
@@ -989,22 +990,20 @@ function DrawerOpportunityQueueBootstrapBodySkeleton() {
     );
 }
 
-/** Full drawer loading composition while operational bootstrap is in flight (header chrome uses matching reserves). */
+/** Centered drawer loading — avoids bare white panel while operational bootstrap is in flight. */
 function DrawerOpportunityOperationalLoadingComposition() {
     return (
         <div
-            className="space-y-3 pt-0.5"
+            className="flex min-h-[min(100%,26rem)] w-full flex-col items-center justify-center px-4 py-10"
             aria-busy="true"
             data-opportunity-drawer-operational-loading="true"
         >
-            <div
-                className="rounded-xl border border-alloy-stone/12 bg-white/80 px-2.5 py-2 shadow-sm"
-                style={{ minHeight: "2.75rem" }}
-            >
-                <DrawerQuietSkeletonBar className="h-3 w-32" />
-                <DrawerQuietSkeletonBar className="mt-2 h-4 w-[min(100%,18rem)]" />
-            </div>
-            <DrawerOpportunityQueueBootstrapBodySkeleton />
+            <AdminV2DrawerLoadingState
+                title="Loading record"
+                description="Preparing inquiry workspace…"
+                density="panel"
+                className="w-full max-w-md"
+            />
         </div>
     );
 }
@@ -2174,18 +2173,7 @@ export default function AdminEntityDrawer() {
             }
             opportunityDrawerBootstrapInflightRef.current = entityOpenKey;
             markDrawerBootstrapRequestStart();
-            const trust = operTrustHintsFromQueueSeed(drawer.opportunityQueuePreviewSeed);
-            const bootstrapUrl = buildOpportunityDrawerBootstrapUrl(
-                drawer.id,
-                drawer.opportunityWorkspaceContext,
-                null,
-                trust
-            );
-            dedupeAdminFetch(bootstrapUrl, workspaceDataFetchInit())
-                .then((res) => {
-                    if (!res.ok) throw new Error(res.status === 404 ? "Not found" : "bootstrap_failed");
-                    return res.json() as Promise<OpportunityDrawerOperationalBootstrapResponse>;
-                })
+            void fetchOpportunityDrawerOperationalBootstrap(drawer.id, drawer.opportunityWorkspaceContext, workspaceDataFetchInit())
                 .then((boot) => {
                     applyOpportunityBootstrap(boot);
                 })
@@ -8886,6 +8874,16 @@ export default function AdminEntityDrawer() {
                     ) : (
                         <DrawerOpportunityQueueBootstrapBodySkeleton />
                     )}
+                </div>
+            ) : drawerBodyGateLoading &&
+              isOpportunityRecordModalTarget &&
+              opportunityDrawerAdminV2Bootstrap &&
+              !opportunityDrawerBootstrapLegacy ? (
+                <div
+                    className={drawerRecordBodyRootClassName}
+                    data-adminv2-opportunity-drawer-body="true"
+                >
+                    <DrawerOpportunityOperationalLoadingComposition />
                 </div>
             ) : drawerBodyGateLoading && !opportunityInquiryWorkflowDrawer ? (
                 <div

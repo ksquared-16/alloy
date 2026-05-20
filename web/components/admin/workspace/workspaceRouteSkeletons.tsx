@@ -1,4 +1,5 @@
 import "@/app/adminV2/components/workspace/workspace.css";
+import { adminV2WorkUnitQueueLaneReserveStyle } from "@/lib/ui-v2/adminV2LoadingGeometry";
 
 /** Thin indeterminate ribbon — route transition affordance without blocking the layout. */
 export function WsRouteLoadingRibbon({ label = "Loading" }: { label?: string }) {
@@ -228,8 +229,48 @@ function QueueRowSkeleton() {
     );
 }
 
-/** Work unit lane body placeholder (no breadcrumb). */
-export function WorkUnitRouteSkeletonBody() {
+function WorkUnitQueuePickerPillsReserve() {
+    const pillClass =
+        "inline-flex shrink-0 h-6 min-w-[4.5rem] rounded-full border border-alloy-stone/14 bg-white/55 adminv2-shimmer-bar";
+    return (
+        <div className="adminv2-ws-wu-header-queue-picker mt-2 min-w-0" aria-hidden>
+            <div className="adminv2-ws-queue-pill-scroll flex gap-1.5 py-0.5" role="group" aria-label="Loading queue filters">
+                {Array.from({ length: 4 }).map((_, i) => (
+                    <span key={i} className={pillClass} style={{ animationDelay: `${i * 45}ms` }} />
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function WorkUnitLaneStripReserve() {
+    return (
+        <div className="adminv2-ws-wu-lane-strip mb-2 space-y-1.5" aria-hidden>
+            <div className="h-3 w-[min(100%,14rem)] adminv2-shimmer-bar rounded bg-alloy-stone/12" />
+            <div className="h-3 w-[min(100%,18rem)] adminv2-shimmer-bar rounded bg-alloy-stone/10" style={{ animationDelay: "70ms" }} />
+        </div>
+    );
+}
+
+function WorkUnitOperLaneSpinner() {
+    return (
+        <div
+            className="h-9 w-9 rounded-full border-[3px] border-alloy-forge/12 border-t-alloy-forge/70 border-r-alloy-forge/35 animate-spin motion-reduce:animate-none"
+            style={{ animationDuration: "0.95s" }}
+            aria-hidden
+        />
+    );
+}
+
+/** Work unit lane body placeholder (no breadcrumb) — dept-like shell: brief, pills, KPI, lane strip, queue cards, rail. */
+export function WorkUnitRouteSkeletonBody({
+    laneHeadline = "Loading lane",
+    reserveActionsRail = true,
+}: {
+    laneHeadline?: string;
+    reserveActionsRail?: boolean;
+}) {
+    const queueLaneStyle = adminV2WorkUnitQueueLaneReserveStyle();
     return (
         <div data-ws-surface="work_unit" className="adminv2-ws-root adminv2-ws-work-unit adminv2-ws-wu-v2">
             <div className="adminv2-ws-dept-v2-contain">
@@ -241,9 +282,10 @@ export function WorkUnitRouteSkeletonBody() {
                                     <div className="adminv2-ws-dept-v2-brief-kicker">Work unit</div>
                                     <div className="adminv2-ws-dept-v2-brief-head-row">
                                         <h2 className="adminv2-ws-dept-v2-brief-headline adminv2-ws-dept-v2-brief-headline--placeholder">
-                                            Loading lane
+                                            {laneHeadline}
                                         </h2>
                                     </div>
+                                    <WorkUnitQueuePickerPillsReserve />
                                 </div>
                             </div>
                             <div data-workspace-zone="kpi-banner">
@@ -251,37 +293,65 @@ export function WorkUnitRouteSkeletonBody() {
                             </div>
                         </div>
 
-                        <div className="adminv2-ws-dept-v2-operational-row adminv2-ws-dept-v2-operational-row--double" aria-label="Lane queue">
+                        <div
+                            className="adminv2-ws-dept-v2-operational-row adminv2-ws-dept-v2-operational-row--double"
+                            aria-label="Lane queue"
+                            data-adminv2-wu-oper-region-loading="true"
+                            aria-busy="true"
+                        >
                             <div className="adminv2-ws-dept-v2-lane adminv2-ws-dept-v2-lane--throughput" data-ws-lane-kind="lane_queue">
                                 <div className="adminv2-ws-dept-v2-lane-chrome adminv2-ws-dept-v2-lane-chrome--throughput-deck">
-                                    <div className="adminv2-ws-wu-queue" aria-hidden>
-                                        {Array.from({ length: 8 }).map((_, i) => (
-                                            <QueueRowSkeleton key={i} />
-                                        ))}
+                                    <WorkUnitLaneStripReserve />
+                                    <div
+                                        className="adminv2-ws-wu-queue-shell relative rounded-xl border border-alloy-stone/12 bg-white/40"
+                                        style={queueLaneStyle}
+                                    >
+                                        <div className="adminv2-ws-wu-queue px-2 py-2" aria-hidden>
+                                            {Array.from({ length: 6 }).map((_, i) => (
+                                                <QueueRowSkeleton key={i} />
+                                            ))}
+                                        </div>
+                                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                                            <WorkUnitOperLaneSpinner />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            <div className="adminv2-ws-dept-v2-lane adminv2-ws-dept-v2-lane--attention adminv2-ws-dept-v2-lane--attention--hidden" aria-hidden />
+                            <div
+                                className="adminv2-ws-dept-v2-lane adminv2-ws-dept-v2-lane--attention adminv2-ws-dept-v2-lane--attention--hidden"
+                                aria-hidden
+                            />
                         </div>
                     </div>
 
-                    <div className="adminv2-ws-dept-v2-command-column" data-adminv2-workspace-command-column>
-                        <aside
-                            className="adminv2-ws-dept-v2-rail adminv2-ws-dept-v2-rail--command-shell"
-                            data-adminv2-workspace-command-rail
-                            aria-label="Decisions and actions"
-                        >
-                            <section className="adminv2-ws-actions-rail adminv2-ws-actions-rail--dept-panel px-3 pb-3 pt-3">
-                                <div className="h-4 w-20 adminv2-shimmer-bar rounded bg-alloy-stone/15" aria-hidden />
-                                <div className="mt-3 space-y-2" aria-hidden>
-                                    <div className="h-8 w-full adminv2-shimmer-bar rounded-md bg-alloy-stone/10" />
-                                    <div className="h-8 w-full adminv2-shimmer-bar rounded-md bg-alloy-stone/10" style={{ animationDelay: "55ms" }} />
-                                    <div className="h-8 w-full adminv2-shimmer-bar rounded-md bg-alloy-stone/10" style={{ animationDelay: "110ms" }} />
-                                    <div className="h-8 w-full adminv2-shimmer-bar rounded-md bg-alloy-stone/10" style={{ animationDelay: "165ms" }} />
-                                </div>
-                            </section>
-                        </aside>
-                    </div>
+                    {reserveActionsRail ? (
+                        <div className="adminv2-ws-dept-v2-command-column" data-adminv2-workspace-command-column>
+                            <aside
+                                className="adminv2-ws-dept-v2-rail adminv2-ws-dept-v2-rail--command-shell"
+                                data-adminv2-workspace-command-rail
+                                aria-label="Decisions and actions"
+                            >
+                                <section className="adminv2-ws-actions-rail adminv2-ws-actions-rail--dept-panel px-3 pb-3 pt-3">
+                                    <div className="h-4 w-20 adminv2-shimmer-bar rounded bg-alloy-stone/15" aria-hidden />
+                                    <div className="mt-3 space-y-2" aria-hidden>
+                                        <div className="h-8 w-full adminv2-shimmer-bar rounded-md bg-alloy-stone/10" />
+                                        <div
+                                            className="h-8 w-full adminv2-shimmer-bar rounded-md bg-alloy-stone/10"
+                                            style={{ animationDelay: "55ms" }}
+                                        />
+                                        <div
+                                            className="h-8 w-full adminv2-shimmer-bar rounded-md bg-alloy-stone/10"
+                                            style={{ animationDelay: "110ms" }}
+                                        />
+                                        <div
+                                            className="h-8 w-full adminv2-shimmer-bar rounded-md bg-alloy-stone/10"
+                                            style={{ animationDelay: "165ms" }}
+                                        />
+                                    </div>
+                                </section>
+                            </aside>
+                        </div>
+                    ) : null}
                 </div>
             </div>
         </div>

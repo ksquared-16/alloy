@@ -48,20 +48,20 @@ describe("adminV2LoadingGeometry", () => {
 });
 
 describe("Work-unit loader alignment (PERF-A-03)", () => {
-    it("route loading.tsx uses WorkspaceQuietQueueLaneReserve", () => {
+    it("route loading.tsx uses WorkUnitRouteSkeletonBody", () => {
         const loading = read(
             "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/loading.tsx"
         );
-        expect(loading).toContain("WorkspaceQuietQueueLaneReserve");
+        expect(loading).toContain("WorkUnitRouteSkeletonBody");
         expect(loading).not.toContain("AdminV2RouteLoadingState");
     });
 
-    it("in-page blocking load uses shared WU lane reserve style", () => {
-        const reserve = read("components/admin/workspace/WorkspaceQuietLoadingReserve.tsx");
-        expect(reserve).toContain("adminV2WorkUnitQueueLaneReserveStyle");
-        expect(reserve).toContain('data-adminv2-wu-queue-lane-reserve="true"');
+    it("in-page blocking load uses WU skeleton with shared lane geometry", () => {
+        const skeletons = read("components/admin/workspace/workspaceRouteSkeletons.tsx");
+        expect(skeletons).toContain("adminV2WorkUnitQueueLaneReserveStyle");
+        expect(skeletons).toContain('data-adminv2-wu-oper-region-loading="true"');
         const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-        expect(page).toContain("WorkspaceQuietQueueLaneReserve");
+        expect(page).toContain("WorkUnitRouteSkeletonBody");
     });
 });
 

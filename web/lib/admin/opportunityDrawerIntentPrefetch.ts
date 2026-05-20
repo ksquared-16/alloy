@@ -1,7 +1,6 @@
 import {
     adminV2DrawerBootstrapEnabled,
-    buildOpportunityDrawerBootstrapUrl,
-    operTrustHintsFromQueueSeed,
+    fetchOpportunityDrawerOperationalBootstrap,
 } from "@/lib/admin/opportunityDrawerBootstrapClient";
 import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
 import { scheduleDeferredCommunicationsDrawerPrefetch } from "@/lib/admin/communications/communicationsDrawerPrefetch";
@@ -35,9 +34,7 @@ export function prefetchOpportunityDrawerOnRowIntent(
         return;
     }
 
-    const trust = operTrustHintsFromQueueSeed(queuePreviewSeed);
-    const bootstrapUrl = buildOpportunityDrawerBootstrapUrl(id, workspaceContext ?? null, null, trust);
-    void dedupeAdminFetch(bootstrapUrl, workspaceDataFetchInit()).catch(() => {
-        /* non-fatal — drawer open will retry */
+    void fetchOpportunityDrawerOperationalBootstrap(id, workspaceContext ?? null, workspaceDataFetchInit()).catch(() => {
+        /* non-fatal — drawer open will reuse in-flight or retry */
     });
 }

@@ -26,7 +26,7 @@ import {
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
-import { WorkspaceQuietQueueLaneReserve } from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
+import { WorkUnitRouteSkeletonBody } from "@/components/admin/workspace/workspaceRouteSkeletons";
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import {
@@ -3252,13 +3252,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
             subtitle=""
         >
             {workUnitPageBlockingLoad ? (
-                <div
-                    className="adminv2-ws-root adminv2-ws-work-unit adminv2-ws-wu-v2 adminv2-ws-dept-v2-contain"
-                    data-ws-surface="work_unit"
-                    aria-busy="true"
-                >
-                    <WorkspaceQuietQueueLaneReserve />
-                </div>
+                <WorkUnitRouteSkeletonBody
+                    laneHeadline={wuName}
+                    reserveActionsRail={isEnrollmentLikeDepartmentKey(dept?.key)}
+                />
             ) : workUnitShellReady && effectiveModel ? (
                 <>
                     {actionSurfaceError ? (

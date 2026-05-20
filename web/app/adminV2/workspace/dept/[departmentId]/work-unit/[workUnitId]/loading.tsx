@@ -1,4 +1,4 @@
-import { WorkspaceQuietQueueLaneReserve } from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
+import { WorkUnitRouteSkeletonBody } from "@/components/admin/workspace/workspaceRouteSkeletons";
 
 export default function Loading() {
     return (
@@ -23,7 +23,7 @@ export default function Loading() {
                     …
                 </span>
             </nav>
-            <WorkspaceQuietQueueLaneReserve />
+            <WorkUnitRouteSkeletonBody />
         </div>
     );
 }

@@ -126,6 +126,15 @@ describe("Drawer opportunity header grouped loading", () => {
         expect(src).toMatch(/opportunityQueuePreviewSeed\?\.title/);
     });
 
+    it("uses centered drawer loading state while bootstrap is pending", () => {
+        const src = read("components/admin/AdminEntityDrawer.tsx");
+        expect(src).toContain("DrawerOpportunityOperationalLoadingComposition");
+        expect(src).toContain("AdminV2DrawerLoadingState");
+        expect(src).toMatch(
+            /opportunityDrawerBootstrapPending[\s\S]*DrawerOpportunityOperationalLoadingComposition/,
+        );
+    });
+
     it("uses section-shaped bootstrap body and title-rail action reserves when queue preview is active", () => {
         const src = read("components/admin/AdminEntityDrawer.tsx");
         expect(src).toContain("DrawerOpportunityQueueBootstrapBodySkeleton");
@@ -215,10 +224,10 @@ describe("Work-unit early action rail", () => {
 });
 
 describe("Work-unit queue-first loading coherence", () => {
-    it("uses a single quiet queue reserve for blocking load and defers KPI/automation", () => {
+    it("uses dept-like work-unit skeleton for blocking load and defers KPI/automation", () => {
         const src = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
         expect(src).toContain("workUnitQueueRevealReady");
-        expect(src).toContain("WorkspaceQuietQueueLaneReserve");
+        expect(src).toContain("WorkUnitRouteSkeletonBody");
         expect(src).toMatch(
             /workUnitKpiStripPlaceholder = workUnitQueueRevealReady && workUnitKpiMetricsPending/,
         );
@@ -238,7 +247,7 @@ describe("Work-unit queue-first loading coherence", () => {
 describe("Drawer operational bootstrap (Cards 4–7)", () => {
     it("uses drawer-operational-bootstrap on AdminV2 opportunity happy path", () => {
         const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("buildOpportunityDrawerBootstrapUrl");
+        expect(src).toContain("fetchOpportunityDrawerOperationalBootstrap");
         expect(src).toContain("applyOpportunityBootstrap");
         expect(src).toContain("runLegacyEntityFetch");
         expect(src).toContain("adminV2DrawerBootstrapEnabled()");
@@ -282,10 +291,14 @@ describe("Drawer single-reveal bootstrap body", () => {
     it("dedupes drawer bootstrap per entity open and suppresses legacy chrome fetches on happy path", () => {
         const drawer = read("components/admin/AdminEntityDrawer.tsx");
         const chrome = read("hooks/useRecordChromeConfig.ts");
+        const bootstrapClient = read("lib/admin/opportunityDrawerBootstrapClient.ts");
         expect(drawer).toContain("opportunityDrawerBootstrapInflightRef");
         expect(drawer).toContain("opportunityDrawerBootstrapEntityKeyRef");
         expect(drawer).toContain("opportunityBootstrapChromeSuppressed");
-        expect(drawer).toContain("DrawerOpportunityOperationalLoadingComposition");
+        expect(drawer).toContain("AdminV2DrawerLoadingState");
+        expect(drawer).toContain("fetchOpportunityDrawerOperationalBootstrap");
+        expect(bootstrapClient).toContain("buildOpportunityDrawerBootstrapCanonicalUrl");
+        expect(bootstrapClient).toContain("drawerBootstrapPayloadInflight");
         expect(drawer).toMatch(
             /opportunityDrawerBootstrapInflightRef\.current === entityOpenKey[\s\S]*?return;/,
         );

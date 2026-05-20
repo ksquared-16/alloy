@@ -32,23 +32,22 @@ describe("prefetchOpportunityDrawerOnRowIntent", () => {
         prefetchOpportunityDrawerOnRowIntent("opp-abc");
         expect(scheduleDeferredCommunicationsDrawerPrefetch).toHaveBeenCalledWith("opportunities", "opp-abc");
         expect(dedupeAdminFetch).toHaveBeenCalledWith(
-            expect.stringContaining("/api/admin/opportunities/opp-abc/drawer-operational-bootstrap"),
+            expect.stringMatching(/\/api\/admin\/opportunities\/opp-abc\/drawer-operational-bootstrap$/),
             expect.anything()
         );
         expect(dedupeAdminFetchWithTtl).not.toHaveBeenCalled();
     });
 
     it("prefetches bootstrap with workspace scope query params", async () => {
-        const { prefetchOpportunityDrawerOnRowIntent } = await import(
-            "@/lib/admin/opportunityDrawerIntentPrefetch"
+        const { buildOpportunityDrawerBootstrapCanonicalUrl } = await import(
+            "@/lib/admin/opportunityDrawerBootstrapClient"
         );
-        prefetchOpportunityDrawerOnRowIntent("opp-abc", {
+        const url = buildOpportunityDrawerBootstrapCanonicalUrl("opp-abc", {
             work_unit_id: "wu-1",
             department_id: "dept-1",
         });
-        expect(dedupeAdminFetch).toHaveBeenCalledWith(
-            expect.stringMatching(/drawer-operational-bootstrap\?.*work_unit_id=wu-1/),
-            expect.anything()
-        );
+        expect(url).toMatch(/drawer-operational-bootstrap\?.*work_unit_id=wu-1/);
+        expect(url).toMatch(/department_id=dept-1/);
+        expect(url).not.toMatch(/hint_oper_trust/);
     });
 });
