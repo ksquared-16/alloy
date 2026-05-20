@@ -234,6 +234,18 @@ function deriveSelectedQueueKeyFromSummaries(wu: WorkUnitRow, qs: QueueSummary[]
     return firstByUi;
 }
 
+/** Authoritative primary lane for bootstrap — summaries win over provisional nav key (PERF-C-02). */
+function resolveBootstrapPrimaryQueueKey(
+    wu: WorkUnitRow,
+    summaries: QueueSummary[] | null,
+    qFromUrl: string
+): string | null {
+    if (summaries?.length) {
+        return deriveSelectedQueueKeyFromSummaries(wu, summaries, qFromUrl);
+    }
+    return resolveNavTimeRowQueueKey(wu, qFromUrl);
+}
+
 function registryQuickActionsFromResolved(rowInline: { key: string; label: string; action_type: string }[]): QueueItemQuickActionVm[] {
     return rowInline.map((a) => ({
         id: a.key,
@@ -397,8 +409,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
     /** Lane filter UI — source of truth; URL is not synced after mount. */
     const [laneUnmappedOnly, setLaneUnmappedOnly] = useState(false);
     const [attentionBucketKey, setAttentionBucketKey] = useState("");
-    /** When true, skip the next selectedQueueKey effect fetch (handler already fetched). */
+    /** When true, next selectedQueueKey effect uses `{ force: true }` (tab/bucket handlers). */
     const skipNextQueueFetchEffectRef = useRef(false);
+    /** After bootstrap primary row fetch, skip one effect pass to avoid duplicate visible load (PERF-C-02). */
+    const suppressQueueFetchEffectOnceRef = useRef(false);
+    const bootstrapPrimaryRowKeyRef = useRef<string | null>(null);
+    const bootstrapPrimaryRowFetchScheduledRef = useRef(false);
+    /** False until bootstrap has scheduled the single primary row fetch for this navigation. */
+    const [wuQueueLaneAuthorityReady, setWuQueueLaneAuthorityReady] = useState(false);
+    /** Work unit id that owns `queueRowsBufferRef` — prevents stale buffer reveal (PERF-C-01). */
+    const queueRowsBufferWorkUnitIdRef = useRef<string | null>(null);
     /** Queue-tab interaction: emit `queue_tab_rows_ready` once when row fetch finishes. */
     const pendingQueueTabPerfRef = useRef(false);
     /** Last settled preview rows — keeps list visible while `queueItems` is briefly null during lane changes. */
@@ -603,18 +623,67 @@ export default function AdminV2OpportunityWorkUnitPage() {
         });
     }, []);
 
-    /** Seed lane UI from URL once per work-unit route (deep link from dept card). No URL sync after mount. */
+    /**
+     * Navigation reset + lane URL seed + optional shell cache (PERF-C-01).
+     * Always clears queue lane state on work-unit / site change — even when session shell seeds metadata.
+     */
     useLayoutEffect(() => {
-        if (!workUnitId) return;
+        if (!departmentId || !workUnitId) return;
+
+        setWuQueueLaneAuthorityReady(false);
+        bootstrapPrimaryRowKeyRef.current = null;
+        bootstrapPrimaryRowFetchScheduledRef.current = false;
+        suppressQueueFetchEffectOnceRef.current = false;
+        queueItemsRequestSeq.current += 1;
+        queueSummariesRequestSeq.current += 1;
+        queueAdjacentPrefetchTokenRef.current += 1;
+        queueItemsLastFetchSigRef.current = null;
+        queueRowLeaseSigsRef.current.clear();
+        queueRowClientCacheRef.current.clear();
+        queueRowsBufferRef.current = [];
+        queueRowsBufferWorkUnitIdRef.current = null;
+        primaryLaneRowsSettledOnceRef.current = false;
+        userLaneTouchedRef.current = false;
+        skipNextQueueFetchEffectRef.current = false;
+
+        setQueueSummaries(null);
+        setQueueSummariesError(null);
+        setQueueSummariesRoute(null);
+        setQueueItems(null);
+        setQueueItemsError(null);
+        setQueueItemsRoute(null);
+        setQueueItemsLoading(false);
+        setWuPrimaryLaneTimedOut(false);
+
         initialLocationRef.current = readWorkUnitInitialLocationParams();
         const init = initialLocationRef.current;
         recordAdminV2RouteChurnAttempt("work-unit-lane-init");
         if (init.queue) {
             setSelectedQueueKeyTraced("laneInitFromUrl", init.queue);
+        } else {
+            setSelectedQueueKey(null);
         }
         setLaneUnmappedOnly(init.unmapped);
         setAttentionBucketKey(init.attentionBucket);
-    }, [departmentId, workUnitId, setSelectedQueueKeyTraced]);
+
+        seededWorkUnitShellRef.current = false;
+        if (!orgId) return;
+        const hit = readWorkUnitPageCache(orgId, departmentId, workUnitId, principalUserId, accessScopeFingerprint);
+        if (!hit || hit.departmentId !== departmentId || hit.workUnit.id !== workUnitId) return;
+        seededWorkUnitShellRef.current = true;
+        setDept(hit.dept);
+        setWorkUnit(hit.workUnit as WorkUnitRow);
+        setLoading(false);
+        setError(null);
+    }, [
+        departmentId,
+        workUnitId,
+        orgId,
+        principalUserId,
+        accessScopeFingerprint,
+        selectedSiteId,
+        setSelectedQueueKeyTraced,
+    ]);
 
     useEffect(() => {
         recordAdminV2RouteChurnAttempt("work-unit-mount");
@@ -649,13 +718,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
         const t = window.setTimeout(() => setWuPrimaryLaneTimedOut(true), 12_000);
         return () => clearTimeout(t);
     }, [workUnitId, selectedQueueKey, workUnit, loading, queueItemsLoading, queueItems, queueItemsError]);
-
-    useEffect(() => {
-        queueRowsBufferRef.current = [];
-        queueRowClientCacheRef.current.clear();
-        primaryLaneRowsSettledOnceRef.current = false;
-        userLaneTouchedRef.current = false;
-    }, [departmentId, workUnitId]);
 
     const setWorkspaceScope = globalAssistant?.setWorkspaceScope;
     useEffect(() => {
@@ -1066,7 +1128,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     prev?.queue && typeof (prev.queue as { key?: string }).key === "string"
                         ? (prev.queue as { key: string }).key
                         : null;
-                if (pk != null && pk !== queueKey) return prev;
+                if (pk != null && pk !== queueKey) return null;
                 return prev;
             });
             try {
@@ -1194,19 +1256,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
         }
     }, [selectedSiteId]);
 
-    /** Session cache → shell before paint on work-unit revisit (revalidated over the network). */
-    useLayoutEffect(() => {
-        seededWorkUnitShellRef.current = false;
-        if (!departmentId || !workUnitId || !orgId) return;
-        const hit = readWorkUnitPageCache(orgId, departmentId, workUnitId, principalUserId, accessScopeFingerprint);
-        if (!hit || hit.departmentId !== departmentId || hit.workUnit.id !== workUnitId) return;
-        seededWorkUnitShellRef.current = true;
-        setDept(hit.dept);
-        setWorkUnit(hit.workUnit as WorkUnitRow);
-        setLoading(false);
-        setError(null);
-    }, [departmentId, workUnitId, orgId, principalUserId, accessScopeFingerprint]);
-
     useEffect(() => {
         if (!departmentId || !workUnitId) {
             setLoading(false);
@@ -1256,41 +1305,49 @@ export default function AdminV2OpportunityWorkUnitPage() {
             pendingDeferredAfterWudRef.current = false;
             bootstrapWuRef.current = null;
             deptWuListPromiseRef.current = null;
-            if (!preserveShell) firstUsefulPaintMarkedRef.current = false;
+            setWuQueueLaneAuthorityReady(false);
+            bootstrapPrimaryRowKeyRef.current = null;
+            bootstrapPrimaryRowFetchScheduledRef.current = false;
+            suppressQueueFetchEffectOnceRef.current = false;
+            if (!preserveShell) {
+                firstUsefulPaintMarkedRef.current = false;
+                setWorkUnit(null);
+                setDept(null);
+            }
+            setOq(null);
+            setNeedsAttentionWorkUnitId(null);
+            setOpportunityQueueRowActions(null);
+            setOpportunityQueueRowResolved(null);
+            setEnrollmentRightRailResolved(null);
+            setWuPlacementRows(undefined);
+            setWuScopeHasPlacements(false);
 
             const qFromUrlEffective = initialLocationRef.current.queue.trim();
+
+            const runBootstrapPrimaryRowFetch = (wu: WorkUnitRow, summaries: QueueSummary[] | null) => {
+                if (cancelled || bootstrapPrimaryRowFetchScheduledRef.current) return;
+                bootstrapPrimaryRowFetchScheduledRef.current = true;
+                if (userLaneTouchedRef.current) {
+                    setWuQueueLaneAuthorityReady(true);
+                    return;
+                }
+                const primaryKey = resolveBootstrapPrimaryQueueKey(wu, summaries, qFromUrlEffective);
+                if (!primaryKey) {
+                    setWuQueueLaneAuthorityReady(true);
+                    return;
+                }
+                bootstrapPrimaryRowKeyRef.current = primaryKey;
+                setSelectedQueueKeyTraced("bootstrapPrimaryLane", primaryKey);
+                suppressQueueFetchEffectOnceRef.current = true;
+                void fetchQueueItems(workUnitId, primaryKey, null);
+                setWuQueueLaneAuthorityReady(true);
+            };
 
             try {
                 deptWuListPromiseRef.current = dedupeAdminFetch(
                     `/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`,
                     init
                 );
-                if (!cancelled && !preserveShell) {
-                    setWorkUnit(null);
-                    setDept(null);
-                    setOq(null);
-                    setNeedsAttentionWorkUnitId(null);
-                    setQueueSummaries(null);
-                    setQueueSummariesError(null);
-                    setQueueSummariesRoute(null);
-                    setSelectedQueueKey(null);
-                    setQueueItems(null);
-                    setQueueItemsError(null);
-                    setQueueItemsRoute(null);
-                    setQueueItemsLoading(false);
-                    setOpportunityQueueRowActions(null);
-                    setOpportunityQueueRowResolved(null);
-                    setEnrollmentRightRailResolved(null);
-                    queueItemsLastFetchSigRef.current = null;
-                    queueRowLeaseSigsRef.current.clear();
-                    queueRowClientCacheRef.current.clear();
-                    queueRowsBufferRef.current = [];
-                    setWuPlacementRows(undefined);
-                    setWuScopeHasPlacements(false);
-                    if (qFromUrlEffective) setSelectedQueueKey(qFromUrlEffective);
-                } else if (!cancelled && qFromUrlEffective && !userLaneTouchedRef.current) {
-                    setSelectedQueueKey(qFromUrlEffective);
-                }
 
                 const wuUrl = `/api/admin/work-units/${encodeURIComponent(workUnitId)}`;
                 const deptUrl = `/api/admin/departments/${encodeURIComponent(departmentId)}`;
@@ -1350,14 +1407,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     return { res, j };
                 });
 
-                let rowKickInvoked = false;
-                let rowKeyUsedForBootstrap: string | null = null;
-                if (qFromUrlEffective) {
-                    rowKickInvoked = true;
-                    rowKeyUsedForBootstrap = qFromUrlEffective;
-                    void fetchQueueItems(workUnitId, qFromUrlEffective, null);
-                }
-
                 const [wuR, deptR, rightRailList] = await Promise.all([wuP, deptP, rightRailP]);
 
                 if (!wuR.res.ok) throw new Error(wuR.j.error ?? "Failed to load work unit");
@@ -1365,18 +1414,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 const wu = wuR.j as WorkUnitRow;
                 if (wu.department_id !== departmentId) {
                     throw new Error("Work unit does not belong to this department");
-                }
-
-                const navRowKey = resolveNavTimeRowQueueKey(wu, qFromUrlEffective);
-                if (navRowKey) {
-                    if (!rowKickInvoked) {
-                        void fetchQueueItems(workUnitId, navRowKey, null);
-                        rowKickInvoked = true;
-                        rowKeyUsedForBootstrap = navRowKey;
-                    } else if (rowKeyUsedForBootstrap !== navRowKey) {
-                        void fetchQueueItems(workUnitId, navRowKey, null, { force: true });
-                        rowKeyUsedForBootstrap = navRowKey;
-                    }
                 }
 
                 if (!deptR.res.ok) throw new Error(deptR.j.error ?? "Failed to load department");
@@ -1438,6 +1475,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         setQueueSummaries(null);
                         setQueueSummariesError("Queue request failed");
                         setQueueSummariesRoute(queueListRoute);
+                        runBootstrapPrimaryRowFetch(wu, null);
                     }
                     sumR = {
                         res: new Response(null, { status: 0, statusText: "Network Error" }),
@@ -1466,18 +1504,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                     count: typeof j.work_unit_scope_total === "number" ? j.work_unit_scope_total : null,
                                 });
                             }
-                            const initial = deriveSelectedQueueKeyFromSummaries(wu, qs, qFromUrlEffective);
-                            if (initial && !userLaneTouchedRef.current) {
-                                setSelectedQueueKey(initial);
-                                if (rowKeyUsedForBootstrap === null) {
-                                    void fetchQueueItems(workUnitId, initial, null);
-                                    rowKickInvoked = true;
-                                    rowKeyUsedForBootstrap = initial;
-                                } else if (rowKeyUsedForBootstrap !== initial) {
-                                    void fetchQueueItems(workUnitId, initial, null, { force: true });
-                                    rowKeyUsedForBootstrap = initial;
-                                }
-                            }
+                            runBootstrapPrimaryRowFetch(wu, qs);
                             if (typeof window !== "undefined" && typeof performance !== "undefined") {
                                 requestAnimationFrame(() => {
                                     requestAnimationFrame(() =>
@@ -1493,6 +1520,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             setQueueSummaries(null);
                             setQueueSummariesError("Queue type not supported yet");
                             setQueueSummariesRoute(route);
+                            runBootstrapPrimaryRowFetch(wu, null);
                         }
                     } else if (queuesRes.status !== 0) {
                         shouldFallbackToLegacy = false;
@@ -1500,6 +1528,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             setQueueSummaries(null);
                             setQueueSummariesError(j.error ?? "Failed to load queues");
                             setQueueSummariesRoute(route);
+                            runBootstrapPrimaryRowFetch(wu, null);
                         }
                     }
                 } catch (e) {
@@ -1508,10 +1537,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         setQueueSummaries(null);
                         setQueueSummariesError(e instanceof Error ? e.message : "Failed to load queues");
                         setQueueSummariesRoute(route);
+                        runBootstrapPrimaryRowFetch(wu, null);
                     }
                 }
 
-                if (!rowKickInvoked && !cancelled) {
+                if (!bootstrapPrimaryRowFetchScheduledRef.current && !cancelled) {
+                    runBootstrapPrimaryRowFetch(wu, null);
+                }
+
+                if (!cancelled) {
                     requestWorkUnitDeferredSupplement();
                 }
 
@@ -1566,6 +1600,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     setOpportunityQueueRowActions(null);
                     setOpportunityQueueRowResolved(null);
                     setEnrollmentRightRailResolved(null);
+                    setWuQueueLaneAuthorityReady(true);
                 }
             } finally {
                 if (!cancelled) setLoading(false);
@@ -1617,13 +1652,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
         return () => window.removeEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
     }, [fetchQueueItems, fetchQueueSummaries, selectedQueueKey, viewScopeFingerprint, workUnitId]);
 
-    /** Row fetch starts once the work-unit shell and selection exist; does not wait on summaries (counts come from summaries; rows always `omit_total_count`). */
+    /** Row fetch after bootstrap authority — tab/bucket handlers may force; bootstrap owns first visible load (PERF-C-02). */
     useEffect(() => {
         if (!workUnitId || !selectedQueueKey || loading || !workUnit) return;
+        if (!wuQueueLaneAuthorityReady) return;
+        if (suppressQueueFetchEffectOnceRef.current) {
+            suppressQueueFetchEffectOnceRef.current = false;
+            return;
+        }
         const force = skipNextQueueFetchEffectRef.current;
         if (force) skipNextQueueFetchEffectRef.current = false;
         void fetchQueueItems(workUnitId, selectedQueueKey, null, force ? { force: true } : undefined);
-    }, [fetchQueueItems, selectedQueueKey, workUnitId, workUnit, loading, laneUnmappedOnly, selectedSiteId]);
+    }, [fetchQueueItems, selectedQueueKey, workUnitId, workUnit, loading, laneUnmappedOnly, selectedSiteId, wuQueueLaneAuthorityReady]);
 
     useEffect(() => {
         if (typeof window === "undefined") return;
@@ -2292,6 +2332,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             String(queueItems.queue.key ?? "") === String(selectedQueueKey)
         ) {
             queueRowsBufferRef.current = liveVmItems.slice();
+            queueRowsBufferWorkUnitIdRef.current = workUnitId;
         }
 
         const hasBufferedRows = queueRowsBufferRef.current.length > 0;
@@ -3023,15 +3064,20 @@ export default function AdminV2OpportunityWorkUnitPage() {
     /** Queue-first reveal — KPI strip and automation footer defer until the lane is useful. */
     const workUnitQueueRevealReady = useMemo(() => {
         if (!workUnitShellReady) return false;
+        if (!wuQueueLaneAuthorityReady) return false;
         if (queueSummaries === null && !queueSummariesError) return false;
         if (queueSummariesError && !queueSummaries) return true;
         if (!queueSummaries) return false;
-        if (queueRowsBufferRef.current.length > 0) return true;
+        const bufferValid =
+            queueRowsBufferWorkUnitIdRef.current === workUnitId && queueRowsBufferRef.current.length > 0;
+        if (bufferValid) return true;
         if (queueItems !== null && !queueItemsLoading) return true;
         if (queueItemsError) return true;
         return queueSummaries.length === 0;
     }, [
         workUnitShellReady,
+        workUnitId,
+        wuQueueLaneAuthorityReady,
         queueSummaries,
         queueSummariesError,
         queueItems,

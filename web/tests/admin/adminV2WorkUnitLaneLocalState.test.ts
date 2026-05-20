@@ -32,3 +32,34 @@ describe("work-unit lane local state (no URL churn)", () => {
         expect(handler).not.toContain("scheduleWorkUnitLaneUrlSync");
     });
 });
+
+describe("work-unit queue stability (PERF-C-01 / C-02)", () => {
+    it("clears queue lane state on navigation even when session shell seeds", () => {
+        expect(pageSource).toContain("setWuQueueLaneAuthorityReady(false)");
+        expect(pageSource).toContain("setQueueSummaries(null)");
+        expect(pageSource).toContain("queueRowsBufferWorkUnitIdRef");
+        expect(pageSource).toMatch(/seededWorkUnitShellRef\.current = true[\s\S]*?setWorkUnit/);
+    });
+
+    it("uses single bootstrap primary row fetch authority", () => {
+        expect(pageSource).toContain("resolveBootstrapPrimaryQueueKey");
+        expect(pageSource).toContain("runBootstrapPrimaryRowFetch");
+        expect(pageSource).toContain("suppressQueueFetchEffectOnceRef");
+        expect(pageSource).not.toMatch(
+            /qFromUrlEffective[\s\S]{0,400}void fetchQueueItems\(workUnitId, qFromUrlEffective/,
+        );
+        expect(pageSource).not.toMatch(
+            /navRowKey[\s\S]{0,200}void fetchQueueItems\(workUnitId, navRowKey/,
+        );
+    });
+
+    it("does not reveal queue from stale row buffer on another work unit", () => {
+        expect(pageSource).toMatch(
+            /queueRowsBufferWorkUnitIdRef\.current === workUnitId/,
+        );
+    });
+
+    it("clears wrong-lane queue items when starting a foreground row fetch", () => {
+        expect(pageSource).toMatch(/pk != null && pk !== queueKey\) return null/);
+    });
+});
