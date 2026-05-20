@@ -102,7 +102,9 @@ describe("OperationalAttentionHeaderStrip", () => {
             />,
         );
         expect(html).toContain("What BOS has to say");
-        expect(html).toContain('data-drawer-slot="alloy_linked_actions_placeholder"');
+        expect(html).not.toContain("Future:");
+        expect(html).not.toContain('data-drawer-slot="alloy_linked_actions_placeholder"');
+        expect(html).toContain('data-operational-attention-canonical="chrome"');
         expect(html).not.toContain("Operational read");
         expect(html).not.toContain("data-drawer-slot=\"operational_summary_narrative\"");
         expect(html).toContain("Needs attention:");
@@ -122,6 +124,22 @@ describe("OperationalAttentionHeaderStrip", () => {
         expect(html).toContain("Enhance draft");
         expect(html).not.toContain("Test AI enrichment");
         expect(html).toContain('data-drawer-slot="enhance_draft_action"');
+    });
+
+    it("panel variant remains available for non-drawer embeds without future placeholder", () => {
+        const html = renderToStaticMarkup(
+            <OperationalAttentionHeaderStrip
+                variant="panel"
+                overviewData={{
+                    _operational_attention: minimalAttention(),
+                    _operational_attention_error: null,
+                    _attention_suggestion: minimalSuggestion(),
+                }}
+            />,
+        );
+        expect(html).not.toContain("Future:");
+        expect(html).not.toContain('data-drawer-slot="alloy_linked_actions_placeholder"');
+        expect(html).not.toContain('data-operational-attention-canonical="chrome"');
     });
 
     it("uses deterministic copy when suggestion is absent", () => {

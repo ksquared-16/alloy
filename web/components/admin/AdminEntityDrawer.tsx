@@ -11117,18 +11117,21 @@ export default function AdminEntityDrawer() {
 
                                                                 </div>
                                                                 <div className={`${oppInqInnerCard} flex min-w-0 flex-col`}>
-                                                                    <div className={tinyLabel}>What BOS has to say</div>
                                                                     {opportunityDrawerSecondaryReady &&
                                                                     overviewData &&
-                                                                    !(overviewData as { _create?: boolean })._create ? (
-                                                                        <div className="mt-1 min-h-0 adminv2-ws-soft-content-reveal">
-                                                                            <OperationalAttentionHeaderStrip
-                                                                                key={`attn-summary-${String((overviewData as { id?: string }).id ?? "")}`}
-                                                                                variant="panel"
-                                                                                suppressSectionBrandLabel
-                                                                                overviewData={overviewData as Record<string, unknown>}
-                                                                            />
-                                                                        </div>
+                                                                    !(overviewData as { _create?: boolean })._create &&
+                                                                    (overviewData as Record<string, unknown>)._operational_attention !=
+                                                                        null &&
+                                                                    (overviewData as Record<string, unknown>)._operational_attention !==
+                                                                        undefined ? (
+                                                                        <p
+                                                                            className="text-[10px] leading-snug text-alloy-midnight/55"
+                                                                            data-drawer-slot="operational_attention_reference"
+                                                                        >
+                                                                            Operational attention is summarized in the drawer
+                                                                            header above. Drafts and follow-ups below do not send
+                                                                            automatically.
+                                                                        </p>
                                                                     ) : null}
                                                                     {drawer.id && drawer.id !== "new" && opportunityDrawerSecondaryReady ? (
                                                                         <div className="mt-2 border-t border-alloy-stone/10 pt-2 adminv2-ws-soft-content-reveal">

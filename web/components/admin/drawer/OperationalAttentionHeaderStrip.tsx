@@ -62,6 +62,7 @@ export default function OperationalAttentionHeaderStrip({
                         : "mt-2 rounded-lg border border-amber-200/90 bg-amber-50/50 px-2.5 py-1.5 text-[12px] text-alloy-midnight/80"
                 }
                 data-drawer-slot="operational_attention_header"
+                {...(chrome ? { "data-operational-attention-canonical": "chrome" as const } : {})}
             >
                 <span className="font-medium text-alloy-midnight/90">Operational summary unavailable · </span>
                 {err.message}
@@ -87,6 +88,7 @@ export default function OperationalAttentionHeaderStrip({
                         : "mt-2 rounded-lg border border-alloy-stone/22 bg-alloy-stone/[0.06] px-2.5 py-1.5 text-[12px] text-alloy-midnight/78"
                 }
                 data-drawer-slot="operational_attention_header"
+                {...(chrome ? { "data-operational-attention-canonical": "chrome" as const } : {})}
             >
                 <span className="font-medium text-alloy-midnight/85">Activity signal · </span>
                 {line}
@@ -117,16 +119,12 @@ export default function OperationalAttentionHeaderStrip({
         const draftBody = suggestion.suggested_content?.body?.trim();
         const frame = chrome ? premiumChromeFrame : premiumPanelFrame;
 
-        /*
-         * Future: `suggestion.next_action.action_family` can map to existing configurable queue / record actions
-         * (same catalog as lane quick actions). No autonomous execution, send, or apply in this phase —
-         * placeholder below reserves UI space only.
-         */
         return (
             <div
                 className={`${frame} relative overflow-visible`}
                 data-drawer-slot="operational_attention_header"
                 data-attention-surface="suggestion_primary"
+                {...(chrome ? { "data-operational-attention-canonical": "chrome" as const } : {})}
             >
                 <div className="flex items-start gap-1">
                     <Sparkles
@@ -200,15 +198,6 @@ export default function OperationalAttentionHeaderStrip({
                             </div>
                         ) : null}
 
-                        <div
-                            className="mt-0.5 rounded border border-dashed border-alloy-stone/22 bg-alloy-stone/[0.02] px-1 py-0.5 text-[8px] leading-tight text-alloy-midnight/42"
-                            data-drawer-slot="alloy_linked_actions_placeholder"
-                            aria-label="Linked actions reserved for a future release"
-                        >
-                            Future: actions from <code className="text-[8px]">next_action.action_family</code> — not
-                            wired; no send/apply.
-                        </div>
-
                         <OperationalAttentionEnhanceDraft suggestion={suggestion} />
 
                         {otherReasons.length > 0 ? (
@@ -244,6 +233,7 @@ export default function OperationalAttentionHeaderStrip({
             <div
                 className="rounded-md border border-[color-mix(in_srgb,rgb(188,67,0)_30%,var(--d-border, rgba(39,63,82,0.14)))] border-l-[3px] border-l-[rgb(188,67,0)] bg-[color-mix(in_srgb,rgb(255,244,235)_55%,white)] px-2 py-1.5 text-[11px] leading-snug shadow-[inset_3px_0_0_color-mix(in_srgb,var(--d-admin-amber, #c95a00)_32%,transparent)]"
                 data-drawer-slot="operational_attention_header"
+                data-operational-attention-canonical="chrome"
             >
                 <div className="font-semibold text-[rgb(72,32,0)]">{headlinePrimaryOnly}</div>
                 {otherReasons.length > 0 ? (

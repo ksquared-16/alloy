@@ -12,6 +12,18 @@ const shellPath = join(
     "../../app/adminV2/components/aiCommandSurface/AICommandSurfaceShell.tsx"
 );
 
+describe("AdminEntityDrawer operational attention hierarchy (Loop 2)", () => {
+    it("renders one canonical attention strip in chrome only (no inquiry panel duplicate)", () => {
+        const src = readFileSync(drawerPath, "utf8");
+        const stripUsages = src.match(/<OperationalAttentionHeaderStrip/g) ?? [];
+        expect(stripUsages.length).toBe(1);
+        expect(src).toContain('variant="chrome"');
+        expect(src).not.toMatch(/<OperationalAttentionHeaderStrip[\s\S]*?variant="panel"/);
+        expect(src).toContain('data-drawer-slot="operational_attention_reference"');
+        expect(src).not.toContain("What BOS has to say");
+    });
+});
+
 describe("AdminEntityDrawer BOS context contract (Loop 1)", () => {
     it("AdminEntityDrawer seeds GlobalAssistantContext for opportunities", () => {
         const src = readFileSync(drawerPath, "utf8");

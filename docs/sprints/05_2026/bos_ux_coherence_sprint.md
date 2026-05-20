@@ -894,14 +894,28 @@ cd web && npm run test -- \
 
 **Tests:** `tests/adminV2/activeOperationalContext.test.ts`, `tests/admin/adminEntityDrawerBosContext.contract.test.ts`, `globalAssistantContext.test.tsx` (equal helper).
 
-**GATE A:** Partial — Cards 1–2 done; Cards 3–6 not started.
+**GATE A:** Partial — Cards 1–4 done; Cards 5–6 not started.
+
+### Loop 2 — Cards 3–4 (2026-05-20)
+
+**Card 3 — Attention deduplication**
+
+- Removed second `OperationalAttentionHeaderStrip` (`variant="panel"`) from inquiry summary “What BOS has to say”.
+- Canonical surface: drawer title-stack `variant="chrome"` only (`data-operational-attention-canonical="chrome"`).
+- Inquiry summary: slim reference line `operational_attention_reference` when `_operational_attention` present; ops strip + activity unchanged below.
+
+**Card 4 — Prototype chrome removal**
+
+- Deleted dashed `alloy_linked_actions_placeholder` block and “Future:” copy from `OperationalAttentionHeaderStrip.tsx`.
+
+**Tests:** `operationalAttentionSuggestionUi.test.tsx` updated; `adminEntityDrawerBosContext.contract.test.ts` Loop 2 block.
 
 | Card | Status | PR / notes |
 |------|--------|------------|
 | 1 | ☑ | Drawer → `GlobalAssistantContext` |
 | 2 | ☑ | Active record chip + stale guard |
-| 3 | ☐ | |
-| 4 | ☐ | |
+| 3 | ☑ | Single chrome attention; inquiry reference only |
+| 4 | ☑ | No Future placeholder in attention strip |
 | 5 | ☐ | |
 | 6 | ☐ | |
 | 7 | ☐ | |
