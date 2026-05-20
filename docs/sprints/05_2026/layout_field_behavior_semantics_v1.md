@@ -38,9 +38,20 @@ Forms, public booking, workflow status-transition enforcement, inquiry_child/OCM
 | 0 | **Done** | Types, parser, `resolveEffectiveFieldBehavior`, unit tests |
 | 1 | **Done** | `PATCH …/opportunity-workflow-v1-field-placements` |
 | 2 | **Done** | Drawer GET effective `_field_policy_resolved` |
-| 3 | Pending | Opportunity PATCH enforcement |
-| 4 | Pending | Placement-aware layout integrity |
-| 5 | Pending | Layouts Settings UI |
+| 3 | **Done** | Opportunity PATCH enforcement |
+| 4 | **Done** | Placement-aware layout integrity |
+| 5 | **Done** | Layouts Settings UI |
+
+### Card 5 manual QA (Layouts → Opportunity)
+
+1. Set a supported custom field **Required when saving** on a section row; confirm **Layout behavior saved**.
+2. Reload Layouts (same section); confirm the select still shows **Required when saving**.
+3. Open an opportunity drawer; confirm the field shows a save-time required indicator (asterisk).
+4. Clear the field and save the drawer; confirm validation error.
+5. Set **Optional** on the layout for a definition-required field; confirm drawer/save no longer require it.
+6. Set **Read-only** on the layout; confirm drawer blocks PATCH for that field.
+7. Confirm **status**, **pricing**, and **relationship** fields show locked layout behavior copy, not broken selects.
+8. Confirm section Up/Down/Remove/Add still works unchanged.
 | 6 | Pending | Fields Settings UI de-emphasis |
 | 7 | Pending | Doctrine updates |
 | 8 | Pending | UI density polish |

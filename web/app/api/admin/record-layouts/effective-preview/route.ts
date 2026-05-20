@@ -148,5 +148,7 @@ export async function GET(request: NextRequest) {
         sections: preview.sections,
         editor_sections,
         overview_hidden_sections: cfg.overview_hidden_sections ?? [],
+        /** Card 5 — layout placement behavior for Settings field rows (read-only). */
+        field_placements_v1: cfg.field_placements_v1 ?? [],
     });
 }

@@ -13,6 +13,13 @@ import {
 import { operatorFieldDisplayLabel, type OperatorFieldRow } from "@/lib/fields/fieldSettingsOperatorUi";
 import { normalizeSortOrdersInSection } from "@/lib/fields/fieldPlacementBatch";
 import type { LayoutCompositionCapabilities } from "@/lib/adminV2/layouts/layoutCompositionCapabilities";
+import {
+    buildLayoutFieldBehaviorView,
+    layoutFieldBehaviorControlsEnabled,
+} from "@/lib/adminV2/layouts/layoutFieldBehaviorUi";
+import LayoutFieldBehaviorControls from "@/components/adminV2/settings/LayoutFieldBehaviorControls";
+import type { FieldPlacementV1 } from "@/lib/fields/fieldPlacementV1";
+import type { RecordLayoutConfigJson } from "@/lib/recordChrome/types";
 
 type FieldRow = {
     id: string;
@@ -23,6 +30,9 @@ type FieldRow = {
     is_system: boolean;
     is_active?: boolean;
     is_visible_in_drawer?: boolean;
+    is_required?: boolean;
+    requirement_policy?: unknown | null;
+    interaction_policy?: unknown | null;
 };
 
 export type LayoutSectionDetail = {
@@ -78,8 +88,16 @@ export default function LayoutSectionFieldsPanel({
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
     const [saveOk, setSaveOk] = useState(false);
+    const [layoutPlacements, setLayoutPlacements] = useState<FieldPlacementV1[] | undefined>(undefined);
 
     const fieldsAssignable = section ? drawerSectionFieldsAssignable(section.kind) : false;
+    const showLayoutBehavior = layoutFieldBehaviorControlsEnabled({
+        entityType,
+        workflowV1Configured,
+        canMutate,
+        isReadOnly: capabilities.isReadOnly,
+        canAssignFields: capabilities.canAssignFields,
+    });
     const canEditPlacement =
         canMutate && capabilities.canAssignFields && fieldsAssignable && !capabilities.isReadOnly;
 
@@ -126,9 +144,33 @@ export default function LayoutSectionFieldsPanel({
         }
     }, [entityType]);
 
+    const loadLayoutPlacements = useCallback(async () => {
+        if (entityType !== "opportunity" || !workflowV1Configured) {
+            setLayoutPlacements(undefined);
+            return;
+        }
+        try {
+            const res = await fetch("/api/admin/record-layouts/effective-preview?entity_type=opportunity", {
+                cache: "no-store",
+            });
+            const json = (await res.json().catch(() => ({}))) as {
+                field_placements_v1?: FieldPlacementV1[];
+                error?: string;
+            };
+            if (!res.ok) return;
+            setLayoutPlacements(json.field_placements_v1 ?? []);
+        } catch {
+            setLayoutPlacements(undefined);
+        }
+    }, [entityType, workflowV1Configured]);
+
     useEffect(() => {
         void loadFields();
     }, [loadFields]);
+
+    useEffect(() => {
+        void loadLayoutPlacements();
+    }, [loadLayoutPlacements]);
 
     useEffect(() => {
         if (section) {
@@ -157,6 +199,11 @@ export default function LayoutSectionFieldsPanel({
         setSaveError(null);
         setPickFieldId("");
     }, [sectionFields, section?.section_key]);
+
+    const layoutConfigForBehavior = useMemo((): RecordLayoutConfigJson | null => {
+        if (!showLayoutBehavior) return null;
+        return { field_placements_v1: layoutPlacements ?? [] };
+    }, [showLayoutBehavior, layoutPlacements]);
 
     const dirty = useMemo(() => {
         return (
@@ -333,47 +380,65 @@ export default function LayoutSectionFieldsPanel({
             ) : null}
 
             <ol className="mt-2 space-y-1.5">
-                {localRows.map((row, i) => (
-                    <li
-                        key={row.id}
-                        className="flex flex-wrap items-center gap-2 rounded border border-admin-border/50 px-2 py-1.5 text-xs"
-                    >
-                        <span className="w-5 text-[10px] text-alloy-midnight/40">{i + 1}</span>
-                        <span className="min-w-0 flex-1 font-medium text-alloy-midnight">
-                            {operatorFieldDisplayLabel(entityType, row as OperatorFieldRow)}
-                        </span>
-                        {canEditPlacement ? (
-                            <span className="flex gap-0.5">
-                                <button
-                                    type="button"
-                                    className="rounded border border-admin-border px-1.5 py-0.5 text-[10px] disabled:opacity-40"
-                                    disabled={i === 0 || saving}
-                                    onClick={() => setLocalRows((prev) => move(prev, i, -1))}
-                                >
-                                    Up
-                                </button>
-                                <button
-                                    type="button"
-                                    className="rounded border border-admin-border px-1.5 py-0.5 text-[10px] disabled:opacity-40"
-                                    disabled={i >= localRows.length - 1 || saving}
-                                    onClick={() => setLocalRows((prev) => move(prev, i, 1))}
-                                >
-                                    Down
-                                </button>
-                                <button
-                                    type="button"
-                                    className="rounded border border-admin-border px-1.5 py-0.5 text-[10px] text-alloy-midnight/55 hover:bg-alloy-stone/10"
-                                    disabled={saving}
-                                    onClick={() => removeFromSection(row.id)}
-                                >
-                                    Remove
-                                </button>
-                            </span>
-                        ) : (
-                            <span className="text-[10px] text-alloy-midnight/45">{row.field_key}</span>
-                        )}
-                    </li>
-                ))}
+                {localRows.map((row, i) => {
+                    const displayLabel = operatorFieldDisplayLabel(entityType, row as OperatorFieldRow);
+                    const behaviorView = showLayoutBehavior
+                        ? buildLayoutFieldBehaviorView(row, layoutConfigForBehavior)
+                        : null;
+                    return (
+                        <li
+                            key={row.id}
+                            className="rounded border border-admin-border/50 px-2 py-1.5 text-xs"
+                        >
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className="w-5 text-[10px] text-alloy-midnight/40">{i + 1}</span>
+                                <span className="min-w-0 flex-1 font-medium text-alloy-midnight">{displayLabel}</span>
+                                {canEditPlacement ? (
+                                    <span className="flex gap-0.5">
+                                        <button
+                                            type="button"
+                                            className="rounded border border-admin-border px-1.5 py-0.5 text-[10px] disabled:opacity-40"
+                                            disabled={i === 0 || saving}
+                                            onClick={() => setLocalRows((prev) => move(prev, i, -1))}
+                                        >
+                                            Up
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="rounded border border-admin-border px-1.5 py-0.5 text-[10px] disabled:opacity-40"
+                                            disabled={i >= localRows.length - 1 || saving}
+                                            onClick={() => setLocalRows((prev) => move(prev, i, 1))}
+                                        >
+                                            Down
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="rounded border border-admin-border px-1.5 py-0.5 text-[10px] text-alloy-midnight/55 hover:bg-alloy-stone/10"
+                                            disabled={saving}
+                                            onClick={() => removeFromSection(row.id)}
+                                        >
+                                            Remove
+                                        </button>
+                                    </span>
+                                ) : (
+                                    <span className="text-[10px] text-alloy-midnight/45">{row.field_key}</span>
+                                )}
+                            </div>
+                            {behaviorView ? (
+                                <LayoutFieldBehaviorControls
+                                    fieldKey={row.field_key}
+                                    displayLabel={displayLabel}
+                                    view={behaviorView}
+                                    disabled={!canMutate}
+                                    onPlacementsSaved={(placements) => {
+                                        setLayoutPlacements(placements);
+                                        onSaved?.();
+                                    }}
+                                />
+                            ) : null}
+                        </li>
+                    );
+                })}
             </ol>
 
             {canEditPlacement && fieldsAvailableToAdd.length > 0 ? (
@@ -435,13 +500,23 @@ export default function LayoutSectionFieldsPanel({
             {saveError ? <p className="mt-1 text-[10px] text-red-600">{saveError}</p> : null}
             {saveOk ? <p className="mt-1 text-[10px] text-alloy-pine">Saved.</p> : null}
 
-            <p className="mt-3 text-[10px] text-alloy-midnight/45">
-                To create new fields or edit policies, use{" "}
-                <Link href="/adminV2/settings/fields" className="font-medium text-alloy-pine hover:underline">
-                    Fields
-                </Link>
-                .
-            </p>
+            {showLayoutBehavior ? (
+                <p className="mt-3 text-[10px] text-alloy-midnight/45">
+                    Required and editability on this layout apply to the opportunity drawer only. Global field rules are on{" "}
+                    <Link href="/adminV2/settings/fields" className="font-medium text-alloy-pine hover:underline">
+                        Fields
+                    </Link>
+                    .
+                </p>
+            ) : (
+                <p className="mt-3 text-[10px] text-alloy-midnight/45">
+                    To create new fields or edit policies, use{" "}
+                    <Link href="/adminV2/settings/fields" className="font-medium text-alloy-pine hover:underline">
+                        Fields
+                    </Link>
+                    .
+                </p>
+            )}
         </section>
     );
 }
