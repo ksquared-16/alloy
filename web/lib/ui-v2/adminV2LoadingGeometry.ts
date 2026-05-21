@@ -44,7 +44,7 @@ export const ADMINV2_DRAWER_OPPORTUNITY_TITLE_RAIL_MIN_H = "2.75rem";
 /** Drawer panel opens immediately on `openDrawer` — geometry locked before bootstrap returns. */
 export const ADMINV2_DRAWER_SHELL_INSTANT_ATTR = "data-adminv2-drawer-shell-instant";
 
-/** Max wait for `surface=full` before revealing bootstrap shell (one coordinated paint). */
+/** Max wait for `surface=drawer_primary` before revealing bootstrap shell (one coordinated paint). */
 export const ADMINV2_OPPORTUNITY_DRAWER_REVEAL_COORD_MAX_MS = 1400;
 
 export function adminV2DeptPairedOperPanelReserveStyle(): { minHeight: string } {

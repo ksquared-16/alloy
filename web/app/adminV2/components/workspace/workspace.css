@@ -94,6 +94,23 @@
   --ws-dept-primary-queue-list-max-height: min(calc(44vh * 1.15), calc((100vh - 18.5rem) * 1.15));
 }
 
+/* Work-unit route loading: subtle enrollment/dept pine accent (quieter than department cold shell). */
+[data-adminv2-wu-route-loading="true"].adminv2-ws-work-unit-route-loading .adminv2-ws-dept-v2-primary-column {
+  border-left: 3px solid color-mix(in srgb, var(--d-pine) 22%, var(--d-border));
+  padding-left: 10px;
+  margin-left: -2px;
+}
+
+[data-adminv2-wu-route-loading="true"].adminv2-ws-work-unit-route-loading
+  .adminv2-ws-dept-throughput-panel.adminv2-ws-dept-qsec--primary {
+  border-top: 2px solid color-mix(in srgb, var(--d-pine) 18%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--d-pine) 5%, #ffffff) 0%,
+    #ffffff 28%
+  );
+}
+
 /* Paired operational panels — shared grid + rhythm (department throughput | needs attention; reusable elsewhere) */
 .adminv2-ws-paired-oper-grid {
   display: grid;

@@ -141,7 +141,14 @@ describe("Drawer opportunity header grouped loading", () => {
         expect(src).toContain("QueueCardSkeleton");
         expect(src).toContain("WorkUnitOperLaneStatusChip");
         expect(src).toContain("adminv2-ws-dept-qsec");
+        expect(src).toContain("adminv2-ws-work-unit-route-loading");
         expect(src).not.toContain("WorkUnitOperLaneSpinner");
+    });
+
+    it("WU route loading applies subtle pine accent in workspace css", () => {
+        const css = read("app/adminV2/components/workspace/workspace.css");
+        expect(css).toContain("adminv2-ws-work-unit-route-loading");
+        expect(css).toMatch(/border-left:[\s\S]*?var\(--d-pine\)/);
     });
 
     it("uses section-shaped bootstrap body and title-rail action reserves when queue preview is active", () => {
@@ -262,19 +269,42 @@ describe("Drawer operational bootstrap (Cards 4–7)", () => {
         expect(src).toContain("adminV2DrawerBootstrapEnabled()");
     });
 
-    it("coordinates overview reveal with full hydrate before paint", () => {
+    it("coordinates overview reveal with drawer_primary before paint", () => {
         const src = read("components/admin/AdminEntityDrawer.tsx");
         expect(src).toContain("opportunityDrawerCoordinatedRevealReady");
         expect(src).toContain("opportunityDrawerPrimaryLoadingVisible");
         expect(src).toContain("ADMINV2_OPPORTUNITY_DRAWER_REVEAL_COORD_MAX_MS");
+        expect(src).toContain("runOpportunityPrimaryHydrate");
+        expect(src).toContain("drawer_primary");
+        expect(src).toContain("opportunityPrimaryHydrateApplied");
         expect(src).toMatch(
             /opportunityDrawerOverviewRevealReady = opportunityDrawerCoordinatedRevealReady/,
         );
         expect(src).toMatch(
-            /opportunityRecordHydrationPending[\s\S]*runOpportunityFullHydrate/,
+            /opportunityRecordHydrationPending[\s\S]*runOpportunityPrimaryHydrate/,
         );
+        expect(src).toMatch(
+            /scheduleAdminV2BackgroundWork[\s\S]*runOpportunityBackgroundFullHydrate/,
+        );
+    });
+
+    it("keeps inquiry drawer header calm until reveal (no queue/oper subtext)", () => {
+        const src = read("components/admin/AdminEntityDrawer.tsx");
+        expect(src).toContain("opportunityDrawerHeaderCalmLoading");
+        expect(src).toMatch(/headerSubtitleForDrawer = opportunityDrawerHeaderCalmLoading \? null/);
+        expect(src).toMatch(/headerSignalsForDrawer = opportunityDrawerHeaderCalmLoading \? null/);
         expect(src).not.toMatch(
-            /scheduleAdminV2BackgroundWork[\s\S]*runOpportunityFullHydrate/,
+            /opportunityDrawerHeaderCalmLoading[\s\S]*opportunityDrawerPreviewSubtitle/,
+        );
+    });
+
+    it("defers postDrawerVisible enrichment until overview reveal on bootstrap path", () => {
+        const src = read("components/admin/AdminEntityDrawer.tsx");
+        expect(src).toMatch(
+            /adminV2DrawerBootstrapEnabled\(\)[\s\S]*!opportunityDrawerBootstrapLegacy[\s\S]*return;/,
+        );
+        expect(src).toMatch(
+            /opportunityDrawerOverviewRevealReady[\s\S]*setPostDrawerVisibleKey/,
         );
     });
 
