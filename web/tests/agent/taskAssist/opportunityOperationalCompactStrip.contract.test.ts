@@ -75,6 +75,7 @@ describe("OpportunityOperationalCompactStrip", () => {
         expect(src).toContain("buildOpportunityOperationalContext");
         expect(src).toContain("orchestratorHandoffSeedCommand");
         expect(src).toContain("setAssistantContext");
+        expect(src).toContain("autoSubmitSeedCommand: true");
         expect(src).not.toContain("Ask AI");
         expect(src).not.toContain("Chat with AI");
     });

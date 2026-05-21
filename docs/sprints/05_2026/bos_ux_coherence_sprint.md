@@ -1022,6 +1022,20 @@ cd web && npm run test -- tests/adminV2/activeOperationalContext.test.ts \
 
 **Files:** `OpportunityOperationalCompactStrip.tsx`, `opportunityOperationalCompactStrip.contract.test.ts`
 
+### Gate A UX fix — auto-run handoff + context boundary + drawer copy (2026-05-20)
+
+**Issues (manual review):** Handoff required a second Ask click; prior record thread merged visually with new context; noisy inquiry summary sentence.
+
+**Fixes:**
+
+1. **Auto-run handoff** — `autoSubmitSeedCommand` on `AdminV2FocusCommandBarDetail`; drawer handoff sets it; `AICommandSurfaceShell` runs `runSubmittedCommand(seed)` without prefilling Ask. General `focusCommandBar` unchanged.
+2. **Context boundary** — `operationalContextSwitchNoticeText` → “Switched active record to {label}”; `noticeRole: context_boundary` on switch notice with thread divider styling; stale cards still blocked.
+3. **Drawer copy** — Removed “Operational attention is summarized in the drawer header above…” from inquiry summary.
+
+**V1.5 deferred:** Full per-record thread history / collapse-on-switch persistence.
+
+**Files:** `adminV2CommandBarEvents.ts`, `AICommandSurfaceShell.tsx`, `CommandSurfaceThread.tsx`, `commandSurfaceThreadTypes.ts`, `operationalContextSwitchNotice.ts`, `OpportunityOperationalCompactStrip.tsx`, `AdminEntityDrawer.tsx`, tests.
+
 | Card | Status | PR / notes |
 |------|--------|------------|
 | 1 | ☑ | Drawer → `GlobalAssistantContext` |

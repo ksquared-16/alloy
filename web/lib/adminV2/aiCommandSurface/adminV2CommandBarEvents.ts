@@ -8,4 +8,9 @@ export type AdminV2FocusCommandBarDetail = {
     seedCommand?: string;
     /** Expand the thread panel when focusing so prior Assist turns stay visible. */
     expandThread?: boolean;
+    /**
+     * When true with `seedCommand`, submit the seed to the Orchestrator immediately.
+     * Only for explicit operator CTAs (e.g. drawer BOS handoff) — not general focus events.
+     */
+    autoSubmitSeedCommand?: boolean;
 };

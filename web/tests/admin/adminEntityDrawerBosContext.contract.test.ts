@@ -19,7 +19,7 @@ describe("AdminEntityDrawer operational attention hierarchy (Loop 2)", () => {
         expect(stripUsages.length).toBe(1);
         expect(src).toContain('variant="chrome"');
         expect(src).not.toMatch(/<OperationalAttentionHeaderStrip[\s\S]*?variant="panel"/);
-        expect(src).toContain('data-drawer-slot="operational_attention_reference"');
+        expect(src).not.toContain("Operational attention is summarized in the drawer");
         expect(src).not.toContain("What BOS has to say");
     });
 });
@@ -44,6 +44,9 @@ describe("AdminEntityDrawer BOS context contract (Loop 1)", () => {
         const chipSrc = readFileSync(chipPath, "utf8");
         expect(shellSrc).toContain("OperationalActiveRecordChip");
         expect(shellSrc).toContain("operationalContextSwitchNoticeText");
+        expect(shellSrc).toContain("noticeRole: \"context_boundary\"");
+        expect(shellSrc).toContain("autoSubmitSeedCommand");
+        expect(shellSrc).toContain("runSubmittedCommandRef");
         expect(shellSrc).toContain("activeOperationalEntityId");
         expect(shellSrc).not.toContain("Context: {globalAssistant.currentContext.label}");
         expect(chipSrc).toContain("data-command-surface-active-record-chip");

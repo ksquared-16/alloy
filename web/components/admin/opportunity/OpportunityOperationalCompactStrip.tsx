@@ -148,6 +148,8 @@ export type OpportunityOperationalCompactStripProps = {
     entityLabel?: string | null;
     /** `inquiry_summary`: grouped Tasks / Reminders under inquiry summary column. */
     layout?: OpportunityOperationalStripLayout;
+    /** When false, defers task-assist operational fetches until summary column is visible. */
+    fetchEnabled?: boolean;
 };
 
 const GROUP_LABEL =
@@ -158,6 +160,7 @@ export default function OpportunityOperationalCompactStrip({
     overviewData = null,
     entityLabel = null,
     layout = "header_chips",
+    fetchEnabled = true,
 }: OpportunityOperationalCompactStripProps) {
     const v11 = isTaskAssistV1UiEnabled();
     const adminDrawer = useAdminDrawerOptional();
@@ -172,7 +175,7 @@ export default function OpportunityOperationalCompactStrip({
     const sendChipRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
     const load = useCallback(async () => {
-        if (!v11 || !opportunityId) return;
+        if (!fetchEnabled || !v11 || !opportunityId) return;
         setLoading(true);
         setError(null);
         try {
@@ -204,7 +207,7 @@ export default function OpportunityOperationalCompactStrip({
         } finally {
             setLoading(false);
         }
-    }, [opportunityId, v11]);
+    }, [fetchEnabled, opportunityId, v11]);
 
     const openTasks = useMemo(() => tasks.filter((t) => t.status === "open"), [tasks]);
     const stripSends = useMemo(
@@ -266,8 +269,15 @@ export default function OpportunityOperationalCompactStrip({
     }, [popoverTask, opportunityId, entityLabel]);
 
     useEffect(() => {
+        if (!fetchEnabled) {
+            setTasks([]);
+            setScheduledSends([]);
+            setLoading(false);
+            setError(null);
+            return;
+        }
         void load();
-    }, [load]);
+    }, [fetchEnabled, load]);
 
     useEffect(() => {
         const onRefresh = (ev: Event) => {
@@ -329,6 +339,7 @@ export default function OpportunityOperationalCompactStrip({
             expandThread: true,
             seedCommand: handoffSeedCommand,
             preferMode: "task_assist",
+            autoSubmitSeedCommand: true,
         });
     }, [globalAssistant, opportunityId, entityLabel, overviewData, handoffSeedCommand]);
 

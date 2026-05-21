@@ -186,12 +186,25 @@ export default function CommandSurfaceThread({
                 switch (turn.kind) {
                     case "user_message":
                         return <UserBubble key={turn.id} text={turn.text} />;
-                    case "assistant_notice":
+                    case "assistant_notice": {
+                        const isContextBoundary = turn.noticeRole === "context_boundary";
                         return (
-                            <AssistantBubble key={turn.id}>
-                                <span data-command-surface-assistant-notice="true">{turn.text}</span>
-                            </AssistantBubble>
+                            <div
+                                key={turn.id}
+                                className={isContextBoundary ? "border-t border-alloy-stone/20 pt-2 mt-1" : undefined}
+                                data-command-surface-context-boundary={isContextBoundary ? "true" : undefined}
+                            >
+                                <AssistantBubble>
+                                    <span
+                                        data-command-surface-assistant-notice="true"
+                                        className={isContextBoundary ? "font-medium text-alloy-midnight/80" : undefined}
+                                    >
+                                        {turn.text}
+                                    </span>
+                                </AssistantBubble>
+                            </div>
                         );
+                    }
                     case "workflow_assist_read":
                         return (
                             <AssistantBubble key={turn.id}>

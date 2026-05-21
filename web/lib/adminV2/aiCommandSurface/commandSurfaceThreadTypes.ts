@@ -37,6 +37,8 @@ export type CommandSurfaceThreadTurn =
           id: string;
           kind: "assistant_notice";
           text: string;
+          /** Visual boundary when operational context changes (V1 — not full per-record threads). */
+          noticeRole?: "default" | "context_boundary";
           at: string;
       }
     | {
@@ -158,7 +160,7 @@ export type CommandSurfaceThreadState = {
 /** Turn payload without generated id/at — safe for appendThreadTurn. */
 export type CommandSurfaceThreadTurnInput =
     | { kind: "user_message"; text: string }
-    | { kind: "assistant_notice"; text: string }
+    | { kind: "assistant_notice"; text: string; noticeRole?: "default" | "context_boundary" }
     | {
           kind: "candidate_results";
           candidates: TaskAssistEntitySearchCandidate[];

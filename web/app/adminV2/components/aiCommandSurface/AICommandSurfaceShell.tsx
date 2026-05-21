@@ -628,6 +628,7 @@ export default function AICommandSurfaceShell() {
         appendThreadTurn(p, {
           kind: "assistant_notice",
           text: operationalContextSwitchNoticeText(ctx.label),
+          noticeRole: "context_boundary",
         })
       );
     }
@@ -1598,11 +1599,12 @@ export default function AICommandSurfaceShell() {
     };
   }, []);
 
-  const handleSubmit = useCallback(async () => {
-    const cmd = commandText.trim();
+  const runSubmittedCommandRef = useRef<(cmd: string) => Promise<void>>(async () => {});
+
+  const runSubmittedCommand = useCallback(
+    async (rawCmd: string) => {
+    const cmd = rawCmd.trim();
     if (!cmd || busy) return;
-    setCommandText("");
-    queueMicrotask(() => inputRef.current?.focus());
 
     setThread((prev) => appendThreadTurn(prev, { kind: "user_message", text: cmd }));
 
@@ -1681,17 +1683,30 @@ export default function AICommandSurfaceShell() {
       setBusy(false);
       queueMicrotask(() => inputRef.current?.focus());
     }
-  }, [
-    busy,
-    commandText,
-    globalAssistant,
-    runConfigLayoutAssistRoute,
-    runJobLayoutRoute,
-    proceedToTaskAssistAction,
-    runTaskAssistRoute,
-    runWorkflowAssistCreateRoute,
-    runWorkflowAssistRoute,
-  ]);
+  },
+    [
+      busy,
+      globalAssistant,
+      runConfigLayoutAssistRoute,
+      runJobLayoutRoute,
+      proceedToTaskAssistAction,
+      runTaskAssistRoute,
+      runWorkflowAssistCreateRoute,
+      runWorkflowAssistRoute,
+      setThread,
+    ]
+  );
+
+  useEffect(() => {
+    runSubmittedCommandRef.current = runSubmittedCommand;
+  }, [runSubmittedCommand]);
+
+  const handleSubmit = useCallback(async () => {
+    const cmd = commandText.trim();
+    if (!cmd || busy) return;
+    setCommandText("");
+    await runSubmittedCommand(cmd);
+  }, [busy, commandText, runSubmittedCommand]);
 
   useEffect(() => {
     const el = threadScrollRef.current;
@@ -1869,11 +1884,15 @@ export default function AICommandSurfaceShell() {
       if (detail.preferMode && globalAssistant) {
         globalAssistant.setCommandSurfaceMode(detail.preferMode);
       }
-      if (detail.seedCommand) {
-        setCommandText(detail.seedCommand);
-      }
       if (detail.expandThread) {
         setThreadExpanded(true);
+      }
+      const seed = detail.seedCommand?.trim() ?? "";
+      if (detail.autoSubmitSeedCommand && seed) {
+        setCommandText("");
+        void runSubmittedCommandRef.current(seed);
+      } else if (seed) {
+        setCommandText(seed);
       }
       inputRef.current?.focus();
     };

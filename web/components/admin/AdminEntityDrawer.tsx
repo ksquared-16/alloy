@@ -164,6 +164,7 @@ import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { prefetchWorkspaceChildcareInquiryOptionSets } from "@/lib/workspace/workspaceChildcareInquiryOptionSets";
 import { adminEntityRefetchShouldBlockDrawerShell } from "@/lib/ui-v2/adminV2EntityDrawerLoading";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
+import { useDrawerSectionIntersection } from "@/lib/admin/drawer/useDrawerSectionIntersection";
 import {
     clearOpportunityDrawerBackgroundFullSchedule,
     finishOpportunityDrawerHydrate,
@@ -1458,6 +1459,12 @@ export default function AdminEntityDrawer() {
         };
     }, [drawer.type, drawer.id]);
 
+    /** Abort row-intent comms prefetch slots — Communications HTTP runs only on Communications tab. */
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        invalidateCommunicationsDrawerPrefetch("opportunities", drawer.id);
+    }, [drawer.type, drawer.id]);
+
     const [oppQuoteIntakeOpen, setOppQuoteIntakeOpen] = useState(false);
     const [oppLaunchPacketOpen, setOppLaunchPacketOpen] = useState(false);
     const [oppDiscountOptions, setOppDiscountOptions] = useState<{ value: string; label: string }[] | null>(null);
@@ -2423,6 +2430,8 @@ export default function AdminEntityDrawer() {
 
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        const visKey = `${drawer.type}:${drawer.id}`;
+        if (postDrawerVisibleKey !== visKey) return;
         if (!data || typeof data !== "object") return;
         if (String((data as { id?: unknown }).id ?? "") !== String(drawer.id)) return;
         const s = String((data as { _record_surface?: string })._record_surface ?? "").trim();
@@ -2470,7 +2479,7 @@ export default function AdminEntityDrawer() {
         };
         // Depends on merged opportunity record (full + pending gate); refs prevent duplicate overlays.
         // eslint-disable-next-line react-hooks/exhaustive-deps -- gate on hydrated record blob, not unrelated drawer state.
-    }, [drawer.type, drawer.id, drawer.jobRecordSurface, data]);
+    }, [drawer.type, drawer.id, drawer.jobRecordSurface, data, postDrawerVisibleKey]);
 
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
@@ -2547,6 +2556,16 @@ export default function AdminEntityDrawer() {
             setOpportunityActivitySignalLoading(false);
             return;
         }
+        const bootstrapEnrichmentPath =
+            drawerShellVariant === "adminV2" &&
+            adminV2DrawerBootstrapEnabled() &&
+            !opportunityDrawerBootstrapLegacy &&
+            drawer.type === "opportunities";
+        if (bootstrapEnrichmentPath && !opportunityFullRecordHydrateApplied) {
+            setOpportunityActivitySignal(null);
+            setOpportunityActivitySignalLoading(false);
+            return;
+        }
         const visKey = `${drawer.type}:${drawer.id}`;
         if (postDrawerVisibleKey !== visKey) {
             setOpportunityActivitySignal(null);
@@ -2586,7 +2605,15 @@ export default function AdminEntityDrawer() {
                 window.clearTimeout(timeoutHandle);
             }
         };
-    }, [drawer.type, drawer.id, opportunityActivitySignalNonce, postDrawerVisibleKey]);
+    }, [
+        drawer.type,
+        drawer.id,
+        drawerShellVariant,
+        opportunityDrawerBootstrapLegacy,
+        opportunityActivitySignalNonce,
+        postDrawerVisibleKey,
+        opportunityFullRecordHydrateApplied,
+    ]);
 
     useEffect(() => {
         if (!drawer.type || !drawer.id || drawer.id === "new" || !canHardDeleteEntityType(drawer.type)) {
@@ -3428,7 +3455,23 @@ export default function AdminEntityDrawer() {
             setOpportunityResolvedHeaderLoading(true);
             return;
         }
-        if (opportunityDrawerBootstrapAppliedRef.current === drawer.id) {
+        if (
+            drawerShellVariant === "adminV2" &&
+            adminV2DrawerBootstrapEnabled() &&
+            !opportunityDrawerBootstrapLegacy &&
+            opportunityDrawerBootstrapAppliedRef.current === drawer.id &&
+            opportunityResolvedHeaderActions != null
+        ) {
+            return;
+        }
+        if (
+            drawerShellVariant === "adminV2" &&
+            adminV2DrawerBootstrapEnabled() &&
+            !opportunityDrawerBootstrapLegacy &&
+            opportunityDrawerBootstrapAppliedRef.current === drawer.id &&
+            !opportunityPrimaryHydrateApplied
+        ) {
+            setOpportunityResolvedHeaderLoading(false);
             return;
         }
         const ctxWu = (drawer.opportunityWorkspaceContext?.work_unit_id ?? "").trim();
@@ -3520,6 +3563,10 @@ export default function AdminEntityDrawer() {
         opportunityWorkUnitDepartmentId,
         data,
         timingEnabled,
+        drawerShellVariant,
+        opportunityDrawerBootstrapLegacy,
+        opportunityPrimaryHydrateApplied,
+        opportunityResolvedHeaderActions,
     ]);
 
     // Keep drawer state, but refresh record + header actions when actions mutate the opportunity.
@@ -6752,6 +6799,21 @@ export default function AdminEntityDrawer() {
         }
         setOpportunityTourBookingsId(drawer.id);
     }, [drawer.type, drawer.id, opportunityDrawerSecondaryReady]);
+
+    const opportunityInquirySummaryEnrichmentGate = opportunityDrawerSecondaryReady;
+    const { ref: tourSectionRef, intersecting: tourSectionVisible } = useDrawerSectionIntersection(
+        opportunityInquirySummaryEnrichmentGate,
+        "80px"
+    );
+    const { ref: inquirySummaryRightRef, intersecting: inquirySummaryRightVisible } = useDrawerSectionIntersection(
+        opportunityInquirySummaryEnrichmentGate,
+        "80px"
+    );
+    const tourBookingsFetchEnabled = opportunityInquirySummaryEnrichmentGate && tourSectionVisible;
+    const inquirySummaryFetchEnabled = opportunityInquirySummaryEnrichmentGate && inquirySummaryRightVisible;
+    const opportunityRegistrySectionActionsFetchEnabled =
+        opportunityDrawerOverviewRevealReady &&
+        (!opportunityDrawerBootstrapEnrichmentPath || opportunityFullRecordHydrateApplied);
 
     const opportunityDrawerTabsPending = false;
 
@@ -11676,6 +11738,7 @@ export default function AdminEntityDrawer() {
                                                                         <div className="mt-1.5 space-y-2">
                                                                             <div>
                                                                                 {drawer.id && drawer.id !== "new" && opportunityDrawerSecondaryReady ? (
+                                                                                    <div ref={tourSectionRef}>
                                                                                     <OpportunityInquiryTourDateBlock
                                                                                         opportunityId={drawer.id}
                                                                                         locationId={String((d.location_id as string | null | undefined) ?? "").trim()}
@@ -11685,7 +11748,9 @@ export default function AdminEntityDrawer() {
                                                                                         onRefresh={refetch}
                                                                                         labelClassName={tinyLabel}
                                                                                         readonlyFieldClassName={oppInqReadonlyField}
+                                                                                        fetchEnabled={tourBookingsFetchEnabled}
                                                                                     />
+                                                                                    </div>
                                                                                 ) : drawer.id && drawer.id !== "new" ? (
                                                                                     <div
                                                                                         className="min-h-[3.25rem] rounded-md border border-alloy-stone/10 bg-alloy-stone/[0.03]"
@@ -11714,22 +11779,6 @@ export default function AdminEntityDrawer() {
 
                                                                 </div>
                                                                 <div className={`${oppInqInnerCard} flex min-w-0 flex-col`}>
-                                                                    {opportunityDrawerSecondaryReady &&
-                                                                    overviewData &&
-                                                                    !(overviewData as { _create?: boolean })._create &&
-                                                                    (overviewData as Record<string, unknown>)._operational_attention !=
-                                                                        null &&
-                                                                    (overviewData as Record<string, unknown>)._operational_attention !==
-                                                                        undefined ? (
-                                                                        <p
-                                                                            className="text-[10px] leading-snug text-alloy-midnight/55"
-                                                                            data-drawer-slot="operational_attention_reference"
-                                                                        >
-                                                                            Operational attention is summarized in the drawer
-                                                                            header above. Drafts and follow-ups below do not send
-                                                                            automatically.
-                                                                        </p>
-                                                                    ) : null}
                                                                     {drawer.id && drawer.id !== "new" && opportunityDrawerSecondaryReady ? (
                                                                         <div className="mt-2 border-t border-alloy-stone/10 pt-2 adminv2-ws-soft-content-reveal">
                                                                             {isTaskAssistV1UiEnabled() ? (
