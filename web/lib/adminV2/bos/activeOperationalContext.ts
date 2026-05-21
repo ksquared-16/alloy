@@ -62,7 +62,7 @@ export function resolveOpportunityOperationalContextLabel(args: {
     const household =
         ident && typeof ident.household === "object" ?
             (ident.household as Record<string, unknown>)
-        :   null;
+            : null;
     const householdLabel =
         household && typeof household.label === "string" ? household.label.trim() : "";
     const customerName =
@@ -70,9 +70,9 @@ export function resolveOpportunityOperationalContextLabel(args: {
     const contactName =
         typeof d._primary_contact_name === "string" ?
             String(d._primary_contact_name).trim()
-        : typeof d._contact_name === "string" ?
-          String(d._contact_name).trim()
-        :   "";
+            : typeof d._contact_name === "string" ?
+                String(d._contact_name).trim()
+                : "";
     const nm = typeof d.name === "string" ? String(d.name).trim() : "";
 
     const fromRecord = householdLabel || customerName || contactName || nm;
@@ -119,8 +119,7 @@ export function isStaleOperationalProposalEntity(
     return card !== active;
 }
 
-export const STALE_OPERATIONAL_PROPOSAL_MESSAGE =
-    "This proposal is for a different record than the active operational context. Open that record or confirm the target again.";
+export { STALE_OPERATIONAL_PROPOSAL_MESSAGE } from "@/lib/adminV2/bos/bosGovernanceCopy";
 
 type AttentionSuggestionHandoff = {
     next_action?: { label?: string | null } | null;

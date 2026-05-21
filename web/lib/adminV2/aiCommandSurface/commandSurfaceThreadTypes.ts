@@ -19,7 +19,10 @@ import type { ConfigLayoutAssistTraceV1 } from "@/lib/agent/configLayoutAssist/c
 import type { WorkflowAssistSuggestionV1 } from "@/lib/agent/workflowAssist/workflowAssistProposalV1";
 import type { AIStatusBadge, ResponseKind } from "@/lib/adminV2/aiCommandSurface/aiCommandSurfaceModel";
 import type { BosCapabilityKey } from "@/lib/bos/bosCapability";
+import type { BosPolicyDenialPresentation } from "@/lib/adminV2/bos/bosGovernanceCopy";
 import type { BosProposalEnvelopeV1 } from "@/lib/bos/bosProposalEnvelope";
+
+export type CommandSurfaceNoticeRole = "default" | "context_boundary" | "routing";
 
 /** Optional BOS metadata on action cards — does not replace native payloads or `agent_key`. */
 export type CommandSurfaceCardBosMetadata = {
@@ -38,7 +41,13 @@ export type CommandSurfaceThreadTurn =
           kind: "assistant_notice";
           text: string;
           /** Visual boundary when operational context changes (V1 — not full per-record threads). */
-          noticeRole?: "default" | "context_boundary";
+          noticeRole?: CommandSurfaceNoticeRole;
+          at: string;
+      }
+    | {
+          id: string;
+          kind: "policy_denial";
+          denial: BosPolicyDenialPresentation;
           at: string;
       }
     | {
@@ -160,7 +169,8 @@ export type CommandSurfaceThreadState = {
 /** Turn payload without generated id/at — safe for appendThreadTurn. */
 export type CommandSurfaceThreadTurnInput =
     | { kind: "user_message"; text: string }
-    | { kind: "assistant_notice"; text: string; noticeRole?: "default" | "context_boundary" }
+    | { kind: "assistant_notice"; text: string; noticeRole?: CommandSurfaceNoticeRole }
+    | { kind: "policy_denial"; denial: BosPolicyDenialPresentation }
     | {
           kind: "candidate_results";
           candidates: TaskAssistEntitySearchCandidate[];

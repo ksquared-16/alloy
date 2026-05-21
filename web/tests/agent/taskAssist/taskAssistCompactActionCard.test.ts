@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { taskAssistFollowUpNoticeText } from "@/lib/agent/taskAssist/taskAssistCompactActionCard";
+import { taskAssistCandidateListPrompt } from "@/lib/agent/taskAssist/taskAssistOrchestratorCopy";
 import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
 
 const candidate: TaskAssistEntitySearchCandidate = {
@@ -12,6 +13,14 @@ const candidate: TaskAssistEntitySearchCandidate = {
     source: "customer_family",
     matched_fields: ["customer.name"],
 };
+
+describe("taskAssistCandidateListPrompt", () => {
+    it("uses operational candidate selection copy", () => {
+        expect(taskAssistCandidateListPrompt(3)).toMatch(/Found 3 matching records/);
+        expect(taskAssistCandidateListPrompt(1)).toMatch(/Confirm which record/);
+        expect(taskAssistCandidateListPrompt(1)).not.toMatch(/who you mean/i);
+    });
+});
 
 describe("taskAssistFollowUpNoticeText", () => {
     it("uses reminder-only copy for create_reminder", () => {

@@ -20,6 +20,7 @@ import {
     parseWorkflowAssistReadIntent,
     type WorkflowAssistReadIntentV1,
 } from "@/lib/agent/workflowAssist/workflowAssistReadV1";
+import { WORKFLOW_ASSIST_BOUNDARY_NOTICE } from "@/lib/adminV2/aiCommandSurface/commandSurfaceRoutingCopy";
 
 export type CommandSurfaceRouteKind =
     | "workflow_assist"
@@ -44,8 +45,7 @@ export type CommandSurfaceRouteResult = {
     workflowAssistCreateIntent: WorkflowAssistCreateIntentV1 | null;
 };
 
-export const WORKFLOW_ASSIST_NOTICE_TEXT =
-    "That's a workflow request. Workflow Assist can summarize runs, explain outcomes, and propose disabled drafts for admin review.";
+export const WORKFLOW_ASSIST_NOTICE_TEXT = WORKFLOW_ASSIST_BOUNDARY_NOTICE;
 export const WORKFLOW_ASSIST_AUTOMATIONS_HREF = "/adminV2/workflows";
 
 const CLARIFY_DEFAULT =

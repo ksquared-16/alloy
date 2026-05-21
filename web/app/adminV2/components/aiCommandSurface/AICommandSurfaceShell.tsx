@@ -26,8 +26,8 @@ import {
 } from "@/lib/adminV2/aiCommandSurface/aiCommandSurfaceModel";
 import OperationalActiveRecordChip from "@/app/adminV2/components/bos/OperationalActiveRecordChip";
 import {
-    JobLayoutOperationalProposalCard,
-    type JobLayoutCardUiState,
+  JobLayoutOperationalProposalCard,
+  type JobLayoutCardUiState,
 } from "@/app/adminV2/components/aiCommandSurface/JobLayoutOperationalProposalCard";
 import { dispatchAiActivityRefresh } from "@/app/adminV2/components/aiActivity/RecentAiActionsStrip";
 import {
@@ -101,7 +101,14 @@ import type { WorkflowOperationalTraceV1 } from "@/lib/agent/workflowAssist/work
 import {
   commandSurfaceEntitySearchQuery,
   routeCommandSurface,
+  type CommandSurfaceRouteResult,
 } from "@/lib/adminV2/aiCommandSurface/commandSurfaceRouter";
+import {
+  buildCommandSurfaceRoutingNotice,
+  ENTITY_SEARCH_ROUTING_NOTICE,
+  shouldAppendCommandSurfaceRoutingNotice,
+} from "@/lib/adminV2/aiCommandSurface/commandSurfaceRoutingCopy";
+import { resolveBosPolicyDenial } from "@/lib/adminV2/bos/bosGovernanceCopy";
 import {
   appendThreadTurn,
   createEmptyThreadState,
@@ -120,6 +127,7 @@ import { shouldForceCommandSurfaceScrollToBottom } from "@/lib/adminV2/aiCommand
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
 import { formatTaskAssistEntitySearchNoMatchMessage } from "@/lib/agent/taskAssist/taskAssistEntitySearchVariants";
 import { taskAssistFollowUpNoticeText } from "@/lib/agent/taskAssist/taskAssistCompactActionCard";
+import { taskAssistCandidateListPrompt } from "@/lib/agent/taskAssist/taskAssistOrchestratorCopy";
 import {
   clarificationPromptText,
   mergeClarificationIntoIntent,
@@ -164,13 +172,25 @@ function clampExpandedHeightPx(viewportH: number): number {
   return Math.max(220, Math.min(EXPANDED_MAX_H, Math.round(viewportH * 0.42)));
 }
 
+function appendCommandSurfaceRoutingNoticeTurn(
+  prev: CommandSurfaceThreadState,
+  routed: CommandSurfaceRouteResult,
+  activeRecordLabel?: string | null
+): CommandSurfaceThreadState {
+  if (!shouldAppendCommandSurfaceRoutingNotice(routed)) return prev;
+  const text = buildCommandSurfaceRoutingNotice({ route: routed, activeRecordLabel });
+  if (!text) return prev;
+  return appendThreadTurn(prev, { kind: "assistant_notice", text, noticeRole: "routing" });
+}
+
 function lastThreadPreviewText(turns: CommandSurfaceThreadTurn[]): string | null {
   for (let i = turns.length - 1; i >= 0; i--) {
     const turn = turns[i]!;
     if (turn.kind === "user_message") return turn.text.trim() || null;
     if (turn.kind === "assistant_notice") return turn.text.trim() || null;
     if (turn.kind === "error") return turn.text.trim() || null;
-    if (turn.kind === "workflow_notice") return "Workflow assist";
+    if (turn.kind === "workflow_notice") return "Workflow Assist";
+    if (turn.kind === "policy_denial") return turn.denial.headline;
     if (turn.kind === "workflow_assist_read") return "Workflow assist";
     if (turn.kind === "candidate_results") return turn.candidates[0]?.label?.trim() || null;
     if (turn.kind === "target_confirmed") return turn.candidate.label?.trim() || null;
@@ -617,7 +637,7 @@ export default function AICommandSurfaceShell() {
   const activeOperationalEntityId =
     globalAssistant?.currentContext?.entity_type === "opportunities" ?
       (globalAssistant.currentContext.entity_id?.trim() || null)
-    : null;
+      : null;
 
   const panelMaxHeight = useMemo(() => clampExpandedHeightPx(viewportH), [viewportH]);
 
@@ -856,8 +876,8 @@ export default function AICommandSurfaceShell() {
       if (!globalAssistant || !taskAssistUiEnabled) {
         setThread((prev) =>
           appendThreadTurn(prev, {
-            kind: "error",
-            text: "Task Assist is not enabled for this workspace.",
+            kind: "policy_denial",
+            denial: resolveBosPolicyDenial("task_assist_unavailable"),
           })
         );
         return;
@@ -904,6 +924,13 @@ export default function AICommandSurfaceShell() {
       }
 
       const qEff = commandSurfaceEntitySearchQuery(cmd, slots, intent);
+      setThread((prev) =>
+        appendThreadTurn(prev, {
+          kind: "assistant_notice",
+          text: ENTITY_SEARCH_ROUTING_NOTICE,
+          noticeRole: "routing",
+        })
+      );
       try {
         const res = await fetchTaskAssistEntitySearch({
           q: qEff,
@@ -948,10 +975,7 @@ export default function AICommandSurfaceShell() {
           );
           return;
         }
-        const intro =
-          list.length > 1 ?
-            `I found ${list.length} matching records. Which one?`
-            : "Confirm who you mean.";
+        const intro = taskAssistCandidateListPrompt(list.length);
         setThread((prev) => {
           let next = appendThreadTurn(prev, { kind: "assistant_notice", text: intro });
           next = appendThreadTurn(next, { kind: "candidate_results", candidates: list, intent });
@@ -1603,91 +1627,93 @@ export default function AICommandSurfaceShell() {
     };
   }, []);
 
-  const runSubmittedCommandRef = useRef<(cmd: string) => Promise<void>>(async () => {});
+  const runSubmittedCommandRef = useRef<(cmd: string) => Promise<void>>(async () => { });
 
   const runSubmittedCommand = useCallback(
     async (rawCmd: string) => {
-    const cmd = rawCmd.trim();
-    if (!cmd || busy) return;
+      const cmd = rawCmd.trim();
+      if (!cmd || busy) return;
 
-    setThread((prev) => appendThreadTurn(prev, { kind: "user_message", text: cmd }));
+      setThread((prev) => appendThreadTurn(prev, { kind: "user_message", text: cmd }));
 
-    const pending = pendingClarificationRef.current;
-    if (pending) {
-      const merged = mergeClarificationIntoIntent(pending.intent, {
-        goalText:
-          pending.awaiting === "message_goal" || pending.awaiting === "reminder_what" ? cmd : undefined,
-        timingText: pending.awaiting === "reminder_when" ? cmd : undefined,
-      });
-      if (pending.awaiting === "message_goal" && needsMessageGoalClarification(merged)) {
-        return;
-      }
-      if (pending.awaiting === "reminder_what") {
-        const nextKind = reminderClarificationKind(merged);
-        if (nextKind) {
-          pendingClarificationRef.current = { candidate: pending.candidate, intent: merged, awaiting: nextKind };
-          setThread((prev) =>
-            appendThreadTurn(prev, {
-              kind: "task_clarification",
-              clarificationKind: nextKind,
-              candidate: pending.candidate,
-              intent: merged,
-            })
-          );
+      const pending = pendingClarificationRef.current;
+      if (pending) {
+        const merged = mergeClarificationIntoIntent(pending.intent, {
+          goalText:
+            pending.awaiting === "message_goal" || pending.awaiting === "reminder_what" ? cmd : undefined,
+          timingText: pending.awaiting === "reminder_when" ? cmd : undefined,
+        });
+        if (pending.awaiting === "message_goal" && needsMessageGoalClarification(merged)) {
           return;
         }
-      }
-      pendingClarificationRef.current = null;
-      proceedToTaskAssistAction(pending.candidate, merged);
-      return;
-    }
-
-    setBusy(true);
-
-    const routed = routeCommandSurface(cmd, {
-      hasAmbientOpportunity:
-        globalAssistant?.currentContext?.entity_type === "opportunities" &&
-        Boolean(globalAssistant.currentContext.entity_id),
-    });
-
-    try {
-      switch (routed.route) {
-        case "workflow_assist": {
-          if (routed.workflowAssistCreateIntent) {
-            await runWorkflowAssistCreateRoute(cmd, routed.workflowAssistCreateIntent);
-            break;
+        if (pending.awaiting === "reminder_what") {
+          const nextKind = reminderClarificationKind(merged);
+          if (nextKind) {
+            pendingClarificationRef.current = { candidate: pending.candidate, intent: merged, awaiting: nextKind };
+            setThread((prev) =>
+              appendThreadTurn(prev, {
+                kind: "task_clarification",
+                clarificationKind: nextKind,
+                candidate: pending.candidate,
+                intent: merged,
+              })
+            );
+            return;
           }
-          const intent = routed.workflowAssistReadIntent;
-          if (!intent) {
-            setThread((prev) => appendThreadTurn(prev, { kind: "workflow_notice" }));
-            break;
-          }
-          await runWorkflowAssistRoute(cmd, intent);
-          break;
         }
-        case "clarify":
-          setThread((prev) =>
-            appendThreadTurn(prev, {
-              kind: "assistant_notice",
-              text: routed.clarifyMessage ?? "Could you say more about what you'd like to do?",
-            })
-          );
-          break;
-        case "config_layout_assist":
-          await runConfigLayoutAssistRoute(cmd);
-          break;
-        case "job_layout":
-          await runJobLayoutRoute(cmd);
-          break;
-        case "task_assist":
-          await runTaskAssistRoute(cmd, routed.taskAssistIntent, routed.slots);
-          break;
+        pendingClarificationRef.current = null;
+        proceedToTaskAssistAction(pending.candidate, merged);
+        return;
       }
-    } finally {
-      setBusy(false);
-      queueMicrotask(() => inputRef.current?.focus());
-    }
-  },
+
+      setBusy(true);
+
+      const routed = routeCommandSurface(cmd, {
+        hasAmbientOpportunity:
+          globalAssistant?.currentContext?.entity_type === "opportunities" &&
+          Boolean(globalAssistant.currentContext.entity_id),
+      });
+
+      try {
+        setThread((prev) => appendCommandSurfaceRoutingNoticeTurn(prev, routed, globalAssistant?.currentContext?.label));
+
+        switch (routed.route) {
+          case "workflow_assist": {
+            if (routed.workflowAssistCreateIntent) {
+              await runWorkflowAssistCreateRoute(cmd, routed.workflowAssistCreateIntent);
+              break;
+            }
+            const intent = routed.workflowAssistReadIntent;
+            if (!intent) {
+              setThread((prev) => appendThreadTurn(prev, { kind: "workflow_notice" }));
+              break;
+            }
+            await runWorkflowAssistRoute(cmd, intent);
+            break;
+          }
+          case "clarify":
+            setThread((prev) =>
+              appendThreadTurn(prev, {
+                kind: "assistant_notice",
+                text: routed.clarifyMessage ?? "Could you say more about what you'd like to do?",
+              })
+            );
+            break;
+          case "config_layout_assist":
+            await runConfigLayoutAssistRoute(cmd);
+            break;
+          case "job_layout":
+            await runJobLayoutRoute(cmd);
+            break;
+          case "task_assist":
+            await runTaskAssistRoute(cmd, routed.taskAssistIntent, routed.slots);
+            break;
+        }
+      } finally {
+        setBusy(false);
+        queueMicrotask(() => inputRef.current?.focus());
+      }
+    },
     [
       busy,
       globalAssistant,

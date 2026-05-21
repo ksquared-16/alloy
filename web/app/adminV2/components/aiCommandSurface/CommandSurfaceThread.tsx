@@ -15,6 +15,7 @@ import { ConfigLayoutAssistReadyCard } from "@/app/adminV2/components/aiCommandS
 import { COMMAND_SURFACE_INTERACTIVE_CARD_CLASS } from "@/lib/adminV2/aiCommandSurface/commandSurfaceCardNavigation";
 import { WorkflowAssistProposalActionCard } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistProposalActionCard";
 import { WorkflowAssistReadThreadCard } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistReadThreadCard";
+import { BosPolicyDenialNotice } from "@/app/adminV2/components/bos/BosPolicyDenialNotice";
 import {
     WORKFLOW_ASSIST_AUTOMATIONS_HREF,
     WORKFLOW_ASSIST_NOTICE_TEXT,
@@ -174,16 +175,22 @@ export default function CommandSurfaceThread({
                         return <UserBubble key={turn.id} text={turn.text} />;
                     case "assistant_notice": {
                         const isContextBoundary = turn.noticeRole === "context_boundary";
+                        const isRouting = turn.noticeRole === "routing";
                         return (
                             <div
                                 key={turn.id}
                                 className={isContextBoundary ? "border-t border-alloy-stone/20 pt-2 mt-1" : undefined}
                                 data-command-surface-context-boundary={isContextBoundary ? "true" : undefined}
+                                data-command-surface-routing-notice={isRouting ? "true" : undefined}
                             >
                                 <AssistantBubble>
                                     <span
                                         data-command-surface-assistant-notice="true"
-                                        className={isContextBoundary ? "font-medium text-alloy-midnight/80" : undefined}
+                                        className={
+                                            isContextBoundary || isRouting ?
+                                                "font-medium text-alloy-midnight/80"
+                                            :   undefined
+                                        }
                                     >
                                         {turn.text}
                                     </span>
@@ -191,6 +198,12 @@ export default function CommandSurfaceThread({
                             </div>
                         );
                     }
+                    case "policy_denial":
+                        return (
+                            <AssistantBubble key={turn.id}>
+                                <BosPolicyDenialNotice denial={turn.denial} />
+                            </AssistantBubble>
+                        );
                     case "workflow_assist_read":
                         return (
                             <AssistantBubble key={turn.id}>

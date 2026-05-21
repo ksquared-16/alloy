@@ -3,8 +3,8 @@ import { formatResolvedTimingLabel } from "@/lib/agent/taskAssist/taskAssistTimi
 import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
 
 export function taskAssistCandidateListPrompt(count: number): string {
-    if (count <= 1) return "Confirm who you mean.";
-    return `I found ${count} matching records. Which one?`;
+    if (count <= 1) return "Confirm which record to use.";
+    return `Found ${count} matching records. Select one to continue.`;
 }
 
 export function taskAssistFollowUpNoticeText(

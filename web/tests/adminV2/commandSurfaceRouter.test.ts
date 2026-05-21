@@ -71,7 +71,7 @@ describe("routeCommandSurface", () => {
     it("routes explicit create workflow to create intent", () => {
         const r = routeCommandSurface("Create a workflow that sends a reminder 3 days before tours");
         expect(r.workflowAssistCreateIntent?.template_id).toBe("tour_reminder");
-        expect(WORKFLOW_ASSIST_NOTICE_TEXT).toContain("Workflow Assist");
+        expect(WORKFLOW_ASSIST_NOTICE_TEXT).toContain("workflow configuration");
     });
 
     it("routes failed-workflow phrase to workflow_assist failed_runs intent", () => {

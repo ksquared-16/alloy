@@ -2,6 +2,7 @@
 
 import { CommandSurfaceCardLink } from "@/app/adminV2/components/aiCommandSurface/CommandSurfaceCardLink";
 import OperationalProposalCardFrame from "@/app/adminV2/components/bos/OperationalProposalCardFrame";
+import { CONFIG_ASSIST_APPLY_PERMISSION_COPY } from "@/lib/adminV2/bos/bosGovernanceCopy";
 import {
     CONFIG_LAYOUT_ASSIST_MUTATION_BOUNDARY_COPY,
     CONFIG_LAYOUT_ASSIST_PROPOSAL_SOURCE_LABEL,
@@ -60,9 +61,7 @@ export function ConfigLayoutAssistReadyCard({
                             >
                                 {busy ? "Working…" : "Approve & apply"}
                             </button>
-                        :   <p className="text-[11px] text-alloy-midnight/55">
-                                Approve and apply require configuration assist permissions for your role.
-                            </p>
+                        :   <p className="text-[11px] text-alloy-midnight/55">{CONFIG_ASSIST_APPLY_PERMISSION_COPY}</p>
                         }
                         <CommandSurfaceCardLink
                             href={reviewHref}

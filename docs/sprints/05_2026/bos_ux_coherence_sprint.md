@@ -6,9 +6,9 @@
 
 **Binding inputs (do not diverge):**
 
-| Phase | Document |
-|-------|----------|
-| Step 0 — Audit | [`bos_ux_coherence_audit.md`](./bos_ux_coherence_audit.md) |
+| Phase           | Document                                                     |
+| --------------- | ------------------------------------------------------------ |
+| Step 0 — Audit  | [`bos_ux_coherence_audit.md`](./bos_ux_coherence_audit.md)   |
 | Step 1 — Design | [`bos_ux_coherence_design.md`](./bos_ux_coherence_design.md) |
 
 **Doctrine (unchanged):** `docs/product/bos-foundation.md`, `docs/system/workspace-system.md`, `docs/system/configuration-system.md`, `docs/system/actions-and-workflows.md`, `docs/execution/roadmap-and-gaps.md`, `docs/execution/operating-doctrine.md`
@@ -31,13 +31,13 @@ Make BOS feel like **one workflow-native operational intelligence layer** embedd
 
 ## 2. Why this sprint (audit → design → build)
 
-| Problem (audit) | Design response | Build outcome |
-|-----------------|-----------------|---------------|
-| Drawer does not seed command context | Active operational context (§6 design) | Context on drawer open |
-| Four proposal dialects | Operational Proposal anatomy (§5) | Shared card regions |
-| Policy/errors opaque | Denial + routing templates (§7–8) | Structured operator copy |
-| Prototype placeholders / `window.prompt` | Attention + trust standards (§10, §8) | Production-safe chrome |
-| Command loading vs workspace | Performance standards (§11) | Calm rail behavior |
+| Problem (audit)                          | Design response                        | Build outcome            |
+| ---------------------------------------- | -------------------------------------- | ------------------------ |
+| Drawer does not seed command context     | Active operational context (§6 design) | Context on drawer open   |
+| Four proposal dialects                   | Operational Proposal anatomy (§5)      | Shared card regions      |
+| Policy/errors opaque                     | Denial + routing templates (§7–8)      | Structured operator copy |
+| Prototype placeholders / `window.prompt` | Attention + trust standards (§10, §8)  | Production-safe chrome   |
+| Command loading vs workspace             | Performance standards (§11)            | Calm rail behavior       |
 
 ---
 
@@ -54,32 +54,32 @@ Make BOS feel like **one workflow-native operational intelligence layer** embedd
 
 ## 4. Non-scope (explicit)
 
-| Forbidden | Notes |
-|-----------|-------|
-| Autonomous agents / multi-agent orchestration | Program paused |
-| New BOS capabilities or Orchestrator routes | No catalog expansion |
-| Config/Layout Assist **apply catalog** expansion | Partial catalog remains; visibility only |
-| Workflow Assist **template** expansion | Maintenance-only |
-| Proposal **table merge** or envelope schema redesign | `raw_payload` stays authoritative |
-| LLM-required routing / memory systems | Deterministic parsers preserved |
-| Queue/resolver semantic changes | Unless bugfix with product sign-off |
-| Full proposal inbox UI | V1.5 backlog |
-| `commandSurface*` code rename sprint | Operator copy only in V1 |
-| Chatbot patterns (persona, prompt chips, typing theatrics) | Interaction Layer V1 preserved |
+| Forbidden                                                  | Notes                                    |
+| ---------------------------------------------------------- | ---------------------------------------- |
+| Autonomous agents / multi-agent orchestration              | Program paused                           |
+| New BOS capabilities or Orchestrator routes                | No catalog expansion                     |
+| Config/Layout Assist **apply catalog** expansion           | Partial catalog remains; visibility only |
+| Workflow Assist **template** expansion                     | Maintenance-only                         |
+| Proposal **table merge** or envelope schema redesign       | `raw_payload` stays authoritative        |
+| LLM-required routing / memory systems                      | Deterministic parsers preserved          |
+| Queue/resolver semantic changes                            | Unless bugfix with product sign-off      |
+| Full proposal inbox UI                                     | V1.5 backlog                             |
+| `commandSurface*` code rename sprint                       | Operator copy only in V1                 |
+| Chatbot patterns (persona, prompt chips, typing theatrics) | Interaction Layer V1 preserved           |
 
 ---
 
 ## 5. Implementation constraints
 
-| Preserve | Do not |
-|----------|--------|
-| `BosProposalEnvelopeV1` + adapters | Invent parallel proposal types |
-| `routeCommandSurface` precedence | Add side effects to Orchestrator |
-| `executeAdminAction` / `emitEvent` spine | Bypass for BOS apply |
-| Queue truth boundary | Mutate from queue rows |
-| AdminV2 shell / workspace model | Second command bar |
-| Org `ai_policy` + RBAC gates | Client-side apply without server validation |
-| Existing API paths (`/api/admin/ai/*`, `/api/admin/agent/*`) | New orchestration microservices |
+| Preserve                                                     | Do not                                      |
+| ------------------------------------------------------------ | ------------------------------------------- |
+| `BosProposalEnvelopeV1` + adapters                           | Invent parallel proposal types              |
+| `routeCommandSurface` precedence                             | Add side effects to Orchestrator            |
+| `executeAdminAction` / `emitEvent` spine                     | Bypass for BOS apply                        |
+| Queue truth boundary                                         | Mutate from queue rows                      |
+| AdminV2 shell / workspace model                              | Second command bar                          |
+| Org `ai_policy` + RBAC gates                                 | Client-side apply without server validation |
+| Existing API paths (`/api/admin/ai/*`, `/api/admin/agent/*`) | New orchestration microservices             |
 
 **Batching rule for Cursor:** Execute cards in **listed order** within a phase; do not start Phase 2 until **GATE A** passes. Combine sub-cards in the same batch only when they share files and no gate dependency.
 
@@ -100,11 +100,11 @@ flowchart LR
   P1 --> GA --> P2 --> GB --> P3 --> P4 --> P5 --> GC
 ```
 
-| Gate | Name | Blocks | Pass when |
-|------|------|--------|-----------|
-| **A** | Contextual intelligence stable | Phase 2+ | § GATE A checklist all checked |
-| **B** | Unified proposal UX stable | Phase 3–4 polish that touches card copy/layout | § GATE B checklist all checked |
-| **C** | Demo coherence validation | Sprint closeout | § GATE C checklist + manual demo script |
+| Gate  | Name                           | Blocks                                         | Pass when                               |
+| ----- | ------------------------------ | ---------------------------------------------- | --------------------------------------- |
+| **A** | Contextual intelligence stable | Phase 2+                                       | § GATE A checklist all checked          |
+| **B** | Unified proposal UX stable     | Phase 3–4 polish that touches card copy/layout | § GATE B checklist all checked          |
+| **C** | Demo coherence validation      | Sprint closeout                                | § GATE C checklist + manual demo script |
 
 ---
 
@@ -135,12 +135,12 @@ flowchart LR
 
 ### Gate B readiness — Phase 2 closeout (2026-05-20)
 
-| Surface | Frame | Notes |
-|---------|-------|-------|
-| Task Assist compact draft/reminder | ☑ | Cards 8 |
-| Workflow Assist proposal/review | ☑ | Cards 9 |
-| Config Assist thread + Settings review | ☑ | Cards 10–11 |
-| Job overview layout | ☑ | Card 12 |
+| Surface                                | Frame | Notes       |
+| -------------------------------------- | ----- | ----------- |
+| Task Assist compact draft/reminder     | ☑     | Cards 8     |
+| Workflow Assist proposal/review        | ☑     | Cards 9     |
+| Config Assist thread + Settings review | ☑     | Cards 10–11 |
+| Job overview layout                    | ☑     | Card 12     |
 
 **Verified:** Stale/blocked guards (Task Assist), approval/mutation boundary copy, presentational-only frame (no API changes). Behaviors unchanged across propose/apply paths.
 
@@ -394,19 +394,19 @@ cd web && npm run test -- tests/adminV2/operationalProposalCardFrame.test.tsx
 
 **Mapping:**
 
-| Frame region | Draft | Reminder |
-|--------------|-------|----------|
-| Title | Send/schedule outbound message | Reminder title from bootstrap |
-| Type | Message draft / Scheduled message | Reminder proposal |
-| Capability | Task Assist | Task Assist |
-| Context | `entityLabel` + optional site scope | Same |
-| Source | Task Assist | Task Assist |
-| Summary | Channel · instruction | — |
-| Change detail | Channel, body, recipient, schedule fields | Title, due, notes |
-| Approval | Required + mutation boundary (no auto-send) | Required |
-| Stale | `mutationsBlocked` → `STALE_OPERATIONAL_PROPOSAL_MESSAGE` | Same |
-| Footer | Send now / schedule / save draft | Create reminder |
-| Receipt | Applied success message | Created task receipt |
+| Frame region  | Draft                                                     | Reminder                      |
+| ------------- | --------------------------------------------------------- | ----------------------------- |
+| Title         | Send/schedule outbound message                            | Reminder title from bootstrap |
+| Type          | Message draft / Scheduled message                         | Reminder proposal             |
+| Capability    | Task Assist                                               | Task Assist                   |
+| Context       | `entityLabel` + optional site scope                       | Same                          |
+| Source        | Task Assist                                               | Task Assist                   |
+| Summary       | Channel · instruction                                     | —                             |
+| Change detail | Channel, body, recipient, schedule fields                 | Title, due, notes             |
+| Approval      | Required + mutation boundary (no auto-send)               | Required                      |
+| Stale         | `mutationsBlocked` → `STALE_OPERATIONAL_PROPOSAL_MESSAGE` | Same                          |
+| Footer        | Send now / schedule / save draft                          | Create reminder               |
+| Receipt       | Applied success message                                   | Created task receipt          |
 
 **Behavior preserved:** propose/apply/schedule APIs, `mutationsBlocked` disables actions, `taskAssistV1UiGate`, no auto-send.
 
@@ -567,7 +567,7 @@ cd web && npm run test -- tests/adminV2/jobLayoutOperationalProposalFrame.test.t
 
 ---
 
-### Card 13 — Routing notices after specialist route
+### Card 13 — Routing notices after specialist route ☑ (2026-05-20, Loop 8)
 
 **Audit:** #5 · **Design:** §7.3, §3.2
 
@@ -594,7 +594,7 @@ cd web && npm run test -- tests/adminV2/jobLayoutOperationalProposalFrame.test.t
 
 ---
 
-### Card 14 — Policy denial presentation + proactive disable
+### Card 14 — Policy denial presentation + proactive disable ☑ (2026-05-20, Loop 8)
 
 **Audit:** #6 · **Design:** §7.4, §8.1
 
@@ -621,6 +621,57 @@ cd web && npm run test -- tests/adminV2/jobLayoutOperationalProposalFrame.test.t
 
 - `resolveBosPolicyDenial.test.ts`
 - Extend task assist gate tests if needed.
+
+#### Card 13–14 implementation notes (Loop 8 — 2026-05-20)
+
+**Routing notices (Card 13)**
+
+- Added `commandSurfaceRoutingCopy.ts` with deterministic one-line templates per `CommandSurfaceRouteKind` + slot/intent hints (`buildCommandSurfaceRoutingNotice`, `shouldAppendCommandSurfaceRoutingNotice`).
+- `AICommandSurfaceShell` appends `assistant_notice` with `noticeRole: "routing"` after route resolution (except clarify and Workflow Assist boundary-only).
+- Entity search path appends `ENTITY_SEARCH_ROUTING_NOTICE` before lookup.
+- Candidate pick prompts use `taskAssistCandidateListPrompt` (no “I found…” / “Confirm who you mean”).
+- `WORKFLOW_ASSIST_NOTICE_TEXT` / boundary aligned to operational copy (no “That’s a workflow request” chatter).
+- `CommandSurfaceThread` styles routing notices like context boundaries (`data-command-surface-routing-notice`).
+
+**Policy / governance copy (Card 14)**
+
+- Added `bosGovernanceCopy.ts` (`STALE_OPERATIONAL_PROPOSAL_MESSAGE`, `WORKFLOW_ASSIST_MUTATION_BLOCKED_COPY`, `resolveBosPolicyDenial`, config apply permission line).
+- Added `BosPolicyDenialNotice.tsx`; thread turn `policy_denial` for Task Assist env-off (replaces generic error).
+- `activeOperationalContext` and `workflowAssistReadV1` re-export governance strings; `operationalProposalPresentation` blocked/stale defaults aligned.
+- `ConfigLayoutAssistReadyCard` uses `CONFIG_ASSIST_APPLY_PERMISSION_COPY`.
+
+**Wording standards (Cards 13–14)**
+
+| Use | Avoid |
+| --- | --- |
+| “Routing to {Specialist} — {operational reason}.” | “Matched capability heuristic”, “AI selected”, “Detected keyword” |
+| “Using active record: {label}” | Debug route IDs, internal capability keys in notices |
+| “This organization currently allows review-only workflow recommendations.” | “Portal blocked”, “Mutation denied”, “Policy violation” |
+| “This proposal is tied to a different active record.” | “Stale context”, “Context mismatch violation” |
+| “Not available — {reason}” + bullets + optional next step | Generic `error` flash for known policy gates |
+
+**Files changed**
+
+- `web/lib/adminV2/aiCommandSurface/commandSurfaceRoutingCopy.ts` *(new)*
+- `web/lib/adminV2/bos/bosGovernanceCopy.ts` *(new)*
+- `web/app/adminV2/components/bos/BosPolicyDenialNotice.tsx` *(new)*
+- `web/lib/adminV2/bos/activeOperationalContext.ts`, `operationalProposalPresentation.ts`
+- `web/lib/adminV2/aiCommandSurface/commandSurfaceRouter.ts`, `commandSurfaceThreadTypes.ts`, `commandSurfaceThreadScroll.ts`
+- `web/lib/agent/workflowAssist/workflowAssistReadV1.ts`, `taskAssistOrchestratorCopy.ts`
+- `web/app/adminV2/components/aiCommandSurface/AICommandSurfaceShell.tsx`, `CommandSurfaceThread.tsx`, `ConfigLayoutAssistReadyCard.tsx`
+- Tests: `commandSurfaceRoutingCopy.test.ts`, `bosGovernanceCopy.test.ts`, `commandSurfaceRoutingShell.contract.test.ts`; updated `commandSurfaceRouter.test.ts`
+
+**Behaviors preserved**
+
+- `routeCommandSurface` precedence and specialist execution paths unchanged.
+- Propose/apply APIs, envelopes, RBAC gates, and `mutationsBlocked` stale logic unchanged (copy only).
+- `workflow_notice` turn retained for Automations link on Workflow Assist boundary.
+
+**Tests run**
+
+```bash
+cd web && npm run test -- tests/adminV2/commandSurfaceRoutingCopy.test.ts tests/adminV2/bosGovernanceCopy.test.ts tests/adminV2/commandSurfaceRoutingShell.contract.test.ts tests/adminV2/commandSurfaceRouter.test.ts
+```
 
 ---
 
@@ -879,15 +930,15 @@ cd web && npm run test -- tests/adminV2/jobLayoutOperationalProposalFrame.test.t
 
 ## V1.5 backlog (do not block sprint closeout)
 
-| ID | Item | Audit # |
-|----|------|---------|
-| V1.5-1 | Read-only open proposals list (envelope-backed) | 13 |
-| V1.5-2 | Bucket count scope tooltips on dept lanes | 15 |
-| V1.5-3 | Integrity warnings inline on config cards (API link) | 16 |
-| V1.5-4 | Remove `commandSurfaceMode` from public focus API | 17 |
-| V1.5-5 | De-emphasize full `TaskAssistOpportunityWorkspace` in thread | 18 |
-| V1.5-6 | Workflow clarification card parity | 19 |
-| V1.5-7 | Stale thread card labeling on context switch | design §6.3 |
+| ID     | Item                                                                                              | Audit #           |
+| ------ | ------------------------------------------------------------------------------------------------- | ----------------- |
+| V1.5-1 | Read-only open proposals list (envelope-backed)                                                   | 13                |
+| V1.5-2 | Bucket count scope tooltips on dept lanes                                                         | 15                |
+| V1.5-3 | Integrity warnings inline on config cards (API link)                                              | 16                |
+| V1.5-4 | Remove `commandSurfaceMode` from public focus API                                                 | 17                |
+| V1.5-5 | De-emphasize full `TaskAssistOpportunityWorkspace` in thread                                      | 18                |
+| V1.5-6 | Workflow clarification card parity                                                                | 19                |
+| V1.5-7 | Stale thread card labeling on context switch                                                      | design §6.3       |
 | V1.5-8 | **BOS recommendation intelligence** — richer drawer handoff than deterministic labels (see below) | Gate A refinement |
 
 ### V1.5-8 — BOS recommendation intelligence (product direction)
@@ -896,13 +947,13 @@ cd web && npm run test -- tests/adminV2/jobLayoutOperationalProposalFrame.test.t
 
 **V1.5 evolution:** Move from **deterministic next-action labels** to **richer operational recommendations** on the same handoff surface (still workflow-native; not LLM-marketing or autonomous execution).
 
-| Capability | V1.5 target | Notes |
-|------------|-------------|--------|
-| **Recommended action type** | Explicit operator taxonomy | e.g. send message, schedule reminder, update status, review stalled inquiry — surfaced on card, not only `next_action.label` text |
-| **Reason stack** | Multi-factor explainability | Combine signals: stale inquiry, no outbound response, tour interest, waiting duration, family/stage — not one summary string only |
-| **Proposed message draft** | When comms recommended | Surface deterministic draft from existing `suggested_content` / templates where channel = message; preview in card or Orchestrator entry (still approve-before-send) |
-| **Context-aware inputs** | Parent / child / household search | Extend entity search & recommendation inputs beyond household name (child names, location, room/program) — aligns with Gate A search backlog |
-| **Outcome-informed rules** | After operational history matures | Recommendation rules informed by outcomes (response rates, stage progression) once enough history exists — rules/config, not speculative LLM |
+| Capability                  | V1.5 target                       | Notes                                                                                                                                                                |
+| --------------------------- | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Recommended action type** | Explicit operator taxonomy        | e.g. send message, schedule reminder, update status, review stalled inquiry — surfaced on card, not only `next_action.label` text                                    |
+| **Reason stack**            | Multi-factor explainability       | Combine signals: stale inquiry, no outbound response, tour interest, waiting duration, family/stage — not one summary string only                                    |
+| **Proposed message draft**  | When comms recommended            | Surface deterministic draft from existing `suggested_content` / templates where channel = message; preview in card or Orchestrator entry (still approve-before-send) |
+| **Context-aware inputs**    | Parent / child / household search | Extend entity search & recommendation inputs beyond household name (child names, location, room/program) — aligns with Gate A search backlog                         |
+| **Outcome-informed rules**  | After operational history matures | Recommendation rules informed by outcomes (response rates, stage progression) once enough history exists — rules/config, not speculative LLM                         |
 
 **Constraints (carry forward):** Deterministic + explainable; resolver/attention/task semantics authoritative; no autonomous send/apply; no new Orchestrator routes required for V1.5 framing — enrich presentation and rule inputs on existing paths first.
 
@@ -1035,18 +1086,18 @@ cd web && npm run test -- tests/adminV2/activeOperationalContext.test.ts \
 
 **GATE A readiness (Phase 1 — not full sprint closeout)**
 
-| Criterion | Status |
-|-----------|--------|
-| Drawer seeds `GlobalAssistantContext` | ☑ Loop 1 |
-| Close clears context | ☑ Loop 1 |
-| Active record chip | ☑ Loop 1 |
-| Single premium attention (chrome) | ☑ Loop 2 |
-| No Future/placeholder chrome | ☑ Loop 2 |
-| Ops strip handoff → command bar + context | ☑ Loop 3 |
-| Dead drawer section removed / panel documented | ☑ Loop 3 |
-| Contract tests green | ☑ 29 tests (Loop 1–3 bundle) 2026-05-20 |
-| Manual: Workflow Assist ambient without re-search | ☐ GATE A demo |
-| Manual: handoff chip matches drawer record | ☐ GATE A demo |
+| Criterion                                         | Status                                  |
+| ------------------------------------------------- | --------------------------------------- |
+| Drawer seeds `GlobalAssistantContext`             | ☑ Loop 1                                |
+| Close clears context                              | ☑ Loop 1                                |
+| Active record chip                                | ☑ Loop 1                                |
+| Single premium attention (chrome)                 | ☑ Loop 2                                |
+| No Future/placeholder chrome                      | ☑ Loop 2                                |
+| Ops strip handoff → command bar + context         | ☑ Loop 3                                |
+| Dead drawer section removed / panel documented    | ☑ Loop 3                                |
+| Contract tests green                              | ☑ 29 tests (Loop 1–3 bundle) 2026-05-20 |
+| Manual: Workflow Assist ambient without re-search | ☐ GATE A demo                           |
+| Manual: handoff chip matches drawer record        | ☐ GATE A demo                           |
 
 **GATE A:** Ready for review — Phase 1 cards 1–6 implemented; human demo + test bundle required before Phase 2 (Card 7+).
 
@@ -1126,32 +1177,32 @@ cd web && npm run test -- tests/adminV2/activeOperationalContext.test.ts \
 
 **V1.5+:** Richer recommendation intelligence — see **V1.5-8** in § V1.5 backlog (action types, reason stack, draft preview, context-aware search, outcome-informed rules).
 
-| Card | Status | PR / notes |
-|------|--------|------------|
-| 1 | ☑ | Drawer → `GlobalAssistantContext` |
-| 2 | ☑ | Active record chip + stale guard |
-| 3 | ☑ | Single chrome attention; inquiry reference only |
-| 4 | ☑ | No Future placeholder in attention strip |
-| 5 | ☑ | Ops strip → Orchestrator handoff |
-| 6 | ☑ | Dead drawer section removed |
-| 7 | ☑ | OperationalProposalCardFrame shell |
-| 8 | ☑ | Task Assist compact cards on frame |
-| 9 | ☑ | Workflow Assist proposal cards on frame |
-| 10 | ☑ | Config Assist thread cards on frame |
-| 11 | ☑ | Config Assist Settings review on frame |
-| 12 | ☑ | Job layout on OperationalProposalCardFrame |
-| 13 | ☐ | |
-| 14 | ☐ | |
-| 15 | ☐ | |
-| 16 | ☐ | |
-| 17 | ☐ | |
-| 18 | ☐ | |
-| 19 | ☐ | |
-| 20 | ☐ | |
-| 21 | ☐ | |
-| 22 | ☐ | |
-| 23 | ☐ | |
-| 24 | ☐ optional | |
+| Card | Status     | PR / notes                                      |
+| ---- | ---------- | ----------------------------------------------- |
+| 1    | ☑          | Drawer → `GlobalAssistantContext`               |
+| 2    | ☑          | Active record chip + stale guard                |
+| 3    | ☑          | Single chrome attention; inquiry reference only |
+| 4    | ☑          | No Future placeholder in attention strip        |
+| 5    | ☑          | Ops strip → Orchestrator handoff                |
+| 6    | ☑          | Dead drawer section removed                     |
+| 7    | ☑          | OperationalProposalCardFrame shell              |
+| 8    | ☑          | Task Assist compact cards on frame              |
+| 9    | ☑          | Workflow Assist proposal cards on frame         |
+| 10   | ☑          | Config Assist thread cards on frame             |
+| 11   | ☑          | Config Assist Settings review on frame          |
+| 12   | ☑          | Job layout on OperationalProposalCardFrame      |
+| 13   | ☑          | Routing notices (Loop 8)                        |
+| 14   | ☑          | Policy denial + governance copy (Loop 8)        |
+| 15   | ☐          |                                                 |
+| 16   | ☐          |                                                 |
+| 17   | ☐          |                                                 |
+| 18   | ☐          |                                                 |
+| 19   | ☐          |                                                 |
+| 20   | ☐          |                                                 |
+| 21   | ☐          |                                                 |
+| 22   | ☐          |                                                 |
+| 23   | ☐          |                                                 |
+| 24   | ☐ optional |                                                 |
 
 **Gates:** A ☐ (Phase 1 ready for review) · B ☐ · C ☐
 
@@ -1159,21 +1210,21 @@ cd web && npm run test -- tests/adminV2/activeOperationalContext.test.ts \
 
 ## Cursor execution order (quick reference)
 
-| Loop | Cards | Est. coupling |
-|------|-------|----------------|
-| 1 | 1, 2 | Context |
-| 2 | 3, 4 | Drawer attention |
-| 3 | 5, 6 | Handoff + cleanup |
-| — | **GATE A** | |
-| 4 | 7 | Proposal frame |
-| 5 | 8, 9 | Task + Workflow cards |
-| 6 | 10, 11, 12 | Config + Job + status |
-| — | **GATE B** | |
-| 7 | 13, 14 | Notices + policy |
-| 8 | 15, 16, 17 | Apply visibility + receipts + copy |
-| 9 | 18, 19, 20 | Performance |
-| 10 | 21, 22, 23, 24? | Closeout |
-| — | **GATE C** | |
+| Loop | Cards           | Est. coupling                      |
+| ---- | --------------- | ---------------------------------- |
+| 1    | 1, 2            | Context                            |
+| 2    | 3, 4            | Drawer attention                   |
+| 3    | 5, 6            | Handoff + cleanup                  |
+| —    | **GATE A**      |                                    |
+| 4    | 7               | Proposal frame                     |
+| 5    | 8, 9            | Task + Workflow cards              |
+| 6    | 10, 11, 12      | Config + Job + status              |
+| —    | **GATE B**      |                                    |
+| 7    | 13, 14          | Notices + policy                   |
+| 8    | 15, 16, 17      | Apply visibility + receipts + copy |
+| 9    | 18, 19, 20      | Performance                        |
+| 10   | 21, 22, 23, 24? | Closeout                           |
+| —    | **GATE C**      |                                    |
 
 ---
 

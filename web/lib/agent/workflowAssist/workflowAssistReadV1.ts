@@ -126,8 +126,7 @@ export type WorkflowAssistThreadMutationHandlersV1 = {
 };
 
 /** Shown on read cards when the portal user is not `admin` (same gate as propose/apply `requireAdmin`). */
-export const WORKFLOW_ASSIST_PORTAL_MUTATION_BLOCKED_USER_MESSAGE =
-    "Workflow changes require admin approval." as const;
+export { WORKFLOW_ASSIST_PORTAL_MUTATION_BLOCKED_USER_MESSAGE } from "@/lib/adminV2/bos/bosGovernanceCopy";
 
 export type WorkflowAssistFailedRunRowV1 = {
     run_id: string;
@@ -140,25 +139,25 @@ export type WorkflowAssistFailedRunRowV1 = {
 
 export type WorkflowAssistReadCardPayloadV1 =
     | {
-          variant: "workflow_summary";
-          headline: string;
-          subline?: string;
-          workflows: WorkflowAssistSummaryRowV1[];
-          total_count: number;
-      }
+        variant: "workflow_summary";
+        headline: string;
+        subline?: string;
+        workflows: WorkflowAssistSummaryRowV1[];
+        total_count: number;
+    }
     | {
-          variant: "failed_runs";
-          headline: string;
-          subline?: string;
-          failed_last_7d_kpi: number | null;
-          runs: WorkflowAssistFailedRunRowV1[];
-      }
+        variant: "failed_runs";
+        headline: string;
+        subline?: string;
+        failed_last_7d_kpi: number | null;
+        runs: WorkflowAssistFailedRunRowV1[];
+    }
     | {
-          variant: "enrollment_touch";
-          headline: string;
-          subline?: string;
-          workflows: WorkflowAssistSummaryRowV1[];
-      }
+        variant: "enrollment_touch";
+        headline: string;
+        subline?: string;
+        workflows: WorkflowAssistSummaryRowV1[];
+    }
     | WorkflowAssistExplainCardPayloadV1;
 
 type SummaryApiRow = {
@@ -268,7 +267,7 @@ export function buildWorkflowAssistReadCardPayload(
                     subline:
                         runs.length ?
                             "Showing recent runs with run status failed or a failed action step."
-                        :   "No failed runs in the sampled window, or none returned by the list API.",
+                            : "No failed runs in the sampled window, or none returned by the list API.",
                     failed_last_7d_kpi: failedKpiNum,
                     runs,
                 },
