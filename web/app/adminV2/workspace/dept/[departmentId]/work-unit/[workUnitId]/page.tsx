@@ -3281,6 +3281,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     <WorkUnitWorkspace
                         model={effectiveModel}
                         onAction={onAction}
+                        opportunityDrawerWorkspaceContext={opportunityWorkspaceContext ?? null}
                         headerQueuePicker={headerQueuePickerSlot}
                         kpiStripPlaceholder={workUnitKpiStripPlaceholder}
                         kpiStripSkeletonCellCount={

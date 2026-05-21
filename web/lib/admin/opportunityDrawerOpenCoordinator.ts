@@ -1,21 +1,33 @@
 import {
     adminV2DrawerBootstrapEnabled,
     fetchOpportunityDrawerOperationalBootstrap,
+    isOpportunityDrawerBootstrapWarm,
 } from "@/lib/admin/opportunityDrawerBootstrapClient";
 import type { OpportunityDrawerOperationalBootstrapResponse } from "@/lib/admin/opportunityDrawerOperationalBootstrapTypes";
 import type { OpportunityWorkspaceContext } from "@/contexts/AdminDrawerContext";
 import { markOpportunityDrawerHydrateDone } from "@/lib/admin/opportunityDrawerHydrateGuards";
-import { opportunityDrawerPrimaryContractReady } from "@/lib/admin/drawer/opportunityDrawerFirstPaintContract";
-import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
-import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import {
+    fetchOpportunityDrawerPrimaryEntity,
+    isOpportunityDrawerPrimaryWarm,
+} from "@/lib/admin/opportunityDrawerPrimaryPrefetch";
 
-/** Minimum time to keep external "Opening record…" before mount (avoids flash of partial drawer). */
-export const OPPORTUNITY_DRAWER_OPEN_MIN_READY_MS = 1500;
+/** Max overlay floor when cold — avoids sub-frame flash; skipped when intent prefetch is warm. */
+export const OPPORTUNITY_DRAWER_OPEN_ANTI_FLICKER_MS = 200;
 
 export type OpportunityDrawerOpenPreload = {
     opportunityId: string;
     bootstrap: OpportunityDrawerOperationalBootstrapResponse;
     primaryEntity: Record<string, unknown>;
+};
+
+export type OpportunityDrawerOpenMetrics = {
+    prefetch_hit: boolean;
+    bootstrap_warm: boolean;
+    primary_warm: boolean;
+    bootstrap_ms: number;
+    primary_ms: number;
+    wait_for_both_ms: number;
+    anti_flicker_ms: number;
 };
 
 export function shouldDeferOpportunityDrawerOpen(
@@ -29,61 +41,71 @@ export function shouldDeferOpportunityDrawerOpen(
     return p.startsWith("/adminV2") || p.startsWith("/admin/workspace");
 }
 
-function opportunityPrimaryFetchUrl(opportunityId: string): string {
-    return `/api/admin/entity/opportunities/${encodeURIComponent(opportunityId)}?surface=drawer_primary`;
-}
-
 /**
  * Loads bootstrap + drawer_primary in parallel. Marks primary hydrate done on success.
- * Throws on network/contract failure — caller keeps external opening UI (no partial drawer).
+ * Opens as soon as both resolve; optional short anti-flicker floor only on cold path.
  */
-export async function loadOpportunityDrawerFirstPaint(
-    opportunityId: string,
-    workspaceContext: OpportunityWorkspaceContext | null | undefined,
-    init?: RequestInit
-): Promise<OpportunityDrawerOpenPreload> {
-    const id = opportunityId.trim();
-    if (!id) throw new Error("missing_opportunity_id");
-
-    const [bootstrap, primaryRes] = await Promise.all([
-        fetchOpportunityDrawerOperationalBootstrap(id, workspaceContext ?? null, init),
-        dedupeAdminFetch(opportunityPrimaryFetchUrl(id), init ?? workspaceDataFetchInit()),
-    ]);
-
-    if (!primaryRes.ok) {
-        throw new Error(primaryRes.status === 404 ? "Not found" : "drawer_primary_failed");
-    }
-
-    const primaryEntity = (await primaryRes.json().catch(() => null)) as Record<string, unknown> | null;
-    if (!primaryEntity || typeof primaryEntity !== "object") {
-        throw new Error("drawer_primary_invalid");
-    }
-    if (String(primaryEntity.id ?? "").trim() !== id) {
-        throw new Error("drawer_primary_id_mismatch");
-    }
-
-    if (!opportunityDrawerPrimaryContractReady(primaryEntity, id)) {
-        throw new Error("drawer_primary_contract_not_ready");
-    }
-
-    markOpportunityDrawerHydrateDone(id, "primary");
-
-    return {
-        opportunityId: id,
-        bootstrap,
-        primaryEntity,
-    };
-}
-
-export function raceOpportunityDrawerFirstPaintWithMinDelay(
+export async function loadOpportunityDrawerFirstPaintWithOpenPolicy(
     opportunityId: string,
     workspaceContext: OpportunityWorkspaceContext | null | undefined,
     init?: RequestInit,
-    minReadyMs: number = OPPORTUNITY_DRAWER_OPEN_MIN_READY_MS
-): Promise<OpportunityDrawerOpenPreload> {
-    const loadP = loadOpportunityDrawerFirstPaint(opportunityId, workspaceContext, init);
-    const minP = new Promise<void>((resolve) => {
-        setTimeout(resolve, minReadyMs);
-    });
-    return Promise.all([loadP, minP]).then(([preload]) => preload);
+    opts?: { overlayShownAt?: number }
+): Promise<{ preload: OpportunityDrawerOpenPreload; metrics: OpportunityDrawerOpenMetrics }> {
+    const id = opportunityId.trim();
+    if (!id) throw new Error("missing_opportunity_id");
+
+    const bootstrapWarm = isOpportunityDrawerBootstrapWarm(id);
+    const primaryWarm = isOpportunityDrawerPrimaryWarm(id);
+    const prefetchHit = bootstrapWarm && primaryWarm;
+
+    const bothStart = typeof performance !== "undefined" ? performance.now() : 0;
+    let bootstrapMs = 0;
+    let primaryMs = 0;
+
+    const bootstrapP = (async () => {
+        const t0 = typeof performance !== "undefined" ? performance.now() : 0;
+        const boot = await fetchOpportunityDrawerOperationalBootstrap(id, workspaceContext ?? null, init);
+        bootstrapMs = Math.round((typeof performance !== "undefined" ? performance.now() : 0) - t0);
+        return boot;
+    })();
+
+    const primaryP = (async () => {
+        const t0 = typeof performance !== "undefined" ? performance.now() : 0;
+        const entity = await fetchOpportunityDrawerPrimaryEntity(id, init);
+        primaryMs = Math.round((typeof performance !== "undefined" ? performance.now() : 0) - t0);
+        return entity;
+    })();
+
+    const [bootstrap, primaryEntity] = await Promise.all([bootstrapP, primaryP]);
+    const waitForBothMs = Math.round((typeof performance !== "undefined" ? performance.now() : 0) - bothStart);
+
+    markOpportunityDrawerHydrateDone(id, "primary");
+
+    let antiFlickerMs = 0;
+    if (!prefetchHit && opts?.overlayShownAt != null && typeof performance !== "undefined") {
+        const elapsed = performance.now() - opts.overlayShownAt;
+        if (elapsed < OPPORTUNITY_DRAWER_OPEN_ANTI_FLICKER_MS) {
+            antiFlickerMs = Math.round(OPPORTUNITY_DRAWER_OPEN_ANTI_FLICKER_MS - elapsed);
+            await new Promise<void>((resolve) => {
+                setTimeout(resolve, antiFlickerMs);
+            });
+        }
+    }
+
+    return {
+        preload: {
+            opportunityId: id,
+            bootstrap,
+            primaryEntity,
+        },
+        metrics: {
+            prefetch_hit: prefetchHit,
+            bootstrap_warm: bootstrapWarm,
+            primary_warm: primaryWarm,
+            bootstrap_ms: bootstrapMs,
+            primary_ms: primaryMs,
+            wait_for_both_ms: waitForBothMs,
+            anti_flicker_ms: antiFlickerMs,
+        },
+    };
 }

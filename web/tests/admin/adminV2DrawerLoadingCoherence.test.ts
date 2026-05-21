@@ -118,6 +118,12 @@ describe("Deferred opportunity drawer open (first-paint gate)", () => {
         expect(overlay).toContain("Opening record");
         expect(overlay).not.toContain("data-adminv2-drawer");
     });
+
+    it("does not force a 1500ms wait before commit", () => {
+        const lib = read("lib/admin/opportunityDrawerOpenCoordinator.ts");
+        expect(lib).not.toContain("1500");
+        expect(lib).toContain("OPPORTUNITY_DRAWER_OPEN_ANTI_FLICKER_MS");
+    });
 });
 
 describe("Drawer opportunity header grouped loading", () => {

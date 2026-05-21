@@ -16,7 +16,10 @@ import type {
 } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
 import { logAdminV2QueueRowClick } from "@/lib/debug/adminV2QueueRowClickDebug";
-import { prefetchOpportunityDrawerOnRowIntent } from "@/lib/admin/opportunityDrawerIntentPrefetch";
+import {
+  prefetchOpportunityDrawerOnRowIntent,
+  type OpportunityDrawerIntentContext,
+} from "@/lib/admin/opportunityDrawerIntentPrefetch";
 import { DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS } from "@/lib/ui-v2/queueUiConfig";
 import { normalizePreviewLooseDateTokens } from "@/lib/adminFormatters";
 import { CRM_COMPACT_VALUE_DOT_SEP } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
@@ -34,6 +37,8 @@ type Props = {
   /** Visual weight — primary queue is dominant in department view */
   variant?: "primary" | "secondary";
   surface?: "default" | "department" | "work_unit";
+  /** Work-unit lane scope — must match drawer open so intent prefetch warms the same bootstrap URL. */
+  opportunityDrawerWorkspaceContext?: OpportunityDrawerIntentContext | null;
 };
 
 /** Routing context for queue gestures — entity authority lives on GET / resolver after drill. */
@@ -69,6 +74,15 @@ function fireQueueRowOpenRecord(
     actionId: "open_record",
     payload: mergeQueueActionPayload(queue),
   });
+}
+
+function prefetchOpportunityQueueRowIntent(
+  queue: QueueVm,
+  itemId: string,
+  workspaceContext?: OpportunityDrawerIntentContext | null
+): void {
+  if (queue.queueEntityType !== "opportunity") return;
+  prefetchOpportunityDrawerOnRowIntent(itemId, workspaceContext ?? null);
 }
 
 function fireViewAll(queue: QueueVm, onAction: WorkspaceActionHandler) {
@@ -855,7 +869,15 @@ export function CrmCompactQueuePreview({
   );
 }
 
-function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: WorkspaceActionHandler }) {
+function WorkUnitQueueLane({
+  queue,
+  onAction,
+  opportunityDrawerWorkspaceContext,
+}: {
+  queue: QueueVm;
+  onAction: WorkspaceActionHandler;
+  opportunityDrawerWorkspaceContext?: OpportunityDrawerIntentContext | null;
+}) {
   const listShellRef = useRef<HTMLDivElement>(null);
   const [refreshMinHeightPx, setRefreshMinHeightPx] = useState<number>();
   /** Client-only collapsed waitlist program/room groups (placement sections). */
@@ -1037,11 +1059,9 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
                 data-ws-needs-attention={attentionAccent ? "true" : undefined}
                 role="button"
                 tabIndex={0}
-                onMouseDown={() => {
-                  if (queue.queueEntityType === "opportunity") {
-                    prefetchOpportunityDrawerOnRowIntent(item.id);
-                  }
-                }}
+                onMouseEnter={() => prefetchOpportunityQueueRowIntent(queue, item.id, opportunityDrawerWorkspaceContext)}
+                onMouseDown={() => prefetchOpportunityQueueRowIntent(queue, item.id, opportunityDrawerWorkspaceContext)}
+                onFocus={() => prefetchOpportunityQueueRowIntent(queue, item.id, opportunityDrawerWorkspaceContext)}
                 onClick={() => fireQueueRowOpenRecord(queue, item.id, onAction, "card")}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
@@ -1228,7 +1248,13 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
   );
 }
 
-export default function QueueBlock({ queue, onAction, variant = "primary", surface = "default" }: Props) {
+export default function QueueBlock({
+  queue,
+  onAction,
+  variant = "primary",
+  surface = "default",
+  opportunityDrawerWorkspaceContext = null,
+}: Props) {
   const isPrimary = variant === "primary";
 
   if (surface === "department") {
@@ -1236,7 +1262,13 @@ export default function QueueBlock({ queue, onAction, variant = "primary", surfa
   }
 
   if (surface === "work_unit") {
-    return <WorkUnitQueueLane queue={queue} onAction={onAction} />;
+    return (
+      <WorkUnitQueueLane
+        queue={queue}
+        onAction={onAction}
+        opportunityDrawerWorkspaceContext={opportunityDrawerWorkspaceContext}
+      />
+    );
   }
 
   return (

@@ -3,15 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import OpportunityDrawerOpeningOverlay from "@/components/admin/OpportunityDrawerOpeningOverlay";
+import { loadOpportunityDrawerFirstPaintWithOpenPolicy } from "@/lib/admin/opportunityDrawerOpenCoordinator";
 import {
-    raceOpportunityDrawerFirstPaintWithMinDelay,
-    OPPORTUNITY_DRAWER_OPEN_MIN_READY_MS,
-} from "@/lib/admin/opportunityDrawerOpenCoordinator";
+    markDrawerOpenOverlayShown,
+    reportDrawerOpenCoordinatorCommit,
+} from "@/lib/perf/adminV2DrawerPerf";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
 /**
  * Runs bootstrap + drawer_primary before AdminDrawerContext commits the drawer.
- * AdminEntityDrawer mounts only after preload is attached (no in-modal loading shell).
+ * Warm intent prefetch commits immediately; cold path shows overlay only for real network wait (+ ≤200ms floor).
  */
 export default function OpportunityDrawerOpenCoordinator() {
     const { openingOpportunity, commitOpportunityDrawerOpen, cancelOpportunityDrawerOpen } = useAdminDrawer();
@@ -27,16 +28,19 @@ export default function OpportunityDrawerOpenCoordinator() {
         const gen = ++runGenRef.current;
         const ac = new AbortController();
         setErrorMessage(null);
+        markDrawerOpenOverlayShown();
+        const overlayShownAt = typeof performance !== "undefined" ? performance.now() : 0;
 
         const run = async () => {
             try {
-                const preload = await raceOpportunityDrawerFirstPaintWithMinDelay(
+                const { preload, metrics } = await loadOpportunityDrawerFirstPaintWithOpenPolicy(
                     openingOpportunity.id,
                     openingOpportunity.opportunityWorkspaceContext ?? null,
                     { ...workspaceDataFetchInit(), signal: ac.signal },
-                    OPPORTUNITY_DRAWER_OPEN_MIN_READY_MS
+                    { overlayShownAt }
                 );
                 if (gen !== runGenRef.current) return;
+                reportDrawerOpenCoordinatorCommit(openingOpportunity.id, metrics);
                 commitOpportunityDrawerOpen(openingOpportunity, preload);
             } catch (e) {
                 if (gen !== runGenRef.current) return;

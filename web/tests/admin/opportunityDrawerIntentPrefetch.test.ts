@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const dedupeAdminFetch = vi.fn(() => Promise.resolve(new Response("{}")));
 const dedupeAdminFetchWithTtl = vi.fn(() => Promise.resolve(new Response("{}")));
 const scheduleDeferredCommunicationsDrawerPrefetch = vi.fn();
+const fetchOpportunityDrawerOperationalBootstrap = vi.fn(() => Promise.resolve({ entity: { id: "opp-abc" } }));
+const prefetchOpportunityDrawerPrimary = vi.fn();
 
 vi.mock("@/lib/workspace/workspaceAdminFetchDedupe", () => ({
     dedupeAdminFetch,
@@ -11,6 +13,15 @@ vi.mock("@/lib/workspace/workspaceAdminFetchDedupe", () => ({
 
 vi.mock("@/lib/admin/communications/communicationsDrawerPrefetch", () => ({
     scheduleDeferredCommunicationsDrawerPrefetch,
+}));
+
+vi.mock("@/lib/admin/opportunityDrawerBootstrapClient", () => ({
+    adminV2DrawerBootstrapEnabled: () => true,
+    fetchOpportunityDrawerOperationalBootstrap,
+}));
+
+vi.mock("@/lib/admin/opportunityDrawerPrimaryPrefetch", () => ({
+    prefetchOpportunityDrawerPrimary,
 }));
 
 describe("prefetchOpportunityDrawerOnRowIntent", () => {
@@ -23,31 +34,36 @@ describe("prefetchOpportunityDrawerOnRowIntent", () => {
         dedupeAdminFetch.mockClear();
         dedupeAdminFetchWithTtl.mockClear();
         scheduleDeferredCommunicationsDrawerPrefetch.mockClear();
+        fetchOpportunityDrawerOperationalBootstrap.mockClear();
+        prefetchOpportunityDrawerPrimary.mockClear();
     });
 
-    it("prefetches drawer-operational-bootstrap on intent without comms", async () => {
+    it("prefetches bootstrap + drawer_primary in parallel without comms", async () => {
         const { prefetchOpportunityDrawerOnRowIntent } = await import(
             "@/lib/admin/opportunityDrawerIntentPrefetch"
         );
         prefetchOpportunityDrawerOnRowIntent("opp-abc");
         expect(scheduleDeferredCommunicationsDrawerPrefetch).not.toHaveBeenCalled();
-        expect(dedupeAdminFetch).toHaveBeenCalledWith(
-            expect.stringMatching(/\/api\/admin\/opportunities\/opp-abc\/drawer-operational-bootstrap$/),
+        expect(fetchOpportunityDrawerOperationalBootstrap).toHaveBeenCalledWith(
+            "opp-abc",
+            null,
             expect.anything()
         );
-        expect(dedupeAdminFetchWithTtl).not.toHaveBeenCalled();
+        expect(prefetchOpportunityDrawerPrimary).toHaveBeenCalledWith("opp-abc", expect.anything());
     });
 
-    it("prefetches bootstrap with workspace scope query params", async () => {
-        const { buildOpportunityDrawerBootstrapCanonicalUrl } = await import(
-            "@/lib/admin/opportunityDrawerBootstrapClient"
+    it("passes workspace context through to bootstrap prefetch", async () => {
+        const { prefetchOpportunityDrawerOnRowIntent } = await import(
+            "@/lib/admin/opportunityDrawerIntentPrefetch"
         );
-        const url = buildOpportunityDrawerBootstrapCanonicalUrl("opp-abc", {
+        prefetchOpportunityDrawerOnRowIntent("opp-abc", {
             work_unit_id: "wu-1",
             department_id: "dept-1",
         });
-        expect(url).toMatch(/drawer-operational-bootstrap\?.*work_unit_id=wu-1/);
-        expect(url).toMatch(/department_id=dept-1/);
-        expect(url).not.toMatch(/hint_oper_trust/);
+        expect(fetchOpportunityDrawerOperationalBootstrap).toHaveBeenCalledWith(
+            "opp-abc",
+            { work_unit_id: "wu-1", department_id: "dept-1" },
+            expect.anything()
+        );
     });
 });

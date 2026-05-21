@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
 import type { OpportunityDrawerOpenPreload } from "@/lib/admin/opportunityDrawerOpenCoordinator";
 import { shouldDeferOpportunityDrawerOpen } from "@/lib/admin/opportunityDrawerOpenCoordinator";
+import { markDrawerOpenStart } from "@/lib/perf/adminV2DrawerPerf";
 import type { OperationalVisualContext } from "@/lib/visualContext";
 
 /** Entity kinds that can open in the admin stack drawer (must match API + presentation registry usage). */
@@ -253,6 +254,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                     pushDrawerToStack(prev);
                     return { type: null, id: null };
                 });
+                markDrawerOpenStart();
                 setOpeningOpportunity({
                     id: params.id,
                     defaultOpportunitySurface: params.defaultOpportunitySurface,

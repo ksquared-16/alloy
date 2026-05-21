@@ -74,6 +74,12 @@ function drawerBootstrapCacheKey(opportunityId: string): string {
     return opportunityId.trim();
 }
 
+/** True when intent prefetch or a prior open still has bootstrap in the 8s coalesce window. */
+export function isOpportunityDrawerBootstrapWarm(opportunityId: string): boolean {
+    const key = drawerBootstrapCacheKey(opportunityId);
+    return key.length > 0 && drawerBootstrapByOpportunityId.has(key);
+}
+
 /** One in-flight bootstrap payload per opportunity (survives Strict Mode; coalesces prefetch vs open). */
 export async function fetchOpportunityDrawerOperationalBootstrap(
     opportunityId: string,

@@ -8,6 +8,8 @@ import { emitAdminV2Perf, perfDrawerFullHydrate } from "@/lib/perf/adminV2PerfLo
 
 const ROW_CLICK_MARK = "drawer_row_click_at";
 const OPEN_START_MARK = "drawer_open_start";
+const OPEN_OVERLAY_MARK = "drawer_open_overlay_at";
+const OPEN_COMMIT_MARK = "drawer_open_commit_at";
 const VISIBLE_REQ_MARK = "drawer_opportunity_visible_req";
 const VISIBLE_APPLIED_MARK = "drawer_opportunity_visible_applied";
 const PRIMARY_READY_MARK = "drawer_primary_ready_at";
@@ -33,6 +35,75 @@ export function markDrawerRowClickStart(): void {
 export function markDrawerOpenStart(): void {
     if (typeof performance === "undefined") return;
     alloyPerfSet(OPEN_START_MARK, performance.now());
+}
+
+/** Deferred open: external overlay mounted (after row click). */
+export function markDrawerOpenOverlayShown(): void {
+    if (typeof performance === "undefined") return;
+    const t = performance.now();
+    alloyPerfSet(OPEN_OVERLAY_MARK, t);
+    const clickToOverlay = msBetween(ROW_CLICK_MARK, OPEN_OVERLAY_MARK);
+    if (clickToOverlay != null) {
+        alloyPerfSet("drawer_open_click_to_overlay", clickToOverlay);
+    }
+}
+
+export type DrawerOpenCoordinatorPerf = {
+    prefetch_hit: boolean;
+    bootstrap_warm: boolean;
+    primary_warm: boolean;
+    bootstrap_ms: number;
+    primary_ms: number;
+    wait_for_both_ms: number;
+    anti_flicker_ms: number;
+};
+
+/** Deferred open: bootstrap + primary ready, drawer committed. */
+export function reportDrawerOpenCoordinatorCommit(
+    opportunityId: string,
+    metrics: DrawerOpenCoordinatorPerf
+): void {
+    if (typeof performance === "undefined") return;
+    const t = performance.now();
+    alloyPerfSet(OPEN_COMMIT_MARK, t);
+    const clickToOverlay = msBetween(ROW_CLICK_MARK, OPEN_OVERLAY_MARK);
+    const clickToCommit = msBetween(ROW_CLICK_MARK, OPEN_COMMIT_MARK);
+    if (clickToOverlay != null) alloyPerfSet("drawer_open_click_to_overlay", clickToOverlay);
+    if (clickToCommit != null) alloyPerfSet("drawer_open_click_to_commit_ms", clickToCommit);
+    alloyPerfSet("drawer_open_bootstrap_ms", metrics.bootstrap_ms);
+    alloyPerfSet("drawer_open_primary_ms", metrics.primary_ms);
+    alloyPerfSet("drawer_open_wait_for_both_ms", metrics.wait_for_both_ms);
+    alloyPerfSet("drawer_open_prefetch_hit", metrics.prefetch_hit ? 1 : 0);
+
+    emitAdminV2Perf("[perf.drawer.open]", {
+        surface: "drawer_opportunity",
+        phase: "deferred_first_paint_commit",
+        opportunity_id: opportunityId,
+        entity_id: opportunityId,
+        drawer_open_click_to_overlay: clickToOverlay,
+        drawer_open_click_to_commit_ms: clickToCommit,
+        drawer_open_bootstrap_ms: metrics.bootstrap_ms,
+        drawer_open_primary_ms: metrics.primary_ms,
+        drawer_open_wait_for_both_ms: metrics.wait_for_both_ms,
+        drawer_open_anti_flicker_ms: metrics.anti_flicker_ms,
+        drawer_open_prefetch_hit: metrics.prefetch_hit,
+        drawer_open_bootstrap_warm: metrics.bootstrap_warm,
+        drawer_open_primary_warm: metrics.primary_warm,
+        source: metrics.prefetch_hit ? "cache" : "network",
+    });
+
+    if (clickToCommit != null && clickToCommit > 1200 && !metrics.prefetch_hit) {
+        emitAdminV2Perf("[perf.drawer.open]", {
+            surface: "drawer_opportunity",
+            phase: "deferred_open_slow_cold",
+            opportunity_id: opportunityId,
+            entity_id: opportunityId,
+            total_ms: clickToCommit,
+            drawer_open_wait_for_both_ms: metrics.wait_for_both_ms,
+            drawer_open_prefetch_hit: false,
+            source: "network",
+        });
+    }
 }
 
 export function markDrawerBootstrapRequestStart(): void {

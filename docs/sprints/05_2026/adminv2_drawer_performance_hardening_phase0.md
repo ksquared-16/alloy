@@ -314,11 +314,11 @@ Explicit `drawerPrimaryContractReady` / `drawerFirstPaintActive` in `web/lib/adm
 
 ## Pass 5 — Deferred drawer mount (2026-05-20)
 
-Modal does not mount until `drawer-operational-bootstrap` + `drawer_primary` complete (min 1500ms external **Opening record…** overlay).
+Modal does not mount until `drawer-operational-bootstrap` + `drawer_primary` complete. External **Opening record…** overlay only on cold path (real network wait + ≤200ms anti-flicker floor). Warm intent prefetch (hover/mousedown/focus) commits immediately.
 
-- `AdminDrawerContext.openDrawer` → `openingOpportunity` + page overlay (`OpportunityDrawerOpenCoordinator`)
-- `commitOpportunityDrawerOpen` attaches preload; `AdminEntityDrawer` `useLayoutEffect` applies bootstrap + primary before paint
-- No in-drawer `DrawerOpportunityOperationalLoadingComposition` on preloaded open; `isOpen` false while `openingOpportunity`
+- Intent prefetch: parallel bootstrap + `drawer_primary` (`opportunityDrawerPrimaryPrefetch.ts`); WU queue passes lane scope on `mouseenter`/`mousedown`/`focus`
+- Perf: `[perf.drawer.open]` with `drawer_open_*` marks (`click_to_overlay`, `bootstrap_ms`, `primary_ms`, `wait_for_both_ms`, `click_to_commit_ms`, `prefetch_hit`)
+- Target: p75 click→commit &lt;900ms when backend warm; &gt;1200ms cold logs `deferred_open_slow_cold`
 
 ---
 

@@ -4,6 +4,7 @@ import { useMemo, type CSSProperties, type ReactNode } from "react";
 import type { WorkUnitWorkspaceModel } from "@/lib/ui-v2/workspace-types";
 import { operationalWorkspaceShellStyle } from "@/lib/visualContext";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
+import type { OpportunityDrawerIntentContext } from "@/lib/admin/opportunityDrawerIntentPrefetch";
 import { SignalBlock, KPIBlock, QueueBlock, WorkBlock, ActionsBlock } from "../blocks";
 import { WorkspaceShellLayout } from "@/components/admin/workspace/WorkspaceShellLayout";
 import { WorkspaceActionsRailPlaceholder } from "@/components/admin/workspace/WorkspaceActionsRailPlaceholder";
@@ -28,6 +29,8 @@ type Props = {
   reserveActionsRail?: boolean;
   /** Optional footer content constrained to the primary column width. */
   primaryFooterSlot?: ReactNode;
+  /** Lane scope for opportunity drawer intent prefetch (bootstrap URL must match open). */
+  opportunityDrawerWorkspaceContext?: OpportunityDrawerIntentContext | null;
 };
 
 /**
@@ -42,6 +45,7 @@ export default function WorkUnitWorkspace({
   kpiStripSkeletonCellCount,
   reserveActionsRail = false,
   primaryFooterSlot,
+  opportunityDrawerWorkspaceContext = null,
 }: Props) {
   const wuShellStyle: CSSProperties = useMemo(
     () =>
@@ -182,7 +186,13 @@ export default function WorkUnitWorkspace({
                     ) : null}
                   </div>
                 ) : null}
-                <QueueBlock queue={model.primaryQueue} onAction={onAction} variant="primary" surface="work_unit" />
+                <QueueBlock
+                  queue={model.primaryQueue}
+                  onAction={onAction}
+                  variant="primary"
+                  surface="work_unit"
+                  opportunityDrawerWorkspaceContext={opportunityDrawerWorkspaceContext}
+                />
               </div>
             </div>
             <div
