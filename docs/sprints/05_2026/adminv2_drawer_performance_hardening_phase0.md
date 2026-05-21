@@ -325,6 +325,8 @@ Warm intent prefetch: bootstrap + primary + full on `mouseenter`/`mousedown`/`fo
 
 Perf: `[perf.drawer.open]` phase `deferred_composed_commit` with `drawer_open_full_ms`, `drawer_open_header_actions_ms`, `drawer_open_wait_for_both_ms`, `drawer_open_prefetch_hit`.
 
+**Layout stability (composed open):** `opportunityDrawerLayoutFrozen` + `opportunityDrawerAboveFoldLocked` until scroll/idle — single-column summary, no right-column/BOS/task strip, inquiry_children last+collapsed, deferred `postDrawerVisibleKey`, header action rail `min-h` reserve (`opportunityDrawerLayoutStability.ts`).
+
 ---
 
 ## Pass 3 — Request suppression (2026-05-20)

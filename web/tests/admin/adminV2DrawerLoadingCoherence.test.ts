@@ -106,6 +106,17 @@ describe("Work-unit KPI and queue picker loading", () => {
     });
 });
 
+describe("Opportunity drawer above-fold layout stability", () => {
+    it("locks summary grid and defers secondary reveal until below-fold", () => {
+        const src = read("components/admin/AdminEntityDrawer.tsx");
+        expect(src).toContain("opportunityDrawerAboveFoldLocked");
+        expect(src).toContain("stabilizeOpportunityWorkflowOverviewSections");
+        expect(src).toContain("shouldDeferOpportunityDrawerSecondaryReveal");
+        expect(src).toContain("OPPORTUNITY_DRAWER_BELOW_FOLD_SCROLL_PX");
+        expect(src).toContain("overflow-anchor-none");
+    });
+});
+
 describe("Deferred opportunity drawer open (first-paint gate)", () => {
     it("does not mount drawer until bootstrap + primary; external overlay only", () => {
         const ctx = read("contexts/AdminDrawerContext.tsx");
@@ -422,11 +433,11 @@ describe("Opportunity drawer first-paint contract", () => {
 
     it("hides right summary column and defers overview sections on first paint", () => {
         const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("opportunityDrawerFirstPaintActive");
-        expect(src).toContain("showInquirySummaryRightColumn");
-        expect(src).toContain("familySummaryUsesFullPanel");
-        expect(src).toContain("filterOpportunityOverviewSectionsForFirstPaint");
-        expect(src).toMatch(/opportunityDrawerFirstPaintActive \? "true" : "false"/);
+        expect(src).toContain("computeShowInquirySummaryRightColumn");
+        expect(src).toContain("computeFamilySummaryUsesFullPanel");
+        expect(src).toContain("stabilizeOpportunityWorkflowOverviewSections");
+        expect(src).toContain("opportunityDrawerLayoutFirstPaintGates");
+        expect(src).toMatch(/opportunityDrawerLayoutFirstPaintGates \? "true" : "false"/);
         expect(src).not.toMatch(
             /min-h-\[3\.25rem\][\s\S]{0,120}aria-hidden[\s\S]{0,120}Tour date/,
         );

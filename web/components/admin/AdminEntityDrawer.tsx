@@ -166,7 +166,6 @@ import { adminEntityRefetchShouldBlockDrawerShell } from "@/lib/ui-v2/adminV2Ent
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { useDrawerSectionIntersection } from "@/lib/admin/drawer/useDrawerSectionIntersection";
 import {
-    filterOpportunityOverviewSectionsForFirstPaint,
     opportunityDrawerEnrichmentLayoutReady as computeOpportunityDrawerEnrichmentLayoutReady,
     opportunityDrawerFirstPaintActive as computeOpportunityDrawerFirstPaintActive,
     opportunityDrawerPrimaryContractReady as computeOpportunityDrawerPrimaryContractReady,
@@ -174,6 +173,17 @@ import {
     opportunityInquirySummaryRightPanelFromPrimaryOnly,
     opportunityInquiryTourDisplayFromPrimaryMetadata,
 } from "@/lib/admin/drawer/opportunityDrawerFirstPaintContract";
+import {
+    OPPORTUNITY_DRAWER_BELOW_FOLD_SCROLL_PX,
+    OPPORTUNITY_DRAWER_HEADER_ACTIONS_RAIL_MIN_H_CLASS,
+    computeFamilySummaryUsesFullPanel,
+    computeShowInquirySummaryRightColumn,
+    opportunityDrawerAboveFoldLayoutLocked,
+    opportunityDrawerLayoutFirstPaintGatesActive,
+    opportunityDrawerSummaryLayoutMode,
+    shouldDeferOpportunityDrawerSecondaryReveal,
+    stabilizeOpportunityWorkflowOverviewSections,
+} from "@/lib/admin/drawer/opportunityDrawerLayoutStability";
 import {
     clearOpportunityDrawerBackgroundFullSchedule,
     finishOpportunityDrawerHydrate,
@@ -1596,6 +1606,9 @@ export default function AdminEntityDrawer() {
     const [opportunityDrawerRevealCoordTimedOut, setOpportunityDrawerRevealCoordTimedOut] = useState(false);
     /** Pre-open coordinator could not fetch `full` — keep enrichment sections unmounted until edit/expand. */
     const [opportunityDrawerEnrichmentHeld, setOpportunityDrawerEnrichmentHeld] = useState(false);
+    /** Composed preload open — freeze above-the-fold layout until scroll or idle below-fold reveal. */
+    const [opportunityDrawerLayoutFrozen, setOpportunityDrawerLayoutFrozen] = useState(false);
+    const [opportunityDrawerBelowFoldRevealed, setOpportunityDrawerBelowFoldRevealed] = useState(false);
     const [opportunityBootstrapAppliedId, setOpportunityBootstrapAppliedId] = useState<string | null>(null);
     const [opportunityBootstrapLayoutRow, setOpportunityBootstrapLayoutRow] = useState<RecordLayoutRow | null>(null);
     const [opportunityOperTrustPreview, setOpportunityOperTrustPreview] = useState<DrawerOperTrustPreviewV1 | null>(
@@ -2090,6 +2103,8 @@ export default function AdminEntityDrawer() {
         const boot = preload.bootstrap;
         if (String((boot.entity as { id?: unknown }).id ?? "") !== String(drawer.id)) return;
         opportunityDrawerFirstPaintPreloadedRef.current = drawer.id;
+        setOpportunityDrawerLayoutFrozen(true);
+        setOpportunityDrawerBelowFoldRevealed(false);
         opportunityDrawerBootstrapAppliedRef.current = drawer.id;
         opportunityDrawerBootstrapEntityKeyRef.current = `${drawer.type}:${drawer.id}`;
         setOpportunityBootstrapAppliedId(drawer.id);
@@ -2122,7 +2137,6 @@ export default function AdminEntityDrawer() {
         setOpportunityDrawerRevealCoordTimedOut(true);
         markOpportunityDrawerHydrateDone(drawer.id, "primary");
         opportunityPrimaryHydrateDoneRef.current = drawer.id;
-        setPostDrawerVisibleKey(`${drawer.type}:${drawer.id}`);
         setLoading(false);
         setError(null);
     }, [drawer.type, drawer.id, consumeOpportunityDrawerPreload]);
@@ -2131,6 +2145,8 @@ export default function AdminEntityDrawer() {
         if (!drawer.type || !drawer.id) {
             entityDrawerTabInitKeyRef.current = "";
             opportunityDrawerFirstPaintPreloadedRef.current = null;
+            setOpportunityDrawerLayoutFrozen(false);
+            setOpportunityDrawerBelowFoldRevealed(false);
             setOpportunityDrawerEnrichmentHeld(false);
             opportunityPrimaryHydrateInFlightRef.current = null;
             opportunityPrimaryHydrateDoneRef.current = null;
@@ -6130,6 +6146,10 @@ export default function AdminEntityDrawer() {
             ? (
                   <div
                       className={`flex flex-col items-end gap-1.5 ${
+                          opportunityDrawerAboveFoldLocked || opportunityRegistryHeaderReady
+                              ? OPPORTUNITY_DRAWER_HEADER_ACTIONS_RAIL_MIN_H_CLASS
+                              : ""
+                      } ${
                           drawerShellVariant === "adminV2"
                               ? opportunityInquiryWorkflowDrawer
                                   ? "max-w-full"
@@ -6594,7 +6614,7 @@ export default function AdminEntityDrawer() {
             : scheduleRecordChromeBodyShell || opportunityRecordChromeBodyShell
               ? "space-y-3 max-w-none"
               : "space-y-6"
-    }${opportunityRecordChromeBodyShell ? " pb-24 sm:pb-28" : ""}`;
+    }${opportunityRecordChromeBodyShell ? " pb-24 sm:pb-28 overflow-anchor-none" : ""}`;
 
     const jobDrawerV2SignalsNode = useMemo(() => {
         if (!isJobDrawerV2 || !overviewData) return null;
@@ -6794,6 +6814,16 @@ export default function AdminEntityDrawer() {
         );
     }, [drawer.id, overviewData, opportunityDrawerBootstrapEnrichmentPath]);
 
+    const opportunityDrawerAboveFoldLocked = useMemo(
+        () => opportunityDrawerAboveFoldLayoutLocked(opportunityDrawerLayoutFrozen, opportunityDrawerBelowFoldRevealed),
+        [opportunityDrawerLayoutFrozen, opportunityDrawerBelowFoldRevealed]
+    );
+
+    const opportunityDrawerLayoutFirstPaintGates = useMemo(
+        () => opportunityDrawerLayoutFirstPaintGatesActive(opportunityDrawerAboveFoldLocked, opportunityDrawerFirstPaintActive),
+        [opportunityDrawerAboveFoldLocked, opportunityDrawerFirstPaintActive]
+    );
+
     const opportunityDrawerEnrichmentLayoutReady = useMemo(
         () =>
             !opportunityDrawerEnrichmentHeld &&
@@ -6811,10 +6841,44 @@ export default function AdminEntityDrawer() {
         [opportunityDrawerBootstrapEnrichmentPath, opportunityFullRecordHydrateApplied, opportunityDrawerEnrichmentHeld]
     );
 
+    /** Below-fold reveal: unlock secondary fetches / right column without reshaping first viewport. */
+    useEffect(() => {
+        if (!opportunityDrawerLayoutFrozen || opportunityDrawerBelowFoldRevealed) return;
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+
+        const scrollRoot = document.querySelector("[data-adminv2-record-modal-scroll]");
+        const onScroll = () => {
+            if (!scrollRoot) return;
+            if (scrollRoot.scrollTop >= OPPORTUNITY_DRAWER_BELOW_FOLD_SCROLL_PX) {
+                setOpportunityDrawerBelowFoldRevealed(true);
+            }
+        };
+        scrollRoot?.addEventListener("scroll", onScroll, { passive: true });
+        if (scrollRoot && scrollRoot.scrollTop >= OPPORTUNITY_DRAWER_BELOW_FOLD_SCROLL_PX) {
+            setOpportunityDrawerBelowFoldRevealed(true);
+        }
+
+        const idleReveal = window.setTimeout(() => {
+            setOpportunityDrawerBelowFoldRevealed(true);
+        }, 2400);
+
+        return () => {
+            scrollRoot?.removeEventListener("scroll", onScroll);
+            window.clearTimeout(idleReveal);
+        };
+    }, [drawer.type, drawer.id, opportunityDrawerLayoutFrozen, opportunityDrawerBelowFoldRevealed]);
+
+    useLayoutEffect(() => {
+        if (!opportunityDrawerLayoutFrozen || opportunityDrawerBelowFoldRevealed) return;
+        const scrollRoot = document.querySelector("[data-adminv2-record-modal-scroll]");
+        if (scrollRoot) scrollRoot.scrollTop = 0;
+    }, [drawer.type, drawer.id, opportunityDrawerLayoutFrozen, opportunityDrawerBelowFoldRevealed]);
+
     /** Deferred enrichment after primary reveal; bootstrap path waits for background `full`. */
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
         if (!opportunityDrawerOverviewRevealReady) return;
+        if (shouldDeferOpportunityDrawerSecondaryReveal(opportunityDrawerAboveFoldLocked)) return;
         const enrichmentReady =
             !opportunityDrawerBootstrapEnrichmentPath || opportunityFullRecordHydrateApplied;
         if (!enrichmentReady) return;
@@ -6838,6 +6902,7 @@ export default function AdminEntityDrawer() {
         opportunityDrawerOverviewRevealReady,
         opportunityFullRecordHydrateApplied,
         postDrawerVisibleKey,
+        opportunityDrawerAboveFoldLocked,
     ]);
 
     useEffect(() => {
@@ -6944,7 +7009,9 @@ export default function AdminEntityDrawer() {
         setOpportunityTourBookingsId(drawer.id);
     }, [drawer.type, drawer.id, opportunityDrawerSecondaryReady]);
 
-    const opportunityInquirySummaryEnrichmentGate = opportunityDrawerSecondaryReady;
+    const opportunityInquirySummaryEnrichmentGate =
+        opportunityDrawerSecondaryReady &&
+        !shouldDeferOpportunityDrawerSecondaryReveal(opportunityDrawerAboveFoldLocked);
     const { ref: tourSectionRef, intersecting: tourSectionVisible } = useDrawerSectionIntersection(
         opportunityInquirySummaryEnrichmentGate,
         "80px"
@@ -6957,7 +7024,7 @@ export default function AdminEntityDrawer() {
     const inquirySummaryFetchEnabled = opportunityInquirySummaryEnrichmentGate && inquirySummaryRightVisible;
     const opportunityRegistrySectionActionsFetchEnabled =
         opportunityDrawerOverviewRevealReady &&
-        !opportunityDrawerFirstPaintActive &&
+        !opportunityDrawerLayoutFirstPaintGates &&
         (!opportunityDrawerBootstrapEnrichmentPath || opportunityFullRecordHydrateApplied);
 
     useEffect(() => {
@@ -8477,16 +8544,18 @@ export default function AdminEntityDrawer() {
         }
         if (oppInquiryWorkflowV1) {
             const savedOrder = oppDrawerCfg?.overview_section_order;
-            if (!savedOrder?.length) {
+            if (!savedOrder?.length && !opportunityDrawerAboveFoldLocked) {
                 const icIdx = overviewSections.findIndex((s) => s.key === "inquiry_children");
                 if (icIdx > 0) {
                     const ic = overviewSections[icIdx]!;
                     overviewSections = [ic, ...overviewSections.slice(0, icIdx), ...overviewSections.slice(icIdx + 1)];
                 }
             }
-            overviewSections = overviewSections.map((s) =>
-                s.key === "inquiry_children" ? { ...s, defaultExpanded: true } : s
-            );
+            if (!opportunityDrawerAboveFoldLocked) {
+                overviewSections = overviewSections.map((s) =>
+                    s.key === "inquiry_children" ? { ...s, defaultExpanded: true } : s
+                );
+            }
             const stripPricingKeys = new Set(["pricing", "tuition", "tuition_pricing", "fee_schedule"]);
             if (overviewSections.some((s) => s.key === "inquiry_tuition")) {
                 overviewSections = overviewSections.filter((s) => !stripPricingKeys.has(s.key));
@@ -8528,12 +8597,12 @@ export default function AdminEntityDrawer() {
             overviewSections = applyPolicyChromeToOverviewSections(overviewSections, chrome);
         }
         if (drawer.type === "opportunities" && oppInquiryWorkflowV1) {
-            overviewSections = filterOpportunityOverviewSectionsForFirstPaint(
-                overviewSections,
-                opportunityDrawerFirstPaintActive,
-                opportunityDrawerEnrichmentLayoutReady,
-                opportunityDrawerEnrichmentHeld
-            );
+            overviewSections = stabilizeOpportunityWorkflowOverviewSections(overviewSections, {
+                aboveFoldLocked: opportunityDrawerAboveFoldLocked,
+                firstPaintGatesActive: opportunityDrawerLayoutFirstPaintGates,
+                enrichmentLayoutReady: opportunityDrawerEnrichmentLayoutReady,
+                enrichmentHeldUntilInteraction: opportunityDrawerEnrichmentHeld,
+            });
         }
         return overviewSections;
     }, [
@@ -8542,7 +8611,8 @@ export default function AdminEntityDrawer() {
         presentationType,
         recordChromeSchedule.layout,
         recordChromeOpportunity.layout,
-        opportunityDrawerFirstPaintActive,
+        opportunityDrawerAboveFoldLocked,
+        opportunityDrawerLayoutFirstPaintGates,
         opportunityDrawerEnrichmentLayoutReady,
         opportunityDrawerEnrichmentHeld,
     ]);
@@ -11712,8 +11782,11 @@ export default function AdminEntityDrawer() {
                                                 const commPhone = String((comm as { phone?: string | null } | null)?.phone ?? "").trim();
                                                 const primaryContactLabelLine = String(commName || primaryContact || primaryPerson || "").trim();
                                                 const primaryContactNamePending =
-                                                    opportunityInquiryAwaitingFullEnrichment && !primaryContactLabelLine;
+                                                    !opportunityDrawerAboveFoldLocked &&
+                                                    opportunityInquiryAwaitingFullEnrichment &&
+                                                    !primaryContactLabelLine;
                                                 const primaryContactChannelsPending =
+                                                    !opportunityDrawerAboveFoldLocked &&
                                                     opportunityInquiryAwaitingFullEnrichment &&
                                                     !!primaryContactLabelLine &&
                                                     (!commPhone || !commEmail);
@@ -11723,7 +11796,7 @@ export default function AdminEntityDrawer() {
                                                     String(ident?.inquiry?.title ?? "").trim() || "";
                                                 const stageLabel = (() => {
                                                     const displaySeed = String(d._status_display ?? "").trim();
-                                                    if (opportunityDrawerFirstPaintActive && displaySeed) {
+                                                    if (opportunityDrawerLayoutFirstPaintGates && displaySeed) {
                                                         return displaySeed;
                                                     }
                                                     const sk = String(formData.status_key ?? d.status_key ?? "").trim();
@@ -11772,22 +11845,32 @@ export default function AdminEntityDrawer() {
                                                             (recordChromeOpportunity.layout?.config_json ?? null) as RecordLayoutConfigJson | null,
                                                             "family_contacts"
                                                         );
-                                                    const familySummaryUsesFullPanel =
-                                                        familyContactsInSummary && !opportunityDrawerFirstPaintActive;
-                                                    const showInquirySummaryRightColumn =
-                                                        !opportunityDrawerFirstPaintActive &&
-                                                        (opportunityInquirySummaryRightPanelFromPrimaryOnly(d) ||
-                                                            (opportunityDrawerEnrichmentLayoutReady &&
-                                                                opportunityDrawerSecondaryReady &&
-                                                                isTaskAssistV1UiEnabled()));
+                                                    const familySummaryUsesFullPanel = computeFamilySummaryUsesFullPanel({
+                                                        aboveFoldLocked: opportunityDrawerAboveFoldLocked,
+                                                        familyContactsInSummary,
+                                                        firstPaintActive: opportunityDrawerFirstPaintActive,
+                                                    });
+                                                    const showInquirySummaryRightColumn = computeShowInquirySummaryRightColumn({
+                                                        aboveFoldLocked: opportunityDrawerAboveFoldLocked,
+                                                        record: d,
+                                                        enrichmentLayoutReady: opportunityDrawerEnrichmentLayoutReady,
+                                                        secondaryReady: opportunityDrawerSecondaryReady,
+                                                        taskAssistEnabled: isTaskAssistV1UiEnabled(),
+                                                    });
+                                                    const inquirySummaryColumnMode = opportunityDrawerSummaryLayoutMode({
+                                                        aboveFoldLocked: opportunityDrawerAboveFoldLocked,
+                                                        recordSurface: String(d._record_surface ?? "").trim(),
+                                                        showRightColumn: showInquirySummaryRightColumn,
+                                                    });
                                                     const showTourFromPrimaryOnly =
-                                                        opportunityDrawerFirstPaintActive &&
-                                                        opportunityInquiryTourDisplayFromPrimaryMetadata(d);
+                                                        opportunityInquiryTourDisplayFromPrimaryMetadata(d) &&
+                                                        (opportunityDrawerAboveFoldLocked ||
+                                                            opportunityDrawerLayoutFirstPaintGates);
                                                     const showTourFromBookings =
-                                                        !opportunityDrawerFirstPaintActive &&
+                                                        !opportunityDrawerAboveFoldLocked &&
                                                         !!drawer.id &&
                                                         drawer.id !== "new" &&
-                                                        opportunityDrawerSecondaryReady;
+                                                        opportunityInquirySummaryEnrichmentGate;
                                                     const showWhatMattersSection =
                                                         showTourFromPrimaryOnly || showTourFromBookings;
 
@@ -11797,7 +11880,10 @@ export default function AdminEntityDrawer() {
                                                             data-opportunity-inquiry-summary="true"
                                                             data-opportunity-inquiry-summary-layout="hardcoded_v1"
                                                             data-opportunity-drawer-first-paint={
-                                                                opportunityDrawerFirstPaintActive ? "true" : "false"
+                                                                opportunityDrawerLayoutFirstPaintGates ? "true" : "false"
+                                                            }
+                                                            data-opportunity-drawer-above-fold-locked={
+                                                                opportunityDrawerAboveFoldLocked ? "true" : "false"
                                                             }
                                                             data-opportunity-drawer-primary-contract-ready={
                                                                 opportunityDrawerPrimaryContractSatisfied ? "true" : "false"
@@ -11812,10 +11898,8 @@ export default function AdminEntityDrawer() {
                                                                 ) : null}
                                                             </div>
                                                             <div
-                                                                className={`mt-2 grid grid-cols-1 gap-2 ${showInquirySummaryRightColumn ? "lg:grid-cols-2 lg:items-stretch" : ""} lg:gap-3`}
-                                                                data-opportunity-inquiry-summary-columns={
-                                                                    showInquirySummaryRightColumn ? "two" : "one"
-                                                                }
+                                                                className={`mt-2 grid grid-cols-1 gap-2 ${inquirySummaryColumnMode === "two" ? "lg:grid-cols-2 lg:items-stretch" : ""} lg:gap-3`}
+                                                                data-opportunity-inquiry-summary-columns={inquirySummaryColumnMode}
                                                             >
                                                                 <div className={`${oppInqInnerCard} min-h-0`}>
                                                                     <div className={tinyLabel}>Family & contacts</div>
