@@ -177,7 +177,7 @@ function DeptOperConsoleQueueRow(props: {
                 e.preventDefault();
                 adminV2CommitNavigation(href, { closeDrawer: adminDrawer?.closeDrawer });
             }}
-            className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-dept-oper-queue-link relative z-[1] cursor-pointer pointer-events-auto ${tier} no-underline text-inherit hover:opacity-[0.98]`}
+            className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-dept-oper-queue-link adminv2-interactive-surface relative z-[1] cursor-pointer pointer-events-auto ${tier} no-underline text-inherit`}
             data-ws-wu-urgency={urgency}
             data-attention-bucket-key={attentionBucketKey}
             title={title}

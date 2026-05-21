@@ -124,7 +124,7 @@ function DepartmentRollupLane({ queue, onAction, variant }: RollupLaneProps) {
     isAttention ? "adminv2-ws-dept-qsec--secondary" : "adminv2-ws-dept-qsec--primary",
     isAttention ? "adminv2-ws-dept-attention-panel" : "adminv2-ws-dept-throughput-panel",
     "adminv2-ws-dept-rollup-lane",
-    queue.viewAllActionId ? "adminv2-ws-dept-rollup-card-hit" : "",
+    queue.viewAllActionId ? "adminv2-ws-dept-rollup-card-hit adminv2-interactive-surface" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -1052,7 +1052,7 @@ function WorkUnitQueueLane({
               ) : null}
               {rowMode !== "header_only" ? (
               <div
-                className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card-interactive relative z-[1] cursor-pointer pointer-events-auto adminv2-ws-wu-queue-card--tier-${tier}${
+                className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card-interactive adminv2-interactive-surface relative z-[1] cursor-pointer pointer-events-auto adminv2-ws-wu-queue-card--tier-${tier}${
                   attentionAccent ? " adminv2-ws-wu-queue-card--attention-accent" : ""
                 }`}
                 data-ws-wu-urgency={tier}

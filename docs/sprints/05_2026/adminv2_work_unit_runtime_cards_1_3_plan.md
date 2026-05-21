@@ -1,10 +1,10 @@
 # AdminV2 `/work-unit` Runtime — Cards 1–3 Implementation Plan
 
 **Date:** 2026-05-20  
-**Status:** Pre-implementation (review gate)  
+**Status:** Pre-implementation (review gate) — runtime/drawer performance sprint **closed** separately; see [`adminv2_drawer_performance_hardening_phase0.md`](./adminv2_drawer_performance_hardening_phase0.md#sprint-closeout-2026-05-20).  
 **Authority:** [`adminv2_dept_runtime_closeout_handoff.md`](./adminv2_dept_runtime_closeout_handoff.md), [`adminv2_performance_scope_lock.md`](./adminv2_performance_scope_lock.md) (Appendix), locked `/dept` runtime (PERF-B-06–08)
 
-**Scope:** Cards 1–3 only. **No drawer work.** **`/dept` must not regress.**
+**Scope:** Cards 1–3 only. Drawer composed-open + prefetch landed in phase-0 closeout; this plan still owns **WU route parity** with `/dept`. **`/dept` must not regress.**
 
 ---
 

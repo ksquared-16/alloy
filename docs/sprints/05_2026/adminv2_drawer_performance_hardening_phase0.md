@@ -1,8 +1,8 @@
 # AdminV2 Opportunity Drawer — Performance Hardening (Phase 0)
 
-**Scope:** Opportunity drawer only. No `/dept`, `/work-unit`, queue doctrine, or global stale caches.  
-**Status:** In progress — Pass 3 request suppression + bootstrap slimming (2026-05-20).  
-**Target:** Production-grade perceived open — one loading state, coherent reveal ≤ ~900ms where backend permits, no pre-reveal network storm.
+**Scope:** Opportunity drawer + AdminV2 runtime/drawer performance sprint (dept/WU bootstrap, composed open, interaction affordances).  
+**Status:** **Closed — good enough for now** (2026-05-20). Future pass available for drawer layout stability / server slimming.  
+**Target:** Production-grade perceived open — one loading state, composed reveal where backend permits, no pre-reveal network storm.
 
 ---
 
@@ -374,3 +374,66 @@ Perf: `[perf.drawer.open]` phase `deferred_composed_commit` with `drawer_open_fu
 - `web/lib/admin/opportunity/opportunityDrawerLayoutPolicy.ts` (referenced)
 - `web/components/admin/opportunity/OpportunityInquirySummaryActivity.tsx`
 - `web/lib/ui-v2/adminV2LoadingGeometry.ts`
+
+---
+
+## Sprint closeout (2026-05-20)
+
+### What shipped
+
+| Area | Deliverable |
+|------|-------------|
+| **Runtime** | `/dept` locked as canonical AdminV2 premium runtime template |
+| **Runtime** | `/work-unit` operational bootstrap (shell-first, oper-region loader, bundled bootstrap) |
+| **Drawer open** | Deferred open coordinator — overlay **Opening record…** until composed reveal ready |
+| **Drawer reveal** | Composed mount: `drawer-operational-bootstrap` + `drawer_primary` + `surface=full` (or enrichment-held) + header actions **before** drawer mount |
+| **Warm path** | Hover / mousedown / focus prefetch (bootstrap + primary + full) on queue rows |
+| **First paint** | `opportunityDrawerFirstPaintContract` — calm header, single-column summary, no pre-reveal option/status storms |
+| **Layout stability** | Above-fold lock until scroll (~72px) or idle (~2.4s) — no 1→2 column flip, deferred sections collapsed |
+| **Request suppression** | Pass 3 — comms off intent; tours/packets/oper strip intersection-gated; options/children edit-gated |
+| **Interaction** | Shared `adminv2-interactive-surface` hover tint + click press on workspace/dept/WU oper cards (CSS only) |
+
+**Key modules:** `opportunityDrawerOpenCoordinator.ts`, `AdminDrawerContext.tsx`, `opportunityDrawerIntentPrefetch.ts`, `opportunityDrawerFirstPaintContract.ts`, `opportunityDrawerLayoutStability.ts`, `AdminEntityDrawer.tsx`, `QueueBlock.tsx`, `workspace.css`.
+
+### Current accepted state
+
+- **Good enough for production staging** on enrollment happy paths.
+- Drawer opens feel intentional: no partial drawer assembly; warm prefetch often commits without long overlay wait.
+- Dept/WU runtime matches locked doctrine; queues remain previews.
+- **Future pass still available** for drawer layout stability tuning and server/bootstrap slimming — not blocking closeout.
+
+### Staging perf baselines (observed)
+
+| Surface | Typical ms |
+|---------|------------|
+| Drawer bootstrap | **~680–790** |
+| Drawer `surface=full` | **~900–1100** |
+| Work-unit bootstrap | **~1.7–2.2s** |
+| Dept bootstrap | **~0.9–1.6s** (enrollment dept post-resolver hardening often **~1.1s** total) |
+
+Use `[perf.drawer.open]` / `[dept-bootstrap-perf]` / WU bootstrap perf logs on staging — numbers vary by lane size and auth cache warmth.
+
+### Remaining future improvements
+
+1. Reduce drawer bootstrap `route_gate` / auth latency (reuse warm admin context where safe).
+2. Slim `surface=full` — move non-overview segments post-reveal; optional `drawer_secondary` surface.
+3. Remove remaining above-fold reshapes after composed open (right rail / BOS strip if any regress).
+4. Suppress any remaining option / status / tour / packet fetches until interaction (audit classic drawer path).
+5. Consider action/header config prewarm keyed by work unit + entity type.
+6. Index / SQL debt for large needs-attention candidate windows (see scope lock appendix).
+
+### Doctrine (carry forward)
+
+| Rule | Meaning |
+|------|---------|
+| **No partial drawer assembly** | Do not mount drawer body until composed reveal criteria met |
+| **Overlay wait → composed mount** | External overlay only; no in-drawer loading shell after preload commit |
+| **No route-wide skeleton replacement** | Shell-first navigation; oper-region / lane loaders only |
+| **Previews are presentation-only** | Queue rows / rollups are selection; authoritative detail via entity APIs |
+| **Bootstrap is not mutation truth** | Saves and workflow side effects use entity/full paths + existing gates |
+
+### Return path
+
+- Scope lock closeout appendix: [`adminv2_performance_scope_lock.md`](./adminv2_performance_scope_lock.md#adminv2-runtime--drawer-sprint-closeout-2026-05-20)
+- `/work-unit` cards 1–3 plan (runtime replication): [`adminv2_work_unit_runtime_cards_1_3_plan.md`](./adminv2_work_unit_runtime_cards_1_3_plan.md)
+- Dept handoff: [`adminv2_dept_runtime_closeout_handoff.md`](./adminv2_dept_runtime_closeout_handoff.md)

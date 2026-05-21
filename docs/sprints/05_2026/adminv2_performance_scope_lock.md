@@ -494,6 +494,25 @@ Observed `[dept-bootstrap-perf]` on enrollment happy path after WU resolution + 
 
 **`/dept` is locked** as the AdminV2 premium runtime template (staging: Today's Focus digits, single right-rail bundle on happy path, `work_unit_needs_attention_lane` + subtimings above). **Next:** replicate to **`/work-unit`** (smaller scope — generally faster); preserve shell-first + oper reveal + bootstrap bundling + nav suppression; drawer choreography remains Lane D / post-WU.
 
+### AdminV2 runtime + drawer sprint closeout (2026-05-20)
+
+**Status:** Closed — good enough for now. Full narrative: [`adminv2_drawer_performance_hardening_phase0.md`](./adminv2_drawer_performance_hardening_phase0.md#sprint-closeout-2026-05-20).
+
+| Shipped | Notes |
+|---------|--------|
+| `/dept` canonical runtime | Locked premium template |
+| `/work-unit` oper bootstrap | Shell-first + bundled bootstrap |
+| Composed drawer open | Overlay until bootstrap + primary + full (or enrichment-held) + header actions |
+| Intent prefetch | hover / mousedown / focus on queue rows |
+| Request suppression | Pass 3 — no pre-reveal option/comms/tour storms |
+| `adminv2-interactive-surface` | Subtle hover/press on dept tiles, oper queue cards, WU rows, rollup drills |
+
+**Staging baselines (approx):** drawer bootstrap **680–790ms**; full **900–1100ms**; WU bootstrap **1.7–2.2s**; dept bootstrap **0.9–1.6s**.
+
+**Doctrine:** no partial drawer; overlay → composed mount; no route-wide skeleton swap; queues = previews; bootstrap ≠ mutation truth.
+
+**Future (non-blocking):** route_gate/auth slimming; full hydrate split; above-fold reshape cleanup; defer remaining option/status/tour/packet fetches; header prewarm by WU/entity type.
+
 ---
 
 ## Document control

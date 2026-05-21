@@ -128,7 +128,7 @@ export function WorkspaceRootDepartmentGrid({
                                     prefetch={prefetchOff ? false : undefined}
                                     onClick={markWorkUnitNavigationStart}
                                     className={[
-                                        "adminv2-ws-company-dept-tile group block h-full text-left no-underline text-inherit rounded-[inherit] focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-blue/35",
+                                        "adminv2-ws-company-dept-tile adminv2-interactive-surface group block h-full text-left no-underline text-inherit rounded-[inherit] focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-blue/35",
                                         root ? "adminv2-ws-company-dept-tile--workspace-root" : "",
                                     ]
                                         .filter(Boolean)
