@@ -3,6 +3,7 @@ import {
     allowOpportunityDrawerFullRefetch,
     finishOpportunityDrawerHydrate,
     resetOpportunityDrawerHydrateGuards,
+    resolveOpportunityHydrateId,
     tryBeginOpportunityDrawerHydrate,
     tryScheduleOpportunityDrawerBackgroundFull,
 } from "@/lib/admin/opportunityDrawerHydrateGuards";
@@ -33,5 +34,14 @@ describe("opportunityDrawerHydrateGuards", () => {
         expect(tryScheduleOpportunityDrawerBackgroundFull(id)).toBe(false);
         allowOpportunityDrawerFullRefetch(id);
         expect(tryScheduleOpportunityDrawerBackgroundFull(id)).toBe(true);
+    });
+
+    it("finishOpportunityDrawerHydrate accepts nullable drawer id (Vercel build contract)", () => {
+        resetOpportunityDrawerHydrateGuards(null);
+        expect(tryBeginOpportunityDrawerHydrate(null, "primary")).toBe(false);
+        finishOpportunityDrawerHydrate(null, "primary", "success");
+        expect(resolveOpportunityHydrateId("opportunities", id)).toBe(id);
+        expect(resolveOpportunityHydrateId("opportunities", null)).toBeNull();
+        expect(resolveOpportunityHydrateId("opportunities", "new")).toBeNull();
     });
 });

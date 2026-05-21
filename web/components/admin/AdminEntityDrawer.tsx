@@ -168,6 +168,7 @@ import {
     clearOpportunityDrawerBackgroundFullSchedule,
     finishOpportunityDrawerHydrate,
     resetOpportunityDrawerHydrateGuards,
+    resolveOpportunityHydrateId,
     tryBeginOpportunityDrawerHydrate,
     tryScheduleOpportunityDrawerBackgroundFull,
     allowOpportunityDrawerFullRefetch,
@@ -2265,16 +2266,16 @@ export default function AdminEntityDrawer() {
     }, [drawer.type, drawer.id, drawer.jobRecordSurface]);
 
     const runOpportunityPrimaryHydrate = useCallback(() => {
-        const oppId = drawer.id;
-        if (drawer.type !== "opportunities" || !oppId || oppId === "new") return;
-        if (!opportunityRecordHydrationPending && opportunityDrawerBootstrapAppliedRef.current !== oppId) return;
-        if (!tryBeginOpportunityDrawerHydrate(oppId, "primary")) return;
-        const url = buildAdminEntityFetchUrl(drawer.type, oppId, drawer.jobRecordSurface, "drawer_primary");
+        const hydrateId = resolveOpportunityHydrateId(drawer.type, drawer.id);
+        if (!hydrateId) return;
+        if (!opportunityRecordHydrationPending && opportunityDrawerBootstrapAppliedRef.current !== hydrateId) return;
+        if (!tryBeginOpportunityDrawerHydrate(hydrateId, "primary")) return;
+        const url = buildAdminEntityFetchUrl(drawer.type, hydrateId, drawer.jobRecordSurface, "drawer_primary");
         if (!url) {
-            finishOpportunityDrawerHydrate(oppId, "primary", "abort");
+            finishOpportunityDrawerHydrate(hydrateId, "primary", "abort");
             return;
         }
-        opportunityPrimaryHydrateInFlightRef.current = oppId;
+        opportunityPrimaryHydrateInFlightRef.current = hydrateId;
         if (typeof window !== "undefined" && typeof performance !== "undefined") {
             alloyPerfSet("drawer_opportunity_primary_req", performance.now());
         }
@@ -2286,13 +2287,13 @@ export default function AdminEntityDrawer() {
                 return res.json();
             })
             .then((json) => {
-                if (String((json as { id?: unknown }).id ?? "") !== oppId) return;
+                if (String((json as { id?: unknown }).id ?? "") !== hydrateId) return;
                 opportunityPrimaryHydrateInFlightRef.current = null;
-                opportunityPrimaryHydrateDoneRef.current = oppId;
-                finishOpportunityDrawerHydrate(oppId, "primary", "success");
+                opportunityPrimaryHydrateDoneRef.current = hydrateId;
+                finishOpportunityDrawerHydrate(hydrateId, "primary", "success");
                 setOpportunityFullHydrateFailed(false);
                 setData((prev) => {
-                    if (!prev || String((prev as { id?: unknown }).id ?? "") !== oppId) {
+                    if (!prev || String((prev as { id?: unknown }).id ?? "") !== hydrateId) {
                         const fresh = { ...(json as Record<string, unknown>) };
                         fresh._record_surface = "drawer_primary";
                         return fresh;
@@ -2305,7 +2306,7 @@ export default function AdminEntityDrawer() {
                     requestAnimationFrame(() => {
                         requestAnimationFrame(() => {
                             alloyPerfSet("drawer_opportunity_primary_applied", performance.now());
-                            reportDrawerPrimaryReady(oppId);
+                            reportDrawerPrimaryReady(hydrateId);
                         });
                     });
                 }
@@ -2313,26 +2314,26 @@ export default function AdminEntityDrawer() {
             .catch((e) => {
                 opportunityPrimaryHydrateInFlightRef.current = null;
                 if (e instanceof Error && e.name === "AbortError") {
-                    finishOpportunityDrawerHydrate(oppId, "primary", "abort");
+                    finishOpportunityDrawerHydrate(hydrateId, "primary", "abort");
                     return;
                 }
-                opportunityPrimaryHydrateDoneRef.current = oppId;
-                finishOpportunityDrawerHydrate(oppId, "primary", "fail");
+                opportunityPrimaryHydrateDoneRef.current = hydrateId;
+                finishOpportunityDrawerHydrate(hydrateId, "primary", "fail");
                 setOpportunityFullHydrateFailed(true);
             });
     }, [drawer.type, drawer.id, drawer.jobRecordSurface, opportunityRecordHydrationPending]);
 
     const runOpportunityBackgroundFullHydrate = useCallback(() => {
-        const oppId = drawer.id;
-        if (drawer.type !== "opportunities" || !oppId || oppId === "new") return;
-        if (!tryBeginOpportunityDrawerHydrate(oppId, "full")) return;
-        const url = buildAdminEntityFetchUrl(drawer.type, oppId, drawer.jobRecordSurface, "full");
+        const hydrateId = resolveOpportunityHydrateId(drawer.type, drawer.id);
+        if (!hydrateId) return;
+        if (!tryBeginOpportunityDrawerHydrate(hydrateId, "full")) return;
+        const url = buildAdminEntityFetchUrl(drawer.type, hydrateId, drawer.jobRecordSurface, "full");
         if (!url) {
-            finishOpportunityDrawerHydrate(oppId, "full", "abort");
-            clearOpportunityDrawerBackgroundFullSchedule(oppId);
+            finishOpportunityDrawerHydrate(hydrateId, "full", "abort");
+            clearOpportunityDrawerBackgroundFullSchedule(hydrateId);
             return;
         }
-        opportunityBackgroundFullInFlightRef.current = oppId;
+        opportunityBackgroundFullInFlightRef.current = hydrateId;
         if (typeof window !== "undefined" && typeof performance !== "undefined") {
             alloyPerfSet("drawer_opportunity_full_req", performance.now());
         }
@@ -2344,13 +2345,13 @@ export default function AdminEntityDrawer() {
                 return res.json();
             })
             .then((json) => {
-                if (String((json as { id?: unknown }).id ?? "") !== oppId) return;
+                if (String((json as { id?: unknown }).id ?? "") !== hydrateId) return;
                 opportunityBackgroundFullInFlightRef.current = null;
-                opportunityBackgroundFullDoneRef.current = oppId;
-                finishOpportunityDrawerHydrate(oppId, "full", "success");
+                opportunityBackgroundFullDoneRef.current = hydrateId;
+                finishOpportunityDrawerHydrate(hydrateId, "full", "success");
                 setOpportunityFullHydrateFailed(false);
                 setData((prev) => {
-                    if (!prev || String((prev as { id?: unknown }).id ?? "") !== oppId) {
+                    if (!prev || String((prev as { id?: unknown }).id ?? "") !== hydrateId) {
                         const fresh = { ...(json as Record<string, unknown>) };
                         fresh._record_surface = "full";
                         return fresh;
@@ -2363,20 +2364,20 @@ export default function AdminEntityDrawer() {
                     requestAnimationFrame(() => {
                         requestAnimationFrame(() => {
                             alloyPerfSet("drawer_opportunity_full_applied", performance.now());
-                            reportDrawerFullHydrated(oppId);
+                            reportDrawerFullHydrated(hydrateId);
                         });
                     });
                 }
             })
             .catch((e) => {
                 opportunityBackgroundFullInFlightRef.current = null;
-                clearOpportunityDrawerBackgroundFullSchedule(oppId);
+                clearOpportunityDrawerBackgroundFullSchedule(hydrateId);
                 if (e instanceof Error && e.name === "AbortError") {
-                    finishOpportunityDrawerHydrate(oppId, "full", "abort");
+                    finishOpportunityDrawerHydrate(hydrateId, "full", "abort");
                     return;
                 }
-                opportunityBackgroundFullDoneRef.current = oppId;
-                finishOpportunityDrawerHydrate(oppId, "full", "fail");
+                opportunityBackgroundFullDoneRef.current = hydrateId;
+                finishOpportunityDrawerHydrate(hydrateId, "full", "fail");
                 setOpportunityFullHydrateFailed(true);
             });
     }, [drawer.type, drawer.id, drawer.jobRecordSurface]);
