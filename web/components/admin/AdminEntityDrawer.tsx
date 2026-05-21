@@ -6146,7 +6146,10 @@ export default function AdminEntityDrawer() {
             ? (
                   <div
                       className={`flex flex-col items-end gap-1.5 ${
-                          opportunityDrawerAboveFoldLocked || opportunityRegistryHeaderReady
+                          opportunityDrawerAboveFoldLayoutLocked(
+                              opportunityDrawerLayoutFrozen,
+                              opportunityDrawerBelowFoldRevealed
+                          ) || opportunityRegistryHeaderReady
                               ? OPPORTUNITY_DRAWER_HEADER_ACTIONS_RAIL_MIN_H_CLASS
                               : ""
                       } ${
