@@ -132,6 +132,8 @@ export function FamilyContactsPanel(props: {
     variant?: "default" | "summary";
     /** Opportunity field definitions for linked-person policy gates (optional). */
     fieldDefinitions?: FieldDefForLinkedEdit[];
+    /** When false, defers `surface=record_section` registry actions until enrichment is allowed. */
+    actionsFetchEnabled?: boolean;
     /** After primary person PATCH from this card — parent should merge hydration + refetch. */
     onPrimaryPersonUpdated?: (person: Record<string, unknown>) => void;
     /** After linked opportunity_person row person PATCH — parent merges `_opportunity_persons` + refetch. */
@@ -156,6 +158,7 @@ export function FamilyContactsPanel(props: {
         opportunityFullHydrateFailed = false,
         variant = "default",
         fieldDefinitions = [],
+        actionsFetchEnabled = true,
         onPrimaryPersonUpdated,
         onLinkedPersonUpdated,
     } = props;
@@ -271,6 +274,7 @@ export function FamilyContactsPanel(props: {
                 openForm={openForm}
                 onApplied={onRegistryApplied}
                 layoutDensity={registryDensity}
+                actionsFetchEnabled={actionsFetchEnabled}
             />
 
             <div className="min-w-0 flex-1">

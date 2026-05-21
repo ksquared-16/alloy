@@ -24,12 +24,19 @@ describe("opportunity drawer operational bootstrap", () => {
             "computeOperationalAttentionAttachment",
             "loadOpportunityActivitySignal",
             "buildOpportunityAttentionQueueItems",
+            "resolveActionsForContext",
         ];
         for (const sym of forbidden) {
             expect(loader).not.toContain(sym);
         }
         expect(loader).toContain("sanitizeDrawerOperTrustPreviewFromHints");
         expect(loader).not.toContain("buildOperationalSummaryDeterministic");
+    });
+
+    it("loader skips work_units DB when workspace context seeds dept and wu", () => {
+        const loader = read("lib/admin/loadOpportunityDrawerOperationalBootstrap.ts");
+        expect(loader).toContain("skipWorkUnitDbLookup");
+        expect(loader).toContain("hintDepartmentId");
     });
 
     it("timing always reports attention_resolver_passes 0", () => {

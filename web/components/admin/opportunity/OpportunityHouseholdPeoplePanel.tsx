@@ -36,6 +36,8 @@ export function OpportunityHouseholdPeoplePanel(props: {
     opportunityFullHydrateFailed?: boolean;
     /** Keys on record_header — avoid duplicate CTAs in customer_booking section. */
     excludeActionKeys?: Set<string>;
+    /** When false, defers `surface=record_section` registry actions until enrichment is allowed. */
+    actionsFetchEnabled?: boolean;
 }) {
     const {
         opportunityId,
@@ -53,6 +55,7 @@ export function OpportunityHouseholdPeoplePanel(props: {
         opportunityFullHydrateApplied,
         opportunityFullHydrateFailed = false,
         excludeActionKeys,
+        actionsFetchEnabled = true,
     } = props;
 
     const householdEmptyAwaitingFull =
@@ -129,6 +132,7 @@ export function OpportunityHouseholdPeoplePanel(props: {
                 openDrawer={openDrawer}
                 openForm={openForm}
                 onApplied={() => void load()}
+                actionsFetchEnabled={actionsFetchEnabled}
             />
 
             {error ? (

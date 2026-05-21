@@ -25,12 +25,12 @@ describe("prefetchOpportunityDrawerOnRowIntent", () => {
         scheduleDeferredCommunicationsDrawerPrefetch.mockClear();
     });
 
-    it("prefetches drawer-operational-bootstrap and comms on intent", async () => {
+    it("prefetches drawer-operational-bootstrap on intent without comms", async () => {
         const { prefetchOpportunityDrawerOnRowIntent } = await import(
             "@/lib/admin/opportunityDrawerIntentPrefetch"
         );
         prefetchOpportunityDrawerOnRowIntent("opp-abc");
-        expect(scheduleDeferredCommunicationsDrawerPrefetch).toHaveBeenCalledWith("opportunities", "opp-abc");
+        expect(scheduleDeferredCommunicationsDrawerPrefetch).not.toHaveBeenCalled();
         expect(dedupeAdminFetch).toHaveBeenCalledWith(
             expect.stringMatching(/\/api\/admin\/opportunities\/opp-abc\/drawer-operational-bootstrap$/),
             expect.anything()

@@ -1,7 +1,7 @@
 # AdminV2 Opportunity Drawer — Performance Hardening (Phase 0)
 
 **Scope:** Opportunity drawer only. No `/dept`, `/work-unit`, queue doctrine, or global stale caches.  
-**Status:** In progress — D1/D2/D5 partial + UI calm header + WU loader accent (2026-05-20).  
+**Status:** In progress — Pass 3 request suppression + bootstrap slimming (2026-05-20).  
 **Target:** Production-grade perceived open — one loading state, coherent reveal ≤ ~900ms where backend permits, no pre-reveal network storm.
 
 ---
@@ -297,6 +297,42 @@ All keyed off `postDrawerVisibleKey` at **bootstrap `drawerReady`** (~900ms), **
 5. Tab-local comms/activity/related/documents.  
 6. Edit-gated options.  
 7. Mutation blocked until full/secondary truth for affected fields (existing correctness gates).
+
+---
+
+## Pass 3 — Request suppression (2026-05-20)
+
+### Root causes (A–H)
+
+| ID | Early request | Root cause | Fix |
+|----|---------------|------------|-----|
+| A/B | comms threads/bindings/recipients | `prefetchOpportunityDrawerOnRowIntent` armed `scheduleDeferredCommunicationsDrawerPrefetch` on row intent | Removed from intent; invalidate slot on drawer open |
+| C | status-options | Legacy non-bootstrap paths; children section option loads | Bootstrap path seeds from entity until edit; children options gated on `enrichmentFetchEnabled={isEditing}` |
+| D | field-definitions | `OpportunityInquiryChildrenSection` mounted after full | Field-def + option loads only when `enrichmentFetchEnabled` (edit) |
+| E | record_section actions | IntersectionObserver `rootMargin: 140px` at reveal | `actionsFetchEnabled` requires reveal + full; IO only when enabled |
+| F | tours/bookings (×2–3) | `OpportunityInquiryTourDateBlock` + `OpportunityTourBookingLifecycleBar` duplicate GETs after secondary | Single hook + shared bookings; `fetchEnabled` + section intersection |
+| G | extra entity GET | Intent `drawer_visible` when bootstrap off; `relationship_member_persons` after full | Intent bootstrap-only; overlay gated on `postDrawerVisibleKey` |
+| H | bootstrap `visible_entity_ms` ~398ms | Parallel FK/status lookups + duplicate work_unit select | `hintDepartmentId` skips WU dept query; skip WU DB when ctx seeds dept+wu; defer header actions off bootstrap |
+
+### Before reveal (target)
+
+1. `GET …/drawer-operational-bootstrap` (once, deduped with intent)
+2. `GET …/entity/opportunities/:id?surface=drawer_primary` (once)
+
+### After reveal (idle / intersection / tab)
+
+- `surface=full` once (background)
+- Header `record_header` actions after primary reveal (client)
+- Tours/packets/operational strip when summary sections intersect
+- Comms only on Communications tab
+- Options/status/field defs on edit
+
+### Remaining blockers
+
+- Bootstrap `visible_entity` still runs status-def + primary-person parallel lookups (~200–400ms).
+- `record_layout` still resolved per open (no bootstrap→primary layout handoff yet).
+- Classic (non–workflow_v1) opportunity drawer still embeds comms on overview with `active`.
+- Primary + bootstrap sequential on wire (~1s combined) — needs server slimming or merged critical path if sub-900ms required.
 
 ---
 

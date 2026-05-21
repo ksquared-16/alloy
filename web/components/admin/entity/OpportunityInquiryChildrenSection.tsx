@@ -319,7 +319,7 @@ export default function OpportunityInquiryChildrenSection({
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [enrichmentFetchEnabled]);
 
     const showDesiredStartColumn = inquiryChildDrawerShowsDesiredStart(fieldDefs);
     const desiredStartLabel = labelForInquiryChildFieldKey(fieldDefs, "desired_start_date", "Desired start");

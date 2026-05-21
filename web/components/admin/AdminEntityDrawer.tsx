@@ -1375,7 +1375,12 @@ export default function AdminEntityDrawer() {
     const [opportunityResolvedHeaderActions, setOpportunityResolvedHeaderActions] = useState<ResolvedActionsBySlot | null>(null);
     const [opportunityResolvedHeaderLoading, setOpportunityResolvedHeaderLoading] = useState(false);
     const [opportunityTourBookingsId, setOpportunityTourBookingsId] = useState<string | null>(null);
-    const { activeBookings: opportunityRecordHeaderActiveTours } = useOpportunityActiveTourBookings(opportunityTourBookingsId);
+    const [inquiryTourFetchArmed, setInquiryTourFetchArmed] = useState(false);
+    const [inquirySummaryFetchArmed, setInquirySummaryFetchArmed] = useState(false);
+    const { activeBookings: opportunityRecordHeaderActiveTours } = useOpportunityActiveTourBookings(
+        opportunityTourBookingsId,
+        inquiryTourFetchArmed
+    );
     const opportunityRecordHeaderActionsForUi = useMemo(() => {
         const base = opportunityResolvedHeaderActions;
         if (!base || !opportunityRecordHeaderActiveTours.length) return base;
@@ -6815,6 +6820,14 @@ export default function AdminEntityDrawer() {
         opportunityDrawerOverviewRevealReady &&
         (!opportunityDrawerBootstrapEnrichmentPath || opportunityFullRecordHydrateApplied);
 
+    useEffect(() => {
+        setInquiryTourFetchArmed(tourBookingsFetchEnabled);
+    }, [tourBookingsFetchEnabled]);
+
+    useEffect(() => {
+        setInquirySummaryFetchArmed(inquirySummaryFetchEnabled);
+    }, [inquirySummaryFetchEnabled]);
+
     const opportunityDrawerTabsPending = false;
 
     /** Inquiry workflow (or record-chrome loading for an existing opportunity): fixed top tabs; no Related. */
@@ -7658,6 +7671,7 @@ export default function AdminEntityDrawer() {
                             });
                         }}
                         excludeActionKeys={opportunityRegistryHeaderActionKeys}
+                        actionsFetchEnabled={opportunityRegistrySectionActionsFetchEnabled}
                         refreshKey={relatedPeopleRefreshKey}
                     />
                 );
@@ -7747,6 +7761,7 @@ export default function AdminEntityDrawer() {
                             return typeof raw === "string" && raw.trim() ? raw.trim().slice(0, 10) : null;
                         })()}
                         canEdit={!!canMutate}
+                        enrichmentFetchEnabled={isEditing}
                         embeddedInPremiumSection={oppCfg?.inquiry_drawer_mode === "workflow_v1"}
                         recordDetailPending={detailPending}
                         onChildrenMutated={() => void refetch()}
@@ -7790,6 +7805,7 @@ export default function AdminEntityDrawer() {
         opportunityFullHydrateFailed,
         getStatusLabel,
         viewerTz,
+        opportunityRegistrySectionActionsFetchEnabled,
     ]);
 
     const overviewSectionHeaderRight = useMemo(() => {
@@ -11663,6 +11679,7 @@ export default function AdminEntityDrawer() {
                                                                                     });
                                                                                 }}
                                                                                 excludeActionKeys={opportunityRegistryHeaderActionKeys}
+                                                                                actionsFetchEnabled={opportunityRegistrySectionActionsFetchEnabled}
                                                                                 refreshKey={relatedPeopleRefreshKey}
                                                                                 onRegistryApplied={() => {
                                                                                     setRelatedPeopleRefreshKey((n) => n + 1);
@@ -11778,7 +11795,10 @@ export default function AdminEntityDrawer() {
                                                                     </div>
 
                                                                 </div>
-                                                                <div className={`${oppInqInnerCard} flex min-w-0 flex-col`}>
+                                                                <div
+                                                                    ref={inquirySummaryRightRef}
+                                                                    className={`${oppInqInnerCard} flex min-w-0 flex-col`}
+                                                                >
                                                                     {drawer.id && drawer.id !== "new" && opportunityDrawerSecondaryReady ? (
                                                                         <div className="mt-2 border-t border-alloy-stone/10 pt-2 adminv2-ws-soft-content-reveal">
                                                                             {isTaskAssistV1UiEnabled() ? (
@@ -11787,6 +11807,7 @@ export default function AdminEntityDrawer() {
                                                                                     opportunityId={drawer.id}
                                                                                     entityLabel={String(d.name ?? "").trim() || null}
                                                                                     overviewData={d}
+                                                                                    fetchEnabled={inquirySummaryFetchArmed}
                                                                                 />
                                                                             ) : null}
                                                                         </div>
@@ -11795,6 +11816,7 @@ export default function AdminEntityDrawer() {
                                                                         <OpportunityInquirySummaryActivity
                                                                             opportunityId={drawer.id}
                                                                             canMutate={!!canMutate}
+                                                                            fetchEnabled={inquirySummaryFetchArmed}
                                                                             onInvalidate={() => {
                                                                                 setOpportunityRelatedData(null);
                                                                                 setOpportunityActivitySignalNonce((n) => n + 1);
