@@ -238,6 +238,20 @@ New surface (name aligns with user ask; can alias/evolve `drawer_initial`):
 | Inquiry header calm loading (`opportunityDrawerHeaderCalmLoading`) | `AdminEntityDrawer.tsx` |
 | WU skeleton pine accent | `workspaceRouteSkeletons.tsx`, `workspace.css` |
 
+### Pass 2 — duplicate full hydrate + post-reveal storm (2026-05-20)
+
+| Change | Files |
+|--------|--------|
+| Per-open hydrate guards (`primary` / `full` once; background full schedule once) | `opportunityDrawerHydrateGuards.ts`, `AdminEntityDrawer.tsx` |
+| `postDrawerVisible` waits for `surface=full` on bootstrap path | `AdminEntityDrawer.tsx` |
+| Secondary surfaces (tours, packets, oper strip) wait for full | `AdminEntityDrawer.tsx` |
+| Options / pipeline / verticals / childcare options: edit-only | `AdminEntityDrawer.tsx` |
+| Status-options: display seed until edit; no `/status-options` on bootstrap view | `AdminEntityDrawer.tsx` |
+| Inquiry children section + field-definitions mount after full | `AdminEntityDrawer.tsx` |
+| Comms prefetch removed from reveal; tab mount only | `AdminEntityDrawer.tsx` |
+| Perf marks: `drawer_primary` vs `full` separated in client capture | `AdminEntityDrawer.tsx` |
+| `refetch()` reuses background full hydrate path (no parallel raw `fetch`) | `AdminEntityDrawer.tsx` |
+
 ---
 
 ## Appendix: Answers to Phase 0 questions

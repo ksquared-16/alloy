@@ -298,13 +298,20 @@ describe("Drawer operational bootstrap (Cards 4–7)", () => {
         );
     });
 
-    it("defers postDrawerVisible enrichment until overview reveal on bootstrap path", () => {
+    it("defers postDrawerVisible enrichment until full hydrate on bootstrap path", () => {
+        const src = read("components/admin/AdminEntityDrawer.tsx");
+        expect(src).toContain("opportunityDrawerBootstrapEnrichmentPath");
+        expect(src).toMatch(
+            /enrichmentReady[\s\S]*!opportunityDrawerBootstrapEnrichmentPath \|\| opportunityFullRecordHydrateApplied/,
+        );
+        expect(src).toMatch(/tryScheduleOpportunityDrawerBackgroundFull/);
+        expect(src).toContain("tryBeginOpportunityDrawerHydrate");
+    });
+
+    it("gates ref option lists on edit for bootstrap opportunity drawer", () => {
         const src = read("components/admin/AdminEntityDrawer.tsx");
         expect(src).toMatch(
-            /adminV2DrawerBootstrapEnabled\(\)[\s\S]*!opportunityDrawerBootstrapLegacy[\s\S]*return;/,
-        );
-        expect(src).toMatch(
-            /opportunityDrawerOverviewRevealReady[\s\S]*setPostDrawerVisibleKey/,
+            /adminV2DrawerBootstrapEnabled\(\)[\s\S]*!opportunityDrawerBootstrapLegacy[\s\S]*!isEditing[\s\S]*setOppRefFieldSelectOptions/,
         );
     });
 
