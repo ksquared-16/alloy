@@ -610,6 +610,48 @@ Harden **`OpportunityPacketReviewOverview`**: list **all** pending packet sessio
 
 - Revert component to pre-rollup modal (step list only); keep rollup API for detail page.  
 
+### P2-3 implementation status (May 2026)
+
+**Status:** Shipped (opportunity drawer multi-session review; P2-4+ not started).
+
+**Files changed**
+
+| Path | Notes |
+|------|--------|
+| `web/components/admin/opportunity/OpportunityPacketReviewOverview.tsx` | Lists all pending sessions; loading/error states; wires modal |
+| `web/components/admin/opportunity/OpportunityPacketPendingReviewList.tsx` | Multi-session pending rows (name, status, timestamps, linkage, hints) |
+| `web/components/admin/opportunity/OpportunityPacketReviewModal.tsx` | Lazy `GET .../review-rollup`; `PacketReviewRollupView` (`placement=modal`); PATCH via shared API helper |
+| `web/lib/forms/packets/packetReviewApi.ts` | Rollup fetch + PATCH body/URL helpers (no builder duplication) |
+| `web/lib/admin/opportunity/enrollmentPacketSummaryPresentation.ts` | Pending filter helpers, warning count, timestamps, linkage hint |
+| `web/app/api/admin/opportunities/[id]/enrollment-packets/route.ts` | `warning_count` per session, `pending_review_count` on response |
+| `web/tests/forms/packetReviewRollupFixture.ts` | Shared rollup fixture for view/modal tests |
+| `web/tests/admin/opportunity/OpportunityPacketPendingReviewList.test.tsx` | All pending sessions render |
+| `web/tests/admin/opportunity/OpportunityPacketReviewModalBody.test.tsx` | Loading/error/rollup/review actions |
+| `web/tests/forms/packetReviewApi.test.ts` | PATCH body + rollup fetch URL |
+| `web/tests/admin/opportunity/enrollmentPacketSummaryPresentation.test.ts` | 0/1/2 pending filter cases |
+
+**Tests run**
+
+```bash
+cd web && npm run test -- \
+  tests/admin/opportunity/OpportunityPacketPendingReviewList.test.tsx \
+  tests/admin/opportunity/OpportunityPacketReviewModalBody.test.tsx \
+  tests/admin/opportunity/enrollmentPacketSummaryPresentation.test.ts \
+  tests/forms/packetReviewApi.test.ts \
+  tests/forms/PacketReviewRollupView.test.tsx
+# 18 passed
+```
+
+**Known limitations**
+
+- Rollup loads when modal opens (not prefetched); list still uses lightweight enrollment-packets rows.
+- Modal does not pass `technicalDetails` to `PacketReviewRollupView` (no session JSON in drawer).
+- `PacketSessionReviewClient` still uses inline fetch/PATCH (not refactored to `packetReviewApi`).
+- No route integration test for enrollment-packets `pending_review_count` (count mirrors presentation filter).
+- Launch packet modal / email flow unchanged but not covered by new tests.
+
+**Suggested commit message:** `forms-p2-3: multi-session opportunity packet review modal with rollup view`
+
 ---
 
 ## P2-4 — Document provenance + non-PDF submitted records
