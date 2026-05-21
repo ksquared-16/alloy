@@ -26,13 +26,19 @@ import {
 } from "@/lib/adminV2/aiCommandSurface/aiCommandSurfaceModel";
 import OperationalActiveRecordChip from "@/app/adminV2/components/bos/OperationalActiveRecordChip";
 import { dispatchAiActivityRefresh } from "@/app/adminV2/components/aiActivity/RecentAiActionsStrip";
+import {
+  activeOpportunityFromContext,
+  buildActiveOpportunitySearchCandidate,
+  shouldShortCircuitTaskAssistEntitySearch,
+  usingActiveRecordNoticeText,
+} from "@/lib/adminV2/bos/activeOperationalContext";
 import { operationalContextSwitchNoticeText } from "@/lib/adminV2/bos/operationalContextSwitchNotice";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
-import { looksLikeAmbientOnlyCommand } from "@/lib/agent/taskAssist/taskAssistCommandBarResolution";
 import {
   buildTaskAssistCommandBootstrap,
+  parseTaskAssistCommandIntent,
   type TaskAssistCommandIntent,
 } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
 import {
@@ -852,27 +858,43 @@ export default function AICommandSurfaceShell() {
         return;
       }
 
-      if (
-        looksLikeAmbientOnlyCommand(cmd) &&
-        globalAssistant.currentContext?.entity_type === "opportunities" &&
-        globalAssistant.currentContext.entity_id
-      ) {
-        const chip: TaskAssistEntitySearchCandidate = {
-          entity_type: "opportunities",
-          entity_id: globalAssistant.currentContext.entity_id,
-          label: globalAssistant.currentContext.label || "Current opportunity",
-          subtitle: "From current context",
-          confidence: "high",
-          source: "opportunity_name",
-          matched_fields: ["ambient_context"],
-        };
+      const activeOpp = activeOpportunityFromContext(globalAssistant.currentContext);
+      const effectiveIntent = intent ?? parseTaskAssistCommandIntent(cmd);
+
+      if (shouldShortCircuitTaskAssistEntitySearch({ command: cmd, activeOpportunity: activeOpp })) {
+        const chip = buildActiveOpportunitySearchCandidate(activeOpp!);
         setThread((prev) =>
           appendThreadTurn(prev, {
-            kind: "candidate_results",
-            candidates: [chip],
-            intent,
+            kind: "assistant_notice",
+            text: usingActiveRecordNoticeText(activeOpp!.label),
           })
         );
+        if (needsMessageGoalClarification(effectiveIntent)) {
+          pendingClarificationRef.current = { candidate: chip, intent: effectiveIntent, awaiting: "message_goal" };
+          setThread((prev) =>
+            appendThreadTurn(prev, {
+              kind: "task_clarification",
+              clarificationKind: "message_goal",
+              candidate: chip,
+              intent: effectiveIntent,
+            })
+          );
+          return;
+        }
+        const remKind = reminderClarificationKind(effectiveIntent);
+        if (remKind) {
+          pendingClarificationRef.current = { candidate: chip, intent: effectiveIntent, awaiting: remKind };
+          setThread((prev) =>
+            appendThreadTurn(prev, {
+              kind: "task_clarification",
+              clarificationKind: remKind,
+              candidate: chip,
+              intent: effectiveIntent,
+            })
+          );
+          return;
+        }
+        proceedToTaskAssistAction(chip, effectiveIntent);
         return;
       }
 
@@ -898,22 +920,6 @@ export default function AICommandSurfaceShell() {
           return;
         }
         let list = dedupeTaskAssistEntitySearchCandidates(Array.isArray(j.candidates) ? j.candidates : []);
-        const ctxOpp =
-          globalAssistant.currentContext?.entity_type === "opportunities" && globalAssistant.currentContext.entity_id ?
-            globalAssistant.currentContext
-            : null;
-        if (ctxOpp && !looksLikeAmbientOnlyCommand(cmd)) {
-          const chip: TaskAssistEntitySearchCandidate = {
-            entity_type: "opportunities",
-            entity_id: ctxOpp.entity_id,
-            label: ctxOpp.label || "Current opportunity",
-            subtitle: "From drawer / ambient context — pick if this is who you mean",
-            confidence: "high",
-            source: "opportunity_name",
-            matched_fields: ["ambient_context"],
-          };
-          list = [chip, ...list.filter((c) => c.entity_id !== ctxOpp.entity_id)];
-        }
         if (list.length === 0) {
           setThread((prev) =>
             appendThreadTurn(prev, {
@@ -955,7 +961,7 @@ export default function AICommandSurfaceShell() {
         );
       }
     },
-    [globalAssistant, selectedSiteId, taskAssistUiEnabled]
+    [globalAssistant, proceedToTaskAssistAction, selectedSiteId, setThread, taskAssistUiEnabled]
   );
 
   const runJobLayoutRoute = useCallback(async (submitted: string) => {

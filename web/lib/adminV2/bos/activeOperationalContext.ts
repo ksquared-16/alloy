@@ -8,6 +8,7 @@ import type {
     GlobalAssistantEntityContext,
     GlobalAssistantSourceSurface,
 } from "@/contexts/GlobalAssistantContext";
+import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
 
 export type OpportunityQueuePreviewSeed = {
     title?: string | null;
@@ -129,6 +130,57 @@ type AttentionSuggestionHandoff = {
  * Optional Orchestrator seed from drawer operational context (awareness → recommendation surface).
  * Does not trigger mutations — prefill only.
  */
+/** Active opportunity from Orchestrator session context (drawer / queue / command bar). */
+export function activeOpportunityFromContext(
+    ctx: GlobalAssistantEntityContext | null | undefined
+): { entity_id: string; label: string } | null {
+    if (ctx?.entity_type !== "opportunities") return null;
+    const entity_id = ctx.entity_id?.trim();
+    if (!entity_id) return null;
+    return { entity_id, label: ctx.label?.trim() || "Current opportunity" };
+}
+
+export function buildActiveOpportunitySearchCandidate(args: {
+    entity_id: string;
+    label: string;
+}): TaskAssistEntitySearchCandidate {
+    return {
+        entity_type: "opportunities",
+        entity_id: args.entity_id,
+        label: args.label.trim() || "Current opportunity",
+        subtitle: null,
+        confidence: "high",
+        source: "opportunity_name",
+        matched_fields: ["ambient_context"],
+    };
+}
+
+/** True when the operator explicitly asks to search or pick among records. */
+export function commandExplicitlyRequestsRecordSearch(command: string): boolean {
+    const t = command.trim();
+    if (!t) return false;
+    return /\b(find|search|look\s*up|lookup|which\s+(one|record|opportunity|inquiry|family)|list\s+(all|records|opportunities|families)|show\s+(me\s+)?(all|every)\s+(records|opportunities|families)|pick\s+(a\s+)?different|another\s+(record|opportunity|family|inquiry))\b/i.test(
+        t
+    );
+}
+
+/**
+ * When an active drawer opportunity is set, Task Assist should use it directly unless the operator
+ * explicitly requests a cross-record search.
+ */
+export function shouldShortCircuitTaskAssistEntitySearch(args: {
+    command: string;
+    activeOpportunity: { entity_id: string } | null;
+}): boolean {
+    if (!args.activeOpportunity?.entity_id) return false;
+    return !commandExplicitlyRequestsRecordSearch(args.command);
+}
+
+export function usingActiveRecordNoticeText(label: string): string {
+    const t = label.trim();
+    return `Using active record: ${t || "this inquiry"}`;
+}
+
 export function orchestratorHandoffSeedCommand(args: {
     entityLabel: string | null | undefined;
     overviewData: Record<string, unknown> | null | undefined;

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
     applyLabelDisambiguationForDuplicates,
     childDisplayNameFromOppMetadata,
+    formatCandidateOperatorPresentation,
 } from "@/lib/agent/taskAssist/taskAssistEntitySearchDisambiguation";
 import { dedupeTaskAssistEntitySearchCandidates } from "@/lib/agent/taskAssist/taskAssistEntitySearchDedupe";
 import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
@@ -71,5 +72,17 @@ describe("taskAssistEntitySearchDisambiguation", () => {
         expect(list[0]?.label).toContain("Mia Mitchell");
         expect(list[1]?.label).toContain("Ethan Mitchell");
         expect(list[0]?.entity_id).not.toBe(list[1]?.entity_id);
+    });
+
+    it("formatCandidateOperatorPresentation surfaces match reason without raw ids", () => {
+        const p = formatCandidateOperatorPresentation(
+            base({
+                matched_fields: ["ambient_context"],
+                disambiguation: { status_key: "new_inquiry", location_name: "West Campus" },
+            })
+        );
+        expect(p.matchReasonLine).toBe("Matched active drawer context");
+        expect(p.secondaryLine).toContain("West Campus");
+        expect(JSON.stringify(p)).not.toContain("opp-1");
     });
 });

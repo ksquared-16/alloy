@@ -23,7 +23,10 @@ import type { CommandSurfaceThreadTurn } from "@/lib/adminV2/aiCommandSurface/co
 import type { ConfigProposalReviewDebugLog } from "@/lib/agent/configLayoutAssist/configLayoutAssistReviewNavigation";
 import type { TaskAssistClarificationKind } from "@/lib/agent/taskAssist/taskAssistClarification";
 import type { TaskAssistCommandIntent } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
-import { formatCandidateDebugLine } from "@/lib/agent/taskAssist/taskAssistEntitySearchDisambiguation";
+import {
+    formatCandidateDebugLine,
+    formatCandidateOperatorPresentation,
+} from "@/lib/agent/taskAssist/taskAssistEntitySearchDisambiguation";
 import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
 import {
     isStaleOperationalProposalEntity,
@@ -169,7 +172,9 @@ export default function CommandSurfaceThread({
     onApproveConfigProposal,
     configAssistCanApproveAndApply = false,
 }: CommandSurfaceThreadProps) {
-    const showSearchDebug = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
+    const showSearchDebug =
+        process.env.NODE_ENV === "development" &&
+        process.env.NEXT_PUBLIC_COMMAND_SURFACE_SEARCH_DEBUG === "1";
 
     if (turns.length === 0) {
         return null;
@@ -228,16 +233,16 @@ export default function CommandSurfaceThread({
                             <AssistantBubble key={turn.id}>
                                 <div className="space-y-1.5" data-command-surface-candidate-results="true">
                                     <ul className="space-y-1">
-                                        {turn.candidates.map((c) => (
+                                        {turn.candidates.map((c) => {
+                                            const presentation = formatCandidateOperatorPresentation(c);
+                                            return (
                                             <li key={c.entity_id}>
                                                 <button
                                                     type="button"
                                                     data-command-surface-candidate-row="true"
                                                     data-entity-id={c.entity_id}
-                                                    data-entity-source={c.source}
-                                                    data-matched-fields={c.matched_fields.join("|")}
                                                     disabled={busy}
-                                                    className="flex w-full flex-col rounded-md border px-2 py-1.5 text-left text-[11px] hover:bg-alloy-stone/[0.06] disabled:opacity-50"
+                                                    className="flex w-full flex-col gap-0.5 rounded-md border px-2 py-1.5 text-left text-[11px] hover:bg-alloy-stone/[0.06] disabled:opacity-50"
                                                     style={{ borderColor: derived.border, color: CMD.textBody }}
                                                     onClick={() =>
                                                         turn.candidates.length === 1 ?
@@ -245,9 +250,33 @@ export default function CommandSurfaceThread({
                                                         :   onPickCandidate(turn.id, c, turn.intent)
                                                     }
                                                 >
-                                                    <span className="font-semibold">{c.label}</span>
-                                                    {c.subtitle ? (
-                                                        <span style={{ color: CMD.textSupporting }}>{c.subtitle}</span>
+                                                    <span className="font-semibold leading-snug">
+                                                        {presentation.primaryLabel}
+                                                    </span>
+                                                    {presentation.secondaryLine ? (
+                                                        <span
+                                                            className="text-[10px] leading-snug"
+                                                            style={{ color: CMD.textSupporting }}
+                                                        >
+                                                            {presentation.secondaryLine}
+                                                        </span>
+                                                    ) : null}
+                                                    {presentation.relatedPeopleLine ? (
+                                                        <span
+                                                            className="text-[10px] leading-snug"
+                                                            style={{ color: CMD.textSupporting }}
+                                                        >
+                                                            {presentation.relatedPeopleLine}
+                                                        </span>
+                                                    ) : null}
+                                                    {presentation.matchReasonLine ? (
+                                                        <span
+                                                            className="text-[9px] leading-snug"
+                                                            style={{ color: CMD.textLabel }}
+                                                            data-command-surface-candidate-match-reason="true"
+                                                        >
+                                                            {presentation.matchReasonLine}
+                                                        </span>
                                                     ) : null}
                                                     {showSearchDebug ? (
                                                         <span
@@ -260,7 +289,8 @@ export default function CommandSurfaceThread({
                                                     ) : null}
                                                 </button>
                                             </li>
-                                        ))}
+                                            );
+                                        })}
                                     </ul>
                                     {turn.candidates.length === 1 ? (
                                         <button

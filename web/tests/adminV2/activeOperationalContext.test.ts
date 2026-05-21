@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
     buildOpportunityOperationalContext,
+    commandExplicitlyRequestsRecordSearch,
     entityOperationalContextEqual,
     isStaleOperationalProposalEntity,
     orchestratorHandoffSeedCommand,
     resolveOpportunityOperationalContextLabel,
+    shouldShortCircuitTaskAssistEntitySearch,
 } from "@/lib/adminV2/bos/activeOperationalContext";
 
 describe("activeOperationalContext", () => {
@@ -77,5 +79,15 @@ describe("activeOperationalContext", () => {
             overviewData: {},
         });
         expect(seed).toBe("Draft message for this inquiry");
+    });
+
+    it("shouldShortCircuitTaskAssistEntitySearch respects explicit record search", () => {
+        expect(
+            shouldShortCircuitTaskAssistEntitySearch({
+                command: "list all opportunities",
+                activeOpportunity: { entity_id: "a" },
+            })
+        ).toBe(false);
+        expect(commandExplicitlyRequestsRecordSearch("list all opportunities")).toBe(true);
     });
 });

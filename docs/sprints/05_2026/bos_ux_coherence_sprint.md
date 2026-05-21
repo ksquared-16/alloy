@@ -989,6 +989,33 @@ cd web && npm run test -- tests/adminV2/activeOperationalContext.test.ts \
 - [ ] Drawer still closes on workspace outside-click; command surface clicks do not dismiss drawer
 - [ ] Re-run Loop 1–3 test bundle
 
+### Gate A blocker fix — active context short-circuits record search (2026-05-20)
+
+**Issue (manual review):** Command surface was visible above the drawer, but Task Assist still ran broad entity search and showed “I found N matching records. Which one?” even when `GlobalAssistantContext` held the open drawer opportunity.
+
+**Fix:** `shouldShortCircuitTaskAssistEntitySearch` in `activeOperationalContext.ts` — when an active opportunity exists and the command does not explicitly request cross-record search, `runTaskAssistRoute` shows `Using active record: …` and proceeds via `proceedToTaskAssistAction` without `fetchTaskAssistEntitySearch`. Explicit search phrases (`find`, `which record`, `list all`, etc.) still disambiguate.
+
+**Record picker readability:** `formatCandidateOperatorPresentation` — primary label, Opportunity · status · location, related people, match reason; raw ids/debug only when `NEXT_PUBLIC_COMMAND_SURFACE_SEARCH_DEBUG=1` in development.
+
+**V1.5 / future backlog (not implemented):** Broader entity search by child name, household, location, room/program, and bulk audience selection for messaging — captured here only; no bulk search/messaging in this fix.
+
+**Files changed**
+
+- `web/lib/adminV2/bos/activeOperationalContext.ts`
+- `web/app/adminV2/components/aiCommandSurface/AICommandSurfaceShell.tsx`
+- `web/app/adminV2/components/aiCommandSurface/CommandSurfaceThread.tsx`
+- `web/lib/agent/taskAssist/taskAssistEntitySearchDisambiguation.ts`
+- `web/tests/adminV2/activeContextTaskAssistRouting.test.ts` (new)
+- `web/tests/adminV2/activeOperationalContext.test.ts`
+- `web/tests/agent/taskAssist/taskAssistEntitySearchDisambiguation.test.ts`
+
+**Validation required**
+
+- [ ] Drawer open → Continue in Orchestrator → Ask → no “Which one?” picker; uses active record
+- [ ] Command with “find …” / “which record” still shows disambiguation when appropriate
+- [ ] Stale Task Assist card guard unchanged
+- [ ] Search result cards readable without raw ids
+
 | Card | Status | PR / notes |
 |------|--------|------------|
 | 1 | ☑ | Drawer → `GlobalAssistantContext` |

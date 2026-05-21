@@ -112,6 +112,78 @@ export function applyLabelDisambiguationForDuplicates(
     });
 }
 
+export type CandidateOperatorPresentation = {
+    primaryLabel: string;
+    secondaryLine: string | null;
+    relatedPeopleLine: string | null;
+    matchReasonLine: string | null;
+};
+
+function formatMatchReasonLine(c: TaskAssistEntitySearchCandidate): string | null {
+    if (c.matched_fields.includes("ambient_context")) {
+        return "Matched active drawer context";
+    }
+    if (c.matched_fields.some((f) => f === "fuzzy_match")) {
+        return "Close name match";
+    }
+    const byField: Record<string, string> = {
+        "opportunity_name": "Matched name",
+        "customer_family": "Matched household",
+        "customer_members.name": "Matched household member",
+        "primary_person_id": "Matched contact",
+        "primary_contact_id": "Matched contact",
+        "uuid_match": "Matched record id",
+    };
+    for (const f of c.matched_fields) {
+        if (byField[f]) return byField[f];
+    }
+    if (c.source === "customer_family") return "Matched household";
+    if (c.source === "customer_member") return "Matched household member";
+    if (c.source === "primary_person" || c.source === "primary_contact") return "Matched contact";
+    return c.matched_fields.length ? "Matched search" : null;
+}
+
+function formatStatusLabel(statusKey: string | null | undefined): string | null {
+    const s = statusKey?.trim();
+    if (!s) return null;
+    return s
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+
+/** Operator-facing candidate card lines (no raw ids). */
+export function formatCandidateOperatorPresentation(
+    c: TaskAssistEntitySearchCandidate
+): CandidateOperatorPresentation {
+    const d = c.disambiguation;
+    const primaryLabel = c.label.trim() || "Record";
+    const status = formatStatusLabel(d?.status_key);
+    const location = d?.location_name?.trim() || null;
+    const secondaryParts = ["Opportunity"];
+    if (status) secondaryParts.push(status);
+    if (location) secondaryParts.push(location);
+    const secondaryLine = secondaryParts.length > 1 ? secondaryParts.join(" · ") : "Opportunity";
+
+    const people: string[] = [];
+    if (d?.matched_members?.length) {
+        people.push(...d.matched_members.map((n) => n.trim()).filter(Boolean));
+    }
+    if (d?.matched_contacts?.length) {
+        for (const n of d.matched_contacts) {
+            const t = n.trim();
+            if (t && !people.includes(t)) people.push(t);
+        }
+    }
+    if (d?.child_display_name?.trim()) {
+        const child = d.child_display_name.trim();
+        if (!people.includes(child)) people.unshift(child);
+    }
+    const relatedPeopleLine = people.length ? people.join(" · ") : null;
+
+    const matchReasonLine = formatMatchReasonLine(c);
+    return { primaryLabel, secondaryLine, relatedPeopleLine, matchReasonLine };
+}
+
 export function formatCandidateDebugLine(c: TaskAssistEntitySearchCandidate): string {
     const d = c.disambiguation;
     const parts = [
