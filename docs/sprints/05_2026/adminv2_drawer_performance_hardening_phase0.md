@@ -300,6 +300,18 @@ All keyed off `postDrawerVisibleKey` at **bootstrap `drawerReady`** (~900ms), **
 
 ---
 
+## Pass 4 — First-paint contract (2026-05-20)
+
+Explicit `drawerPrimaryContractReady` / `drawerFirstPaintActive` in `web/lib/admin/drawer/opportunityDrawerFirstPaintContract.ts`.
+
+**First paint shows:** header (queue seed → primary title), tabs, inquiry summary (single column), family/contact from `_identity` / bootstrap, metadata-only tour when present, `_status_display` without status-options fetch.
+
+**Hidden until `surface=full`:** right summary column (oper strip / packets), inquiry children / tuition / deferred overview sections, tour bookings GET, FamilyContactsPanel full mode, header action skeletons.
+
+**Fix:** `opportunityFullHydratePending` no longer drives inquiry skeletons during `drawer_primary` — use `opportunityInquiryAwaitingFullEnrichment` + `opportunityFullRecordHydrateApplied`.
+
+---
+
 ## Pass 3 — Request suppression (2026-05-20)
 
 ### Root causes (A–H)

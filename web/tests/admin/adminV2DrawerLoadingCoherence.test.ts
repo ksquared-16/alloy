@@ -391,3 +391,33 @@ describe("Drawer single-reveal bootstrap body", () => {
         );
     });
 });
+
+describe("Opportunity drawer first-paint contract", () => {
+    it("defines primary contract and first-paint gates in shared module", () => {
+        const mod = read("lib/admin/drawer/opportunityDrawerFirstPaintContract.ts");
+        expect(mod).toContain("opportunityDrawerPrimaryContractReady");
+        expect(mod).toContain("opportunityDrawerFirstPaintActive");
+        expect(mod).toContain("filterOpportunityOverviewSectionsForFirstPaint");
+    });
+
+    it("hides right summary column and defers overview sections on first paint", () => {
+        const src = read("components/admin/AdminEntityDrawer.tsx");
+        expect(src).toContain("opportunityDrawerFirstPaintActive");
+        expect(src).toContain("showInquirySummaryRightColumn");
+        expect(src).toContain("familySummaryUsesFullPanel");
+        expect(src).toContain("filterOpportunityOverviewSectionsForFirstPaint");
+        expect(src).toMatch(/opportunityDrawerFirstPaintActive \? "true" : "false"/);
+        expect(src).not.toMatch(
+            /min-h-\[3\.25rem\][\s\S]{0,120}aria-hidden[\s\S]{0,120}Tour date/,
+        );
+    });
+
+    it("does not show header action skeletons during first paint", () => {
+        const src = read("components/admin/AdminEntityDrawer.tsx");
+        expect(src).toContain("opportunityHeaderFirstPaintSuppress");
+        expect(src).toMatch(
+            /opportunityHeaderFirstPaintSuppress[\s\S]{0,280}return null/,
+        );
+        expect(src).toContain("opportunityInquiryAwaitingFullEnrichment");
+    });
+});

@@ -328,32 +328,41 @@ flowchart LR
 
 ---
 
-### Card 7 — Operational Proposal shell (UX-only shared component)
+### Card 7 — Operational Proposal shell (UX-only shared component) ☑ (2026-05-20)
 
 **Audit:** §5 design · **Design:** §5.2–5.3
 
-**Files (new + consumers):**
+**Files (new):**
 
-- `web/app/adminV2/components/bos/OperationalProposalCardFrame.tsx` *(new)*
-- `web/lib/adminV2/bos/operationalProposalPresentation.ts` *(new — status labels, region props types)*
-- `web/lib/adminV2/bos/mapNativeProposalToPresentation.ts` *(optional thin mapper from envelope or native)*
+- `web/app/adminV2/components/bos/OperationalProposalCardFrame.tsx`
+- `web/lib/adminV2/bos/operationalProposalPresentation.ts`
+- `web/tests/adminV2/operationalProposalCardFrame.test.tsx`
 
-**Work:**
+**Frame anatomy (region order fixed):**
 
-1. Implement frame with regions: **Header** (capability subtitle), **Why shown** (optional slot), **Summary**, **Scope**, **Change detail** (children), **Risk & approval**, **Validation** (errors/warnings), **Actions** (footer slot), **Status** badge.
-2. Map `BosProposalStatus` / native states to operator labels per design §8.2 (Draft, Ready for review, Applied, …).
-3. **No** API changes; envelopes optional input — native props OK for v1.
-4. Export `OPERATIONAL_PROPOSAL_CAPABILITY_LABELS` for Task/Workflow/Config/Job layout.
+1. **Header** — eyebrow “Operational proposal”, title, `capability · type`, status badge, active record line  
+2. **Why shown** — source, reason label/detail, optional slot  
+3. **Summary** · **Scope** · **Change detail** (`children`)  
+4. **Risk & approval** — approval required, risk level, mutation/policy copy  
+5. **Validation** — errors / warnings lists  
+6. **Actions** — `footer` slot  
+7. **Receipt** — `receipt` slot + variant styling (`normal` | `review_required` | `blocked` | `stale` | `applied` | `failed`)
+
+**Presentation module:** `OPERATIONAL_PROPOSAL_CAPABILITY_LABELS`, `OPERATIONAL_PROPOSAL_STATUS_LABELS`, `formatOperationalProposalTypeLine`, `resolveOperationalProposalFrameVariant`. No envelope mapper in this card (deferred to Card 8+).
+
+**Migration boundary:** **No** Task/Workflow/Config/Job cards wrapped yet — frame only; Cards 8–9 adopt shell.
+
+**Tests run:**
+
+```bash
+cd web && npm run test -- tests/adminV2/operationalProposalCardFrame.test.tsx
+```
 
 **Acceptance criteria:**
 
-- [ ] Frame is presentational only — no fetch/apply logic inside.
-- [ ] Used by at least one card in same PR (Card 8 or 9) to avoid dead code.
-- [ ] `requires_approval` shows “Requires your approval” when true.
-
-**Tests:**
-
-- `web/tests/adminV2/operationalProposalCardFrame.test.tsx` — renders regions; status badge mapping.
+- [x] Frame is presentational only — no fetch/apply logic inside.
+- [x] Specialist cards not migrated in Card 7 (intentional).
+- [x] `requiresApproval` shows “Approval required” when true.
 
 ---
 
@@ -825,6 +834,25 @@ flowchart LR
 | V1.5-5 | De-emphasize full `TaskAssistOpportunityWorkspace` in thread | 18 |
 | V1.5-6 | Workflow clarification card parity | 19 |
 | V1.5-7 | Stale thread card labeling on context switch | design §6.3 |
+| V1.5-8 | **BOS recommendation intelligence** — richer drawer handoff than deterministic labels (see below) | Gate A refinement |
+
+### V1.5-8 — BOS recommendation intelligence (product direction)
+
+**V1 shipped (Gate A):** Drawer **Recommended next step** card via `buildOperationalRecommendationHandoffCopy` — primary label from `_attention_suggestion.next_action` / attention reason map, single operational reason line, active-record context, auto-submit handoff to Orchestrator (review/approve; no auto-send).
+
+**V1.5 evolution:** Move from **deterministic next-action labels** to **richer operational recommendations** on the same handoff surface (still workflow-native; not LLM-marketing or autonomous execution).
+
+| Capability | V1.5 target | Notes |
+|------------|-------------|--------|
+| **Recommended action type** | Explicit operator taxonomy | e.g. send message, schedule reminder, update status, review stalled inquiry — surfaced on card, not only `next_action.label` text |
+| **Reason stack** | Multi-factor explainability | Combine signals: stale inquiry, no outbound response, tour interest, waiting duration, family/stage — not one summary string only |
+| **Proposed message draft** | When comms recommended | Surface deterministic draft from existing `suggested_content` / templates where channel = message; preview in card or Orchestrator entry (still approve-before-send) |
+| **Context-aware inputs** | Parent / child / household search | Extend entity search & recommendation inputs beyond household name (child names, location, room/program) — aligns with Gate A search backlog |
+| **Outcome-informed rules** | After operational history matures | Recommendation rules informed by outcomes (response rates, stage progression) once enough history exists — rules/config, not speculative LLM |
+
+**Constraints (carry forward):** Deterministic + explainable; resolver/attention/task semantics authoritative; no autonomous send/apply; no new Orchestrator routes required for V1.5 framing — enrich presentation and rule inputs on existing paths first.
+
+**Related V1.5 items:** V1.5-7 (thread labeling on context switch); entity-search breadth (Gate A blocker note § active context).
 
 ---
 
@@ -1042,6 +1070,8 @@ cd web && npm run test -- tests/adminV2/activeOperationalContext.test.ts \
 
 **Signal sources (no LLM):** `_attention_suggestion`, `_operational_attention`, `suggestionActionForReasonCode`, `operationalAttentionExplain` timing/guidance; optional open task title fallback.
 
+**V1.5+:** Richer recommendation intelligence — see **V1.5-8** in § V1.5 backlog (action types, reason stack, draft preview, context-aware search, outcome-informed rules).
+
 | Card | Status | PR / notes |
 |------|--------|------------|
 | 1 | ☑ | Drawer → `GlobalAssistantContext` |
@@ -1050,7 +1080,7 @@ cd web && npm run test -- tests/adminV2/activeOperationalContext.test.ts \
 | 4 | ☑ | No Future placeholder in attention strip |
 | 5 | ☑ | Ops strip → Orchestrator handoff |
 | 6 | ☑ | Dead drawer section removed |
-| 7 | ☐ | |
+| 7 | ☑ | OperationalProposalCardFrame shell |
 | 8 | ☐ | |
 | 9 | ☐ | |
 | 10 | ☐ | |

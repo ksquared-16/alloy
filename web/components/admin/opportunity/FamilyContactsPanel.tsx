@@ -165,16 +165,12 @@ export function FamilyContactsPanel(props: {
 
     const relationshipRowsAwaitingFullHydrate =
         !opportunityFullHydrateFailed &&
-        (opportunityFullHydratePending === true ||
-            (opportunityFullHydratePending === undefined &&
-                opportunityFullHydrateApplied !== true &&
-                recordHydrationPending));
+        opportunityFullHydratePending === true &&
+        opportunityFullHydrateApplied !== true;
     const primaryContactAwaitingFullHydrate =
         !opportunityFullHydrateFailed &&
-        (opportunityFullHydratePending === true ||
-            (opportunityFullHydratePending === undefined &&
-                opportunityFullHydrateApplied !== true &&
-                recordHydrationPending));
+        opportunityFullHydratePending === true &&
+        opportunityFullHydrateApplied !== true;
 
     const timingEnabled =
         typeof window === "undefined"
