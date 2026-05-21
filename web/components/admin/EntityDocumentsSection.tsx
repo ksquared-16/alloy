@@ -5,20 +5,15 @@ import { formatDateTime } from "@/lib/adminFormatters";
 import { isV1DocumentEntityType } from "@/lib/admin/v1DocumentEntities";
 import type { V1DocumentEntityValue } from "@/lib/admin/v1DocumentEntities";
 import AssociatedDocumentUploadModal from "@/components/admin/AssociatedDocumentUploadModal";
+import {
+    artifactKindBadgeClass,
+    artifactKindDisplayLabel,
+    isSyntheticPacketDocumentId,
+} from "@/lib/forms/packets/documentProvenanceDisplay";
+import type { NormalizedDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 
 /** Aligned with `NormalizedDocumentRow` from `/api/admin/related/...` and upload response. */
-export type EntityDocumentListItem = {
-    id: string;
-    name?: string | null;
-    original_filename?: string | null;
-    document_type?: string | null;
-    status?: string | null;
-    uploaded_at?: string | null;
-    created_at?: string | null;
-    source_form_submission_id?: string | null;
-    source_form_submission_admin_path?: string | null;
-    source_packet_session_admin_path?: string | null;
-};
+export type EntityDocumentListItem = NormalizedDocumentRow;
 
 type Props = {
     documents: EntityDocumentListItem[];
@@ -223,39 +218,66 @@ export default function EntityDocumentsSection({
                             className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-alloy-stone/20 px-3 py-2 bg-white/80"
                         >
                             <div className="min-w-0 flex-1">
-                                <p className="text-sm font-medium text-alloy-forge/90 truncate">{displayName(doc)}</p>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    <p className="text-sm font-medium text-alloy-forge/90 truncate">{displayName(doc)}</p>
+                                    {doc.artifact_kind === "generated_pdf" || doc.artifact_kind === "submitted_record" ?
+                                        <span
+                                            className={`shrink-0 rounded border px-1 py-0.5 text-[10px] font-medium ${artifactKindBadgeClass(doc.artifact_kind)}`}
+                                        >
+                                            {artifactKindDisplayLabel(doc.artifact_kind)}
+                                        </span>
+                                    : null}
+                                    {doc.generation_label_display ?
+                                        <span className="shrink-0 text-[10px] text-alloy-midnight/55">
+                                            {doc.generation_label_display}
+                                        </span>
+                                    : null}
+                                </div>
+                                {doc.provenance_line ?
+                                    <p className="mt-0.5 text-[11px] text-alloy-midnight/65">{doc.provenance_line}</p>
+                                : null}
                                 <p className="text-xs text-alloy-muted">
                                     {[doc.document_type, doc.status, displayWhen(doc)].filter(Boolean).join(" · ") || "—"}
                                 </p>
                                 {(doc.source_form_submission_admin_path || doc.source_packet_session_admin_path) && (
                                     <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px]">
-                                        {doc.source_form_submission_admin_path ? (
+                                        {doc.source_form_submission_admin_path ?
                                             <a
                                                 href={doc.source_form_submission_admin_path}
                                                 className="font-medium text-alloy-blue hover:underline"
                                             >
-                                                Form submission
+                                                {doc.open_target === "submission_link" ? "View submission" : "Form submission"}
                                             </a>
-                                        ) : null}
-                                        {doc.source_packet_session_admin_path ? (
+                                        : null}
+                                        {doc.source_packet_session_admin_path ?
                                             <a
                                                 href={doc.source_packet_session_admin_path}
                                                 className="font-medium text-alloy-blue hover:underline"
                                             >
                                                 Packet session
                                             </a>
-                                        ) : null}
+                                        : null}
                                     </p>
                                 )}
                             </div>
-                            <button
-                                type="button"
-                                disabled={openingId === doc.id}
-                                onClick={() => openSignedUrl(doc.id)}
-                                className="text-xs px-2 py-1 border border-alloy-blue/50 rounded text-alloy-blue hover:bg-alloy-blue/10 shrink-0 disabled:opacity-50"
-                            >
-                                {openingId === doc.id ? "Opening…" : "Open"}
-                            </button>
+                            {doc.open_target === "submission_link" || isSyntheticPacketDocumentId(doc.id) ?
+                                doc.source_form_submission_admin_path ?
+                                    <a
+                                        href={doc.source_form_submission_admin_path}
+                                        className="shrink-0 text-xs px-2 py-1 border border-alloy-blue/50 rounded text-alloy-blue hover:bg-alloy-blue/10 font-medium"
+                                    >
+                                        View submission
+                                    </a>
+                                :   null
+                            :   <button
+                                    type="button"
+                                    disabled={openingId === doc.id}
+                                    onClick={() => openSignedUrl(doc.id)}
+                                    className="text-xs px-2 py-1 border border-alloy-blue/50 rounded text-alloy-blue hover:bg-alloy-blue/10 shrink-0 disabled:opacity-50"
+                                >
+                                    {openingId === doc.id ? "Opening…" : "Open"}
+                                </button>
+                            }
                         </li>
                     ))}
                 </ul>

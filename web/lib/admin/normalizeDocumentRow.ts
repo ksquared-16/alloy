@@ -14,6 +14,14 @@ export type NormalizedDocumentRow = {
     source_form_submission_id?: string | null;
     source_form_submission_admin_path?: string | null;
     source_packet_session_admin_path?: string | null;
+    /** Packet artifact from rollup (`generated_pdf` | `submitted_record`). */
+    artifact_kind?: "generated_pdf" | "submitted_record" | null;
+    provenance_line?: string | null;
+    generation_label?: "current" | "also_generated" | null;
+    generation_label_display?: string | null;
+    /** `signed_url` for real documents; `submission_link` for synthetic submitted_record rows. */
+    open_target?: "signed_url" | "submission_link" | null;
+    is_packet_artifact?: boolean;
 };
 
 export function normalizeDocumentRow(row: Record<string, unknown>): NormalizedDocumentRow {
@@ -38,6 +46,22 @@ export function normalizeDocumentRow(row: Record<string, unknown>): NormalizedDo
         typeof subPathRaw === "string" && subPathRaw.trim() ? subPathRaw.trim() : null;
     const source_packet_session_admin_path =
         typeof packetPathRaw === "string" && packetPathRaw.trim() ? packetPathRaw.trim() : null;
+
+    const artifactKindRaw = row.artifact_kind;
+    const artifact_kind =
+        artifactKindRaw === "generated_pdf" || artifactKindRaw === "submitted_record" ? artifactKindRaw : null;
+    const provenanceLineRaw = row.provenance_line;
+    const provenance_line =
+        typeof provenanceLineRaw === "string" && provenanceLineRaw.trim() ? provenanceLineRaw.trim() : null;
+    const genRaw = row.generation_label;
+    const generation_label = genRaw === "current" || genRaw === "also_generated" ? genRaw : null;
+    const genDisplayRaw = row.generation_label_display;
+    const generation_label_display =
+        typeof genDisplayRaw === "string" && genDisplayRaw.trim() ? genDisplayRaw.trim() : null;
+    const openRaw = row.open_target;
+    const open_target = openRaw === "signed_url" || openRaw === "submission_link" ? openRaw : null;
+    const is_packet_artifact = row.is_packet_artifact === true;
+
     return {
         id: String(row.id),
         name: titleStr ?? origStr,
@@ -53,6 +77,12 @@ export function normalizeDocumentRow(row: Record<string, unknown>): NormalizedDo
                   ...(source_packet_session_admin_path ? { source_packet_session_admin_path } : {}),
               }
             : {}),
+        ...(artifact_kind ? { artifact_kind } : {}),
+        ...(provenance_line ? { provenance_line } : {}),
+        ...(generation_label ? { generation_label } : {}),
+        ...(generation_label_display ? { generation_label_display } : {}),
+        ...(open_target ? { open_target } : {}),
+        ...(is_packet_artifact ? { is_packet_artifact } : {}),
     };
 }
 

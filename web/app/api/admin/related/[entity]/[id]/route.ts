@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { normalizeDocumentRows, type NormalizedDocumentRow } from "@/lib/admin/normalizeDocumentRow";
+import { mergeOpportunityPacketDocumentsForRelated } from "@/lib/admin/related/mergeOpportunityPacketDocuments";
 import { computeJobDisplayTotalCents, type JobPriceInput } from "@/lib/admin/jobDisplayPrice";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { dbListSubmissionLinkedDocumentsForSubmissionIds } from "@/lib/admin/forms/formsAdminDb";
-
 const LIMIT = 25;
 /** Opportunity drawer merges direct opportunity uploads with packet-linked submission documents; allow a larger cap so packet PDFs are not dropped behind job noise. */
 const OPPORTUNITY_DOC_MERGE_LIMIT = 50;
@@ -34,121 +32,6 @@ function mergeDocumentLists(
         const tb = b.created_at || b.uploaded_at || "";
         return tb.localeCompare(ta);
     }).slice(0, limit);
-}
-
-/** Documents linked via form_submission_documents for packet sessions tied to this opportunity (not entity_type=opportunity rows). */
-async function loadPacketSubmissionDocumentRowsForOpportunity(
-    supabase: SupabaseClient,
-    orgId: string,
-    opportunityId: string
-): Promise<Record<string, unknown>[]> {
-    const { data: bySnap } = await supabase
-        .from("form_packet_sessions")
-        .select("id")
-        .eq("org_id", orgId)
-        .filter("crm_snapshot->>opportunity_id", "eq", opportunityId)
-        .limit(40);
-    let sessionIds = (bySnap ?? []).map((s: { id: string }) => s.id);
-    if (sessionIds.length === 0) {
-        const { data: links } = await supabase
-            .from("form_public_links")
-            .select("id")
-            .eq("org_id", orgId)
-            .filter("metadata->>form_context_mode", "eq", "packet")
-            .filter("metadata->>source_entity_type", "eq", "opportunity")
-            .filter("metadata->>source_entity_id", "eq", opportunityId)
-            .limit(80);
-        const linkIds = (links ?? []).map((r: { id: string }) => r.id).filter(Boolean);
-        if (linkIds.length > 0) {
-            const { data: byLink } = await supabase
-                .from("form_packet_sessions")
-                .select("id")
-                .eq("org_id", orgId)
-                .in("started_via_public_link_id", linkIds)
-                .limit(40);
-            sessionIds = (byLink ?? []).map((s: { id: string }) => s.id);
-        }
-    }
-    if (sessionIds.length === 0) return [];
-    const { data: items } = await supabase
-        .from("form_packet_session_items")
-        .select("packet_session_id, form_submission_id")
-        .eq("org_id", orgId)
-        .in("packet_session_id", sessionIds)
-        .not("form_submission_id", "is", null);
-    const submissionIds = [
-        ...new Set((items ?? []).map((r: { form_submission_id: string }) => r.form_submission_id).filter(Boolean)),
-    ];
-    const submissionToPacketSession = new Map<string, string>();
-    for (const it of items ?? []) {
-        const r = it as { form_submission_id?: string | null; packet_session_id?: string | null };
-        if (r.form_submission_id && r.packet_session_id) {
-            submissionToPacketSession.set(r.form_submission_id, r.packet_session_id);
-        }
-    }
-    if (submissionIds.length === 0) return [];
-    const batch = await dbListSubmissionLinkedDocumentsForSubmissionIds(supabase, orgId, submissionIds);
-    if (batch.error || !batch.data) return [];
-    const allIds = new Set<string>();
-    for (const list of Object.values(batch.data)) {
-        for (const e of list) {
-            allIds.add(e.document.id);
-        }
-    }
-    if (allIds.size === 0) return [];
-
-    const docToSubmission = new Map<string, string>();
-    for (const [sid, list] of Object.entries(batch.data)) {
-        for (const e of list) {
-            const did = e.document.id;
-            if (!docToSubmission.has(did)) docToSubmission.set(did, sid);
-        }
-    }
-
-    const pathBySubmission = new Map<string, string>();
-    if (submissionIds.length > 0) {
-        const { data: subs } = await supabase
-            .from("form_submissions")
-            .select("id, form_definition_id")
-            .eq("org_id", orgId)
-            .in("id", submissionIds);
-        for (const s of subs ?? []) {
-            const r = s as { id: string; form_definition_id: string };
-            if (r.id && r.form_definition_id) {
-                pathBySubmission.set(
-                    r.id,
-                    `/admin/forms/${encodeURIComponent(r.form_definition_id)}/submissions/${encodeURIComponent(r.id)}`
-                );
-            }
-        }
-    }
-
-    const { data: fullDocs, error } = await supabase
-        .from("documents")
-        .select(DOC_SELECT)
-        .eq("org_id", orgId)
-        .in("id", [...allIds]);
-    if (error) return [];
-    return (fullDocs ?? []).map((doc) => {
-        const id = String((doc as { id: string }).id);
-        const sid = docToSubmission.get(id) ?? null;
-        const path = sid ? pathBySubmission.get(sid) ?? null : null;
-        const packetSessionId = sid ? submissionToPacketSession.get(sid) ?? null : null;
-        const packetPath =
-            packetSessionId != null && String(packetSessionId).length > 0
-                ? `/adminV2/forms/packets/${encodeURIComponent(String(packetSessionId))}`
-                : null;
-        return {
-            ...(doc as Record<string, unknown>),
-            ...(sid && path
-                ? {
-                      source_form_submission_id: sid,
-                      source_form_submission_admin_path: path,
-                      ...(packetPath ? { source_packet_session_admin_path: packetPath } : {}),
-                  }
-                : {}),
-        };
-    });
 }
 
 export async function GET(
@@ -313,8 +196,13 @@ export async function GET(
                     .limit(OPPORTUNITY_DOC_MERGE_LIMIT)
                     .then((r) => (r.error ? { data: [] } : r)),
             ]);
-            const packetSubmissionDocs = await loadPacketSubmissionDocumentRowsForOpportunity(supabase, ctx.orgId, id);
-            const documentsMerged = mergeDocumentLists([packetSubmissionDocs, documentsRes.data], OPPORTUNITY_DOC_MERGE_LIMIT);
+            const documentsMerged = await mergeOpportunityPacketDocumentsForRelated(
+                supabase,
+                ctx.orgId,
+                id,
+                documentsRes.data,
+                OPPORTUNITY_DOC_MERGE_LIMIT
+            );
             const jobIds = (jobsRes.data ?? []).map((j: { id: string }) => j.id);
             let discountRedemptions: { id: string; created_at?: string; discount_code_id?: string; customer_id?: string; job_id?: string }[] = [];
             if (jobIds.length > 0) {

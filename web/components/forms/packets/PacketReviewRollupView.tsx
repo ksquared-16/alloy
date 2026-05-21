@@ -8,10 +8,12 @@ import { validateFormSchema } from "@/lib/forms/schema";
 import type { PacketReviewRollupV1 } from "@/lib/forms/packets/packetReviewRollupTypes";
 import {
     artifactKindBadgeClass,
-    formatPacketReviewProvenanceLine,
+    artifactKindDisplayLabel,
+    formatPacketDocumentProvenanceLine,
     formatShortDate,
-    operatorReviewStatusLabel,
-} from "@/lib/forms/packets/packetReviewPresentation";
+    generationLabelDisplay,
+} from "@/lib/forms/packets/documentProvenanceDisplay";
+import { operatorReviewStatusLabel } from "@/lib/forms/packets/packetReviewPresentation";
 
 export type PacketReviewTechnicalDetails = {
     launch_context: unknown;
@@ -210,7 +212,9 @@ export function PacketReviewRollupView({
                                                 artifactKindBadgeClass(step.artifact.kind)
                                             )}
                                         >
-                                            {step.artifact.label}
+                                            {step.artifact.kind === "generated_pdf" || step.artifact.kind === "submitted_record" ?
+                                                artifactKindDisplayLabel(step.artifact.kind)
+                                            :   step.artifact.label}
                                         </span>
                                     </div>
                                     <p className="mt-1 text-[11px] text-[#59678b]">
@@ -284,13 +288,11 @@ export function PacketReviewRollupView({
                                                                 {openingDocId === doc.id ? "Opening…" : doc.name ?? "View PDF"}
                                                             </button>
                                                             <span className="text-[#59678b]">
-                                                                {doc.generation_label === "current" ?
-                                                                    "Current generated PDF"
-                                                                :   "Also generated"}
+                                                                {generationLabelDisplay(doc.generation_label)}
                                                             </span>
                                                             {idxEntry ?
                                                                 <span className="text-[#59678b]">
-                                                                    · {formatPacketReviewProvenanceLine(idxEntry.provenance)}
+                                                                    · {formatPacketDocumentProvenanceLine(idxEntry.provenance)}
                                                                 </span>
                                                             : null}
                                                         </li>
@@ -318,7 +320,7 @@ export function PacketReviewRollupView({
                                                     )
                                                     .map((e) => (
                                                         <p key={e.form_submission_id} className="mt-1 text-[11px]">
-                                                            {formatPacketReviewProvenanceLine(e.provenance)}
+                                                            {formatPacketDocumentProvenanceLine(e.provenance)}
                                                         </p>
                                                     ))}
                                             </div>
@@ -357,10 +359,10 @@ export function PacketReviewRollupView({
                                             artifactKindBadgeClass(entry.kind)
                                         )}
                                     >
-                                        {entry.kind === "generated_pdf" ? "PDF" : "Submitted record"}
+                                        {artifactKindDisplayLabel(entry.kind)}
                                     </span>
                                 </div>
-                                <p className="mt-0.5 text-[#59678b]">{formatPacketReviewProvenanceLine(entry.provenance)}</p>
+                                <p className="mt-0.5 text-[#59678b]">{formatPacketDocumentProvenanceLine(entry.provenance)}</p>
                                 <div className="mt-1 flex flex-wrap gap-2">
                                     <a
                                         href={entry.admin_links.submission_path}

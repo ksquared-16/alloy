@@ -713,6 +713,44 @@ Surface **provenance** on document rows and **`submitted_record`** entries in op
 
 - Remove synthetic merge; PDF-only related list returns to Phase 1 behavior.  
 
+### P2-4 implementation status (May 2026)
+
+**Status:** Shipped (Documents tab + shared provenance display; P2-5 not started).
+
+**Files changed**
+
+| Path | Notes |
+|------|--------|
+| `web/lib/forms/packets/documentProvenanceDisplay.ts` | Shared provenance line, generation labels, synthetic row mapping |
+| `web/lib/admin/related/mergeOpportunityPacketDocuments.ts` | Rollup-driven merge: PDF enrichment + `submitted_record` synthetic rows |
+| `web/lib/admin/normalizeDocumentRow.ts` | `artifact_kind`, `provenance_line`, `generation_label_display`, `open_target` |
+| `web/app/api/admin/related/[entity]/[id]/route.ts` | Opportunity branch uses merge helper |
+| `web/components/admin/EntityDocumentsSection.tsx` | Provenance line, badges, View submission vs Open |
+| `web/components/forms/packets/PacketReviewRollupView.tsx` | Uses shared display helpers (labels match Documents tab) |
+| `web/lib/forms/packets/packetReviewPresentation.ts` | Re-exports shared provenance formatters |
+| `web/tests/forms/documentProvenanceDisplay.test.ts` | Provenance line, synthetic row, stable labels |
+| `web/tests/admin/relatedOpportunityDocuments.test.ts` | Merge PDF + submitted_record safely |
+
+**Tests run**
+
+```bash
+cd web && npm run test -- \
+  tests/forms/documentProvenanceDisplay.test.ts \
+  tests/admin/relatedOpportunityDocuments.test.ts \
+  tests/forms/packetReviewRollup.test.ts
+# 17 passed (rollup tests include documents_index assertions from P2-1)
+```
+
+**Known limitations**
+
+- Opportunity Documents loads one rollup per packet session on related fetch (acceptable for MVP; no caching).
+- Historical PDFs without join metadata still get best-effort provenance from rollup builder only when session rollup succeeds.
+- No `documents.metadata` backfill on insert (optional task deferred; join-based provenance only).
+- Superseded PDF lifecycle not implemented.
+- Other entity related tabs unchanged (opportunity-only synthetic merge).
+
+**Suggested commit message:** `forms-p2-4: packet document provenance and submitted_record on opportunity Documents`
+
 ---
 
 ## P2-5 — Deterministic BOS packet review insight
