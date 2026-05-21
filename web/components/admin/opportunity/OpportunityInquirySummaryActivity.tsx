@@ -16,6 +16,8 @@ type Props = {
     canMutate: boolean;
     onInvalidate: () => void;
     onGoToTab: (tab: "activity" | "documents") => void;
+    /** When false, defers enrollment-packets probe until summary column is visible. */
+    fetchEnabled?: boolean;
 };
 
 /**
@@ -28,6 +30,7 @@ export function OpportunityInquirySummaryActivity({
     canMutate,
     onInvalidate,
     onGoToTab,
+    fetchEnabled = true,
 }: Props) {
     const [loadState, setLoadState] = useState<"loading" | "ready">("loading");
     const [hasSessions, setHasSessions] = useState(false);
@@ -53,8 +56,14 @@ export function OpportunityInquirySummaryActivity({
     }, [opportunityId]);
 
     useEffect(() => {
+        if (!fetchEnabled) {
+            setLoadState("ready");
+            setHasSessions(false);
+            setHasPacketSummary(false);
+            return;
+        }
         void probeSessions();
-    }, [probeSessions]);
+    }, [fetchEnabled, probeSessions]);
 
     useEffect(() => {
         const onOpp = (ev: Event) => {

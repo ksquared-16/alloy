@@ -5,7 +5,10 @@ import type { TourBookingRow } from "@/lib/tours/bookings/types";
  * Active non-terminal `tour_bookings` for an opportunity (admin API). Used by inquiry Tour date
  * and header action label; refetches on `adminv2:opportunity-updated` for the same id.
  */
-export function useOpportunityActiveTourBookings(opportunityId: string | null | undefined) {
+export function useOpportunityActiveTourBookings(
+    opportunityId: string | null | undefined,
+    enabled = true
+) {
     const oid =
         opportunityId && String(opportunityId).trim() && String(opportunityId).trim() !== "new"
             ? String(opportunityId).trim()
@@ -14,7 +17,7 @@ export function useOpportunityActiveTourBookings(opportunityId: string | null | 
     const [activeBookings, setActiveBookings] = useState<TourBookingRow[]>([]);
 
     const load = useCallback(async () => {
-        if (!oid) {
+        if (!enabled || !oid) {
             setActiveBookings([]);
             return;
         }
@@ -28,7 +31,7 @@ export function useOpportunityActiveTourBookings(opportunityId: string | null | 
         } catch {
             setActiveBookings([]);
         }
-    }, [oid]);
+    }, [enabled, oid]);
 
     useEffect(() => {
         void load();

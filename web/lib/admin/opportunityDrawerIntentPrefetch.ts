@@ -3,7 +3,6 @@ import {
     fetchOpportunityDrawerOperationalBootstrap,
 } from "@/lib/admin/opportunityDrawerBootstrapClient";
 import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
-import { scheduleDeferredCommunicationsDrawerPrefetch } from "@/lib/admin/communications/communicationsDrawerPrefetch";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 
@@ -23,8 +22,6 @@ export function prefetchOpportunityDrawerOnRowIntent(
 ): void {
     const id = opportunityId.trim();
     if (!id || typeof window === "undefined") return;
-
-    scheduleDeferredCommunicationsDrawerPrefetch("opportunities", id);
 
     if (!adminV2DrawerBootstrapEnabled()) {
         const url = `/api/admin/entity/opportunities/${encodeURIComponent(id)}?surface=drawer_visible`;

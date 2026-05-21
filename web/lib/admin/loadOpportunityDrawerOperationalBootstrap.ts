@@ -1,6 +1,4 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { resolveActionsForContext } from "@/lib/admin/actions/resolveActionsForContext";
-import { emptyResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { fetchEffectiveRecordDrawerLayout } from "@/lib/admin/effectiveRecordDrawerLayout";
 import { buildOpportunityDrawerVisiblePayload } from "@/lib/admin/opportunityEntityRecord";
 import type {
@@ -67,14 +65,22 @@ export async function loadOpportunityDrawerOperationalBootstrap(
     const ctxWu = (params.workUnitId ?? "").trim();
     const rowWu = String((oppRow as { work_unit_id?: unknown }).work_unit_id ?? "").trim();
     const workUnitId = ctxWu || rowWu;
+    const skipWorkUnitDbLookup = !!(ctxDept && ctxWu);
 
     const tVis0 = Date.now();
-    const entityP = buildOpportunityDrawerVisiblePayload(supabase, orgId, oppRow as Record<string, unknown>);
+    const entityP = buildOpportunityDrawerVisiblePayload(supabase, orgId, oppRow as Record<string, unknown>, {
+        hintDepartmentId: ctxDept || null,
+    });
     const tLayout0 = Date.now();
     const layoutP = fetchEffectiveRecordDrawerLayout(supabase, orgId, "opportunity");
     const tWu0 = Date.now();
     const wuP =
-        workUnitId ?
+        skipWorkUnitDbLookup ?
+            Promise.resolve({
+                data: { id: ctxWu, department_id: ctxDept, queue_definition: null },
+                error: null,
+            })
+        : workUnitId ?
             supabase
                 .from("work_units")
                 .select("id, department_id, queue_definition")
@@ -118,29 +124,8 @@ export async function loadOpportunityDrawerOperationalBootstrap(
     const deptFromEntity = String((entity as { _work_unit_department_id?: unknown })._work_unit_department_id ?? "").trim();
     const departmentId = ctxDept || work_unit?.department_id || deptFromEntity || null;
 
-    let record_header_actions = emptyResolvedActionsBySlot();
+    /** Header actions load client-side after primary reveal — keeps bootstrap off the critical path. */
     const tAct0 = Date.now();
-    if (workUnitId && departmentId) {
-        const sk =
-            (params.hintOpportunityStatusKey ?? "").trim() ||
-            (entity.status_key != null && typeof entity.status_key === "string" ? entity.status_key.trim() : "") ||
-            null;
-        const meta =
-            params.hintOpportunityMetadata ??
-            (entity.metadata && typeof entity.metadata === "object" ?
-                (entity.metadata as Record<string, unknown>)
-            :   null);
-        record_header_actions = await resolveActionsForContext(supabase, {
-            orgId,
-            surface: "record_header",
-            entityType: "opportunity",
-            entityId: opportunityId,
-            departmentId,
-            workUnitId,
-            hintOpportunityStatusKey: sk,
-            hintOpportunityMetadata: meta,
-        });
-    }
     phases.record_header_actions_ms = Date.now() - tAct0;
 
     const oper_trust_preview = sanitizeDrawerOperTrustPreviewFromHints({
@@ -155,7 +140,7 @@ export async function loadOpportunityDrawerOperationalBootstrap(
     return {
         entity,
         record_layout,
-        record_header_actions: workUnitId && departmentId ? record_header_actions : null,
+        record_header_actions: null,
         work_unit,
         workspace_scope: {
             department_id: departmentId,

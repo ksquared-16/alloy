@@ -30,18 +30,26 @@ type Props = {
     locationId: string;
     canMutate: boolean;
     onRefresh: () => void | Promise<void>;
+    /** Shared bookings from parent — avoids duplicate GET when tour date block already loaded. */
+    activeBookings?: TourBookingRow[];
+    fetchEnabled?: boolean;
 };
 
 /** Inline actions below inquiry "Tour date" — uses tour_bookings APIs only (no duplicate Schedule entry point). */
 export function OpportunityTourBookingLifecycleBar(props: Props) {
-    const { opportunityId, locationId, canMutate, onRefresh } = props;
-    const [loading, setLoading] = useState(true);
+    const { opportunityId, locationId, canMutate, onRefresh, activeBookings, fetchEnabled = true } = props;
+    const useSharedBookings = activeBookings != null;
+    const [loading, setLoading] = useState(!useSharedBookings);
     const [err, setErr] = useState<string | null>(null);
-    const [active, setActive] = useState<TourBookingRow[]>([]);
+    const [active, setActive] = useState<TourBookingRow[]>(activeBookings ?? []);
     const [saving, setSaving] = useState(false);
     const [rescheduleOpen, setRescheduleOpen] = useState(false);
 
     const load = useCallback(async () => {
+        if (useSharedBookings || !fetchEnabled) {
+            setLoading(false);
+            return;
+        }
         if (!locationId) {
             setLoading(false);
             return;
@@ -60,11 +68,16 @@ export function OpportunityTourBookingLifecycleBar(props: Props) {
         } finally {
             setLoading(false);
         }
-    }, [opportunityId, locationId]);
+    }, [fetchEnabled, opportunityId, locationId, useSharedBookings]);
 
     useEffect(() => {
+        if (useSharedBookings) {
+            setActive(activeBookings);
+            setLoading(false);
+            return;
+        }
         void load();
-    }, [load]);
+    }, [activeBookings, load, useSharedBookings]);
 
     const primary = useMemo(() => active[0] ?? null, [active]);
 

@@ -166,6 +166,8 @@ export default function OpportunityInquiryChildrenSection({
     recordDetailPending = false,
     /** When true, outer EntityDrawerSection already provides premium card chrome — avoid nested heavy cards. */
     embeddedInPremiumSection = false,
+    /** When false, defers field-definitions / option-set / status-definitions until edit. */
+    enrichmentFetchEnabled = false,
 }: {
     rows: InquiryChildRow[];
     canEdit: boolean;
@@ -176,6 +178,7 @@ export default function OpportunityInquiryChildrenSection({
     onChildrenMutated?: () => void;
     recordDetailPending?: boolean;
     embeddedInPremiumSection?: boolean;
+    enrichmentFetchEnabled?: boolean;
 }) {
     const rootCol = embeddedInPremiumSection ? "min-w-0 w-full" : "md:col-span-2";
     const emptyBox = embeddedInPremiumSection
@@ -252,7 +255,7 @@ export default function OpportunityInquiryChildrenSection({
     }, [rows]);
 
     useEffect(() => {
-        if (rows.length === 0) {
+        if (!enrichmentFetchEnabled || rows.length === 0) {
             setProgramItems([]);
             setScheduleItems([]);
             setStatusItems([]);
@@ -289,9 +292,13 @@ export default function OpportunityInquiryChildrenSection({
         return () => {
             cancelled = true;
         };
-    }, [rows.length]);
+    }, [enrichmentFetchEnabled, rows.length]);
 
     useEffect(() => {
+        if (!enrichmentFetchEnabled) {
+            setFieldDefs([]);
+            return undefined;
+        }
         let cancelled = false;
         async function loadDefs() {
             try {

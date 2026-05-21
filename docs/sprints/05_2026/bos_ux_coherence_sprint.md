@@ -1016,6 +1016,12 @@ cd web && npm run test -- tests/adminV2/activeOperationalContext.test.ts \
 - [ ] Stale Task Assist card guard unchanged
 - [ ] Search result cards readable without raw ids
 
+### Gate A visual refinement — premium Orchestrator handoff CTA (2026-05-20)
+
+**Change:** Replaced plain “Continue in Orchestrator” link in `OpportunityOperationalCompactStrip` with compact `OrchestratorHandoffCard` — eyebrow “BOS handoff”, active record line, supporting copy, bordered tint card, primary button + arrow. Routing/context unchanged.
+
+**Files:** `OpportunityOperationalCompactStrip.tsx`, `opportunityOperationalCompactStrip.contract.test.ts`
+
 | Card | Status | PR / notes |
 |------|--------|------------|
 | 1 | ☑ | Drawer → `GlobalAssistantContext` |

@@ -706,10 +706,16 @@ async function respondOpportunityRelationshipMemberOverlay(
  * Fast drawer shell payload — no `_operational_attention` (attaches on `surface=full` only).
  * Used by drawer operational bootstrap and `GET ?surface=drawer_visible`.
  */
+export type BuildOpportunityDrawerVisiblePayloadOptions = {
+  /** When queue/workspace context already resolved department, skip work_units lookup. */
+  hintDepartmentId?: string | null;
+};
+
 export async function buildOpportunityDrawerVisiblePayload(
   supabase: AdminSupabase,
   orgId: string,
   data: Record<string, unknown>,
+  options?: BuildOpportunityDrawerVisiblePayloadOptions,
 ): Promise<Record<string, unknown>> {
   const opp = data as Record<string, unknown> & {
     status_key?: string | null;
@@ -725,18 +731,21 @@ export async function buildOpportunityDrawerVisiblePayload(
     title?: string | null;
   };
   const wuidForDept = trimOrNull(opp.work_unit_id);
+  const hintDepartmentId = trimOrNull(options?.hintDepartmentId ?? null);
   const oppPipelineStageId = opp.pipeline_stage_id ?? null;
   const oppOrgIdForDefs = opp.org_id;
   const primaryPersonContactP = fetchPrimaryPersonContactHydrate(supabase, orgId, opp);
   const [wuDeptRowV, customerRowV, stRowV, primaryHydrV, opportunityDefsVisible] = await Promise.all([
-    wuidForDept
-      ? supabase
-          .from("work_units")
-          .select("department_id, metadata")
-          .eq("id", wuidForDept)
-          .eq("org_id", orgId)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
+    hintDepartmentId
+      ? Promise.resolve({ data: { department_id: hintDepartmentId, metadata: null } })
+      : wuidForDept
+        ? supabase
+            .from("work_units")
+            .select("department_id, metadata")
+            .eq("id", wuidForDept)
+            .eq("org_id", orgId)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
     opp.customer_id
       ? supabase
           .from("customers")
@@ -760,9 +769,11 @@ export async function buildOpportunityDrawerVisiblePayload(
       : Promise.resolve([]),
   ]);
   const vis: Record<string, unknown> = { ...data };
-  vis._work_unit_department_id = wuidForDept
-    ? trimOrNull((wuDeptRowV.data as { department_id?: string | null } | null)?.department_id ?? null)
-    : null;
+  vis._work_unit_department_id = hintDepartmentId
+    ? hintDepartmentId
+    : wuidForDept
+      ? trimOrNull((wuDeptRowV.data as { department_id?: string | null } | null)?.department_id ?? null)
+      : null;
   vis._customer_name = (customerRowV.data as { name?: string | null } | null)?.name ?? null;
   if (oppPipelineStageId) {
     const stName = (stRowV.data as { name?: string | null } | null)?.name ?? null;

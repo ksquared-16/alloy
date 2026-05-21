@@ -35,6 +35,8 @@ type Props = {
     onExecutionResult?: (executionResult: Record<string, unknown> | undefined) => void;
     /** Summary column uses a shorter action skeleton aligned with inquiry header panels. */
     layoutDensity?: "default" | "summary";
+    /** When false, intersection observer and `surface=record_section` fetch stay off until enrichment is allowed. */
+    actionsFetchEnabled?: boolean;
 };
 
 function filterSlot(
@@ -63,6 +65,7 @@ export default function OpportunityRecordSectionRegistryActions({
     onApplied,
     onExecutionResult,
     layoutDensity = "default",
+    actionsFetchEnabled = true,
 }: Props) {
     const mountRef = useRef<HTMLDivElement | null>(null);
     const [shouldLoad, setShouldLoad] = useState(false);
@@ -80,7 +83,7 @@ export default function OpportunityRecordSectionRegistryActions({
 
     useEffect(() => {
         const el = mountRef.current;
-        if (!el || shouldLoad) return;
+        if (!actionsFetchEnabled || !el || shouldLoad) return;
         const obs = new IntersectionObserver(
             (entries) => {
                 const hit = entries.some((e) => e.isIntersecting);
@@ -93,7 +96,7 @@ export default function OpportunityRecordSectionRegistryActions({
         );
         obs.observe(el);
         return () => obs.disconnect();
-    }, [opportunityId, sectionKey, shouldLoad]);
+    }, [actionsFetchEnabled, opportunityId, sectionKey, shouldLoad]);
 
     useEffect(() => {
         if (!shouldLoad) return;

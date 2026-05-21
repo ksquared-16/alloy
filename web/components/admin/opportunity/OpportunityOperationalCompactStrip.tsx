@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowRight } from "lucide-react";
 
 import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
@@ -37,6 +38,59 @@ import {
     operationalStripShowEmptyState,
     type OpportunityOperationalStripLayout,
 } from "@/lib/admin/drawer/opportunityOperationalStripPresentation";
+
+function OrchestratorHandoffCard(props: {
+    entityLabel?: string | null;
+    layout: OpportunityOperationalStripLayout;
+    onContinue: () => void;
+}) {
+    const { entityLabel, layout, onContinue } = props;
+    const recordHint = entityLabel?.trim() ? entityLabel.trim() : "this inquiry";
+
+    return (
+        <div
+            className={
+                layout === "inquiry_summary" ?
+                    "mt-2 border-t border-alloy-stone/10 pt-2"
+                :   "mt-2 w-full max-w-[min(100%,28rem)] border-t border-alloy-stone/10 pt-2"
+            }
+            data-drawer-slot="operational_orchestrator_handoff"
+            data-operational-orchestrator-handoff-card="true"
+        >
+            <div
+                className="rounded-lg border border-alloy-blue/22 bg-gradient-to-br from-alloy-blue/[0.06] via-white to-alloy-stone/[0.03] px-2.5 py-2 shadow-[0_1px_0_rgba(39,63,82,0.04)]"
+            >
+                <p
+                    className="text-[9px] font-semibold uppercase tracking-[0.14em] text-alloy-midnight/45"
+                    data-operational-orchestrator-handoff-eyebrow="true"
+                >
+                    BOS handoff
+                </p>
+                <p className="mt-1 text-[10px] leading-snug text-alloy-midnight/70">
+                    <span className="font-medium text-alloy-midnight/85">Active record · </span>
+                    {recordHint}
+                </p>
+                <p className="mt-1 text-[9px] leading-snug text-alloy-midnight/55">
+                    Uses this active record in the Orchestrator. Review before anything sends.
+                </p>
+                <div className="mt-2 flex justify-end">
+                    <button
+                        type="button"
+                        data-operational-orchestrator-handoff="true"
+                        className="inline-flex items-center gap-1.5 rounded-md border border-alloy-blue/35 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-alloy-blue shadow-sm transition-colors hover:border-alloy-blue/50 hover:bg-alloy-blue/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-blue/30"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onContinue();
+                        }}
+                    >
+                        Continue in Orchestrator
+                        <ArrowRight className="h-3 w-3 shrink-0 opacity-80" strokeWidth={2.25} aria-hidden />
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
 
 type OperationalTaskRow = {
     id: string;
@@ -470,29 +524,11 @@ export default function OpportunityOperationalCompactStrip({
                 </div>
             )}
             {globalAssistant ? (
-                <div
-                    className={
-                        inquirySummary ?
-                            "mt-1 border-t border-alloy-stone/10 pt-2"
-                        :   "mt-1 flex w-full justify-end border-t border-alloy-stone/10 pt-1.5"
-                    }
-                    data-drawer-slot="operational_orchestrator_handoff"
-                >
-                    <button
-                        type="button"
-                        data-operational-orchestrator-handoff="true"
-                        className="rounded-md border border-alloy-stone/25 bg-white/80 px-2.5 py-1 text-[10px] font-semibold text-alloy-blue hover:bg-alloy-stone/[0.04] focus:outline-none focus-visible:ring-1 focus-visible:ring-alloy-blue/35"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onContinueInOrchestrator();
-                        }}
-                    >
-                        Continue in Orchestrator
-                    </button>
-                    <p className="mt-1 text-[9px] leading-snug text-alloy-midnight/50">
-                        Uses the active record in the command bar. Review and approve before anything sends.
-                    </p>
-                </div>
+                <OrchestratorHandoffCard
+                    entityLabel={entityLabel}
+                    layout={layout}
+                    onContinue={onContinueInOrchestrator}
+                />
             ) : null}
         </div>
     );

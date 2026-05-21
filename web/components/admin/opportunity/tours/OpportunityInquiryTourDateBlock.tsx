@@ -15,6 +15,8 @@ export type OpportunityInquiryTourDateBlockProps = {
     onRefresh: () => void | Promise<void>;
     labelClassName: string;
     readonlyFieldClassName: string;
+    /** When false, skips tour_bookings GET until section is visible and full hydrate has applied. */
+    fetchEnabled?: boolean;
 };
 
 /**
@@ -22,9 +24,19 @@ export type OpportunityInquiryTourDateBlockProps = {
  * plus the booking lifecycle bar — single surface, no separate `tour_scheduling` section.
  */
 export function OpportunityInquiryTourDateBlock(props: OpportunityInquiryTourDateBlockProps) {
-    const { opportunityId, locationId, metadata, viewerTimezone, canMutate, onRefresh, labelClassName, readonlyFieldClassName } = props;
+    const {
+        opportunityId,
+        locationId,
+        metadata,
+        viewerTimezone,
+        canMutate,
+        onRefresh,
+        labelClassName,
+        readonlyFieldClassName,
+        fetchEnabled = true,
+    } = props;
 
-    const { activeBookings } = useOpportunityActiveTourBookings(opportunityId);
+    const { activeBookings } = useOpportunityActiveTourBookings(opportunityId, fetchEnabled);
 
     const primary = activeBookings[0];
     const bookingBacked = Boolean(primary && typeof primary.start_at === "string" && primary.start_at.trim());
@@ -47,6 +59,8 @@ export function OpportunityInquiryTourDateBlock(props: OpportunityInquiryTourDat
                 locationId={locationId}
                 canMutate={canMutate}
                 onRefresh={onRefresh}
+                activeBookings={activeBookings}
+                fetchEnabled={fetchEnabled}
             />
         </>
     );
