@@ -1036,6 +1036,12 @@ cd web && npm run test -- tests/adminV2/activeOperationalContext.test.ts \
 
 **Files:** `adminV2CommandBarEvents.ts`, `AICommandSurfaceShell.tsx`, `CommandSurfaceThread.tsx`, `commandSurfaceThreadTypes.ts`, `operationalContextSwitchNotice.ts`, `OpportunityOperationalCompactStrip.tsx`, `AdminEntityDrawer.tsx`, tests.
 
+### Gate A final refinement — operational recommendation handoff card (2026-05-20)
+
+**Change:** Handoff card is now **Recommended next step** with deterministic primary label (`_attention_suggestion.next_action` or attention reason map), operational reason (`reasoning.summary` / attention timing), subtle active-record line, and CTA **Review next step** / **Open recommendation** / **Review in Orchestrator** by `action_family`. `buildOperationalRecommendationHandoffCopy` in `operationalRecommendationHandoff.ts`. Auto-submit handoff unchanged.
+
+**Signal sources (no LLM):** `_attention_suggestion`, `_operational_attention`, `suggestionActionForReasonCode`, `operationalAttentionExplain` timing/guidance; optional open task title fallback.
+
 | Card | Status | PR / notes |
 |------|--------|------------|
 | 1 | ☑ | Drawer → `GlobalAssistantContext` |

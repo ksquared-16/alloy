@@ -64,9 +64,10 @@ describe("OpportunityOperationalCompactStrip", () => {
 
     it("operational strip handoff focuses Orchestrator with active drawer context", () => {
         const src = readFileSync(stripPath, "utf8");
-        expect(src).toContain("Continue in Orchestrator");
         expect(src).toContain("OrchestratorHandoffCard");
-        expect(src).toContain("BOS handoff");
+        expect(src).toContain("buildOperationalRecommendationHandoffCopy");
+        expect(src).toContain("operationalRecommendationHandoff");
+        expect(src).toContain("data-operational-recommendation-primary");
         expect(src).toContain("data-operational-orchestrator-handoff-card");
         expect(src).toContain("data-operational-orchestrator-handoff-eyebrow");
         expect(src).toContain("data-operational-orchestrator-handoff=\"true\"");

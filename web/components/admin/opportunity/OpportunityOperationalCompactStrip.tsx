@@ -52,7 +52,7 @@ function OrchestratorHandoffCard(props: {
             className={
                 layout === "inquiry_summary" ?
                     "mt-2 border-t border-alloy-stone/10 pt-2"
-                :   "mt-2 w-full max-w-[min(100%,28rem)] border-t border-alloy-stone/10 pt-2"
+                    : "mt-2 w-full max-w-[min(100%,28rem)] border-t border-alloy-stone/10 pt-2"
             }
             data-drawer-slot="operational_orchestrator_handoff"
             data-operational-orchestrator-handoff-card="true"
@@ -379,11 +379,10 @@ export default function OpportunityOperationalCompactStrip({
                             setSendPopoverAnchorEl(null);
                             setPopoverTaskId((prev) => (prev === t.id ? null : t.id));
                         }}
-                        className={`${CHIP} cursor-pointer text-left border ${
-                            selected ?
+                        className={`${CHIP} cursor-pointer text-left border ${selected ?
                                 "border-alloy-blue/45 bg-alloy-blue/10 text-alloy-midnight/90 ring-2 ring-alloy-blue/25"
-                            :   `${taskBadge.className} hover:opacity-95`
-                        }`}
+                                : `${taskBadge.className} hover:opacity-95`
+                            }`}
                     >
                         {!inquirySummary ? (
                             <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide opacity-80">
@@ -441,11 +440,10 @@ export default function OpportunityOperationalCompactStrip({
                                 setSendPopoverAnchorEl(nextId ? (e.currentTarget as HTMLButtonElement) : null);
                                 setPopoverSendId(nextId);
                             }}
-                            className={`${CHIP} cursor-pointer text-left border ${
-                                selected ?
+                            className={`${CHIP} cursor-pointer text-left border ${selected ?
                                     "border-alloy-blue/45 bg-alloy-blue/10 text-alloy-midnight/90 ring-2 ring-alloy-blue/25"
-                                :   `${sendBadge.className} hover:opacity-95`
-                            }`}
+                                    : `${sendBadge.className} hover:opacity-95`
+                                }`}
                         >
                             {!inquirySummary ? (
                                 <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide opacity-80">
@@ -477,7 +475,7 @@ export default function OpportunityOperationalCompactStrip({
             className={
                 inquirySummary ?
                     "relative flex w-full min-w-0 flex-col gap-2"
-                :   "relative flex w-full min-w-0 max-w-[min(100%,28rem)] flex-col items-end gap-1"
+                    : "relative flex w-full min-w-0 max-w-[min(100%,28rem)] flex-col items-end gap-1"
             }
             data-admin-opportunity-operational-strip="true"
             data-operational-strip-layout={layout}
@@ -494,11 +492,11 @@ export default function OpportunityOperationalCompactStrip({
                 >
                     {sendAttention.failed > 0 ?
                         `${sendAttention.failed} scheduled message${sendAttention.failed === 1 ? "" : "s"} failed delivery.`
-                    :   null}
+                        : null}
                     {sendAttention.failed > 0 && sendAttention.needs_attention > 0 ? " " : null}
                     {sendAttention.needs_attention > 0 ?
                         `${sendAttention.needs_attention} scheduled message${sendAttention.needs_attention === 1 ? "" : "s"} not processed.`
-                    :   null}{" "}
+                        : null}{" "}
                     Open a chip to edit, cancel, or process.
                 </p>
             ) : null}
