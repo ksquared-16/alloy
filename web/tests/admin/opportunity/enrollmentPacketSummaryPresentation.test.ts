@@ -25,6 +25,21 @@ describe("enrollmentPacketSummaryPresentation", () => {
         expect(pending).toHaveLength(1);
     });
 
+    it("returns all pending completed sessions (0, 1, 2)", () => {
+        expect(enrollmentPacketSessionsPendingReview([])).toHaveLength(0);
+        expect(
+            enrollmentPacketSessionsPendingReview([
+                { status: "completed", operator_review_status: null },
+            ])
+        ).toHaveLength(1);
+        const two = enrollmentPacketSessionsPendingReview([
+            { status: "completed", operator_review_status: "needs_review" },
+            { status: "completed", operator_review_status: "needs_correction" },
+            { status: "completed", operator_review_status: "approved" },
+        ]);
+        expect(two).toHaveLength(2);
+    });
+
     it("detects reviewed head session for approved display", () => {
         const head = enrollmentPacketReviewedHeadSession([
             {

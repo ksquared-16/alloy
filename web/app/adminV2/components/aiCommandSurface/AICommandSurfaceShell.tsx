@@ -1842,7 +1842,7 @@ export default function AICommandSurfaceShell() {
           plannerOk={card.plannerOk}
           structuredOverrideJson={card.structuredOverrideJson}
           expanded
-          panelMaxHeight={panelMaxHeight}
+          panelMaxHeight={`${panelMaxHeight}px`}
           ui={ui}
           canApply={canApply}
           applyBlockedByNoop={applyBlockedByNoop}

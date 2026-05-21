@@ -240,6 +240,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
             packet_name: typeof defName === "string" && defName.trim() ? defName.trim() : null,
             started_via_public_link_id: (sess.started_via_public_link_id as string | null) ?? null,
             operator_review_status: (sess as { operator_review_status?: string | null }).operator_review_status ?? null,
+            warning_count: operator_review_warnings.length,
             operator_review_warnings,
             operator_review_notes: (sess as { operator_review_notes?: string | null }).operator_review_notes ?? null,
             operator_reviewed_at: (sess as { operator_reviewed_at?: string | null }).operator_reviewed_at ?? null,
@@ -317,5 +318,13 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         minted_links_pending_open = pending;
     }
 
-    return NextResponse.json({ sessions: out, minted_links_pending_open });
+    const pendingReviewCount = out.filter(
+        (s: { status: string; operator_review_status?: string | null }) =>
+            s.status === "completed" &&
+            (s.operator_review_status == null ||
+                s.operator_review_status === "needs_review" ||
+                s.operator_review_status === "needs_correction")
+    ).length;
+
+    return NextResponse.json({ sessions: out, pending_review_count: pendingReviewCount, minted_links_pending_open });
 }

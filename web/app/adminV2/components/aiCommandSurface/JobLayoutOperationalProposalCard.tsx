@@ -210,7 +210,7 @@ export function JobLayoutOperationalProposalCard(props: JobLayoutOperationalProp
                 scope={JOB_LAYOUT_PROPOSAL_SCOPE_LABEL}
                 sourceLabel={JOB_LAYOUT_PROPOSAL_SOURCE_LABEL}
                 summary={subline ?? undefined}
-                requiresApproval={requiresApproval && responseKind !== "applied_success"}
+                requiresApproval={requiresApproval}
                 riskLevel="medium"
                 mutationBoundaryCopy={jobLayoutMutationBoundaryCopy(responseKind)}
                 footer={expanded ? expandedFooter : collapsedFooter}
