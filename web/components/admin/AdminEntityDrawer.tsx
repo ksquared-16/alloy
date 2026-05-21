@@ -177,6 +177,7 @@ import {
 import {
     clearOpportunityDrawerBackgroundFullSchedule,
     finishOpportunityDrawerHydrate,
+    markOpportunityDrawerHydrateDone,
     resetOpportunityDrawerHydrateGuards,
     resolveOpportunityHydrateId,
     tryBeginOpportunityDrawerHydrate,
@@ -1263,7 +1264,17 @@ function opportunityActivityStaleBadgeClass(severity: "low" | "medium" | "high")
 }
 
 export default function AdminEntityDrawer() {
-    const { drawer, openDrawer, closeDrawer, canGoBack, goBack, previousDrawer, stack } = useAdminDrawer();
+    const {
+        drawer,
+        openDrawer,
+        closeDrawer,
+        canGoBack,
+        goBack,
+        previousDrawer,
+        stack,
+        consumeOpportunityDrawerPreload,
+        isOpportunityDrawerOpening,
+    } = useAdminDrawer();
     const { canMutate, role: adminRole } = useAdminAuth();
     const { orgId: workspaceOrgId } = useWorkspaceOrg();
     const recordChromeOrgScope = workspaceOrgId?.trim() || null;
@@ -1592,6 +1603,8 @@ export default function AdminEntityDrawer() {
     const drawerReadyLoggedKeyRef = useRef<string | null>(null);
     const opportunityDrawerShellSettledPerfRef = useRef(false);
     const opportunityDrawerRevealCoordStartedAtRef = useRef<number | null>(null);
+    /** Pre-open coordinator applied bootstrap + drawer_primary before modal mount. */
+    const opportunityDrawerFirstPaintPreloadedRef = useRef<string | null>(null);
     const [addInquiryChildState, setAddInquiryChildState] = useState<{ mode: "child" | "sibling" } | null>(null);
     const [collectPaymentOpen, setCollectPaymentOpen] = useState(false);
     const [collectPaymentContext, setCollectPaymentContext] = useState<AdminCollectPaymentModalContext | null>(null);
@@ -2068,9 +2081,48 @@ export default function AdminEntityDrawer() {
         (data as { discount_code_id?: string | null } | null)?.discount_code_id,
     ]);
 
+    useLayoutEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        const preload = consumeOpportunityDrawerPreload(drawer.id);
+        if (!preload) return;
+        const boot = preload.bootstrap;
+        if (String((boot.entity as { id?: unknown }).id ?? "") !== String(drawer.id)) return;
+        opportunityDrawerFirstPaintPreloadedRef.current = drawer.id;
+        opportunityDrawerBootstrapAppliedRef.current = drawer.id;
+        opportunityDrawerBootstrapEntityKeyRef.current = `${drawer.type}:${drawer.id}`;
+        setOpportunityBootstrapAppliedId(drawer.id);
+        setOpportunityBootstrapLayoutRow(mapBootstrapLayoutToRecordLayoutRow(boot));
+        setOpportunityOperTrustPreview(boot.oper_trust_preview);
+        const merged = mergeOpportunityFullHydrate(
+            boot.entity as Record<string, unknown>,
+            preload.primaryEntity
+        );
+        merged._record_surface = "drawer_primary";
+        setData(merged);
+        if (boot.record_header_actions) {
+            setOpportunityResolvedHeaderActions(boot.record_header_actions);
+            opportunityHeaderResolvedSigRef.current = "bootstrap";
+        }
+        setOpportunityResolvedHeaderLoading(false);
+        if (boot.work_unit?.queue_definition) {
+            setOpportunityQueueDefinition(boot.work_unit.queue_definition);
+        } else {
+            setOpportunityQueueDefinition(null);
+        }
+        setOpportunityWorkUnitDepartmentId(boot.work_unit?.department_id ?? boot.workspace_scope.department_id);
+        markDrawerBootstrapApplied(String(drawer.id));
+        setOpportunityDrawerRevealCoordTimedOut(false);
+        markOpportunityDrawerHydrateDone(drawer.id, "primary");
+        opportunityPrimaryHydrateDoneRef.current = drawer.id;
+        setOpportunityFullHydrateFailed(false);
+        setLoading(false);
+        setError(null);
+    }, [drawer.type, drawer.id, consumeOpportunityDrawerPreload]);
+
     useEffect(() => {
         if (!drawer.type || !drawer.id) {
             entityDrawerTabInitKeyRef.current = "";
+            opportunityDrawerFirstPaintPreloadedRef.current = null;
             opportunityPrimaryHydrateInFlightRef.current = null;
             opportunityPrimaryHydrateDoneRef.current = null;
             opportunityBackgroundFullInFlightRef.current = null;
@@ -2128,6 +2180,13 @@ export default function AdminEntityDrawer() {
             return;
         }
         const entityOpenKey = `${drawer.type}:${drawer.id}`;
+        if (
+            drawer.type === "opportunities" &&
+            drawer.id !== "new" &&
+            opportunityDrawerFirstPaintPreloadedRef.current === drawer.id
+        ) {
+            return;
+        }
         if (entityDrawerTabInitKeyRef.current !== entityOpenKey) {
             entityDrawerTabInitKeyRef.current = entityOpenKey;
             setDrawerTab("overview");
@@ -2151,6 +2210,7 @@ export default function AdminEntityDrawer() {
             setOpportunityFullHydrateFailed(false);
             const entityChanged = opportunityDrawerBootstrapEntityKeyRef.current !== entityOpenKey;
             if (entityChanged) {
+                opportunityDrawerFirstPaintPreloadedRef.current = null;
                 opportunityDrawerBootstrapEntityKeyRef.current = entityOpenKey;
                 opportunityDrawerBootstrapAppliedRef.current = null;
                 opportunityDrawerBootstrapInflightRef.current = null;
@@ -6795,7 +6855,14 @@ export default function AdminEntityDrawer() {
         }
     }, [drawer.type, drawer.id, drawerShellVariant]);
 
+    const opportunityDrawerFirstPaintPreloaded =
+        drawer.type === "opportunities" &&
+        !!drawer.id &&
+        drawer.id !== "new" &&
+        opportunityDrawerFirstPaintPreloadedRef.current === drawer.id;
+
     const opportunityDrawerPrimaryLoadingVisible =
+        !opportunityDrawerFirstPaintPreloaded &&
         opportunityDrawerRevealCoordActive &&
         !error &&
         (opportunityDrawerBootstrapPending ||
@@ -9341,7 +9408,7 @@ export default function AdminEntityDrawer() {
 
     return (
         <Drawer
-            isOpen={Boolean(drawer.type && drawer.id)}
+            isOpen={Boolean(drawer.type && drawer.id) && !isOpportunityDrawerOpening}
             onClose={closeDrawer}
             title={drawerTitleResolved}
             headerSubtitle={headerSubtitleForDrawer}

@@ -312,6 +312,16 @@ Explicit `drawerPrimaryContractReady` / `drawerFirstPaintActive` in `web/lib/adm
 
 ---
 
+## Pass 5 — Deferred drawer mount (2026-05-20)
+
+Modal does not mount until `drawer-operational-bootstrap` + `drawer_primary` complete (min 1500ms external **Opening record…** overlay).
+
+- `AdminDrawerContext.openDrawer` → `openingOpportunity` + page overlay (`OpportunityDrawerOpenCoordinator`)
+- `commitOpportunityDrawerOpen` attaches preload; `AdminEntityDrawer` `useLayoutEffect` applies bootstrap + primary before paint
+- No in-drawer `DrawerOpportunityOperationalLoadingComposition` on preloaded open; `isOpen` false while `openingOpportunity`
+
+---
+
 ## Pass 3 — Request suppression (2026-05-20)
 
 ### Root causes (A–H)

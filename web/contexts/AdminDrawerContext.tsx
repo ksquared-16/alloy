@@ -3,6 +3,8 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
+import type { OpportunityDrawerOpenPreload } from "@/lib/admin/opportunityDrawerOpenCoordinator";
+import { shouldDeferOpportunityDrawerOpen } from "@/lib/admin/opportunityDrawerOpenCoordinator";
 import type { OperationalVisualContext } from "@/lib/visualContext";
 
 /** Entity kinds that can open in the admin stack drawer (must match API + presentation registry usage). */
@@ -74,6 +76,15 @@ interface AdminDrawerState {
     opportunityQueuePreviewSeed?: OpportunityDrawerQueuePreviewSeed | null;
 }
 
+/** Params held while bootstrap + drawer_primary load outside the modal. */
+export type OpportunityDrawerOpeningParams = {
+    id: string;
+    defaultOpportunitySurface?: "quote_intake";
+    operationalVisualContext?: OperationalVisualContext;
+    opportunityWorkspaceContext?: OpportunityWorkspaceContext | null;
+    opportunityQueuePreviewSeed?: OpportunityDrawerQueuePreviewSeed | null;
+};
+
 export type DrawerStackItem = {
     type: AdminDrawerEntityType;
     id: string;
@@ -91,6 +102,9 @@ export type DrawerStackItem = {
 
 interface AdminDrawerContextValue {
     drawer: AdminDrawerState;
+    /** External gate: bootstrap + primary in flight; modal stays unmounted. */
+    openingOpportunity: OpportunityDrawerOpeningParams | null;
+    isOpportunityDrawerOpening: boolean;
     /** When opening a linked record from inside a drawer, the previous drawer is pushed here. */
     stack: DrawerStackItem[];
     canGoBack: boolean;
@@ -112,6 +126,13 @@ interface AdminDrawerContextValue {
     }) => void;
     goBack: () => void;
     closeDrawer: () => void;
+    /** One-shot handoff after pre-open fetch (AdminEntityDrawer layout effect). */
+    consumeOpportunityDrawerPreload: (opportunityId: string) => OpportunityDrawerOpenPreload | null;
+    cancelOpportunityDrawerOpen: () => void;
+    commitOpportunityDrawerOpen: (
+        opening: OpportunityDrawerOpeningParams,
+        preload: OpportunityDrawerOpenPreload
+    ) => void;
 }
 
 const AdminDrawerContext = createContext<AdminDrawerContextValue | null>(null);
@@ -131,6 +152,83 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
     const pathname = usePathname();
     const [drawer, setDrawer] = useState<AdminDrawerState>({ type: null, id: null });
     const [stack, setStack] = useState<DrawerStackItem[]>([]);
+    const [openingOpportunity, setOpeningOpportunity] = useState<OpportunityDrawerOpeningParams | null>(null);
+    const opportunityDrawerPreloadRef = useRef<OpportunityDrawerOpenPreload | null>(null);
+
+    const pushDrawerToStack = useCallback((prev: AdminDrawerState) => {
+        const prevType = prev.type;
+        const prevId = prev.id;
+        if (prevType != null && prevId != null) {
+            setStack((s) => [
+                ...s,
+                {
+                    type: prevType,
+                    id: prevId,
+                    defaultWorkflowEntityType: prev.defaultWorkflowEntityType,
+                    defaultCustomerId: prev.defaultCustomerId,
+                    defaultVendorId: prev.defaultVendorId,
+                    defaultSchedulePrefill: prev.defaultSchedulePrefill,
+                    defaultJobPrefill: prev.defaultJobPrefill,
+                    jobRecordSurface: prev.jobRecordSurface,
+                    operationalVisualContext: prev.operationalVisualContext,
+                    defaultOpportunitySurface: prev.defaultOpportunitySurface,
+                    opportunityWorkspaceContext: prev.opportunityWorkspaceContext,
+                    opportunityQueuePreviewSeed: prev.opportunityQueuePreviewSeed,
+                },
+            ]);
+        }
+    }, []);
+
+    const commitOpportunityDrawerOpen = useCallback(
+        (opening: OpportunityDrawerOpeningParams, preload: OpportunityDrawerOpenPreload) => {
+            opportunityDrawerPreloadRef.current = preload;
+            setOpeningOpportunity(null);
+            setDrawer({
+                type: "opportunities",
+                id: opening.id,
+                operationalVisualContext: opening.operationalVisualContext,
+                defaultOpportunitySurface: opening.defaultOpportunitySurface,
+                opportunityWorkspaceContext: opening.opportunityWorkspaceContext ?? null,
+                opportunityQueuePreviewSeed: opening.opportunityQueuePreviewSeed ?? null,
+            });
+        },
+        []
+    );
+
+    const cancelOpportunityDrawerOpen = useCallback(() => {
+        setOpeningOpportunity(null);
+        opportunityDrawerPreloadRef.current = null;
+        setStack((s) => {
+            const next = [...s];
+            const item = next.pop();
+            if (item) {
+                setDrawer({
+                    type: item.type,
+                    id: item.id,
+                    defaultWorkflowEntityType: item.defaultWorkflowEntityType,
+                    defaultCustomerId: item.defaultCustomerId,
+                    defaultVendorId: item.defaultVendorId,
+                    defaultSchedulePrefill: item.defaultSchedulePrefill,
+                    defaultJobPrefill: item.defaultJobPrefill,
+                    jobRecordSurface: item.jobRecordSurface,
+                    operationalVisualContext: item.operationalVisualContext,
+                    defaultOpportunitySurface: item.defaultOpportunitySurface,
+                    opportunityWorkspaceContext: item.opportunityWorkspaceContext,
+                    opportunityQueuePreviewSeed: item.opportunityQueuePreviewSeed,
+                });
+            } else {
+                setDrawer({ type: null, id: null });
+            }
+            return next;
+        });
+    }, []);
+
+    const consumeOpportunityDrawerPreload = useCallback((opportunityId: string): OpportunityDrawerOpenPreload | null => {
+        const p = opportunityDrawerPreloadRef.current;
+        if (!p || p.opportunityId !== opportunityId.trim()) return null;
+        opportunityDrawerPreloadRef.current = null;
+        return p;
+    }, []);
 
     const openDrawer = useCallback(
         (params: {
@@ -147,28 +245,26 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
             opportunityWorkspaceContext?: OpportunityWorkspaceContext | null;
             opportunityQueuePreviewSeed?: OpportunityDrawerQueuePreviewSeed | null;
         }) => {
+            if (
+                params.type === "opportunities" &&
+                shouldDeferOpportunityDrawerOpen(pathname, params.id)
+            ) {
+                setDrawer((prev) => {
+                    pushDrawerToStack(prev);
+                    return { type: null, id: null };
+                });
+                setOpeningOpportunity({
+                    id: params.id,
+                    defaultOpportunitySurface: params.defaultOpportunitySurface,
+                    operationalVisualContext: params.operationalVisualContext,
+                    opportunityWorkspaceContext: params.opportunityWorkspaceContext ?? null,
+                    opportunityQueuePreviewSeed: params.opportunityQueuePreviewSeed ?? null,
+                });
+                return;
+            }
+
             setDrawer((prev) => {
-                const prevType = prev.type;
-                const prevId = prev.id;
-                if (prevType != null && prevId != null) {
-                    setStack((s) => [
-                        ...s,
-                        {
-                            type: prevType,
-                            id: prevId,
-                            defaultWorkflowEntityType: prev.defaultWorkflowEntityType,
-                            defaultCustomerId: prev.defaultCustomerId,
-                            defaultVendorId: prev.defaultVendorId,
-                            defaultSchedulePrefill: prev.defaultSchedulePrefill,
-                            defaultJobPrefill: prev.defaultJobPrefill,
-                            jobRecordSurface: prev.jobRecordSurface,
-                            operationalVisualContext: prev.operationalVisualContext,
-                            defaultOpportunitySurface: prev.defaultOpportunitySurface,
-                            opportunityWorkspaceContext: prev.opportunityWorkspaceContext,
-                            opportunityQueuePreviewSeed: prev.opportunityQueuePreviewSeed,
-                        },
-                    ]);
-                }
+                pushDrawerToStack(prev);
                 return {
                     type: params.type,
                     id: params.id,
@@ -187,7 +283,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                 };
             });
         },
-        []
+        [pathname, pushDrawerToStack]
     );
 
     const goBack = useCallback(() => {
@@ -215,6 +311,8 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const closeDrawer = useCallback(() => {
+        setOpeningOpportunity(null);
+        opportunityDrawerPreloadRef.current = null;
         setDrawer({ type: null, id: null });
         setStack([]);
     }, []);
@@ -239,7 +337,22 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
     const previousDrawer = stack.length > 0 ? stack[stack.length - 1] : null;
 
     return (
-        <AdminDrawerContext.Provider value={{ drawer, stack, canGoBack: stack.length > 0, previousDrawer, openDrawer, goBack, closeDrawer }}>
+        <AdminDrawerContext.Provider
+            value={{
+                drawer,
+                openingOpportunity,
+                isOpportunityDrawerOpening: openingOpportunity != null,
+                stack,
+                canGoBack: stack.length > 0,
+                previousDrawer,
+                openDrawer,
+                goBack,
+                closeDrawer,
+                consumeOpportunityDrawerPreload,
+                cancelOpportunityDrawerOpen,
+                commitOpportunityDrawerOpen,
+            }}
+        >
             {children}
         </AdminDrawerContext.Provider>
     );

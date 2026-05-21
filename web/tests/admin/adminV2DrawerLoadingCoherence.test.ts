@@ -106,6 +106,20 @@ describe("Work-unit KPI and queue picker loading", () => {
     });
 });
 
+describe("Deferred opportunity drawer open (first-paint gate)", () => {
+    it("does not mount drawer until bootstrap + primary; external overlay only", () => {
+        const ctx = read("contexts/AdminDrawerContext.tsx");
+        expect(ctx).toContain("setOpeningOpportunity");
+        expect(ctx).toContain("type: null, id: null");
+        const drawer = read("components/admin/AdminEntityDrawer.tsx");
+        expect(drawer).toContain("!isOpportunityDrawerOpening");
+        expect(drawer).toContain("consumeOpportunityDrawerPreload");
+        const overlay = read("components/admin/OpportunityDrawerOpeningOverlay.tsx");
+        expect(overlay).toContain("Opening record");
+        expect(overlay).not.toContain("data-adminv2-drawer");
+    });
+});
+
 describe("Drawer opportunity header grouped loading", () => {
     it("keeps workflow header chrome in skeleton until coordinated reveal", () => {
         const src = read("components/admin/AdminEntityDrawer.tsx");

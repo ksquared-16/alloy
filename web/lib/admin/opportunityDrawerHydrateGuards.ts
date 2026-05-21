@@ -79,6 +79,19 @@ export function clearOpportunityDrawerBackgroundFullSchedule(opportunityId: stri
     fullScheduled.delete(id);
 }
 
+/** Pre-open coordinator finished primary — skip duplicate GET on drawer mount. */
+export function markOpportunityDrawerHydrateDone(
+    opportunityId: string | null | undefined,
+    phase: OpportunityDrawerHydratePhase
+): void {
+    const id = normalizeOpportunityHydrateId(opportunityId);
+    if (!id) return;
+    const inflight = phase === "primary" ? primaryInflight : fullInflight;
+    const done = phase === "primary" ? primaryDone : fullDone;
+    inflight.delete(id);
+    done.add(id);
+}
+
 /** User/refetch-driven refresh — allows one new `surface=full` for this open. */
 export function allowOpportunityDrawerFullRefetch(opportunityId: string | null | undefined): void {
     const id = normalizeOpportunityHydrateId(opportunityId);
