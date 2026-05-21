@@ -28,10 +28,7 @@ import {
     formatCandidateOperatorPresentation,
 } from "@/lib/agent/taskAssist/taskAssistEntitySearchDisambiguation";
 import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
-import {
-    isStaleOperationalProposalEntity,
-    STALE_OPERATIONAL_PROPOSAL_MESSAGE,
-} from "@/lib/adminV2/bos/activeOperationalContext";
+import { isStaleOperationalProposalEntity } from "@/lib/adminV2/bos/activeOperationalContext";
 import type { WorkflowAssistThreadMutationHandlersV1 } from "@/lib/agent/workflowAssist/workflowAssistReadV1";
 import { neutral, derived, brand, semantic } from "@/styles/tokens/colors";
 
@@ -139,17 +136,6 @@ export type CommandSurfaceThreadProps = {
     onApproveConfigProposal?: (proposalId: string) => void;
     configAssistCanApproveAndApply?: boolean;
 };
-
-function StaleOperationalProposalBanner() {
-    return (
-        <p
-            className="rounded-md border border-amber-200/80 bg-amber-50/60 px-2 py-1 text-[10px] leading-snug text-alloy-midnight/80"
-            data-command-surface-stale-proposal="true"
-        >
-            {STALE_OPERATIONAL_PROPOSAL_MESSAGE}
-        </p>
-    );
-}
 
 export default function CommandSurfaceThread({
     turns,
@@ -442,7 +428,6 @@ export default function CommandSurfaceThread({
                             return (
                                 <AssistantBubble key={turn.id}>
                                     <div className="space-y-2" data-command-surface-task-assist-action-card="true">
-                                        {staleProposal ? <StaleOperationalProposalBanner /> : null}
                                         {uiPhase === "reminder" ? (
                                             <TaskAssistCompactReminderCard
                                                 entityId={entityId}

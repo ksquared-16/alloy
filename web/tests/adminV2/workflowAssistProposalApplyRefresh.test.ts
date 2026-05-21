@@ -10,5 +10,6 @@ describe("Workflow Assist apply refresh wiring", () => {
         );
         expect(src).toContain("dispatchWorkflowAutomationRefresh");
         expect(src).toContain("globalAssistant?.workspaceScope");
+        expect(src).toContain("OperationalProposalCardFrame");
     });
 });

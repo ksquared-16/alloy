@@ -2,14 +2,18 @@
 
 import { useMemo, useState } from "react";
 
-import {
-    CommandSurfaceActionCardShell,
-    CommandSurfaceCardLink,
-} from "@/app/adminV2/components/aiCommandSurface/CommandSurfaceCardLink";
+import { CommandSurfaceCardLink } from "@/app/adminV2/components/aiCommandSurface/CommandSurfaceCardLink";
+import OperationalProposalCardFrame from "@/app/adminV2/components/bos/OperationalProposalCardFrame";
 import type { WorkflowAssistDraftReviewV1 } from "@/lib/agent/workflowAssist/workflowAssistDraftEnrichmentV1";
 import type { WorkflowAssistCreateTemplateIdV1 } from "@/lib/agent/workflowAssist/workflowAssistCreateFromCommandV1";
 import { buildWorkflowAssistProposalStepperV1 } from "@/lib/agent/workflowAssist/workflowAssistProposalStepperV1";
 import { WORKFLOW_ASSIST_AUTOMATIONS_HREF } from "@/lib/adminV2/aiCommandSurface/commandSurfaceRouter";
+import {
+    WORKFLOW_ASSIST_DISABLED_DRAFT_BOUNDARY_COPY,
+    WORKFLOW_ASSIST_PROPOSAL_SOURCE_LABEL,
+    WORKFLOW_ASSIST_PROPOSAL_TYPE_LABEL,
+} from "@/lib/adminV2/bos/workflowAssistOperationalProposalPresentation";
+import { COMMAND_SURFACE_INTERACTIVE_CARD_CLASS } from "@/lib/adminV2/aiCommandSurface/commandSurfaceCardNavigation";
 import { brand, derived, neutral, semantic } from "@/styles/tokens/colors";
 
 const CMD = {
@@ -51,18 +55,15 @@ function ProposalStepper({
                                 {step.title}
                             </h4>
                             {step.id === "message" ?
-                                <span
-                                    className="text-[9px] font-semibold"
-                                    style={{ color: brand.secondary }}
-                                >
+                                <span className="text-[9px] font-semibold" style={{ color: brand.secondary }}>
                                     {messageProvenanceLabel}
                                 </span>
                             : null}
                         </div>
                         {step.id === "message" ?
                             <p
-                                className="mt-1 rounded-md border px-2.5 py-2 text-[11px] leading-relaxed whitespace-pre-wrap"
-                                style={{ borderColor: derived.border, color: CMD.textBody }}
+                                className="mt-1 rounded-md border border-alloy-stone/20 bg-alloy-stone/[0.03] px-2.5 py-2 text-[11px] leading-relaxed whitespace-pre-wrap"
+                                style={{ color: CMD.textBody }}
                                 data-command-surface-workflow-assist-message-preview-body="true"
                             >
                                 {step.body}
@@ -103,35 +104,44 @@ export function WorkflowAssistProposalReviewPanel({
     );
 
     return (
-        <CommandSurfaceActionCardShell className="space-y-3" data-command-surface-workflow-assist-draft-review="true">
-            <header className="space-y-1.5">
-                <h3 className="text-[13px] font-semibold" style={{ color: CMD.textBody }} data-command-surface-workflow-assist-title>
-                    {op.display_title}
-                </h3>
-                <div className="flex flex-wrap gap-1.5">
-                    <span
-                        className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
-                        style={{ backgroundColor: "rgba(39, 63, 82, 0.08)", color: CMD.textLabel }}
+        <div data-command-surface-workflow-assist-draft-review="true">
+            <OperationalProposalCardFrame
+            proposalTitle={op.display_title}
+            proposalTypeLabel={WORKFLOW_ASSIST_PROPOSAL_TYPE_LABEL}
+            capabilityKey="workflow_assist"
+            status={applyDone ? "applied" : "validated"}
+            presentationVariant={applyDone ? "applied" : !applyAllowed ? undefined : "review_required"}
+            scope={op.scope_label}
+            sourceLabel={WORKFLOW_ASSIST_PROPOSAL_SOURCE_LABEL}
+            requiresApproval
+            riskLevel="high"
+            mutationBoundaryCopy={WORKFLOW_ASSIST_DISABLED_DRAFT_BOUNDARY_COPY}
+            blocked={!applyAllowed}
+            blockedCopy={!applyAllowed ? (applyBlockedMessage ?? undefined) : undefined}
+            footer={
+                <div className="flex flex-wrap gap-2">
+                    <button
+                        type="button"
+                        disabled={applyBusy || applyDone || !applyAllowed}
+                        title={!applyAllowed ? (applyBlockedMessage ?? undefined) : undefined}
+                        className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
+                        data-command-surface-workflow-assist-apply="true"
+                        onClick={onApply}
                     >
-                        Disabled draft
-                    </span>
-                    <span
-                        className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
-                        style={{ backgroundColor: "rgba(220, 38, 38, 0.1)", color: semantic.warning }}
+                        {applyBusy ? "Applying…" : applyDone ? "Applied" : "Apply disabled draft"}
+                    </button>
+                    <CommandSurfaceCardLink
+                        href={WORKFLOW_ASSIST_AUTOMATIONS_HREF}
+                        className="rounded-md border border-alloy-stone/25 px-3 py-1.5 text-[11px] font-semibold text-alloy-midnight/85"
+                        data-command-surface-workflow-assist-open-automations="true"
                     >
-                        Needs review
-                    </span>
+                        Open Automations
+                    </CommandSurfaceCardLink>
                 </div>
-                <p className="text-[10px]" style={{ color: CMD.textLabel }}>
-                    Scope: {op.scope_label}
-                </p>
-            </header>
-
-            <section
-                className="rounded-md border px-2.5 py-2"
-                style={{ borderColor: derived.border }}
-                aria-label="Workflow steps"
-            >
+            }
+            className={COMMAND_SURFACE_INTERACTIVE_CARD_CLASS}
+        >
+            <section aria-label="Workflow steps">
                 <ProposalStepper steps={steps} messageProvenanceLabel={review.message_preview.provenance_label} />
             </section>
 
@@ -155,44 +165,8 @@ export function WorkflowAssistProposalReviewPanel({
                 </ul>
             </section>
 
-            <div
-                className="rounded-md border px-2.5 py-2 text-[10px] leading-snug"
-                style={{ borderColor: derived.border, color: CMD.textSupporting }}
-                data-command-surface-workflow-assist-safety-once="true"
-            >
-                This creates a disabled draft. No messages will send until reviewed and enabled.
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-                <button
-                    type="button"
-                    disabled={applyBusy || applyDone || !applyAllowed}
-                    title={!applyAllowed ? (applyBlockedMessage ?? undefined) : undefined}
-                    className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
-                    data-command-surface-workflow-assist-apply="true"
-                    onClick={onApply}
-                >
-                    {applyBusy ? "Applying…" : applyDone ? "Applied" : "Apply disabled draft"}
-                </button>
-                <CommandSurfaceCardLink
-                    href={WORKFLOW_ASSIST_AUTOMATIONS_HREF}
-                    className="rounded-md border px-3 py-1.5 text-[11px] font-semibold"
-                    style={{ borderColor: derived.border, color: CMD.textBody }}
-                    data-command-surface-workflow-assist-open-automations="true"
-                >
-                    Open Automations
-                </CommandSurfaceCardLink>
-            </div>
-
-            {!applyAllowed && applyBlockedMessage ?
-                <p className="text-[10px]" style={{ color: CMD.textSupporting }} data-command-surface-workflow-assist-apply-blocked>
-                    {applyBlockedMessage}
-                </p>
-            : null}
-
             <details
-                className="rounded-md border text-[10px]"
-                style={{ borderColor: derived.border }}
+                className="rounded-md border border-alloy-stone/20 text-[10px]"
                 data-command-surface-workflow-assist-advanced-details="true"
                 open={advancedOpen}
                 onToggle={(e) => setAdvancedOpen((e.target as HTMLDetailsElement).open)}
@@ -200,7 +174,7 @@ export function WorkflowAssistProposalReviewPanel({
                 <summary className="cursor-pointer px-2 py-1.5 font-semibold" style={{ color: CMD.textLabel }}>
                     Advanced details
                 </summary>
-                <div className="space-y-2 border-t px-2 py-2" style={{ borderColor: derived.border, color: CMD.textSupporting }}>
+                <div className="space-y-2 border-t border-alloy-stone/15 px-2 py-2" style={{ color: CMD.textSupporting }}>
                     <p>
                         <span className="font-semibold">event_type:</span> {review.advanced.event_type}
                     </p>
@@ -243,6 +217,7 @@ export function WorkflowAssistProposalReviewPanel({
                     : null}
                 </div>
             </details>
-        </CommandSurfaceActionCardShell>
+            </OperationalProposalCardFrame>
+        </div>
     );
 }

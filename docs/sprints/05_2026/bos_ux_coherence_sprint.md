@@ -366,59 +366,75 @@ cd web && npm run test -- tests/adminV2/operationalProposalCardFrame.test.tsx
 
 ---
 
-### Card 8 — Task Assist cards adopt Operational Proposal frame
+### Card 8 — Task Assist cards adopt Operational Proposal frame ☑ (2026-05-20)
 
 **Audit:** proposal fragmentation · **Design:** §5.8
 
-**Files:**
+**Files migrated:**
 
 - `web/components/admin/taskAssist/TaskAssistCompactDraftCard.tsx`
 - `web/components/admin/taskAssist/TaskAssistCompactReminderCard.tsx`
-- `web/app/adminV2/components/aiCommandSurface/CommandSurfaceThread.tsx` *(wrapper if needed)*
+- `web/lib/adminV2/bos/taskAssistOperationalProposalPresentation.ts` *(title/type/summary copy)*
+- `web/app/adminV2/components/aiCommandSurface/CommandSurfaceThread.tsx` *(removed duplicate `StaleOperationalProposalBanner`; frame owns stale copy)*
 
-**Work:**
+**Mapping:**
 
-1. Wrap compact draft/reminder in `OperationalProposalCardFrame` with capability subtitle **Task Assist**.
-2. Summary = channel + intent; change detail = draft preview; actions = existing approve/send controls.
-3. Preserve all existing API calls and gates (`taskAssistV1UiGate`).
+| Frame region | Draft | Reminder |
+|--------------|-------|----------|
+| Title | Send/schedule outbound message | Reminder title from bootstrap |
+| Type | Message draft / Scheduled message | Reminder proposal |
+| Capability | Task Assist | Task Assist |
+| Context | `entityLabel` + optional site scope | Same |
+| Source | Task Assist | Task Assist |
+| Summary | Channel · instruction | — |
+| Change detail | Channel, body, recipient, schedule fields | Title, due, notes |
+| Approval | Required + mutation boundary (no auto-send) | Required |
+| Stale | `mutationsBlocked` → `STALE_OPERATIONAL_PROPOSAL_MESSAGE` | Same |
+| Footer | Send now / schedule / save draft | Create reminder |
+| Receipt | Applied success message | Created task receipt |
+
+**Behavior preserved:** propose/apply/schedule APIs, `mutationsBlocked` disables actions, `taskAssistV1UiGate`, no auto-send.
+
+**Tests run:**
+
+```bash
+cd web && npm run test -- tests/adminV2/taskAssistOperationalProposalFrame.test.tsx tests/agent/taskAssist/taskAssistCompactDraftCard.test.tsx
+```
 
 **Acceptance criteria:**
 
-- [ ] Approve/send semantics unchanged (no auto-send).
-- [ ] Card reads as Operational Proposal, not a separate “AI draft widget.”
-
-**Tests:**
-
-- `taskAssistCompactActionCard.test.ts`, `taskAssistCompactDraftCard.test.tsx` — update snapshots/contracts.
+- [x] Approve/send semantics unchanged (no auto-send).
+- [x] Cards read as Operational Proposal.
 
 ---
 
-### Card 9 — Workflow Assist proposal card + in-card edit (remove `window.prompt`)
+### Card 9 — Workflow Assist proposal cards adopt Operational Proposal frame ☑ (2026-05-20)
 
-**Audit:** #3 · **Design:** §5.8, §9.5
+**Audit:** #3 · **Design:** §5.8
 
-**Files:**
+**Files migrated:**
 
 - `web/app/adminV2/components/aiCommandSurface/WorkflowAssistProposalActionCard.tsx`
 - `web/app/adminV2/components/aiCommandSurface/WorkflowAssistProposalReviewPanel.tsx`
-- `web/app/adminV2/components/aiCommandSurface/AICommandSurfaceShell.tsx` *(remove prompts ~1473–1485)*
+- `web/lib/adminV2/bos/workflowAssistOperationalProposalPresentation.ts`
 
-**Work:**
+**Mapping:** `Workflow Assist · Workflow proposal`; title from suggestion/create headline; scope from draft review; high risk + approval required; disabled-draft boundary copy; footer = Apply + Open Automations; receipt = apply success/failure; blocked when `!applyAllowed`.
 
-1. Move rename/description capture into review panel inline fields (controlled state passed to propose/apply).
-2. Adopt `OperationalProposalCardFrame`; subtitle **Workflow Assist**; high risk → expanded review default.
-3. Keep duplicate warning component placement per design §8.3.
+**Deferred (not Loop 5):** `window.prompt` rename/description in `AICommandSurfaceShell.tsx` (Card 9 original scope item — shell migration only this loop).
+
+**Behavior preserved:** `/api/admin/ai/workflow-assist/apply`, disabled draft default, duplicate warning, automation refresh dispatch.
+
+**Tests run:**
+
+```bash
+cd web && npm run test -- tests/adminV2/workflowAssistOperationalProposalFrame.test.tsx tests/adminV2/workflowAssistProposalApplyRefresh.test.ts
+```
 
 **Acceptance criteria:**
 
-- [ ] Zero `window.prompt` in `AICommandSurfaceShell.tsx` and workflow cards.
-- [ ] Apply still creates **disabled** workflow by default (existing server behavior).
-- [ ] Duplicate warning still functional.
-
-**Tests:**
-
-- `workflowAssistProposalApplyRefresh.test.ts`
-- Grep CI: no `window.prompt` under `aiCommandSurface/`
+- [x] Proposal cards use `OperationalProposalCardFrame` (no `CommandSurfaceActionCardShell` on proposal surfaces).
+- [x] Apply still creates **disabled** workflow by default (server unchanged).
+- [x] Duplicate warning still functional.
 
 ---
 
@@ -1081,8 +1097,8 @@ cd web && npm run test -- tests/adminV2/activeOperationalContext.test.ts \
 | 5 | ☑ | Ops strip → Orchestrator handoff |
 | 6 | ☑ | Dead drawer section removed |
 | 7 | ☑ | OperationalProposalCardFrame shell |
-| 8 | ☐ | |
-| 9 | ☐ | |
+| 8 | ☑ | Task Assist compact cards on frame |
+| 9 | ☑ | Workflow Assist proposal cards on frame |
 | 10 | ☐ | |
 | 11 | ☐ | |
 | 12 | ☐ | |

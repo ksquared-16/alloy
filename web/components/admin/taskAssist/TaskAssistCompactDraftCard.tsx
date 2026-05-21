@@ -30,6 +30,16 @@ import {
     computeTaskAssistSendDisabled,
     minDatetimeLocalValue,
 } from "@/components/admin/taskAssist/TaskAssistOpportunityWorkspace";
+import OperationalProposalCardFrame from "@/app/adminV2/components/bos/OperationalProposalCardFrame";
+import { STALE_OPERATIONAL_PROPOSAL_MESSAGE } from "@/lib/adminV2/bos/activeOperationalContext";
+import {
+    TASK_ASSIST_PROPOSAL_SOURCE_LABEL,
+    taskAssistDraftMutationBoundaryCopy,
+    taskAssistDraftProposalSummary,
+    taskAssistDraftProposalTitle,
+    taskAssistDraftProposalTypeLabel,
+} from "@/lib/adminV2/bos/taskAssistOperationalProposalPresentation";
+import { COMMAND_SURFACE_INTERACTIVE_CARD_CLASS } from "@/lib/adminV2/aiCommandSurface/commandSurfaceCardNavigation";
 
 export type TaskAssistCompactDraftCardProps = {
     entityId: string;
@@ -330,9 +340,90 @@ export default function TaskAssistCompactDraftCard({
         );
     }, [proposal, selectedPersonId, finalBody, finalSubject, channel]);
 
-    const targetSummary = locationLabel?.trim() ?
-        `${entityLabel} · ${locationLabel.trim()}`
-    :   entityLabel;
+    const entityScopeLabel = locationLabel?.trim() ? `Site · ${locationLabel.trim()}` : null;
+
+    const actionFooter = (
+        <div className="flex flex-wrap gap-1.5">
+            {isScheduleIntent ?
+                <>
+                    <button
+                        type="button"
+                        data-task-assist-compact-schedule-submit="true"
+                        disabled={scheduleDisabled}
+                        onClick={() => void onSubmitSchedule()}
+                        className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-45"
+                    >
+                        {scheduleSubmitLoading ? "Scheduling…" : "Schedule send"}
+                    </button>
+                    <button
+                        type="button"
+                        data-task-assist-compact-send-now="true"
+                        disabled={sendDisabled}
+                        onClick={() => void onApply()}
+                        className="rounded-md border border-alloy-stone/30 px-3 py-1.5 text-[11px] font-semibold text-alloy-midnight/85 disabled:opacity-45"
+                    >
+                        {applyLoading ? "Sending…" : "Send now"}
+                    </button>
+                    {v11 ?
+                        <button
+                            type="button"
+                            data-task-assist-compact-save-draft="true"
+                            disabled={!proposalValid || saveDraftLoading}
+                            onClick={() => void onSaveDraft()}
+                            className="rounded-md border border-alloy-stone/30 px-3 py-1.5 text-[11px] font-semibold disabled:opacity-45"
+                        >
+                            {saveDraftLoading ? "Saving…" : "Save draft"}
+                        </button>
+                    :   null}
+                </>
+            :   <>
+                    <button
+                        type="button"
+                        data-task-assist-compact-send-now="true"
+                        disabled={sendDisabled}
+                        onClick={() => void onApply()}
+                        className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-45"
+                    >
+                        {applyLoading ? "Sending…" : "Send now"}
+                    </button>
+                    <button
+                        type="button"
+                        data-task-assist-compact-schedule="true"
+                        disabled={!proposalValid || !selectedPersonId || !finalBody.trim()}
+                        onClick={openSchedulePrompt}
+                        className="rounded-md border border-alloy-stone/30 px-3 py-1.5 text-[11px] font-semibold disabled:opacity-45"
+                    >
+                        Schedule for later
+                    </button>
+                    {v11 ?
+                        <button
+                            type="button"
+                            data-task-assist-compact-save-draft="true"
+                            disabled={!proposalValid || saveDraftLoading}
+                            onClick={() => void onSaveDraft()}
+                            className="rounded-md border border-alloy-stone/30 px-3 py-1.5 text-[11px] font-semibold disabled:opacity-45"
+                        >
+                            {saveDraftLoading ? "Saving…" : "Save draft"}
+                        </button>
+                    :   null}
+                </>
+            }
+        </div>
+    );
+
+    const frameCommon = {
+        proposalTitle: taskAssistDraftProposalTitle(bootstrap),
+        proposalTypeLabel: taskAssistDraftProposalTypeLabel(bootstrap),
+        capabilityKey: "task_assist" as const,
+        entityContextLabel: entityLabel,
+        scope: entityScopeLabel,
+        sourceLabel: TASK_ASSIST_PROPOSAL_SOURCE_LABEL,
+        requiresApproval: true,
+        mutationBoundaryCopy: taskAssistDraftMutationBoundaryCopy(bootstrap),
+        stale: mutationsBlocked,
+        blockedCopy: mutationsBlocked ? STALE_OPERATIONAL_PROPOSAL_MESSAGE : null,
+        className: COMMAND_SURFACE_INTERACTIVE_CARD_CLASS,
+    };
 
     if (phase === "loading" || proposeLoading) {
         const loadingLabel =
@@ -340,15 +431,20 @@ export default function TaskAssistCompactDraftCard({
         return (
             <div className="space-y-1" data-task-assist-compact-draft="loading">
                 <p className="text-[12px] font-medium text-alloy-midnight/80">{loadingLabel}</p>
-                <p className="text-[10px] text-alloy-midnight/55">{targetSummary}</p>
+                <p className="text-[10px] text-alloy-midnight/55">{entityLabel}</p>
             </div>
         );
     }
 
     if (phase === "success") {
         return (
-            <div className="space-y-1" data-task-assist-compact-draft="success">
-                <p className="text-[12px] font-medium text-emerald-800/90">{success}</p>
+            <div data-task-assist-compact-draft="success">
+                <OperationalProposalCardFrame
+                    {...frameCommon}
+                    status="applied"
+                    presentationVariant="applied"
+                    receipt={success ? <p>{success}</p> : null}
+                />
             </div>
         );
     }
@@ -361,7 +457,33 @@ export default function TaskAssistCompactDraftCard({
             timingHintIsDateGranularOnly(th) &&
             !timingHintHasExplicitClock(th);
         return (
-            <div className="space-y-2" data-task-assist-compact-draft="schedule-prompt">
+            <div data-task-assist-compact-draft="schedule-prompt">
+                <OperationalProposalCardFrame
+                    {...frameCommon}
+                    status="validated"
+                    presentationVariant={mutationsBlocked ? undefined : "review_required"}
+                    summary={taskAssistDraftProposalSummary(channel, instruction)}
+                    footer={
+                        <div className="flex flex-wrap gap-1.5">
+                            <button
+                                type="button"
+                                disabled={scheduleDisabled}
+                                data-task-assist-compact-schedule-submit="true"
+                                onClick={() => void onSubmitSchedule()}
+                                className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-45"
+                            >
+                                {scheduleSubmitLoading ? "Scheduling…" : "Schedule send"}
+                            </button>
+                            <button
+                                type="button"
+                                className="rounded-md border border-alloy-stone/30 px-3 py-1.5 text-[11px] font-semibold"
+                                onClick={() => setPhase("review")}
+                            >
+                                Back
+                            </button>
+                        </div>
+                    }
+                >
                 <p className="text-[12px] font-medium text-alloy-midnight/85">
                     {timeQuestion ? "What time should I send it?" : "When should I send it?"}
                 </p>
@@ -380,39 +502,32 @@ export default function TaskAssistCompactDraftCard({
                     onChange={(e) => setScheduledForLocal(e.target.value)}
                     className="w-full rounded-md border border-alloy-stone/25 bg-white px-2 py-1.5 text-[12px]"
                 />
-                <div className="flex flex-wrap gap-1.5">
-                    <button
-                        type="button"
-                        disabled={scheduleDisabled}
-                        data-task-assist-compact-schedule-submit="true"
-                        onClick={() => void onSubmitSchedule()}
-                        className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-45"
-                    >
-                        {scheduleSubmitLoading ? "Scheduling…" : "Schedule send"}
-                    </button>
-                    <button
-                        type="button"
-                        className="rounded-md border border-alloy-stone/30 px-3 py-1.5 text-[11px] font-semibold"
-                        onClick={() => setPhase("review")}
-                    >
-                        Back
-                    </button>
-                </div>
+                </OperationalProposalCardFrame>
             </div>
         );
     }
 
+    const scheduleWarnings =
+        scheduleNeedsExplicitTime && !scheduledForLocal.trim() ?
+            ["Choose a send time before scheduling."]
+        :   null;
+
     return (
-        <div className="space-y-2" data-task-assist-compact-draft="review">
-            {success ? <p className="text-[11px] font-medium text-emerald-800/90">{success}</p> : null}
-            {error ? (
-                <p className="text-[11px] font-medium text-red-800/90" role="alert" data-task-assist-compact-error="true">
-                    {error}
-                </p>
-            ) : null}
-
-            <p className="text-[10px] text-alloy-midnight/60">{targetSummary}</p>
-
+        <div data-task-assist-compact-draft="review">
+            <OperationalProposalCardFrame
+                {...frameCommon}
+                status="validated"
+                presentationVariant={mutationsBlocked ? undefined : "review_required"}
+                summary={taskAssistDraftProposalSummary(channel, instruction)}
+                validationErrors={
+                    error ? [error]
+                    : mergedPreviewErrors.length > 0 && selectedPersonId ? mergedPreviewErrors
+                    : null
+                }
+                validationWarnings={scheduleWarnings}
+                footer={actionFooter}
+                receipt={success ? <p className="text-emerald-800/90">{success}</p> : null}
+            >
             {isScheduleIntent && finalBody.trim() ? (
                 <div
                     className="rounded-md border border-alloy-stone/20 bg-alloy-stone/[0.04] p-2 text-[11px]"
@@ -510,14 +625,6 @@ export default function TaskAssistCompactDraftCard({
                 </div>
             ) : null}
 
-            {mergedPreviewErrors.length > 0 && selectedPersonId ? (
-                <ul className="list-disc pl-4 text-[10px] text-red-800/85">
-                    {mergedPreviewErrors.map((m, i) => (
-                        <li key={i}>{m}</li>
-                    ))}
-                </ul>
-            ) : null}
-
             {isScheduleIntent ? (
                 <div className="rounded-md border border-alloy-stone/20 bg-alloy-stone/[0.04] p-2">
                     <label className={LABEL} htmlFor={`ta-compact-send-at-${entityId}`}>
@@ -541,79 +648,7 @@ export default function TaskAssistCompactDraftCard({
                     ) : null}
                 </div>
             ) : null}
-
-            <div className="flex flex-wrap gap-1.5 pt-1">
-                {isScheduleIntent ? (
-                    <>
-                        <button
-                            type="button"
-                            data-task-assist-compact-schedule-submit="true"
-                            disabled={scheduleDisabled}
-                            onClick={() => void onSubmitSchedule()}
-                            className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-45"
-                        >
-                            {scheduleSubmitLoading ? "Scheduling…" : "Schedule send"}
-                        </button>
-                        <button
-                            type="button"
-                            data-task-assist-compact-send-now="true"
-                            disabled={sendDisabled}
-                            onClick={() => void onApply()}
-                            className="rounded-md border border-alloy-stone/30 px-3 py-1.5 text-[11px] font-semibold text-alloy-midnight/85 disabled:opacity-45"
-                        >
-                            {applyLoading ? "Sending…" : "Send now"}
-                        </button>
-                        {v11 ? (
-                            <button
-                                type="button"
-                                data-task-assist-compact-save-draft="true"
-                                disabled={!proposalValid || saveDraftLoading}
-                                onClick={() => void onSaveDraft()}
-                                className="rounded-md border border-alloy-stone/30 px-3 py-1.5 text-[11px] font-semibold disabled:opacity-45"
-                            >
-                                {saveDraftLoading ? "Saving…" : "Save draft"}
-                            </button>
-                        ) : null}
-                    </>
-                ) : (
-                    <>
-                        <button
-                            type="button"
-                            data-task-assist-compact-send-now="true"
-                            disabled={sendDisabled}
-                            onClick={() => void onApply()}
-                            className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-45"
-                        >
-                            {applyLoading ? "Sending…" : "Send now"}
-                        </button>
-                        <button
-                            type="button"
-                            data-task-assist-compact-schedule="true"
-                            disabled={!proposalValid || !selectedPersonId || !finalBody.trim()}
-                            onClick={openSchedulePrompt}
-                            className="rounded-md border border-alloy-stone/30 px-3 py-1.5 text-[11px] font-semibold disabled:opacity-45"
-                        >
-                            Schedule for later
-                        </button>
-                        {v11 ? (
-                            <button
-                                type="button"
-                                data-task-assist-compact-save-draft="true"
-                                disabled={!proposalValid || saveDraftLoading}
-                                onClick={() => void onSaveDraft()}
-                                className="rounded-md border border-alloy-stone/30 px-3 py-1.5 text-[11px] font-semibold disabled:opacity-45"
-                            >
-                                {saveDraftLoading ? "Saving…" : "Save draft"}
-                            </button>
-                        ) : null}
-                    </>
-                )}
-            </div>
-            <p className="text-[10px] text-alloy-midnight/50">
-                {isScheduleIntent ?
-                    "Nothing sends until you confirm Schedule send or Send now. Pick a future send time for scheduling."
-                :   "Nothing sends until you confirm Send now or schedule."}
-            </p>
+            </OperationalProposalCardFrame>
         </div>
     );
 }
