@@ -44,4 +44,11 @@ describe("opportunityDrawerFirstPaintContract", () => {
         expect(after).toHaveLength(2);
         expect(after[0]?.defaultExpanded).toBe(false);
     });
+
+    it("holds all overview sections when enrichment is held pre-open", () => {
+        const sections = [
+            { key: "quote", title: "Quote", defaultExpanded: true, collapsible: true, fields: [] },
+        ];
+        expect(filterOpportunityOverviewSectionsForFirstPaint(sections, false, true, true)).toEqual([]);
+    });
 });

@@ -3,6 +3,7 @@ import {
     fetchOpportunityDrawerOperationalBootstrap,
 } from "@/lib/admin/opportunityDrawerBootstrapClient";
 import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
+import { prefetchOpportunityDrawerFull } from "@/lib/admin/opportunityDrawerFullPrefetch";
 import { prefetchOpportunityDrawerPrimary } from "@/lib/admin/opportunityDrawerPrimaryPrefetch";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
@@ -13,8 +14,9 @@ export type OpportunityDrawerIntentContext = {
 };
 
 /**
- * Intent-time prefetch for opportunity drawer (row hover / mousedown / focus before click).
- * Warms bootstrap + drawer_primary in parallel — coordinator reuses the same caches/in-flight GETs.
+ * Intent-time prefetch (hover / mousedown / focus before click).
+ * Warms bootstrap + drawer_primary + surface=full in parallel.
+ * Header actions resolve on open (needs primary row for hints).
  */
 export function prefetchOpportunityDrawerOnRowIntent(
     opportunityId: string,
@@ -38,4 +40,5 @@ export function prefetchOpportunityDrawerOnRowIntent(
         /* non-fatal — drawer open will reuse in-flight or retry */
     });
     prefetchOpportunityDrawerPrimary(id, init);
+    prefetchOpportunityDrawerFull(id, init);
 }

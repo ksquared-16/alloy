@@ -96,8 +96,10 @@ export const OPPORTUNITY_ENRICHMENT_DEFERRED_OVERVIEW_SECTION_KEYS = new Set<str
 export function filterOpportunityOverviewSectionsForFirstPaint(
     sections: EntityDrawerSectionConfig[],
     firstPaintActive: boolean,
-    enrichmentLayoutReady: boolean
+    enrichmentLayoutReady: boolean,
+    enrichmentHeldUntilInteraction?: boolean
 ): EntityDrawerSectionConfig[] {
+    if (enrichmentHeldUntilInteraction) return [];
     if (!firstPaintActive) return sections;
     if (!enrichmentLayoutReady) return [];
     return sections.map((s) =>
@@ -106,3 +108,4 @@ export function filterOpportunityOverviewSectionsForFirstPaint(
         :   s
     );
 }
+

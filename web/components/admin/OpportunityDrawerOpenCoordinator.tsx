@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import OpportunityDrawerOpeningOverlay from "@/components/admin/OpportunityDrawerOpeningOverlay";
-import { loadOpportunityDrawerFirstPaintWithOpenPolicy } from "@/lib/admin/opportunityDrawerOpenCoordinator";
+import { loadOpportunityDrawerComposedOpen } from "@/lib/admin/opportunityDrawerOpenCoordinator";
 import {
     markDrawerOpenOverlayShown,
     reportDrawerOpenCoordinatorCommit,
@@ -33,7 +33,7 @@ export default function OpportunityDrawerOpenCoordinator() {
 
         const run = async () => {
             try {
-                const { preload, metrics } = await loadOpportunityDrawerFirstPaintWithOpenPolicy(
+                const { preload, metrics } = await loadOpportunityDrawerComposedOpen(
                     openingOpportunity.id,
                     openingOpportunity.opportunityWorkspaceContext ?? null,
                     { ...workspaceDataFetchInit(), signal: ac.signal },

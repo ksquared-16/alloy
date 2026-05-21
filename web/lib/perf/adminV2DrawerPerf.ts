@@ -52,10 +52,15 @@ export type DrawerOpenCoordinatorPerf = {
     prefetch_hit: boolean;
     bootstrap_warm: boolean;
     primary_warm: boolean;
+    full_warm?: boolean;
     bootstrap_ms: number;
     primary_ms: number;
-    wait_for_both_ms: number;
+    full_ms?: number | null;
+    header_actions_ms: number;
+    wait_for_composed_ms: number;
+    wait_for_both_ms?: number;
     anti_flicker_ms: number;
+    enrichment_held?: boolean;
 };
 
 /** Deferred open: bootstrap + primary ready, drawer committed. */
@@ -70,25 +75,32 @@ export function reportDrawerOpenCoordinatorCommit(
     const clickToCommit = msBetween(ROW_CLICK_MARK, OPEN_COMMIT_MARK);
     if (clickToOverlay != null) alloyPerfSet("drawer_open_click_to_overlay", clickToOverlay);
     if (clickToCommit != null) alloyPerfSet("drawer_open_click_to_commit_ms", clickToCommit);
+    const waitComposed = metrics.wait_for_composed_ms ?? metrics.wait_for_both_ms ?? 0;
     alloyPerfSet("drawer_open_bootstrap_ms", metrics.bootstrap_ms);
     alloyPerfSet("drawer_open_primary_ms", metrics.primary_ms);
-    alloyPerfSet("drawer_open_wait_for_both_ms", metrics.wait_for_both_ms);
+    if (metrics.full_ms != null) alloyPerfSet("drawer_open_full_ms", metrics.full_ms);
+    alloyPerfSet("drawer_open_header_actions_ms", metrics.header_actions_ms);
+    alloyPerfSet("drawer_open_wait_for_both_ms", waitComposed);
     alloyPerfSet("drawer_open_prefetch_hit", metrics.prefetch_hit ? 1 : 0);
 
     emitAdminV2Perf("[perf.drawer.open]", {
         surface: "drawer_opportunity",
-        phase: "deferred_first_paint_commit",
+        phase: "deferred_composed_commit",
         opportunity_id: opportunityId,
         entity_id: opportunityId,
         drawer_open_click_to_overlay: clickToOverlay,
         drawer_open_click_to_commit_ms: clickToCommit,
         drawer_open_bootstrap_ms: metrics.bootstrap_ms,
         drawer_open_primary_ms: metrics.primary_ms,
-        drawer_open_wait_for_both_ms: metrics.wait_for_both_ms,
+        drawer_open_full_ms: metrics.full_ms ?? undefined,
+        drawer_open_header_actions_ms: metrics.header_actions_ms,
+        drawer_open_wait_for_both_ms: waitComposed,
         drawer_open_anti_flicker_ms: metrics.anti_flicker_ms,
         drawer_open_prefetch_hit: metrics.prefetch_hit,
         drawer_open_bootstrap_warm: metrics.bootstrap_warm,
         drawer_open_primary_warm: metrics.primary_warm,
+        drawer_open_full_warm: metrics.full_warm,
+        drawer_open_enrichment_held: metrics.enrichment_held,
         source: metrics.prefetch_hit ? "cache" : "network",
     });
 

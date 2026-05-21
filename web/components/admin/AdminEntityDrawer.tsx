@@ -1594,6 +1594,8 @@ export default function AdminEntityDrawer() {
     const opportunityDrawerBootstrapInflightRef = useRef<string | null>(null);
     const [opportunityDrawerBootstrapLegacy, setOpportunityDrawerBootstrapLegacy] = useState(false);
     const [opportunityDrawerRevealCoordTimedOut, setOpportunityDrawerRevealCoordTimedOut] = useState(false);
+    /** Pre-open coordinator could not fetch `full` — keep enrichment sections unmounted until edit/expand. */
+    const [opportunityDrawerEnrichmentHeld, setOpportunityDrawerEnrichmentHeld] = useState(false);
     const [opportunityBootstrapAppliedId, setOpportunityBootstrapAppliedId] = useState<string | null>(null);
     const [opportunityBootstrapLayoutRow, setOpportunityBootstrapLayoutRow] = useState<RecordLayoutRow | null>(null);
     const [opportunityOperTrustPreview, setOpportunityOperTrustPreview] = useState<DrawerOperTrustPreviewV1 | null>(
@@ -2093,16 +2095,22 @@ export default function AdminEntityDrawer() {
         setOpportunityBootstrapAppliedId(drawer.id);
         setOpportunityBootstrapLayoutRow(mapBootstrapLayoutToRecordLayoutRow(boot));
         setOpportunityOperTrustPreview(boot.oper_trust_preview);
-        const merged = mergeOpportunityFullHydrate(
+        let merged = mergeOpportunityFullHydrate(
             boot.entity as Record<string, unknown>,
             preload.primaryEntity
         );
-        merged._record_surface = "drawer_primary";
-        setData(merged);
-        if (boot.record_header_actions) {
-            setOpportunityResolvedHeaderActions(boot.record_header_actions);
-            opportunityHeaderResolvedSigRef.current = "bootstrap";
+        if (preload.fullEntity) {
+            merged = mergeOpportunityFullHydrate(merged, preload.fullEntity);
+            merged._record_surface = "full";
+            markOpportunityDrawerHydrateDone(drawer.id, "full");
+            opportunityBackgroundFullDoneRef.current = drawer.id;
+            setOpportunityFullHydrateFailed(false);
+        } else {
+            merged._record_surface = "drawer_primary";
         }
+        setData(merged);
+        setOpportunityDrawerEnrichmentHeld(preload.enrichmentHeldUntilInteraction);
+        setOpportunityResolvedHeaderActions(preload.headerActions);
         setOpportunityResolvedHeaderLoading(false);
         if (boot.work_unit?.queue_definition) {
             setOpportunityQueueDefinition(boot.work_unit.queue_definition);
@@ -2111,10 +2119,10 @@ export default function AdminEntityDrawer() {
         }
         setOpportunityWorkUnitDepartmentId(boot.work_unit?.department_id ?? boot.workspace_scope.department_id);
         markDrawerBootstrapApplied(String(drawer.id));
-        setOpportunityDrawerRevealCoordTimedOut(false);
+        setOpportunityDrawerRevealCoordTimedOut(true);
         markOpportunityDrawerHydrateDone(drawer.id, "primary");
         opportunityPrimaryHydrateDoneRef.current = drawer.id;
-        setOpportunityFullHydrateFailed(false);
+        setPostDrawerVisibleKey(`${drawer.type}:${drawer.id}`);
         setLoading(false);
         setError(null);
     }, [drawer.type, drawer.id, consumeOpportunityDrawerPreload]);
@@ -2123,6 +2131,7 @@ export default function AdminEntityDrawer() {
         if (!drawer.type || !drawer.id) {
             entityDrawerTabInitKeyRef.current = "";
             opportunityDrawerFirstPaintPreloadedRef.current = null;
+            setOpportunityDrawerEnrichmentHeld(false);
             opportunityPrimaryHydrateInFlightRef.current = null;
             opportunityPrimaryHydrateDoneRef.current = null;
             opportunityBackgroundFullInFlightRef.current = null;
@@ -3518,6 +3527,10 @@ export default function AdminEntityDrawer() {
             setOpportunityResolvedHeaderActions(null);
             setOpportunityResolvedHeaderLoading(false);
             opportunityHeaderResolvedSigRef.current = null;
+            return;
+        }
+        if (opportunityDrawerFirstPaintPreloadedRef.current === drawer.id && opportunityResolvedHeaderActions != null) {
+            setOpportunityResolvedHeaderLoading(false);
             return;
         }
         if (
@@ -6783,16 +6796,19 @@ export default function AdminEntityDrawer() {
 
     const opportunityDrawerEnrichmentLayoutReady = useMemo(
         () =>
+            !opportunityDrawerEnrichmentHeld &&
             computeOpportunityDrawerEnrichmentLayoutReady(
                 opportunityDrawerBootstrapEnrichmentPath,
                 opportunityFullRecordHydrateApplied
             ),
-        [opportunityDrawerBootstrapEnrichmentPath, opportunityFullRecordHydrateApplied]
+        [opportunityDrawerBootstrapEnrichmentPath, opportunityFullRecordHydrateApplied, opportunityDrawerEnrichmentHeld]
     );
 
     const opportunityInquiryAwaitingFullEnrichment = useMemo(
-        () => opportunityDrawerBootstrapEnrichmentPath && !opportunityFullRecordHydrateApplied,
-        [opportunityDrawerBootstrapEnrichmentPath, opportunityFullRecordHydrateApplied]
+        () =>
+            opportunityDrawerBootstrapEnrichmentPath &&
+            (opportunityDrawerEnrichmentHeld || !opportunityFullRecordHydrateApplied),
+        [opportunityDrawerBootstrapEnrichmentPath, opportunityFullRecordHydrateApplied, opportunityDrawerEnrichmentHeld]
     );
 
     /** Deferred enrichment after primary reveal; bootstrap path waits for background `full`. */
@@ -6827,6 +6843,7 @@ export default function AdminEntityDrawer() {
     useEffect(() => {
         if (!opportunityDrawerBootstrapEnrichmentPath) return;
         if (!drawer.id || drawer.id === "new") return;
+        if (opportunityDrawerFirstPaintPreloadedRef.current === drawer.id && opportunityFullRecordHydrateApplied) return;
         if (!opportunityDrawerOverviewRevealReady) return;
         if (opportunityFullRecordHydrateApplied) return;
         if (!tryScheduleOpportunityDrawerBackgroundFull(drawer.id)) return;
@@ -8514,7 +8531,8 @@ export default function AdminEntityDrawer() {
             overviewSections = filterOpportunityOverviewSectionsForFirstPaint(
                 overviewSections,
                 opportunityDrawerFirstPaintActive,
-                opportunityDrawerEnrichmentLayoutReady
+                opportunityDrawerEnrichmentLayoutReady,
+                opportunityDrawerEnrichmentHeld
             );
         }
         return overviewSections;
@@ -8526,6 +8544,7 @@ export default function AdminEntityDrawer() {
         recordChromeOpportunity.layout,
         opportunityDrawerFirstPaintActive,
         opportunityDrawerEnrichmentLayoutReady,
+        opportunityDrawerEnrichmentHeld,
     ]);
 
     const overviewFieldPolicyProps = useMemo(() => {
@@ -9313,6 +9332,7 @@ export default function AdminEntityDrawer() {
         opportunityInquiryWorkflowDrawer &&
         !!drawer.id &&
         drawer.id !== "new" &&
+        opportunityDrawerFirstPaintPreloadedRef.current !== drawer.id &&
         !error &&
         !opportunityDrawerOverviewRevealReady;
 
@@ -9385,6 +9405,7 @@ export default function AdminEntityDrawer() {
         isOpportunityExistingView &&
         !!drawer.id &&
         drawer.id !== "new" &&
+        opportunityDrawerFirstPaintPreloadedRef.current !== drawer.id &&
         opportunityResolvedHeaderLoading &&
         !opportunityResolvedHeaderActions;
 

@@ -5,6 +5,7 @@ const dedupeAdminFetchWithTtl = vi.fn(() => Promise.resolve(new Response("{}")))
 const scheduleDeferredCommunicationsDrawerPrefetch = vi.fn();
 const fetchOpportunityDrawerOperationalBootstrap = vi.fn(() => Promise.resolve({ entity: { id: "opp-abc" } }));
 const prefetchOpportunityDrawerPrimary = vi.fn();
+const prefetchOpportunityDrawerFull = vi.fn();
 
 vi.mock("@/lib/workspace/workspaceAdminFetchDedupe", () => ({
     dedupeAdminFetch,
@@ -24,6 +25,10 @@ vi.mock("@/lib/admin/opportunityDrawerPrimaryPrefetch", () => ({
     prefetchOpportunityDrawerPrimary,
 }));
 
+vi.mock("@/lib/admin/opportunityDrawerFullPrefetch", () => ({
+    prefetchOpportunityDrawerFull,
+}));
+
 describe("prefetchOpportunityDrawerOnRowIntent", () => {
     beforeEach(() => {
         vi.stubGlobal("window", {} as Window & typeof globalThis);
@@ -36,9 +41,10 @@ describe("prefetchOpportunityDrawerOnRowIntent", () => {
         scheduleDeferredCommunicationsDrawerPrefetch.mockClear();
         fetchOpportunityDrawerOperationalBootstrap.mockClear();
         prefetchOpportunityDrawerPrimary.mockClear();
+        prefetchOpportunityDrawerFull.mockClear();
     });
 
-    it("prefetches bootstrap + drawer_primary in parallel without comms", async () => {
+    it("prefetches bootstrap + drawer_primary + full in parallel without comms", async () => {
         const { prefetchOpportunityDrawerOnRowIntent } = await import(
             "@/lib/admin/opportunityDrawerIntentPrefetch"
         );
@@ -50,6 +56,7 @@ describe("prefetchOpportunityDrawerOnRowIntent", () => {
             expect.anything()
         );
         expect(prefetchOpportunityDrawerPrimary).toHaveBeenCalledWith("opp-abc", expect.anything());
+        expect(prefetchOpportunityDrawerFull).toHaveBeenCalledWith("opp-abc", expect.anything());
     });
 
     it("passes workspace context through to bootstrap prefetch", async () => {
