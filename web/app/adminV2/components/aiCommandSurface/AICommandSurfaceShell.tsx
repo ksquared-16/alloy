@@ -25,6 +25,10 @@ import {
   type ResponseKind,
 } from "@/lib/adminV2/aiCommandSurface/aiCommandSurfaceModel";
 import OperationalActiveRecordChip from "@/app/adminV2/components/bos/OperationalActiveRecordChip";
+import {
+    JobLayoutOperationalProposalCard,
+    type JobLayoutCardUiState,
+} from "@/app/adminV2/components/aiCommandSurface/JobLayoutOperationalProposalCard";
 import { dispatchAiActivityRefresh } from "@/app/adminV2/components/aiActivity/RecentAiActionsStrip";
 import {
   activeOpportunityFromContext,
@@ -1813,7 +1817,12 @@ export default function AICommandSurfaceShell() {
       const turn = thread.turns.find((t) => t.id === turnId && t.kind === "action_card" && t.card.type === "job_layout");
       if (!turn || turn.kind !== "action_card" || turn.card.type !== "job_layout") return null;
       const card = turn.card;
-      const ui = jobCardUi[turnId] ?? { advancedOpen: false, detailsOpen: false, applyAnyway: false, applying: false };
+      const ui: JobLayoutCardUiState = jobCardUi[turnId] ?? {
+        advancedOpen: false,
+        detailsOpen: false,
+        applyAnyway: false,
+        applying: false,
+      };
       const applyBlockedByNoop = shouldBlockSemanticNoopApply({
         previewRoute: "v1",
         semanticPlanner: card.plannerOk,
@@ -1823,48 +1832,28 @@ export default function AICommandSurfaceShell() {
         Boolean(card.structuredOverrideJson) &&
         !applyBlockedByNoop &&
         (card.responseKind === "action_preview" || card.responseKind === "no_op" || card.responseKind === "unresolved_only");
-      const detailsBullets = buildDetailsBullets({
-        kind: card.responseKind,
-        planner: card.plannerOk,
-        commandText: card.submittedCommand,
-        errorSubline: card.responseKind === "error" ? card.subline : undefined,
-      });
 
       return (
-        <div className="space-y-2 border-t pt-2" style={{ borderColor: derived.border, maxHeight: panelMaxHeight, overflowY: "auto" }}>
-          <OutcomeZone
-            headline={card.headline}
-            subline={card.subline}
-            confidence={card.confidence}
-            submittedCommand={card.submittedCommand}
-          />
-          <AIActionsRow
-            kind={card.responseKind}
-            canApply={canApply}
-            applying={ui.applying}
-            applyBlockedByNoop={applyBlockedByNoop}
-            applyAnyway={ui.applyAnyway}
-            onToggleApplyAnyway={(v) => setJobCardUi((u) => ({ ...u, [turnId]: { ...ui, applyAnyway: v } }))}
-            onApply={() => void applyJobLayoutCard(turnId)}
-            onDismiss={() => setThread((prev) => toggleActionCardExpanded(prev, turnId))}
-            onRefine={() => inputRef.current?.focus()}
-          />
-          {card.responseKind !== "loading" && card.responseKind !== "applied_success" ? (
-            <DetailsToggle
-              open={ui.detailsOpen}
-              onToggle={() => setJobCardUi((u) => ({ ...u, [turnId]: { ...ui, detailsOpen: !ui.detailsOpen } }))}
-              bullets={detailsBullets}
-            />
-          ) : null}
-          {card.plannerOk || card.structuredOverrideJson ? (
-            <AdvancedDrawer
-              open={ui.advancedOpen}
-              onToggle={() => setJobCardUi((u) => ({ ...u, [turnId]: { ...ui, advancedOpen: !ui.advancedOpen } }))}
-              planner={card.plannerOk}
-              structuredOverrideJson={card.structuredOverrideJson}
-            />
-          ) : null}
-        </div>
+        <JobLayoutOperationalProposalCard
+          submittedCommand={card.submittedCommand}
+          headline={card.headline}
+          subline={card.subline}
+          responseKind={card.responseKind}
+          plannerOk={card.plannerOk}
+          structuredOverrideJson={card.structuredOverrideJson}
+          expanded
+          panelMaxHeight={panelMaxHeight}
+          ui={ui}
+          canApply={canApply}
+          applyBlockedByNoop={applyBlockedByNoop}
+          onToggleExpand={() => setThread((prev) => toggleActionCardExpanded(prev, turnId))}
+          onApply={() => void applyJobLayoutCard(turnId)}
+          onDismiss={() => setThread((prev) => toggleActionCardExpanded(prev, turnId))}
+          onRefine={() => inputRef.current?.focus()}
+          onToggleApplyAnyway={(v) => setJobCardUi((u) => ({ ...u, [turnId]: { ...ui, applyAnyway: v } }))}
+          onToggleDetails={() => setJobCardUi((u) => ({ ...u, [turnId]: { ...ui, detailsOpen: !ui.detailsOpen } }))}
+          onToggleAdvanced={() => setJobCardUi((u) => ({ ...u, [turnId]: { ...ui, advancedOpen: !ui.advancedOpen } }))}
+        />
       );
     },
     [applyJobLayoutCard, jobCardUi, panelMaxHeight, thread.turns]

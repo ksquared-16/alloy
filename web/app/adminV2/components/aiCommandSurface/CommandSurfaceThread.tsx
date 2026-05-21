@@ -8,13 +8,13 @@ import TaskAssistCompactReminderCard from "@/components/admin/taskAssist/TaskAss
 import TaskAssistOpportunityWorkspace from "@/components/admin/taskAssist/TaskAssistOpportunityWorkspace";
 import { CommandSurfaceCardLink } from "@/app/adminV2/components/aiCommandSurface/CommandSurfaceCardLink";
 import { ConfigLayoutAssistFieldSetupCard } from "@/app/adminV2/components/aiCommandSurface/ConfigLayoutAssistFieldSetupCard";
+import { JobLayoutOperationalProposalCard } from "@/app/adminV2/components/aiCommandSurface/JobLayoutOperationalProposalCard";
 import type { ConfigLayoutAssistFieldSetupConfirmPayload } from "@/app/adminV2/components/aiCommandSurface/ConfigLayoutAssistFieldSetupCard";
 import { ConfigLayoutAssistProposalThreadCard } from "@/app/adminV2/components/aiCommandSurface/ConfigLayoutAssistProposalThreadCard";
 import { ConfigLayoutAssistReadyCard } from "@/app/adminV2/components/aiCommandSurface/ConfigLayoutAssistReadyCard";
 import { COMMAND_SURFACE_INTERACTIVE_CARD_CLASS } from "@/lib/adminV2/aiCommandSurface/commandSurfaceCardNavigation";
 import { WorkflowAssistProposalActionCard } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistProposalActionCard";
 import { WorkflowAssistReadThreadCard } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistReadThreadCard";
-import { badgeLabel } from "@/lib/adminV2/aiCommandSurface/aiCommandSurfaceModel";
 import {
     WORKFLOW_ASSIST_AUTOMATIONS_HREF,
     WORKFLOW_ASSIST_NOTICE_TEXT,
@@ -521,40 +521,37 @@ export default function CommandSurfaceThread({
                         }
                         if (turn.card.type === "job_layout") {
                             const card = turn.card;
+                            if (card.expanded && renderJobLayoutCardActions) {
+                                return (
+                                    <AssistantBubble key={turn.id}>{renderJobLayoutCardActions(turn.id)}</AssistantBubble>
+                                );
+                            }
                             return (
                                 <AssistantBubble key={turn.id}>
-                                    <div className="space-y-2" data-command-surface-job-layout-action-card="true">
-                                        <div className="flex flex-wrap items-start justify-between gap-2">
-                                            <div>
-                                                <div className="text-[13px] font-semibold">{card.headline}</div>
-                                                {card.subline ? (
-                                                    <div className="text-[11px]" style={{ color: CMD.textSupporting }}>
-                                                        {card.subline}
-                                                    </div>
-                                                ) : null}
-                                            </div>
-                                            <span
-                                                className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                                                style={{
-                                                    backgroundColor: "rgba(0, 162, 131, 0.14)",
-                                                    color: brand.secondary,
-                                                }}
-                                            >
-                                                {badgeLabel(card.confidence)}
-                                            </span>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            className="text-[11px] font-semibold underline-offset-2 hover:underline"
-                                            style={{ color: brand.secondary }}
-                                            onClick={() => onToggleActionCard(turn.id)}
-                                        >
-                                            {card.expanded ? "Hide details" : "Show layout preview"}
-                                        </button>
-                                        {card.expanded && renderJobLayoutCardActions ?
-                                            renderJobLayoutCardActions(turn.id)
-                                        :   null}
-                                    </div>
+                                    <JobLayoutOperationalProposalCard
+                                        submittedCommand={card.submittedCommand}
+                                        headline={card.headline}
+                                        subline={card.subline}
+                                        responseKind={card.responseKind}
+                                        plannerOk={card.plannerOk}
+                                        structuredOverrideJson={card.structuredOverrideJson}
+                                        expanded={false}
+                                        ui={{
+                                            advancedOpen: false,
+                                            detailsOpen: false,
+                                            applyAnyway: false,
+                                            applying: false,
+                                        }}
+                                        canApply={false}
+                                        applyBlockedByNoop
+                                        onToggleExpand={() => onToggleActionCard(turn.id)}
+                                        onApply={() => undefined}
+                                        onDismiss={() => onToggleActionCard(turn.id)}
+                                        onRefine={() => undefined}
+                                        onToggleApplyAnyway={() => undefined}
+                                        onToggleDetails={() => undefined}
+                                        onToggleAdvanced={() => undefined}
+                                    />
                                 </AssistantBubble>
                             );
                         }

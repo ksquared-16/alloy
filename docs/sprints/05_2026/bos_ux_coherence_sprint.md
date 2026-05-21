@@ -127,11 +127,26 @@ flowchart LR
 
 **Required before Phase 3 cards that change governance copy on cards (13–17) and before Phase 5 terminology pass.**
 
-- [ ] Shared Operational Proposal regions visible on Task, Workflow, and Config thread cards (§ Card 7 anatomy).
-- [ ] No `window.prompt` in workflow propose/edit path.
-- [ ] Risk + “Requires your approval” consistent where `requires_approval` true.
-- [ ] Job layout card uses same header/summary/risk pattern (job-specific diff region allowed).
-- [ ] Tests: workflow proposal card contract; config proposal thread card contract (updated).
+- [x] Shared Operational Proposal regions visible on Task, Workflow, and Config thread cards (§ Card 7 anatomy).
+- [ ] No `window.prompt` in workflow propose/edit path *(deferred from Card 9 — still in `AICommandSurfaceShell` rename/description handlers)*.
+- [x] Risk + **Approval required** consistent where `requires_approval` / preview-apply true.
+- [x] Job layout card uses same header/summary/risk pattern (job-specific diff region in `children`).
+- [x] Tests: workflow/config/job layout frame contracts + existing thread card contracts.
+
+### Gate B readiness — Phase 2 closeout (2026-05-20)
+
+| Surface | Frame | Notes |
+|---------|-------|-------|
+| Task Assist compact draft/reminder | ☑ | Cards 8 |
+| Workflow Assist proposal/review | ☑ | Cards 9 |
+| Config Assist thread + Settings review | ☑ | Cards 10–11 |
+| Job overview layout | ☑ | Card 12 |
+
+**Verified:** Stale/blocked guards (Task Assist), approval/mutation boundary copy, presentational-only frame (no API changes). Behaviors unchanged across propose/apply paths.
+
+**Not sprint-complete:** Gate C demo script, Phase 3–5 cards, `window.prompt` workflow edit removal.
+
+**Manual UI checklist before Phase 3:** (1) Open inquiry drawer → Orchestrator handoff auto-runs with active record. (2) Task Assist draft: frame, Send now disabled when stale. (3) Workflow proposal: Apply disabled draft + Automations link. (4) Config proposal thread → Settings review same frame family. (5) Job layout command: collapsed frame → expand → Approve and apply only after preview.
 
 ---
 
@@ -488,32 +503,35 @@ cd web && npm run test -- tests/adminV2/configLayoutAssistOperationalProposalFra
 
 ---
 
-### Card 11 (original sprint) — Job layout card alignment → deferred to Card 12 batch
+### Card 12 — Job layout proposal surfaces ☑ (2026-05-20)
 
 **Audit:** job layout dialect · **Design:** §5.8
 
-**Files:**
+**Files migrated:**
 
-- `web/app/adminV2/components/aiCommandSurface/AICommandSurfaceShell.tsx` *(job card render region ~268–533, ~1668–1743)*
+- `web/app/adminV2/components/aiCommandSurface/JobLayoutOperationalProposalCard.tsx` *(new)*
+- `web/lib/adminV2/bos/jobLayoutOperationalProposalPresentation.ts` *(new)*
+- `web/app/adminV2/components/aiCommandSurface/AICommandSurfaceShell.tsx` — `renderJobLayoutCardActions`
+- `web/app/adminV2/components/aiCommandSurface/CommandSurfaceThread.tsx` — collapsed job layout thread card
 
-**Work:**
+**Mapping:** `Job overview layout · Layout proposal`; scope **Job record · overview layout**; approval + medium risk; preview mutation boundary; primary action **Approve and apply** (was Apply); Details + Advanced JSON in `children`; receipt on applied.
 
-1. Wrap job layout preview in `OperationalProposalCardFrame` — capability **Job overview layout**.
-2. Map Preview → L1 inline; Apply → “Approve and apply” label per design §5.4.
-3. Keep `OutcomeZone` / Advanced collapse behavior; reduce divergent button labels (Preview vs Approve and apply) only where safe.
+**Behavior preserved:** Semantic preview planner, noop apply-anyway checkbox, `/api/admin/agent/v1/record-overview-layout` apply, expand/collapse thread, Refine/Collapse/Full log.
+
+**Tests run:**
+
+```bash
+cd web && npm run test -- tests/adminV2/jobLayoutOperationalProposalFrame.test.tsx tests/adminV2/operationalProposalCardFrame.test.tsx tests/adminV2/taskAssistOperationalProposalFrame.test.tsx tests/adminV2/workflowAssistOperationalProposalFrame.test.tsx tests/adminV2/configLayoutAssistOperationalProposalFrame.test.ts
+```
 
 **Acceptance criteria:**
 
-- [ ] Job layout still preview-before-apply; no new auto-apply.
-- [ ] Visual family matches other proposal cards at header/risk/footer.
-
-**Tests:**
-
-- `adminV2AiCommandSurfaceModel.test.ts` (regression)
+- [x] Job layout preview-before-apply; no new auto-apply.
+- [x] Visual family matches Task/Workflow/Config proposal cards.
 
 ---
 
-### Card 12 — Proposal status badge helper (envelope-aware display)
+### Card 12 (original sprint) — Proposal status badge helper (envelope-aware display) → Phase 2+ / optional
 
 **Audit:** lifecycle visibility · **Design:** §8.2
 
@@ -1121,7 +1139,7 @@ cd web && npm run test -- tests/adminV2/activeOperationalContext.test.ts \
 | 9 | ☑ | Workflow Assist proposal cards on frame |
 | 10 | ☑ | Config Assist thread cards on frame |
 | 11 | ☑ | Config Assist Settings review on frame |
-| 12 | ☐ | |
+| 12 | ☑ | Job layout on OperationalProposalCardFrame |
 | 13 | ☐ | |
 | 14 | ☐ | |
 | 15 | ☐ | |
