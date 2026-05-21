@@ -49,6 +49,39 @@ function trimOrNull(v: unknown): string | null {
   return s ? s : null;
 }
 
+/** Overview-first inquiry lines without OCM / member graph (native columns + quote defs on host row). */
+function buildOpportunityInquiryLinesLite(
+  out: Record<string, unknown>,
+): { key: string; label: string; value: string }[] {
+  const lines: { key: string; label: string; value: string }[] = [];
+  const push = (key: string, label: string, raw: unknown) => {
+    const s = trimOrNull(raw);
+    if (s) lines.push({ key, label, value: s });
+  };
+  push("program_type", "Program", out.program_type);
+  push("schedule_type", "Schedule", out.schedule_type);
+  push("desired_start_date", "Desired start", out.desired_start_date);
+  const defs =
+    (out._field_definitions as
+      | {
+          field_key: string;
+          label: string | null;
+          section_key: string | null;
+          is_visible_in_drawer?: boolean;
+        }[]
+      | undefined) ?? [];
+  for (const d of defs) {
+    if (d.is_visible_in_drawer === false) continue;
+    if (String(d.section_key ?? "").trim() !== "quote") continue;
+    const key = d.field_key;
+    const s = trimOrNull(out[key]);
+    if (!s) continue;
+    lines.push({ key, label: trimOrNull(d.label) ?? key, value: s });
+    if (lines.length >= 3) break;
+  }
+  return lines.slice(0, 3);
+}
+
 function ageFromDobIso(
   dobIso: string | null | undefined,
 ): { years: number; months: number; label: string } | null {
@@ -1160,7 +1193,8 @@ export async function respondOpportunityEntityGet(
   hydrateGraphTimings.opportunity_financial_status_shell_ms = Date.now() - tFinShell;
   markPhase("after_status_defs_and_financial");
   lapSegment("status_resolve_and_lifecycle_shell");
-  const drawerInitial = surfaceParamEarly === "drawer_initial";
+  const drawerInitial =
+    surfaceParamEarly === "drawer_initial" || surfaceParamEarly === "drawer_primary";
   const layoutForFieldPolicy =
     orgId != null
       ? await fetchEffectiveRecordDrawerLayout(supabase, orgId, "opportunity")
@@ -1176,12 +1210,18 @@ export async function respondOpportunityEntityGet(
   markPhase("after_field_definitions_values");
   lapSegment("field_definitions_and_values_attach");
   if (drawerInitial) {
-    markPhase("drawer_initial_skip_rel_inquiry_persons");
+    markPhase("drawer_primary_skip_rel_inquiry_persons");
     out._inquiry_children = [];
     out._opportunity_persons = [];
-    out._record_surface = "drawer_initial";
+    out._record_surface = "drawer_primary";
+    const inquiryLinesPrimary = buildOpportunityInquiryLinesLite(out);
     const inquiryTitleEarly =
-      trimOrNull(out.name) ?? trimOrNull(out.title) ?? "—";
+      trimOrNull(out.name) ??
+      trimOrNull(out.title) ??
+      (inquiryLinesPrimary.length
+        ? inquiryLinesPrimary.map((l) => l.value).join(" · ")
+        : null) ??
+      "—";
     out._identity = {
       household:
         typeof opp.customer_id === "string" && opp.customer_id.trim()
@@ -1211,33 +1251,13 @@ export async function respondOpportunityEntityGet(
           }
         : null,
       primary_child: null,
-      inquiry: { title: inquiryTitleEarly, lines: [], section_key: "quote" },
+      inquiry: {
+        title: inquiryTitleEarly,
+        lines: inquiryLinesPrimary,
+        section_key: "quote",
+      },
     };
     markPhase("after_identity_block");
-    const wuMetaInitial =
-      wuidForDept && wuDeptRow.data
-        ? (wuDeptRow.data as { metadata?: unknown }).metadata ?? null
-        : null;
-    const deptMetaInitial = await fetchDepartmentMetadataForActivity(
-      supabase,
-      orgId,
-      (wuDeptRow.data as { department_id?: string | null } | null)?.department_id,
-    );
-    const attnInitial = await attachOpportunityAttentionSuggestionBundle({
-      supabase,
-      orgId,
-      opportunityRow: out as Record<string, unknown>,
-      defs: opportunityDefs,
-      attentionConfigMetadata: wuMetaInitial,
-      workUnitId: wuidForDept,
-      statusKey: oppSkRaw,
-      preloadedActivityOrgMetadata: {
-        workUnitMetadata: (wuDeptRow.data as { metadata?: unknown } | null)?.metadata ?? null,
-        departmentMetadata: deptMetaInitial,
-      },
-      nowMs: Date.now(),
-    });
-    Object.assign(out, attnInitial);
     const enrichTotalMsDi = Date.now() - enrichStartedAt;
     const enrichHeaderDi =
       JSON.stringify({ total_ms: enrichTotalMsDi, phases_ms: enrichPhaseMs })
@@ -1253,12 +1273,12 @@ export async function respondOpportunityEntityGet(
         opportunity_id: id,
         enrich_ms: enrichTotalMsDi,
         enrich_phases_ms: enrichPhaseMs,
-        surface: "drawer_initial",
+        surface: "drawer_primary",
       });
     }
     return NextResponse.json(out, {
       headers: {
-        "X-Alloy-Entity-Surface": "drawer_initial",
+        "X-Alloy-Entity-Surface": "drawer_primary",
         "X-Alloy-Opp-Enrich": enrichHeaderDi,
         "X-Alloy-Server-Duration": String(serverRouteMsDi),
       },

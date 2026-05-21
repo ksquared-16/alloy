@@ -1,6 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
+import { createPortal } from "react-dom";
+import { ADMINV2_COMMAND_SURFACE_Z } from "@/components/admin/Drawer";
 import { neutral, derived, brand, semantic } from "@/styles/tokens/colors";
 import type { JobOverviewPlannerSuccess } from "@/lib/agent/planner/jobOverviewPlannerTypes";
 import { runOverviewLayoutSemanticPreview } from "@/lib/admin/agentLab/overviewLayoutSemanticAssistant";
@@ -273,14 +283,21 @@ function SurfaceCard(props: {
   rootRef?: RefObject<HTMLElement | null>;
 }) {
   const { children, expanded, rootRef } = props;
-  return (
+  const [portalReady, setPortalReady] = useState(false);
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
+
+  const footer = (
     <footer
       ref={rootRef}
       data-adminv2-ai-command-surface
+      data-adminv2-command-surface-layer="global"
       role="contentinfo"
       aria-label="Orchestrator assistant"
-      className="w-full flex justify-center px-4"
+      className="pointer-events-auto fixed inset-x-0 bottom-2 flex w-full justify-center px-4"
       style={{
+        zIndex: ADMINV2_COMMAND_SURFACE_Z,
         paddingTop: expanded ? 8 : 10,
         paddingBottom: 8,
         background: `linear-gradient(180deg, ${derived.adminV2AiBarPineWash} 0%, ${neutral.surface} 38%, ${neutral.surface} 100%)`,
@@ -293,6 +310,9 @@ function SurfaceCard(props: {
       </div>
     </footer>
   );
+
+  if (!portalReady) return footer;
+  return createPortal(footer, document.body);
 }
 
 function OutcomeZone(props: { headline: string; subline?: string; confidence: AIStatusBadge; submittedCommand?: string }) {

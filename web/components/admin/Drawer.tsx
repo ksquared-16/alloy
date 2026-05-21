@@ -16,6 +16,11 @@ export const ADMINV2_DRAWER_PANEL_Z = 70;
 /** Above drawer panel; below drawer-adjacent modals (z-80+). */
 /** Sidebar + top nav — above portaled drawer (panel z-70). */
 export const ADMINV2_SHELL_CHROME_Z = 100;
+/**
+ * Global BOS / Orchestrator command surface (portaled to `document.body`).
+ * Above entity drawer panel (70) and drawer popovers (~85); below shell chrome (100).
+ */
+export const ADMINV2_COMMAND_SURFACE_Z = 90;
 
 interface DrawerProps {
     isOpen: boolean;

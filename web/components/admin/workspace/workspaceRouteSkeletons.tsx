@@ -272,7 +272,11 @@ export function WorkUnitRouteSkeletonBody({
 }) {
     const queueLaneStyle = adminV2WorkUnitQueueLaneReserveStyle();
     return (
-        <div data-ws-surface="work_unit" className="adminv2-ws-root adminv2-ws-work-unit adminv2-ws-wu-v2">
+        <div
+            data-ws-surface="work_unit"
+            data-adminv2-wu-route-loading="true"
+            className="adminv2-ws-root adminv2-ws-work-unit adminv2-ws-wu-v2 adminv2-ws-work-unit-route-loading"
+        >
             <div className="adminv2-ws-dept-v2-contain">
                 <div className="adminv2-ws-dept-v2-page-split">
                     <div className="adminv2-ws-dept-v2-primary-column">

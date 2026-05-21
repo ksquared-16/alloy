@@ -968,6 +968,27 @@ cd web && npm run test -- tests/adminV2/activeOperationalContext.test.ts \
 
 **GATE A:** Ready for review — Phase 1 cards 1–6 implemented; human demo + test bundle required before Phase 2 (Card 7+).
 
+### Gate A blocker fix — command surface above drawer (2026-05-20)
+
+**Issue (manual review):** With an opportunity drawer open, the portaled drawer stack (`z` 60/70) covered the Orchestrator rail (`z` 20 inside shell), blocking active-record chip, handoff, and command input validation.
+
+**Fix:** Portaled `AICommandSurfaceShell` `SurfaceCard` to `document.body` as a `fixed` global rail at `ADMINV2_COMMAND_SURFACE_Z` (90) — above drawer panel (70), below shell chrome (100). Drawer outside-click ignore list unchanged (`data-adminv2-ai-command-surface`).
+
+**Files changed**
+
+- `web/components/admin/Drawer.tsx` — `ADMINV2_COMMAND_SURFACE_Z`
+- `web/app/adminV2/components/aiCommandSurface/AICommandSurfaceShell.tsx` — portal + fixed layer
+- `web/tests/adminV2/commandSurfaceLayering.contract.test.ts` (new)
+- `web/tests/admin/drawerAdminV2PointerEvents.test.ts`
+
+**Validation required before Gate A sign-off**
+
+- [ ] Open opportunity drawer → Orchestrator visible and clickable
+- [ ] Active record chip visible with drawer open
+- [ ] Continue in Orchestrator expands/focuses visible rail
+- [ ] Drawer still closes on workspace outside-click; command surface clicks do not dismiss drawer
+- [ ] Re-run Loop 1–3 test bundle
+
 | Card | Status | PR / notes |
 |------|--------|------------|
 | 1 | ☑ | Drawer → `GlobalAssistantContext` |

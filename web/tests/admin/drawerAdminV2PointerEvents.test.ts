@@ -3,6 +3,13 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
+import {
+    ADMINV2_COMMAND_SURFACE_Z,
+    ADMINV2_DRAWER_BACKDROP_Z,
+    ADMINV2_DRAWER_PANEL_Z,
+    ADMINV2_SHELL_CHROME_Z,
+} from "@/components/admin/Drawer";
+
 const drawerPath = join(dirname(fileURLToPath(import.meta.url)), "../../components/admin/Drawer.tsx");
 const drawerSource = readFileSync(drawerPath, "utf8");
 
@@ -30,6 +37,13 @@ describe("AdminV2 sidebar drawer pointer-events contract", () => {
         expect(drawerSource).toContain("ADMINV2_SHELL_CHROME_Z");
         expect(drawerSource).toContain("ADMINV2_DRAWER_BACKDROP_Z");
         expect(drawerSource).toContain("ADMINV2_DRAWER_PANEL_Z");
+        expect(drawerSource).toContain("ADMINV2_COMMAND_SURFACE_Z");
+    });
+
+    it("stacking order: drawer < command surface < shell chrome", () => {
+        expect(ADMINV2_DRAWER_BACKDROP_Z).toBeLessThan(ADMINV2_DRAWER_PANEL_Z);
+        expect(ADMINV2_DRAWER_PANEL_Z).toBeLessThan(ADMINV2_COMMAND_SURFACE_Z);
+        expect(ADMINV2_COMMAND_SURFACE_Z).toBeLessThan(ADMINV2_SHELL_CHROME_Z);
     });
 
     it("modal record drawer dim does not capture workspace clicks", () => {
