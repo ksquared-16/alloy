@@ -3,17 +3,29 @@
 import { useMemo } from "react";
 import type { MouseEvent } from "react";
 
-import { CommandSurfaceActionCardShell } from "@/app/adminV2/components/aiCommandSurface/CommandSurfaceCardLink";
+import OperationalProposalCardFrame from "@/app/adminV2/components/bos/OperationalProposalCardFrame";
+import {
+    CONFIG_LAYOUT_ASSIST_MUTATION_BOUNDARY_COPY,
+    CONFIG_LAYOUT_ASSIST_PROPOSAL_SOURCE_LABEL,
+    CONFIG_LAYOUT_ASSIST_PROPOSAL_TYPE_LABEL,
+    CONFIG_LAYOUT_ASSIST_SETTINGS_HUB_COPY,
+    configProposalEntityContextLabel,
+    configProposalRequiresFrameApproval,
+    configProposalRiskLevel,
+    configProposalValidationMessages,
+} from "@/lib/adminV2/bos/configLayoutAssistOperationalProposalPresentation";
+import { COMMAND_SURFACE_INTERACTIVE_CARD_CLASS } from "@/lib/adminV2/aiCommandSurface/commandSurfaceCardNavigation";
 import { configLayoutAssistProposalStatusCopy } from "@/lib/agent/configLayoutAssist/configLayoutAssistProposalCopy";
 import type { ConfigurationProposalV1 } from "@/lib/agent/configLayoutAssist/configurationProposalV1";
 import type { ConfigLayoutAssistTraceV1 } from "@/lib/agent/configLayoutAssist/configLayoutAssistTypes";
+import { buildProposalReviewPresentation } from "@/lib/agent/configLayoutAssist/configLayoutAssistProposalPresentation";
 import {
     configProposalReviewHrefForId,
     createConfigProposalReviewClickHandler,
     resolveConfigProposalReviewId,
     type ConfigProposalReviewDebugLog,
 } from "@/lib/agent/configLayoutAssist/configLayoutAssistReviewNavigation";
-import { brand, derived, neutral } from "@/styles/tokens/colors";
+import { neutral } from "@/styles/tokens/colors";
 
 const CMD = {
     textBody: neutral.textPrimary,
@@ -35,8 +47,10 @@ export function ConfigLayoutAssistProposalThreadCard({
     debugReviewNavigation?: ConfigProposalReviewDebugLog;
 }) {
     const reviewProposalId = resolveConfigProposalReviewId(persistedProposalId);
+    const reviewPresentation = useMemo(() => buildProposalReviewPresentation(proposal), [proposal]);
     const statusCopy = configLayoutAssistProposalStatusCopy(proposal);
     const reviewHref = reviewProposalId ? configProposalReviewHrefForId(reviewProposalId) : null;
+    const { errors: validationErrors, warnings: validationWarnings } = configProposalValidationMessages(proposal);
 
     const mutatingCount = proposal.proposed_operations.filter(
         (o) => o.kind !== "data_quality_recommendation"
@@ -56,65 +70,72 @@ export function ConfigLayoutAssistProposalThreadCard({
         onReviewClick(event);
     };
 
+    const requiresApproval = configProposalRequiresFrameApproval(proposal);
+    const mutationBoundary =
+        statusCopy.includes("Recommendation") ? statusCopy : CONFIG_LAYOUT_ASSIST_MUTATION_BOUNDARY_COPY;
+
     return (
-        <CommandSurfaceActionCardShell data-command-surface-config-layout-assist-card="true">
-            <p className="text-[13px] font-semibold" style={{ color: CMD.textBody }}>
-                Configuration proposal (review required)
-            </p>
-            <p className="mt-1 text-[12px]" style={{ color: CMD.textSupporting }}>
-                {proposal.summary}
-            </p>
-            <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
-                <div>
-                    <dt style={{ color: CMD.textLabel }}>Risk</dt>
-                    <dd className="font-medium capitalize" style={{ color: CMD.textBody }}>
-                        {proposal.risk_level}
-                    </dd>
-                </div>
-                <div>
-                    <dt style={{ color: CMD.textLabel }}>Operations</dt>
-                    <dd className="font-medium" style={{ color: CMD.textBody }}>
-                        {proposal.proposed_operations.length}
-                        {mutatingCount < proposal.proposed_operations.length
-                            ? ` (${mutatingCount} mutating)`
-                            : ""}
-                    </dd>
-                </div>
-            </dl>
-            {proposal.rationale.length > 0 ? (
-                <ul className="mt-2 list-disc space-y-0.5 pl-4 text-[11px]" style={{ color: CMD.textSupporting }}>
-                    {proposal.rationale.slice(0, 4).map((line) => (
-                        <li key={line}>{line}</li>
-                    ))}
-                </ul>
-            ) : null}
-            {trace.rationale_steps.length > 0 ? (
-                <p className="mt-2 text-[10px]" style={{ color: CMD.textLabel }}>
-                    Trace: {trace.rationale_steps.join(" → ")}
-                </p>
-            ) : null}
-            <p
-                className="mt-2 rounded border px-2 py-1 text-[10px]"
-                style={{ borderColor: derived.border, color: CMD.textSupporting }}
+        <div data-command-surface-config-layout-assist-card="true">
+            <OperationalProposalCardFrame
+                proposalTitle={reviewPresentation.title}
+                proposalTypeLabel={CONFIG_LAYOUT_ASSIST_PROPOSAL_TYPE_LABEL}
+                capabilityKey="config_layout_assist"
+                status="validated"
+                presentationVariant={requiresApproval ? "review_required" : "normal"}
+                entityContextLabel={configProposalEntityContextLabel(proposal)}
+                sourceLabel={CONFIG_LAYOUT_ASSIST_PROPOSAL_SOURCE_LABEL}
+                summary={proposal.summary}
+                reasonLabel={trace.rationale_steps.length ? "Trace" : null}
+                reasonDetail={trace.rationale_steps.length ? trace.rationale_steps.join(" → ") : null}
+                requiresApproval={requiresApproval}
+                riskLevel={configProposalRiskLevel(proposal)}
+                mutationBoundaryCopy={mutationBoundary}
+                policyCopy={
+                    reviewProposalId ?
+                        CONFIG_LAYOUT_ASSIST_SETTINGS_HUB_COPY
+                    :   "Save the proposal to Settings before review."
+                }
+                validationErrors={validationErrors.length ? validationErrors : null}
+                validationWarnings={validationWarnings.length ? validationWarnings : null}
+                footer={
+                    reviewProposalId && reviewHref ?
+                        <button
+                            type="button"
+                            className="relative z-[1] inline-flex cursor-pointer rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[11px] font-semibold text-white pointer-events-auto"
+                            data-command-surface-config-assist-review-proposal="true"
+                            data-proposal-id={reviewProposalId}
+                            onClick={handleReviewButtonClick}
+                        >
+                            View advanced review
+                        </button>
+                    :   null
+                }
+                className={COMMAND_SURFACE_INTERACTIVE_CARD_CLASS}
             >
-                {statusCopy}
-            </p>
-            {reviewProposalId && reviewHref ? (
-                <button
-                    type="button"
-                    className="relative z-[1] mt-2 inline-flex cursor-pointer text-left text-[12px] font-semibold underline pointer-events-auto"
-                    style={{ color: brand.secondary }}
-                    data-command-surface-config-assist-review-proposal="true"
-                    data-proposal-id={reviewProposalId}
-                    onClick={handleReviewButtonClick}
-                >
-                    View advanced review
-                </button>
-            ) : (
-                <p className="mt-2 text-[11px] italic" style={{ color: CMD.textLabel }}>
-                    Save the proposal to Settings before review.
-                </p>
-            )}
-        </CommandSurfaceActionCardShell>
+                <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+                    <div>
+                        <dt style={{ color: CMD.textLabel }}>Operations</dt>
+                        <dd className="font-medium" style={{ color: CMD.textBody }}>
+                            {proposal.proposed_operations.length}
+                            {mutatingCount < proposal.proposed_operations.length
+                                ? ` (${mutatingCount} mutating)`
+                                : ""}
+                        </dd>
+                    </div>
+                </dl>
+                {proposal.rationale.length > 0 ?
+                    <ul className="list-disc space-y-0.5 pl-4 text-[11px]" style={{ color: CMD.textSupporting }}>
+                        {proposal.rationale.slice(0, 4).map((line) => (
+                            <li key={line}>{line}</li>
+                        ))}
+                    </ul>
+                :   null}
+                {!reviewProposalId ?
+                    <p className="text-[11px] italic" style={{ color: CMD.textLabel }}>
+                        Save the proposal to Settings before review.
+                    </p>
+                :   null}
+            </OperationalProposalCardFrame>
+        </div>
     );
 }

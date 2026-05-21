@@ -23,6 +23,7 @@ const clientPath = join(
 describe("ConfigLayoutAssist proposal review CTA contract", () => {
     it("thread card uses button + createConfigProposalReviewClickHandler", () => {
         const src = readFileSync(cardPath, "utf8");
+        expect(src).toContain("OperationalProposalCardFrame");
         expect(src).toContain("createConfigProposalReviewClickHandler");
         expect(src).toContain('type="button"');
         expect(src).toContain("data-command-surface-config-assist-review-proposal");

@@ -1,12 +1,17 @@
 "use client";
 
+import { CommandSurfaceCardLink } from "@/app/adminV2/components/aiCommandSurface/CommandSurfaceCardLink";
+import OperationalProposalCardFrame from "@/app/adminV2/components/bos/OperationalProposalCardFrame";
 import {
-    CommandSurfaceActionCardShell,
-    CommandSurfaceCardLink,
-} from "@/app/adminV2/components/aiCommandSurface/CommandSurfaceCardLink";
+    CONFIG_LAYOUT_ASSIST_MUTATION_BOUNDARY_COPY,
+    CONFIG_LAYOUT_ASSIST_PROPOSAL_SOURCE_LABEL,
+    CONFIG_LAYOUT_ASSIST_READY_TYPE_LABEL,
+    CONFIG_LAYOUT_ASSIST_SETTINGS_HUB_COPY,
+} from "@/lib/adminV2/bos/configLayoutAssistOperationalProposalPresentation";
+import { COMMAND_SURFACE_INTERACTIVE_CARD_CLASS } from "@/lib/adminV2/aiCommandSurface/commandSurfaceCardNavigation";
 import { configProposalReviewHrefForId } from "@/lib/agent/configLayoutAssist/configLayoutAssistReviewNavigation";
 import type { ConfigLayoutAssistReadySummaryV1 } from "@/lib/agent/configLayoutAssist/configLayoutAssistFieldSetup";
-import { brand, derived, neutral } from "@/styles/tokens/colors";
+import { neutral } from "@/styles/tokens/colors";
 
 const CMD = {
     textBody: neutral.textPrimary,
@@ -30,55 +35,54 @@ export function ConfigLayoutAssistReadyCard({
     const reviewHref = configProposalReviewHrefForId(persistedProposalId);
 
     return (
-        <CommandSurfaceActionCardShell data-command-surface-config-assist-ready="true">
-            <p className="text-[13px] font-semibold" style={{ color: CMD.textBody }}>
-                Ready to apply
-            </p>
-            <p className="mt-1 text-[12px]" style={{ color: CMD.textSupporting }}>
-                Your proposal is saved. Review the summary below, then apply when you are ready.
-            </p>
-
-            <dl className="mt-3 space-y-2 text-[12px]">
-                <Row label="Field" value={readySummary.field_name} />
-                <Row label="Type" value={readySummary.field_type_label} />
-                <Row label="Required" value={readySummary.required_label} />
-                <Row label="Appears in" value={readySummary.section_label} />
-            </dl>
-
-            <p
-                className="mt-3 rounded border px-2 py-1.5 text-[11px]"
-                style={{ borderColor: derived.border, color: CMD.textSupporting }}
+        <div data-command-surface-config-assist-ready="true">
+            <OperationalProposalCardFrame
+                proposalTitle={`Add field: ${readySummary.field_name}`}
+                proposalTypeLabel={CONFIG_LAYOUT_ASSIST_READY_TYPE_LABEL}
+                capabilityKey="config_layout_assist"
+                status="validated"
+                presentationVariant="review_required"
+                entityContextLabel={null}
+                sourceLabel={CONFIG_LAYOUT_ASSIST_PROPOSAL_SOURCE_LABEL}
+                summary="Your proposal is saved. Review the summary below, then apply when you are ready."
+                requiresApproval
+                mutationBoundaryCopy={CONFIG_LAYOUT_ASSIST_MUTATION_BOUNDARY_COPY}
+                policyCopy={CONFIG_LAYOUT_ASSIST_SETTINGS_HUB_COPY}
+                footer={
+                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                        {canApproveAndApply ?
+                            <button
+                                type="button"
+                                disabled={busy}
+                                className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
+                                data-command-surface-config-assist-approve-apply="true"
+                                onClick={() => onApproveAndApply()}
+                            >
+                                {busy ? "Working…" : "Approve & apply"}
+                            </button>
+                        :   <p className="text-[11px] text-alloy-midnight/55">
+                                Approve and apply require configuration assist permissions for your role.
+                            </p>
+                        }
+                        <CommandSurfaceCardLink
+                            href={reviewHref}
+                            className="inline-flex items-center justify-center rounded-md border border-alloy-stone/25 px-3 py-1.5 text-[11px] font-semibold text-alloy-midnight/85"
+                            data-command-surface-config-assist-advanced-review="true"
+                        >
+                            View advanced review
+                        </CommandSurfaceCardLink>
+                    </div>
+                }
+                className={COMMAND_SURFACE_INTERACTIVE_CARD_CLASS}
             >
-                No changes are live until you approve and apply.
-            </p>
-
-            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                {canApproveAndApply ? (
-                    <button
-                        type="button"
-                        disabled={busy}
-                        className="rounded-lg px-3 py-2 text-[12px] font-semibold text-white disabled:opacity-50"
-                        style={{ backgroundColor: brand.secondary }}
-                        data-command-surface-config-assist-approve-apply="true"
-                        onClick={() => onApproveAndApply()}
-                    >
-                        {busy ? "Working…" : "Approve & apply"}
-                    </button>
-                ) : (
-                    <p className="text-[11px] text-alloy-midnight/55">
-                        Approve and apply require configuration assist permissions for your role.
-                    </p>
-                )}
-                <CommandSurfaceCardLink
-                    href={reviewHref}
-                    className="inline-flex items-center justify-center rounded-lg border px-3 py-2 text-[12px] font-semibold"
-                    style={{ borderColor: derived.border, color: CMD.textBody }}
-                    data-command-surface-config-assist-advanced-review="true"
-                >
-                    View advanced review
-                </CommandSurfaceCardLink>
-            </div>
-        </CommandSurfaceActionCardShell>
+                <dl className="space-y-2 text-[12px]">
+                    <Row label="Field" value={readySummary.field_name} />
+                    <Row label="Type" value={readySummary.field_type_label} />
+                    <Row label="Required" value={readySummary.required_label} />
+                    <Row label="Appears in" value={readySummary.section_label} />
+                </dl>
+            </OperationalProposalCardFrame>
+        </div>
     );
 }
 

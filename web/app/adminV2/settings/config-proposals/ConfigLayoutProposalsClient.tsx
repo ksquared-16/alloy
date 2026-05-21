@@ -242,6 +242,7 @@ export default function ConfigLayoutProposalsClient({ initialId }: { initialId?:
                     <ConfigLayoutProposalReviewPanel
                         presentation={reviewPresentation}
                         statePresentation={statePresentation}
+                        lifecycleState={detail.state}
                         lifecycleActions={lifecycleActions}
                         busy={busy}
                         message={message}

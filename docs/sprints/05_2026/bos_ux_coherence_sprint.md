@@ -438,37 +438,57 @@ cd web && npm run test -- tests/adminV2/workflowAssistOperationalProposalFrame.t
 
 ---
 
-### Card 10 — Config Assist cards + Settings apply path copy
+### Card 10 — Config Assist thread proposal surfaces ☑ (2026-05-20)
 
 **Audit:** #4 · **Design:** §5.3 L3, §5.4
 
-**Files:**
+**Files migrated:**
 
 - `web/app/adminV2/components/aiCommandSurface/ConfigLayoutAssistProposalThreadCard.tsx`
 - `web/app/adminV2/components/aiCommandSurface/ConfigLayoutAssistReadyCard.tsx`
-- `web/app/adminV2/settings/config-proposals/ConfigLayoutProposalsClient.tsx`
-- `web/lib/agent/configLayoutAssist/configLayoutAssistProposalCopy.ts`
+- `web/app/adminV2/components/aiCommandSurface/ConfigLayoutAssistFieldSetupCard.tsx`
+- `web/lib/adminV2/bos/configLayoutAssistOperationalProposalPresentation.ts`
 
-**Work:**
+**Mapping:** `Config Assist · Configuration proposal` (field setup uses **Field setup** type); title from `buildProposalReviewPresentation`; context from proposal metadata; approval + risk from proposal; mutation boundary from existing status copy; Settings hub copy when persisted; footer = review / approve / confirm controls unchanged.
 
-1. Adopt frame on proposal + ready cards.
-2. Ready card: explicit copy **“Same proposal as Settings → Config proposals”** when persisted ID exists.
-3. When apply catalog partial: list operations **Applied / Skipped (not supported in V1)** from server response or static catalog check — **display only**, no new apply logic.
-4. Gate ready-card primary apply when user lacks `config_assist.apply` or proposal invalid (existing checks + visible reason).
+**Deferred:** Partial apply Applied/Skipped breakdown UI (display-only catalog) — no server breakdown in this loop.
+
+**Tests run:**
+
+```bash
+cd web && npm run test -- tests/adminV2/configLayoutAssistOperationalProposalFrame.test.tsx tests/adminV2/configLayoutAssistProposalThreadCard.contract.test.ts tests/adminV2/configLayoutAssistFieldSetupFlow.contract.test.ts
+```
 
 **Acceptance criteria:**
 
-- [ ] Operators can articulate two paths: thread review vs Settings hub (copy-level).
-- [ ] Partial apply never silently omits skipped ops in UI when server returns breakdown.
-
-**Tests:**
-
-- `configLayoutAssistProposalThreadCard.contract.test.ts`
-- `configLayoutAssistFieldSetupFlow.contract.test.ts` (regression)
+- [x] Thread proposal, ready, and field-setup cards use `OperationalProposalCardFrame`.
+- [x] Review CTA and apply gating unchanged.
 
 ---
 
-### Card 11 — Job layout card alignment
+### Card 11 — Config Assist Settings / apply surfaces ☑ (2026-05-20)
+
+**Audit:** #4 · **Design:** §5.4
+
+**Files migrated:**
+
+- `web/app/adminV2/settings/config-proposals/ConfigLayoutProposalReviewPanel.tsx`
+- `web/app/adminV2/settings/config-proposals/ConfigLayoutProposalsClient.tsx` *(passes `lifecycleState`)*
+
+**Mapping:** Settings review uses frame with lifecycle status badge, mutation boundary by state, lifecycle actions in footer, message/failed receipt; confirm-change + advanced details in `children` (reduced nested card chrome).
+
+**Behavior preserved:** List/detail fetch, state transitions, apply route, permission hints, recommendation-only hints.
+
+**Tests:** Covered by `configLayoutAssistOperationalProposalFrame.test.ts` (settings panel contract).
+
+**Acceptance criteria:**
+
+- [x] Settings review panel uses shared proposal frame.
+- [x] Apply/review lifecycle semantics unchanged.
+
+---
+
+### Card 11 (original sprint) — Job layout card alignment → deferred to Card 12 batch
 
 **Audit:** job layout dialect · **Design:** §5.8
 
@@ -1099,8 +1119,8 @@ cd web && npm run test -- tests/adminV2/activeOperationalContext.test.ts \
 | 7 | ☑ | OperationalProposalCardFrame shell |
 | 8 | ☑ | Task Assist compact cards on frame |
 | 9 | ☑ | Workflow Assist proposal cards on frame |
-| 10 | ☐ | |
-| 11 | ☐ | |
+| 10 | ☑ | Config Assist thread cards on frame |
+| 11 | ☑ | Config Assist Settings review on frame |
 | 12 | ☐ | |
 | 13 | ☐ | |
 | 14 | ☐ | |
