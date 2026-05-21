@@ -37,6 +37,7 @@ import {
 } from "@/lib/ui-v2/adminV2LoadingGeometry";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import EntityDocumentsSection from "@/components/admin/EntityDocumentsSection";
+import { normalizeDocumentRows } from "@/lib/admin/normalizeDocumentRow";
 import CommunicationsDrawerSection from "@/components/admin/communications/CommunicationsDrawerSection";
 import OpportunityOperationalCompactStrip from "@/components/admin/opportunity/OpportunityOperationalCompactStrip";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
@@ -10811,7 +10812,7 @@ export default function AdminEntityDrawer() {
                         <div className="pt-2 space-y-3">
                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
                             <EntityDocumentsSection
-                                documents={contactRelatedData?.documents ?? []}
+                                documents={normalizeDocumentRows(contactRelatedData?.documents)}
                                 loading={contactRelatedLoading}
                                 uploadEntityType="contact"
                                 entityId={drawer.id}
@@ -11140,7 +11141,7 @@ export default function AdminEntityDrawer() {
                         <div className="pt-2 space-y-3">
                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
                             <EntityDocumentsSection
-                                documents={memberRelatedData?.documents ?? []}
+                                documents={normalizeDocumentRows(memberRelatedData?.documents)}
                                 loading={memberRelatedDataLoading}
                                 uploadEntityType="customer_member"
                                 entityId={drawer.id}
@@ -11153,7 +11154,7 @@ export default function AdminEntityDrawer() {
                         <div className="pt-2 space-y-3">
                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
                             <EntityDocumentsSection
-                                documents={customerRelatedData?.documents ?? []}
+                                documents={normalizeDocumentRows(customerRelatedData?.documents)}
                                 loading={customerRelatedLoading}
                                 uploadEntityType="customer"
                                 entityId={drawer.id}
@@ -11169,7 +11170,7 @@ export default function AdminEntityDrawer() {
                                 Includes files linked to this person and onboarding documents from any vendor that lists this person as the primary person.
                             </p>
                             <EntityDocumentsSection
-                                documents={personRelatedData?.documents ?? []}
+                                documents={normalizeDocumentRows(personRelatedData?.documents)}
                                 loading={personRelatedLoading}
                                 uploadEntityType="person"
                                 entityId={drawer.id}
@@ -11279,7 +11280,7 @@ export default function AdminEntityDrawer() {
                         <div className="pt-2 space-y-3">
                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
                             <EntityDocumentsSection
-                                documents={opportunityRelatedData?.documents ?? []}
+                                documents={normalizeDocumentRows(opportunityRelatedData?.documents)}
                                 loading={opportunityRelatedLoading}
                                 uploadEntityType="opportunity"
                                 entityId={drawer.id}
@@ -11292,7 +11293,7 @@ export default function AdminEntityDrawer() {
                         <div className="pt-2 space-y-3">
                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
                             <EntityDocumentsSection
-                                documents={jobRelatedData?.documents ?? []}
+                                documents={normalizeDocumentRows(jobRelatedData?.documents)}
                                 loading={jobRelatedLoading}
                                 uploadEntityType="job"
                                 entityId={drawer.id}
@@ -11305,7 +11306,7 @@ export default function AdminEntityDrawer() {
                         <div className="pt-2 space-y-3">
                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
                             <EntityDocumentsSection
-                                documents={scheduleRelatedDocuments}
+                                documents={normalizeDocumentRows(scheduleRelatedDocuments)}
                                 loading={scheduleRelatedDocumentsLoading}
                                 uploadEntityType="schedule"
                                 entityId={drawer.id}
@@ -11321,7 +11322,7 @@ export default function AdminEntityDrawer() {
                                 Canonical files live in the documents list below. Legacy storage paths may still exist on the vendor record for older integrations.
                             </p>
                             <EntityDocumentsSection
-                                documents={vendorRelatedData?.documents ?? []}
+                                documents={normalizeDocumentRows(vendorRelatedData?.documents)}
                                 loading={vendorRelatedLoading}
                                 uploadEntityType="vendor"
                                 entityId={drawer.id}
@@ -11334,7 +11335,7 @@ export default function AdminEntityDrawer() {
                         <div className="pt-2 space-y-3">
                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
                             <EntityDocumentsSection
-                                documents={locationDocuments}
+                                documents={normalizeDocumentRows(locationDocuments)}
                                 loading={locationDocumentsLoading}
                                 uploadEntityType="location"
                                 entityId={drawer.id}
