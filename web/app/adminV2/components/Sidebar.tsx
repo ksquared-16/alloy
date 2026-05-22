@@ -149,7 +149,6 @@ function SidebarNav({
 
     const homeHref = workspaceHref(WORKSPACE);
     const railWidth = collapsed ? 56 : 280;
-    const showContextual = Boolean(departmentId);
 
     const homeLink = (
         <AdminV2NavLink
@@ -210,36 +209,6 @@ function SidebarNav({
             )}
         </AdminV2NavLink>
     );
-
-    const contextualRailLinks =
-        showContextual ?
-            <>
-                {departmentId ? (
-                    <AdminV2NavLink
-                        href={workspaceHref(`${WORKSPACE}/dept/${departmentId}`)}
-                        title="Department"
-                        aria-label="Department"
-                        active={Boolean(departmentId && !workUnitId)}
-                        className="adminv2-sidebar-rail-link"
-                        style={primaryLinkStyle}
-                    >
-                        <Building2 size={20} strokeWidth={1.75} />
-                    </AdminV2NavLink>
-                ) : null}
-                {departmentId && workUnitId ? (
-                    <AdminV2NavLink
-                        href={workspaceHref(`${WORKSPACE}/dept/${departmentId}/work-unit/${workUnitId}`)}
-                        title="Work unit"
-                        aria-label="Work unit"
-                        active
-                        className="adminv2-sidebar-rail-link"
-                        style={primaryLinkStyle}
-                    >
-                        <Building2 size={20} strokeWidth={1.75} />
-                    </AdminV2NavLink>
-                ) : null}
-            </>
-        :   null;
 
     const departmentTreeExpanded = (
         <div className="pt-2 min-h-0">
@@ -363,13 +332,7 @@ function SidebarNav({
                         {homeLink}
                         {automationsLink}
                     </div>
-                    {contextualRailLinks ? (
-                        <div className="flex min-h-0 flex-1 flex-col items-stretch gap-1 overflow-y-auto py-1">
-                            {contextualRailLinks}
-                        </div>
-                    ) : (
-                        <div className="min-h-0 flex-1" aria-hidden />
-                    )}
+                    <div className="min-h-0 flex-1" aria-hidden />
                     <div
                         className="flex shrink-0 flex-col items-stretch gap-1 border-t pt-1"
                         style={{ borderColor: neutral.border }}
