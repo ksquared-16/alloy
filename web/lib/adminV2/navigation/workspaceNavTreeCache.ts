@@ -12,6 +12,7 @@ export type WorkspaceNavTreeWu = {
     name: string | null;
     key?: string | null;
     department_id: string;
+    queue_definition?: unknown;
     metadata?: unknown;
 };
 

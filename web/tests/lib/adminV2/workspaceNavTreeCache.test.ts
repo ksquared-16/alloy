@@ -17,14 +17,7 @@ vi.mock("@/lib/workspace/workspaceAdminFetchDedupe", () => ({
         return {
             ok: true,
             json: async () => ({
-                items: [
-                    {
-                        id: "w1",
-                        name: "Enrollment Pipeline",
-                        key: "enrollment_pipeline",
-                        department_id: "d1",
-                    },
-                ],
+                items: [{ id: "w1", name: "Billing", key: "billing", department_id: "d1" }],
             }),
         };
     }),

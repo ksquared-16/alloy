@@ -70,8 +70,9 @@ describe("AdminV2 shell navigation helpers", () => {
         const src = read("app/adminV2/components/Sidebar.tsx");
         expect(src).toContain("ChevronRight");
         expect(src).toContain("expandedDeptIds.has");
-        expect(src).toMatch(/hasWus && isExpanded/);
-        expect(src).toContain("resolveWorkspaceNavWorkUnitLabel");
+        expect(src).toMatch(/hasChildren && isExpanded/);
+        expect(src).toContain("buildWorkspaceNavDeptChildren");
+        expect(src).toContain("workspaceNavChildHref");
     });
 
     it("tasks modal opens from header without waiting on fetch in TopNavBar", () => {

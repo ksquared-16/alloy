@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
-import { usePathname } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
     Building2,
     Boxes,
@@ -26,7 +26,11 @@ import {
     readExpandedDeptIds,
     writeExpandedDeptIds,
 } from "@/lib/adminV2/navigation/adminV2SidebarDeptExpanded";
-import { resolveWorkspaceNavWorkUnitLabel } from "@/lib/adminV2/navigation/workspaceNavWorkUnitLabel";
+import {
+    buildWorkspaceNavDeptChildren,
+    isWorkspaceNavChildActive,
+    workspaceNavChildHref,
+} from "@/lib/adminV2/navigation/buildWorkspaceNavDeptChildren";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 
 const WORKSPACE = "/adminV2/workspace";
@@ -67,22 +71,9 @@ function filterDepts(depts: WorkspaceNavTreeDept[]): WorkspaceNavTreeDept[] {
         .sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id));
 }
 
-function groupWusByDept(wus: WorkspaceNavTreeWu[]): Map<string, WorkspaceNavTreeWu[]> {
-    const m = new Map<string, WorkspaceNavTreeWu[]>();
-    for (const w of wus) {
-        const k = w.department_id;
-        if (!m.has(k)) m.set(k, []);
-        m.get(k)!.push(w);
-    }
-    for (const arr of m.values()) {
-        arr.sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id));
-    }
-    return m;
-}
-
 const primaryLinkStyle = { color: brand.primary } as CSSProperties;
 
-export default function Sidebar({
+function SidebarNav({
     collapsed,
     onToggle,
 }: {
@@ -90,8 +81,10 @@ export default function Sidebar({
     onToggle: () => void;
 }) {
     const pathname = usePathname();
+    const searchParams = useSearchParams();
     const path = useMemo(() => normalizeAdminPath(pathname), [pathname]);
     const { departmentId, workUnitId } = parseWorkspaceRoute(path);
+    const activeQueueKey = searchParams.get("queue")?.trim() || null;
     const onSettings = path.startsWith(SETTINGS_HREF);
     const onWorkflows = path.startsWith(WORKFLOWS_HREF);
 
@@ -131,9 +124,9 @@ export default function Sidebar({
         };
     }, []);
 
-    /** Reveal work units only when the user is on a work-unit route (not on dept-only). */
+    /** Auto-expand only the active department (dept or work-unit route under it). */
     useEffect(() => {
-        if (!departmentId || !workUnitId) return;
+        if (!departmentId) return;
         setExpandedDeptIds((prev) => {
             if (prev.has(departmentId)) return prev;
             const next = new Set(prev);
@@ -141,7 +134,7 @@ export default function Sidebar({
             writeExpandedDeptIds(next);
             return next;
         });
-    }, [departmentId, workUnitId]);
+    }, [departmentId]);
 
     const toggleDeptExpanded = useCallback((deptId: string) => {
         setExpandedDeptIds((prev) => {
@@ -154,7 +147,13 @@ export default function Sidebar({
     }, []);
 
     const deptsSorted = useMemo(() => filterDepts(depts), [depts]);
-    const wusByDept = useMemo(() => groupWusByDept(wus), [wus]);
+    const deptNavChildren = useMemo(() => {
+        const m = new Map<string, ReturnType<typeof buildWorkspaceNavDeptChildren>>();
+        for (const d of deptsSorted) {
+            m.set(d.id, buildWorkspaceNavDeptChildren(d.id, wus));
+        }
+        return m;
+    }, [deptsSorted, wus]);
 
     const homeHref = workspaceHref(WORKSPACE);
     const railWidth = collapsed ? 56 : 280;
@@ -269,13 +268,13 @@ export default function Sidebar({
                     const name = (d.name ?? "").trim() || "Untitled department";
                     const deptHref = workspaceHref(`${WORKSPACE}/dept/${d.id}`);
                     const deptActive = departmentId === d.id && !workUnitId;
-                    const deptWus = wusByDept.get(d.id) ?? [];
-                    const hasWus = deptWus.length > 0;
+                    const deptChildren = deptNavChildren.get(d.id) ?? [];
+                    const hasChildren = deptChildren.length > 0;
                     const isExpanded = expandedDeptIds.has(d.id);
                     return (
                         <div key={d.id} className="space-y-0.5">
                             <div className="flex items-stretch gap-0.5">
-                                {hasWus ? (
+                                {hasChildren ? (
                                     <button
                                         type="button"
                                         className="flex h-8 w-7 shrink-0 items-center justify-center rounded-md hover:bg-alloy-stone/10"
@@ -306,26 +305,31 @@ export default function Sidebar({
                                     </span>
                                 </AdminV2NavLink>
                             </div>
-                            {hasWus && isExpanded ? (
+                            {hasChildren && isExpanded ? (
                                 <div className="ml-7 space-y-0.5">
-                                    {deptWus.map((wu) => {
-                                        const wuName = resolveWorkspaceNavWorkUnitLabel(wu);
-                                        const wuHref = workspaceHref(
-                                            `${WORKSPACE}/dept/${d.id}/work-unit/${wu.id}`
+                                    {deptChildren.map((child) => {
+                                        const childHref = workspaceHref(
+                                            workspaceNavChildHref(WORKSPACE, d.id, child)
                                         );
-                                        const wuActive = departmentId === d.id && workUnitId === wu.id;
+                                        const childActive = isWorkspaceNavChildActive({
+                                            departmentId,
+                                            workUnitId,
+                                            activeQueueKey,
+                                            child,
+                                            deptId: d.id,
+                                        });
                                         return (
                                             <AdminV2NavLink
-                                                key={wu.id}
-                                                href={wuHref}
-                                                active={wuActive}
+                                                key={child.rowKey}
+                                                href={childHref}
+                                                active={childActive}
                                                 className={EXPANDED_PRIMARY_LINK}
                                                 style={primaryLinkStyle}
-                                                title={wuName}
+                                                title={child.label}
                                             >
                                                 <span className="inline-flex min-w-0 items-center gap-2">
                                                     <Boxes size={15} strokeWidth={1.75} className="shrink-0" />
-                                                    <span className="truncate">{wuName}</span>
+                                                    <span className="truncate">{child.label}</span>
                                                 </span>
                                             </AdminV2NavLink>
                                         );
@@ -394,5 +398,22 @@ export default function Sidebar({
                 </div>
             )}
         </aside>
+    );
+}
+
+export default function Sidebar(props: { collapsed: boolean; onToggle: () => void }) {
+    const railWidth = props.collapsed ? 56 : 280;
+    return (
+        <Suspense
+            fallback={
+                <aside
+                    className="relative z-[100] flex flex-shrink-0 flex-col border-r"
+                    style={{ width: railWidth, backgroundColor: neutral.surface, borderColor: neutral.border }}
+                    aria-hidden
+                />
+            }
+        >
+            <SidebarNav {...props} />
+        </Suspense>
     );
 }
