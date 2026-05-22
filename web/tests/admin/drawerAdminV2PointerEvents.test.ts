@@ -28,6 +28,9 @@ describe("AdminV2 sidebar drawer pointer-events contract", () => {
         );
         expect(drawerSource).toContain("left-auto");
         expect(drawerSource).toContain("w-[min(100vw,42rem)]");
+        expect(drawerSource).toContain("adminv2-drawer-shell-inset");
+        expect(drawerSource).toContain("ADMINV2_SHELL_HEADER_INSET");
+        expect(drawerSource).toContain("ADMINV2_SHELL_COMMAND_INSET");
         expect(drawerSource).not.toMatch(
             /adminv2-drawer-sidebar-dim[\s\S]*?onClick=\{onClose\}/
         );
@@ -51,6 +54,8 @@ describe("AdminV2 sidebar drawer pointer-events contract", () => {
         expect(drawerSource).toMatch(/adminv2-drawer-modal-dim[\s\S]*?pointer-events-none/);
         expect(drawerSource).not.toMatch(/adminv2-drawer-modal-dim[\s\S]*?onClick=\{onClose\}/);
         expect(drawerSource).toContain("adminv2-drawer-modal-panel");
+        expect(drawerSource).toMatch(/adminv2-drawer-modal-panel[\s\S]*?adminv2-drawer-shell-inset/);
+        expect(drawerSource).not.toMatch(/adminv2-drawer-modal-panel[\s\S]*?-translate-y-1\/2/);
     });
 
     it("portals drawer layers to document.body", () => {

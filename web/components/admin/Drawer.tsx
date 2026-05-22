@@ -21,6 +21,10 @@ export const ADMINV2_SHELL_CHROME_Z = 100;
  * Above entity drawer panel (70) and drawer popovers (~85); below shell chrome (100).
  */
 export const ADMINV2_COMMAND_SURFACE_Z = 90;
+/** Matches `TopNavBar` `h-[3.75rem]`. */
+export const ADMINV2_SHELL_HEADER_INSET = "3.75rem";
+/** Matches workspace `pb-[96px]` + command surface `bottom-2` lift. */
+export const ADMINV2_SHELL_COMMAND_INSET = "6.5rem";
 
 interface DrawerProps {
     isOpen: boolean;
@@ -375,7 +379,7 @@ export default function Drawer({
                     data-adminv2-drawer="true"
                     data-adminv2-record-modal="true"
                     data-adminv2-record-modal-tone={cleaningRecordModalTone ? "cleaning-v2" : undefined}
-                    className={`adminv2-drawer-modal-panel pointer-events-auto fixed left-1/2 top-1/2 flex max-h-[min(920px,92vh)] w-[min(calc(100vw-1.5rem),80rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl animate-in fade-in zoom-in-[0.99] duration-300 ${cleaningRecordModalTone ? "min-h-[min(520px,78vh)]" : ""} ${panelClassName ?? "max-w-5xl"}`}
+                    className={`adminv2-drawer-modal-panel adminv2-drawer-shell-inset pointer-events-auto fixed left-1/2 flex w-[min(calc(100vw-1.5rem),80rem)] max-h-[min(920px,100%)] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl animate-in fade-in zoom-in-[0.99] duration-300 ${cleaningRecordModalTone ? "min-h-[min(520px,50%)]" : ""} ${panelClassName ?? "max-w-5xl"}`}
                     style={
                         cleaningRecordModalTone && recordModalContextStyle
                             ? { ...recordModalContextStyle, ...panelStyle, zIndex: zIndexPanel }
@@ -397,8 +401,8 @@ export default function Drawer({
                     aria-modal="true"
                     aria-labelledby="admin-drawer-title"
                     data-adminv2-drawer={isV2 ? "true" : undefined}
-                    className={`adminv2-drawer-sidebar-panel pointer-events-auto fixed inset-y-0 right-0 left-auto flex w-[min(100vw,42rem)] max-w-2xl flex-col border shadow-xl ${panelClassName ?? ""} ${
-                        isV2 ? "border-solid" : `bg-admin-surface-card border-admin-border ${accentColor ? "" : "border-l-4 border-alloy-blue/40"}`
+                    className={`adminv2-drawer-sidebar-panel pointer-events-auto fixed right-0 left-auto flex w-[min(100vw,42rem)] max-w-2xl flex-col border shadow-xl ${isV2 ? "adminv2-drawer-shell-inset border-solid" : "inset-y-0"} ${panelClassName ?? ""} ${
+                        isV2 ? "" : `bg-admin-surface-card border-admin-border ${accentColor ? "" : "border-l-4 border-alloy-blue/40"}`
                     }`}
                     style={panelStyle}
                 >
