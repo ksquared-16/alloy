@@ -20,7 +20,9 @@ export type WorkUnitBootstrapPerfPhases = {
     pipeline_ms?: number;
     kpi_placements_ms?: number;
     kpi_placements_cache_hit?: boolean;
+    kpi_placements_deferred?: boolean;
     right_rail_actions_ms?: number;
+    right_rail_actions_deferred?: boolean;
 };
 
 export function logWorkUnitOperationalBootstrapPerf(params: {
