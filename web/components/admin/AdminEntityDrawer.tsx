@@ -6830,7 +6830,7 @@ export default function AdminEntityDrawer() {
             payment_status_label: paymentStatusLabel,
             payment_is_paid: pay?.payment_status_key === "paid",
             payment_failed: pay?.payment_status_key === "failed",
-            cleaning_record_modal: showJobRecordModalV2,
+            cleaning_record_modal: showJobRecordModalV2 === true,
         });
     }, [
         isJobDrawerV2,
