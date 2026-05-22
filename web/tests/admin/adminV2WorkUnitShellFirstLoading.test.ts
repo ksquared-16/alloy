@@ -17,17 +17,16 @@ describe("Work-unit shell-first loading (Card 3A)", () => {
         expect(loading).toMatch(/return null/);
     });
 
-    it("page owns single cold shell early return; oper lane loads in-region", () => {
+    it("page owns single WorkspaceChrome shell; oper lane loads in-region via route pipeline", () => {
         const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-        expect(page).toContain("WorkUnitWorkspaceColdShell");
-        expect(page).not.toContain("WorkUnitRouteSkeletonBody");
-        expect(page).toMatch(/if \(workUnitPageBlockingLoad\)[\s\S]{0,120}return \([\s\S]{0,80}WorkUnitWorkspaceColdShell/);
-        expect(page).toMatch(/workUnitPageBlockingLoad = loading && !workUnitShellReady/);
-        expect(page).not.toMatch(
-            /<WorkspaceChrome[\s\S]{0,400}workUnitPageBlockingLoad[\s\S]{0,400}WorkUnitWorkspaceColdShell/
-        );
-        expect(page).toContain("operLaneLoading={workUnitOperLanePending}");
-        expect(page).toContain("workUnitRenderableModel");
+        expect(page).not.toContain("WorkUnitWorkspaceColdShell");
+        expect(page).not.toContain("workUnitPageBlockingLoad");
+        expect(page).toContain("buildWorkUnitRouteShellPlaceholder");
+        expect(page).toContain("operLaneLoading={workUnitOperLaneLoading}");
+        expect(page).toContain("workUnitRouteShellPlaceholder");
+        expect(page).toContain("<WorkspaceChrome");
+        expect(page).toContain("<WorkUnitWorkspace");
+        expect(page).not.toMatch(/return \([\s\S]{0,200}WorkUnitWorkspaceColdShell/);
     });
 
     it("exports WorkUnitOperationalLaneLoader with quiet lane reserve", () => {
@@ -37,10 +36,13 @@ describe("Work-unit shell-first loading (Card 3A)", () => {
         expect(reserve).toContain("Loading work unit");
     });
 
-    it("dept route oper-region pattern is unchanged", () => {
+    it("dept route uses single WorkspaceChrome with in-region oper loader", () => {
         const deptPage = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
         expect(deptPage).toContain("DeptOperationalRegionLoader");
         expect(deptPage).toContain("departmentPageBlockingLoad");
+        expect(deptPage).not.toMatch(/if \(departmentPageBlockingLoad\)[\s\S]{0,80}DepartmentWorkspaceColdShell/);
+        const deptLoading = read("app/adminV2/workspace/dept/[departmentId]/loading.tsx");
+        expect(deptLoading).toMatch(/return null/);
     });
 
     it("workspace → dept transition from Card 2 is unchanged", () => {

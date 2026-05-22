@@ -27,7 +27,16 @@ import {
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
-import { WorkUnitWorkspaceColdShell } from "@/components/admin/workspace/WorkUnitWorkspaceColdShell";
+import {
+    buildWorkUnitRoutePipelineState,
+    buildWorkUnitRouteShellPlaceholder,
+    markRouteBootstrapReturned,
+    markRouteFirstAboveFoldStable,
+    markRouteShellVisible,
+    registerRouteLoadingOwner,
+    resetRouteShellTrace,
+    unregisterRouteLoadingOwner,
+} from "@/lib/adminV2/routeShellPipeline";
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import {
@@ -719,6 +728,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
     useEffect(() => {
         recordAdminV2RouteChurnAttempt("work-unit-mount");
+        resetRouteShellTrace("work_unit");
+        registerRouteLoadingOwner("work_unit", "page");
+        markRouteShellVisible("work_unit", { departmentId, workUnitId });
+        return () => unregisterRouteLoadingOwner("work_unit", "page");
     }, [departmentId, workUnitId]);
 
     useEffect(() => {
@@ -3397,8 +3410,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
     /** Shell + header render after WU + dept; queue summaries and rows stay in-lane (Phase 3.1). */
     const workUnitShellReady = Boolean(workUnit) && Boolean(dept) && !error;
     const workUnitOperLanePending = workUnitShellReady && !wuQueueLaneAuthorityReady;
-    /** Full cold shell only until dept + work-unit identity exist — oper lane loads in-region (shell-first). */
-    const workUnitPageBlockingLoad = loading && !workUnitShellReady;
+
+    const workUnitRouteShellPlaceholder = useMemo(
+        () =>
+            buildWorkUnitRouteShellPlaceholder({
+                workUnitId: workUnitId ?? undefined,
+                workUnitTitle: workUnit?.name?.trim() || wuName,
+                departmentTitle: dept?.name?.trim() || deptName,
+                departmentKey: dept?.key,
+                reserveActionsRail: isEnrollmentLikeDepartmentKey(dept?.key),
+            }),
+        [workUnitId, workUnit?.name, workUnit?.key, dept?.name, dept?.key, wuName, deptName]
+    );
 
     /** Queue-first reveal — KPI strip and automation footer defer until the lane is useful. */
     const workUnitQueueRevealReady = useMemo(() => {
@@ -3425,34 +3448,66 @@ export default function AdminV2OpportunityWorkUnitPage() {
     ]);
 
     const workUnitKpiStripPlaceholder = workUnitQueueRevealReady && workUnitKpiMetricsPending;
-    const workUnitRenderableModel = effectiveModel ?? queueModel;
 
-    if (workUnitPageBlockingLoad) {
-        return (
-            <WorkUnitWorkspaceColdShell
-                workUnitTitle={wuName}
-                departmentTitle={deptName}
-                departmentId={departmentId}
-                reserveActionsRail={isEnrollmentLikeDepartmentKey(dept?.key)}
-            />
-        );
-    }
+    const workUnitRoutePipeline = useMemo(
+        () =>
+            buildWorkUnitRoutePipelineState({
+                department_id: departmentId,
+                work_unit_id: workUnitId,
+                department_title: deptName,
+                work_unit_title: wuName,
+                department_key: dept?.key,
+                shell_identity_ready: workUnitShellReady,
+                oper_lane_loading: !workUnitShellReady || workUnitOperLanePending,
+                kpi_placeholder: workUnitKpiMetricsPending,
+                primary_loaded: workUnitShellReady,
+                full_complete: workUnitQueueRevealReady,
+            }),
+        [
+            departmentId,
+            workUnitId,
+            deptName,
+            wuName,
+            dept?.key,
+            workUnitShellReady,
+            workUnitOperLanePending,
+            workUnitKpiMetricsPending,
+            workUnitQueueRevealReady,
+        ]
+    );
+
+    useEffect(() => {
+        if (!workUnitShellReady) return;
+        markRouteBootstrapReturned("work_unit", { departmentId, workUnitId });
+    }, [workUnitShellReady, departmentId, workUnitId]);
+
+    useEffect(() => {
+        if (!workUnitQueueRevealReady) return;
+        markRouteFirstAboveFoldStable("work_unit", { departmentId, workUnitId });
+    }, [workUnitQueueRevealReady, departmentId, workUnitId]);
+
+    const workUnitRenderableModel =
+        workUnitShellReady && (effectiveModel ?? queueModel)
+            ? (effectiveModel ?? queueModel)!
+            : workUnitRouteShellPlaceholder;
+
+    const workUnitOperLaneLoading =
+        workUnitRoutePipeline.above_fold.queue_lane.oper_lane_loading;
 
     return (
         <WorkspaceChrome
             variant="bridge"
-            breadcrumbs={[
-                { href: appendWorkspaceSiteToPath(WORKSPACE_BASE, selectedSiteId), label: "Workspace" },
-                {
-                    href: appendWorkspaceSiteToPath(`${WORKSPACE_BASE}/dept/${departmentId}`, selectedSiteId),
-                    label: deptName,
-                },
-                { label: wuName },
-            ]}
-            title={wuName}
-            subtitle=""
+            breadcrumbs={workUnitRoutePipeline.shell.breadcrumbs.map((b) => ({
+                ...b,
+                href: b.href ? appendWorkspaceSiteToPath(b.href, selectedSiteId) : undefined,
+            }))}
+            title={workUnitRoutePipeline.shell.title}
+            subtitle={workUnitRoutePipeline.shell.subtitle ?? ""}
+            data-route-shell-ready={workUnitShellReady ? "true" : "false"}
         >
-            {workUnitShellReady && workUnitRenderableModel ? (
+            {error && !workUnitShellReady ? (
+                <p className="text-sm text-alloy-ember px-1 py-4">{error}</p>
+            ) : (
                 <>
                     {actionSurfaceError ? (
                         <div
@@ -3477,7 +3532,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     <WorkUnitWorkspace
                         model={workUnitRenderableModel}
                         onAction={onAction}
-                        operLaneLoading={workUnitOperLanePending}
+                        operLaneLoading={workUnitOperLaneLoading}
                         opportunityDrawerWorkspaceContext={opportunityWorkspaceContext ?? null}
                         headerQueuePicker={workUnitOperLanePending ? null : headerQueuePickerSlot}
                         kpiStripPlaceholder={workUnitKpiStripPlaceholder || workUnitOperLanePending}
@@ -3575,8 +3630,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         }}
                     />
                 </>
-            ) : (
-                <p className="text-sm text-alloy-ember px-1 py-4">{error ?? "Unable to load this work unit."}</p>
             )}
         </WorkspaceChrome>
     );

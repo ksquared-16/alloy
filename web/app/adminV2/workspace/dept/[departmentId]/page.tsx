@@ -24,7 +24,6 @@ import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import { DepartmentWorkspaceBridgeShell } from "@/components/admin/workspace/DepartmentWorkspaceBridgeShell";
 import { WorkspaceActionsRailPlaceholder } from "@/components/admin/workspace/WorkspaceActionsRailPlaceholder";
 import KPIBlock from "@/app/adminV2/components/workspace/blocks/KPIBlock";
-import { DepartmentWorkspaceColdShell } from "@/components/admin/workspace/DepartmentWorkspaceColdShell";
 import {
     DeptOperationalRegionLoader,
     WorkspaceQuietKpiReserve,
@@ -1514,9 +1513,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         </div>
     );
 
-    if (departmentPageBlockingLoad) {
-        return <DepartmentWorkspaceColdShell departmentTitle="Department" />;
-    }
+    const deptTitleForShell = dept?.name?.trim() || title;
 
     return (
         <WorkspaceChrome
@@ -1531,7 +1528,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
             title={title}
             subtitle=""
         >
-            {!dept ? (
+            {!dept && !departmentPageBlockingLoad ? (
                 <div
                     className="rounded-xl border px-4 py-10 text-center text-sm text-alloy-ember/90"
                     style={{ borderColor: "var(--d-border, rgba(39,63,82,0.14))" }}
@@ -1539,31 +1536,31 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     {deptError ??
                         "This department could not be loaded. Use the workspace link above to pick another department."}
                 </div>
-            ) : deptConfirmedNoWorkUnits ? (
+            ) : dept && deptConfirmedNoWorkUnits ? (
                 <div
                     className="rounded-xl border px-4 py-10 text-center text-sm text-alloy-midnight/55"
                     style={{ borderColor: "var(--d-border, rgba(39,63,82,0.14))" }}
                 >
                     No configured Work Unit UI was found for this department.
                 </div>
-            ) : deptShellReady ? (
+            ) : departmentPageBlockingLoad || deptShellReady ? (
                 <DepartmentWorkspaceBridgeShell
+                    briefTitle={deptTitleForShell}
                     departmentKey={deptKey}
-                    briefTitle={title}
                     briefSubtitle=""
                     signalsSlot={null}
                     kpiSlot={
-                        !deptTopSummaryReady ? (
+                        departmentPageBlockingLoad || !deptTopSummaryReady ? (
                             <WorkspaceQuietKpiReserve id="dept-kpi-quiet-reserve" />
                         ) : kpis.length ? (
                             <KPIBlock kpis={kpis} maxVisible={5} />
                         ) : null
                     }
                     throughputSlot={
-                        deptOperationalRegionReady ? (
-                            throughputPairedPanels
-                        ) : (
+                        departmentPageBlockingLoad || !deptOperationalRegionReady ? (
                             <DeptOperationalRegionLoader throughputTitle={deptOperPanelTitleLocked} />
+                        ) : (
+                            throughputPairedPanels
                         )
                     }
                     attentionSlot={null}

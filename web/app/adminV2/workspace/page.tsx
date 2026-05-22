@@ -20,7 +20,12 @@ import {
     readWorkspaceRootCache,
     writeWorkspaceRootCache,
 } from "@/lib/workspace/adminV2WorkspaceSessionCache";
-import { WorkspaceRootColdShell } from "@/components/admin/workspace/WorkspaceRootColdShell";
+import {
+    markRouteShellVisible,
+    registerRouteLoadingOwner,
+    resetRouteShellTrace,
+    unregisterRouteLoadingOwner,
+} from "@/lib/adminV2/routeShellPipeline";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 
 /** First paint: work-unit counts + rollup lines without per-dept growth KPI / pipeline calls. */
@@ -84,6 +89,13 @@ export default function AdminV2WorkspaceIndexPage() {
     const [workspaceKpiPlacementPending, setWorkspaceKpiPlacementPending] = useState(false);
     /** After per-dept rollup finishes — soft opacity lift on department cards (quick → refined stats). */
     const [workspaceRollupRefined, setWorkspaceRollupRefined] = useState(false);
+
+    useEffect(() => {
+        resetRouteShellTrace("workspace");
+        registerRouteLoadingOwner("workspace", "page");
+        markRouteShellVisible("workspace");
+        return () => unregisterRouteLoadingOwner("workspace", "page");
+    }, []);
 
     /** Session cache hydrate before paint — avoids revisit blank shell when SSR showed the route loader momentarily. */
     useLayoutEffect(() => {
@@ -336,11 +348,7 @@ export default function AdminV2WorkspaceIndexPage() {
         };
     }, [metrics, departments.length]);
 
-    if (loading) {
-        return <WorkspaceRootColdShell />;
-    }
-
-    if (error) {
+    if (error && departments.length === 0) {
         return (
             <div className="max-w-3xl">
                 <p className="text-sm text-alloy-ember">{error}</p>
@@ -365,11 +373,12 @@ export default function AdminV2WorkspaceIndexPage() {
             departments={departments}
             deptTileStats={deptTileStats}
             metrics={metricsResolved}
-            metricsLoading={false}
+            metricsLoading={loading && metricsResolved == null}
             orgOpportunityKpis={orgOpportunityKpis}
             workspaceKpiStrip={workspaceKpiStrip}
-            kpiStripPlaceholder={workspaceKpiPlacementPending}
+            kpiStripPlaceholder={workspaceKpiPlacementPending || (loading && departments.length === 0)}
             workspaceRollupRefined={workspaceRollupRefined}
+            departmentsPending={loading && departments.length === 0}
         />
     );
 }
