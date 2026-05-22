@@ -36,9 +36,15 @@ export function logWorkUnitOperationalBootstrapPerf(params: {
     routeGateMs?: number;
     prepMs?: number;
     loaderMs?: number;
+    payloadBytes?: number;
+    deferBundle?: boolean;
     phases?: WorkUnitBootstrapPerfPhases;
 }): void {
     if (params.totalMs < 250 && (params.loaderMs ?? params.totalMs) < 250) return;
+    const payloadKb =
+        typeof params.payloadBytes === "number"
+            ? Math.round((params.payloadBytes / 1024) * 10) / 10
+            : undefined;
     console.warn("[wu-bootstrap-perf]", {
         work_unit_id: params.workUnitId,
         department_id: params.departmentId,
@@ -46,6 +52,8 @@ export function logWorkUnitOperationalBootstrapPerf(params: {
         route_gate_ms: params.routeGateMs,
         route_prep_ms: params.prepMs,
         loader_ms: params.loaderMs,
+        payload_kb: payloadKb,
+        defer_bundle: params.deferBundle,
         ...params.phases,
     });
 }

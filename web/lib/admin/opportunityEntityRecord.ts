@@ -21,7 +21,11 @@ import {
   type InquiryChildHydrateRow,
 } from "@/lib/admin/drawer/inquiryChildrenHydration";
 import { logDbTiming, withDbTiming } from "@/lib/admin/dbQueryTiming";
-import { perfDrawerFullHydrate, timingOpportunityApiVisible } from "@/lib/perf/adminV2PerfLog";
+import {
+  perfDrawerFullHydrate,
+  timingOpportunityApiVisible,
+  timingOpportunityDrawerPrimary,
+} from "@/lib/perf/adminV2PerfLog";
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import { assertOpportunityInAccessScope } from "@/lib/admin/accessScope";
 import {
@@ -1215,6 +1219,84 @@ export async function respondOpportunityEntityGet(
     });
   }
 
+  if (surfaceParamEarly === "drawer_primary" || surfaceParamEarly === "drawer_initial") {
+    const enrichStartedAt = Date.now();
+    const enrichPhaseMs: Record<string, number> = {};
+    const tPrimary0 = Date.now();
+    const out = await buildOpportunityDrawerVisiblePayload(supabase, orgId, data);
+    enrichPhaseMs.drawer_primary_build_ms = Date.now() - tPrimary0;
+    out._record_surface =
+      surfaceParamEarly === "drawer_initial" ? "drawer_initial" : "drawer_primary";
+    const inquiryLinesPrimary = buildOpportunityInquiryLinesLite(out);
+    const inquiryTitleEarly =
+      trimOrNull(out.name) ??
+      trimOrNull(out.title) ??
+      (inquiryLinesPrimary.length
+        ? inquiryLinesPrimary.map((l) => l.value).join(" · ")
+        : null) ??
+      "—";
+    const householdIdPrimary =
+      typeof opp.customer_id === "string" && opp.customer_id.trim()
+        ? opp.customer_id.trim()
+        : null;
+    const householdLabelPrimary = trimOrNull(out._customer_name) ?? "—";
+    out._identity = {
+      household: householdIdPrimary ? { id: householdIdPrimary, label: householdLabelPrimary } : null,
+      primary_person: opp.primary_person_id
+        ? {
+            id: String(opp.primary_person_id),
+            label: trimOrNull(out._primary_person_name) ?? "—",
+            email: trimOrNull(out._primary_person_email),
+            phone: trimOrNull(out._primary_person_phone),
+            role_key: null,
+            role_label: null,
+          }
+        : null,
+      primary_contact: opp.primary_contact_id
+        ? {
+            id: String(opp.primary_contact_id),
+            label: trimOrNull(out._primary_contact_name) ?? "—",
+            email: trimOrNull(out._primary_contact_email),
+            phone: trimOrNull(out._primary_contact_phone),
+            role_key: null,
+            role_label: null,
+          }
+        : null,
+      primary_child: null,
+      inquiry: {
+        title: inquiryTitleEarly,
+        lines: inquiryLinesPrimary,
+        section_key: "quote",
+      },
+    };
+    const enrichTotalMsPrimary = Date.now() - enrichStartedAt;
+    const enrichHeaderPrimary =
+      JSON.stringify({ total_ms: enrichTotalMsPrimary, phases_ms: enrichPhaseMs }).length < 3900
+        ? JSON.stringify({ total_ms: enrichTotalMsPrimary, phases_ms: enrichPhaseMs })
+        : JSON.stringify({ total_ms: enrichTotalMsPrimary, phases_ms: {} });
+    const serverRouteMsPrimary = Date.now() - opportunityRouteStartedAt;
+    const primaryDeptId = trimOrNull(out._work_unit_department_id as string | null);
+    if (process.env.NODE_ENV !== "production" || enrichTotalMsPrimary > 200) {
+      timingOpportunityDrawerPrimary({
+        opportunity_id: id,
+        org_id: orgId,
+        work_unit_id: wuidForDept ?? null,
+        department_id: primaryDeptId,
+        total_ms: enrichTotalMsPrimary,
+        enrich_phases_ms: enrichPhaseMs,
+        server_route_ms: serverRouteMsPrimary,
+        payload_bytes: Buffer.byteLength(JSON.stringify(out), "utf8"),
+      });
+    }
+    return NextResponse.json(out, {
+      headers: {
+        "X-Alloy-Entity-Surface": out._record_surface as string,
+        "X-Alloy-Opp-Enrich": enrichHeaderPrimary,
+        "X-Alloy-Server-Duration": String(serverRouteMsPrimary),
+      },
+    });
+  }
+
   const enrichStartedAt = Date.now();
   const enrichPhaseMs: Record<string, number> = {};
   /** Delta timings (full hydrate); cumulative phases remain in enrichPhaseMs for response header. */
@@ -1427,89 +1509,6 @@ export async function respondOpportunityEntityGet(
   hydrateGraphTimings.opportunity_financial_status_shell_ms = Date.now() - tFinShell;
   markPhase("after_status_defs_and_financial");
   lapSegment("status_resolve_and_lifecycle_shell");
-  const drawerInitial =
-    surfaceParamEarly === "drawer_initial" || surfaceParamEarly === "drawer_primary";
-  if (drawerInitial) {
-    markPhase("drawer_primary_fast_path");
-    out._field_definitions = [];
-    await Promise.all([
-      attachOpportunityInquiryChildrenShell(supabase, orgId, out),
-      attachOpportunityPersonsShell(supabase, orgId, out),
-      attachOpportunityActivitySignalShell(supabase, orgId, out),
-      attachOpportunityInquirySummaryTaskPreview(supabase, orgId, out),
-    ]);
-    out._record_surface = "drawer_primary";
-    const inquiryLinesPrimary = buildOpportunityInquiryLinesLite(out);
-    const inquiryTitleEarly =
-      trimOrNull(out.name) ??
-      trimOrNull(out.title) ??
-      (inquiryLinesPrimary.length
-        ? inquiryLinesPrimary.map((l) => l.value).join(" · ")
-        : null) ??
-      "—";
-    out._identity = {
-      household:
-        typeof opp.customer_id === "string" && opp.customer_id.trim()
-          ? {
-              id: opp.customer_id.trim(),
-              label: trimOrNull(out._customer_name) ?? "—",
-            }
-          : null,
-      primary_person: opp.primary_person_id
-        ? {
-            id: String(opp.primary_person_id),
-            label: trimOrNull(out._primary_person_name) ?? "—",
-            email: trimOrNull(out._primary_person_email),
-            phone: trimOrNull(out._primary_person_phone),
-            role_key: null,
-            role_label: null,
-          }
-        : null,
-      primary_contact: opp.primary_contact_id
-        ? {
-            id: String(opp.primary_contact_id),
-            label: trimOrNull(out._primary_contact_name) ?? "—",
-            email: trimOrNull(out._primary_contact_email),
-            phone: trimOrNull(out._primary_contact_phone),
-            role_key: null,
-            role_label: null,
-          }
-        : null,
-      primary_child: null,
-      inquiry: {
-        title: inquiryTitleEarly,
-        lines: inquiryLinesPrimary,
-        section_key: "quote",
-      },
-    };
-    markPhase("after_identity_block");
-    const enrichTotalMsDi = Date.now() - enrichStartedAt;
-    const enrichHeaderDi =
-      JSON.stringify({ total_ms: enrichTotalMsDi, phases_ms: enrichPhaseMs })
-        .length < 3900
-        ? JSON.stringify({
-            total_ms: enrichTotalMsDi,
-            phases_ms: enrichPhaseMs,
-          })
-        : JSON.stringify({ total_ms: enrichTotalMsDi, phases_ms: {} });
-    const serverRouteMsDi = Date.now() - opportunityRouteStartedAt;
-    if (process.env.NODE_ENV !== "production") {
-      console.info("[timing][opportunity-api]", {
-        opportunity_id: id,
-        enrich_ms: enrichTotalMsDi,
-        enrich_phases_ms: enrichPhaseMs,
-        surface: "drawer_primary",
-      });
-    }
-    return NextResponse.json(out, {
-      headers: {
-        "X-Alloy-Entity-Surface": "drawer_primary",
-        "X-Alloy-Opp-Enrich": enrichHeaderDi,
-        "X-Alloy-Server-Duration": String(serverRouteMsDi),
-      },
-    });
-  }
-
   const relationshipDisplaysMode = await attachDirectFkRelationshipDisplays(
     supabase,
     orgId,

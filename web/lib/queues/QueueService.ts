@@ -46,6 +46,7 @@ import { buildOperationalSummaryDeterministic, toOperationalSummaryQueuePreview 
 import { childDesiredStartSummaryFromOcmRows } from "@/lib/ui-v2/childDesiredStartQueuePresentation";
 import { DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1 } from "@/lib/workspace/opportunityAttentionRules";
 import { buildQueueServiceAttentionSemantics } from "@/lib/workspace/opportunityAttentionCountSemantics";
+import { logQueueSummaryPerf } from "@/lib/queues/queueSummaryPerf";
 import { applyPlacementToOpportunityQueueRows } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
 import type { WorkUnitPlacementQueueDiagnostics } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
 import { resolvePlacementQueueConfig } from "@/lib/orchestration/placement/resolvePlacementQueueConfig";
@@ -2362,6 +2363,19 @@ export async function getWorkUnitQueueSummaries(params: {
             deferred_queue_keys: deferredQueueKeys,
         });
     }
+    logQueueSummaryPerf({
+        tag: "getWorkUnitQueueSummaries",
+        totalMs,
+        orgId: params.orgId,
+        workUnitId: params.workUnitId,
+        includePreviews,
+        summaryCount: def.queues.length,
+        phases: {
+            load_def_ms: loadDefMs,
+            summary_mode: summaryMode,
+            rows_enriched_total: rowsEnrichedTotal,
+        },
+    });
     if (summaryMode === "partial") {
         return { queues: rowResults.filter((x): x is QueueSummary => x != null), ...viewerTimeZonePayload };
     }
@@ -2541,6 +2555,15 @@ export async function getDepartmentWorkUnitQueueSummaries(params: {
             summary_mode: summaryMode,
         });
     }
+    logQueueSummaryPerf({
+        tag: "getDepartmentWorkUnitQueueSummaries",
+        totalMs: batchMs,
+        orgId: params.orgId,
+        departmentId: params.departmentId,
+        includePreviews,
+        summaryCount: ids.length,
+        phases: { summary_mode: summaryMode, work_unit_concurrency: wuConc },
+    });
     return { work_units };
 }
 

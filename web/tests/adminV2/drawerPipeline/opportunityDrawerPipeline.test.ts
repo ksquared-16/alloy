@@ -59,6 +59,38 @@ describe("buildOpportunityDrawerPipelineState", () => {
         expect(fc?.relationships_full_hydrate_failed).toBe(false);
     });
 
+    it("shows orchestrator handoff strip on drawer_primary without full hydrate", () => {
+        const state = buildOpportunityDrawerPipelineState({
+            shell: minimalOpportunityShell(),
+            record: { id: "opp-1", _record_surface: "drawer_primary" },
+            drawer_id: "opp-1",
+            background_full_failed: false,
+            workflow_v1: true,
+            above_fold_locked: true,
+            first_paint_gates_active: true,
+            enrichment_layout_ready: false,
+            below_fold_enrichment_ready: false,
+            task_assist_enabled: true,
+        });
+        expect(state.above_fold.inquiry_summary?.task_preview.show_operational_strip).toBe(true);
+    });
+
+    it("hides orchestrator handoff strip on drawer_visible (primary not loaded)", () => {
+        const state = buildOpportunityDrawerPipelineState({
+            shell: minimalOpportunityShell(),
+            record: { id: "opp-1", _record_surface: "drawer_visible" },
+            drawer_id: "opp-1",
+            background_full_failed: false,
+            workflow_v1: true,
+            above_fold_locked: true,
+            first_paint_gates_active: true,
+            enrichment_layout_ready: false,
+            below_fold_enrichment_ready: false,
+            task_assist_enabled: true,
+        });
+        expect(state.above_fold.inquiry_summary?.task_preview.show_operational_strip).toBe(false);
+    });
+
     it("exposes background full failure on family contacts slot only", () => {
         const state = buildOpportunityDrawerPipelineState({
             shell: minimalOpportunityShell(),

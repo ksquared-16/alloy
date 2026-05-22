@@ -4,6 +4,7 @@ import { departmentIdAllowed } from "@/lib/admin/accessScope";
 import {
     buildQueueSummariesSharedBootstrap,
     getDepartmentWorkUnitQueueSummaries,
+    type QueueSummariesSharedBootstrap,
     type QueueSummaryRequestMode,
 } from "@/lib/queues/QueueService";
 import type { QueueViewerTimezoneMeta } from "@/lib/queues/types";
@@ -51,6 +52,8 @@ export async function loadDeptOperationalBootstrap(params: {
         priorityBudget?: number;
     };
     attentionWorkUnitIdParam?: string | null;
+    /** When route already resolved shared bootstrap, skip duplicate org-level fetch. */
+    sharedBootstrap?: QueueSummariesSharedBootstrap;
 }): Promise<
     | { payload: DeptOperationalBootstrapPayload; phases: DeptBootstrapPerfPhases }
     | { error: string; status: number }
@@ -133,8 +136,10 @@ export async function loadDeptOperationalBootstrap(params: {
     const departmentMetadata = (deptRow as { metadata?: unknown }).metadata ?? null;
 
     const tShared0 = Date.now();
-    const sharedBootstrap = await buildQueueSummariesSharedBootstrap(orgId);
+    const sharedBootstrap =
+        params.sharedBootstrap ?? (await buildQueueSummariesSharedBootstrap(orgId));
     phases.shared_bootstrap_ms = Date.now() - tShared0;
+    phases.shared_bootstrap_reused = Boolean(params.sharedBootstrap);
 
     const wuRowsLite = wuRows.map((w) => ({
         id: String((w as { id: string }).id),

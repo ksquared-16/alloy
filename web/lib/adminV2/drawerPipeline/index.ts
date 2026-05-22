@@ -32,6 +32,7 @@ export {
     drawerAboveFoldLayoutLocked,
     drawerBelowFoldEnrichmentReady,
     drawerFullBoundValuesReady,
+    drawerOperationalStripReady,
     drawerLayoutFirstPaintGatesActive,
 } from "@/lib/adminV2/drawerPipeline/layoutLock";
 

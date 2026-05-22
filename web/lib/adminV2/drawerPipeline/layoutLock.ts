@@ -29,3 +29,17 @@ export function drawerFullBoundValuesReady(
         !enrichment.enrichment_held_until_interaction
     );
 }
+
+/**
+ * Inquiry-summary BOS orchestrator handoff (`OpportunityOperationalCompactStrip`).
+ * Visible on `drawer_primary` contract — not only after `surface=full`.
+ */
+export function drawerOperationalStripReady(
+    task_assist_enabled: boolean,
+    below_fold_enrichment_ready: boolean,
+    enrichment: DrawerEnrichmentState
+): boolean {
+    if (!task_assist_enabled) return false;
+    if (drawerFullBoundValuesReady(below_fold_enrichment_ready, enrichment)) return true;
+    return enrichment.primary_loaded;
+}

@@ -3,6 +3,7 @@ export type DeptBootstrapPerfPhases = {
     dept_fetch_ms?: number;
     work_units_fetch_ms?: number;
     shared_bootstrap_ms?: number;
+    shared_bootstrap_reused?: boolean;
     queue_summaries_ms?: number;
     attention_ms?: number;
     /** `work_unit_needs_attention_lane` vs `department_attention_preview` — explains missing subtimings. */
@@ -33,15 +34,21 @@ export function logDeptOperationalBootstrapPerf(params: {
     routeGateMs?: number;
     prepMs?: number;
     loaderMs?: number;
+    payloadBytes?: number;
     phases?: DeptBootstrapPerfPhases;
 }): void {
     if (params.totalMs < 250 && (params.loaderMs ?? params.totalMs) < 250) return;
+    const payloadKb =
+        typeof params.payloadBytes === "number"
+            ? Math.round((params.payloadBytes / 1024) * 10) / 10
+            : undefined;
     console.warn("[dept-bootstrap-perf]", {
         department_id: params.departmentId,
         total_ms: params.totalMs,
         route_gate_ms: params.routeGateMs,
         route_prep_ms: params.prepMs,
         loader_ms: params.loaderMs,
+        payload_kb: payloadKb,
         ...params.phases,
     });
 }

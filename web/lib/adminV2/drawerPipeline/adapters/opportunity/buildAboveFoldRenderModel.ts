@@ -2,7 +2,10 @@ import { opportunityInquirySummaryRightPanelFromPrimaryOnly } from "@/lib/admin/
 import { opportunityInquiryTourDisplayFromPrimaryMetadata } from "@/lib/admin/drawer/opportunityDrawerFirstPaintContract";
 import { parseInquirySummaryTaskPreview } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
 import { drawerRelationshipsFullHydrateFailed } from "@/lib/adminV2/drawerPipeline/enrichmentState";
-import { drawerFullBoundValuesReady } from "@/lib/adminV2/drawerPipeline/layoutLock";
+import {
+    drawerFullBoundValuesReady,
+    drawerOperationalStripReady,
+} from "@/lib/adminV2/drawerPipeline/layoutLock";
 import { overviewSectionsFromAboveFoldModel } from "@/lib/adminV2/drawerPipeline/overviewSections";
 import {
     buildSectionRenderModels,
@@ -125,7 +128,11 @@ export function buildOpportunityAboveFoldRenderModel(
                 open_count: task_preview?.open_count ?? 0,
                 open_tasks: task_preview?.open_tasks ?? [],
                 show_reminders_placeholder: !full_bound,
-                show_operational_strip: full_bound && input.task_assist_enabled,
+                show_operational_strip: drawerOperationalStripReady(
+                    input.task_assist_enabled,
+                    input.below_fold_enrichment_ready,
+                    input.enrichment
+                ),
             },
         },
     };

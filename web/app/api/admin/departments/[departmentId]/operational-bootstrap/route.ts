@@ -8,7 +8,11 @@ import {
 } from "@/lib/admin/resolveQueueRecordScopeConstraints";
 import { fetchEffectiveUserDisplayTimezone } from "@/lib/admin/timezoneContract";
 import { loadDepartmentKpiPlacementsServer } from "@/lib/kpi/loadDepartmentKpiPlacementsServer";
-import { QueueServiceError, type QueueSummaryRequestMode } from "@/lib/queues/QueueService";
+import {
+    buildQueueSummariesSharedBootstrap,
+    QueueServiceError,
+    type QueueSummaryRequestMode,
+} from "@/lib/queues/QueueService";
 import { loadDeptOperationalBootstrap } from "@/lib/workspace/loadDeptOperationalBootstrap";
 import { logDeptOperationalBootstrapPerf } from "@/lib/workspace/deptOperationalBootstrapPerf";
 import { loadRightRailActionsBundleServer } from "@/lib/workspace/loadRightRailActionsBundleServer";
@@ -79,13 +83,14 @@ export async function GET(request: NextRequest, context: { params: Promise<{ dep
     const tPrep0 = Date.now();
     try {
         const workspaceSiteId = parseWorkspaceSiteIdFromSearchParams(request.nextUrl.searchParams);
-        const [rowOrg, scopeBundle, viewerDisplayTimeZone] = await Promise.all([
+        const [rowOrg, scopeBundle, viewerDisplayTimeZone, sharedBootstrap] = await Promise.all([
             assertRowOrg(supabase, "departments", departmentId, gate.orgId),
             resolveQueueRecordScopeConstraints(supabase, gate.orgId, gate.dim, workspaceSiteId),
             fetchEffectiveUserDisplayTimezone(supabase, {
                 orgId: gate.orgId,
                 userId: gate.userId,
             }),
+            buildQueueSummariesSharedBootstrap(gate.orgId),
         ]);
         const routePrepMs = Date.now() - tPrep0;
         if (!rowOrg.ok) {
@@ -105,6 +110,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ dep
             recordScopeImpossible,
             recordScopeConstraints,
             viewerDisplayTimeZone,
+            sharedBootstrap,
             attentionWorkUnitIdParam,
             summaries: {
                 limit: parseLimit(request.nextUrl.searchParams),
@@ -158,12 +164,22 @@ export async function GET(request: NextRequest, context: { params: Promise<{ dep
         const { payload, phases } = bootstrapResult;
         const totalMs = Date.now() - routeT0;
 
+        const responseBody = {
+            ...payload,
+            kpi_placements: {
+                items: kpiResult.items,
+                scope_has_placements: kpiResult.scope_has_placements,
+            },
+            right_rail_actions: actionsResult.actions,
+        };
+
         logDeptOperationalBootstrapPerf({
             departmentId,
             totalMs,
             routeGateMs,
             prepMs: routePrepMs,
             loaderMs,
+            payloadBytes: Buffer.byteLength(JSON.stringify(responseBody), "utf8"),
             phases: {
                 ...phases,
                 kpi_placements_ms: kpiResult.ms,
@@ -172,14 +188,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ dep
             },
         });
 
-        return NextResponse.json({
-            ...payload,
-            kpi_placements: {
-                items: kpiResult.items,
-                scope_has_placements: kpiResult.scope_has_placements,
-            },
-            right_rail_actions: actionsResult.actions,
-        });
+        return NextResponse.json(responseBody);
     } catch (e) {
         if (e instanceof QueueServiceError) {
             return NextResponse.json({ error: e.message, code: e.code }, { status: e.status });

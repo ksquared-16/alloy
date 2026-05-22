@@ -50,15 +50,17 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const tPrep0 = Date.now();
     try {
         const workspaceSiteId = parseWorkspaceSiteIdFromSearchParams(request.nextUrl.searchParams);
-        const [wuOrg, scopeBundle, viewerDisplayTimeZone] = await Promise.all([
+        const [wuOrg, scopeBundle, viewerDisplayTimeZone, sharedBootstrapFromPrep] = await Promise.all([
             assertRowOrg(supabase, "work_units", workUnitId, gate.orgId),
             resolveQueueRecordScopeConstraints(supabase, gate.orgId, gate.dim, workspaceSiteId),
             fetchEffectiveUserDisplayTimezone(supabase, {
                 orgId: gate.orgId,
                 userId: gate.userId,
             }),
+            buildQueueSummariesSharedBootstrap(gate.orgId),
         ]);
         const routePrepMs = Date.now() - tPrep0;
+        const sharedBootstrapPrepMs = routePrepMs;
         if (!wuOrg.ok) {
             return NextResponse.json({ error: "Not found" }, { status: 404 });
         }
@@ -69,17 +71,15 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         const primaryRowLimit = parsePrimaryRowLimit(request.nextUrl.searchParams);
         const omitTotalCount = request.nextUrl.searchParams.get("omit_total_count") === "true";
 
+        const deferBundle = request.nextUrl.searchParams.get("defer_bundle") === "true";
+
         const tLoader0 = Date.now();
-        const tShared0 = Date.now();
-        const sharedBootstrap = await buildQueueSummariesSharedBootstrap(gate.orgId);
-        const sharedBootstrapMs = Date.now() - tShared0;
+        const sharedBootstrap = sharedBootstrapFromPrep;
 
         const attentionResolverPasses = { count: 0 };
         const phases: import("@/lib/workspace/workUnitOperationalBootstrapPerf").WorkUnitBootstrapPerfPhases = {
-            shared_bootstrap_ms: sharedBootstrapMs,
+            shared_bootstrap_ms: sharedBootstrapPrepMs,
         };
-
-        const deferBundle = request.nextUrl.searchParams.get("defer_bundle") === "true";
 
         const bootstrapP = loadWorkUnitOperationalBootstrap({
             ctx: {
@@ -154,6 +154,43 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         const blockingLoaderMs = loaderMs;
         const totalMs = Date.now() - routeT0;
 
+        const responseBody = {
+            ...payload,
+            ...(deferBundle
+                ? {}
+                : {
+                      kpi_placements: {
+                          items: kpiResult.items,
+                          scope_has_placements: kpiResult.scope_has_placements,
+                      },
+                      right_rail_actions: actionsResult.actions,
+                  }),
+            runtime: deferBundle
+                ? {
+                      generated_at: new Date().toISOString(),
+                      source: "authoritative_work_unit_bootstrap",
+                      bootstrap_total_ms: totalMs,
+                      defer_bundle: true as const,
+                      deferred: ["primary_lane_rows", "kpi_placements", "right_rail_actions"],
+                  }
+                : {
+                      generated_at: new Date().toISOString(),
+                      source: "authoritative_work_unit_bootstrap",
+                      bootstrap_total_ms: totalMs,
+                      defer_bundle: false as const,
+                      deferred: [
+                          "workflow_kpis",
+                          "queue_row_actions",
+                          "adjacent_lane_prefetch",
+                          "sidebar_tree",
+                          "entity_labels_refresh",
+                          "ai_capabilities",
+                          "operational_tasks",
+                          "unread_count",
+                      ],
+                  },
+        };
+
         logWorkUnitOperationalBootstrapPerf({
             workUnitId,
             departmentId,
@@ -161,6 +198,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             routeGateMs,
             prepMs: routePrepMs,
             loaderMs,
+            payloadBytes: Buffer.byteLength(JSON.stringify(responseBody), "utf8"),
+            deferBundle,
             phases: {
                 ...loaderPhases,
                 blocking_loader_ms: blockingLoaderMs,
@@ -172,31 +211,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             },
         });
 
-        return NextResponse.json({
-            ...payload,
-            kpi_placements: {
-                items: kpiResult.items,
-                scope_has_placements: kpiResult.scope_has_placements,
-            },
-            right_rail_actions: actionsResult.actions,
-            runtime: {
-                generated_at: new Date().toISOString(),
-                source: "authoritative_work_unit_bootstrap",
-                bootstrap_total_ms: totalMs,
-                defer_bundle: deferBundle,
-                deferred: [
-                    ...(deferBundle ? (["primary_lane_rows"] as const) : []),
-                    "workflow_kpis",
-                    "queue_row_actions",
-                    "adjacent_lane_prefetch",
-                    "sidebar_tree",
-                    "entity_labels_refresh",
-                    "ai_capabilities",
-                    "operational_tasks",
-                    "unread_count",
-                ],
-            },
-        });
+        return NextResponse.json(responseBody);
     } catch (e) {
         if (e instanceof QueueServiceError) {
             return NextResponse.json({ error: e.message, code: e.code }, { status: e.status });

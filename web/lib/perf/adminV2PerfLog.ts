@@ -121,6 +121,39 @@ export function perfDrawerFullHydrate(args: AdminV2PerfCommon & Record<string, u
     });
 }
 
+/** Drawer primary contract timing (`surface=drawer_primary` early path). */
+export function timingOpportunityDrawerPrimary(args: {
+    opportunity_id: string;
+    org_id: string;
+    work_unit_id?: string | null;
+    department_id?: string | null;
+    total_ms: number;
+    enrich_phases_ms?: Record<string, number>;
+    server_route_ms?: number;
+    payload_bytes?: number;
+    source?: AdminV2PerfSource;
+}): void {
+    const payloadKb =
+        typeof args.payload_bytes === "number"
+            ? Math.round((args.payload_bytes / 1024) * 10) / 10
+            : undefined;
+    emitAdminV2Perf("[drawer-primary-perf]", {
+        surface: "drawer_primary",
+        route: `/api/admin/entity/opportunities/[id]?surface=drawer_primary`,
+        entity_id: args.opportunity_id,
+        opportunity_id: args.opportunity_id,
+        org_id: args.org_id,
+        work_unit_id: args.work_unit_id ?? undefined,
+        department_id: args.department_id ?? undefined,
+        total_ms: args.total_ms,
+        enrich_ms: args.total_ms,
+        enrich_phases_ms: args.enrich_phases_ms,
+        server_route_ms: args.server_route_ms,
+        payload_kb: payloadKb,
+        source: args.source ?? "network",
+    });
+}
+
 /** Drawer visible shell timing (aligned tag kept for dashboards that grep `opportunity-api-visible`) */
 export function timingOpportunityApiVisible(args: {
     opportunity_id: string;
