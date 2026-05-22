@@ -15,7 +15,9 @@ import { ConfigLayoutAssistReadyCard } from "@/app/adminV2/components/aiCommandS
 import { COMMAND_SURFACE_INTERACTIVE_CARD_CLASS } from "@/lib/adminV2/aiCommandSurface/commandSurfaceCardNavigation";
 import { WorkflowAssistProposalActionCard } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistProposalActionCard";
 import { WorkflowAssistReadThreadCard } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistReadThreadCard";
+import { BosExecutionReceiptNotice } from "@/app/adminV2/components/bos/BosExecutionReceiptNotice";
 import { BosPolicyDenialNotice } from "@/app/adminV2/components/bos/BosPolicyDenialNotice";
+import type { BosExecutionReceiptPresentation } from "@/lib/adminV2/bos/bosExecutionReceipt";
 import {
     WORKFLOW_ASSIST_AUTOMATIONS_HREF,
     WORKFLOW_ASSIST_NOTICE_TEXT,
@@ -136,6 +138,7 @@ export type CommandSurfaceThreadProps = {
     onConfirmConfigFieldSetup?: (command: string, payload: ConfigLayoutAssistFieldSetupConfirmPayload) => void;
     onApproveConfigProposal?: (proposalId: string) => void;
     configAssistCanApproveAndApply?: boolean;
+    onExecutionReceipt?: (receipt: BosExecutionReceiptPresentation) => void;
 };
 
 export default function CommandSurfaceThread({
@@ -158,6 +161,7 @@ export default function CommandSurfaceThread({
     onConfirmConfigFieldSetup,
     onApproveConfigProposal,
     configAssistCanApproveAndApply = false,
+    onExecutionReceipt,
 }: CommandSurfaceThreadProps) {
     const showSearchDebug =
         process.env.NODE_ENV === "development" &&
@@ -202,6 +206,12 @@ export default function CommandSurfaceThread({
                         return (
                             <AssistantBubble key={turn.id}>
                                 <BosPolicyDenialNotice denial={turn.denial} />
+                            </AssistantBubble>
+                        );
+                    case "execution_receipt":
+                        return (
+                            <AssistantBubble key={turn.id}>
+                                <BosExecutionReceiptNotice receipt={turn.receipt} />
                             </AssistantBubble>
                         );
                     case "workflow_assist_read":
@@ -375,6 +385,7 @@ export default function CommandSurfaceThread({
                                         createInterpreted={turn.card.createInterpreted}
                                         applyAllowed={workflowAssistMutationsAllowed}
                                         onProposeEditExisting={onWorkflowAssistProposeEdit}
+                                        onExecutionReceipt={onExecutionReceipt}
                                     />
                                 </AssistantBubble>
                             );
@@ -449,6 +460,7 @@ export default function CommandSurfaceThread({
                                                 bootstrap={bootstrap}
                                                 bootstrapKey={bootstrapKey}
                                                 mutationsBlocked={staleProposal}
+                                                onExecutionReceipt={onExecutionReceipt}
                                             />
                                         ) : null}
                                         {uiPhase === "draft" ? (
@@ -460,6 +472,7 @@ export default function CommandSurfaceThread({
                                                 bootstrapKey={bootstrapKey}
                                                 autoPropose
                                                 mutationsBlocked={staleProposal}
+                                                onExecutionReceipt={onExecutionReceipt}
                                             />
                                         ) : null}
                                         {uiPhase === "workspace" ? (

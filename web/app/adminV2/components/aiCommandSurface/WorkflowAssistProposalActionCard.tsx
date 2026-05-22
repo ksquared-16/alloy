@@ -3,12 +3,18 @@
 import { useCallback, useState } from "react";
 
 import { CommandSurfaceCardLink } from "@/app/adminV2/components/aiCommandSurface/CommandSurfaceCardLink";
+import { BosExecutionReceiptNotice } from "@/app/adminV2/components/bos/BosExecutionReceiptNotice";
 import OperationalProposalCardFrame from "@/app/adminV2/components/bos/OperationalProposalCardFrame";
+import type { BosExecutionReceiptPresentation } from "@/lib/adminV2/bos/bosExecutionReceipt";
+import {
+    buildWorkflowAssistAppliedReceipt,
+    buildWorkflowAssistFailedReceipt,
+} from "@/lib/adminV2/bos/bosExecutionReceipt";
 import { dispatchAiActivityRefresh } from "@/app/adminV2/components/aiActivity/RecentAiActionsStrip";
 import { WorkflowAssistDuplicateWarning } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistDuplicateWarning";
 import { WorkflowAssistProposalReviewPanel } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistProposalReviewPanel";
-import type { WorkflowAssistCreateTemplateIdV1 } from "@/lib/agent/workflowAssist/workflowAssistCreateFromCommandV1";
 import { WORKFLOW_ASSIST_AUTOMATIONS_HREF } from "@/lib/adminV2/aiCommandSurface/commandSurfaceRouter";
+import type { WorkflowAssistCreateTemplateIdV1 } from "@/lib/agent/workflowAssist/workflowAssistCreateFromCommandV1";
 import { dispatchWorkflowAutomationRefresh } from "@/lib/adminV2/aiCommandSurface/workflowAssistWorkspaceEvents";
 import type { WorkflowAssistCreateProposeBuildV1 } from "@/lib/agent/workflowAssist/workflowAssistCreateFromCommandV1";
 import type { WorkflowAssistSuggestionV1 } from "@/lib/agent/workflowAssist/workflowAssistProposalV1";
@@ -68,21 +74,25 @@ export function WorkflowAssistProposalActionCard({
     createInterpreted,
     applyAllowed = true,
     onProposeEditExisting,
+    onExecutionReceipt,
 }: {
     suggestion: WorkflowAssistSuggestionV1;
     createInterpreted?: WorkflowAssistCreateProposeBuildV1["interpreted"];
     applyAllowed?: boolean;
     onProposeEditExisting?: (workflowId: string) => void;
+    onExecutionReceipt?: (receipt: BosExecutionReceiptPresentation) => void;
 }) {
     const globalAssistant = useGlobalAssistantOptional();
     const [busy, setBusy] = useState(false);
     const [done, setDone] = useState<ApplyJson | null>(null);
+    const [executionReceipt, setExecutionReceipt] = useState<BosExecutionReceiptPresentation | null>(null);
     const [duplicateDismissed, setDuplicateDismissed] = useState(false);
 
     const apply = useCallback(async () => {
         if (!applyAllowed) return;
         setBusy(true);
         setDone(null);
+        setExecutionReceipt(null);
         try {
             const res = await fetch("/api/admin/ai/workflow-assist/apply", {
                 method: "POST",
@@ -97,10 +107,22 @@ export function WorkflowAssistProposalActionCard({
             });
             const j = (await res.json()) as ApplyJson;
             if (!res.ok) {
-                setDone({ ok: false, error: (j as { error?: string }).error, message: (j as { message?: string }).message });
+                const failed = { ok: false as const, error: (j as { error?: string }).error, message: (j as { message?: string }).message };
+                setDone(failed);
+                const failReceipt = buildWorkflowAssistFailedReceipt(
+                    failed.message?.trim() || failed.error || "Apply failed"
+                );
+                setExecutionReceipt(failReceipt);
+                onExecutionReceipt?.(failReceipt);
                 return;
             }
             setDone(j);
+            const receipt = buildWorkflowAssistAppliedReceipt({
+                workflowId: (j as { workflow_id?: string }).workflow_id,
+                draftOnly: Boolean(suggestion.draft_review),
+            });
+            setExecutionReceipt(receipt);
+            onExecutionReceipt?.(receipt);
             const ws = globalAssistant?.workspaceScope;
             dispatchWorkflowAutomationRefresh({
                 department_id: ws?.department_id ?? null,
@@ -108,36 +130,26 @@ export function WorkflowAssistProposalActionCard({
             });
             dispatchAiActivityRefresh();
         } catch (e) {
+            const msg = e instanceof Error ? e.message : "Apply request failed.";
             setDone({
                 ok: false,
                 error: "FETCH_FAILED",
-                message: e instanceof Error ? e.message : "Apply request failed.",
+                message: msg,
             });
+            const failReceipt = buildWorkflowAssistFailedReceipt(msg);
+            setExecutionReceipt(failReceipt);
+            onExecutionReceipt?.(failReceipt);
         } finally {
             setBusy(false);
         }
-    }, [suggestion, applyAllowed, globalAssistant?.workspaceScope]);
+    }, [suggestion, applyAllowed, globalAssistant?.workspaceScope, onExecutionReceipt]);
 
     const draftReview = suggestion.draft_review ?? null;
     const editReview = suggestion.edit_review ?? [];
     const isCreate = suggestion.proposal_kind === "create_workflow";
 
-    const applyReceipt =
-        done && !done.ok ?
-            <p data-command-surface-workflow-assist-apply-error>
-                {(done as { error?: string }).error}: {(done as { message?: string }).message ?? "Apply failed"}
-            </p>
-        : done?.ok ?
-            <p data-command-surface-workflow-assist-apply-success>
-                {draftReview ? "Draft saved." : "Applied."}{" "}
-                <CommandSurfaceCardLink
-                    href={`${WORKFLOW_ASSIST_AUTOMATIONS_HREF}?workflow=${encodeURIComponent((done as { workflow_id?: string }).workflow_id ?? "")}`}
-                    className="font-semibold underline-offset-2 hover:underline"
-                >
-                    Open in Automations
-                </CommandSurfaceCardLink>
-            </p>
-        :   null;
+    const applyReceiptEl =
+        executionReceipt ? <BosExecutionReceiptNotice receipt={executionReceipt} compact /> : null;
 
     if (draftReview) {
         const templateId = parseCreateTemplateId(suggestion);
@@ -160,9 +172,9 @@ export function WorkflowAssistProposalActionCard({
                     applyAllowed={applyAllowed}
                     applyBlockedMessage={!applyAllowed ? WORKFLOW_ASSIST_PORTAL_MUTATION_BLOCKED_USER_MESSAGE : null}
                 />
-                {applyReceipt ?
+                {applyReceiptEl ?
                     <div className="text-[11px]" style={{ color: done?.ok ? undefined : semantic.warning }}>
-                        {applyReceipt}
+                        {applyReceiptEl}
                     </div>
                 :   null}
             </div>
@@ -215,7 +227,7 @@ export function WorkflowAssistProposalActionCard({
                         </CommandSurfaceCardLink>
                     </div>
                 }
-                receipt={applyReceipt}
+                receipt={applyReceiptEl}
                 className={COMMAND_SURFACE_INTERACTIVE_CARD_CLASS}
             >
                 {isCreate && createInterpreted ?

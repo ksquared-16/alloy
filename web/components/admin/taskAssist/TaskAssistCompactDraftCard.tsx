@@ -31,7 +31,15 @@ import {
     minDatetimeLocalValue,
 } from "@/components/admin/taskAssist/TaskAssistOpportunityWorkspace";
 import OperationalProposalCardFrame from "@/app/adminV2/components/bos/OperationalProposalCardFrame";
+import { BosExecutionReceiptFrameReceipt } from "@/app/adminV2/components/bos/BosExecutionReceiptNotice";
 import { STALE_OPERATIONAL_PROPOSAL_MESSAGE } from "@/lib/adminV2/bos/activeOperationalContext";
+import type { BosExecutionReceiptPresentation } from "@/lib/adminV2/bos/bosExecutionReceipt";
+import {
+    buildTaskAssistDraftSavedReceipt,
+    buildTaskAssistFailedReceipt,
+    buildTaskAssistScheduledReceipt,
+    buildTaskAssistSentReceipt,
+} from "@/lib/adminV2/bos/bosExecutionReceipt";
 import {
     TASK_ASSIST_PROPOSAL_SOURCE_LABEL,
     taskAssistDraftMutationBoundaryCopy,
@@ -52,6 +60,7 @@ export type TaskAssistCompactDraftCardProps = {
     onSchedulePrompt?: () => void;
     /** Block send/schedule when command surface active record differs from this card. */
     mutationsBlocked?: boolean;
+    onExecutionReceipt?: (receipt: BosExecutionReceiptPresentation) => void;
 };
 
 const LABEL = "block text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/55";
@@ -67,6 +76,7 @@ export default function TaskAssistCompactDraftCard({
     autoPropose = true,
     onSchedulePrompt,
     mutationsBlocked = false,
+    onExecutionReceipt,
 }: TaskAssistCompactDraftCardProps) {
     const v11 = isTaskAssistV1UiEnabled();
     const proposedRef = useRef<string | null>(null);
@@ -88,7 +98,7 @@ export default function TaskAssistCompactDraftCard({
     const [scheduledForLocal, setScheduledForLocal] = useState("");
     const [scheduleTimingText, setScheduleTimingText] = useState("");
     const [error, setError] = useState<string | null>(null);
-    const [success, setSuccess] = useState<string | null>(null);
+    const [executionReceipt, setExecutionReceipt] = useState<BosExecutionReceiptPresentation | null>(null);
     const [scheduleNeedsExplicitTime, setScheduleNeedsExplicitTime] = useState(false);
 
     const isScheduleIntent = bootstrap.intent_type === "schedule_message";
@@ -101,7 +111,7 @@ export default function TaskAssistCompactDraftCard({
         }
         setProposeLoading(true);
         setError(null);
-        setSuccess(null);
+        setExecutionReceipt(null);
         setProposal(null);
         setProposalValid(false);
         setSelectedPersonId(null);
@@ -222,7 +232,7 @@ export default function TaskAssistCompactDraftCard({
         if (!proposal || !selectedPersonId || sendDisabled) return;
         setApplyLoading(true);
         setError(null);
-        setSuccess(null);
+        setExecutionReceipt(null);
         try {
             const body = buildTaskAssistApplyRequestBody({
                 proposal,
@@ -246,14 +256,20 @@ export default function TaskAssistCompactDraftCard({
             if (!res.ok || !json.ok || !json.send?.communication_message_id) {
                 throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
             }
-            setSuccess("Message sent.");
+            const receipt = buildTaskAssistSentReceipt(entityLabel);
+            setExecutionReceipt(receipt);
+            onExecutionReceipt?.(receipt);
             setPhase("success");
         } catch (e: unknown) {
-            setError(formatTaskAssistClientError((e as Error).message));
+            const msg = formatTaskAssistClientError((e as Error).message);
+            setError(msg);
+            const failReceipt = buildTaskAssistFailedReceipt(entityLabel, msg);
+            setExecutionReceipt(failReceipt);
+            onExecutionReceipt?.(failReceipt);
         } finally {
             setApplyLoading(false);
         }
-    }, [proposal, selectedPersonId, sendDisabled, finalBody, finalSubject, channel]);
+    }, [proposal, selectedPersonId, sendDisabled, finalBody, finalSubject, channel, entityLabel, onExecutionReceipt]);
 
     const onSaveDraft = useCallback(async () => {
         if (!proposal || !proposalValid || !v11) return;
@@ -265,9 +281,13 @@ export default function TaskAssistCompactDraftCard({
             if (!res.ok || !json.ok) {
                 throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
             }
-            setSuccess("Draft saved.");
+            const receipt = buildTaskAssistDraftSavedReceipt(entityLabel);
+            setExecutionReceipt(receipt);
+            onExecutionReceipt?.(receipt);
         } catch (e: unknown) {
-            setError(formatTaskAssistClientError((e as Error).message));
+            const msg = formatTaskAssistClientError((e as Error).message);
+            setError(msg);
+            onExecutionReceipt?.(buildTaskAssistFailedReceipt(entityLabel, msg));
         } finally {
             setSaveDraftLoading(false);
         }
@@ -317,7 +337,12 @@ export default function TaskAssistCompactDraftCard({
             if (!res.ok || !json.ok) {
                 throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
             }
-            setSuccess("Message scheduled.");
+            const receipt = buildTaskAssistScheduledReceipt(
+                entityLabel,
+                scheduledForLocal ? new Date(scheduledForLocal).toLocaleString() : null
+            );
+            setExecutionReceipt(receipt);
+            onExecutionReceipt?.(receipt);
             if (typeof window !== "undefined") {
                 window.dispatchEvent(
                     new CustomEvent(ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH, {
@@ -327,11 +352,15 @@ export default function TaskAssistCompactDraftCard({
             }
             setPhase("success");
         } catch (e: unknown) {
-            setError(formatTaskAssistClientError((e as Error).message));
+            const msg = formatTaskAssistClientError((e as Error).message);
+            setError(msg);
+            const failReceipt = buildTaskAssistFailedReceipt(entityLabel, msg);
+            setExecutionReceipt(failReceipt);
+            onExecutionReceipt?.(failReceipt);
         } finally {
             setScheduleSubmitLoading(false);
         }
-    }, [v11, scheduleDisabled, selectedPersonId, entityId, channel, finalBody, finalSubject, scheduledForLocal]);
+    }, [v11, scheduleDisabled, selectedPersonId, entityId, channel, finalBody, finalSubject, scheduledForLocal, entityLabel, onExecutionReceipt]);
 
     const mergedPreviewErrors = useMemo(() => {
         if (!proposal || !selectedPersonId) return [] as string[];
@@ -443,7 +472,7 @@ export default function TaskAssistCompactDraftCard({
                     {...frameCommon}
                     status="applied"
                     presentationVariant="applied"
-                    receipt={success ? <p>{success}</p> : null}
+                    receipt={executionReceipt ? <BosExecutionReceiptFrameReceipt receipt={executionReceipt} /> : null}
                 />
             </div>
         );
@@ -526,7 +555,7 @@ export default function TaskAssistCompactDraftCard({
                 }
                 validationWarnings={scheduleWarnings}
                 footer={actionFooter}
-                receipt={success ? <p className="text-emerald-800/90">{success}</p> : null}
+                receipt={executionReceipt ? <BosExecutionReceiptFrameReceipt receipt={executionReceipt} /> : null}
             >
             {isScheduleIntent && finalBody.trim() ? (
                 <div

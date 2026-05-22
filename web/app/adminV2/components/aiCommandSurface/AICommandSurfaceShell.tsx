@@ -109,6 +109,16 @@ import {
   shouldAppendCommandSurfaceRoutingNotice,
 } from "@/lib/adminV2/aiCommandSurface/commandSurfaceRoutingCopy";
 import { resolveBosPolicyDenial } from "@/lib/adminV2/bos/bosGovernanceCopy";
+import type { BosExecutionReceiptPresentation } from "@/lib/adminV2/bos/bosExecutionReceipt";
+import {
+  buildJobLayoutAppliedReceipt,
+  buildJobLayoutFailedReceipt,
+  configApplyOutcomeToExecutionReceipt,
+} from "@/lib/adminV2/bos/bosExecutionReceipt";
+import {
+  buildConfigAssistApplyOutcomeFromApi,
+  type ConfigAssistApplyApiPayload,
+} from "@/lib/agent/configLayoutAssist/configLayoutAssistApplyPresentation";
 import {
   appendThreadTurn,
   createEmptyThreadState,
@@ -191,6 +201,7 @@ function lastThreadPreviewText(turns: CommandSurfaceThreadTurn[]): string | null
     if (turn.kind === "error") return turn.text.trim() || null;
     if (turn.kind === "workflow_notice") return "Workflow Assist";
     if (turn.kind === "policy_denial") return turn.denial.headline;
+    if (turn.kind === "execution_receipt") return turn.receipt.headline;
     if (turn.kind === "workflow_assist_read") return "Workflow assist";
     if (turn.kind === "candidate_results") return turn.candidates[0]?.label?.trim() || null;
     if (turn.kind === "target_confirmed") return turn.candidate.label?.trim() || null;
@@ -610,6 +621,13 @@ export default function AICommandSurfaceShell() {
 
   const thread = globalAssistant?.commandSurfaceThread ?? localThread;
   const setThread = globalAssistant?.setCommandSurfaceThread ?? setLocalThread;
+
+  const appendExecutionReceipt = useCallback(
+    (receipt: BosExecutionReceiptPresentation) => {
+      setThread((prev) => appendThreadTurn(prev, { kind: "execution_receipt", receipt }));
+    },
+    [setThread]
+  );
   const jobCardUi = globalAssistant?.commandSurfaceJobCardUi ?? localJobCardUi;
   const setJobCardUi = globalAssistant?.setCommandSurfaceJobCardUi ?? setLocalJobCardUi;
   const threadExpanded = globalAssistant?.commandSurfaceThreadExpanded ?? localThreadExpanded;
@@ -1410,6 +1428,17 @@ export default function AICommandSurfaceShell() {
 
   const approveAndApplyConfigProposal = useCallback(
     async (proposalId: string) => {
+      const readyTurn = thread.turns.find(
+        (t) =>
+          t.kind === "action_card" &&
+          t.card.type === "config_layout_assist_ready" &&
+          t.card.persistedProposalId === proposalId
+      );
+      const proposal =
+        readyTurn?.kind === "action_card" && readyTurn.card.type === "config_layout_assist_ready" ?
+          readyTurn.card.proposal
+        : null;
+
       setBusy(true);
       try {
         const transition = async (to_state: string) => {
@@ -1433,28 +1462,56 @@ export default function AICommandSurfaceShell() {
           `/api/admin/config-layout-assist/proposals/${encodeURIComponent(proposalId)}/apply`,
           { method: "POST", credentials: "include", headers: { Accept: "application/json" } }
         );
-        const applyJ = (await applyRes.json()) as { ok?: boolean; message?: string; error?: string };
-        if (!applyRes.ok || !applyJ.ok) {
+        const applyJ = (await applyRes.json()) as ConfigAssistApplyApiPayload;
+        if (proposal) {
+          const outcome = buildConfigAssistApplyOutcomeFromApi(proposal, applyJ);
+          const receipt = configApplyOutcomeToExecutionReceipt(outcome);
+          setThread((prev) => appendThreadTurn(prev, { kind: "execution_receipt", receipt }));
+          if (!applyRes.ok || !applyJ.ok) {
+            return;
+          }
+        } else if (!applyRes.ok || !applyJ.ok) {
           throw new Error(applyJ.message ?? applyJ.error ?? "Apply failed");
+        } else {
+          setThread((prev) =>
+            appendThreadTurn(prev, {
+              kind: "execution_receipt",
+              receipt: configApplyOutcomeToExecutionReceipt({
+                headline: "Applied",
+                summary: "Configuration apply completed.",
+                rows: [],
+                partialFailure: false,
+                showLayoutIntegrityLink: false,
+              }),
+            })
+          );
         }
-        setThread((prev) =>
-          appendThreadTurn(prev, {
-            kind: "assistant_notice",
-            text: "Field configuration applied successfully.",
-          })
-        );
       } catch (e) {
-        setThread((prev) =>
-          appendThreadTurn(prev, {
-            kind: "error",
-            text: e instanceof Error ? e.message : "Approve and apply failed.",
-          })
-        );
+        const msg = e instanceof Error ? e.message : "Approve and apply failed.";
+        if (proposal) {
+          const outcome = buildConfigAssistApplyOutcomeFromApi(proposal, {
+            ok: false,
+            message: msg,
+          });
+          setThread((prev) =>
+            appendThreadTurn(prev, {
+              kind: "execution_receipt",
+              receipt: configApplyOutcomeToExecutionReceipt(outcome),
+            })
+          );
+        } else {
+          setThread((prev) =>
+            appendThreadTurn(prev, {
+              kind: "error",
+              text: msg,
+            })
+          );
+        }
       } finally {
         setBusy(false);
       }
     },
-    [setThread]
+    [setThread, thread.turns]
   );
 
   const proposeWorkflowAssistBody = useCallback(
@@ -1798,8 +1855,8 @@ export default function AICommandSurfaceShell() {
         if (!res.ok) {
           setThread((prev) =>
             appendThreadTurn(prev, {
-              kind: "error",
-              text: `Apply failed (HTTP ${res.status}).`,
+              kind: "execution_receipt",
+              receipt: buildJobLayoutFailedReceipt(`Apply failed (HTTP ${res.status}).`),
             })
           );
           return;
@@ -1810,7 +1867,7 @@ export default function AICommandSurfaceShell() {
             kind: "action_card",
             card: {
               ...card,
-              headline: "Changes applied",
+              headline: "Applied",
               subline: "Job overview layout saved.",
               confidence: "applied",
               responseKind: "applied_success",
@@ -1819,15 +1876,16 @@ export default function AICommandSurfaceShell() {
         );
         setThread((prev) =>
           appendThreadTurn(prev, {
-            kind: "assistant_notice",
-            text: "Job overview layout saved.",
+            kind: "execution_receipt",
+            receipt: buildJobLayoutAppliedReceipt(),
           })
         );
       } catch (e) {
+        const msg = e instanceof Error ? e.message : "Apply failed.";
         setThread((prev) =>
           appendThreadTurn(prev, {
-            kind: "error",
-            text: e instanceof Error ? e.message : "Apply failed.",
+            kind: "execution_receipt",
+            receipt: buildJobLayoutFailedReceipt(msg),
           })
         );
       } finally {
@@ -2029,6 +2087,7 @@ export default function AICommandSurfaceShell() {
                   (configLayoutAssistCaps?.can_review ?? false) &&
                   (configLayoutAssistCaps?.can_apply ?? false)
                 }
+                onExecutionReceipt={appendExecutionReceipt}
               />
             </div>
           ) : null}

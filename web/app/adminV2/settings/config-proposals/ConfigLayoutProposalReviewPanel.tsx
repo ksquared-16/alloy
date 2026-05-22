@@ -11,6 +11,9 @@ import {
 import type { ProposalReviewPresentation } from "@/lib/agent/configLayoutAssist/configLayoutAssistProposalPresentation";
 import type { ProposalStatePresentation } from "@/lib/agent/configLayoutAssist/configLayoutAssistProposalPresentation";
 import { operationKindLabel } from "@/lib/agent/configLayoutAssist/configLayoutAssistProposalPresentation";
+import type { ConfigAssistApplyOutcomePresentation } from "@/lib/agent/configLayoutAssist/configLayoutAssistApplyPresentation";
+import { ConfigLayoutAssistApplyOutcomeList } from "@/app/adminV2/components/bos/ConfigLayoutAssistApplyOutcomeList";
+import { CONFIG_ASSIST_APPLY_PERMISSION_COPY } from "@/lib/adminV2/bos/bosGovernanceCopy";
 
 type LifecycleAction = {
     label: string;
@@ -28,6 +31,7 @@ export function ConfigLayoutProposalReviewPanel({
     showApplyPermissionHint,
     showRecommendationApprovedHint,
     lifecycleState,
+    applyOutcome = null,
 }: {
     presentation: ProposalReviewPresentation;
     statePresentation: ProposalStatePresentation;
@@ -38,6 +42,7 @@ export function ConfigLayoutProposalReviewPanel({
     showApplyPermissionHint?: boolean;
     showRecommendationApprovedHint?: boolean;
     lifecycleState: string;
+    applyOutcome?: ConfigAssistApplyOutcomePresentation | null;
 }) {
     const bosStatus = mapConfigLifecycleToBosStatus(lifecycleState);
     const frameVariant = mapConfigLifecycleToFrameVariant(statePresentation, lifecycleState);
@@ -47,16 +52,18 @@ export function ConfigLayoutProposalReviewPanel({
 
     const policyLines: string[] = [];
     if (showApplyPermissionHint) {
-        policyLines.push("Approve and apply require the configuration apply permission for your role.");
+        policyLines.push(CONFIG_ASSIST_APPLY_PERMISSION_COPY);
     }
     if (showRecommendationApprovedHint) {
         policyLines.push("This proposal is recommendation-only; there are no configuration mutations to apply.");
     }
 
     const receipt =
-        message || failedReason ?
+        applyOutcome ?
+            <ConfigLayoutAssistApplyOutcomeList outcome={applyOutcome} />
+        : message || failedReason ?
             <div className="space-y-1 text-xs">
-                {message ? <p className="text-alloy-midnight/70">{message}</p> : null}
+                {message && !applyOutcome ? <p className="text-alloy-midnight/70">{message}</p> : null}
                 {failedReason ? <p className="text-red-700">Failed: {failedReason}</p> : null}
             </div>
         :   null;

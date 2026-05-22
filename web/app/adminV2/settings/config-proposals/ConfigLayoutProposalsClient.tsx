@@ -14,6 +14,13 @@ import {
 } from "@/lib/agent/configLayoutAssist/configLayoutAssistProposalPresentation";
 import { readConfigProposalIdFromSearchParams } from "@/lib/agent/configLayoutAssist/configLayoutAssistReviewNavigation";
 
+import type { ConfigAssistApplyOutcomePresentation } from "@/lib/agent/configLayoutAssist/configLayoutAssistApplyPresentation";
+import {
+    buildConfigAssistApplyOutcomeFromApi,
+    type ConfigAssistApplyApiPayload,
+} from "@/lib/agent/configLayoutAssist/configLayoutAssistApplyPresentation";
+import { ConfigLayoutAssistApplyOutcomeList } from "@/app/adminV2/components/bos/ConfigLayoutAssistApplyOutcomeList";
+
 import { ConfigLayoutProposalReviewPanel } from "./ConfigLayoutProposalReviewPanel";
 
 type ProposalListItem = {
@@ -43,6 +50,7 @@ export default function ConfigLayoutProposalsClient({ initialId }: { initialId?:
     const [caps, setCaps] = useState<ConfigLayoutAssistCapabilitiesV1 | null>(null);
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
+    const [applyOutcome, setApplyOutcome] = useState<ConfigAssistApplyOutcomePresentation | null>(null);
 
     const presentationCtx = useMemo(() => ({ entityLabels }), [entityLabels]);
 
@@ -85,6 +93,8 @@ export default function ConfigLayoutProposalsClient({ initialId }: { initialId?:
     useEffect(() => {
         if (selectedId) void loadDetail(selectedId);
         else setDetail(null);
+        setApplyOutcome(null);
+        setMessage(null);
     }, [selectedId, loadDetail]);
 
     const transition = useCallback(
@@ -117,29 +127,35 @@ export default function ConfigLayoutProposalsClient({ initialId }: { initialId?:
         [selectedId, loadList, loadDetail]
     );
 
+    const proposal = detail?.proposal_json;
+
     const applyApproved = useCallback(async () => {
         if (!selectedId) return;
         setBusy(true);
         setMessage(null);
+        setApplyOutcome(null);
         try {
             const res = await fetch(
                 `/api/admin/config-layout-assist/proposals/${encodeURIComponent(selectedId)}/apply`,
                 { method: "POST", credentials: "include", headers: { Accept: "application/json" } }
             );
-            const j = (await res.json()) as { ok?: boolean; message?: string; error?: string };
-            if (!res.ok || !j.ok) {
+            const j = (await res.json()) as ConfigAssistApplyApiPayload;
+            const proposalJson = detail?.proposal_json;
+            if (proposalJson) {
+                const outcome = buildConfigAssistApplyOutcomeFromApi(proposalJson, j);
+                setApplyOutcome(outcome);
+                setMessage(outcome.summary);
+            } else if (!res.ok || !j.ok) {
                 setMessage(j.message ?? j.error ?? `Apply failed (${res.status})`);
             } else {
-                setMessage("Apply completed with verification.");
+                setMessage("Configuration apply completed.");
             }
             await loadList();
             await loadDetail(selectedId);
         } finally {
             setBusy(false);
         }
-    }, [selectedId, loadList, loadDetail]);
-
-    const proposal = detail?.proposal_json;
+    }, [selectedId, loadList, loadDetail, detail?.proposal_json]);
     const canReview = caps?.can_review ?? false;
     const canApply = caps?.can_apply ?? false;
 
@@ -251,6 +267,7 @@ export default function ConfigLayoutProposalsClient({ initialId }: { initialId?:
                         showRecommendationApprovedHint={
                             detail.apply_mode === "recommendation_only" && detail.state === "approved"
                         }
+                        applyOutcome={applyOutcome}
                     />
                 )}
             </section>

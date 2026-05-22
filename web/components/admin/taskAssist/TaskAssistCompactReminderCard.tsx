@@ -18,9 +18,16 @@ import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGa
 import { computeReminderSubmitDisabled, minDatetimeLocalValue } from "@/components/admin/taskAssist/TaskAssistOpportunityWorkspace";
 import OperationalProposalCardFrame from "@/app/adminV2/components/bos/OperationalProposalCardFrame";
 import { STALE_OPERATIONAL_PROPOSAL_MESSAGE } from "@/lib/adminV2/bos/activeOperationalContext";
+import { BosExecutionReceiptFrameReceipt } from "@/app/adminV2/components/bos/BosExecutionReceiptNotice";
+import type { BosExecutionReceiptPresentation } from "@/lib/adminV2/bos/bosExecutionReceipt";
+import {
+    buildTaskAssistFailedReceipt,
+    buildTaskAssistReminderCreatedReceipt,
+} from "@/lib/adminV2/bos/bosExecutionReceipt";
 import {
     TASK_ASSIST_PROPOSAL_SOURCE_LABEL,
     TASK_ASSIST_REMINDER_PROPOSAL_TYPE_LABEL,
+    taskAssistReminderMutationBoundaryCopy,
     taskAssistReminderProposalTitle,
 } from "@/lib/adminV2/bos/taskAssistOperationalProposalPresentation";
 import { COMMAND_SURFACE_INTERACTIVE_CARD_CLASS } from "@/lib/adminV2/aiCommandSurface/commandSurfaceCardNavigation";
@@ -34,6 +41,7 @@ export type TaskAssistCompactReminderCardProps = {
     bootstrap: TaskAssistCommandBootstrap;
     bootstrapKey: string;
     mutationsBlocked?: boolean;
+    onExecutionReceipt?: (receipt: BosExecutionReceiptPresentation) => void;
 };
 
 export default function TaskAssistCompactReminderCard({
@@ -43,6 +51,7 @@ export default function TaskAssistCompactReminderCard({
     bootstrap,
     bootstrapKey,
     mutationsBlocked = false,
+    onExecutionReceipt,
 }: TaskAssistCompactReminderCardProps) {
     const v11 = isTaskAssistV1UiEnabled();
     const adminDrawer = useAdminDrawerOptional();
@@ -52,7 +61,7 @@ export default function TaskAssistCompactReminderCard({
     const [notes, setNotes] = useState("");
     const [submitLoading, setSubmitLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [success, setSuccess] = useState<string | null>(null);
+    const [executionReceipt, setExecutionReceipt] = useState<BosExecutionReceiptPresentation | null>(null);
     const [lastCreated, setLastCreated] = useState<{ id: string; title: string; due_at: string; status: string } | null>(null);
     const [anomaly, setAnomaly] = useState<ReturnType<typeof detectOperationalAnomalies>>(null);
     const [anomalyAcknowledged, setAnomalyAcknowledged] = useState(false);
@@ -65,7 +74,7 @@ export default function TaskAssistCompactReminderCard({
         setDueLocal(due);
         setNotes("");
         setError(null);
-        setSuccess(null);
+        setExecutionReceipt(null);
         setLastCreated(null);
         setAnomaly(null);
         setAnomalyAcknowledged(false);
@@ -82,7 +91,7 @@ export default function TaskAssistCompactReminderCard({
         if (!v11 || reminderDisabled) return;
         setSubmitLoading(true);
         setError(null);
-        setSuccess(null);
+        setExecutionReceipt(null);
         try {
             const dueIso = new Date(dueLocal).toISOString();
             if (!anomalyAcknowledged) {
@@ -116,7 +125,9 @@ export default function TaskAssistCompactReminderCard({
                 message?: string | null;
             }>(res);
             if (!res.ok || !json.ok) throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
-            setSuccess("Reminder created.");
+            const receipt = buildTaskAssistReminderCreatedReceipt(entityLabel, title);
+            setExecutionReceipt(receipt);
+            onExecutionReceipt?.(receipt);
             if (json.task) {
                 setLastCreated({
                     id: String(json.task.id),
@@ -133,7 +144,11 @@ export default function TaskAssistCompactReminderCard({
                 );
             }
         } catch (e: unknown) {
-            setError(formatTaskAssistClientError((e as Error).message));
+            const msg = formatTaskAssistClientError((e as Error).message);
+            setError(msg);
+            const failReceipt = buildTaskAssistFailedReceipt(entityLabel, msg);
+            setExecutionReceipt(failReceipt);
+            onExecutionReceipt?.(failReceipt);
         } finally {
             setSubmitLoading(false);
         }
@@ -183,8 +198,8 @@ export default function TaskAssistCompactReminderCard({
                     View task
                 </button>
             </div>
-        : success ?
-            <p>{success}</p>
+        : executionReceipt ?
+            <BosExecutionReceiptFrameReceipt receipt={executionReceipt} />
         :   null;
 
     return (
@@ -203,7 +218,7 @@ export default function TaskAssistCompactReminderCard({
                 scope={entityScopeLabel}
                 sourceLabel={TASK_ASSIST_PROPOSAL_SOURCE_LABEL}
                 requiresApproval
-                mutationBoundaryCopy="Creates an operational task on the active record. Nothing is sent to families."
+                mutationBoundaryCopy={taskAssistReminderMutationBoundaryCopy()}
                 stale={mutationsBlocked}
                 blockedCopy={mutationsBlocked ? STALE_OPERATIONAL_PROPOSAL_MESSAGE : null}
                 validationErrors={error ? [error] : null}

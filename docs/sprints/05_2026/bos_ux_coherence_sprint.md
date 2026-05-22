@@ -705,7 +705,7 @@ Canonical write-up: **`forms_documents_phase_2_packet_review_mvp.md`** § Platfo
 
 ---
 
-### Card 15 — Config partial apply + integrity hint
+### Card 15 — Config partial apply + integrity hint ☑ (2026-05-20, Loop 9)
 
 **Audit:** #4, #16 (hint only V1) · **Design:** §5.4, §7.5
 
@@ -730,7 +730,7 @@ Canonical write-up: **`forms_documents_phase_2_packet_review_mvp.md`** § Platfo
 
 ---
 
-### Card 16 — Execution receipt turns (Task Assist + Workflow Assist)
+### Card 16 — Execution receipt turns (Task Assist + Workflow Assist) ☑ (2026-05-20, Loop 9)
 
 **Audit:** execution visibility · **Design:** §5.7, §8.5–8.6
 
@@ -757,7 +757,7 @@ Canonical write-up: **`forms_documents_phase_2_packet_review_mvp.md`** § Platfo
 
 ---
 
-### Card 17 — Mutation boundary copy pass (insight vs execution)
+### Card 17 — Mutation boundary copy pass (insight vs execution) ☑ (2026-05-20, Loop 9)
 
 **Audit:** enrich confusion · **Design:** §8.4
 
@@ -779,6 +779,58 @@ Canonical write-up: **`forms_documents_phase_2_packet_review_mvp.md`** § Platfo
 **Tests:**
 
 - Copy contract strings in existing drawer tests.
+
+#### Cards 15–17 implementation notes (Loop 9 — 2026-05-20)
+
+**Card 15 — partial apply visibility**
+
+- Added `configLayoutAssistApplyPresentation.ts` — maps server `apply_results` + proposal operations to rows: **Applied**, **Skipped**, **Failed**, **Needs review** (unverified).
+- `ConfigLayoutAssistApplyOutcomeList.tsx` renders per-operation lines in Settings review and receipt payloads.
+- Settings `ConfigLayoutProposalsClient` + Orchestrator `approveAndApplyConfigProposal` consume `apply_results` from existing apply API (no route changes).
+- Layout integrity: link **Check layout integrity in Settings → Layouts** when applied ops touch field/layout kinds (heuristic).
+
+**Deferred:** Server does not return richer per-op narratives beyond `apply_results` / `apply_verification`; unsupported catalog kinds (e.g. `create_section`) show as **Skipped** with catalog message, not invented success.
+
+**Card 16 — execution receipts**
+
+- Added `bosExecutionReceipt.ts`, `BosExecutionReceiptNotice.tsx`, thread turn `execution_receipt`.
+- Headlines: **Sent**, **Scheduled**, **Created**, **Saved**, **Applied**, **Partially applied**, **Failed** — past tense, no celebration copy.
+- Task/Workflow compact cards emit receipts in-frame + `onExecutionReceipt` → thread turn (no duplicate success banners).
+- Job layout + Config apply append thread receipts; failed paths use **Failed** (never “Sent”).
+
+**Card 17 — mutation boundary standards**
+
+- Centralized in `bosMutationBoundaryCopy.ts`; wired through `operationalProposalPresentation`, task/config/workflow presentation modules.
+- Drawer enhance: **Enhanced draft (preview only)** — copy only; does not send.
+- Activity strip: **Recent operational activity** (was “Recent AI actions”).
+- Task workspace hero lines: Communications path, draft-save, approval-without-send wording.
+
+**Execution receipt semantics**
+
+| Outcome | Headline | When |
+| --- | --- | --- |
+| `sent` | Sent | Task Assist message apply |
+| `scheduled` | Scheduled | Task Assist schedule |
+| `created` | Created | Reminder / operational task |
+| `saved` | Saved | Draft saved for review |
+| `applied` | Applied | Workflow / job layout / full config apply |
+| `partial` | Partially applied | Config apply with failed or unverified ops |
+| `failed` | Failed | Any apply error |
+
+**Tests run**
+
+```bash
+cd web && npm run test -- \
+  tests/adminV2/configLayoutAssistApplyPresentation.test.ts \
+  tests/adminV2/bosExecutionReceipt.test.ts \
+  tests/adminV2/bosMutationBoundaryCopy.test.ts \
+  tests/adminV2/commandSurfaceExecutionReceipt.contract.test.ts \
+  tests/adminV2/bosGovernanceCopy.test.ts \
+  tests/adminV2/operationalProposalCardFrame.test.tsx \
+  tests/adminV2/taskAssistOperationalProposalFrame.test.tsx
+```
+
+**Behaviors preserved:** Apply APIs, envelopes, RBAC, routing, and proposal state machines unchanged (presentation + thread turns only).
 
 ---
 
@@ -1223,9 +1275,9 @@ cd web && npm run test -- tests/adminV2/activeOperationalContext.test.ts \
 | 12   | ☑          | Job layout on OperationalProposalCardFrame      |
 | 13   | ☑          | Routing notices (Loop 8)                        |
 | 14   | ☑          | Policy denial + governance copy (Loop 8)        |
-| 15   | ☐          |                                                 |
-| 16   | ☐          |                                                 |
-| 17   | ☐          |                                                 |
+| 15   | ☑          | Config partial apply visibility (Loop 9)        |
+| 16   | ☑          | Execution receipt turns (Loop 9)                |
+| 17   | ☑          | Mutation boundary copy (Loop 9)                 |
 | 18   | ☐          |                                                 |
 | 19   | ☐          |                                                 |
 | 20   | ☐          |                                                 |
