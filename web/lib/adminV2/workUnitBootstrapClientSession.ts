@@ -92,9 +92,9 @@ export async function fetchWorkUnitOperationalBootstrapSession(
     if (caller === "prefetch") {
         if (completedOwnershipKey === ownershipKey || inflightOwnershipKey === ownershipKey) {
             logWuBootstrapOwner("suppressed", { ownershipKey, url, caller });
-            const response =
-                inflightPromise ??
-                (await dedupeAdminFetchWithTtl(canonicalUrlForOwnership ?? url, init, BOOTSTRAP_TTL_MS));
+            const response = inflightPromise
+                ? await inflightPromise
+                : await dedupeAdminFetchWithTtl(canonicalUrlForOwnership ?? url, init, BOOTSTRAP_TTL_MS);
             return { response, ownershipKey, bootstrapOwner: "suppressed" };
         }
         logWuBootstrapOwner("suppressed", { ownershipKey, url, caller, note: "prefetch_disabled" });
