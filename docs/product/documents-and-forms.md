@@ -68,11 +68,31 @@ Unified intake, documents, and compliance-oriented capture: web/API/email channe
 | Entity route (documents branches) | `web/app/api/admin/entity/[type]/[id]/route.ts` |
 | Document PATCH / entity options | `web/app/api/admin/documents/[id]/route.ts`, `web/app/api/admin/documents/entity-options/route.ts` |
 
+## Platform model (three intake modes)
+
+Alloy forms are one engine with three operator-facing modes — **enrollment is not a separate subsystem**:
+
+| Mode | Primary truth | Review / documents pattern |
+|------|---------------|----------------------------|
+| Standalone operational form | `form_submissions` | Submission detail + optional PDF; provenance from form version |
+| Public lead / intake | `form_submissions` + public link metadata | Intake/linkage review; same labeled-answer patterns |
+| Multi-step packet | `form_packet_sessions` + items | Packet review rollup, opportunity Documents merge, operator review PATCH |
+
+Shared building blocks: versioned definitions, public links, prefill (`web/lib/forms/prefill/**`), `launch_context` / `crm_snapshot` on packets, `form_submission_documents`, Communications for delivery.
+
+## Prefill (hydration vs truth)
+
+- **Prefill** hydrates draft `payload.values` from CRM/context when link metadata allows (`prefill_enabled`, `prefill_field_map`, `form_context_mode` existing_record or anchored packet). See **`docs/forms/existing-record-public-link-contract.md`**.
+- **Submitted values** in `form_submissions.payload` remain intake truth until explicit intake/linkage/review paths promote CRM fields.
+- **Packet `shared_values`** is a shallow cross-step scalar merge — not a full prefill store or CRM mirror.
+- Review UX should eventually distinguish **already known** (aligned with snapshot/context) vs **new or changed** (submitted differs) — Phase 2 rollup warnings are a first slice (name hints only).
+
 ## Guardrails
 
 - **Do not** treat client-side file previews as persisted documents until server confirms storage + DB row.
 - **Do not** attach documents without org scoping on parent entity.
 - **Do not** treat **`form_submissions.payload`** as automatically reflected on CRM entities without an explicit linkage/sync path.
+- **Do not** hardcode enrollment-only behavior in shared form/packet/review modules — use link metadata and generic packet/session contracts.
 
 ## Known gaps / risks
 

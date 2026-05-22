@@ -673,6 +673,36 @@ cd web && npm run test -- tests/adminV2/jobLayoutOperationalProposalFrame.test.t
 cd web && npm run test -- tests/adminV2/commandSurfaceRoutingCopy.test.ts tests/adminV2/bosGovernanceCopy.test.ts tests/adminV2/commandSurfaceRoutingShell.contract.test.ts tests/adminV2/commandSurfaceRouter.test.ts
 ```
 
+#### Platform boundary + prefill doctrine (cross-sprint — May 2026)
+
+**Not enrollment-only.** BOS UX and Forms/Documents Phase 2 share one generalized intake/review platform:
+
+1. Standalone operational forms  
+2. Public lead/intake forms  
+3. Multi-step operational packets (enrollment = proving ground, not architecture ceiling)
+
+**Reuse across verticals:** review console regions, provenance lines, artifact kinds, rollup read APIs, document linkage, submission lifecycle, `web/lib/forms/prefill/**`.
+
+**Prefill doctrine**
+
+| Layer | Rule |
+| ----- | ---- |
+| CRM / launch context | Hydrates drafts when `prefill_enabled` + field maps apply |
+| `form_submissions.payload` | Submitted answers — authoritative for review |
+| Review / approve | Governs review status + PDF backfill — **not** silent CRM mutation |
+| BOS assist | Read-only; may later summarize match/diff — **no apply** |
+
+**UX surfaces to harden (Cards 15–17 / Forms P2-5 — identification only in Loop 8)**
+
+| Surface | Operator should see |
+| ------- | ------------------- |
+| Packet/form review console | **Already known** vs **new or changed** (extend `operator_review_warnings` beyond name hints) |
+| Public embed (future) | Per-field or group “from your records” when prefilled |
+| Operational Proposal / Task Assist | Prefill seeds **instructions** only; send/apply paths stay governed |
+| BOS packet insight (Forms P2-5) | Bullets from rollup linkage/warnings; disclaimer that submitted answers are authoritative |
+
+Canonical write-up: **`forms_documents_phase_2_packet_review_mvp.md`** § Platform boundary + Prefill doctrine; **`docs/product/documents-and-forms.md`** § Platform model + Prefill.
+
 ---
 
 ### Card 15 — Config partial apply + integrity hint

@@ -1,4 +1,4 @@
-/** Frozen read model for enrollment packet operator review (contract_version: 1). */
+/** Frozen read model for multi-step packet session operator review (contract_version: 1). Enrollment is the first vertical; contracts are packet-generic. */
 
 export type OperatorReviewWarningV1 = {
     kind: string;

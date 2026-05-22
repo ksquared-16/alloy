@@ -46,6 +46,51 @@ An operator can open an opportunity with a **completed** enrollment packet, see 
 
 ## Doctrine and hard boundaries
 
+### Platform boundary — generalized intake/review (not enrollment-only)
+
+Enrollment packets are the **proving ground** for Phase 2, not the architecture ceiling. Implementation must stay reusable across:
+
+| Mode | Execution truth | Review / artifacts (Phase 2 pattern) |
+|------|-----------------|----------------------------------------|
+| **Standalone operational form** | `form_submissions` + version | Single-submission review surfaces; provenance from version + submit time |
+| **Public lead / intake form** | `form_submissions` + link metadata | Same rollup/provenance **patterns**; linkage + intake review flags |
+| **Multi-step operational packet** | `form_packet_sessions` + items + per-step submissions | `PacketReviewRollupV1`, `PacketReviewRollupView`, Documents merge |
+
+**Preserve (do not encode enrollment-only in platform layers):**
+
+- Reusable **review console** layout (context → linkage/warnings → labeled answers → artifacts → governed actions).
+- Reusable **provenance** lines and artifact kinds (`generated_pdf`, `submitted_record`, currentness heuristic).
+- Reusable **BOS read-only assist** on rollup input (P2-5+), not enrollment-specific mutation paths.
+- Reusable **document linkage** via `form_submission_documents` + synthetic submitted-record rows (P2-4).
+- Reusable **submission lifecycle** (`draft` → `submitted`, packet `in_progress` → `completed`, operator review PATCH).
+- Reusable **prefill infrastructure** under `web/lib/forms/prefill/**` and link `launch_context` / `crm_snapshot` — opportunity launch is one entry point, not the only one.
+
+**Avoid in shared modules:** vertical-specific branching in `buildPacketReviewRollupV1`, `PacketReviewRollupView`, or related-route merge unless driven by **link metadata** (`form_context_mode`, `source_entity_*`) rather than hardcoded “enrollment”.
+
+### Prefill doctrine — context hydration vs submission truth
+
+Prefill is **required product capability** and must remain visible in UX hardening:
+
+| Layer | Role |
+|-------|------|
+| **CRM / launch context** | Opportunity, person, customer, member, child, site/program hints — hydrates drafts where `prefill_enabled` and field maps allow |
+| **`form_submissions.payload`** | **Canonical submitted answers** after public/admin submit — not overwritten by CRM edits post-submit |
+| **`form_packet_sessions.shared_values`** | Shallow cross-step scalar carry-forward (today); not a substitute for full prefill or CRM truth |
+| **`form_packet_sessions.crm_snapshot`** | Frozen linkage context at session start; compare for review hints, not auto-mutation |
+| **Operator review / approve** | Governs PDF generation and review status; **does not** auto-apply arbitrary field values to CRM (intake/linkage paths remain explicit) |
+
+**UX hardening targets (current + next):**
+
+| Surface | Operator should understand |
+|---------|---------------------------|
+| **Public embed** | Which fields were **prefilled from your records** vs empty (future: per-field “From your profile” hints). |
+| **Packet / form review console** | **Already known** (matches CRM snapshot / shared context) vs **new or changed** (submitted value differs from snapshot — extend beyond name-only warnings). |
+| **Technical details (collapsed)** | `launch_context`, `crm_snapshot`, `shared_values` for engineers — not the primary trust surface. |
+| **Documents / provenance** | Artifact is **from form X · vN · submitted …** — independent of whether answers were prefilled. |
+| **BOS assist (P2-5+, read-only)** | May summarize “N fields match CRM”, “M hints differ” — **must not** imply CRM was updated or recommend silent apply. |
+
+**Deferred (explicit):** field-level DCP, auto-CRM apply from review, repeating-group `shared_values` merge — see step0 audit; does not block generalized UX patterns above.
+
 ### Canonical truth (unchanged)
 
 | Layer | Role |
