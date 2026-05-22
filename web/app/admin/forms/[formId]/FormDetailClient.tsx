@@ -29,6 +29,13 @@ import {
 import { MEDICATION_AUTHORIZATION_DEMO_FORM_KEY } from "@/lib/forms/seeds/medicationAuthorizationDemo";
 import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
 import FormSchemaWorkspace from "@/app/admin/forms/FormSchemaWorkspace";
+import {
+    TechnicalDetailDisclosure,
+    TechnicalDetailField,
+    TechnicalDetailFieldList,
+    TechnicalDetailMonospaceValue,
+} from "@/components/forms/review";
+import { FORMS_TECHNICAL_DISCLOSURE } from "@/lib/forms/review/formsReviewTechnicalDisclosure";
 
 type VersionRow = {
     id: string;
@@ -441,26 +448,24 @@ export default function FormDetailClient() {
                                     </p>
                                 ) : null}
                             </details>
-                            <details className="rounded-lg border border-[#e6e8ec] bg-white px-4 py-3 open:bg-[#fafbfd]">
-                                <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-[#59678b]">
-                                    Technical IDs (integrations / API)
-                                </summary>
-                                <dl className="mt-2 space-y-1.5 font-mono text-[11px] text-[#31394d]">
-                                    <div>
-                                        <dt className="text-[#59678b]">Form definition id</dt>
-                                        <dd className="break-all">{detail.id}</dd>
-                                    </div>
-                                    <div>
-                                        <dt className="text-[#59678b]">Internal key</dt>
-                                        <dd>{detail.key}</dd>
-                                    </div>
-                                </dl>
-                            </details>
-                            <p className="text-xs text-[#59678b]">
-                                Tailored copy: set{" "}
-                                <code className="rounded bg-[#F4F6F9] px-1 font-mono text-[11px]">metadata.operator_context</code>{" "}
-                                via API (purpose, who completes, after submission, notes).
-                            </p>
+                            <TechnicalDetailDisclosure
+                                title={FORMS_TECHNICAL_DISCLOSURE.technicalDetails.title}
+                                helperText="Form definition id, internal key, and API metadata paths."
+                            >
+                                <TechnicalDetailFieldList>
+                                    <TechnicalDetailField label="Form definition id" fullWidth>
+                                        <TechnicalDetailMonospaceValue>{detail.id}</TechnicalDetailMonospaceValue>
+                                    </TechnicalDetailField>
+                                    <TechnicalDetailField label="Internal key" fullWidth>
+                                        <TechnicalDetailMonospaceValue>{detail.key}</TechnicalDetailMonospaceValue>
+                                    </TechnicalDetailField>
+                                </TechnicalDetailFieldList>
+                                <p className="mt-3 text-xs text-[#59678b]">
+                                    Tailored copy: set{" "}
+                                    <code className="rounded bg-[#F4F6F9] px-1 font-mono text-[11px]">metadata.operator_context</code>{" "}
+                                    via API (purpose, who completes, after submission, notes).
+                                </p>
+                            </TechnicalDetailDisclosure>
                         </div>
                     </SectionCard>
 

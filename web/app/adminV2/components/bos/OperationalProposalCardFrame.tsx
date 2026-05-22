@@ -72,7 +72,7 @@ export type OperationalProposalCardFrameProps = {
 
 function frameShellClass(variant: OperationalProposalFrameVariant): string {
     const base =
-        "rounded-lg border bg-white text-[12px] leading-snug shadow-[0_1px_0_rgba(39,63,82,0.04)]";
+        "rounded-lg border bg-white text-[12px] leading-snug shadow-[0_1px_0_rgba(39,63,82,0.04)] transition-[border-color,background-color] duration-150 ease-out";
     switch (variant) {
         case "applied":
             return `${base} border-emerald-200/70 bg-emerald-50/30`;

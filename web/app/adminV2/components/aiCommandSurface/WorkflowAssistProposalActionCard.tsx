@@ -26,6 +26,7 @@ import {
     workflowAssistProposalTitleFromSuggestion,
 } from "@/lib/adminV2/bos/workflowAssistOperationalProposalPresentation";
 import { COMMAND_SURFACE_INTERACTIVE_CARD_CLASS } from "@/lib/adminV2/aiCommandSurface/commandSurfaceCardNavigation";
+import { CAPABILITY_GATE_CHECKING_LABEL } from "@/lib/adminV2/aiCommandSurface/commandSurfaceShellLayout";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { neutral, semantic } from "@/styles/tokens/colors";
 
@@ -73,12 +74,14 @@ export function WorkflowAssistProposalActionCard({
     suggestion,
     createInterpreted,
     applyAllowed = true,
+    applyCapabilitiesPending = false,
     onProposeEditExisting,
     onExecutionReceipt,
 }: {
     suggestion: WorkflowAssistSuggestionV1;
     createInterpreted?: WorkflowAssistCreateProposeBuildV1["interpreted"];
     applyAllowed?: boolean;
+    applyCapabilitiesPending?: boolean;
     onProposeEditExisting?: (workflowId: string) => void;
     onExecutionReceipt?: (receipt: BosExecutionReceiptPresentation) => void;
 }) {
@@ -170,6 +173,7 @@ export function WorkflowAssistProposalActionCard({
                     applyBusy={busy}
                     applyDone={done?.ok === true}
                     applyAllowed={applyAllowed}
+                    applyCapabilitiesPending={applyCapabilitiesPending}
                     applyBlockedMessage={!applyAllowed ? WORKFLOW_ASSIST_PORTAL_MUTATION_BLOCKED_USER_MESSAGE : null}
                 />
                 {applyReceiptEl ?
@@ -211,12 +215,18 @@ export function WorkflowAssistProposalActionCard({
                     <div className="flex flex-wrap gap-2">
                         <button
                             type="button"
-                            disabled={busy || done?.ok === true || !applyAllowed}
+                            disabled={busy || done?.ok === true || !applyAllowed || applyCapabilitiesPending}
                             className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
                             data-command-surface-workflow-assist-apply="true"
                             onClick={() => void apply()}
                         >
-                            {busy ? "Applying…" : done?.ok ? "Applied" : "Apply disabled draft"}
+                            {applyCapabilitiesPending ?
+                                CAPABILITY_GATE_CHECKING_LABEL
+                            : busy ?
+                                "Applying…"
+                            : done?.ok ?
+                                "Applied"
+                            :   "Apply disabled draft"}
                         </button>
                         <CommandSurfaceCardLink
                             href={WORKFLOW_ASSIST_AUTOMATIONS_HREF}

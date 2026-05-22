@@ -103,11 +103,16 @@ import {
   routeCommandSurface,
   type CommandSurfaceRouteResult,
 } from "@/lib/adminV2/aiCommandSurface/commandSurfaceRouter";
+import { buildCommandSurfaceRoutingNotice } from "@/lib/adminV2/aiCommandSurface/commandSurfaceRoutingCopy";
 import {
-  buildCommandSurfaceRoutingNotice,
-  ENTITY_SEARCH_ROUTING_NOTICE,
+  CAPABILITY_GATE_CHECKING_LABEL,
+  COMMAND_SURFACE_SEARCHING_NOTICE,
+  COMMAND_SURFACE_THREAD_PANEL_MIN_HEIGHT_COLLAPSED_PX,
+  COMMAND_SURFACE_THREAD_SCROLL_MIN_HEIGHT_PX,
+  resolveCommandSurfaceThreadStatusLabel,
   shouldAppendCommandSurfaceRoutingNotice,
-} from "@/lib/adminV2/aiCommandSurface/commandSurfaceRoutingCopy";
+  shouldShowInlineThreadBusyIndicator,
+} from "@/lib/adminV2/aiCommandSurface/commandSurfaceShellLayout";
 import { resolveBosPolicyDenial } from "@/lib/adminV2/bos/bosGovernanceCopy";
 import type { BosExecutionReceiptPresentation } from "@/lib/adminV2/bos/bosExecutionReceipt";
 import {
@@ -945,8 +950,8 @@ export default function AICommandSurfaceShell() {
       setThread((prev) =>
         appendThreadTurn(prev, {
           kind: "assistant_notice",
-          text: ENTITY_SEARCH_ROUTING_NOTICE,
-          noticeRole: "routing",
+          text: COMMAND_SURFACE_SEARCHING_NOTICE,
+          noticeRole: "searching",
         })
       );
       try {
@@ -1692,6 +1697,7 @@ export default function AICommandSurfaceShell() {
       if (!cmd || busy) return;
 
       setThread((prev) => appendThreadTurn(prev, { kind: "user_message", text: cmd }));
+      setThreadExpanded(true);
 
       const pending = pendingClarificationRef.current;
       if (pending) {
@@ -1976,9 +1982,20 @@ export default function AICommandSurfaceShell() {
   const hasThread = thread.turns.length > 0;
   const threadPreview = useMemo(() => lastThreadPreviewText(thread.turns), [thread.turns]);
   const surfaceExpanded = hasThread;
+  const workflowAssistCapabilitiesPending = workflowAssistMutationCapable === null;
   const workflowAssistMutationsAllowed = workflowAssistMutationCapable === true;
   const workflowAssistMutationBlockedReasonShell =
     workflowAssistMutationCapable === false ? WORKFLOW_ASSIST_PORTAL_MUTATION_BLOCKED_USER_MESSAGE : null;
+  const configAssistCapabilitiesPending = configLayoutAssistCaps === null;
+  const configAssistCanApproveAndApply =
+    configLayoutAssistCaps === null ?
+      false
+    : Boolean(configLayoutAssistCaps.can_review && configLayoutAssistCaps.can_apply);
+
+  const threadStatusLabel = useMemo(
+    () => resolveCommandSurfaceThreadStatusLabel({ busy, turns: thread.turns }),
+    [busy, thread.turns]
+  );
 
   const debugReviewNavigation = useCallback<ConfigProposalReviewDebugLog>((message, detail) => {
     if (process.env.NODE_ENV === "development") {
@@ -2014,11 +2031,18 @@ export default function AICommandSurfaceShell() {
       {hasThread ? (
         <div
           className="rounded-t-xl border border-b-0 overflow-hidden"
-          style={{ borderColor: derived.border, backgroundColor: neutral.surface }}
+          style={{
+            borderColor: derived.border,
+            backgroundColor: neutral.surface,
+            minHeight:
+              threadExpanded ?
+                undefined
+              : `${COMMAND_SURFACE_THREAD_PANEL_MIN_HEIGHT_COLLAPSED_PX}px`,
+          }}
           data-command-surface-thread-panel="true"
         >
           <div
-            className="flex items-center gap-2 border-b px-3 py-1.5"
+            className="flex items-center gap-2 border-b px-3 py-1.5 min-h-[32px]"
             style={{ borderColor: derived.border, backgroundColor: derived.adminV2AiBarPineWash }}
           >
             <button
@@ -2040,6 +2064,16 @@ export default function AICommandSurfaceShell() {
                 Assistant
               </span>
             )}
+            {threadStatusLabel ?
+              <span
+                className="shrink-0 text-[10px] font-medium tabular-nums"
+                style={{ color: CMD.textSupporting }}
+                data-command-surface-thread-status="true"
+                aria-live="polite"
+              >
+                {threadStatusLabel}
+              </span>
+            :   null}
             <button
               type="button"
               className="shrink-0 text-[10px] underline-offset-2 hover:underline"
@@ -2056,12 +2090,21 @@ export default function AICommandSurfaceShell() {
             variant="thread_header"
           />
           {threadExpanded ? (
-            <div ref={threadScrollRef} className="max-h-[min(52vh,440px)] overflow-y-auto rounded-b-none">
-              {busy && thread.turns[thread.turns.length - 1]?.kind === "user_message" ? (
-                <div className="px-3 py-2 text-[11px]" style={{ color: CMD.textSupporting }}>
-                  Working…
+            <div
+              ref={threadScrollRef}
+              className="max-h-[min(52vh,440px)] overflow-y-auto rounded-b-none"
+              style={{ minHeight: `${COMMAND_SURFACE_THREAD_SCROLL_MIN_HEIGHT_PX}px` }}
+            >
+              {shouldShowInlineThreadBusyIndicator({ busy, turns: thread.turns }) ?
+                <div
+                  className="px-3 py-2 text-[11px]"
+                  style={{ color: CMD.textSupporting }}
+                  data-command-surface-inline-busy="true"
+                  aria-hidden
+                >
+                  {threadStatusLabel ?? "Processing…"}
                 </div>
-              ) : null}
+              :   null}
               <CommandSurfaceThread
                 turns={thread.turns}
                 busy={busy}
@@ -2076,6 +2119,7 @@ export default function AICommandSurfaceShell() {
                 workflowAssistMutation={workflowAssistMutationsAllowed ? workflowAssistMutation : undefined}
                 workflowAssistMutationBlockedReason={workflowAssistMutationBlockedReasonShell}
                 workflowAssistMutationsAllowed={workflowAssistMutationsAllowed}
+                workflowAssistCapabilitiesPending={workflowAssistCapabilitiesPending}
                 onReviewConfigProposal={onReviewConfigProposal}
                 onWorkflowAssistProposeEdit={onWorkflowAssistProposeEdit}
                 debugReviewNavigation={debugReviewNavigation}
@@ -2083,10 +2127,8 @@ export default function AICommandSurfaceShell() {
                   void confirmConfigLayoutFieldSetup(command, payload)
                 }
                 onApproveConfigProposal={(proposalId) => void approveAndApplyConfigProposal(proposalId)}
-                configAssistCanApproveAndApply={
-                  (configLayoutAssistCaps?.can_review ?? false) &&
-                  (configLayoutAssistCaps?.can_apply ?? false)
-                }
+                configAssistCanApproveAndApply={configAssistCanApproveAndApply}
+                configAssistCapabilitiesPending={configAssistCapabilitiesPending}
                 onExecutionReceipt={appendExecutionReceipt}
               />
             </div>
@@ -2143,7 +2185,7 @@ export default function AICommandSurfaceShell() {
             boxShadow: `0 2px 8px rgba(0, 162, 131, 0.35)`,
           }}
         >
-          {busy ? "Working…" : "Ask"}
+          {busy ? "Processing…" : "Ask"}
         </button>
       </div>
     </SurfaceCard>

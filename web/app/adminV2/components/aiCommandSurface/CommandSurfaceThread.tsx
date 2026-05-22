@@ -17,6 +17,7 @@ import { WorkflowAssistProposalActionCard } from "@/app/adminV2/components/aiCom
 import { WorkflowAssistReadThreadCard } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistReadThreadCard";
 import { BosExecutionReceiptNotice } from "@/app/adminV2/components/bos/BosExecutionReceiptNotice";
 import { BosPolicyDenialNotice } from "@/app/adminV2/components/bos/BosPolicyDenialNotice";
+import { CAPABILITY_GATE_CHECKING_LABEL } from "@/lib/adminV2/aiCommandSurface/commandSurfaceShellLayout";
 import type { BosExecutionReceiptPresentation } from "@/lib/adminV2/bos/bosExecutionReceipt";
 import {
     WORKFLOW_ASSIST_AUTOMATIONS_HREF,
@@ -116,6 +117,7 @@ export type CommandSurfaceThreadProps = {
     workflowAssistMutation?: WorkflowAssistThreadMutationHandlersV1 | null;
     /** When false, proposal/apply CTAs stay disabled (e.g. ops or capability not yet loaded). */
     workflowAssistMutationsAllowed?: boolean;
+    workflowAssistCapabilitiesPending?: boolean;
     /** Shown on read cards when mutations are not allowed for this session. */
     workflowAssistMutationBlockedReason?: string | null;
     onClarificationChip?: (
@@ -138,6 +140,7 @@ export type CommandSurfaceThreadProps = {
     onConfirmConfigFieldSetup?: (command: string, payload: ConfigLayoutAssistFieldSetupConfirmPayload) => void;
     onApproveConfigProposal?: (proposalId: string) => void;
     configAssistCanApproveAndApply?: boolean;
+    configAssistCapabilitiesPending?: boolean;
     onExecutionReceipt?: (receipt: BosExecutionReceiptPresentation) => void;
 };
 
@@ -152,6 +155,7 @@ export default function CommandSurfaceThread({
     renderJobLayoutCardActions,
     workflowAssistMutation,
     workflowAssistMutationsAllowed = false,
+    workflowAssistCapabilitiesPending = false,
     workflowAssistMutationBlockedReason,
     onClarificationChip,
     onConfirmFuzzySuggestion,
@@ -161,6 +165,7 @@ export default function CommandSurfaceThread({
     onConfirmConfigFieldSetup,
     onApproveConfigProposal,
     configAssistCanApproveAndApply = false,
+    configAssistCapabilitiesPending = false,
     onExecutionReceipt,
 }: CommandSurfaceThreadProps) {
     const showSearchDebug =
@@ -179,13 +184,14 @@ export default function CommandSurfaceThread({
                         return <UserBubble key={turn.id} text={turn.text} />;
                     case "assistant_notice": {
                         const isContextBoundary = turn.noticeRole === "context_boundary";
-                        const isRouting = turn.noticeRole === "routing";
+                        const isRouting = turn.noticeRole === "routing" || turn.noticeRole === "searching";
                         return (
                             <div
                                 key={turn.id}
                                 className={isContextBoundary ? "border-t border-alloy-stone/20 pt-2 mt-1" : undefined}
                                 data-command-surface-context-boundary={isContextBoundary ? "true" : undefined}
-                                data-command-surface-routing-notice={isRouting ? "true" : undefined}
+                                data-command-surface-routing-notice={turn.noticeRole === "routing" ? "true" : undefined}
+                                data-command-surface-searching-notice={turn.noticeRole === "searching" ? "true" : undefined}
                             >
                                 <AssistantBubble>
                                     <span
@@ -384,6 +390,7 @@ export default function CommandSurfaceThread({
                                         suggestion={turn.card.suggestion}
                                         createInterpreted={turn.card.createInterpreted}
                                         applyAllowed={workflowAssistMutationsAllowed}
+                                        applyCapabilitiesPending={workflowAssistCapabilitiesPending}
                                         onProposeEditExisting={onWorkflowAssistProposeEdit}
                                         onExecutionReceipt={onExecutionReceipt}
                                     />
@@ -414,6 +421,7 @@ export default function CommandSurfaceThread({
                                         persistedProposalId={card.persistedProposalId}
                                         busy={busy}
                                         canApproveAndApply={configAssistCanApproveAndApply}
+                                        capabilitiesPending={configAssistCapabilitiesPending}
                                         onApproveAndApply={() =>
                                             onApproveConfigProposal?.(card.persistedProposalId)
                                         }

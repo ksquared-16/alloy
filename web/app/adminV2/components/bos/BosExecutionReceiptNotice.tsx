@@ -63,7 +63,7 @@ export function BosExecutionReceiptNotice({
     return (
         <div
             className={[
-                "space-y-1.5 rounded-md border px-2.5 py-2",
+                "space-y-1.5 rounded-md border px-2.5 py-2 transition-opacity duration-150",
                 tone.border,
                 tone.bg,
                 compact ? "text-[10px]" : "text-[11px]",

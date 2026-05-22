@@ -37,15 +37,19 @@ export function opportunityDrawerLayoutFirstPaintGatesActive(
 export function computeShowInquirySummaryRightColumn(params: {
     aboveFoldLocked: boolean;
     record: Record<string, unknown>;
-    enrichmentLayoutReady: boolean;
-    secondaryReady: boolean;
+    belowFoldEnrichmentReady: boolean;
+    fullHydrateReady: boolean;
     taskAssistEnabled: boolean;
 }): boolean {
     if (params.aboveFoldLocked) return false;
     if (opportunityInquirySummaryRightPanelFromPrimaryOnly(params.record)) {
         return true;
     }
-    return params.enrichmentLayoutReady && params.secondaryReady && params.taskAssistEnabled;
+    return (
+        params.belowFoldEnrichmentReady &&
+        params.fullHydrateReady &&
+        params.taskAssistEnabled
+    );
 }
 
 /** Family block stays compact until below-fold — prevents FamilyContactsPanel height jump. */

@@ -28,7 +28,8 @@ Build the **narrow Forms/Documents Phase 2 MVP** that makes enrollment **packet 
 | **P2-2** | Packet detail review console | P2-1 |
 | **P2-3** | Opportunity drawer review modal hardening | P2-1 |
 | **P2-4** | Document provenance + non-PDF submitted records | P2-1 |
-| **P2-5** | Deterministic BOS packet review insight | P2-1 |
+| **UX** | Operational experience hardening (audit/design/cards only → implementation) | P2-1 … P2-4 |
+| **P2-5** | Deterministic BOS packet review insight | P2-1, **UX-D + UX-H** |
 
 ### Optional (documented, not MVP execution)
 
@@ -799,6 +800,8 @@ cd web && npm run test -- \
 ---
 
 ## P2-5 — Deterministic BOS packet review insight
+
+**Prerequisite:** Complete [`forms_documents_operational_experience_hardening.md`](./forms_documents_operational_experience_hardening.md) cards **UX-D** (case-file layout) and **UX-H** (BOS summary region) so insight renders in the designed slot — not mid-page JSON.
 
 ### 1. Goal
 

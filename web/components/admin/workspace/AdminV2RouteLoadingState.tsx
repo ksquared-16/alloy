@@ -1,38 +1,12 @@
 import type { ReactNode } from "react";
 import "@/app/adminV2/components/workspace/workspace.css";
 import { WsRouteLoadingRibbon } from "@/components/admin/workspace/workspaceRouteSkeletons";
+import {
+    ADMIN_V2_ROUTE_LOADING_VOCABULARY,
+    type AdminV2RouteLoadingVariant,
+} from "@/lib/adminV2/navigation/adminV2RouteLoadingVocabulary";
 
-export type AdminV2RouteLoadingVariant = "workspace" | "department" | "work_unit" | "queue";
-
-const DEFAULTS: Record<
-    AdminV2RouteLoadingVariant,
-    {
-        title: string;
-        description: string;
-        ribbon: string;
-    }
-> = {
-    workspace: {
-        title: "Preparing workspace",
-        description: "Loading departments and organization context…",
-        ribbon: "Loading workspace",
-    },
-    department: {
-        title: "Loading department",
-        description: "Fetching department details…",
-        ribbon: "Loading department",
-    },
-    work_unit: {
-        title: "Loading work unit",
-        description: "Fetching queues and actions for this lane…",
-        ribbon: "Loading work unit",
-    },
-    queue: {
-        title: "Preparing queue",
-        description: "Loading records for the selected lane…",
-        ribbon: "Loading queue",
-    },
-};
+export type { AdminV2RouteLoadingVariant } from "@/lib/adminV2/navigation/adminV2RouteLoadingVocabulary";
 
 /**
  * Unified AdminV2 route-level loading — polished card + motion (no full-page ghost layouts).
@@ -57,7 +31,7 @@ export function AdminV2RouteLoadingState({
     children?: ReactNode;
     className?: string;
 }) {
-    const d = DEFAULTS[variant];
+    const d = ADMIN_V2_ROUTE_LOADING_VOCABULARY[variant];
     const title = titleOverride ?? d.title;
     const description = descriptionOverride ?? d.description;
     const compact = variant === "queue";

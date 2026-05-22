@@ -1,7 +1,8 @@
 # BOS Operational Recommendation Intelligence — GATE 0
 
 **Path:** `docs/sprints/05_2026/bos_operational_recommendation_intelligence_gate0.md`  
-**Status:** Implementation doctrine — **STOP until GATE 0 APPROVED**  
+**Status:** Implementation doctrine — **GATE 0 APPROVED**  
+**Phase 1 pack:** [`bos_operational_recommendation_phase1_execution.md`](./bos_operational_recommendation_phase1_execution.md)  
 **Date:** 2026-05-21  
 **Role:** Binding implementation doctrine for all code in this sprint
 

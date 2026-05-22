@@ -862,13 +862,13 @@ cd web && npm run test -- \
 
 **Acceptance criteria:**
 
-- [ ] First command in session does not jump page content by > reserved height.
-- [ ] Search shows notice before candidates or clarify.
+- [x] First command in session does not jump page content by > reserved height.
+- [x] Search shows notice before candidates or clarify.
 
 **Tests:**
 
 - `commandSurfaceThreadScroll.test.ts` (regression)
-- Contract: searching notice string in shell.
+- `commandSurfaceShellLayout.test.ts`, `commandSurfaceShellPerformance.contract.test.ts`
 
 ---
 
@@ -888,12 +888,12 @@ cd web && npm run test -- \
 
 **Acceptance criteria:**
 
-- [ ] Network failure still shows strip chrome with retry.
-- [ ] Successful load unchanged functionally.
+- [x] Network failure still shows strip chrome with retry.
+- [x] Successful load unchanged functionally.
 
 **Tests:**
 
-- Component test with mocked fetch failure.
+- `recentAiActionsStrip.test.ts` (source contract)
 
 ---
 
@@ -912,12 +912,89 @@ cd web && npm run test -- \
 
 **Acceptance criteria:**
 
-- [ ] Apply button does not appear from nothing after paint without label transition.
-- [ ] No extra API calls per keystroke.
+- [x] Apply button does not appear from nothing after paint without label transition.
+- [x] No extra API calls per keystroke (capability fetch unchanged; `null` → disabled gate label only).
 
 **Tests:**
 
-- Source contract: shell contains stable loading label for apply gate.
+- `commandSurfaceShellPerformance.contract.test.ts` — `CAPABILITY_GATE_CHECKING_LABEL`, pending flags
+
+---
+
+#### Cards 18–20 implementation notes (Loop 10 — Phase 4 — 2026-05-20)
+
+**Theme:** Perceived performance + operational smoothness — reserve space, coordinate loading, calmer transitions. No backend optimization, no artificial delays, no rail redesign.
+
+**Card 18 — command rail reserve + loading coordination**
+
+- New `commandSurfaceShellLayout.ts`: collapsed thread `minHeight` (72px), scroll region min (48px), `COMMAND_SURFACE_SEARCHING_NOTICE`, `COMMAND_SURFACE_PROCESSING_LABEL`, `shouldAppendCommandSurfaceRoutingNotice` (entity-only search skips duplicate “Routing to Task Assist…” line), `shouldShowInlineThreadBusyIndicator` / `resolveCommandSurfaceThreadStatusLabel` (no stacked inline “Working…” when routing/search notice already present).
+- `AICommandSurfaceShell.tsx`: expand thread on submit; searching turn uses `noticeRole: "searching"`; header **Processing…** only when inline busy allowed; submit button **Processing…** (not **Working…**).
+- `CommandSurfaceThread.tsx`: searching notice styling (`noticeRole === "searching"`).
+- `commandSurfaceRoutingCopy.ts`: `ENTITY_SEARCH_ROUTING_NOTICE` aliases searching notice; routing skip re-exported from shell layout.
+
+**Card 19 — activity strip stability**
+
+- `RecentAiActionsStrip.tsx`: always-mounted shell with `STRIP_MIN_HEIGHT_PX` (52); phases `loading | ready | empty | unavailable`; fetch failure shows **Activity log unavailable** + **Retry** (no `hidden=true`); soft refresh on `REFRESH_EVENT`; label **Recent operational activity**.
+
+**Card 20 — broader perceived-performance pass**
+
+- Capability gate: `workflowAssistCapabilitiesPending` / `configAssistCapabilitiesPending` when capability fetch is `null` → disabled Apply with **Checking permissions…** on `WorkflowAssistProposalActionCard`, `WorkflowAssistProposalReviewPanel`, `ConfigLayoutAssistReadyCard` (wired from shell/thread).
+- Calmer transitions: `OperationalProposalCardFrame` border/background `transition-[border-color,background-color] duration-150`; `BosExecutionReceiptNotice` `transition-opacity duration-150`.
+- Thread busy coordination fix: trailing search/routing notice suppresses duplicate inline busy indicator.
+
+**Loading / perception standards (Phase 4)**
+
+| Surface | Standard |
+| --- | --- |
+| Command rail | Reserved collapsed height; one progress line (routing **or** searching **or** header Processing); no stacked Working + notice |
+| Entity search | Single **Searching records…** notice; no preceding generic routing line |
+| Apply CTAs | Disabled + **Checking permissions…** until capability resolved; no pop-in Apply |
+| Activity strip | Fixed min-height shell; unavailable state keeps chrome + Retry |
+| Proposal / receipt | 150ms opacity/border transitions only — no layout fakeouts |
+
+**Shell continuity notes**
+
+- Thread expands on first submit in session to avoid abrupt expansion after idle collapse.
+- Routing/governance semantics unchanged (Loop 8 contracts preserved).
+- Drawer hydration still occasionally disjointed — **deferred** (needs drawer-specific reserve pass, out of Card 18–20 scope).
+
+**Files changed**
+
+| Area | Files |
+| --- | --- |
+| Shell layout | `web/lib/adminV2/aiCommandSurface/commandSurfaceShellLayout.ts` (new) |
+| Routing copy | `web/lib/adminV2/aiCommandSurface/commandSurfaceRoutingCopy.ts` |
+| Thread types | `web/lib/adminV2/aiCommandSurface/commandSurfaceThreadTypes.ts` |
+| Shell / thread | `AICommandSurfaceShell.tsx`, `CommandSurfaceThread.tsx` |
+| Proposals | `WorkflowAssistProposalActionCard.tsx`, `WorkflowAssistProposalReviewPanel.tsx`, `ConfigLayoutAssistReadyCard.tsx` |
+| Activity | `RecentAiActionsStrip.tsx` |
+| Frame / receipt | `OperationalProposalCardFrame.tsx`, `BosExecutionReceiptNotice.tsx` |
+| Tests | `commandSurfaceShellLayout.test.ts`, `commandSurfaceShellPerformance.contract.test.ts`, `recentAiActionsStrip.test.ts`; updates to `commandSurfaceRoutingCopy.test.ts`, `commandSurfaceRoutingShell.contract.test.ts` |
+
+**Deferred performance items (not in Loop 10)**
+
+- Drawer section hydration reserve / enrichment repaint coordination.
+- Job layout apply capability gate (workflow + config covered; job layout card unchanged).
+- Backend query / resolver latency optimization.
+- Full command-thread history persistence on context switch (V1.5).
+
+**Tests run (Loop 10)**
+
+```bash
+cd web && npm run test -- \
+  tests/adminV2/commandSurfaceShellLayout.test.ts \
+  tests/adminV2/commandSurfaceShellPerformance.contract.test.ts \
+  tests/adminV2/recentAiActionsStrip.test.ts \
+  tests/adminV2/commandSurfaceRoutingCopy.test.ts \
+  tests/adminV2/commandSurfaceRoutingShell.contract.test.ts \
+  tests/adminV2/commandSurfaceThreadScroll.test.ts \
+  tests/adminV2/operationalProposalCardFrame.test.ts \
+  tests/adminV2/bosExecutionReceipt.test.ts
+```
+
+**Result:** 35 passed (8 files). Routing/governance + proposal frame + execution receipt regressions green.
+
+**Gate C readiness (after Loop 10):** Phase 4 cards **18–20 complete**. **Not ready for GATE C** until Phase 5 (Cards 21–23): terminology pass, minimal doctrine alignment, full regression bundle + manual demo script. Human validation still open on GATE A checklist items.
 
 ---
 
@@ -1278,9 +1355,9 @@ cd web && npm run test -- tests/adminV2/activeOperationalContext.test.ts \
 | 15   | ☑          | Config partial apply visibility (Loop 9)        |
 | 16   | ☑          | Execution receipt turns (Loop 9)                |
 | 17   | ☑          | Mutation boundary copy (Loop 9)                 |
-| 18   | ☐          |                                                 |
-| 19   | ☐          |                                                 |
-| 20   | ☐          |                                                 |
+| 18   | ☑          | Rail reserve + loading coordination (Loop 10)   |
+| 19   | ☑          | Activity strip stability (Loop 10)              |
+| 20   | ☑          | Capability gate + transition calm (Loop 10)     |
 | 21   | ☐          |                                                 |
 | 22   | ☐          |                                                 |
 | 23   | ☐          |                                                 |

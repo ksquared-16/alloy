@@ -35,6 +35,7 @@ import {
 } from "@/lib/forms/submissionLinkageReviewUx";
 import { effectiveManualLinkUuid } from "@/lib/admin/forms/crmEntitySearchShared";
 import CrmEntitySearchPicker from "@/components/forms/admin/CrmEntitySearchPicker";
+import { SubmissionReviewTechnicalPanel } from "@/components/forms/review";
 
 type LinkedDoc = {
     role: string;
@@ -87,11 +88,6 @@ function ConnectionRow({
                 <p className="mt-0.5 text-xs leading-snug text-[#59678b]">{row.hint}</p>
             </div>
             <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
-                {linked && row.recordId ? (
-                    <code className="max-w-[240px] truncate rounded bg-[#F4F6F9] px-1.5 py-0.5 font-mono text-[11px] text-[#31394d] sm:max-w-md">
-                        {row.recordId}
-                    </code>
-                ) : null}
                 {linked && onOpen ? (
                     <button type="button" className="text-[#00458C] hover:underline" onClick={onOpen}>
                         Open
@@ -464,48 +460,6 @@ export default function FormSubmissionDetailClient() {
                             ) : null}
                         </section>
 
-                        {hasLaunchContextDisplay ? (
-                            <section className="space-y-2 border-b border-[#e6e8ec] py-4">
-                                <h3 className="text-xs font-bold uppercase tracking-wide text-[#59678b]">
-                                    Form launch context
-                                </h3>
-                                <p className="text-sm text-[#59678b]">
-                                    How this submission was started (from link metadata stamped at draft create). Prefill and
-                                    deep launch flows are incremental — this panel is read-only today.
-                                </p>
-                                <dl className="grid gap-2 text-sm text-[#31394d] sm:grid-cols-2">
-                                    <div>
-                                        <dt className="text-xs text-[#59678b]">form_context_mode</dt>
-                                        <dd className="font-mono text-xs">{launchContext.form_context_mode ?? "—"}</dd>
-                                    </div>
-                                    <div>
-                                        <dt className="text-xs text-[#59678b]">source_entity_type</dt>
-                                        <dd className="font-mono text-xs">{launchContext.source_entity_type ?? "—"}</dd>
-                                    </div>
-                                    <div className="sm:col-span-2">
-                                        <dt className="text-xs text-[#59678b]">source_entity_id</dt>
-                                        <dd className="break-all font-mono text-[11px]">
-                                            {launchContext.source_entity_id ?? "—"}
-                                        </dd>
-                                    </div>
-                                    <div>
-                                        <dt className="text-xs text-[#59678b]">prefill_enabled</dt>
-                                        <dd>{launchContext.prefill_enabled === undefined ? "—" : launchContext.prefill_enabled ? "Yes" : "No"}</dd>
-                                    </div>
-                                    <div>
-                                        <dt className="text-xs text-[#59678b]">allow_auto_create</dt>
-                                        <dd>
-                                            {launchContext.allow_auto_create === undefined ?
-                                                "—"
-                                            : launchContext.allow_auto_create ?
-                                                "Yes"
-                                            :   "No"}
-                                        </dd>
-                                    </div>
-                                </dl>
-                            </section>
-                        ) : null}
-
                         {intakeSection ? (
                             <section
                                 className={`space-y-2 border-b border-[#e6e8ec] py-4 ${
@@ -539,110 +493,10 @@ export default function FormSubmissionDetailClient() {
                                 </ul>
                                 {intakeNeedsAttention ?
                                     <p className="text-sm font-medium text-amber-950">
-                                        Needs review — check this section before using Generate document.
+                                        Needs review — check this section before using Generate document. Link configuration
+                                        and launch routing are under Review diagnostics below.
                                     </p>
                                 : null}
-
-                                <div className="mt-3 rounded-lg border border-[#e6e8ec] bg-white px-3 py-2.5 sm:px-4">
-                                    <h4 className="text-xs font-bold uppercase tracking-wide text-[#59678b]">
-                                        Link configuration (operator)
-                                    </h4>
-                                    {row.public_link_intake_debug ?
-                                        <dl className="mt-2 grid gap-2 text-xs text-[#31394d] sm:grid-cols-2">
-                                            <div>
-                                                <dt className="text-[#59678b]">Public link id</dt>
-                                                <dd className="break-all font-mono text-[11px]">
-                                                    {row.public_link_intake_debug.public_link_id ?? "—"}
-                                                </dd>
-                                            </div>
-                                            <div>
-                                                <dt className="text-[#59678b]">Lead capture / intake</dt>
-                                                <dd>{row.public_link_intake_debug.lead_capture ? "Yes" : "No"}</dd>
-                                            </div>
-                                            <div>
-                                                <dt className="text-[#59678b]">default_vertical_id</dt>
-                                                <dd className="break-all font-mono text-[11px]">
-                                                    {row.public_link_intake_debug.default_vertical_id ?? "Missing"}
-                                                </dd>
-                                            </div>
-                                            <div>
-                                                <dt className="text-[#59678b]">Auto-create flags</dt>
-                                                <dd className="leading-snug">
-                                                    person{" "}
-                                                    {row.public_link_intake_debug.auto_create_person ? "on" : "off"},{" "}
-                                                    customer{" "}
-                                                    {row.public_link_intake_debug.auto_create_customer ? "on" : "off"},{" "}
-                                                    member{" "}
-                                                    {row.public_link_intake_debug.auto_create_customer_member ?
-                                                        "on"
-                                                    :   "off"}
-                                                    , opp{" "}
-                                                    {row.public_link_intake_debug.auto_create_opportunity ? "on" : "off"}
-                                                </dd>
-                                            </div>
-                                            {row.public_link_intake_debug.link_label ?
-                                                <div className="sm:col-span-2">
-                                                    <dt className="text-[#59678b]">Link label</dt>
-                                                    <dd>{row.public_link_intake_debug.link_label}</dd>
-                                                </div>
-                                            : null}
-                                            {row.public_link_intake_debug.alloy_admin_preview ?
-                                                <div className="sm:col-span-2 text-[#59678b]">
-                                                    This link was minted as an Admin preview session.
-                                                </div>
-                                            : null}
-                                            {row.public_link_intake_debug.form_context_mode ?
-                                                <div>
-                                                    <dt className="text-[#59678b]">form_context_mode (link)</dt>
-                                                    <dd className="font-mono text-[11px]">
-                                                        {row.public_link_intake_debug.form_context_mode}
-                                                    </dd>
-                                                </div>
-                                            : null}
-                                            {row.public_link_intake_debug.source_entity_type ?
-                                                <div>
-                                                    <dt className="text-[#59678b]">source_entity_type (link)</dt>
-                                                    <dd className="font-mono text-[11px]">
-                                                        {row.public_link_intake_debug.source_entity_type}
-                                                    </dd>
-                                                </div>
-                                            : null}
-                                            {row.public_link_intake_debug.source_entity_id ?
-                                                <div className="sm:col-span-2">
-                                                    <dt className="text-[#59678b]">source_entity_id (link)</dt>
-                                                    <dd className="break-all font-mono text-[11px]">
-                                                        {row.public_link_intake_debug.source_entity_id}
-                                                    </dd>
-                                                </div>
-                                            : null}
-                                            {row.public_link_intake_debug.prefill_enabled !== null &&
-                                            row.public_link_intake_debug.prefill_enabled !== undefined ?
-                                                <div>
-                                                    <dt className="text-[#59678b]">prefill_enabled (link)</dt>
-                                                    <dd>{row.public_link_intake_debug.prefill_enabled ? "Yes" : "No"}</dd>
-                                                </div>
-                                            : null}
-                                            {row.public_link_intake_debug.allow_auto_create !== null &&
-                                            row.public_link_intake_debug.allow_auto_create !== undefined ?
-                                                <div>
-                                                    <dt className="text-[#59678b]">allow_auto_create (link)</dt>
-                                                    <dd>{row.public_link_intake_debug.allow_auto_create ? "Yes" : "No"}</dd>
-                                                </div>
-                                            : null}
-                                        </dl>
-                                    : row.created_via_public_link_id ?
-                                        <p className="mt-2 text-xs text-[#59678b]">
-                                            Public link id on submission:{" "}
-                                            <code className="break-all font-mono text-[11px] text-[#31394d]">
-                                                {row.created_via_public_link_id}
-                                            </code>{" "}
-                                            — link metadata could not be loaded.
-                                        </p>
-                                    :   <p className="mt-2 text-xs text-[#59678b]">
-                                            This submission was not created via a public link (no shareable link id).
-                                        </p>
-                                    }
-                                </div>
                             </section>
                         ) : null}
 
@@ -910,25 +764,6 @@ export default function FormSubmissionDetailClient() {
                             </ul>
                         </section>
 
-                        <details className="rounded-md border border-dashed border-[#cfd6e6] bg-[#f8f9fc] px-3 py-2 text-sm">
-                            <summary className="cursor-pointer font-medium text-[#59678b]">
-                                Technical identifiers
-                            </summary>
-                            <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
-                                <div>
-                                    <dt className="text-[#59678b]">Submission id</dt>
-                                    <dd className="font-mono text-[#31394d]">{row.id}</dd>
-                                </div>
-                                <div>
-                                    <dt className="text-[#59678b]">Form definition id</dt>
-                                    <dd className="font-mono text-[#31394d]">{row.form_definition_id}</dd>
-                                </div>
-                                <div>
-                                    <dt className="text-[#59678b]">Version id</dt>
-                                    <dd className="font-mono text-[#31394d]">{row.form_definition_version_id}</dd>
-                                </div>
-                            </dl>
-                        </details>
                     </SectionCard>
 
                     <SectionCard title="Documents & PDF">
@@ -995,37 +830,37 @@ export default function FormSubmissionDetailClient() {
                         )}
                     </SectionCard>
 
-                    <SectionCard title="Answers & technical details">
-                        <section className="space-y-2">
-                            <h3 className="text-sm font-semibold text-[#31394d]">Answers submitted</h3>
-                            <p className="text-xs text-[#59678b]">
-                                Same read-only view recipients filled out (fields depend on published schema).
+                    <SectionCard title="Answers submitted">
+                        <p className="text-xs text-[#59678b]">
+                            Read-only view of what was submitted (fields depend on published schema).
+                        </p>
+                        {!schema ? (
+                            <p className="mt-2 text-sm text-[#59678b]">
+                                Schema unavailable — expand Technical details below for the raw payload.
                             </p>
-                            {!schema ? (
-                                <p className="text-sm text-[#59678b]">Schema unavailable — see technical payload below.</p>
-                            ) : (
-                                <div className="rounded-lg border border-[#e6e8ec] bg-white p-4">
-                                    <FormEngineRenderer
-                                        schema={schema}
-                                        payload={row.payload}
-                                        onChange={() => {}}
-                                        mode="readonly"
-                                    />
-                                </div>
-                            )}
-                        </section>
-                        <details className="mt-5 rounded-md border border-[#e6e8ec] bg-[#fafbfd] p-3">
-                            <summary className="cursor-pointer text-sm font-medium text-[#00458C]">
-                                Technical payload (JSON)
-                            </summary>
-                            <p className="mt-2 text-xs text-[#59678b]">
-                                Raw submission payload for support or debugging — not needed for daily operations.
-                            </p>
-                            <pre className="mt-2 max-h-64 overflow-auto rounded bg-[#F4F6F9] p-3 font-mono text-xs">
-                                {JSON.stringify(row.payload, null, 2)}
-                            </pre>
-                        </details>
+                        ) : (
+                            <div className="mt-3 rounded-lg border border-[#e6e8ec] bg-white p-4">
+                                <FormEngineRenderer
+                                    schema={schema}
+                                    payload={row.payload}
+                                    onChange={() => {}}
+                                    mode="readonly"
+                                />
+                            </div>
+                        )}
                     </SectionCard>
+
+                    <SubmissionReviewTechnicalPanel
+                        submissionId={row.id}
+                        formDefinitionId={row.form_definition_id}
+                        formDefinitionVersionId={row.form_definition_version_id}
+                        createdViaPublicLinkId={row.created_via_public_link_id}
+                        payload={row.payload}
+                        launchContext={launchContext}
+                        hasLaunchContextDisplay={hasLaunchContextDisplay}
+                        intakeDebug={row.public_link_intake_debug}
+                        entityRows={entityRows}
+                    />
                 </>
             ) : null}
         </div>

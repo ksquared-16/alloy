@@ -31,11 +31,13 @@ describe("Workspace → dept transition (no root skeleton flash)", () => {
         expect(page).toContain("mergeDeptWorkUnitSummariesForKpis");
     });
 
-    it("workspace root dept tiles use Link soft nav (not location.assign)", () => {
+    it("workspace root dept tiles use orchestrated soft nav (router.push, not location.assign)", () => {
         const grid = read("components/admin/workspace/WorkspaceRootDepartmentGrid.tsx");
-        expect(grid).toContain('from "next/link"');
+        expect(grid).toContain("runAdminV2NavigationTransition");
+        expect(grid).toContain("router.push(href)");
         expect(grid).toContain("/dept/");
-        expect(grid).toContain("<Link");
+        expect(grid).toContain('<a');
+        expect(grid).not.toContain('from "next/link"');
         expect(grid).not.toContain("adminV2CommitNavigation");
     });
 });

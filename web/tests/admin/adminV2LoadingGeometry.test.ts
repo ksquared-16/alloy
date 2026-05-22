@@ -47,21 +47,23 @@ describe("adminV2LoadingGeometry", () => {
     });
 });
 
-describe("Work-unit loader alignment (PERF-A-03)", () => {
-    it("route loading.tsx uses WorkUnitRouteSkeletonBody", () => {
+describe("Work-unit loader alignment (PERF-A-03 / Card 3A shell-first)", () => {
+    it("route loading.tsx uses WorkUnitWorkspaceColdShell", () => {
         const loading = read(
             "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/loading.tsx"
         );
-        expect(loading).toContain("WorkUnitRouteSkeletonBody");
+        expect(loading).toContain("WorkUnitWorkspaceColdShell");
+        expect(loading).not.toContain("WorkUnitRouteSkeletonBody");
         expect(loading).not.toContain("AdminV2RouteLoadingState");
     });
 
-    it("in-page blocking load uses WU skeleton with shared lane geometry", () => {
-        const skeletons = read("components/admin/workspace/workspaceRouteSkeletons.tsx");
-        expect(skeletons).toContain("adminV2WorkUnitQueueLaneReserveStyle");
-        expect(skeletons).toContain('data-adminv2-wu-oper-region-loading="true"');
+    it("in-page blocking uses cold shell; oper lane uses WorkUnitOperationalLaneLoader", () => {
+        const reserve = read("components/admin/workspace/WorkspaceQuietLoadingReserve.tsx");
+        expect(reserve).toContain("adminV2WorkUnitQueueLaneReserveStyle");
+        expect(reserve).toContain("WorkUnitOperationalLaneLoader");
         const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-        expect(page).toContain("WorkUnitRouteSkeletonBody");
+        expect(page).toContain("WorkUnitWorkspaceColdShell");
+        expect(page).toContain("operLaneLoading={workUnitOperLanePending}");
     });
 });
 

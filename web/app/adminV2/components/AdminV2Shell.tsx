@@ -20,6 +20,7 @@ import RecordsExpandable from "./records/RecordsExpandable";
 import { MOCK_DEPARTMENTS } from "./canvas/mockDepartments";
 import type { DepartmentKey } from "@/lib/departmentColors";
 import WorkspaceAmbientLayer from "./WorkspaceAmbientLayer";
+import { AdminV2NavigationTransitionRibbon } from "@/components/admin/workspace/AdminV2NavigationTransitionRibbon";
 
 /**
  * AdminV2 AI command surface is internal/admin-only and should be interactive whenever visible.
@@ -163,6 +164,7 @@ export default function AdminV2Shell({
                 ) : null}
                 {/* Reserve room for the bottom AI bar so content isn't hidden behind it. */}
                 <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate pb-[96px]">
+                  <AdminV2NavigationTransitionRibbon />
                   {isAiActivityRoute || isSettingsRoute || isWorkflowsRoute || isFormsRoute ? (
                     <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</main>
                   ) : (
@@ -206,6 +208,7 @@ export default function AdminV2Shell({
                   <WorkspaceAmbientLayer />
                 ) : null}
                 <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate pb-[96px]">
+                  <AdminV2NavigationTransitionRibbon />
                   {isAiActivityRoute || isSettingsRoute || isWorkflowsRoute || isFormsRoute ? (
                     <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</main>
                   ) : (

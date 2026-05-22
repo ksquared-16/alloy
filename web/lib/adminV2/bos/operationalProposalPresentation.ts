@@ -9,6 +9,10 @@ import {
     OPERATIONAL_PROPOSAL_CONTEXT_MISMATCH_COPY,
     OPERATIONAL_PROPOSAL_STALE_DEFAULT_COPY as STALE_FRAME_COPY,
 } from "@/lib/adminV2/bos/bosGovernanceCopy";
+import {
+    MUTATION_BOUNDARY_APPROVAL_REQUIRED,
+    MUTATION_BOUNDARY_REVIEW_REQUIRED,
+} from "@/lib/adminV2/bos/bosMutationBoundaryCopy";
 
 /** Visual emphasis for frame shell (presentation only). */
 export type OperationalProposalFrameVariant =
@@ -72,8 +76,8 @@ export function operationalProposalRiskLabel(risk: BosRiskLevel | null | undefin
     }
 }
 
-export const OPERATIONAL_PROPOSAL_APPROVAL_REQUIRED_COPY = "Approval required";
-export const OPERATIONAL_PROPOSAL_REVIEW_REQUIRED_COPY = "Review required";
+export const OPERATIONAL_PROPOSAL_APPROVAL_REQUIRED_COPY = MUTATION_BOUNDARY_APPROVAL_REQUIRED;
+export const OPERATIONAL_PROPOSAL_REVIEW_REQUIRED_COPY = MUTATION_BOUNDARY_REVIEW_REQUIRED;
 export const OPERATIONAL_PROPOSAL_USING_ACTIVE_RECORD_PREFIX = "Using active record";
 export const OPERATIONAL_PROPOSAL_BLOCKED_DEFAULT_COPY = OPERATIONAL_PROPOSAL_CONTEXT_MISMATCH_COPY;
 export const OPERATIONAL_PROPOSAL_STALE_DEFAULT_COPY = STALE_FRAME_COPY;

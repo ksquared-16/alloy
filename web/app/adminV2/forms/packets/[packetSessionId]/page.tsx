@@ -25,7 +25,18 @@ export default async function AdminV2PacketSessionDetailPage({
     const supabase = createAdminClient();
     const { data: session, error: sErr } = await supabase
         .from("form_packet_sessions")
-        .select("id, launch_context, crm_snapshot, shared_values")
+        .select(
+            `
+      id,
+      launch_context,
+      crm_snapshot,
+      shared_values,
+      opportunity_id,
+      customer_id,
+      recipient_person_id,
+      form_packet_definitions ( key )
+    `
+        )
         .eq("id", packetSessionId)
         .eq("org_id", auth.orgId)
         .maybeSingle();
@@ -39,10 +50,20 @@ export default async function AdminV2PacketSessionDetailPage({
     }
     if (!session) notFound();
 
+    const def = session.form_packet_definitions as { key?: string | null } | { key?: string | null }[] | null;
+    const defKey = Array.isArray(def) ? def[0]?.key : def?.key;
+
     const technicalDetails = {
         launch_context: session.launch_context ?? {},
         crm_snapshot: session.crm_snapshot ?? {},
         shared_values: session.shared_values ?? {},
+        identifiers: {
+            packet_session_id: session.id,
+            opportunity_id: session.opportunity_id ?? null,
+            customer_id: session.customer_id ?? null,
+            recipient_person_id: session.recipient_person_id ?? null,
+            packet_definition_key: defKey ?? null,
+        },
     };
 
     return (

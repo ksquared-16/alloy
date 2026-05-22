@@ -9,6 +9,10 @@ import { SignalBlock, KPIBlock, QueueBlock, WorkBlock, ActionsBlock } from "../b
 import { WorkspaceShellLayout } from "@/components/admin/workspace/WorkspaceShellLayout";
 import { WorkspaceActionsRailPlaceholder } from "@/components/admin/workspace/WorkspaceActionsRailPlaceholder";
 import { KpiStripSkeleton } from "@/components/admin/workspace/KpiStripSkeleton";
+import {
+    WorkUnitOperationalLaneLoader,
+    WorkspaceQuietKpiReserve,
+} from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
 
 type Props = {
   model: WorkUnitWorkspaceModel;
@@ -27,6 +31,8 @@ type Props = {
    * (enrollment work units — avoids primary column reflow when actions arrive).
    */
   reserveActionsRail?: boolean;
+  /** Oper lane authority not ready — quiet reserve + spinner instead of queue row skeleton churn. */
+  operLaneLoading?: boolean;
   /** Optional footer content constrained to the primary column width. */
   primaryFooterSlot?: ReactNode;
   /** Lane scope for opportunity drawer intent prefetch (bootstrap URL must match open). */
@@ -44,6 +50,7 @@ export default function WorkUnitWorkspace({
   kpiStripPlaceholder,
   kpiStripSkeletonCellCount,
   reserveActionsRail = false,
+  operLaneLoading = false,
   primaryFooterSlot,
   opportunityDrawerWorkspaceContext = null,
 }: Props) {
@@ -154,7 +161,11 @@ export default function WorkUnitWorkspace({
               ) : null}
               {kpiStripPlaceholder ? (
                 <div data-workspace-zone="kpi-banner">
-                  <KpiStripSkeleton id="wu-kpi-skeleton" cellCount={kpiStripSkeletonCellCount} />
+                  {operLaneLoading ? (
+                    <WorkspaceQuietKpiReserve id="wu-kpi-quiet-reserve" />
+                  ) : (
+                    <KpiStripSkeleton id="wu-kpi-skeleton" cellCount={kpiStripSkeletonCellCount} />
+                  )}
                 </div>
               ) : hasKpis ? (
                 <div className="adminv2-ws-soft-content-reveal" data-workspace-zone="kpi-banner">
@@ -163,43 +174,47 @@ export default function WorkUnitWorkspace({
               ) : null}
             </div>
           ) : null}
-          <div className="adminv2-ws-dept-v2-operational-row adminv2-ws-dept-v2-operational-row--double" aria-label="Lane queue">
-            <div
-              className="adminv2-ws-dept-v2-lane adminv2-ws-dept-v2-lane--throughput"
-              data-ws-lane-kind="lane_queue"
-              data-ws-lane-drill-queue={model.primaryQueue.id}
-            >
-              <div className="adminv2-ws-dept-v2-lane-chrome adminv2-ws-dept-v2-lane-chrome--throughput-deck">
-                {hasLaneStrip ? (
-                  <div className="adminv2-ws-wu-lane-strip" aria-label="Lane status">
-                    {statusLine ? (
-                      <p className="adminv2-ws-wu-lane-strip-line">
-                        <span className="adminv2-ws-wu-lane-strip-k">Status</span>
-                        {statusLine}
-                      </p>
-                    ) : null}
-                    {recLine ? (
-                      <p className="adminv2-ws-wu-lane-strip-line">
-                        <span className="adminv2-ws-wu-lane-strip-k">Suggested</span>
-                        {recLine}
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-                <QueueBlock
-                  queue={model.primaryQueue}
-                  onAction={onAction}
-                  variant="primary"
-                  surface="work_unit"
-                  opportunityDrawerWorkspaceContext={opportunityDrawerWorkspaceContext}
-                />
+          {operLaneLoading ? (
+            <WorkUnitOperationalLaneLoader laneLabel={model.primaryQueue.laneQueueLabel?.trim() || "Queue"} />
+          ) : (
+            <div className="adminv2-ws-dept-v2-operational-row adminv2-ws-dept-v2-operational-row--double" aria-label="Lane queue">
+              <div
+                className="adminv2-ws-dept-v2-lane adminv2-ws-dept-v2-lane--throughput"
+                data-ws-lane-kind="lane_queue"
+                data-ws-lane-drill-queue={model.primaryQueue.id}
+              >
+                <div className="adminv2-ws-dept-v2-lane-chrome adminv2-ws-dept-v2-lane-chrome--throughput-deck">
+                  {hasLaneStrip ? (
+                    <div className="adminv2-ws-wu-lane-strip" aria-label="Lane status">
+                      {statusLine ? (
+                        <p className="adminv2-ws-wu-lane-strip-line">
+                          <span className="adminv2-ws-wu-lane-strip-k">Status</span>
+                          {statusLine}
+                        </p>
+                      ) : null}
+                      {recLine ? (
+                        <p className="adminv2-ws-wu-lane-strip-line">
+                          <span className="adminv2-ws-wu-lane-strip-k">Suggested</span>
+                          {recLine}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  <QueueBlock
+                    queue={model.primaryQueue}
+                    onAction={onAction}
+                    variant="primary"
+                    surface="work_unit"
+                    opportunityDrawerWorkspaceContext={opportunityDrawerWorkspaceContext}
+                  />
+                </div>
               </div>
+              <div
+                className="adminv2-ws-dept-v2-lane adminv2-ws-dept-v2-lane--attention adminv2-ws-dept-v2-lane--attention--hidden"
+                aria-hidden
+              />
             </div>
-            <div
-              className="adminv2-ws-dept-v2-lane adminv2-ws-dept-v2-lane--attention adminv2-ws-dept-v2-lane--attention--hidden"
-              aria-hidden
-            />
-          </div>
+          )}
           {model.workSummary ? (
             <div className="adminv2-ws-dept-v2-workflows-strip">
               <WorkBlock work={model.workSummary} onAction={onAction} mode="summary" surface="work_unit" />

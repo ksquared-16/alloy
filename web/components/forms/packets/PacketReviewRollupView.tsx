@@ -6,19 +6,52 @@ import { FormEngineRenderer } from "@/components/forms/engine/FormEngineRenderer
 import type { FormPayload } from "@/lib/forms/validateSubmission";
 import { validateFormSchema } from "@/lib/forms/schema";
 import type { PacketReviewRollupV1 } from "@/lib/forms/packets/packetReviewRollupTypes";
+import { formatShortDate } from "@/lib/forms/packets/documentProvenanceDisplay";
 import {
-    artifactKindBadgeClass,
-    artifactKindDisplayLabel,
-    formatPacketDocumentProvenanceLine,
-    formatShortDate,
-    generationLabelDisplay,
-} from "@/lib/forms/packets/documentProvenanceDisplay";
-import { operatorReviewStatusLabel } from "@/lib/forms/packets/packetReviewPresentation";
+    BosReviewSummaryPlaceholder,
+    CaseFileSection,
+    FormsArtifactBadge,
+    FormsProvenanceLine,
+    FormsReviewBadge,
+    FormsTechnicalDetailStack,
+    TechnicalDetailDisclosure,
+    TechnicalDetailField,
+    TechnicalDetailFieldList,
+    TechnicalDetailJsonBlock,
+    TechnicalDetailMonospaceValue,
+} from "@/components/forms/review";
+import { FORMS_TECHNICAL_DISCLOSURE } from "@/lib/forms/review/formsReviewTechnicalDisclosure";
+import {
+    FORMS_CASE_FILE_SECTION,
+    FORMS_REVIEW_EMPTY,
+    operatorReviewStatusLabel,
+    operatorReviewStatusTone,
+    packetSessionStatusLabel,
+    packetSessionStatusTone,
+} from "@/lib/forms/review/formsReviewPresentation";
+import {
+    formsCaseFileActionLink,
+    formsCaseFileAnswerSurface,
+    formsCaseFileGroupedRow,
+    formsCaseFileGroupedSurface,
+    formsCaseFileMetaText,
+    formsCaseFileRegionTitle,
+    formsCaseFileStack,
+    formsCaseFileStackCompact,
+} from "@/lib/forms/review/formsReviewClassTokens";
 
 export type PacketReviewTechnicalDetails = {
     launch_context: unknown;
     crm_snapshot: unknown;
     shared_values: unknown;
+    /** Operator-secondary identifiers (collapsed by default). */
+    identifiers?: {
+        packet_session_id?: string;
+        opportunity_id?: string | null;
+        customer_id?: string | null;
+        recipient_person_id?: string | null;
+        packet_definition_key?: string | null;
+    };
 };
 
 type Props = {
@@ -29,18 +62,6 @@ type Props = {
     /** Review actions slot (approve / reject / needs correction) rendered after case file */
     reviewActionsSlot?: React.ReactNode;
 };
-
-function JsonPanel({ title, subtitle, value }: { title: string; subtitle?: string; value: unknown }) {
-    return (
-        <div className="rounded-lg border border-[#e6e8ec] bg-[#fafbfd] p-3 text-xs text-[#59678b]">
-            <p className="font-medium text-[#31394d]">{title}</p>
-            {subtitle ? <p className="mt-1 text-[11px] leading-snug">{subtitle}</p> : null}
-            <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap font-mono text-[11px] text-[#31394d]">
-                {JSON.stringify(value ?? {}, null, 2)}
-            </pre>
-        </div>
-    );
-}
 
 async function openDocumentSignedUrl(docId: string): Promise<string | null> {
     const res = await fetch(`/api/admin/documents/${encodeURIComponent(docId)}/signed-url`, {
@@ -63,7 +84,6 @@ export function PacketReviewRollupView({
     const compact = placement === "modal";
     const [openingDocId, setOpeningDocId] = useState<string | null>(null);
     const [openDocErr, setOpenDocErr] = useState<string | null>(null);
-    const [techOpen, setTechOpen] = useState(false);
 
     const onOpenPdf = useCallback(async (docId: string) => {
         setOpenDocErr(null);
@@ -80,23 +100,36 @@ export function PacketReviewRollupView({
 
     const ctx = rollup.enrollment_context;
     const prog = rollup.progress;
+    const hasLinkageAttention =
+        rollup.linkage_summary.any_intake_needs_review || rollup.linkage_summary.steps_missing_crm_fk > 0;
 
     return (
-        <div className={clsx("space-y-4", compact && "space-y-3 text-[13px]")}>
-            <section className="rounded-lg border border-[#c7d2fe] bg-[#eef2ff] px-4 py-3 text-sm text-[#1e3a8a]">
-                <h2 className="text-sm font-semibold text-[#172554]">Enrollment context</h2>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-[#1e3a8a]/90">
+        <div className={clsx(compact ? formsCaseFileStackCompact : formsCaseFileStack, compact && "text-[13px]")}>
+            <CaseFileSection
+                id={FORMS_CASE_FILE_SECTION.intakeContext}
+                title="Intake context"
+                variant="context"
+                description="Who this packet is for and how it was launched."
+            >
+                <ul className="list-disc space-y-1 pl-5 text-sm text-alloy-midnight/85">
                     <li>
                         <span className="font-medium">Packet:</span> {rollup.packet_definition.name}
                         {rollup.packet_definition.key ?
-                            <span className="text-[#475569]"> ({rollup.packet_definition.key})</span>
+                            <span className="text-alloy-midnight/55"> ({rollup.packet_definition.key})</span>
                         : null}
                     </li>
-                    <li>
-                        <span className="font-medium">Session status:</span> {rollup.status}
-                        {" · "}
-                        <span className="font-medium">Review:</span>{" "}
-                        {operatorReviewStatusLabel(rollup.operator_review.status)}
+                    <li className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium">Session:</span>
+                        <FormsReviewBadge
+                            label={packetSessionStatusLabel(rollup.status)}
+                            tone={packetSessionStatusTone(rollup.status)}
+                        />
+                        <span className="text-alloy-midnight/50">·</span>
+                        <span className="font-medium">Review:</span>
+                        <FormsReviewBadge
+                            label={operatorReviewStatusLabel(rollup.operator_review.status)}
+                            tone={operatorReviewStatusTone(rollup.operator_review.status)}
+                        />
                     </li>
                     <li>
                         <span className="font-medium">Progress:</span> {prog.submitted_steps} of {prog.total_steps}{" "}
@@ -107,41 +140,40 @@ export function PacketReviewRollupView({
                             <span className="font-medium">Launch:</span> CRM opportunity packet link
                         </li>
                     : null}
-                    {ctx.opportunity_id ?
+                    {ctx.opportunity_label ?
                         <li>
-                            <span className="font-medium">Opportunity:</span>{" "}
-                            {ctx.opportunity_label ? `${ctx.opportunity_label} · ` : null}
-                            <span className="font-mono text-[11px]">{ctx.opportunity_id}</span>
+                            <span className="font-medium">Opportunity:</span> {ctx.opportunity_label}
                         </li>
                     : null}
-                    {ctx.customer_id ?
+                    {ctx.customer_label ?
                         <li>
-                            <span className="font-medium">Customer:</span>{" "}
-                            {ctx.customer_label ? `${ctx.customer_label} · ` : null}
-                            <span className="font-mono text-[11px]">{ctx.customer_id}</span>
+                            <span className="font-medium">Customer:</span> {ctx.customer_label}
                         </li>
                     : null}
                 </ul>
-            </section>
+            </CaseFileSection>
 
-            {(rollup.linkage_summary.any_intake_needs_review || rollup.linkage_summary.steps_missing_crm_fk > 0) ?
-                <section
-                    role="status"
-                    className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950"
+            <BosReviewSummaryPlaceholder />
+
+            {hasLinkageAttention ?
+                <CaseFileSection
+                    id={FORMS_CASE_FILE_SECTION.needsAttention}
+                    title="Needs attention"
+                    variant="attention"
+                    description="Resolve linkage before treating review as complete."
                 >
-                    <p className="font-semibold">Linkage summary</p>
-                    <ul className="mt-1 list-disc space-y-1 pl-5 text-[13px]">
+                    <ul className="list-disc space-y-1 pl-5 text-sm">
                         {rollup.linkage_summary.any_intake_needs_review ?
                             <li>One or more steps need intake / linkage review.</li>
                         : null}
                         {rollup.linkage_summary.steps_missing_crm_fk > 0 ?
                             <li>
-                                {rollup.linkage_summary.steps_missing_crm_fk} submitted step(s) missing CRM FK on
+                                {rollup.linkage_summary.steps_missing_crm_fk} submitted step(s) missing CRM link on
                                 submission.
                             </li>
                         : null}
                     </ul>
-                    <ul className="mt-2 space-y-1 text-[12px]">
+                    <ul className="mt-2 space-y-1 text-xs">
                         {rollup.linkage_summary.steps
                             .filter((s) => s.intake_needs_review || !s.has_crm_fk)
                             .map((s) => (
@@ -152,7 +184,7 @@ export function PacketReviewRollupView({
                                             {" — "}
                                             <a
                                                 href={s.admin_submission_path}
-                                                className="font-semibold text-[#2563eb] hover:underline"
+                                                className={formsCaseFileActionLink}
                                                 target="_blank"
                                                 rel="noreferrer"
                                             >
@@ -163,24 +195,28 @@ export function PacketReviewRollupView({
                                 </li>
                             ))}
                     </ul>
-                </section>
+                </CaseFileSection>
             : null}
 
             {rollup.operator_review.warnings.length > 0 ?
-                <section className="rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2">
-                    <p className="text-[11px] font-semibold text-amber-950">Name / CRM hints</p>
-                    <ul className="mt-1 list-disc space-y-1 pl-4 text-[11px] text-amber-950/90">
+                <CaseFileSection
+                    id={FORMS_CASE_FILE_SECTION.whatChanged}
+                    title="What changed"
+                    variant="attention"
+                    description="Hints from submitted values vs known CRM context."
+                >
+                    <ul className="list-disc space-y-1 pl-5 text-sm text-alloy-midnight/85">
                         {rollup.operator_review.warnings.map((w, i) => (
                             <li key={i}>{w.message}</li>
                         ))}
                     </ul>
-                </section>
+                </CaseFileSection>
             : null}
 
-            <section>
-                <h2 className="text-sm font-semibold text-[#0f172a]">Submitted answers by step</h2>
+            <section id={FORMS_CASE_FILE_SECTION.submittedForms}>
+                <h2 className={formsCaseFileRegionTitle}>Submitted forms</h2>
                 {rollup.steps.length === 0 ?
-                    <p className="mt-2 text-sm text-[#59678b]">No steps in this packet.</p>
+                    <p className={clsx("mt-2", formsCaseFileMetaText)}>{FORMS_REVIEW_EMPTY.noSteps}</p>
                 :   <ul className="mt-2 space-y-4">
                         {rollup.steps.map((step) => {
                             let schema = null;
@@ -200,33 +236,31 @@ export function PacketReviewRollupView({
                             return (
                                 <li
                                     key={step.session_item_id}
-                                    className="rounded-lg border border-[#e6e8ec] bg-white px-4 py-3 shadow-sm"
+                                    className="rounded-lg border border-admin-border bg-white px-4 py-3"
                                 >
                                     <div className="flex flex-wrap items-baseline justify-between gap-2">
-                                        <h3 className="font-medium text-[#0f172a]">
+                                        <h3 className="text-sm font-medium text-alloy-midnight">
                                             Step {step.sequence_index + 1}: {step.form_name}
                                         </h3>
-                                        <span
-                                            className={clsx(
-                                                "rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide",
-                                                artifactKindBadgeClass(step.artifact.kind)
-                                            )}
-                                        >
-                                            {step.artifact.kind === "generated_pdf" || step.artifact.kind === "submitted_record" ?
-                                                artifactKindDisplayLabel(step.artifact.kind)
-                                            :   step.artifact.label}
-                                        </span>
+                                        <FormsArtifactBadge
+                                            kind={step.artifact.kind}
+                                            label={
+                                                step.artifact.kind === "generated_pdf" ||
+                                                step.artifact.kind === "submitted_record" ?
+                                                    undefined
+                                                :   step.artifact.label
+                                            }
+                                        />
                                     </div>
-                                    <p className="mt-1 text-[11px] text-[#59678b]">
-                                        Item: {step.item_status}
-                                        {step.version_number != null ? ` · Version ${step.version_number}` : ""}
+                                    <p className={clsx("mt-1", formsCaseFileMetaText)}>
+                                        {step.version_number != null ? `Version ${step.version_number}` : null}
                                         {step.submitted_at ?
-                                            ` · Submitted ${formatShortDate(step.submitted_at)}`
-                                        :   ""}
+                                            `${step.version_number != null ? " · " : ""}Submitted ${formatShortDate(step.submitted_at)}`
+                                        :   null}
                                     </p>
 
                                     {step.intake_meta?.intake_needs_review ?
-                                        <p className="mt-2 text-[11px] text-amber-900">
+                                        <p className="mt-2 text-xs text-alloy-ember">
                                             Intake needs review
                                             {step.intake_meta.intake_review_reason ?
                                                 `: ${step.intake_meta.intake_review_reason}`
@@ -236,7 +270,7 @@ export function PacketReviewRollupView({
 
                                     <div className="mt-3">
                                         {schema ?
-                                            <div className="rounded-lg border border-[#e6e8ec] bg-[#fafbfd] p-3">
+                                            <div className={formsCaseFileAnswerSurface}>
                                                 <FormEngineRenderer
                                                     schema={schema}
                                                     payload={payload}
@@ -246,12 +280,12 @@ export function PacketReviewRollupView({
                                                 />
                                             </div>
                                         : step.submission_status === "submitted" ?
-                                            <p className="text-sm text-[#59678b]">
+                                            <p className={formsCaseFileMetaText}>
                                                 Answers unavailable (schema could not be loaded).{" "}
                                                 {step.artifact.admin_submission_path ?
                                                     <a
                                                         href={step.artifact.admin_submission_path}
-                                                        className="font-semibold text-[#2563eb] hover:underline"
+                                                        className={formsCaseFileActionLink}
                                                         target="_blank"
                                                         rel="noreferrer"
                                                     >
@@ -259,85 +293,52 @@ export function PacketReviewRollupView({
                                                     </a>
                                                 : null}
                                             </p>
-                                        :   <p className="text-sm text-[#59678b]">Not submitted yet.</p>
+                                        :   <p className={formsCaseFileMetaText}>Not submitted yet.</p>
                                         }
                                     </div>
 
-                                    <div className="mt-3 border-t border-[#e6e8ec] pt-3">
-                                        <p className="text-[11px] font-semibold text-[#31394d]">Artifacts</p>
-                                        {step.artifact.helper_text ?
-                                            <p className="mt-1 text-[11px] text-[#59678b]">{step.artifact.helper_text}</p>
-                                        : null}
-                                        {step.artifact.kind === "generated_pdf" && step.artifact.documents.length > 0 ?
-                                            <ul className="mt-2 space-y-1.5">
-                                                {step.artifact.documents.map((doc) => {
-                                                    const idxEntry = rollup.documents_index.find(
-                                                        (e) => e.document_id === doc.id
-                                                    );
-                                                    return (
-                                                        <li
-                                                            key={doc.id}
-                                                            className="flex flex-wrap items-center gap-2 text-[12px]"
-                                                        >
+                                    {(step.artifact.kind === "generated_pdf" && step.artifact.documents.length > 0) ||
+                                    (step.artifact.kind === "submitted_record" && step.artifact.admin_submission_path) ||
+                                    step.artifact.kind === "pending" ||
+                                    step.artifact.kind === "not_started" ?
+                                        <div className="mt-3 border-t border-admin-border pt-3">
+                                            {step.artifact.kind === "generated_pdf" && step.artifact.documents.length > 0 ?
+                                                <ul className="space-y-1">
+                                                    {step.artifact.documents.map((doc) => (
+                                                        <li key={doc.id}>
                                                             <button
                                                                 type="button"
-                                                                className="font-semibold text-[#2563eb] hover:underline disabled:opacity-50"
+                                                                className={clsx(
+                                                                    formsCaseFileActionLink,
+                                                                    "disabled:opacity-50"
+                                                                )}
                                                                 disabled={openingDocId === doc.id}
                                                                 onClick={() => void onOpenPdf(doc.id)}
                                                             >
-                                                                {openingDocId === doc.id ? "Opening…" : doc.name ?? "View PDF"}
+                                                                {openingDocId === doc.id ?
+                                                                    "Opening…"
+                                                                :   doc.name ?? "Open PDF"}
                                                             </button>
-                                                            <span className="text-[#59678b]">
-                                                                {generationLabelDisplay(doc.generation_label)}
-                                                            </span>
-                                                            {idxEntry ?
-                                                                <span className="text-[#59678b]">
-                                                                    · {formatPacketDocumentProvenanceLine(idxEntry.provenance)}
-                                                                </span>
-                                                            : null}
                                                         </li>
-                                                    );
-                                                })}
-                                            </ul>
-                                        : step.artifact.kind === "submitted_record" ?
-                                            <div className="mt-2 text-[12px] text-[#59678b]">
-                                                <p>Submitted form record (no generated PDF for this step).</p>
-                                                {step.artifact.admin_submission_path ?
-                                                    <a
-                                                        href={step.artifact.admin_submission_path}
-                                                        className="mt-1 inline-block font-semibold text-[#2563eb] hover:underline"
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                    >
-                                                        View submission
-                                                    </a>
-                                                : null}
-                                                {rollup.documents_index
-                                                    .filter(
-                                                        (e) =>
-                                                            e.kind === "submitted_record" &&
-                                                            e.form_submission_id === step.form_submission_id
-                                                    )
-                                                    .map((e) => (
-                                                        <p key={e.form_submission_id} className="mt-1 text-[11px]">
-                                                            {formatPacketDocumentProvenanceLine(e.provenance)}
-                                                        </p>
                                                     ))}
-                                            </div>
-                                        : step.artifact.kind === "pending" || step.artifact.kind === "not_started" ?
-                                            <p className="mt-2 text-[12px] text-[#59678b]">{step.artifact.label}</p>
-                                        :   null}
-                                        {step.artifact.admin_submission_path ?
-                                            <a
-                                                href={step.artifact.admin_submission_path}
-                                                className="mt-2 inline-block text-[11px] font-semibold text-[#2563eb] hover:underline"
-                                                target="_blank"
-                                                rel="noreferrer"
-                                            >
-                                                Open submission (advanced)
-                                            </a>
-                                        : null}
-                                    </div>
+                                                </ul>
+                                            : step.artifact.kind === "submitted_record" && step.artifact.admin_submission_path ?
+                                                <a
+                                                    href={step.artifact.admin_submission_path}
+                                                    className={formsCaseFileActionLink}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                >
+                                                    View submission record
+                                                </a>
+                                            : step.artifact.kind === "pending" || step.artifact.kind === "not_started" ?
+                                                <p className={formsCaseFileMetaText}>{step.artifact.label}</p>
+                                            :   null}
+                                            <p className={clsx("mt-1.5", formsCaseFileMetaText)}>
+                                                Provenance and artifact types are listed under Documents &amp; records.
+                                            </p>
+                                        </div>
+                                    :   null}
                                 </li>
                             );
                         })}
@@ -345,28 +346,25 @@ export function PacketReviewRollupView({
                 }
             </section>
 
-            {rollup.documents_index.length > 0 ?
-                <section>
-                    <h2 className="text-sm font-semibold text-[#0f172a]">Documents index</h2>
-                    <ul className="mt-2 divide-y divide-[#e6e8ec] rounded-lg border border-[#e6e8ec] bg-white text-[12px]">
+            <section id={FORMS_CASE_FILE_SECTION.documents}>
+                <h2 className={formsCaseFileRegionTitle}>Documents & records</h2>
+                {rollup.documents_index.length === 0 ?
+                    <p className={clsx("mt-2", formsCaseFileMetaText)}>{FORMS_REVIEW_EMPTY.noDocuments}</p>
+                :   <ul className={clsx("mt-2", formsCaseFileGroupedSurface)}>
                         {rollup.documents_index.map((entry) => (
-                            <li key={`${entry.kind}-${entry.form_submission_id}-${entry.document_id ?? "rec"}`} className="px-3 py-2">
-                                <div className="font-medium text-[#31394d]">
-                                    {entry.title}
-                                    <span
-                                        className={clsx(
-                                            "ms-2 rounded border px-1 py-0.5 text-[10px] font-medium",
-                                            artifactKindBadgeClass(entry.kind)
-                                        )}
-                                    >
-                                        {artifactKindDisplayLabel(entry.kind)}
-                                    </span>
+                            <li
+                                key={`${entry.kind}-${entry.form_submission_id}-${entry.document_id ?? "rec"}`}
+                                className={formsCaseFileGroupedRow}
+                            >
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className="font-medium text-alloy-midnight">{entry.title}</span>
+                                    <FormsArtifactBadge kind={entry.kind} />
                                 </div>
-                                <p className="mt-0.5 text-[#59678b]">{formatPacketDocumentProvenanceLine(entry.provenance)}</p>
-                                <div className="mt-1 flex flex-wrap gap-2">
+                                <FormsProvenanceLine provenance={entry.provenance} className="mt-1" />
+                                <div className="mt-1.5 flex flex-wrap gap-2">
                                     <a
                                         href={entry.admin_links.submission_path}
-                                        className="font-semibold text-[#2563eb] hover:underline"
+                                        className={formsCaseFileActionLink}
                                         target="_blank"
                                         rel="noreferrer"
                                     >
@@ -375,7 +373,7 @@ export function PacketReviewRollupView({
                                     {entry.document_id ?
                                         <button
                                             type="button"
-                                            className="font-semibold text-[#2563eb] hover:underline disabled:opacity-50"
+                                            className={clsx(formsCaseFileActionLink, "disabled:opacity-50")}
                                             disabled={openingDocId === entry.document_id}
                                             onClick={() => void onOpenPdf(entry.document_id!)}
                                         >
@@ -386,33 +384,88 @@ export function PacketReviewRollupView({
                             </li>
                         ))}
                     </ul>
-                </section>
-            : null}
+                }
+            </section>
 
             {openDocErr ?
-                <p className="text-xs text-red-700" role="alert">
+                <p className="text-xs text-alloy-ember" role="alert">
                     {openDocErr}
                 </p>
             : null}
 
             {technicalDetails ?
-                <details
-                    className="rounded-lg border border-[#e6e8ec] bg-[#fafbfd] px-3 py-2"
-                    open={techOpen}
-                    onToggle={(e) => setTechOpen(e.currentTarget.open)}
-                >
-                    <summary className="cursor-pointer text-sm font-medium text-[#00458C]">Technical details (JSON)</summary>
-                    <div className="mt-3 grid gap-3 md:grid-cols-2">
-                        <JsonPanel title="Launch context" value={technicalDetails.launch_context} />
-                        <JsonPanel title="CRM snapshot" value={technicalDetails.crm_snapshot} />
-                    </div>
-                    <div className="mt-3">
-                        <JsonPanel title="Shared values" value={technicalDetails.shared_values} />
-                    </div>
-                </details>
+                <FormsTechnicalDetailStack>
+                    <TechnicalDetailDisclosure
+                        title={FORMS_TECHNICAL_DISCLOSURE.technicalDetails.title}
+                        helperText={FORMS_TECHNICAL_DISCLOSURE.technicalDetails.helper}
+                    >
+                        {technicalDetails.identifiers ?
+                            <TechnicalDetailFieldList>
+                                {technicalDetails.identifiers.packet_session_id ?
+                                    <TechnicalDetailField label="Packet session id" fullWidth>
+                                        <TechnicalDetailMonospaceValue>
+                                            {technicalDetails.identifiers.packet_session_id}
+                                        </TechnicalDetailMonospaceValue>
+                                    </TechnicalDetailField>
+                                : null}
+                                {technicalDetails.identifiers.packet_definition_key ?
+                                    <TechnicalDetailField label="Packet definition key">
+                                        <TechnicalDetailMonospaceValue>
+                                            {technicalDetails.identifiers.packet_definition_key}
+                                        </TechnicalDetailMonospaceValue>
+                                    </TechnicalDetailField>
+                                : null}
+                                {technicalDetails.identifiers.opportunity_id ?
+                                    <TechnicalDetailField label="Opportunity id" fullWidth>
+                                        <TechnicalDetailMonospaceValue>
+                                            {technicalDetails.identifiers.opportunity_id}
+                                        </TechnicalDetailMonospaceValue>
+                                    </TechnicalDetailField>
+                                : null}
+                                {technicalDetails.identifiers.customer_id ?
+                                    <TechnicalDetailField label="Customer id" fullWidth>
+                                        <TechnicalDetailMonospaceValue>
+                                            {technicalDetails.identifiers.customer_id}
+                                        </TechnicalDetailMonospaceValue>
+                                    </TechnicalDetailField>
+                                : null}
+                                {technicalDetails.identifiers.recipient_person_id ?
+                                    <TechnicalDetailField label="Recipient person id" fullWidth>
+                                        <TechnicalDetailMonospaceValue>
+                                            {technicalDetails.identifiers.recipient_person_id}
+                                        </TechnicalDetailMonospaceValue>
+                                    </TechnicalDetailField>
+                                : null}
+                            </TechnicalDetailFieldList>
+                        : null}
+                        {rollup.steps.some((s) => s.item_status) ?
+                            <div className="mt-3">
+                                <TechnicalDetailJsonBlock
+                                    title="Step item status"
+                                    subtitle="Per-step execution state from packet session items."
+                                    value={Object.fromEntries(
+                                        rollup.steps.map((s) => [
+                                            `step_${s.sequence_index + 1}`,
+                                            { item_status: s.item_status, form_submission_id: s.form_submission_id },
+                                        ])
+                                    )}
+                                />
+                            </div>
+                        : null}
+                        <div className="mt-3 grid gap-3 md:grid-cols-2">
+                            <TechnicalDetailJsonBlock title="Launch context" value={technicalDetails.launch_context} />
+                            <TechnicalDetailJsonBlock title="CRM snapshot" value={technicalDetails.crm_snapshot} />
+                        </div>
+                        <TechnicalDetailJsonBlock title="Shared values" value={technicalDetails.shared_values} />
+                    </TechnicalDetailDisclosure>
+                </FormsTechnicalDetailStack>
             : null}
 
-            {reviewActionsSlot ? <div className="border-t border-[#e6e8ec] pt-4">{reviewActionsSlot}</div> : null}
+            {reviewActionsSlot ?
+                <div id={FORMS_CASE_FILE_SECTION.reviewActions} className="border-t border-admin-border pt-4">
+                    {reviewActionsSlot}
+                </div>
+            : null}
         </div>
     );
 }

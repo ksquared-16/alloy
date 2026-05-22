@@ -7,6 +7,11 @@ import { proposalHasMutatingOperations } from "@/lib/agent/configLayoutAssist/co
 import type { ProposalStatePresentation } from "@/lib/agent/configLayoutAssist/configLayoutAssistProposalPresentation";
 import type { BosProposalStatus, BosRiskLevel } from "@/lib/bos/bosCapability";
 import type { OperationalProposalFrameVariant } from "@/lib/adminV2/bos/operationalProposalPresentation";
+import {
+    MUTATION_BOUNDARY_CONFIG_APPROVED_PENDING_APPLY,
+    MUTATION_BOUNDARY_CONFIG_NOT_LIVE,
+    MUTATION_BOUNDARY_RECOMMENDATION_ONLY,
+} from "@/lib/adminV2/bos/bosMutationBoundaryCopy";
 
 export const CONFIG_LAYOUT_ASSIST_PROPOSAL_TYPE_LABEL = "Configuration proposal";
 export const CONFIG_LAYOUT_ASSIST_FIELD_SETUP_TYPE_LABEL = "Field setup";
@@ -16,8 +21,7 @@ export const CONFIG_LAYOUT_ASSIST_PROPOSAL_SOURCE_LABEL = "Config Assist";
 export const CONFIG_LAYOUT_ASSIST_SETTINGS_HUB_COPY =
     "Same proposal as Settings → Config proposals. Use advanced review for full lifecycle and apply controls.";
 
-export const CONFIG_LAYOUT_ASSIST_MUTATION_BOUNDARY_COPY =
-    "No configuration changes are live until you review, approve, and apply in Settings.";
+export const CONFIG_LAYOUT_ASSIST_MUTATION_BOUNDARY_COPY = MUTATION_BOUNDARY_CONFIG_NOT_LIVE;
 
 export function configProposalEntityContextLabel(proposal: ConfigurationProposalV1): string | null {
     const meta = proposal.metadata;
@@ -86,13 +90,13 @@ export function configProposalMutationBoundaryCopy(
     statePresentation: ProposalStatePresentation
 ): string | null {
     if (statePresentation.isRecommendationOnly) {
-        return "Recommendation only — no configuration changes will be applied.";
+        return MUTATION_BOUNDARY_RECOMMENDATION_ONLY;
     }
     if (statePresentation.needsConfirmation) {
         return CONFIG_LAYOUT_ASSIST_MUTATION_BOUNDARY_COPY;
     }
     if (statePresentation.stateLabel.includes("Approved")) {
-        return "Approved in Settings. Apply when you are ready to make this change live.";
+        return MUTATION_BOUNDARY_CONFIG_APPROVED_PENDING_APPLY;
     }
     return CONFIG_LAYOUT_ASSIST_MUTATION_BOUNDARY_COPY;
 }

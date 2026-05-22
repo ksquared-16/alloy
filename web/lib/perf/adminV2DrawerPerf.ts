@@ -251,7 +251,7 @@ export function reportDrawerFullHydrated(opportunityId: string): void {
     });
 }
 
-/** `postDrawerVisible` enrichment queue started (secondary fetches — Card 2 will tighten gates). */
+/** Post-reveal enrich window opened (`postDrawerVisible` after primary contract — not full). */
 export function reportPostRevealEnrichStart(opportunityId: string): void {
     if (typeof performance !== "undefined") {
         alloyPerfSet(POST_REVEAL_ENRICH_START_MARK, performance.now());
@@ -262,7 +262,7 @@ export function reportPostRevealEnrichStart(opportunityId: string): void {
     });
 }
 
-/** Full hydrate applied — enrichment layout may expand (not full Card 2 suppression). */
+/** Below-fold enrichment window open (scroll/idle unlock — oper/tours may mount). */
 export function reportPostRevealEnrichEnd(opportunityId: string): void {
     if (typeof performance !== "undefined") {
         alloyPerfSet(POST_REVEAL_ENRICH_END_MARK, performance.now());

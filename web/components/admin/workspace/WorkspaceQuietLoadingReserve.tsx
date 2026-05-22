@@ -110,8 +110,60 @@ export function WorkspaceQuietQueueLaneReserve() {
             className="adminv2-ws-wu-queue-shell rounded-xl border border-alloy-stone/12 bg-white/40"
             style={adminV2WorkUnitQueueLaneReserveStyle()}
             data-adminv2-wu-queue-lane-reserve="true"
-            aria-busy="true"
-            aria-label="Loading queue"
+            aria-hidden
         />
+    );
+}
+
+function WorkUnitOperLaneSpinner() {
+    return (
+        <div
+            className="h-9 w-9 rounded-full border-[3px] border-alloy-forge/12 border-t-alloy-forge/70 border-r-alloy-forge/35 animate-spin motion-reduce:animate-none"
+            style={{ animationDuration: "0.95s" }}
+            aria-hidden
+        />
+    );
+}
+
+/**
+ * Centered loader inside the work-unit queue lane — gates oper region without framed page skeletons.
+ */
+export function WorkUnitOperationalLaneLoader({ laneLabel = "Queue" }: { laneLabel?: string }) {
+    return (
+        <div
+            className="adminv2-ws-dept-v2-operational-row adminv2-ws-dept-v2-operational-row--double"
+            aria-label="Lane queue"
+            data-adminv2-wu-oper-region-loading="true"
+            aria-busy="true"
+            aria-live="polite"
+        >
+            <div className="adminv2-ws-dept-v2-lane adminv2-ws-dept-v2-lane--throughput" data-ws-lane-kind="lane_queue">
+                <div className="adminv2-ws-dept-v2-lane-chrome adminv2-ws-dept-v2-lane-chrome--throughput-deck">
+                    <section
+                        className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--primary adminv2-ws-dept-throughput-panel rounded-xl border border-alloy-stone/18 bg-white shadow-sm"
+                        aria-label={laneLabel}
+                    >
+                        <header className="adminv2-ws-queue-header border-b border-alloy-stone/12 px-2.5 py-2">
+                            <div className="adminv2-ws-queue-title-row">
+                                <h3 className="adminv2-ws-queue-title text-alloy-forge/90">{laneLabel}</h3>
+                            </div>
+                        </header>
+                        <div className="relative px-2 py-2" style={adminV2WorkUnitQueueLaneReserveStyle()}>
+                            <WorkspaceQuietQueueLaneReserve />
+                            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                                <div className="flex flex-col items-center gap-2">
+                                    <WorkUnitOperLaneSpinner />
+                                    <span className="text-[11px] font-medium text-alloy-forge/75">Loading work unit…</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+            <div
+                className="adminv2-ws-dept-v2-lane adminv2-ws-dept-v2-lane--attention adminv2-ws-dept-v2-lane--attention--hidden"
+                aria-hidden
+            />
+        </div>
     );
 }

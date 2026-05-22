@@ -5,11 +5,9 @@ import { formatDateTime } from "@/lib/adminFormatters";
 import { isV1DocumentEntityType } from "@/lib/admin/v1DocumentEntities";
 import type { V1DocumentEntityValue } from "@/lib/admin/v1DocumentEntities";
 import AssociatedDocumentUploadModal from "@/components/admin/AssociatedDocumentUploadModal";
-import {
-    artifactKindBadgeClass,
-    artifactKindDisplayLabel,
-    isSyntheticPacketDocumentId,
-} from "@/lib/forms/packets/documentProvenanceDisplay";
+import { FormsArtifactBadge, FormsReviewBadge } from "@/components/forms/review";
+import { generationLabelOperatorText, generationLabelTone } from "@/lib/forms/review/formsReviewPresentation";
+import { isSyntheticPacketDocumentId } from "@/lib/forms/packets/documentProvenanceDisplay";
 import type { NormalizedDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 
 /** Aligned with `NormalizedDocumentRow` from `/api/admin/related/...` and upload response. */
@@ -221,13 +219,15 @@ export default function EntityDocumentsSection({
                                 <div className="flex flex-wrap items-center gap-1.5">
                                     <p className="text-sm font-medium text-alloy-forge/90 truncate">{displayName(doc)}</p>
                                     {doc.artifact_kind === "generated_pdf" || doc.artifact_kind === "submitted_record" ?
-                                        <span
-                                            className={`shrink-0 rounded border px-1 py-0.5 text-[10px] font-medium ${artifactKindBadgeClass(doc.artifact_kind)}`}
-                                        >
-                                            {artifactKindDisplayLabel(doc.artifact_kind)}
-                                        </span>
+                                        <FormsArtifactBadge kind={doc.artifact_kind} className="shrink-0" />
                                     : null}
-                                    {doc.generation_label_display ?
+                                    {doc.generation_label === "current" || doc.generation_label === "also_generated" ?
+                                        <FormsReviewBadge
+                                            className="shrink-0"
+                                            label={generationLabelOperatorText(doc.generation_label)}
+                                            tone={generationLabelTone(doc.generation_label)}
+                                        />
+                                    : doc.generation_label_display ?
                                         <span className="shrink-0 text-[10px] text-alloy-midnight/55">
                                             {doc.generation_label_display}
                                         </span>

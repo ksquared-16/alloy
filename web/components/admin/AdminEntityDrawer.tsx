@@ -184,9 +184,14 @@ import {
     opportunityDrawerAboveFoldLayoutLocked,
     opportunityDrawerLayoutFirstPaintGatesActive,
     opportunityDrawerSummaryLayoutMode,
-    shouldDeferOpportunityDrawerSecondaryReveal,
     stabilizeOpportunityWorkflowOverviewSections,
 } from "@/lib/admin/drawer/opportunityDrawerLayoutStability";
+import {
+    opportunityDrawerBelowFoldEnrichmentReady as computeBelowFoldEnrichmentReady,
+    opportunityDrawerFullBoundEnrichmentReady as computeFullBoundEnrichmentReady,
+    opportunityDrawerPostRevealMayOpen,
+    opportunityDrawerSecondaryWindowOpen as computeSecondaryWindowOpen,
+} from "@/lib/admin/drawer/opportunityDrawerRevealReadiness";
 import {
     clearOpportunityDrawerBackgroundFullSchedule,
     finishOpportunityDrawerHydrate,
@@ -1429,10 +1434,10 @@ export default function AdminEntityDrawer() {
             header: relabel(base.header ?? []),
         };
     }, [opportunityResolvedHeaderActions, opportunityRecordHeaderActiveTours]);
-    /** After `drawer_visible_ready` + two animation frames — defer non-critical fetches (activity-signal, deletion check). */
+    /** After primary reveal + contract — arms post-reveal enrich queue (not gated on full). */
     const [postDrawerVisibleKey, setPostDrawerVisibleKey] = useState<string | null>(null);
     const postRevealEnrichEndReportedRef = useRef<string | null>(null);
-    /** Packet, activity strip, tour editor — after primary overview reveal (no extra visible phases). */
+    /** Below-fold enrichment mounts (secondary window + above-fold stable). */
     const [opportunityDrawerSecondaryReady, setOpportunityDrawerSecondaryReady] = useState(false);
     /** Background `surface=full` after `drawer_visible` — avoids second loading shell; cleared on new entity fetch / drawer close. */
     const opportunityPrimaryHydrateInFlightRef = useRef<string | null>(null);
@@ -1474,6 +1479,7 @@ export default function AdminEntityDrawer() {
 
     useEffect(() => {
         setPostDrawerVisibleKey(null);
+        postRevealEnrichEndReportedRef.current = null;
         setOpportunityDrawerSecondaryReady(false);
         setOpportunityDrawerRevealCoordTimedOut(false);
         opportunityDrawerRevealCoordStartedAtRef.current = null;
@@ -2666,11 +2672,6 @@ export default function AdminEntityDrawer() {
             adminV2DrawerBootstrapEnabled() &&
             !opportunityDrawerBootstrapLegacy &&
             drawer.type === "opportunities";
-        if (bootstrapEnrichmentPath && !opportunityFullRecordHydrateApplied) {
-            setOpportunityActivitySignal(null);
-            setOpportunityActivitySignalLoading(false);
-            return;
-        }
         const visKey = `${drawer.type}:${drawer.id}`;
         if (postDrawerVisibleKey !== visKey) {
             setOpportunityActivitySignal(null);
@@ -2717,7 +2718,6 @@ export default function AdminEntityDrawer() {
         opportunityDrawerBootstrapLegacy,
         opportunityActivitySignalNonce,
         postDrawerVisibleKey,
-        opportunityFullRecordHydrateApplied,
     ]);
 
     useEffect(() => {
@@ -6137,13 +6137,13 @@ export default function AdminEntityDrawer() {
             drawerShellVariant === "adminV2" &&
             adminV2DrawerBootstrapEnabled() &&
             !opportunityDrawerBootstrapLegacy &&
-            opportunityPrimaryHydrateApplied &&
-            !opportunityFullRecordHydrateApplied,
+            opportunityDrawerLayoutFrozen &&
+            !opportunityDrawerBelowFoldRevealed,
         [
             drawerShellVariant,
             opportunityDrawerBootstrapLegacy,
-            opportunityPrimaryHydrateApplied,
-            opportunityFullRecordHydrateApplied,
+            opportunityDrawerLayoutFrozen,
+            opportunityDrawerBelowFoldRevealed,
         ]
     );
 
@@ -6828,6 +6828,36 @@ export default function AdminEntityDrawer() {
         [opportunityDrawerLayoutFrozen, opportunityDrawerBelowFoldRevealed]
     );
 
+    const opportunityDrawerSecondaryWindowOpen = useMemo(
+        () => computeSecondaryWindowOpen(drawer.type, drawer.id, postDrawerVisibleKey),
+        [drawer.type, drawer.id, postDrawerVisibleKey]
+    );
+
+    const opportunityDrawerAboveFoldStable = !opportunityDrawerAboveFoldLocked;
+
+    const opportunityDrawerBelowFoldEnrichmentReady = useMemo(
+        () =>
+            computeBelowFoldEnrichmentReady(
+                opportunityDrawerSecondaryWindowOpen,
+                opportunityDrawerAboveFoldStable
+            ),
+        [opportunityDrawerSecondaryWindowOpen, opportunityDrawerAboveFoldStable]
+    );
+
+    const opportunityDrawerFullBoundEnrichmentReady = useMemo(
+        () =>
+            computeFullBoundEnrichmentReady(
+                opportunityDrawerBelowFoldEnrichmentReady,
+                opportunityFullRecordHydrateApplied,
+                opportunityDrawerEnrichmentHeld
+            ),
+        [
+            opportunityDrawerBelowFoldEnrichmentReady,
+            opportunityFullRecordHydrateApplied,
+            opportunityDrawerEnrichmentHeld,
+        ]
+    );
+
     const opportunityDrawerLayoutFirstPaintGates = useMemo(
         () => opportunityDrawerLayoutFirstPaintGatesActive(opportunityDrawerAboveFoldLocked, opportunityDrawerFirstPaintActive),
         [opportunityDrawerAboveFoldLocked, opportunityDrawerFirstPaintActive]
@@ -6883,14 +6913,17 @@ export default function AdminEntityDrawer() {
         if (scrollRoot) scrollRoot.scrollTop = 0;
     }, [drawer.type, drawer.id, opportunityDrawerLayoutFrozen, opportunityDrawerBelowFoldRevealed]);
 
-    /** Deferred enrichment after primary reveal; bootstrap path waits for background `full`. */
+    /** Post-reveal enrich window opens after primary contract — full hydrate is a participant, not the trigger. */
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
-        if (!opportunityDrawerOverviewRevealReady) return;
-        if (shouldDeferOpportunityDrawerSecondaryReveal(opportunityDrawerAboveFoldLocked)) return;
-        const enrichmentReady =
-            !opportunityDrawerBootstrapEnrichmentPath || opportunityFullRecordHydrateApplied;
-        if (!enrichmentReady) return;
+        if (
+            !opportunityDrawerPostRevealMayOpen({
+                overviewRevealReady: opportunityDrawerOverviewRevealReady,
+                primaryContractSatisfied: opportunityDrawerPrimaryContractSatisfied,
+            })
+        ) {
+            return;
+        }
         const key = `${drawer.type}:${drawer.id}`;
         if (postDrawerVisibleKey === key) return;
         let cancelled = false;
@@ -6910,27 +6943,19 @@ export default function AdminEntityDrawer() {
     }, [
         drawer.type,
         drawer.id,
-        opportunityDrawerBootstrapEnrichmentPath,
         opportunityDrawerOverviewRevealReady,
-        opportunityFullRecordHydrateApplied,
+        opportunityDrawerPrimaryContractSatisfied,
         postDrawerVisibleKey,
-        opportunityDrawerAboveFoldLocked,
     ]);
 
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        if (!opportunityDrawerBelowFoldEnrichmentReady) return;
         const key = `${drawer.type}:${drawer.id}`;
-        if (postDrawerVisibleKey !== key) return;
-        if (!opportunityFullRecordHydrateApplied) return;
         if (postRevealEnrichEndReportedRef.current === key) return;
         postRevealEnrichEndReportedRef.current = key;
         reportPostRevealEnrichEnd(String(drawer.id));
-    }, [
-        drawer.type,
-        drawer.id,
-        postDrawerVisibleKey,
-        opportunityFullRecordHydrateApplied,
-    ]);
+    }, [drawer.type, drawer.id, opportunityDrawerBelowFoldEnrichmentReady]);
 
     useEffect(() => {
         if (!opportunityDrawerBootstrapEnrichmentPath) return;
@@ -7012,17 +7037,8 @@ export default function AdminEntityDrawer() {
             setOpportunityDrawerSecondaryReady(false);
             return;
         }
-        const secondaryReady =
-            opportunityDrawerCoordinatedRevealReady &&
-            (!opportunityDrawerBootstrapEnrichmentPath || opportunityFullRecordHydrateApplied);
-        setOpportunityDrawerSecondaryReady(secondaryReady);
-    }, [
-        drawer.type,
-        drawer.id,
-        opportunityDrawerCoordinatedRevealReady,
-        opportunityDrawerBootstrapEnrichmentPath,
-        opportunityFullRecordHydrateApplied,
-    ]);
+        setOpportunityDrawerSecondaryReady(opportunityDrawerBelowFoldEnrichmentReady);
+    }, [drawer.type, drawer.id, opportunityDrawerBelowFoldEnrichmentReady]);
 
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
@@ -7036,9 +7052,7 @@ export default function AdminEntityDrawer() {
         setOpportunityTourBookingsId(drawer.id);
     }, [drawer.type, drawer.id, opportunityDrawerSecondaryReady]);
 
-    const opportunityInquirySummaryEnrichmentGate =
-        opportunityDrawerSecondaryReady &&
-        !shouldDeferOpportunityDrawerSecondaryReveal(opportunityDrawerAboveFoldLocked);
+    const opportunityInquirySummaryEnrichmentGate = opportunityDrawerBelowFoldEnrichmentReady;
     const { ref: tourSectionRef, intersecting: tourSectionVisible } = useDrawerSectionIntersection(
         opportunityInquirySummaryEnrichmentGate,
         "80px"
@@ -7052,7 +7066,9 @@ export default function AdminEntityDrawer() {
     const opportunityRegistrySectionActionsFetchEnabled =
         opportunityDrawerOverviewRevealReady &&
         !opportunityDrawerLayoutFirstPaintGates &&
-        (!opportunityDrawerBootstrapEnrichmentPath || opportunityFullRecordHydrateApplied);
+        opportunityDrawerSecondaryWindowOpen &&
+        opportunityDrawerBelowFoldEnrichmentReady &&
+        opportunityFullRecordHydrateApplied;
 
     useEffect(() => {
         setInquiryTourFetchArmed(tourBookingsFetchEnabled);
@@ -7925,8 +7941,7 @@ export default function AdminEntityDrawer() {
             const allowInquiryChildren =
                 oppCfg?.inquiry_drawer_mode === "workflow_v1" ||
                 (Array.isArray(order) && order.includes("inquiry_children"));
-            const inquiryChildrenHydrateReady =
-                !opportunityDrawerBootstrapEnrichmentPath || opportunityFullRecordHydrateApplied;
+            const inquiryChildrenHydrateReady = opportunityDrawerFullBoundEnrichmentReady;
             if (allowInquiryChildren && inquiryChildrenHydrateReady) {
                 const raw = (d._inquiry_children as unknown[]) ?? [];
                 const rows: InquiryChildRow[] = Array.isArray(raw)
@@ -11880,8 +11895,8 @@ export default function AdminEntityDrawer() {
                                                     const showInquirySummaryRightColumn = computeShowInquirySummaryRightColumn({
                                                         aboveFoldLocked: opportunityDrawerAboveFoldLocked,
                                                         record: d,
-                                                        enrichmentLayoutReady: opportunityDrawerEnrichmentLayoutReady,
-                                                        secondaryReady: opportunityDrawerSecondaryReady,
+                                                        belowFoldEnrichmentReady: opportunityDrawerBelowFoldEnrichmentReady,
+                                                        fullHydrateReady: opportunityFullRecordHydrateApplied,
                                                         taskAssistEnabled: isTaskAssistV1UiEnabled(),
                                                     });
                                                     const inquirySummaryColumnMode = opportunityDrawerSummaryLayoutMode({
@@ -11914,6 +11929,12 @@ export default function AdminEntityDrawer() {
                                                             }
                                                             data-opportunity-drawer-primary-contract-ready={
                                                                 opportunityDrawerPrimaryContractSatisfied ? "true" : "false"
+                                                            }
+                                                            data-opportunity-drawer-secondary-window-open={
+                                                                opportunityDrawerSecondaryWindowOpen ? "true" : "false"
+                                                            }
+                                                            data-opportunity-drawer-full-hydrate-ready={
+                                                                opportunityFullRecordHydrateApplied ? "true" : "false"
                                                             }
                                                         >
                                                             <div className="flex flex-wrap items-end justify-between gap-2 border-b border-alloy-stone/12 pb-2">
@@ -12104,7 +12125,7 @@ export default function AdminEntityDrawer() {
                                                                     ref={inquirySummaryRightRef}
                                                                     className={`${oppInqInnerCard} flex min-w-0 flex-col`}
                                                                 >
-                                                                    {drawer.id && drawer.id !== "new" && opportunityDrawerSecondaryReady ? (
+                                                                    {drawer.id && drawer.id !== "new" && opportunityDrawerFullBoundEnrichmentReady ? (
                                                                         <div className="mt-2 border-t border-alloy-stone/10 pt-2 adminv2-ws-soft-content-reveal">
                                                                             {isTaskAssistV1UiEnabled() ? (
                                                                                 <OpportunityOperationalCompactStrip
@@ -12117,7 +12138,7 @@ export default function AdminEntityDrawer() {
                                                                             ) : null}
                                                                         </div>
                                                                     ) : null}
-                                                                    {drawer.id && drawer.id !== "new" && opportunityDrawerSecondaryReady ? (
+                                                                    {drawer.id && drawer.id !== "new" && opportunityDrawerFullBoundEnrichmentReady ? (
                                                                         <OpportunityInquirySummaryActivity
                                                                             opportunityId={drawer.id}
                                                                             canMutate={!!canMutate}

@@ -4,7 +4,8 @@
 **Status:** Step 0 audit + Step 1 design complete — **STOP at GATE 0** before implementation  
 **Date:** 2026-05-21
 
-**GATE 0 implementation doctrine (binding before code):** [`bos_operational_recommendation_intelligence_gate0.md`](./bos_operational_recommendation_intelligence_gate0.md)
+**GATE 0 implementation doctrine (binding before code):** [`bos_operational_recommendation_intelligence_gate0.md`](./bos_operational_recommendation_intelligence_gate0.md)  
+**Phase 1 execution pack:** [`bos_operational_recommendation_phase1_execution.md`](./bos_operational_recommendation_phase1_execution.md)
 
 **Prerequisite sprints (must be landed or in closeout):**
 
@@ -484,15 +485,12 @@ flowchart LR
 
 **Goal:** Ship `OperationalRecommendationV1` with deep deterministic copy — no new AI routes required.
 
-| Card | Work | Files (expected) |
-|------|------|------------------|
-| 1.1 | Types + JSON schema validators | `web/lib/adminV2/bos/recommendations/types.ts`, validators |
-| 1.2 | `recommendationActionCatalog` — replace thin labels with contextual templates per reason + wait + days | catalog + tests |
-| 1.3 | `buildOperationalRecommendationV1` — assemble from resolver + activity + tasks/sends snapshot | builder module |
-| 1.4 | `inputs_fingerprint` + stale helper | stale check util |
-| 1.5 | Entity attach on opportunity GET | `opportunityEntityRecord.ts`, attachment helper |
-| 1.6 | Adapter `operationalRecommendationToAttentionSuggestionV1` | backward compat |
-| 1.7 | Contract tests — one fixture per reason code | `web/tests/adminV2/operationalRecommendation*.test.ts` |
+**Implementation spec:** [`bos_operational_recommendation_phase1_execution.md`](./bos_operational_recommendation_phase1_execution.md) (module layout, contract, pipeline, replacement map, GATE 1 checklist).
+
+| Card | Work | See execution pack |
+|------|------|-------------------|
+| 1.1–1.5 | Contract, catalog, builder, fingerprint, projections, adapters | §2–§8 |
+| 1.6–1.9 | Entity + queue wire, UI scaffolding, tests | §9–§11 |
 
 **GATE 1 checklist:**
 

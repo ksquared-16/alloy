@@ -8,6 +8,13 @@ import SectionCard from "@/components/admin/SectionCard";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 import { mergeFormListWithPacketItems, type PacketStepFormOption } from "@/lib/admin/forms/packetDefinitionStepForms";
 import { applyRecentFormToSteps, trimLeadingEmptyStepRows } from "@/lib/admin/forms/packetStepRecentFormPlacement";
+import {
+    TechnicalDetailDisclosure,
+    TechnicalDetailField,
+    TechnicalDetailFieldList,
+    TechnicalDetailMonospaceValue,
+} from "@/components/forms/review";
+import { FORMS_TECHNICAL_DISCLOSURE } from "@/lib/forms/review/formsReviewTechnicalDisclosure";
 
 type PacketItem = {
     id: string;
@@ -443,13 +450,32 @@ export default function PacketDefinitionDetailClient() {
                                 If this packet already has sessions, step changes are blocked — create a new packet definition instead.
                             </p>
                         ) : null}
-                        <details className="mt-4 rounded border border-[#e6e8ec] bg-[#fafbfd] px-3 py-2 text-xs text-[#59678b]">
-                            <summary className="cursor-pointer font-medium text-[#31394d]">Technical / debug</summary>
-                            <p className="mt-2">
-                                {items.length} saved step row(s) on server. Packet id:{" "}
-                                <span className="font-mono break-all">{packetDefId}</span>
+                        <TechnicalDetailDisclosure
+                            title={FORMS_TECHNICAL_DISCLOSURE.technicalDetails.title}
+                            helperText="Packet definition id and public link identifiers."
+                            className="mt-4"
+                        >
+                            <p className="text-xs text-[#59678b]">
+                                {items.length} saved step row(s) on server.
                             </p>
-                        </details>
+                            <TechnicalDetailFieldList className="mt-2">
+                                <TechnicalDetailField label="Packet definition id" fullWidth>
+                                    <TechnicalDetailMonospaceValue>{packetDefId}</TechnicalDetailMonospaceValue>
+                                </TechnicalDetailField>
+                                {links.map((L) => (
+                                    <TechnicalDetailField
+                                        key={L.id}
+                                        label={`Link ${L.is_active ? "(active)" : "(inactive)"}`}
+                                        fullWidth
+                                    >
+                                        <TechnicalDetailMonospaceValue>
+                                            {L.token_prefix ? `prefix ${L.token_prefix} · ` : ""}
+                                            {L.id}
+                                        </TechnicalDetailMonospaceValue>
+                                    </TechnicalDetailField>
+                                ))}
+                            </TechnicalDetailFieldList>
+                        </TechnicalDetailDisclosure>
                     </SectionCard>
 
                     <SectionCard title="Public packet links">
@@ -489,7 +515,9 @@ export default function PacketDefinitionDetailClient() {
                             <ul className="mt-4 divide-y divide-[#e6e8ec] text-sm">
                                 {links.map((L) => (
                                     <li key={L.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                                        <span className="font-mono text-xs">{L.token_prefix ?? L.id.slice(0, 8)}</span>
+                                        <span className="text-xs text-[#31394d]">
+                                            {L.is_active ? "Active link" : "Inactive link"}
+                                        </span>
                                         <span className="text-xs text-[#59678b]">{L.is_active ? "active" : "inactive"}</span>
                                         <button
                                             type="button"

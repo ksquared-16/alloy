@@ -96,7 +96,7 @@ describe("Work-unit KPI and queue picker loading", () => {
         const src = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
         expect(src).toContain("workUnitKpiMetricsPending");
         expect(src).toContain("workUnitQueueRevealReady");
-        expect(src).toContain("kpiStripPlaceholder={workUnitKpiStripPlaceholder}");
+        expect(src).toMatch(/kpiStripPlaceholder=\{workUnitKpiStripPlaceholder/);
     });
 
     it("queue tab count pending uses skeleton pulse, not spinners", () => {
@@ -111,7 +111,7 @@ describe("Opportunity drawer above-fold layout stability", () => {
         const src = read("components/admin/AdminEntityDrawer.tsx");
         expect(src).toContain("opportunityDrawerAboveFoldLocked");
         expect(src).toContain("stabilizeOpportunityWorkflowOverviewSections");
-        expect(src).toContain("shouldDeferOpportunityDrawerSecondaryReveal");
+        expect(src).toContain("opportunityDrawerBelowFoldEnrichmentReady");
         expect(src).toContain("OPPORTUNITY_DRAWER_BELOW_FOLD_SCROLL_PX");
         expect(src).toContain("overflow-anchor-none");
     });
@@ -271,10 +271,12 @@ describe("Work-unit early action rail", () => {
 });
 
 describe("Work-unit queue-first loading coherence", () => {
-    it("uses dept-like work-unit skeleton for blocking load and defers KPI/automation", () => {
+    it("uses shell-first cold shell + oper-lane loader; defers KPI/automation", () => {
         const src = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
         expect(src).toContain("workUnitQueueRevealReady");
-        expect(src).toContain("WorkUnitRouteSkeletonBody");
+        expect(src).toContain("WorkUnitWorkspaceColdShell");
+        expect(src).not.toContain("WorkUnitRouteSkeletonBody");
+        expect(src).toContain("operLaneLoading={workUnitOperLanePending}");
         expect(src).toMatch(
             /workUnitKpiStripPlaceholder = workUnitQueueRevealReady && workUnitKpiMetricsPending/,
         );
@@ -282,10 +284,10 @@ describe("Work-unit queue-first loading coherence", () => {
         expect(src).not.toContain("wu-blocking-kpi-skeleton");
     });
 
-    it("keeps oper lane in quiet reserve until bootstrap authority (no stale rows on nav)", () => {
+    it("keeps oper lane in-region until bootstrap authority (no stale rows on nav)", () => {
         const src = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
         expect(src).toContain("workUnitOperLanePending");
-        expect(src).toMatch(/workUnitPageBlockingLoad[\s\S]*workUnitOperLanePending/);
+        expect(src).toMatch(/workUnitPageBlockingLoad = loading && !workUnitShellReady/);
         expect(src).not.toMatch(/readWorkUnitPageCache[\s\S]{0,400}setLoading\(false\)/);
         expect(src).toMatch(/setLoading\(true\)/);
     });
@@ -329,14 +331,25 @@ describe("Drawer operational bootstrap (Cards 4–7)", () => {
         );
     });
 
-    it("defers postDrawerVisible enrichment until full hydrate on bootstrap path", () => {
+    it("arms postDrawerVisible after primary contract without full hydrate", () => {
         const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("opportunityDrawerBootstrapEnrichmentPath");
+        expect(src).toContain("opportunityDrawerPostRevealMayOpen");
+        expect(src).toContain("reportPostRevealEnrichStart");
         expect(src).toMatch(
-            /enrichmentReady[\s\S]*!opportunityDrawerBootstrapEnrichmentPath \|\| opportunityFullRecordHydrateApplied/,
+            /Post-reveal enrich window opens after primary contract[\s\S]{0,1200}setPostDrawerVisibleKey\(key\)/
+        );
+        expect(src).not.toMatch(
+            /opportunityDrawerPostRevealMayOpen[\s\S]{0,800}opportunityFullRecordHydrateApplied/
         );
         expect(src).toMatch(/tryScheduleOpportunityDrawerBackgroundFull/);
         expect(src).toContain("tryBeginOpportunityDrawerHydrate");
+    });
+
+    it("keeps above-fold layout stability data attributes on inquiry summary", () => {
+        const src = read("components/admin/AdminEntityDrawer.tsx");
+        expect(src).toContain("data-opportunity-drawer-secondary-window-open");
+        expect(src).toContain("data-opportunity-drawer-full-hydrate-ready");
+        expect(src).toContain("data-opportunity-drawer-above-fold-locked");
     });
 
     it("composed open gates on primary contract, not surface=full", () => {

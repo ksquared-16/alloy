@@ -5,6 +5,7 @@ const FORCE_SCROLL_TURN_KINDS = new Set<CommandSurfaceThreadTurn["kind"]>([
     "action_card",
     "assistant_notice",
     "policy_denial",
+    "execution_receipt",
     "error",
     "workflow_notice",
     "workflow_assist_read",

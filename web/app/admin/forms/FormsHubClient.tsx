@@ -12,6 +12,8 @@ import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 import { parseOperatorContext } from "@/lib/forms/operatorFormGuidance";
+import { TechnicalDetailDisclosure } from "@/components/forms/review";
+import { FORMS_TECHNICAL_DISCLOSURE } from "@/lib/forms/review/formsReviewTechnicalDisclosure";
 
 type FormRow = {
     id: string;
@@ -48,9 +50,13 @@ function FormsSeedEnvironmentHint() {
         process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_VERCEL_ENV === "preview";
 
     return (
-        <div className="mt-4 rounded-lg border border-[#e6e8ec] bg-[#fafbfd] p-4 text-sm text-[#31394d]">
-            <p className="font-medium text-[#31394d]">Optional: medication demo (non-production tooling)</p>
-            <p className="mt-2 leading-relaxed text-[#59678b]">
+        <TechnicalDetailDisclosure
+            title={FORMS_TECHNICAL_DISCLOSURE.setupHelp.title}
+            helperText={FORMS_TECHNICAL_DISCLOSURE.setupHelp.helper}
+            className="mt-4"
+        >
+            <p className="text-sm font-medium text-[#31394d]">Optional: medication demo (non-production tooling)</p>
+            <p className="mt-2 text-sm leading-relaxed text-[#59678b]">
                 There is <strong className="font-medium text-[#31394d]">no drag-and-drop canvas</strong> — operators configure
                 fields using the structured editor on each form&apos;s page. Optional demo forms can still be installed via
                 migrations/scripts.
@@ -72,7 +78,7 @@ DEMO_RESET_ORG_ID="<your-org-uuid>" npm run demo:seed:medication-form`}
                     runbook so this org receives configured definitions — do not run ad hoc scripts without approval.
                 </p>
             )}
-        </div>
+        </TechnicalDetailDisclosure>
     );
 }
 
@@ -189,12 +195,17 @@ export default function FormsHubClient() {
                             </li>
                         </ol>
                     </div>
-                    <p className="border-t border-[#e6e8ec] pt-3 text-xs text-[#59678b]">
-                        Definitions use the shared{" "}
-                        <strong className="font-medium text-[#31394d]">schema_version: 1</strong> contract (validated + rendered by
-                        the same engine as public embeds). Tailored operator notes can live in{" "}
-                        <code className="rounded bg-[#F4F6F9] px-1 font-mono text-[11px]">metadata.operator_context</code>.
-                    </p>
+                    <TechnicalDetailDisclosure
+                        title={FORMS_TECHNICAL_DISCLOSURE.technicalDetails.title}
+                        helperText="Schema contract and metadata keys for integrations."
+                        className="border-t border-[#e6e8ec] pt-3"
+                    >
+                        <p className="text-xs text-[#59678b]">
+                            Definitions use <strong className="font-medium text-[#31394d]">schema_version: 1</strong> (same engine
+                            as public embeds). Tailored operator notes:{" "}
+                            <code className="rounded bg-[#F4F6F9] px-1 font-mono text-[11px]">metadata.operator_context</code>.
+                        </p>
+                    </TechnicalDetailDisclosure>
                 </div>
             </SectionCard>
 
@@ -265,9 +276,8 @@ export default function FormsHubClient() {
                     <div className="space-y-3 text-sm">
                         <p className="font-medium text-[#31394d]">No forms are configured for this organization yet.</p>
                         <p className="leading-relaxed text-[#59678b]">
-                            That usually means no form definitions have been seeded or provisioned for your{" "}
-                            <code className="rounded bg-[#F4F6F9] px-1 font-mono text-[11px]">org_id</code>. This is expected on a
-                            fresh tenant until your team loads the Forms package you need.
+                            That usually means no form definitions have been seeded or provisioned for this organization yet. This
+                            is expected on a fresh tenant until your team loads the Forms package you need.
                         </p>
                         <p className="leading-relaxed text-[#59678b]">
                             Create a form below, add fields on the form workspace, publish a version, then use it in a packet or

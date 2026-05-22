@@ -31,6 +31,10 @@ import {
     readJson,
 } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
+import {
+    MUTATION_BOUNDARY_APPLIES_THROUGH_COMMS,
+    MUTATION_BOUNDARY_TASK_ASSIST_DRAFT_SAVE,
+} from "@/lib/adminV2/bos/bosMutationBoundaryCopy";
 import type { TaskAssistCommandBootstrap } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
 import { timingHintToDatetimeLocal } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
 import { formatTaskAssistClientError } from "@/lib/agent/taskAssist/taskAssistClientErrorMessages";
@@ -400,9 +404,7 @@ export default function TaskAssistOpportunityWorkspace({
             if (!res.ok || !json.ok || !json.send?.communication_message_id) {
                 throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
             }
-            setSuccess(
-                `Message queued for delivery (communication_messages). Id ${json.send.communication_message_id}. ${json.send.process_trigger_attempted_note ?? ""}`.trim()
-            );
+            setSuccess("Sent — message queued through Communications.");
             setProposal(null);
             setProposalValid(false);
             setSelectedPersonId(null);
@@ -428,7 +430,7 @@ export default function TaskAssistOpportunityWorkspace({
             if (!res.ok || !json.ok) {
                 throw new Error(json.message || json.error || `Save failed (${res.status})`);
             }
-            setSuccess("Draft saved to task_assist_proposals for later review — nothing sends until you approve from proposals.");
+            setSuccess(MUTATION_BOUNDARY_TASK_ASSIST_DRAFT_SAVE);
             await refreshLists();
         } catch (e: unknown) {
             setError((e as Error).message);
@@ -447,7 +449,7 @@ export default function TaskAssistOpportunityWorkspace({
                 const res = await postTaskAssistProposalApprove(id);
                 const json = await readJson<{ ok?: boolean; error?: string; message?: string }>(res);
                 if (!res.ok || !json.ok) throw new Error(json.message || json.error || `Approve failed (${res.status})`);
-                setSuccess("Proposal approved (review only — no send).");
+                setSuccess("Approved for review — does not send until you apply from Communications.");
                 await refreshLists();
             } catch (e: unknown) {
                 setError((e as Error).message);
@@ -498,9 +500,7 @@ export default function TaskAssistOpportunityWorkspace({
             const res = await createCommunicationScheduledSend(body);
             const json = await readJson<{ ok?: boolean; error?: string; message?: string }>(res);
             if (!res.ok || !json.ok) throw new Error(json.message || json.error || `Schedule failed (${res.status})`);
-            setSuccess(
-                "Scheduled send saved to communication_scheduled_sends. A background worker sends at the chosen time — not immediately."
-            );
+            setSuccess("Scheduled — sends through Communications at the chosen time.");
             setScheduledForLocal("");
             setScheduleProposalId("");
             await refreshLists();
@@ -552,9 +552,7 @@ export default function TaskAssistOpportunityWorkspace({
                 message?: string | null;
             }>(res);
             if (!res.ok || !json.ok) throw new Error(json.message || json.error || `Reminder failed (${res.status})`);
-            setSuccess(
-                "Saved to operational_tasks as a personal reminder / follow-up. This is not a scheduled message — nothing sends automatically."
-            );
+            setSuccess("Created — operational reminder on this record (not a family message).");
             if (json.task) {
                 setLastCreatedOperationalTask({
                     id: String(json.task.id),
@@ -862,7 +860,7 @@ export default function TaskAssistOpportunityWorkspace({
                                 >
                                     {saveDraftLoading ? "Saving…" : "Save draft for review"}
                                 </button>
-                                <p className="text-[10px] text-alloy-midnight/50">Saves an operator-review copy — approve does not send.</p>
+                                <p className="text-[10px] text-alloy-midnight/50">{MUTATION_BOUNDARY_TASK_ASSIST_DRAFT_SAVE}</p>
                             </div>
                         ) : null}
 
@@ -877,9 +875,7 @@ export default function TaskAssistOpportunityWorkspace({
                             >
                                 {applyLoading ? "Sending…" : "Send approved draft"}
                             </button>
-                            <p className="mt-1 text-[10px] text-alloy-midnight/50">
-                                Sends through the same communications path as the composer — queued until processed.
-                            </p>
+                            <p className="mt-1 text-[10px] text-alloy-midnight/50">{MUTATION_BOUNDARY_APPLIES_THROUGH_COMMS}</p>
                         </div>
                     </div>
                 ) : null}

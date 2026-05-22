@@ -1206,6 +1206,7 @@ export async function respondOpportunityEntityGet(
   lapSegment("status_resolve_and_lifecycle_shell");
   const drawerInitial =
     surfaceParamEarly === "drawer_initial" || surfaceParamEarly === "drawer_primary";
+  // Card 5/future: pass bootstrap `record_layout` into drawer_primary to skip second layout fetch (see production pass §4).
   const layoutForFieldPolicy =
     orgId != null
       ? await fetchEffectiveRecordDrawerLayout(supabase, orgId, "opportunity")

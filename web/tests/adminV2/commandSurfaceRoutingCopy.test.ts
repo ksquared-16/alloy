@@ -4,9 +4,9 @@ import { routeCommandSurface } from "@/lib/adminV2/aiCommandSurface/commandSurfa
 import {
     buildCommandSurfaceRoutingNotice,
     ENTITY_SEARCH_ROUTING_NOTICE,
-    shouldAppendCommandSurfaceRoutingNotice,
     WORKFLOW_ASSIST_BOUNDARY_NOTICE,
 } from "@/lib/adminV2/aiCommandSurface/commandSurfaceRoutingCopy";
+import { shouldAppendCommandSurfaceRoutingNotice } from "@/lib/adminV2/aiCommandSurface/commandSurfaceShellLayout";
 import { usingActiveRecordNoticeText } from "@/lib/adminV2/bos/activeOperationalContext";
 
 const CHATBOT_PATTERNS = [/AI selected/i, /Matched capability/i, /Detected workflow/i, /heuristic/i];
@@ -46,8 +46,19 @@ describe("commandSurfaceRoutingCopy", () => {
     });
 
     it("entity search notice is operational", () => {
-        expect(ENTITY_SEARCH_ROUTING_NOTICE).toMatch(/matching records/i);
+        expect(ENTITY_SEARCH_ROUTING_NOTICE).toMatch(/Searching records/i);
         expectNoChatbotCopy(ENTITY_SEARCH_ROUTING_NOTICE);
+    });
+
+    it("entity-search-only routes skip duplicate routing notice", () => {
+        const routed = routeCommandSurface("find Mitchell");
+        expect(routed.route).toBe("task_assist");
+        const boundaryOnly = {
+            ...routed,
+            workflowAssistReadIntent: null,
+            workflowAssistCreateIntent: null,
+        };
+        expect(shouldAppendCommandSurfaceRoutingNotice(boundaryOnly)).toBe(false);
     });
 
     it("active record notice uses operator label", () => {

@@ -7,10 +7,13 @@ import {
     type PacketReviewTechnicalDetails,
 } from "@/components/forms/packets/PacketReviewRollupView";
 import type { PacketReviewRollupV1 } from "@/lib/forms/packets/packetReviewRollupTypes";
+import { FormsReviewStatePanel } from "@/components/forms/review";
 import {
+    FORMS_REVIEW_ERROR,
+    FORMS_REVIEW_LOADING,
     isPacketReviewAwaitingDecision,
     operatorReviewStatusLabel,
-} from "@/lib/forms/packets/packetReviewPresentation";
+} from "@/lib/forms/review/formsReviewPresentation";
 
 type Props = {
     packetSessionId: string;
@@ -170,25 +173,20 @@ export function PacketSessionReviewClient({
             </div>
 
             {phase === "loading" ?
-                <div className="rounded-lg border border-[#e6e8ec] bg-white px-4 py-8 text-center text-sm text-[#59678b]">
-                    Loading packet review…
-                </div>
+                <FormsReviewStatePanel variant="loading" message={FORMS_REVIEW_LOADING.packetReview} />
             : phase === "error" ?
-                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-800">
-                    <p>{err ?? "Could not load packet review."}</p>
-                    <button
-                        type="button"
-                        className="mt-3 rounded border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-900 hover:bg-red-50"
-                        onClick={() => void load()}
-                    >
-                        Retry
-                    </button>
-                </div>
+                <FormsReviewStatePanel
+                    variant="error"
+                    message={err ?? FORMS_REVIEW_ERROR.packetReviewDefault}
+                    onRetry={() => void load()}
+                />
             : rollup ?
                 <>
                     <div>
                         <h1 className="text-xl font-semibold text-[#0f172a]">{rollup.packet_definition.name}</h1>
-                        <p className="mt-1 font-mono text-[11px] text-[#59678b]">Session {rollup.packet_session_id}</p>
+                        <p className="mt-1 text-sm text-[#59678b]">
+                            Packet session review — identifiers are under Technical details below.
+                        </p>
                     </div>
                     <PacketReviewRollupView
                         rollup={rollup}

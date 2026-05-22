@@ -6,7 +6,10 @@ import type { CommandSurfaceRouteResult } from "@/lib/adminV2/aiCommandSurface/c
 import type { CommandSurfaceRouteKind } from "@/lib/adminV2/aiCommandSurface/commandSurfaceRouter";
 import { usingActiveRecordNoticeText } from "@/lib/adminV2/bos/activeOperationalContext";
 
-export const ENTITY_SEARCH_ROUTING_NOTICE = "Looking up matching records for this request.";
+import { COMMAND_SURFACE_SEARCHING_NOTICE } from "@/lib/adminV2/aiCommandSurface/commandSurfaceShellLayout";
+
+/** @deprecated Prefer COMMAND_SURFACE_SEARCHING_NOTICE — kept for imports. */
+export const ENTITY_SEARCH_ROUTING_NOTICE = COMMAND_SURFACE_SEARCHING_NOTICE;
 
 export type CommandSurfaceRoutingNoticeInput = {
     route: CommandSurfaceRouteResult;
@@ -98,18 +101,7 @@ export function buildCommandSurfaceRoutingNotice(input: CommandSurfaceRoutingNot
     return `Routing to ${specialist} — ${detail}.`;
 }
 
-/** Skip generic routing line when Workflow Assist boundary notice carries the explanation. */
-export function shouldAppendCommandSurfaceRoutingNotice(route: CommandSurfaceRouteResult): boolean {
-    if (route.route === "clarify") return false;
-    if (
-        route.route === "workflow_assist" &&
-        !route.workflowAssistReadIntent &&
-        !route.workflowAssistCreateIntent
-    ) {
-        return false;
-    }
-    return true;
-}
+export { shouldAppendCommandSurfaceRoutingNotice } from "@/lib/adminV2/aiCommandSurface/commandSurfaceShellLayout";
 
 /** Workflow Assist boundary when workflow language did not resolve to a read/create intent. */
 export const WORKFLOW_ASSIST_BOUNDARY_NOTICE =

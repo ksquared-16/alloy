@@ -1,7 +1,7 @@
 # AdminV2 Drawer Production Pass — Design
 
 **Date:** 2026-05-22  
-**Status:** Cards 0–1 implemented (2026-05-22); Cards 2–5 pending  
+**Status:** Cards 0–2 implemented (2026-05-22); Cards 3–5 pending  
 **Sprint type:** Perceived performance + orchestration — **not** AdminV2 redesign, queue doctrine change, or schema work.
 
 **Authority (read order):**
@@ -324,23 +324,19 @@ Small PR/card slices. **Do not start Card 2 until Card 1 is merged and measured.
 
 ---
 
-### Card 2 — Suppress/relocate late drawer fetches
+### Card 2 — Suppress/relocate late drawer fetches — **DONE**
 
 | Field | Content |
 |-------|---------|
-| **Files** | `AdminEntityDrawer.tsx`, `opportunityDrawerLayoutStability.ts`, `opportunityDrawerFirstPaintContract.ts`, `useDrawerSectionIntersection.ts`, `communicationsDrawerPrefetch.ts`, `opportunityEntityRecord.ts` (optional `drawer_secondary`), `opportunityDrawerLayoutStability.test.ts` |
-| **Work** | Move `postDrawerVisible` to fire after **primary reveal** + above-fold unlock policy (not full). Mount full-dependent sections only when full arrives OR enrichment-held interaction. Split “idle enrichment” queue: oper strip / children / right column. Eliminate duplicate layout fetch bootstrap→primary. Classic drawer path: remove overview-embedded comms active prefetch. |
-| **Acceptance** | Zero network requests that reshape header or above-fold inquiry summary between primary reveal and unlock; full merge does not toggle column count while `opportunityDrawerAboveFoldLocked` |
-| **Tests** | Extend `adminV2DrawerLoadingCoherence.test.ts` — `postDrawerVisible` not tied to `opportunityFullRecordHydrateApplied` on bootstrap path; `opportunityDrawerLayoutStability.test.ts`; drawer hydrate guards |
-| **Rollback risk** | **Medium-high** — oper actions preview-only longer; verify save gates |
+| **Files** | `AdminEntityDrawer.tsx`, `opportunityDrawerRevealReadiness.ts`, `opportunityDrawerLayoutStability.ts`, `adminV2DrawerPerf.ts`, `opportunityEntityRecord.ts` (dedupe note), tests |
+| **Shipped** | `postDrawerVisible` after primary contract (not full); explicit readiness flags; `secondaryReady` = below-fold window; oper/packets/children gated on `fullBoundEnrichmentReady`; activity-signal no longer waits for full; layout dedupe deferred (comment in entity record) |
+| **Tests** | `opportunityDrawerRevealReadiness.test.ts`, `adminV2DrawerLoadingCoherence.test.ts`, `opportunityDrawerLayoutStability.test.ts` |
+| **Rollback risk** | **Medium-high** — revert postDrawerVisible effect + secondary ready effect |
 
-**Card 2 must handle (explicit backlog from Card 1)**
+**Card 3 must handle next**
 
-- `postDrawerVisible` currently requires `opportunityFullRecordHydrateApplied` — relocate to primary + layout unlock.
-- Secondary surfaces (`opportunityDrawerSecondaryReady` = full) — decouple from tab/overview stability.
-- Section intersection mounts (tours, packets, children, field-definitions).
-- Bootstrap → primary layout dedupe in `opportunityEntityRecord.ts`.
-- Any remaining above-fold reshape from full merge (right rail, BOS strip).
+- Tab pane mount cache + fixed tab panel geometry
+- Repeated tab switch without remount/refetch
 
 ---
 

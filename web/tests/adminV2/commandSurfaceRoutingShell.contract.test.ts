@@ -11,7 +11,8 @@ describe("AICommandSurfaceShell routing notices (Card 13)", () => {
         expect(src).toContain("appendCommandSurfaceRoutingNoticeTurn");
         expect(src).toContain('noticeRole: "routing"');
         expect(src).toContain("buildCommandSurfaceRoutingNotice");
-        expect(src).toContain("ENTITY_SEARCH_ROUTING_NOTICE");
+        expect(src).toContain("COMMAND_SURFACE_SEARCHING_NOTICE");
+        expect(src).toContain('noticeRole: "searching"');
     });
 
     it("uses policy denial instead of generic task assist error", () => {

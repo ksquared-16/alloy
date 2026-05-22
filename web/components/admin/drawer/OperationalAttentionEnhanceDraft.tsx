@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import OperationalAttentionAnchoredDraftPopover from "@/components/admin/drawer/OperationalAttentionAnchoredDraftPopover";
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
 import { userFacingEnrichAttentionError } from "@/lib/admin/enrichAttentionDraftMessages";
+import { MUTATION_BOUNDARY_ENHANCED_DRAFT } from "@/lib/adminV2/bos/bosMutationBoundaryCopy";
 
 type Props = {
     suggestion: AttentionSuggestionV1;
@@ -84,7 +85,7 @@ export default function OperationalAttentionEnhanceDraft({ suggestion }: Props) 
                     aria-live="polite"
                 >
                     <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-alloy-blue" aria-hidden />
-                    <span>{enhancedBody ? "Refreshing draft with Alloy…" : "Enhancing draft with Alloy…"}</span>
+                    <span>{enhancedBody ? "Refreshing enhanced draft…" : "Preparing enhanced draft…"}</span>
                 </div>
             ) : enhancedBody ? (
                 <button
@@ -93,7 +94,7 @@ export default function OperationalAttentionEnhanceDraft({ suggestion }: Props) 
                     className="rounded border border-alloy-stone/20 bg-alloy-stone/[0.06] px-1.5 py-0.5 text-[9px] font-semibold text-alloy-midnight/55"
                     data-drawer-slot="enhance_draft_primary_done"
                 >
-                    Enhanced
+                    Enhanced (preview)
                 </button>
             ) : (
                 <button
@@ -101,7 +102,7 @@ export default function OperationalAttentionEnhanceDraft({ suggestion }: Props) 
                     onClick={() => void runEnhance()}
                     className="rounded border border-alloy-blue/25 bg-alloy-blue/[0.06] px-1.5 py-0.5 text-[9px] font-semibold text-alloy-blue hover:bg-alloy-blue/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                    Enhance draft
+                    Enhance draft (preview)
                 </button>
             )}
 
@@ -109,7 +110,7 @@ export default function OperationalAttentionEnhanceDraft({ suggestion }: Props) 
                 <div className={`relative w-full min-w-0 ${loading ? "pointer-events-none opacity-55" : ""}`}>
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                         <p className="text-[9px] font-medium text-emerald-800/90" data-drawer-slot="enhance_draft_success">
-                            Enhanced draft ready
+                            {MUTATION_BOUNDARY_ENHANCED_DRAFT}
                         </p>
                         <button
                             ref={enhancedTriggerRef}
@@ -126,8 +127,8 @@ export default function OperationalAttentionEnhanceDraft({ suggestion }: Props) 
                         open={enhancedPopoverOpen}
                         onClose={() => setEnhancedPopoverOpen(false)}
                         anchorRef={enhancedTriggerRef}
-                        title="Enhanced draft"
-                        subtitle="Review before using."
+                        title="Enhanced draft (preview only)"
+                        subtitle="Copy only — does not send."
                         body={enhancedBody ?? ""}
                         copyLabel="Copy"
                         data-drawer-slot="enhance_draft_popover"

@@ -3,6 +3,7 @@
 import { CommandSurfaceCardLink } from "@/app/adminV2/components/aiCommandSurface/CommandSurfaceCardLink";
 import OperationalProposalCardFrame from "@/app/adminV2/components/bos/OperationalProposalCardFrame";
 import { CONFIG_ASSIST_APPLY_PERMISSION_COPY } from "@/lib/adminV2/bos/bosGovernanceCopy";
+import { CAPABILITY_GATE_CHECKING_LABEL } from "@/lib/adminV2/aiCommandSurface/commandSurfaceShellLayout";
 import {
     CONFIG_LAYOUT_ASSIST_MUTATION_BOUNDARY_COPY,
     CONFIG_LAYOUT_ASSIST_PROPOSAL_SOURCE_LABEL,
@@ -25,12 +26,14 @@ export function ConfigLayoutAssistReadyCard({
     persistedProposalId,
     busy,
     canApproveAndApply,
+    capabilitiesPending = false,
     onApproveAndApply,
 }: {
     readySummary: ConfigLayoutAssistReadySummaryV1;
     persistedProposalId: string;
     busy: boolean;
     canApproveAndApply: boolean;
+    capabilitiesPending?: boolean;
     onApproveAndApply: () => void;
 }) {
     const reviewHref = configProposalReviewHrefForId(persistedProposalId);
@@ -51,7 +54,16 @@ export function ConfigLayoutAssistReadyCard({
                 policyCopy={CONFIG_LAYOUT_ASSIST_SETTINGS_HUB_COPY}
                 footer={
                     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                        {canApproveAndApply ?
+                        {capabilitiesPending ?
+                            <button
+                                type="button"
+                                disabled
+                                className="rounded-md bg-alloy-midnight/50 px-3 py-1.5 text-[11px] font-semibold text-white opacity-80"
+                                data-command-surface-config-assist-capabilities-pending="true"
+                            >
+                                {CAPABILITY_GATE_CHECKING_LABEL}
+                            </button>
+                        : canApproveAndApply ?
                             <button
                                 type="button"
                                 disabled={busy}
@@ -59,7 +71,7 @@ export function ConfigLayoutAssistReadyCard({
                                 data-command-surface-config-assist-approve-apply="true"
                                 onClick={() => onApproveAndApply()}
                             >
-                                {busy ? "Working…" : "Approve & apply"}
+                                {busy ? "Applying…" : "Approve & apply"}
                             </button>
                         :   <p className="text-[11px] text-alloy-midnight/55">{CONFIG_ASSIST_APPLY_PERMISSION_COPY}</p>
                         }

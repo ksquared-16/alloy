@@ -26,8 +26,8 @@ describe("opportunityDrawerLayoutStability", () => {
             computeShowInquirySummaryRightColumn({
                 aboveFoldLocked: true,
                 record: { _record_surface: "full", next_follow_up_at: "2026-06-01" },
-                enrichmentLayoutReady: true,
-                secondaryReady: true,
+                belowFoldEnrichmentReady: true,
+                fullHydrateReady: true,
                 taskAssistEnabled: true,
             })
         ).toBe(false);
@@ -73,8 +73,8 @@ describe("opportunityDrawerLayoutStability", () => {
             computeShowInquirySummaryRightColumn({
                 aboveFoldLocked: false,
                 record: { _record_surface: "full" },
-                enrichmentLayoutReady: true,
-                secondaryReady: true,
+                belowFoldEnrichmentReady: true,
+                fullHydrateReady: true,
                 taskAssistEnabled: true,
             })
         ).toBe(true);

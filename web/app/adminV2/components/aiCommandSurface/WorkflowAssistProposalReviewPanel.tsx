@@ -14,6 +14,7 @@ import {
     WORKFLOW_ASSIST_PROPOSAL_TYPE_LABEL,
 } from "@/lib/adminV2/bos/workflowAssistOperationalProposalPresentation";
 import { COMMAND_SURFACE_INTERACTIVE_CARD_CLASS } from "@/lib/adminV2/aiCommandSurface/commandSurfaceCardNavigation";
+import { CAPABILITY_GATE_CHECKING_LABEL } from "@/lib/adminV2/aiCommandSurface/commandSurfaceShellLayout";
 import { brand, derived, neutral, semantic } from "@/styles/tokens/colors";
 
 const CMD = {
@@ -86,6 +87,7 @@ export function WorkflowAssistProposalReviewPanel({
     applyBusy,
     applyDone,
     applyAllowed,
+    applyCapabilitiesPending = false,
     applyBlockedMessage,
 }: {
     review: WorkflowAssistDraftReviewV1;
@@ -94,6 +96,7 @@ export function WorkflowAssistProposalReviewPanel({
     applyBusy: boolean;
     applyDone: boolean;
     applyAllowed: boolean;
+    applyCapabilitiesPending?: boolean;
     applyBlockedMessage?: string | null;
 }) {
     const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -122,13 +125,19 @@ export function WorkflowAssistProposalReviewPanel({
                 <div className="flex flex-wrap gap-2">
                     <button
                         type="button"
-                        disabled={applyBusy || applyDone || !applyAllowed}
+                        disabled={applyBusy || applyDone || !applyAllowed || applyCapabilitiesPending}
                         title={!applyAllowed ? (applyBlockedMessage ?? undefined) : undefined}
                         className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
                         data-command-surface-workflow-assist-apply="true"
                         onClick={onApply}
                     >
-                        {applyBusy ? "Applying…" : applyDone ? "Applied" : "Apply disabled draft"}
+                        {applyCapabilitiesPending ?
+                            CAPABILITY_GATE_CHECKING_LABEL
+                        : applyBusy ?
+                            "Applying…"
+                        : applyDone ?
+                            "Applied"
+                        :   "Apply disabled draft"}
                     </button>
                     <CommandSurfaceCardLink
                         href={WORKFLOW_ASSIST_AUTOMATIONS_HREF}

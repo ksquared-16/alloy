@@ -8,10 +8,13 @@ import {
     patchPacketReview,
     type PacketReviewPatchStatus,
 } from "@/lib/forms/packets/packetReviewApi";
+import { FormsReviewStatePanel } from "@/components/forms/review";
 import {
+    FORMS_REVIEW_ERROR,
+    FORMS_REVIEW_LOADING,
     isPacketReviewAwaitingDecision,
     operatorReviewStatusLabel,
-} from "@/lib/forms/packets/packetReviewPresentation";
+} from "@/lib/forms/review/formsReviewPresentation";
 import { enrollmentPacketSubjectLine } from "@/lib/admin/opportunity/enrollmentPacketSummaryPresentation";
 import type { OpportunityPacketPendingSession } from "@/components/admin/opportunity/OpportunityPacketPendingReviewList";
 
@@ -119,19 +122,16 @@ export function OpportunityPacketReviewModalBody({
             </a>
 
             {rollupPhase === "loading" ?
-                <p className="mt-4 text-sm text-alloy-midnight/65" role="status">
-                    Loading review case file…
-                </p>
+                <div className="mt-4">
+                    <FormsReviewStatePanel variant="loading" message={FORMS_REVIEW_LOADING.packetReview} />
+                </div>
             : rollupPhase === "error" ?
-                <div className="mt-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
-                    <p>{rollupError ?? "Could not load packet review."}</p>
-                    <button
-                        type="button"
-                        className="mt-2 rounded border border-red-300 bg-white px-2 py-1 text-xs font-semibold text-red-900 hover:bg-red-50"
-                        onClick={onRetryRollup}
-                    >
-                        Retry
-                    </button>
+                <div className="mt-4">
+                    <FormsReviewStatePanel
+                        variant="error"
+                        message={rollupError ?? FORMS_REVIEW_ERROR.packetReviewDefault}
+                        onRetry={onRetryRollup}
+                    />
                 </div>
             : rollup && rollupPhase === "ready" ?
                 <div className="mt-3">

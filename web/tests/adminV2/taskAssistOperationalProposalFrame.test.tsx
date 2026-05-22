@@ -108,6 +108,6 @@ describe("Task Assist OperationalProposalCardFrame migration", () => {
             />
         );
         expect(html).toContain("data-operational-proposal-blocked");
-        expect(html).toContain("different record than the active operational context");
+        expect(html).toContain("different active record");
     });
 });

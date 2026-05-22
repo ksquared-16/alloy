@@ -27,7 +27,7 @@ import {
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
-import { WorkUnitRouteSkeletonBody } from "@/components/admin/workspace/workspaceRouteSkeletons";
+import { WorkUnitWorkspaceColdShell } from "@/components/admin/workspace/WorkUnitWorkspaceColdShell";
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import {
@@ -3226,8 +3226,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
     /** Shell + header render after WU + dept; queue summaries and rows stay in-lane (Phase 3.1). */
     const workUnitShellReady = Boolean(workUnit) && Boolean(dept) && !error;
     const workUnitOperLanePending = workUnitShellReady && !wuQueueLaneAuthorityReady;
-    const workUnitPageBlockingLoad =
-        (loading && !workUnitShellReady) || workUnitOperLanePending;
+    /** Full cold shell only until dept + work-unit identity exist — oper lane loads in-region (shell-first). */
+    const workUnitPageBlockingLoad = loading && !workUnitShellReady;
 
     /** Queue-first reveal — KPI strip and automation footer defer until the lane is useful. */
     const workUnitQueueRevealReady = useMemo(() => {
@@ -3270,8 +3270,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
             subtitle=""
         >
             {workUnitPageBlockingLoad ? (
-                <WorkUnitRouteSkeletonBody
-                    laneHeadline={wuName}
+                <WorkUnitWorkspaceColdShell
+                    workUnitTitle={wuName}
+                    departmentTitle={deptName}
+                    departmentId={departmentId}
                     reserveActionsRail={isEnrollmentLikeDepartmentKey(dept?.key)}
                 />
             ) : workUnitShellReady && effectiveModel ? (
@@ -3299,9 +3301,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     <WorkUnitWorkspace
                         model={effectiveModel}
                         onAction={onAction}
+                        operLaneLoading={workUnitOperLanePending}
                         opportunityDrawerWorkspaceContext={opportunityWorkspaceContext ?? null}
-                        headerQueuePicker={headerQueuePickerSlot}
-                        kpiStripPlaceholder={workUnitKpiStripPlaceholder}
+                        headerQueuePicker={workUnitOperLanePending ? null : headerQueuePickerSlot}
+                        kpiStripPlaceholder={workUnitKpiStripPlaceholder || workUnitOperLanePending}
                         kpiStripSkeletonCellCount={
                             wuPlacementRows && wuPlacementRows.length > 0 ? wuPlacementRows.length : undefined
                         }

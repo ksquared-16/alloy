@@ -73,8 +73,11 @@ describe("OpportunityPacketReviewModalBody", () => {
                 onApplyReview={vi.fn()}
             />
         );
-        expect(html).toContain("Enrollment context");
+        expect(html).toContain("Intake context");
+        expect(html).toContain("data-testid=\"bos-review-summary-placeholder\"");
+        expect(html).toContain("Documents &amp; records");
         expect(html).toContain("Submitted form record");
+        expect(html).not.toContain("Enrollment context");
         expect(html).toContain("Guardian first name");
     });
 

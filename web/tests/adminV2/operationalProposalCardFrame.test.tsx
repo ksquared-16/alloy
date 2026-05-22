@@ -145,14 +145,19 @@ describe("OperationalProposalCardFrame", () => {
 
 describe("OperationalProposalCardFrame copy contract", () => {
     it("avoids chatbot and AI-marketing language in source", () => {
-        const src = readFileSync(framePath, "utf8") + readFileSync(presentationPath, "utf8");
+        const mutationPath = join(process.cwd(), "lib/adminV2/bos/bosMutationBoundaryCopy.ts");
+        const src =
+            readFileSync(framePath, "utf8") +
+            readFileSync(presentationPath, "utf8") +
+            readFileSync(mutationPath, "utf8");
         expect(src).not.toMatch(/\bAI thinks\b/i);
         expect(src).not.toContain("Copilot");
         expect(src).not.toContain("Magic");
         expect(src).not.toContain("Autonomous");
         expect(src).not.toContain("Assistant recommends");
         expect(src).toContain("Operational proposal");
-        expect(src).toContain("Approval required");
+        expect(src).toContain("OPERATIONAL_PROPOSAL_APPROVAL_REQUIRED_COPY");
+        expect(src).toContain("MUTATION_BOUNDARY_APPROVAL_REQUIRED");
     });
 
     it("frame is presentational only", () => {

@@ -1,4 +1,5 @@
 import type { DocumentProvenanceV1, PacketReviewDocumentIndexEntryV1 } from "@/lib/forms/packets/packetReviewRollupTypes";
+import { legacyArtifactKindBadgeClass } from "@/lib/forms/review/formsReviewBadgeStyles";
 
 export type PacketArtifactKind = "generated_pdf" | "submitted_record";
 
@@ -45,15 +46,9 @@ export function artifactKindDisplayLabel(kind: PacketArtifactKind): string {
     return kind === "generated_pdf" ? "Generated PDF" : "Submitted form record";
 }
 
+/** Alloy-aligned artifact badge classes (shared with Forms review primitives). */
 export function artifactKindBadgeClass(kind: string): string {
-    switch (kind) {
-        case "generated_pdf":
-            return "border-emerald-200 bg-emerald-50 text-emerald-900";
-        case "submitted_record":
-            return "border-sky-200 bg-sky-50 text-sky-900";
-        default:
-            return "border-[#e6e8ec] bg-[#f4f6f9] text-[#59678b]";
-    }
+    return legacyArtifactKindBadgeClass(kind);
 }
 
 /** Map rollup `documents_index` entry to a row shape for `normalizeDocumentRow`. */
