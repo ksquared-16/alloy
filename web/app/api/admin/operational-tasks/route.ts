@@ -10,8 +10,7 @@ import {
     validateOperationalTaskCreateBody,
     type OperationalTaskWorkspaceFilter,
 } from "@/lib/admin/operationalTasksService";
-import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
+import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
 /**
@@ -19,11 +18,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
  * POST `/api/admin/operational-tasks` — create Task Assist–sourced operational task (no send).
  */
 export async function GET(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
-
-    const ctx = await getAdminContextCached();
-    if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const ctx = await requireAdminOrgContextLight();
+    if (ctx instanceof Response) return ctx;
 
     const url = new URL(request.url);
     const scope = (url.searchParams.get("scope") ?? "").trim().toLowerCase();
@@ -83,11 +79,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
-
-    const ctx = await getAdminContextCached();
-    if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const ctx = await requireAdminOrgContextLight();
+    if (ctx instanceof Response) return ctx;
 
     let body: unknown;
     try {

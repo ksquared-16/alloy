@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { requireAdminOrOps } from "@/lib/adminAuth";
-import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight";
 import { getOrgLocalTodayUtcBounds } from "@/lib/admin/orgLocalDayBounds";
 import {
     fetchOperationalTimezoneForOrg,
@@ -26,10 +25,8 @@ export type WorkflowRunRow = {
 
 /** GET: list workflow_runs for caller org. Enriches with workflow name and event_type/entity_type/entity_id from workflow_events. */
 export async function GET(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
-    const ctx = await getAdminContextCached();
-    if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const ctx = await requireAdminOrgContextLight();
+    if (ctx instanceof Response) return ctx;
     const orgId = ctx.orgId;
 
     const { searchParams } = new URL(request.url);

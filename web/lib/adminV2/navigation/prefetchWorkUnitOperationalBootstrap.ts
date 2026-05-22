@@ -1,6 +1,9 @@
-import { appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClient";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import {
+    buildWorkUnitOperationalBootstrapClientUrl,
+    type WorkUnitBootstrapRequestParams,
+} from "@/lib/adminV2/workUnitBootstrapClientSession";
 
 export type WorkUnitOperationalBootstrapPrefetchOpts = {
     departmentId: string;
@@ -15,21 +18,14 @@ export function buildWorkUnitOperationalBootstrapUrl(
     workUnitId: string,
     opts: WorkUnitOperationalBootstrapPrefetchOpts
 ): string {
-    const qs = new URLSearchParams({
-        department_id: opts.departmentId,
-        include_previews: "false",
-        count_mode: "exact",
-        summary_mode: "all",
-        limit: "3",
-        omit_total_count: "true",
-        primary_row_limit: "20",
+    return buildWorkUnitOperationalBootstrapClientUrl({
+        departmentId: opts.departmentId,
+        workUnitId,
+        selectedSiteId: opts.selectedSiteId ?? null,
+        focusQueue: opts.focusQueue ?? undefined,
+        attentionBucket: opts.attentionBucket ?? undefined,
+        deferBundle: true,
     });
-    const focus = (opts.focusQueue ?? "").trim();
-    if (focus) qs.set("focus_queue", focus);
-    const bucket = (opts.attentionBucket ?? "").trim();
-    if (bucket) qs.set("attention_bucket", bucket);
-    const base = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/operational-bootstrap?${qs.toString()}`;
-    return appendWorkspaceSiteToUrl(base, opts.selectedSiteId ?? null);
 }
 
 /** Parse dept oper card `href` for work-unit bootstrap prefetch (future orchestrated nav). */
@@ -63,3 +59,5 @@ export async function prefetchWorkUnitOperationalBootstrap(
     }
     await res.json().catch(() => ({}));
 }
+
+export type { WorkUnitBootstrapRequestParams };

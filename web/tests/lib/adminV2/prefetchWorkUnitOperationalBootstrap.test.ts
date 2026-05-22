@@ -25,6 +25,7 @@ describe("prefetchWorkUnitOperationalBootstrap", () => {
         expect(url).toContain("focus_queue=pipeline_total");
         expect(url).toContain("attention_bucket=stale_quote");
         expect(url).toContain("workspace_site_id=site-9");
+        expect(url).toContain("defer_bundle=true");
     });
 
     it("parses dept oper href for prefetch opts", () => {

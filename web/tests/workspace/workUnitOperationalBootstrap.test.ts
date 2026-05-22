@@ -21,7 +21,7 @@ describe("work-unit operational bootstrap runtime", () => {
     it("bootstrap loader uses shared context and single attention pass", () => {
         const loaderPath = path.join(repoRoot, "web/lib/workspace/loadWorkUnitOperationalBootstrap.ts");
         const src = fs.readFileSync(loaderPath, "utf8");
-        expect(src).toContain("buildQueueSummariesSharedBootstrap");
+        expect(src).toContain("sharedBootstrap");
         expect(src).toContain("WorkUnitOperBootstrapContext");
         expect(src).toContain("resolveWorkUnitNeedsAttentionExecution");
         expect(src).toContain("workUnitDefinesNeedsAttentionQueue");
@@ -35,12 +35,30 @@ describe("work-unit operational bootstrap runtime", () => {
         const loaderPath = path.join(repoRoot, "web/lib/workspace/loadWorkUnitOperationalBootstrap.ts");
         const src = fs.readFileSync(loaderPath, "utf8");
         expect(src).toContain('source: "work_unit_needs_attention_lane"');
-        expect(src).toMatch(/if \(naExecution && workUnitDefinesNeedsAttentionQueue/);
+        expect(src).toContain("attentionEligible");
+        expect(src).toContain("workUnitDefinesNeedsAttentionQueue");
+        const parallelBlock = src.match(
+            /const \[summariesResult, attentionOutcome\][\s\S]*?phases\.summaries_attention_parallel = true/
+        )?.[0];
+        expect(parallelBlock).toBeTruthy();
         const primaryLaneIdx = src.indexOf("let primary_lane:");
-        const attnBlockIdx = src.indexOf("let preloadedAttention:");
-        expect(attnBlockIdx).toBeGreaterThan(-1);
-        expect(primaryLaneIdx).toBeGreaterThan(-1);
-        expect(attnBlockIdx).toBeLessThan(primaryLaneIdx);
+        const parallelAwaitIdx = src.indexOf("await Promise.all([summariesP, attentionP])");
+        expect(parallelAwaitIdx).toBeGreaterThan(-1);
+        expect(primaryLaneIdx).toBeGreaterThan(parallelAwaitIdx);
+    });
+
+    it("runs queue summaries and attention in parallel (Card 2)", () => {
+        const src = fs.readFileSync(
+            path.join(repoRoot, "web/lib/workspace/loadWorkUnitOperationalBootstrap.ts"),
+            "utf8"
+        );
+        expect(src).toMatch(/const summariesP = \(async \(\) =>/);
+        expect(src).toMatch(/const attentionP = \(async \(\)/);
+        expect(src).toContain("await Promise.all([summariesP, attentionP])");
+        expect(src).toContain("summaries_attention_parallel_ms");
+        expect(src).toContain("phases.summaries_attention_parallel = true");
+        expect(src).toContain("primary_lane_wait_on");
+        expect(src).toMatch(/preloadedAttentionPack: primaryIsNeedsAttention \? preloadedAttention/);
     });
 
     it("bucket builder accepts preloaded attention", () => {

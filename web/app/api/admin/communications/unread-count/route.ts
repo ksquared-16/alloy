@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
+import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight";
 
 const RECENT_CAP = 300;
 
@@ -9,11 +8,8 @@ const RECENT_CAP = 300;
  * GET /api/admin/communications/unread-count — inbound messages in org without a read row for current user (bounded scan).
  */
 export async function GET() {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
-
-    const ctx = await getAdminContextCached();
-    if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const ctx = await requireAdminOrgContextLight();
+    if (ctx instanceof Response) return ctx;
 
     const supabase = createAdminClient();
 

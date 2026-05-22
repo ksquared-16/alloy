@@ -79,6 +79,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             shared_bootstrap_ms: sharedBootstrapMs,
         };
 
+        const deferBundle = request.nextUrl.searchParams.get("defer_bundle") === "true";
+
         const bootstrapP = loadWorkUnitOperationalBootstrap({
             ctx: {
                 supabase,
@@ -100,34 +102,45 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             phases,
         });
 
-        const kpiP = (async () => {
-            const t0 = Date.now();
-            try {
-                const r = await loadWorkUnitKpiPlacementsServer({ orgId: gate.orgId, departmentId, workUnitId });
-                return { ...r, ms: Date.now() - t0 };
-            } catch {
-                return {
-                    items: [],
-                    scope_has_placements: false,
-                    cache_hit: false,
-                    ms: Date.now() - t0,
-                };
-            }
-        })();
+        const kpiP = deferBundle
+            ? Promise.resolve({
+                  items: [] as Awaited<ReturnType<typeof loadWorkUnitKpiPlacementsServer>>["items"],
+                  scope_has_placements: false,
+                  cache_hit: false,
+                  ms: 0,
+                  deferred: true as const,
+              })
+            : (async () => {
+                  const t0 = Date.now();
+                  try {
+                      const r = await loadWorkUnitKpiPlacementsServer({ orgId: gate.orgId, departmentId, workUnitId });
+                      return { ...r, ms: Date.now() - t0, deferred: false as const };
+                  } catch {
+                      return {
+                          items: [],
+                          scope_has_placements: false,
+                          cache_hit: false,
+                          ms: Date.now() - t0,
+                          deferred: false as const,
+                      };
+                  }
+              })();
 
-        const actionsP = (async () => {
-            const t0 = Date.now();
-            try {
-                const actions = await loadRightRailActionsBundleServer({
-                    orgId: gate.orgId,
-                    departmentId,
-                    workUnitId,
-                });
-                return { actions, ms: Date.now() - t0 };
-            } catch {
-                return { actions: [], ms: Date.now() - t0 };
-            }
-        })();
+        const actionsP = deferBundle
+            ? Promise.resolve({ actions: [] as Awaited<ReturnType<typeof loadRightRailActionsBundleServer>>, ms: 0, deferred: true as const })
+            : (async () => {
+                  const t0 = Date.now();
+                  try {
+                      const actions = await loadRightRailActionsBundleServer({
+                          orgId: gate.orgId,
+                          departmentId,
+                          workUnitId,
+                      });
+                      return { actions, ms: Date.now() - t0, deferred: false as const };
+                  } catch {
+                      return { actions: [], ms: Date.now() - t0, deferred: false as const };
+                  }
+              })();
 
         const [bootstrapResult, kpiResult, actionsResult] = await Promise.all([bootstrapP, kpiP, actionsP]);
         const loaderMs = Date.now() - tLoader0;
@@ -150,7 +163,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
                 ...loaderPhases,
                 kpi_placements_ms: kpiResult.ms,
                 kpi_placements_cache_hit: kpiResult.cache_hit,
+                kpi_placements_deferred: deferBundle,
                 right_rail_actions_ms: actionsResult.ms,
+                right_rail_actions_deferred: deferBundle,
             },
         });
 
@@ -165,6 +180,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
                 generated_at: new Date().toISOString(),
                 source: "authoritative_work_unit_bootstrap",
                 bootstrap_total_ms: totalMs,
+                defer_bundle: deferBundle,
                 deferred: [
                     "workflow_kpis",
                     "queue_row_actions",

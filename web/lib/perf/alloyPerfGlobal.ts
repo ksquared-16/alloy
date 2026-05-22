@@ -50,3 +50,17 @@ export function isAdminV2OperNavigationActive(maxAgeMs = 10_000): boolean {
     if (nav == null) return false;
     return performance.now() - nav < maxAgeMs;
 }
+
+/**
+ * True from WU drill-in until primary lane / bootstrap ready marks — shell sidecars should not compete.
+ */
+export function isAdminV2WuPrimaryPaintPending(maxAgeMs = 20_000): boolean {
+    if (typeof window === "undefined" || typeof performance === "undefined") return false;
+    const nav = alloyPerfGet("work_unit_navigation_start");
+    if (nav == null) return false;
+    if (performance.now() - nav >= maxAgeMs) return false;
+    const primary = alloyPerfGet("work_unit_primary_lane_ready");
+    const bootstrap = alloyPerfGet("work_unit_bootstrap_ready");
+    if (primary != null || bootstrap != null) return false;
+    return true;
+}

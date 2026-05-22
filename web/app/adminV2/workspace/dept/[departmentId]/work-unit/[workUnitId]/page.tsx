@@ -73,6 +73,10 @@ import { markDrawerRowClickStart } from "@/lib/perf/adminV2DrawerPerf";
 import { markWorkUnitNavigationStart } from "@/lib/perf/markWorkUnitNavigationStart";
 import { dedupeAdminFetch, dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
+import {
+    clearWorkUnitBootstrapSessionForEntity,
+    fetchWorkUnitOperationalBootstrapSession,
+} from "@/lib/adminV2/workUnitBootstrapClientSession";
 import { logAdminV2LegacyFanOut } from "@/lib/adminV2/runtime/adminV2LegacyFanOutDiagnostics";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import type { NeedsAttentionBucketWithCount } from "@/lib/opportunities/needsAttentionBuckets";
@@ -367,6 +371,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const { orgId, principalUserId, accessScopeFingerprint } = useWorkspaceOrg();
     const siteFilter = useWorkspaceSiteFilter();
     const selectedSiteId = siteFilter?.selectedSiteId ?? null;
+    const siteSelectionReady = siteFilter?.siteSelectionReady ?? true;
     const viewScopeFingerprint = workspaceViewCacheFingerprint(accessScopeFingerprint, selectedSiteId);
     const { openDrawer } = useAdminDrawer();
     const viewerTz = useAdminViewerTimezone();
@@ -692,6 +697,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         setAttentionBucketKey(init.attentionBucket);
 
         seededWorkUnitShellRef.current = false;
+        clearWorkUnitBootstrapSessionForEntity(departmentId, workUnitId);
         if (!orgId) return;
         const hit = readWorkUnitPageCache(orgId, departmentId, workUnitId, principalUserId, accessScopeFingerprint);
         if (!hit || hit.departmentId !== departmentId || hit.workUnit.id !== workUnitId) return;
@@ -850,6 +856,19 @@ export default function AdminV2OpportunityWorkUnitPage() {
         const init = workspaceDataFetchInit();
         let parsedQueueRowQuick: QueueItemQuickActionVm[] | null = null;
 
+        try {
+            const rightRailList = await fetchWorkspaceRightRailResolvedActions({
+                departmentId,
+                workUnitId,
+                fetchInit: init,
+            });
+            if (Array.isArray(rightRailList) && rightRailList.length) {
+                setEnrollmentRightRailResolved(rightRailList);
+            }
+        } catch {
+            /* non-fatal */
+        }
+
         const actionsListRoute =
             `/api/admin/actions?` +
             new URLSearchParams({
@@ -897,7 +916,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         if (attn?.execution_work_unit_id) {
             setNeedsAttentionWorkUnitId(attn.execution_work_unit_id);
         }
-    }, [departmentId, workUnitId]);
+    }, [departmentId, workUnitId, selectedSiteId]);
 
     const requestWorkUnitDeferredSupplement = useCallback(() => {
         if (workUnitDeferredScheduledRef.current) return;
@@ -1163,6 +1182,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
         [requestWorkUnitDeferredSupplement, markFirstUsefulPaintOnce, laneUnmappedOnly, viewScopeFingerprint, selectedSiteId]
     );
 
+    const fetchQueueItemsRef = useRef(fetchQueueItems);
+    fetchQueueItemsRef.current = fetchQueueItems;
+    const requestWorkUnitDeferredSupplementRef = useRef(requestWorkUnitDeferredSupplement);
+    requestWorkUnitDeferredSupplementRef.current = requestWorkUnitDeferredSupplement;
+    const markFirstUsefulPaintOnceRef = useRef(markFirstUsefulPaintOnce);
+    markFirstUsefulPaintOnceRef.current = markFirstUsefulPaintOnce;
+
     const warmWorkUnitLanePreviewCache = useCallback(async () => {
         if (!departmentId || !workUnitId || wuLanePreviewBundleDoneRef.current) return;
         const deferred = wuDeferredQueueKeysRef.current;
@@ -1328,6 +1354,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
     }, [selectedSiteId]);
 
     useEffect(() => {
+        if (!siteSelectionReady) {
+            return;
+        }
         if (!departmentId || !workUnitId) {
             setLoading(false);
             setWorkUnit(null);
@@ -1366,6 +1395,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             const routeStart = typeof performance !== "undefined" ? performance.now() : 0;
             if (typeof performance !== "undefined" && typeof window !== "undefined") {
                 alloyPerfSet("work_unit_start", routeStart);
+                console.info("[wu-route-perf]", { event: "work_unit_route_mount", departmentId, workUnitId });
             }
             setLoading(true);
             setError(null);
@@ -1410,30 +1440,31 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 bootstrapPrimaryRowKeyRef.current = primaryKey;
                 setSelectedQueueKeyTraced("bootstrapPrimaryLane", primaryKey);
                 suppressQueueFetchEffectOnceRef.current = true;
-                void fetchQueueItems(workUnitId, primaryKey, null);
+                void fetchQueueItemsRef.current(workUnitId, primaryKey, null);
                 setWuQueueLaneAuthorityReady(true);
             };
 
             try {
-                const bootstrapQs = new URLSearchParams({
-                    department_id: departmentId,
-                    include_previews: "false",
-                    count_mode: "exact",
-                    summary_mode: "all",
-                    limit: "3",
-                    omit_total_count: "true",
-                    primary_row_limit: "20",
-                });
-                if (qFromUrlEffective) bootstrapQs.set("focus_queue", qFromUrlEffective);
                 const abInit = initialLocationRef.current.attentionBucket.trim();
-                if (abInit) bootstrapQs.set("attention_bucket", abInit);
-                const bootstrapRoute = appendWorkspaceSiteToUrl(
-                    `/api/admin/work-units/${encodeURIComponent(workUnitId)}/operational-bootstrap?${bootstrapQs.toString()}`,
-                    selectedSiteId
-                );
-
                 try {
-                    const bootstrapRes = await dedupeAdminFetch(bootstrapRoute, init);
+                    const { response: bootstrapRes, duplicateSuppressed, cacheHit } =
+                        await fetchWorkUnitOperationalBootstrapSession({
+                            departmentId,
+                            workUnitId,
+                            selectedSiteId,
+                            focusQueue: qFromUrlEffective || undefined,
+                            attentionBucket: abInit || undefined,
+                            deferBundle: true,
+                        });
+                    if (duplicateSuppressed || cacheHit) {
+                        console.info("[wu-route-perf]", {
+                            event: "bootstrap_deduped",
+                            departmentId,
+                            workUnitId,
+                            duplicateSuppressed,
+                            cacheHit,
+                        });
+                    }
                     if (!bootstrapRes.ok && !cancelled) {
                         logAdminV2LegacyFanOut({
                             surface: "work_unit",
@@ -1486,9 +1517,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
                         setWorkUnit(wu);
                         setDept(deptRow);
-                        setEnrollmentRightRailResolved(
-                            Array.isArray(b.right_rail_actions) ? b.right_rail_actions : []
-                        );
                         if (orgId) {
                             writeWorkUnitPageCache(orgId, principalUserId, accessScopeFingerprint, {
                                 departmentId,
@@ -1506,11 +1534,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         setQueueSummaries(qs);
                         setQueueSummariesError(null);
                         setQueueSummariesRoute(buildWorkUnitQueuesListRoute(workUnitId, selectedSiteId));
-
-                        if (b.kpi_placements) {
-                            setWuPlacementRows(b.kpi_placements.items ?? []);
-                            setWuScopeHasPlacements(b.kpi_placements.scope_has_placements === true);
-                        }
 
                         if (b.queue?.attention?.execution_work_unit_id) {
                             const buckets = b.queue.attention.needs_attention_buckets ?? [];
@@ -1570,6 +1593,23 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 primaryAb
                             );
                             primaryLaneRowsSettledOnceRef.current = true;
+                            if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                                const laneAt = performance.now();
+                                alloyPerfSet("work_unit_primary_lane_ready", laneAt);
+                                console.info("[wu-route-perf]", {
+                                    event: "work_unit_primary_lane_ready",
+                                    departmentId,
+                                    workUnitId,
+                                    queue_key: pl.queue_key,
+                                });
+                                requestAnimationFrame(() => {
+                                    console.info("[wu-route-perf]", {
+                                        event: "work_unit_first_list_paint",
+                                        departmentId,
+                                        workUnitId,
+                                    });
+                                });
+                            }
                         }
                         setWuQueueLaneAuthorityReady(true);
 
@@ -1581,11 +1621,22 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 alloyPerfSet("work_unit_shell_ready", shellAt);
                                 alloyPerfSet("work_unit_bootstrap_ready", shellAt);
                             }
-                            markFirstUsefulPaintOnce();
+                            markFirstUsefulPaintOnceRef.current();
                         }
 
                         if (!cancelled) {
-                            requestWorkUnitDeferredSupplement();
+                            scheduleAdminV2BackgroundWork(() => {
+                                if (Array.isArray(b.right_rail_actions) && b.right_rail_actions.length) {
+                                    setEnrollmentRightRailResolved(b.right_rail_actions);
+                                }
+                                if (b.kpi_placements) {
+                                    setWuPlacementRows(b.kpi_placements.items ?? []);
+                                    setWuScopeHasPlacements(b.kpi_placements.scope_has_placements === true);
+                                } else {
+                                    void loadWuKpiPlacements(wu);
+                                }
+                            }, { idleTimeoutMs: 1500, fallbackMs: 80 });
+                            requestWorkUnitDeferredSupplementRef.current();
                         }
                         return;
                     }
@@ -1884,17 +1935,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         return () => {
             cancelled = true;
         };
-    }, [
-        departmentId,
-        workUnitId,
-        selectedSiteId,
-        orgId,
-        principalUserId,
-        accessScopeFingerprint,
-        fetchQueueItems,
-        requestWorkUnitDeferredSupplement,
-        markFirstUsefulPaintOnce,
-    ]);
+    }, [departmentId, workUnitId, selectedSiteId, siteSelectionReady, orgId, principalUserId, accessScopeFingerprint, loadWuKpiPlacements]);
 
     const invalidate = useCallback(
         (opts?: { entity_type?: string; entity_id?: string; action_key?: string }) => {

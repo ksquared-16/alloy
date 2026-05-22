@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { requireAdminOrOps } from "@/lib/adminAuth";
-import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight";
 import {
     isUuidString,
     partitionWorkflowsByWorkspaceScope,
@@ -37,14 +36,10 @@ type WorkflowCardRow = {
 /** GET: workflows summary for AdminV2 list (steps count + last run). */
 export async function GET(request: NextRequest) {
     const t0 = Date.now();
-    const forbidden = await requireAdminOrOps();
-    const authMs = Date.now() - t0;
-    if (forbidden) return forbidden;
-    const t1 = Date.now();
-    const ctx = await getAdminContextCached();
-    const ctxMs = Date.now() - t1;
-    if (!ctx.ok) return adminContextFailureResponse(ctx);
-    const orgId = ctx.orgId;
+    const gate = await requireAdminOrgContextLight();
+    const gateMs = Date.now() - t0;
+    if (gate instanceof Response) return gate;
+    const orgId = gate.orgId;
 
     const variant = (request.nextUrl.searchParams.get("variant") ?? "").trim();
     const departmentId = (request.nextUrl.searchParams.get("department_id") ?? "").trim();
@@ -132,8 +127,8 @@ export async function GET(request: NextRequest) {
         if (totalMs > 300) {
             console.warn("[admin-timing] GET /api/admin/workflows/summary variant=workspace", {
                 total_ms: totalMs,
-                require_admin_ms: authMs,
-                get_admin_context_ms: ctxMs,
+                portal_gate_ms: gateMs,
+                light_context: true,
                 parallel_queries_ms: parallelCardMs,
                 workflow_count: rows.length,
             });
@@ -224,8 +219,8 @@ export async function GET(request: NextRequest) {
     if (totalMs > 300) {
         console.warn("[admin-timing] GET /api/admin/workflows/summary full", {
             total_ms: totalMs,
-            require_admin_ms: authMs,
-            get_admin_context_ms: ctxMs,
+            portal_gate_ms: gateMs,
+            light_context: true,
             parallel_queries_ms: parallelMs,
             failed_action_lookup_ms: failedLookupMs,
             workflow_count: (workflows ?? []).length,

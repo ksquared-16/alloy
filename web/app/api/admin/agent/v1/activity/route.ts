@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight";
 
 function agentV1RecordLayoutEnabled(): boolean {
     const v = process.env.AGENT_V1_RECORD_LAYOUT_ENABLED?.trim().toLowerCase();
@@ -38,8 +38,8 @@ type LayoutRow = {
  * Query: `limit` (1–50, default 50).
  */
 export async function GET(request: NextRequest) {
-    const ctx = await getAdminContextCached();
-    if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const ctx = await requireAdminOrgContextLight();
+    if (ctx instanceof Response) return ctx;
     if (!agentV1RecordLayoutEnabled()) {
         return NextResponse.json({ ok: false, error: "FEATURE_DISABLED", message: "Agent v1 record layout is disabled" }, { status: 403 });
     }

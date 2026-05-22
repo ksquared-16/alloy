@@ -10,7 +10,7 @@ import { ADMIN_V2_OPEN_TASKS_MODAL, fetchOperationalTasksSummary, readJson } fro
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
 import { neutral } from "@/styles/tokens/colors";
-import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
+import { scheduleAdminV2SidecarWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { isAdminV2OperNavigationActive } from "@/lib/perf/alloyPerfGlobal";
 
 type TaskCounts = { open: number; due_soon: number; overdue: number };
@@ -43,7 +43,7 @@ export default function OperationalTasksNavBadge({
 
     useEffect(() => {
         if (!enabled) return;
-        const cancelDefer = scheduleAdminV2BackgroundWork(() => load(), { idleTimeoutMs: 4000, fallbackMs: 500 });
+        const cancelDefer = scheduleAdminV2SidecarWork(() => load(), { idleTimeoutMs: 6000, fallbackMs: 1200 });
         const id = window.setInterval(() => void load(), 120_000);
         const onRefresh = () => void load();
         const onOpen = () => onOpenModal();

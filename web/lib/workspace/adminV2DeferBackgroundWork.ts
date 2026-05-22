@@ -1,3 +1,5 @@
+import { isAdminV2WuPrimaryPaintPending } from "@/lib/perf/alloyPerfGlobal";
+
 /**
  * Schedules non-critical AdminV2 client work after the navigation paint / idle window.
  * Used to keep dept-critical fetches from competing with shell background polls.
@@ -24,4 +26,41 @@ export function scheduleAdminV2BackgroundWork(
     }
 
     return () => undefined;
+}
+
+/**
+ * Defers shell sidecars until WU primary paint marks are set (or navigation window expires).
+ */
+export function scheduleAdminV2SidecarWork(
+    fn: () => void | Promise<void>,
+    options?: { idleTimeoutMs?: number; fallbackMs?: number; maxWaitMs?: number }
+): () => void {
+    const maxWaitMs = options?.maxWaitMs ?? 20_000;
+    let cancelled = false;
+    let innerCancel: (() => void) | undefined;
+
+    const armIdle = () => {
+        if (cancelled) return;
+        innerCancel = scheduleAdminV2BackgroundWork(fn, {
+            idleTimeoutMs: options?.idleTimeoutMs ?? 8000,
+            fallbackMs: options?.fallbackMs ?? 1200,
+        });
+    };
+
+    const waitForPrimary = () => {
+        if (cancelled) return;
+        if (!isAdminV2WuPrimaryPaintPending(maxWaitMs)) {
+            armIdle();
+            return;
+        }
+        if (typeof window !== "undefined") {
+            window.requestAnimationFrame(waitForPrimary);
+        }
+    };
+
+    waitForPrimary();
+    return () => {
+        cancelled = true;
+        innerCancel?.();
+    };
 }

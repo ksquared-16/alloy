@@ -37,6 +37,8 @@ type WorkspaceSiteFilterContextValue = {
     loadError: string | null;
     /** null = all allowed sites */
     selectedSiteId: string | null;
+    /** False until URL/session sticky site is applied (avoids bootstrap without then with site). */
+    siteSelectionReady: boolean;
     setSelectedSiteId: (id: string | null) => void;
 };
 
@@ -46,6 +48,7 @@ export function WorkspaceSiteFilterProvider({ children }: { children: ReactNode 
     const [bootstrap, setBootstrap] = useState<WorkspaceSiteFilterBootstrap | null>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [selectedSiteId, setSelectedSiteIdState] = useState<string | null>(null);
+    const [siteSelectionReady, setSiteSelectionReady] = useState(false);
     const hydratedRef = useRef(false);
     const scopeRef = useRef<WorkspaceSiteFilterPersistenceScope | null>(null);
 
@@ -60,6 +63,7 @@ export function WorkspaceSiteFilterProvider({ children }: { children: ReactNode 
                 if (!res.ok) {
                     setLoadError(typeof j.error === "string" ? j.error : "Failed to load site filter");
                     setBootstrap(null);
+                    setSiteSelectionReady(true);
                     return;
                 }
                 setLoadError(null);
@@ -73,6 +77,7 @@ export function WorkspaceSiteFilterProvider({ children }: { children: ReactNode 
                 if (!cancelled) {
                     setLoadError("Failed to load site filter");
                     setBootstrap(null);
+                    setSiteSelectionReady(true);
                 }
             }
         })();
@@ -119,7 +124,14 @@ export function WorkspaceSiteFilterProvider({ children }: { children: ReactNode 
         if (!bootstrap?.sites) return;
         hydrateFromUrlAndSession(bootstrap.sites, !hydratedRef.current);
         hydratedRef.current = true;
+        setSiteSelectionReady(true);
     }, [bootstrap, hydrateFromUrlAndSession]);
+
+    useEffect(() => {
+        if (bootstrap && (!bootstrap.sites || bootstrap.sites.length === 0)) {
+            setSiteSelectionReady(true);
+        }
+    }, [bootstrap]);
 
     useEffect(() => {
         const onScope = (ev: Event) => {
@@ -148,9 +160,10 @@ export function WorkspaceSiteFilterProvider({ children }: { children: ReactNode 
             bootstrap,
             loadError,
             selectedSiteId,
+            siteSelectionReady,
             setSelectedSiteId,
         }),
-        [bootstrap, loadError, selectedSiteId, setSelectedSiteId]
+        [bootstrap, loadError, selectedSiteId, siteSelectionReady, setSelectedSiteId]
     );
 
     return <WorkspaceSiteFilterContext.Provider value={value}>{children}</WorkspaceSiteFilterContext.Provider>;

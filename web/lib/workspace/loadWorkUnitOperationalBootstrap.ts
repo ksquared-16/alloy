@@ -3,7 +3,6 @@ import type { AdminAccessScopeDimensions, RecordScopeConstraints } from "@/lib/a
 import { departmentIdAllowed } from "@/lib/admin/accessScope";
 import { resolveOpportunityAttentionConfigFromMetadata } from "@/lib/opportunities/opportunityAttentionConfig";
 import {
-    buildQueueSummariesSharedBootstrap,
     getWorkUnitQueueItems,
     getWorkUnitQueueSummaries,
     loadOpportunityNeedsAttentionRows,
@@ -83,6 +82,114 @@ export type WorkUnitOperBootstrapContext = {
     attentionResolverPasses: { count: number };
 };
 
+type AttentionBootstrapOutcome = {
+    preloadedAttention?: OpportunityNeedsAttentionLoadResult;
+    attentionBlock?: WorkUnitOperationalBootstrapQueue["attention"];
+};
+
+async function loadWorkUnitBootstrapAttention(params: {
+    supabase: SupabaseClient;
+    orgId: string;
+    departmentId: string;
+    departmentMetadata: unknown;
+    workUnitMetadata: unknown;
+    accessDim: AdminAccessScopeDimensions;
+    recordScopeImpossible: boolean;
+    recordScopeConstraints: RecordScopeConstraints | null;
+    sharedBootstrap: QueueSummariesSharedBootstrap;
+    naExecution: NonNullable<ReturnType<typeof resolveWorkUnitNeedsAttentionExecution>>;
+    attentionResolverPasses: { count: number };
+    phases: WorkUnitBootstrapPerfPhases;
+}): Promise<AttentionBootstrapOutcome> {
+    const {
+        supabase,
+        orgId,
+        departmentMetadata,
+        workUnitMetadata,
+        accessDim,
+        recordScopeImpossible,
+        recordScopeConstraints,
+        sharedBootstrap,
+        naExecution,
+        attentionResolverPasses,
+        phases,
+    } = params;
+
+    const tAttention0 = Date.now();
+    const oppDefs = sharedBootstrap.opportunityStatusDefs;
+    const attentionConfig = resolveOpportunityAttentionConfigFromMetadata(workUnitMetadata);
+    const refUtc = new Date();
+    const sort = [{ column: "updated_at", ascending: true as const }];
+    const loadPerf: {
+        query_ms?: number;
+        resolver_ms?: number;
+        membership_filter_ms?: number;
+    } = {};
+
+    const preloadedAttention = await loadOpportunityNeedsAttentionRows({
+        supabase,
+        orgId,
+        workUnitId: naExecution.id,
+        sort,
+        now: refUtc,
+        opportunityStatusDefs: oppDefs,
+        attentionConfig,
+        recordScopeConstraints,
+        columnSelect: "resolver_minimal",
+        skipPostFilterSort: true,
+        perf: loadPerf,
+    });
+    attentionResolverPasses.count += 1;
+
+    const bucketPerf: {
+        rules_ms?: number;
+        query_ms?: number;
+        resolver_ms?: number;
+        membership_filter_ms?: number;
+        bucket_merge_ms?: number;
+        candidate_count?: number;
+    } = {};
+    const scoped = await buildWorkUnitScopedNeedsAttentionLaneBuckets({
+        supabase,
+        orgId,
+        workUnitId: naExecution.id,
+        workUnitMetadata,
+        departmentMetadata,
+        accessDim,
+        recordScopeImpossible,
+        recordScopeConstraints,
+        opportunityStatusDefs: oppDefs,
+        preloadedAttention,
+        perf: bucketPerf,
+    });
+
+    phases.attention_ms = Date.now() - tAttention0;
+    phases.attention_query_ms = loadPerf.query_ms;
+    phases.attention_resolver_ms = loadPerf.resolver_ms;
+    phases.attention_candidate_count = preloadedAttention.raw_candidates_fetched;
+    phases.attention_resolver_passes = attentionResolverPasses.count;
+    phases.attention_rules_ms = bucketPerf.rules_ms;
+    phases.attention_bucket_merge_ms = bucketPerf.bucket_merge_ms;
+
+    return {
+        preloadedAttention,
+        attentionBlock: {
+            source: "work_unit_needs_attention_lane",
+            execution_work_unit_id: naExecution.id,
+            execution_mode: naExecution.mode,
+            bucket_count_scope: "work_unit_needs_attention_list_cap",
+            needs_attention_buckets: scoped.needs_attention_buckets,
+            total_matches: scoped.total_matches,
+            attention_reason_counts: scoped.attention_reason_counts,
+            opportunity_needs_attention_semantics: scoped.opportunity_needs_attention_semantics,
+            attention_query_ms: loadPerf.query_ms ?? 0,
+            attention_resolver_ms: loadPerf.resolver_ms ?? 0,
+            attention_candidate_count: preloadedAttention.raw_candidates_fetched,
+            attention_resolver_passes: attentionResolverPasses.count,
+        },
+    };
+}
+
 export async function loadWorkUnitOperationalBootstrap(params: {
     ctx: WorkUnitOperBootstrapContext;
     phases: WorkUnitBootstrapPerfPhases;
@@ -158,21 +265,6 @@ export async function loadWorkUnitOperationalBootstrap(params: {
         departmentId,
     };
 
-    const tSummaries0 = Date.now();
-    const summariesResult = await getWorkUnitQueueSummaries({
-        orgId,
-        workUnitId,
-        preloadedQueueDefinition,
-        limit: summariesLimit,
-        includePreviews: false,
-        summaryMode: "all",
-        sharedBootstrap,
-        viewerDisplayTimeZone,
-        recordScopeImpossible,
-        recordScopeConstraints,
-    });
-    phases.queue_summaries_ms = Date.now() - tSummaries0;
-
     const naExecution = resolveWorkUnitNeedsAttentionExecution(
         {
             id: workUnitId,
@@ -183,89 +275,65 @@ export async function loadWorkUnitOperationalBootstrap(params: {
         },
         departmentId
     );
+    const attentionEligible = Boolean(naExecution && workUnitDefinesNeedsAttentionQueue(queueDefinition));
 
-    let preloadedAttention: OpportunityNeedsAttentionLoadResult | undefined;
-    let attentionBlock: WorkUnitOperationalBootstrapQueue["attention"];
-
-    if (naExecution && workUnitDefinesNeedsAttentionQueue(queueDefinition)) {
-        const tAttention0 = Date.now();
-        const oppDefs = sharedBootstrap.opportunityStatusDefs;
-        const attentionConfig = resolveOpportunityAttentionConfigFromMetadata(workUnitMetadata);
-        const refUtc = new Date();
-        const sort = [{ column: "updated_at", ascending: true as const }];
-        const loadPerf: {
-            query_ms?: number;
-            resolver_ms?: number;
-            membership_filter_ms?: number;
-        } = {};
-
-        preloadedAttention = await loadOpportunityNeedsAttentionRows({
-            supabase,
+    const tParallel0 = Date.now();
+    const summariesP = (async () => {
+        const t0 = Date.now();
+        const result = await getWorkUnitQueueSummaries({
             orgId,
-            workUnitId: naExecution.id,
-            sort,
-            now: refUtc,
-            opportunityStatusDefs: oppDefs,
-            attentionConfig,
+            workUnitId,
+            preloadedQueueDefinition,
+            limit: summariesLimit,
+            includePreviews: false,
+            summaryMode: "all",
+            sharedBootstrap,
+            viewerDisplayTimeZone,
+            recordScopeImpossible,
             recordScopeConstraints,
-            columnSelect: "resolver_minimal",
-            skipPostFilterSort: true,
-            perf: loadPerf,
         });
-        attentionResolverPasses.count += 1;
+        phases.queue_summaries_ms = Date.now() - t0;
+        return result;
+    })();
 
-        const bucketPerf: {
-            rules_ms?: number;
-            query_ms?: number;
-            resolver_ms?: number;
-            membership_filter_ms?: number;
-            bucket_merge_ms?: number;
-            candidate_count?: number;
-        } = {};
-        const scoped = await buildWorkUnitScopedNeedsAttentionLaneBuckets({
+    const attentionP = (async (): Promise<AttentionBootstrapOutcome> => {
+        if (!attentionEligible || !naExecution) {
+            phases.attention_ms = 0;
+            return {};
+        }
+        return loadWorkUnitBootstrapAttention({
             supabase,
             orgId,
-            workUnitId: naExecution.id,
-            workUnitMetadata,
+            departmentId,
             departmentMetadata,
+            workUnitMetadata,
             accessDim,
             recordScopeImpossible,
             recordScopeConstraints,
-            opportunityStatusDefs: oppDefs,
-            preloadedAttention,
-            perf: bucketPerf,
+            sharedBootstrap,
+            naExecution,
+            attentionResolverPasses,
+            phases,
         });
+    })();
 
-        phases.attention_ms = Date.now() - tAttention0;
-        phases.attention_query_ms = loadPerf.query_ms;
-        phases.attention_resolver_ms = loadPerf.resolver_ms;
-        phases.attention_candidate_count = preloadedAttention.raw_candidates_fetched;
-        phases.attention_resolver_passes = attentionResolverPasses.count;
-        phases.attention_rules_ms = bucketPerf.rules_ms;
-        phases.attention_bucket_merge_ms = bucketPerf.bucket_merge_ms;
+    const [summariesResult, attentionOutcome] = await Promise.all([summariesP, attentionP]);
+    phases.summaries_attention_parallel_ms = Date.now() - tParallel0;
+    phases.summaries_attention_parallel = true;
 
-        const attnCfg = resolveOpportunityAttentionConfigFromMetadata(workUnitMetadata);
-        attentionBlock = {
-            source: "work_unit_needs_attention_lane",
-            execution_work_unit_id: naExecution.id,
-            execution_mode: naExecution.mode,
-            bucket_count_scope: "work_unit_needs_attention_list_cap",
-            needs_attention_buckets: scoped.needs_attention_buckets,
-            total_matches: scoped.total_matches,
-            attention_reason_counts: scoped.attention_reason_counts,
-            opportunity_needs_attention_semantics: scoped.opportunity_needs_attention_semantics,
-            attention_query_ms: loadPerf.query_ms ?? 0,
-            attention_resolver_ms: loadPerf.resolver_ms ?? 0,
-            attention_candidate_count: preloadedAttention.raw_candidates_fetched,
-            attention_resolver_passes: attentionResolverPasses.count,
-        };
-    }
+    const preloadedAttention = attentionOutcome.preloadedAttention;
+    const attentionBlock = attentionOutcome.attentionBlock;
 
     const primaryQueueKey = resolveWorkUnitBootstrapPrimaryQueueKey(
         { queue_definition: queueDefinition },
         summariesResult.queues,
         focusQueue
     );
+
+    const primaryIsNeedsAttention =
+        primaryQueueKey != null && primaryQueueKey.trim().toLowerCase() === "needs_attention";
+    phases.primary_lane_wait_on =
+        primaryQueueKey == null ? "none" : primaryIsNeedsAttention ? "needs_attention" : "summaries_only";
 
     let primary_lane: WorkUnitOperationalBootstrapQueue["primary_lane"];
     if (primaryQueueKey) {
@@ -281,11 +349,10 @@ export async function loadWorkUnitOperationalBootstrap(params: {
             recordScopeImpossible,
             recordScopeConstraints,
             viewerDisplayTimeZone,
-            attentionBucketKey: primaryQueueKey.trim().toLowerCase() === "needs_attention" ? attentionBucketKey : null,
+            attentionBucketKey: primaryIsNeedsAttention ? attentionBucketKey : null,
             preloadedQueueDefinition,
             sharedBootstrap,
-            preloadedAttentionPack:
-                primaryQueueKey.trim().toLowerCase() === "needs_attention" ? preloadedAttention : undefined,
+            preloadedAttentionPack: primaryIsNeedsAttention ? preloadedAttention : undefined,
         });
         phases.primary_lane_rows_ms = Date.now() - tRows0;
         primary_lane = {

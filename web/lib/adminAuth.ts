@@ -10,7 +10,11 @@ import { NextResponse } from "next/server";
 import type { User } from "@supabase/supabase-js";
 import { loadAdminAccessBundleCached } from "@/lib/admin/getAdminAccessContext";
 import { compatibilityPortalRole } from "@/lib/admin/adminPortalRolePick";
-import { getCachedAuthUser } from "@/lib/admin/cachedAuthSession";
+import { getCachedAuthUser, getCachedAuthUserId } from "@/lib/admin/cachedAuthSession";
+import {
+    adminOrgContextLightFailureResponse,
+    getAdminOrgContextLightCached,
+} from "@/lib/admin/getAdminOrgContextLight";
 
 const ALLOWED_ROLES = ["admin", "ops"] as const;
 export type AdminRole = (typeof ALLOWED_ROLES)[number];
@@ -27,9 +31,10 @@ export interface AdminAuthResult {
 
 async function loadAdminAuth(): Promise<AdminAuthResult | null> {
     const t0 = Date.now();
-    const user = await getCachedAuthUser();
-    const authUserMs = Date.now() - t0;
-    if (!user?.id) return null;
+    const tAuth0 = Date.now();
+    const userId = await getCachedAuthUserId();
+    const authUserMs = Date.now() - tAuth0;
+    if (!userId) return null;
 
     const t1 = Date.now();
     const bundle = await loadAdminAccessBundleCached();
@@ -39,12 +44,15 @@ async function loadAdminAuth(): Promise<AdminAuthResult | null> {
         return null;
     }
 
+    const user = await getCachedAuthUser();
+    if (!user?.id) return null;
+
     const role = compatibilityPortalRole(bundle.roleKeys);
 
     const totalMs = Date.now() - t0;
     if (totalMs > 400) {
         console.warn("[admin-context-perf] getAdminAuth", {
-            auth_get_user_ms: authUserMs,
+            auth_lookup_ms: authUserMs,
             bundle_resolve_ms: bundleMs,
             total_ms: totalMs,
         });
@@ -103,9 +111,9 @@ export async function requireAdmin(): Promise<NextResponse | null> {
  * Returns 401 if not logged in or no valid profile; 403 if role not in (admin, ops); otherwise null.
  */
 export async function requireAdminOrOps(): Promise<NextResponse | null> {
-    const auth = await getAdminAuth();
-    if (!auth) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const ctx = await getAdminOrgContextLightCached();
+    if (!ctx.ok) {
+        return adminOrgContextLightFailureResponse(ctx);
     }
     return null;
 }

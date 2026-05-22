@@ -3,8 +3,13 @@ export type WorkUnitBootstrapPerfPhases = {
     dept_fetch_ms?: number;
     work_unit_fetch_ms?: number;
     shared_bootstrap_ms?: number;
+    /** Wall-clock for summaries ∥ attention block (Card 2). */
+    summaries_attention_parallel_ms?: number;
+    summaries_attention_parallel?: boolean;
     queue_summaries_ms?: number;
     attention_ms?: number;
+    /** needs_attention | summaries_only | none */
+    primary_lane_wait_on?: string;
     attention_query_ms?: number;
     attention_resolver_ms?: number;
     attention_candidate_count?: number;
