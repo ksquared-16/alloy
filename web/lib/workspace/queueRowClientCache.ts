@@ -95,6 +95,22 @@ export function peekFreshQueueRowCache<TPayload>(
     return e;
 }
 
+/**
+ * Move a fresh entry to the end of the Map so LRU eviction prefers older lanes (Card 5).
+ * No-op when missing or expired.
+ */
+export function touchQueueRowCacheOnHit<TPayload>(
+    map: Map<string, QueueRowClientCacheBucket<TPayload>>,
+    logicalKey: string,
+    ttlMs: number = QUEUE_ROW_CLIENT_CACHE_TTL_MS
+): QueueRowClientCacheBucket<TPayload> | null {
+    const ent = peekFreshQueueRowCache(map, logicalKey, ttlMs);
+    if (!ent) return null;
+    map.delete(logicalKey);
+    map.set(logicalKey, ent);
+    return ent;
+}
+
 export function shouldStaleBackgroundRefresh(
     fetchedAt: number,
     ttlMs: number = QUEUE_ROW_CLIENT_CACHE_TTL_MS

@@ -4,6 +4,7 @@ import {
     enforceQueueRowCacheLru,
     peekFreshQueueRowCache,
     putQueueRowCache,
+    touchQueueRowCacheOnHit,
     QUEUE_ROW_CLIENT_CACHE_MAX_ENTRIES,
     queueRowLogicalCacheKey,
 } from "@/lib/workspace/queueRowClientCache";
@@ -25,6 +26,17 @@ describe("queueRowClientCache", () => {
         const longTtl = 9_000_000;
         expect(peekFreshQueueRowCache(m, `${FP}:wu1:q1:all`, longTtl)?.payload).toEqual({ n: 1 });
         expect(peekFreshQueueRowCache(m, `${FP}:wu1:q1:unmapped`, longTtl)?.payload).toEqual({ n: 1 });
+    });
+
+    it("touchQueueRowCacheOnHit moves entry to LRU tail without changing payload", () => {
+        const m = new Map<string, { payload: { n: number }; fetchedAt: number }>();
+        putQueueRowCache(m, FP, "wu1", "a", { n: 1 });
+        putQueueRowCache(m, FP, "wu1", "b", { n: 2 });
+        const keyA = `${FP}:wu1:a:all`;
+        const ent = touchQueueRowCacheOnHit(m, keyA);
+        expect(ent?.payload).toEqual({ n: 1 });
+        const keysAfter = [...m.keys()];
+        expect(keysAfter[keysAfter.length - 1]).toBe(keyA);
     });
 
     it("documents LRU cap for session cache", () => {

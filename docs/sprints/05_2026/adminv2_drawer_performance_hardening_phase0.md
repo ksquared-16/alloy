@@ -434,6 +434,7 @@ Use `[perf.drawer.open]` / `[dept-bootstrap-perf]` / WU bootstrap perf logs on s
 
 ### Return path
 
+- **Production pass (Cards 0–5):** [`adminv2_drawer_production_pass.md`](./adminv2_drawer_production_pass.md) — primary-gated reveal, tab cache, WU lane previews, closeout §6
 - Scope lock closeout appendix: [`adminv2_performance_scope_lock.md`](./adminv2_performance_scope_lock.md#adminv2-runtime--drawer-sprint-closeout-2026-05-20)
 - `/work-unit` cards 1–3 plan (runtime replication): [`adminv2_work_unit_runtime_cards_1_3_plan.md`](./adminv2_work_unit_runtime_cards_1_3_plan.md)
 - Dept handoff: [`adminv2_dept_runtime_closeout_handoff.md`](./adminv2_dept_runtime_closeout_handoff.md)

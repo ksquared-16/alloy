@@ -98,6 +98,7 @@ import {
     deleteQueueRowCacheKeysForWorkUnit,
     logQueueRowClientCache,
     peekFreshQueueRowCache,
+    touchQueueRowCacheOnHit,
     putQueueRowCache,
     queueRowLogicalCacheKey,
     shouldStaleBackgroundRefresh,
@@ -966,7 +967,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             }
 
             if (!options?.force && !options?.prefetchOnly && !options?.quietStaleRefresh) {
-                const ent = peekFreshQueueRowCache(cache, logicalKey);
+                const ent = touchQueueRowCacheOnHit(cache, logicalKey);
                 if (ent) {
                     queueItemsLastFetchSigRef.current = fetchSig;
                     setQueueItemsError(null);
