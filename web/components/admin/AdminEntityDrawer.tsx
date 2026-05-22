@@ -153,8 +153,6 @@ import { deriveTourMetadataMirrorFromBooking, TOUR_BOOKING_OPPORTUNITY_STATUS } 
 import { validateQueueDefinition, type QueueDefinitionV1, type QueueFilter } from "@/lib/config/queueDefinitionSchema";
 import {
     JobDrawerV2TabBar,
-    JobDrawerV2SignalsStrip,
-    deriveJobDrawerSignalLines,
     JobDrawerV2PrimaryActions,
     JobRecordPrimaryPanel,
     JobDrawerV2TimelineCard,
@@ -200,11 +198,14 @@ import {
     stabilizeOpportunityWorkflowOverviewSections,
 } from "@/lib/admin/drawer/opportunityDrawerLayoutStability";
 import {
+    buildJobDrawerPipelineState,
     buildOpportunityDrawerPipelineState,
     drawerFullBoundValuesReady,
+    JOB_DRAWER_V2_OVERVIEW_SECTIONS,
     opportunityShellToDrawerShellContract,
     overviewSectionsFromAboveFoldModel,
 } from "@/lib/adminV2/drawerPipeline";
+import DrawerAboveFoldRenderer from "@/components/admin/drawer/DrawerAboveFoldRenderer";
 import {
     opportunityDrawerBelowFoldEnrichmentReady as computeBelowFoldEnrichmentReady,
     opportunityDrawerFullBoundEnrichmentReady as computeFullBoundEnrichmentReady,
@@ -490,86 +491,6 @@ function canEditInDrawer(type: string): type is (typeof EDITABLE_TYPES)[number] 
 /** Shared spacing: 24px container (drawer body has p-6), 16px between rows, section title with divider */
 const DRAWER_SECTION_HEADER_CLASS = "text-xs font-semibold tracking-wider text-[#59678b] border-b border-[#e6e8ec] pb-2 mb-4";
 const DRAWER_ROW_SPACING = "space-y-4";
-
-/** Curated collapsible sections for Admin V2 cleaning job Record tab (no RRS section; People & places = opportunity + work unit only). */
-function buildJobDrawerV2OverviewSections(): EntityDrawerSectionConfig[] {
-    const pres = getEntityPresentation("jobs").drawer?.overviewSections ?? [];
-    const ps = pres.find((s) => s.key === "property_service");
-    const sched = pres.find((s) => s.key === "scheduling");
-    const notes = pres.find((s) => s.key === "notes");
-    const rec = pres.find((s) => s.key === "record_info");
-    const propertyFields: EntityDrawerFieldConfig[] = [
-        { key: "title", label: "Title", span: 1, renderHint: "text", editable: true },
-        { key: "service_key", label: "Service", span: 1, renderHint: "text", editable: true },
-        { key: "job_type", label: "Job type", span: 1, renderHint: "text", editable: true },
-        ...(ps?.fields ?? []),
-    ];
-    const schedFields = (sched?.fields ?? []).filter((f) => f.key !== "_next_schedule");
-    const pb = getJobPricingBreakdownSection();
-    const bill = getJobOverviewBillingSummarySection();
-    const peoplePlacesFields: EntityDrawerFieldConfig[] = [
-        {
-            key: "opportunity_id",
-            label: "Opportunity",
-            span: 1,
-            renderHint: "link",
-            editable: true,
-            linkTarget: { idField: "opportunity_id", entityType: "opportunities" },
-        },
-        { key: "work_unit_id", label: "Work unit", span: 1, renderHint: "text", editable: true },
-    ];
-    return [
-        {
-            key: "property_service_v2",
-            title: "Property & service details",
-            defaultExpanded: true,
-            collapsible: true,
-            gridCols: 2,
-            fields: propertyFields,
-            locked: true,
-        },
-        {
-            key: "scheduling_v2",
-            title: "Scheduling",
-            defaultExpanded: false,
-            collapsible: true,
-            gridCols: 2,
-            fields: schedFields,
-            locked: true,
-        },
-        { ...pb, key: "job_pricing_breakdown", title: "Pricing", defaultExpanded: false },
-        { ...bill, defaultExpanded: false },
-        {
-            key: "people_places_v2",
-            title: "People & places",
-            defaultExpanded: false,
-            collapsible: true,
-            gridCols: 2,
-            fields: peoplePlacesFields,
-            locked: true,
-        },
-        {
-            key: "communications_canonical_embed",
-            title: "Communication",
-            defaultExpanded: false,
-            collapsible: true,
-            gridCols: 1,
-            fields: [],
-            locked: true,
-        },
-        {
-            key: "internal_notes_record_v2",
-            title: "Internal notes & record details",
-            defaultExpanded: false,
-            collapsible: true,
-            gridCols: 2,
-            fields: [...(notes?.fields ?? []), ...(rec?.fields ?? [])],
-            locked: true,
-        },
-    ];
-}
-
-const JOB_DRAWER_V2_OVERVIEW_SECTIONS = buildJobDrawerV2OverviewSections();
 
 /** Entity types that use inline-edit; always show inputs, save on blur or Save (no overview read/edit toggle). */
 const INLINE_EDIT_ENTITY_TYPES = ["contacts", "customers", "vendors", "opportunities", "schedules", "customer_members", "payments", "service_offerings", "service_plan_templates", "addons", "persons"] as const;
@@ -6772,19 +6693,6 @@ export default function AdminEntityDrawer() {
               : "space-y-6"
     }${opportunityRecordChromeBodyShell ? " pb-24 sm:pb-28 overflow-anchor-none" : ""}`;
 
-    const jobDrawerV2SignalsNode = useMemo(() => {
-        if (!isJobDrawerV2 || !overviewData) return null;
-        const pay = jobPaymentSummaryFromApi;
-        const lines = deriveJobDrawerSignalLines(
-            overviewData as Record<string, unknown>,
-            jobSchedules,
-            paymentStatusLabel,
-            pay?.payment_status_key === "paid",
-            pay?.payment_status_key === "failed"
-        );
-        return <JobDrawerV2SignalsStrip {...lines} presentation={showJobRecordModalV2 ? "cleaningRecordModal" : "default"} />;
-    }, [isJobDrawerV2, overviewData, jobSchedules, paymentStatusLabel, jobPaymentSummaryFromApi, showJobRecordModalV2]);
-
     const drawerHeaderRecordSubtitle = useMemo(() => {
         if (!overviewData || (overviewData as { _create?: boolean })._create) return null;
         return drawerRecordNumberSubtitle(drawer.type, overviewData as Record<string, unknown>);
@@ -6908,6 +6816,45 @@ export default function AdminEntityDrawer() {
             overview: "Record",
         };
     }, [isJobRecordModalTarget, drawer.type, tabLabels]);
+
+    const jobDrawerPipeline = useMemo(() => {
+        if (!isJobDrawerV2 || drawer.type !== "jobs" || !drawer.id || drawer.id === "new" || !overviewData) {
+            return null;
+        }
+        const pay = jobPaymentSummaryFromApi;
+        return buildJobDrawerPipelineState({
+            tabs: isJobRecordModalTarget ? jobDrawerV2TabListResolved : tabList,
+            record: overviewData as Record<string, unknown>,
+            drawer_id: drawer.id,
+            schedules: jobSchedules,
+            payment_status_label: paymentStatusLabel,
+            payment_is_paid: pay?.payment_status_key === "paid",
+            payment_failed: pay?.payment_status_key === "failed",
+            cleaning_record_modal: showJobRecordModalV2,
+        });
+    }, [
+        isJobDrawerV2,
+        drawer.type,
+        drawer.id,
+        overviewData,
+        isJobRecordModalTarget,
+        jobDrawerV2TabListResolved,
+        tabList,
+        jobSchedules,
+        paymentStatusLabel,
+        jobPaymentSummaryFromApi,
+        showJobRecordModalV2,
+    ]);
+
+    const jobDrawerV2OverviewSectionsResolved = useMemo((): EntityDrawerSectionConfig[] => {
+        if (jobDrawerPipeline) {
+            return overviewSectionsFromAboveFoldModel(
+                jobDrawerPipeline.shell,
+                jobDrawerPipeline.above_fold.sections
+            );
+        }
+        return JOB_DRAWER_V2_OVERVIEW_SECTIONS;
+    }, [jobDrawerPipeline]);
 
     /** Existing opportunity: until entity row + record chrome both resolve, keep inquiry strip (no generic Related tab flash). */
     const opportunityDrawerShellSettled =
@@ -9748,7 +9695,7 @@ export default function AdminEntityDrawer() {
                 <DrawerQuietSkeletonBar className="h-14 w-full rounded-lg opacity-95" />
             </div>
         ) : isJobDrawerV2 ? (
-            jobDrawerV2SignalsNode
+            <DrawerAboveFoldRenderer model={jobDrawerPipeline?.above_fold} />
         ) : (
             opportunityInquiryWorkflowHeaderTimeline
         )
@@ -12148,7 +12095,7 @@ export default function AdminEntityDrawer() {
                                             entityType={presentationType}
                                             data={entityDrawerOverviewData}
                                             customSectionContent={overviewCustomContent}
-                                            overviewSectionsOverride={JOB_DRAWER_V2_OVERVIEW_SECTIONS}
+                                            overviewSectionsOverride={jobDrawerV2OverviewSectionsResolved}
                                             selectOptionsByFieldKey={overviewSelectOptionsByFieldKey}
                                             isEditing={isEditing || drawer.type === "jobs"}
                                             formData={formData}

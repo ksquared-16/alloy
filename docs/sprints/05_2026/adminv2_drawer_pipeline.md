@@ -4,7 +4,9 @@
 
 One reusable drawer pipeline for AdminV2 entity drawers. Entity adapters supply data and slot values; a shared contract and render model own composition rules.
 
-Opportunity is the first adapter. Work-unit, department, and BOS drawers are out of scope until they adopt the same pattern.
+Opportunity is the first adapter. **Job (Admin V2)** is the second. Work-unit, department, and BOS are out of scope.
+
+Sprint expansion audit: [`adminv2_drawer_pipeline_expansion.md`](./adminv2_drawer_pipeline_expansion.md).
 
 ## Doctrine
 
@@ -32,28 +34,74 @@ See also: `docs/sprints/05_2026/adminv2_shell_doctrine_preload_structure_hydrate
 ```
 web/lib/adminV2/drawerPipeline/
   types.ts
-  enrichmentState.ts      # buildDrawerEnrichmentState, warning helpers
-  layoutLock.ts           # above-fold lock, below-fold / full-bound value gates
-  sectionRenderModel.ts   # section lifecycle + stabilizeOverviewSectionsFromShell
-  hydrationPlan.ts        # standard staged entity GET plan
-  adapters/opportunity/   # first entity adapter
-    compileShell.ts
-    buildAboveFoldRenderModel.ts
-    buildPipelineState.ts
-    geometry.ts
-    deferredSections.ts
+  compileShellFromSections.ts   # generic shell from sections + lifecycle map
+  assemblePipelineState.ts    # enrichment + hydration + above-fold wiring
+  overviewSections.ts         # overviewSectionsFromAboveFoldModel
+  enrichmentState.ts
+  layoutLock.ts
+  sectionRenderModel.ts
+  hydrationPlan.ts
+  adapters/opportunity/
+  adapters/job/               # Admin V2 job record drawer
   index.ts
+
+web/components/admin/drawer/
+  DrawerAboveFoldRenderer.tsx # header_signals slot (job); opportunity inquiry TBD
 ```
 
 ## Adding a new entity drawer adapter
 
-1. **Compile shell** — Map frozen record chrome / layout config → `DrawerShellContract` (mirror `adapters/opportunity/compileShell.ts`).
-2. **Geometry reader** — Typed accessors for adapter-specific `geometry` flags (`readOpportunityDrawerGeometry`).
-3. **Deferred sections** — `deferredSections.ts`: keys withheld from first paint, primary shell attach list for `DrawerHydrationPlan`.
-4. **Build above-fold model** — `buildXAboveFoldRenderModel`: map shell + record + enrichment → `DrawerAboveFoldRenderModel` (no layout gates tied to `full_pending`).
-5. **Build pipeline state** — `buildXDrawerPipelineState` wires enrichment, hydration plan, and above-fold model.
-6. **Wire drawer host** — In `AdminEntityDrawer` (or a thin entity wrapper), `useMemo` → pipeline snapshot; overview sections via `overviewSectionsFromAboveFoldModel`; JSX reads slot fields only.
-7. **Tests** — Pipeline unit tests for enrichment warnings, column stability, and section stabilization.
+1. **Sections** — Frozen `EntityDrawerSectionConfig[]` in `adapters/<entity>/sections.ts` (no runtime discovery in the host).
+2. **Compile shell** — `compileDrawerShellFromSections` or entity-specific wrapper (`compileJobDrawerShell`, `opportunityShellToDrawerShellContract`).
+3. **Deferred sections** — `deferredSections.ts`: keys with `below_fold_deferred` lifecycle; primary attach list for `DrawerHydrationPlan`.
+4. **Above-fold slots** — Extend `DrawerAboveFoldRenderModel` only when a new above-fold region is required; prefer value-only updates on hydrate.
+5. **Pipeline state** — `assembleDrawerPipelineState` + `buildXAboveFoldRenderModel`.
+6. **Host wiring** — `useMemo` → pipeline; `overviewSectionsFromAboveFoldModel`; `DrawerAboveFoldRenderer` for generic slots.
+7. **Tests** — `tests/adminV2/drawerPipeline/<entity>DrawerPipeline.test.ts` + doctrine tests.
+
+### Primary vs full hydrate
+
+| Surface | Purpose | May change layout? |
+|---------|---------|-------------------|
+| `drawer_visible` / bootstrap | Fast open footprint | No — skeleton values only |
+| `drawer_primary` | Authoritative header + above-fold values | No |
+| `full` (background) | Deferred sections, registry, relationships | **No** — values only |
+
+Pass `background_full_failed: true` only when background `surface=full` fails after final retry.
+
+### Child components — forbidden
+
+- Discovering overview section order or column layout from field defs at runtime
+- Swapping compact → full panel above the fold on hydrate
+- Showing “record did not load” while `full_pending`
+- Mounting new above-fold regions after first paint (use shell slots + `value_phase`)
+
+### Known gaps
+
+- Opportunity inquiry summary JSX still in `AdminEntityDrawer` (not yet a slot renderer component)
+- Legacy job path still uses `configDrivenOverviewSections` ranking
+- Schedule/customer adapters not started
+- Server shell attach registry still opportunity-specific
+
+## Job adapter (Admin V2)
+
+```ts
+import { buildJobDrawerPipelineState, JOB_DRAWER_V2_OVERVIEW_SECTIONS } from "@/lib/adminV2/drawerPipeline";
+
+const pipeline = buildJobDrawerPipelineState({
+  tabs: jobDrawerV2TabListResolved,
+  record: overviewData,
+  drawer_id: drawer.id,
+  schedules: jobSchedules,
+  payment_status_label,
+  payment_is_paid,
+  payment_failed,
+  cleaning_record_modal: showJobRecordModalV2,
+});
+
+// Header: <DrawerAboveFoldRenderer model={pipeline.above_fold} />
+// Sections: overviewSectionsFromAboveFoldModel(pipeline.shell, pipeline.above_fold.sections)
+```
 
 ## Opportunity adapter (reference)
 

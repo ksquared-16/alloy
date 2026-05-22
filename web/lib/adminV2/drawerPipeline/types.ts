@@ -108,8 +108,26 @@ export type DrawerFamilyContactsRenderSlot = {
     relationships_pending: boolean;
 };
 
+export type DrawerSignalTone = "neutral" | "info" | "warning" | "critical";
+
+/** Job (and future) header signal strip — values hydrate; structure reserved at shell paint. */
+export type DrawerHeaderSignalsRenderSlot = {
+    reserved: boolean;
+    presentation: "default" | "cleaningRecordModal";
+    value_phase: DrawerSectionValuePhase;
+    lines: {
+        paymentLabel: string;
+        paymentTone: DrawerSignalTone;
+        scheduleLabel: string;
+        scheduleTone: DrawerSignalTone;
+        assignmentLabel: string;
+        assignmentTone: DrawerSignalTone;
+    } | null;
+};
+
 /** Above-fold composition owned by generic pipeline — entity adapter fills slot values only. */
 export type DrawerAboveFoldRenderModel = {
+    header_signals?: DrawerHeaderSignalsRenderSlot;
     inquiry_summary?: {
         column_mode: DrawerInquirySummaryColumnMode;
         show_right_column: boolean;

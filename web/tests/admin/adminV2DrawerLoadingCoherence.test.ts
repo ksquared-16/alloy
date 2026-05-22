@@ -495,6 +495,14 @@ describe("Opportunity drawer first-paint contract", () => {
         expect(mod).toContain("filterOpportunityOverviewSectionsForFirstPaint");
     });
 
+    it("job Admin V2 uses drawer pipeline for sections and header signals", () => {
+        const src = read("components/admin/AdminEntityDrawer.tsx");
+        expect(src).toContain("buildJobDrawerPipelineState");
+        expect(src).toContain("jobDrawerPipeline");
+        expect(src).toContain("DrawerAboveFoldRenderer");
+        expect(src).toContain("jobDrawerV2OverviewSectionsResolved");
+    });
+
     it("inquiry summary uses drawer pipeline with bootstrap fallbacks", () => {
         const src = read("components/admin/AdminEntityDrawer.tsx");
         expect(src).toContain("buildOpportunityDrawerPipelineState");

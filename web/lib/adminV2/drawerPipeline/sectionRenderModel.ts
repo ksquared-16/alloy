@@ -11,6 +11,8 @@ import type { EntityDrawerSectionConfig } from "@/lib/entityPresentation";
 export type StabilizeSectionsParams = {
     above_fold_locked: boolean;
     deferred_section_keys: ReadonlySet<string>;
+    /** When locked, keep this section expanded (opportunity: inquiry_children). */
+    pinned_expanded_section_key?: string;
     /** When unlocked, filter deferred sections for first paint. */
     filter_deferred_when_unlocked?: (
         sections: EntityDrawerSectionConfig[],
@@ -80,8 +82,9 @@ export function stabilizeOverviewSectionsFromShell(
     params: StabilizeSectionsParams
 ): EntityDrawerSectionConfig[] {
     if (params.above_fold_locked) {
+        const pinned = params.pinned_expanded_section_key;
         return sections.map((s) => {
-            if (s.key === "inquiry_children") {
+            if (pinned && s.key === pinned) {
                 return { ...s, defaultExpanded: true, collapsible: true };
             }
             if (params.deferred_section_keys.has(s.key)) {

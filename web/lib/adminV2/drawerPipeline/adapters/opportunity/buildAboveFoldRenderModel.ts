@@ -3,6 +3,7 @@ import { opportunityInquiryTourDisplayFromPrimaryMetadata } from "@/lib/admin/dr
 import { parseInquirySummaryTaskPreview } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
 import { drawerRelationshipsFullHydrateFailed } from "@/lib/adminV2/drawerPipeline/enrichmentState";
 import { drawerFullBoundValuesReady } from "@/lib/adminV2/drawerPipeline/layoutLock";
+import { overviewSectionsFromAboveFoldModel } from "@/lib/adminV2/drawerPipeline/overviewSections";
 import {
     buildSectionRenderModels,
     stabilizeOverviewSectionsFromShell,
@@ -66,6 +67,7 @@ export function buildOpportunityAboveFoldRenderModel(
         input.enrichment,
         {
             above_fold_locked: input.above_fold_locked,
+            pinned_expanded_section_key: "inquiry_children",
             deferred_section_keys: OPPORTUNITY_DEFERRED_OVERVIEW_SECTION_KEYS,
             filter_deferred_when_unlocked: filterOpportunityOverviewSectionsForFirstPaint,
             first_paint_gates_active: input.first_paint_gates_active,
@@ -129,18 +131,4 @@ export function buildOpportunityAboveFoldRenderModel(
     };
 }
 
-export function overviewSectionsFromAboveFoldModel(
-    shell: DrawerShellContract,
-    section_models: DrawerAboveFoldRenderModel["sections"]
-): EntityDrawerSectionConfig[] {
-    const byKey = new Map(section_models.map((m) => [m.section_key, m]));
-    return shell.overview_sections.map((s) => {
-        const m = byKey.get(s.key);
-        if (!m) return s;
-        return {
-            ...s,
-            defaultExpanded: m.default_expanded,
-            collapsible: m.collapsible,
-        };
-    });
-}
+export { overviewSectionsFromAboveFoldModel };
