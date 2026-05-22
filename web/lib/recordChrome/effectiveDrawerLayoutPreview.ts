@@ -166,7 +166,8 @@ function mapOppFieldDefToDrawerField(f: PreviewFieldDef): EntityDrawerFieldConfi
     };
 }
 
-function computeOpportunityOverviewSectionsLikeDrawer(
+/** Mirrors `AdminEntityDrawer` opportunity overview assembly — shared with shell contract compiler. */
+export function computeOpportunityOverviewSectionsLikeDrawer(
     cfg: RecordLayoutConfigJson | null,
     fieldDefs: PreviewFieldDef[],
     fieldSectionLabels: Record<string, string>,

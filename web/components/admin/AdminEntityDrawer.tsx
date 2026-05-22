@@ -20,6 +20,7 @@ import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
+import { recordAdminV2JankBudgetRequest } from "@/lib/perf/adminV2JankBudget";
 import {
     markDrawerBootstrapApplied,
     markDrawerBootstrapRequestStart,
@@ -129,11 +130,15 @@ import { mergeUnifiedStatusIntoConfigOverview } from "@/lib/admin/unifiedDrawerS
 import { recordSurfaceContextStyle } from "@/lib/visualContext";
 import OpportunityInquiryChildrenSection, { type InquiryChildRow } from "@/components/admin/entity/OpportunityInquiryChildrenSection";
 import {
-    filterInquiryChildRowsForDrawer,
     logInquiryChildrenDebug,
     summarizeInquiryChildrenRows,
 } from "@/lib/admin/drawer/inquiryChildrenDebug";
 import { OpportunityInquiryChildrenRegistryActions } from "@/components/admin/opportunity/OpportunityInquiryChildrenRegistryActions";
+import { OpportunityInquiryChildrenShellChrome } from "@/components/admin/opportunity/OpportunityInquiryChildrenShellChrome";
+import {
+    inquiryChildrenRowCountFromEntity,
+    mapRawInquiryChildrenToDrawerRows,
+} from "@/lib/admin/drawer/inquiryChildrenDrawerRows";
 import { OpportunityInquirySummaryActivity } from "@/components/admin/opportunity/OpportunityInquirySummaryActivity";
 import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
 import { deriveTourMetadataMirrorFromBooking, TOUR_BOOKING_OPPORTUNITY_STATUS } from "@/lib/tours/opportunity/tourBookingOpportunityIntegration";
@@ -250,6 +255,9 @@ import { formatActivityRelativeShort, type ActivitySignalResult } from "@/lib/ad
 import { formatOpportunityActivityTimelineEvent } from "@/lib/admin/opportunityActivityTimelineFormat";
 import OpportunityQuoteIntakeSection from "@/components/admin/quoteIntake/OpportunityQuoteIntakeSection";
 import OpportunityEnrollmentPacketModal from "@/components/admin/opportunity/OpportunityEnrollmentPacketModal";
+import { OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP } from "@/lib/adminV2/shellContracts/opportunityInquiryWorkflowTabs";
+import { compileOpportunityRecordDrawerShellFromEntity } from "@/lib/adminV2/shellContracts/compileOpportunityRecordDrawerShell";
+import type { RecordDrawerShellContract } from "@/lib/adminV2/shellContracts/types";
 
 function dispatchAfterPaymentRun(jobId: string, scheduleId: string | null) {
     window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "jobs", id: jobId } }));
@@ -258,14 +266,6 @@ function dispatchAfterPaymentRun(jobId: string, scheduleId: string | null) {
         window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "schedules", id: scheduleId } }));
     }
 }
-
-const OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP: DrawerTabKey[] = [
-    "overview",
-    "communications",
-    "notes",
-    "documents",
-    "activity",
-];
 
 type FieldCatalogEntry = { key: string; label: string; data_type: string; operators: string[]; source: string };
 
@@ -1336,6 +1336,18 @@ export default function AdminEntityDrawer() {
         drawer.type === "opportunities" &&
         !!drawer.id &&
         drawer.id !== "new";
+
+    const freezeOpportunityDrawerShellContract = useCallback(
+        (layoutConfig: RecordLayoutConfigJson | null, entity: Record<string, unknown>) => {
+            const compiled = compileOpportunityRecordDrawerShellFromEntity(layoutConfig, entity);
+            if (!compiled) return;
+            opportunityDrawerShellContractRef.current = compiled;
+            setOpportunityDrawerShellContract(compiled);
+            setOpportunityDrawerLayoutFrozen(true);
+            setOpportunityDrawerBelowFoldRevealed(false);
+        },
+        []
+    );
     const [data, setData] = useState<Record<string, unknown> | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -1629,6 +1641,10 @@ export default function AdminEntityDrawer() {
     /** Composed preload open — freeze above-the-fold layout until scroll or idle below-fold reveal. */
     const [opportunityDrawerLayoutFrozen, setOpportunityDrawerLayoutFrozen] = useState(false);
     const [opportunityDrawerBelowFoldRevealed, setOpportunityDrawerBelowFoldRevealed] = useState(false);
+    /** Bootstrap-compiled shell map — authoritative for tabs/sections after open (P1-2). */
+    const [opportunityDrawerShellContract, setOpportunityDrawerShellContract] =
+        useState<RecordDrawerShellContract | null>(null);
+    const opportunityDrawerShellContractRef = useRef<RecordDrawerShellContract | null>(null);
     const [opportunityBootstrapAppliedId, setOpportunityBootstrapAppliedId] = useState<string | null>(null);
     const [opportunityBootstrapLayoutRow, setOpportunityBootstrapLayoutRow] = useState<RecordLayoutRow | null>(null);
     const [opportunityOperTrustPreview, setOpportunityOperTrustPreview] = useState<DrawerOperTrustPreviewV1 | null>(
@@ -2125,8 +2141,10 @@ export default function AdminEntityDrawer() {
         const boot = preload.bootstrap;
         if (String((boot.entity as { id?: unknown }).id ?? "") !== String(drawer.id)) return;
         opportunityDrawerFirstPaintPreloadedRef.current = drawer.id;
-        setOpportunityDrawerLayoutFrozen(true);
-        setOpportunityDrawerBelowFoldRevealed(false);
+        freezeOpportunityDrawerShellContract(
+            boot.record_layout?.config_json ?? null,
+            boot.entity as Record<string, unknown>
+        );
         opportunityDrawerBootstrapAppliedRef.current = drawer.id;
         opportunityDrawerBootstrapEntityKeyRef.current = `${drawer.type}:${drawer.id}`;
         setOpportunityBootstrapAppliedId(drawer.id);
@@ -2161,7 +2179,7 @@ export default function AdminEntityDrawer() {
         opportunityPrimaryHydrateDoneRef.current = drawer.id;
         setLoading(false);
         setError(null);
-    }, [drawer.type, drawer.id, consumeOpportunityDrawerPreload]);
+    }, [drawer.type, drawer.id, consumeOpportunityDrawerPreload, freezeOpportunityDrawerShellContract]);
 
     useEffect(() => {
         if (!drawer.type || !drawer.id) {
@@ -2174,6 +2192,8 @@ export default function AdminEntityDrawer() {
             setOpportunityDrawerLayoutFrozen(false);
             setOpportunityDrawerBelowFoldRevealed(false);
             setOpportunityDrawerEnrichmentHeld(false);
+            setOpportunityDrawerShellContract(null);
+            opportunityDrawerShellContractRef.current = null;
             opportunityPrimaryHydrateInFlightRef.current = null;
             opportunityPrimaryHydrateDoneRef.current = null;
             opportunityBackgroundFullInFlightRef.current = null;
@@ -2296,6 +2316,10 @@ export default function AdminEntityDrawer() {
             opportunityDrawerBootstrapAppliedRef.current = drawer.id;
             setOpportunityBootstrapAppliedId(drawer.id);
             setOpportunityBootstrapLayoutRow(mapBootstrapLayoutToRecordLayoutRow(boot));
+            freezeOpportunityDrawerShellContract(
+                boot.record_layout?.config_json ?? null,
+                boot.entity as Record<string, unknown>
+            );
             setOpportunityOperTrustPreview(boot.oper_trust_preview);
             setData(boot.entity);
             if (boot.record_header_actions) {
@@ -2912,11 +2936,14 @@ export default function AdminEntityDrawer() {
             setOppRefFieldSelectOptions({});
             return;
         }
+        if (!isEditing) {
+            setOppRefFieldSelectOptions({});
+            return;
+        }
         if (
             drawerShellVariant === "adminV2" &&
             adminV2DrawerBootstrapEnabled() &&
-            !opportunityDrawerBootstrapLegacy &&
-            !isEditing
+            !opportunityDrawerBootstrapLegacy
         ) {
             setOppRefFieldSelectOptions({});
             return;
@@ -3655,6 +3682,7 @@ export default function AdminEntityDrawer() {
         if (typeof window !== "undefined" && typeof performance !== "undefined") {
             alloyPerfSet("drawer_header_actions_request_start", performance.now());
         }
+        recordAdminV2JankBudgetRequest({ phase: "drawer_actions", url: actionsUrl });
         dedupeAdminFetchWithTtl(actionsUrl, workspaceDataFetchInit(), 1500)
             .then((r) => r.json())
             .then((j: { actions?: ResolvedActionsBySlot }) => {
@@ -5868,6 +5896,7 @@ export default function AdminEntityDrawer() {
         !opportunityDrawerBootstrapLegacy &&
         (loading || opportunityBootstrapAppliedId !== drawer.id);
     const opportunityInquiryWorkflowDrawer =
+        opportunityDrawerShellContract?.inquiry_drawer_mode === "workflow_v1" ||
         (opportunityDrawerAdminV2Bootstrap && !opportunityDrawerBootstrapLegacy) ||
         (drawer.type === "opportunities" &&
             recordChromeOpportunity.configResolved &&
@@ -6847,7 +6876,9 @@ export default function AdminEntityDrawer() {
         !!drawer.id &&
         drawer.id !== "new" &&
         drawerReady &&
-        (opportunityBootstrapChromeSuppressed || recordChromeOpportunity.configResolved) &&
+        (opportunityDrawerShellContract != null ||
+            opportunityBootstrapChromeSuppressed ||
+            recordChromeOpportunity.configResolved) &&
         !!overviewData &&
         !(overviewData as { _create?: boolean })._create;
 
@@ -7167,6 +7198,9 @@ export default function AdminEntityDrawer() {
         if (overviewData && (overviewData as { _create?: boolean })._create) {
             return tabList;
         }
+        if (opportunityDrawerShellContract?.tabs.length) {
+            return opportunityDrawerShellContract.tabs;
+        }
         if (!opportunityDrawerOverviewRevealReady) {
             return [];
         }
@@ -7174,7 +7208,15 @@ export default function AdminEntityDrawer() {
             return OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP;
         }
         return tabList;
-    }, [drawer.type, drawer.id, overviewData, opportunityDrawerOverviewRevealReady, opportunityRecordGateWorkflowLayout, tabList]);
+    }, [
+        drawer.type,
+        drawer.id,
+        overviewData,
+        opportunityDrawerShellContract,
+        opportunityDrawerOverviewRevealReady,
+        opportunityRecordGateWorkflowLayout,
+        tabList,
+    ]);
 
     useEffect(() => {
         if (!isJobDrawerV2 || drawer.type !== "jobs" || !drawer.id || drawer.id === "new") return;
@@ -8020,49 +8062,13 @@ export default function AdminEntityDrawer() {
             const allowInquiryChildren =
                 oppCfg?.inquiry_drawer_mode === "workflow_v1" ||
                 (Array.isArray(order) && order.includes("inquiry_children"));
-            const inquiryChildrenHydrateReady = opportunityDrawerFullBoundEnrichmentReady;
-            if (allowInquiryChildren && inquiryChildrenHydrateReady) {
-                const raw = (d._inquiry_children as unknown[]) ?? [];
-                const rows: InquiryChildRow[] = Array.isArray(raw)
-                    ? raw.map((x) => {
-                          const r = x as Record<string, unknown>;
-                          return {
-                              id: String(r.id ?? ""),
-                              customer_member_id: String(r.customer_member_id ?? ""),
-                              person_id: r.person_id != null && String(r.person_id).trim() ? String(r.person_id) : null,
-                              display_name: r.display_name != null ? String(r.display_name) : null,
-                              dob: r.dob != null && String(r.dob).trim() ? String(r.dob) : null,
-                              age: r.age != null && String(r.age).trim() ? String(r.age) : null,
-                              desired_program_type:
-                                  r.desired_program_type != null && String(r.desired_program_type).trim()
-                                      ? String(r.desired_program_type)
-                                      : null,
-                              desired_program_label: r.desired_program_label != null ? String(r.desired_program_label) : null,
-                              desired_schedule_type:
-                                  r.desired_schedule_type != null && String(r.desired_schedule_type).trim()
-                                      ? String(r.desired_schedule_type)
-                                      : null,
-                              desired_schedule_label: r.desired_schedule_label != null ? String(r.desired_schedule_label) : null,
-                              outcome_status_key:
-                                  r.outcome_status_key != null && String(r.outcome_status_key).trim()
-                                      ? String(r.outcome_status_key)
-                                      : null,
-                              outcome_status_label: r.outcome_status_label != null ? String(r.outcome_status_label) : null,
-                              notes: r.notes != null ? String(r.notes) : null,
-                              desired_start_date:
-                                  r.desired_start_date != null ? String(r.desired_start_date).slice(0, 10) : null,
-                              custom_fields:
-                                  r.custom_fields && typeof r.custom_fields === "object"
-                                      ? (r.custom_fields as Record<string, unknown>)
-                                      : {},
-                              first_name: r.first_name != null ? String(r.first_name) : null,
-                              last_name: r.last_name != null ? String(r.last_name) : null,
-                              linked_on_inquiry: r.linked_on_inquiry === true,
-                              ocm_id: r.ocm_id != null ? String(r.ocm_id) : null,
-                          };
-                      })
-                    : [];
-                const { kept: drawerChildRows, dropped: droppedChildRows } = filterInquiryChildRowsForDrawer(rows);
+            const raw = (d._inquiry_children as unknown[]) ?? [];
+            const drawerChildRows = mapRawInquiryChildrenToDrawerRows(raw);
+            const shellShowsInquiryChildren =
+                allowInquiryChildren &&
+                opportunityDrawerOverviewRevealReady &&
+                (opportunityDrawerShellContract != null || drawerChildRows.length > 0);
+            if (shellShowsInquiryChildren) {
                 logInquiryChildrenDebug("AdminEntityDrawer.inquiry_children", {
                     component: "OpportunityInquiryChildrenSection",
                     sectionTitle: "Inquiry children",
@@ -8070,28 +8076,33 @@ export default function AdminEntityDrawer() {
                     customerId: d.customer_id ?? null,
                     recordSurface: d._record_surface ?? null,
                     apiRoute: drawer.id ? `/api/admin/entity/opportunities/${drawer.id}` : null,
-                    apiChildCount: rows.length,
+                    apiChildCount: Array.isArray(raw) ? raw.length : 0,
                     afterComponentFilterCount: drawerChildRows.length,
-                    droppedByComponentFilter: droppedChildRows,
-                    apiChildren: summarizeInquiryChildrenRows(rows),
-                    renderedChildren: summarizeInquiryChildrenRows(drawerChildRows),
                     serverDebug: d._debug_inquiry_children ?? null,
+                    renderedChildren: summarizeInquiryChildrenRows(drawerChildRows),
                 });
-                const detailPending = d._member_person_graph_pending === true;
+                const expectedRowCount = Math.max(
+                    drawerChildRows.length,
+                    inquiryChildrenRowCountFromEntity(d),
+                    opportunityDrawerShellContract?.section_slots.some((s) => s.section_key === "inquiry_children")
+                        ? 1
+                        : 0
+                );
                 out.inquiry_children = (
                     <OpportunityInquiryChildrenSection
                         rows={drawerChildRows}
                         opportunityId={drawer.id ?? undefined}
                         opportunityDesiredStartDate={(() => {
-                            const raw =
+                            const rawStart =
                                 d.desired_start_date ??
                                 (d.metadata as Record<string, unknown> | null)?.desired_start_date;
-                            return typeof raw === "string" && raw.trim() ? raw.trim().slice(0, 10) : null;
+                            return typeof rawStart === "string" && rawStart.trim() ? rawStart.trim().slice(0, 10) : null;
                         })()}
                         canEdit={!!canMutate}
                         enrichmentFetchEnabled={isEditing}
                         embeddedInPremiumSection={oppCfg?.inquiry_drawer_mode === "workflow_v1"}
-                        recordDetailPending={detailPending}
+                        recordDetailPending={drawerChildRows.length === 0 && expectedRowCount > 0}
+                        shellReservedRowCount={expectedRowCount}
                         onChildrenMutated={() => void refetch()}
                         onOpenChild={(row) => {
                             const cm = row.customer_member_id?.trim() ?? "";
@@ -8134,6 +8145,10 @@ export default function AdminEntityDrawer() {
         opportunityFullHydrateFailed,
         opportunityDrawerEnrichmentLayoutReady,
         opportunityDrawerFirstPaintActive,
+        opportunityDrawerOverviewRevealReady,
+        opportunityDrawerFullBoundEnrichmentReady,
+        opportunityDrawerShellContract,
+        opportunityDrawerOverviewRevealReady,
         getStatusLabel,
         viewerTz,
         opportunityRegistrySectionActionsFetchEnabled,
@@ -8142,31 +8157,65 @@ export default function AdminEntityDrawer() {
     const overviewSectionHeaderRight = useMemo(() => {
         if (!overviewData || drawer.type !== "opportunities" || (overviewData as { _create?: boolean })._create) return {};
         const d = overviewData as Record<string, unknown>;
-        const rawKids = (d._inquiry_children as unknown[]) ?? [];
-        const nKids = Array.isArray(rawKids)
-            ? rawKids.filter((x) => x && typeof x === "object" && String((x as any).display_name ?? "").trim()).length
-            : 0;
+        const oppCfg = (recordChromeOpportunity.layout?.config_json ?? opportunityDrawerShellContract?.layout_config ?? null) as RecordLayoutConfigJson | null;
+        const order = oppCfg?.overview_section_order ?? null;
+        const allowInquiryChildren =
+            oppCfg?.inquiry_drawer_mode === "workflow_v1" ||
+            (Array.isArray(order) && order.includes("inquiry_children"));
+        if (!allowInquiryChildren || !opportunityDrawerOverviewRevealReady) return {};
+
+        const nKids = inquiryChildrenRowCountFromEntity(d);
+        const openAddInquiryChild = (mode: "child" | "sibling") => {
+            setAddInquiryChildState({ mode });
+        };
+
         return {
             inquiry_children: (
-                <OpportunityInquiryChildrenRegistryActions
-                    opportunityId={drawer.id ?? ""}
+                <OpportunityInquiryChildrenShellChrome
                     childrenCount={nKids}
                     canMutate={!!canMutate}
-                    router={router}
-                    openDrawer={openDrawer}
-                    openForm={({ form_key, action }) => {
-                        if (form_key === "add_inquiry_child") {
-                            const mode = action.payload?.mode != null ? String(action.payload.mode).trim() : "";
-                            setAddInquiryChildState({ mode: mode === "add_sibling" ? "sibling" : "child" });
-                        }
-                    }}
+                    onAddChild={() => openAddInquiryChild("child")}
+                    onAddSibling={() => openAddInquiryChild("sibling")}
                 />
             ),
         } as Record<string, unknown>;
-    }, [overviewData, drawer.type, drawer.id, canMutate, router, openDrawer]);
+    }, [
+        overviewData,
+        drawer.type,
+        drawer.id,
+        canMutate,
+        recordChromeOpportunity.layout,
+        opportunityDrawerShellContract,
+        opportunityDrawerOverviewRevealReady,
+    ]);
 
     const configDrivenOverviewSections = useMemo((): EntityDrawerSectionConfig[] => {
         if (!overviewData || (overviewData as { _create?: boolean })._create) return [];
+        if (drawer.type === "opportunities" && opportunityDrawerShellContract) {
+            const oppInquiryWorkflowV1 =
+                opportunityDrawerShellContract.inquiry_drawer_mode === "workflow_v1";
+            let overviewSections = opportunityDrawerShellContract.overview_sections.map((s) => ({
+                ...s,
+                fields: (s.fields ?? []).map((f) => ({
+                    ...f,
+                    ...(f.linkTarget ? { linkTarget: { ...f.linkTarget } } : {}),
+                })),
+            }));
+            const chrome = buildDrawerFieldPolicyChromeFromEntityData(
+                overviewData as Record<string, unknown>,
+                "opportunities"
+            );
+            overviewSections = applyPolicyChromeToOverviewSections(overviewSections, chrome);
+            if (oppInquiryWorkflowV1) {
+                overviewSections = stabilizeOpportunityWorkflowOverviewSections(overviewSections, {
+                    aboveFoldLocked: opportunityDrawerAboveFoldLocked,
+                    firstPaintGatesActive: opportunityDrawerLayoutFirstPaintGates,
+                    enrichmentLayoutReady: opportunityDrawerEnrichmentLayoutReady,
+                    enrichmentHeldUntilInteraction: opportunityDrawerEnrichmentHeld,
+                });
+            }
+            return overviewSections;
+        }
         const defs = (overviewData._field_definitions as { field_key: string; field_type: string; label: string | null; section_key: string | null; sort_order: number; is_visible_in_drawer: boolean }[] | undefined) ?? [];
         let visible = defs.filter((d) => d.is_visible_in_drawer !== false);
         if (drawer.type === "vendors") {
@@ -8732,6 +8781,7 @@ export default function AdminEntityDrawer() {
         presentationType,
         recordChromeSchedule.layout,
         recordChromeOpportunity.layout,
+        opportunityDrawerShellContract,
         opportunityDrawerAboveFoldLocked,
         opportunityDrawerLayoutFirstPaintGates,
         opportunityDrawerEnrichmentLayoutReady,
@@ -9342,11 +9392,13 @@ export default function AdminEntityDrawer() {
                 onSelect={setDrawerTab}
                 tabButtonsDisabled={drawerGateLoading}
             />
-        ) : isOpportunityRecordModalTarget && opportunityDrawerPrimaryLoadingVisible ? (
+        ) : isOpportunityRecordModalTarget &&
+          opportunityDrawerPrimaryLoadingVisible &&
+          !opportunityDrawerShellContract ? (
             <DrawerRecordTabStripGateSkeleton tabCount={4} />
         ) : isOpportunityRecordModalTarget &&
           opportunityInquiryWorkflowDrawer &&
-          opportunityDrawerOverviewRevealReady &&
+          (opportunityDrawerOverviewRevealReady || opportunityDrawerShellContract) &&
           drawerTabStripKeys.length > 0 ? (
             <div className="flex min-h-0 flex-wrap gap-0.5 rounded-lg border border-admin-border bg-white py-1.5 px-1.5">
                 {drawerTabStripKeys.map((tab) => (
@@ -9710,6 +9762,9 @@ export default function AdminEntityDrawer() {
                     data-adminv2-job-drawer-body={isJobDrawerV2 && drawer.type === "jobs" ? "true" : undefined}
                     data-adminv2-schedule-drawer-body={showScheduleRecordModalV2 ? "true" : undefined}
                     data-adminv2-opportunity-drawer-body={showOpportunityRecordModalV2 ? "true" : undefined}
+                    data-opportunity-drawer-shell-contract={
+                        opportunityDrawerShellContract ? opportunityDrawerShellContract.layout_version : undefined
+                    }
                     {...(opportunityWorkflowTabBodyHostProps ?? {})}
                 >
                     {saveError && <p className="text-alloy-ember text-sm">{saveError}</p>}
@@ -12114,29 +12169,38 @@ export default function AdminEntityDrawer() {
                                                     const householdId =
                                                         ident?.household?.id ?? (String(d.customer_id ?? "").trim() || null);
                                                     const familyContactsInSummary =
-                                                        !!drawer.id &&
-                                                        drawer.id !== "new" &&
-                                                        recordOpportunityDrawerLayoutIncludesSection(
-                                                            (recordChromeOpportunity.layout?.config_json ?? null) as RecordLayoutConfigJson | null,
-                                                            "family_contacts"
-                                                        );
+                                                        opportunityDrawerShellContract?.geometry.family_contacts_in_summary ??
+                                                        (!!drawer.id &&
+                                                            drawer.id !== "new" &&
+                                                            recordOpportunityDrawerLayoutIncludesSection(
+                                                                (recordChromeOpportunity.layout?.config_json ?? null) as RecordLayoutConfigJson | null,
+                                                                "family_contacts"
+                                                            ));
                                                     const familySummaryUsesFullPanel = computeFamilySummaryUsesFullPanel({
                                                         aboveFoldLocked: opportunityDrawerAboveFoldLocked,
                                                         familyContactsInSummary,
                                                         firstPaintActive: opportunityDrawerFirstPaintActive,
                                                     });
-                                                    const showInquirySummaryRightColumn = computeShowInquirySummaryRightColumn({
-                                                        aboveFoldLocked: opportunityDrawerAboveFoldLocked,
-                                                        record: d,
-                                                        belowFoldEnrichmentReady: opportunityDrawerBelowFoldEnrichmentReady,
-                                                        fullHydrateReady: opportunityFullRecordHydrateApplied,
-                                                        taskAssistEnabled: isTaskAssistV1UiEnabled(),
-                                                    });
-                                                    const inquirySummaryColumnMode = opportunityDrawerSummaryLayoutMode({
-                                                        aboveFoldLocked: opportunityDrawerAboveFoldLocked,
-                                                        recordSurface: String(d._record_surface ?? "").trim(),
-                                                        showRightColumn: showInquirySummaryRightColumn,
-                                                    });
+                                                    const summaryRightReserved =
+                                                        opportunityDrawerShellContract?.geometry.summary_right_column_reserved ===
+                                                        true;
+                                                    const showInquirySummaryRightColumn =
+                                                        summaryRightReserved ||
+                                                        computeShowInquirySummaryRightColumn({
+                                                            aboveFoldLocked: opportunityDrawerAboveFoldLocked,
+                                                            record: d,
+                                                            belowFoldEnrichmentReady: opportunityDrawerBelowFoldEnrichmentReady,
+                                                            fullHydrateReady: opportunityFullRecordHydrateApplied,
+                                                            taskAssistEnabled: isTaskAssistV1UiEnabled(),
+                                                        });
+                                                    const inquirySummaryColumnMode =
+                                                        summaryRightReserved ? "two" : (
+                                                            opportunityDrawerSummaryLayoutMode({
+                                                                aboveFoldLocked: opportunityDrawerAboveFoldLocked,
+                                                                recordSurface: String(d._record_surface ?? "").trim(),
+                                                                showRightColumn: showInquirySummaryRightColumn,
+                                                            })
+                                                        );
                                                     const showTourFromPrimaryOnly =
                                                         opportunityInquiryTourDisplayFromPrimaryMetadata(d) &&
                                                         (opportunityDrawerAboveFoldLocked ||
@@ -12361,9 +12425,12 @@ export default function AdminEntityDrawer() {
                                                                 {showInquirySummaryRightColumn ? (
                                                                 <div
                                                                     ref={inquirySummaryRightRef}
-                                                                    className={`${oppInqInnerCard} flex min-w-0 flex-col`}
+                                                                    className={`${oppInqInnerCard} flex min-w-0 flex-col min-h-[8rem]`}
+                                                                    data-shell-slot="inquiry_summary_right"
                                                                 >
-                                                                    {drawer.id && drawer.id !== "new" && opportunityDrawerFullBoundEnrichmentReady ? (
+                                                                    {drawer.id &&
+                                                                    drawer.id !== "new" &&
+                                                                    opportunityDrawerFullBoundEnrichmentReady ? (
                                                                         <div className="mt-2 border-t border-alloy-stone/10 pt-2 adminv2-ws-soft-content-reveal">
                                                                             {isTaskAssistV1UiEnabled() ? (
                                                                                 <OpportunityOperationalCompactStrip
@@ -12371,16 +12438,28 @@ export default function AdminEntityDrawer() {
                                                                                     opportunityId={drawer.id}
                                                                                     entityLabel={String(d.name ?? "").trim() || null}
                                                                                     overviewData={d}
-                                                                                    fetchEnabled={inquirySummaryFetchArmed}
+                                                                                    fetchEnabled={false}
+                                                                                    tasksLoadMode="on_demand"
                                                                                 />
                                                                             ) : null}
                                                                         </div>
+                                                                    ) : summaryRightReserved ? (
+                                                                        <div
+                                                                            className="mt-2 space-y-2 border-t border-alloy-stone/10 pt-2"
+                                                                            aria-hidden
+                                                                            data-shell-slot-placeholder="tasks_messages"
+                                                                        >
+                                                                            <div className="h-10 w-full skeleton-pulse rounded-md bg-alloy-stone/12" />
+                                                                            <div className="h-14 w-full skeleton-pulse rounded-md bg-alloy-stone/10" />
+                                                                        </div>
                                                                     ) : null}
-                                                                    {drawer.id && drawer.id !== "new" && opportunityDrawerFullBoundEnrichmentReady ? (
+                                                                    {drawer.id &&
+                                                                    drawer.id !== "new" &&
+                                                                    opportunityDrawerFullBoundEnrichmentReady ? (
                                                                         <OpportunityInquirySummaryActivity
                                                                             opportunityId={drawer.id}
                                                                             canMutate={!!canMutate}
-                                                                            fetchEnabled={inquirySummaryFetchArmed}
+                                                                            fetchEnabled={false}
                                                                             onInvalidate={() => {
                                                                                 setOpportunityRelatedData(null);
                                                                                 setOpportunityActivitySignalNonce((n) => n + 1);

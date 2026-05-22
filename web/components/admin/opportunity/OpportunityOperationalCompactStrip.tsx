@@ -150,6 +150,8 @@ export type OpportunityOperationalCompactStripProps = {
     layout?: OpportunityOperationalStripLayout;
     /** When false, defers task-assist operational fetches until summary column is visible. */
     fetchEnabled?: boolean;
+    /** Inquiry summary: no fetch until operator expands — avoids late pop-in / resize. */
+    tasksLoadMode?: "auto" | "on_demand";
 };
 
 const GROUP_LABEL =
@@ -161,8 +163,11 @@ export default function OpportunityOperationalCompactStrip({
     entityLabel = null,
     layout = "header_chips",
     fetchEnabled = true,
+    tasksLoadMode = "auto",
 }: OpportunityOperationalCompactStripProps) {
     const v11 = isTaskAssistV1UiEnabled();
+    const onDemandTasks = tasksLoadMode === "on_demand";
+    const [tasksExpanded, setTasksExpanded] = useState(false);
     const adminDrawer = useAdminDrawerOptional();
     const globalAssistant = useGlobalAssistantOptional();
     const [tasks, setTasks] = useState<OperationalTaskRow[]>([]);
@@ -176,6 +181,7 @@ export default function OpportunityOperationalCompactStrip({
 
     const load = useCallback(async () => {
         if (!fetchEnabled || !v11 || !opportunityId) return;
+        if (onDemandTasks && !tasksExpanded) return;
         setLoading(true);
         setError(null);
         try {
@@ -207,7 +213,7 @@ export default function OpportunityOperationalCompactStrip({
         } finally {
             setLoading(false);
         }
-    }, [fetchEnabled, opportunityId, v11]);
+    }, [fetchEnabled, onDemandTasks, opportunityId, tasksExpanded, v11]);
 
     const openTasks = useMemo(() => tasks.filter((t) => t.status === "open"), [tasks]);
     const stripSends = useMemo(
@@ -346,6 +352,25 @@ export default function OpportunityOperationalCompactStrip({
     if (!v11) return null;
 
     const inquirySummary = layout === "inquiry_summary";
+
+    if (inquirySummary && onDemandTasks && !tasksExpanded) {
+        const nextFollowUpIso = parseNextFollowUpAt(overviewData);
+        return (
+            <div
+                className="mt-2 min-h-[2.75rem] border-t border-alloy-stone/10 pt-2"
+                data-drawer-slot="operational_tasks_collapsed"
+            >
+                <button
+                    type="button"
+                    className="text-[10px] font-semibold text-alloy-blue hover:underline"
+                    onClick={() => setTasksExpanded(true)}
+                >
+                    Tasks & reminders
+                    {nextFollowUpIso ? ` · follow-up ${shortWhen(nextFollowUpIso)}` : ""}
+                </button>
+            </div>
+        );
+    }
     const hasChips = openTasks.length > 0 || stripSends.length > 0 || showNextFollowUp;
     const showEmpty = operationalStripShowEmptyState({
         loading,

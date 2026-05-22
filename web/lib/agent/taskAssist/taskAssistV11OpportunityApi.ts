@@ -1,4 +1,5 @@
 import type { TaskAssistSuggestionV1 } from "@/lib/agent/taskAssist/types";
+import { fetchAdminV2Sidecar } from "@/lib/adminV2/adminV2SidecarSession";
 
 const JSON_HEADERS = { "Content-Type": "application/json" } as const;
 
@@ -63,7 +64,7 @@ export async function fetchWorkspaceOperationalTasks(
 }
 
 export async function fetchOperationalTasksSummary(): Promise<Response> {
-    return fetch(operationalTasksSummaryUrl(), { credentials: "include" });
+    return fetchAdminV2Sidecar("operational_tasks_summary");
 }
 
 export function buildPersistProposalBody(proposal: TaskAssistSuggestionV1): { payload: TaskAssistSuggestionV1; expires_at: null } {

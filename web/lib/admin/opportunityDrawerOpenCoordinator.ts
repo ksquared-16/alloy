@@ -24,6 +24,10 @@ import {
     reportDrawerHeaderActionsReady,
     reportDrawerPrimaryReadyAtOpen,
 } from "@/lib/perf/adminV2DrawerPerf";
+import {
+    setAdminV2DrawerOpenPending,
+} from "@/lib/perf/adminV2PrimarySurfaceGate";
+import { markAdminV2DrawerOpenBudgetStart } from "@/lib/perf/adminV2JankBudget";
 
 /** Max overlay floor when cold — avoids sub-frame flash; skipped when intent prefetch is warm. */
 export const OPPORTUNITY_DRAWER_OPEN_ANTI_FLICKER_MS = 200;
@@ -108,6 +112,9 @@ export async function loadOpportunityDrawerComposedOpen(
     const id = opportunityId.trim();
     if (!id) throw new Error("missing_opportunity_id");
 
+    setAdminV2DrawerOpenPending(true, "drawer_composed_open");
+    markAdminV2DrawerOpenBudgetStart();
+
     const bootstrapWarm = isOpportunityDrawerBootstrapWarm(id);
     const primaryWarm = isOpportunityDrawerPrimaryWarm(id);
     const fullWarm = isOpportunityDrawerFullWarm(id);
@@ -189,6 +196,7 @@ export async function loadOpportunityDrawerComposedOpen(
 
     const waitForComposedMs = Math.round((typeof performance !== "undefined" ? performance.now() : 0) - composedStart);
     reportDrawerComposedRevealReady(id, waitForComposedMs);
+    setAdminV2DrawerOpenPending(false, "composed_reveal");
 
     markOpportunityDrawerHydrateDone(id, "primary");
     if (fullEntity) {

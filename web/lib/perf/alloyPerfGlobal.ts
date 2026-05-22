@@ -11,6 +11,7 @@ const PRIMARY_SURFACE_CLEAR_MARKS = new Set([
     "work_unit_primary_lane_ready",
     "department_ready",
     "drawer_primary_ready",
+    "drawer_primary_ready_at",
 ]);
 
 declare global {

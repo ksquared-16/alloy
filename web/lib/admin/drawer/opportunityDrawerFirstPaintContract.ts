@@ -93,19 +93,28 @@ export const OPPORTUNITY_ENRICHMENT_DEFERRED_OVERVIEW_SECTION_KEYS = new Set<str
     "family_contacts",
 ]);
 
+/** Collapse enrichment sections without removing shell structure (geometry contract). */
+function collapseDeferredOverviewSections(sections: EntityDrawerSectionConfig[]): EntityDrawerSectionConfig[] {
+    return sections.map((s) =>
+        OPPORTUNITY_ENRICHMENT_DEFERRED_OVERVIEW_SECTION_KEYS.has(s.key) ?
+            { ...s, defaultExpanded: false, collapsible: true }
+        :   s
+    );
+}
+
 export function filterOpportunityOverviewSectionsForFirstPaint(
     sections: EntityDrawerSectionConfig[],
     firstPaintActive: boolean,
     enrichmentLayoutReady: boolean,
     enrichmentHeldUntilInteraction?: boolean
 ): EntityDrawerSectionConfig[] {
-    if (enrichmentHeldUntilInteraction) return [];
+    if (enrichmentHeldUntilInteraction) {
+        return sections.map((s) => ({ ...s, defaultExpanded: false, collapsible: true }));
+    }
     if (!firstPaintActive) return sections;
-    if (!enrichmentLayoutReady) return [];
-    return sections.map((s) =>
-        OPPORTUNITY_ENRICHMENT_DEFERRED_OVERVIEW_SECTION_KEYS.has(s.key) ?
-            { ...s, defaultExpanded: false, collapsible: true }
-        :   s
-    );
+    if (!enrichmentLayoutReady) {
+        return collapseDeferredOverviewSections(sections);
+    }
+    return collapseDeferredOverviewSections(sections);
 }
 

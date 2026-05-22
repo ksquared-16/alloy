@@ -37,6 +37,7 @@ import {
   usingActiveRecordNoticeText,
 } from "@/lib/adminV2/bos/activeOperationalContext";
 import { operationalContextSwitchNoticeText } from "@/lib/adminV2/bos/operationalContextSwitchNotice";
+import { fetchAdminV2Sidecar } from "@/lib/adminV2/adminV2SidecarSession";
 import { runWhenAdminV2PrimarySurfaceReady } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
@@ -1633,10 +1634,7 @@ export default function AICommandSurfaceShell() {
     const cancelDefer = runWhenAdminV2PrimarySurfaceReady(
       async () => {
         try {
-          const res = await fetch("/api/admin/ai/workflow-assist/capabilities", {
-            credentials: "include",
-            headers: { Accept: "application/json" },
-          });
+          const res = await fetchAdminV2Sidecar("workflow_assist_capabilities");
           const j = (await res.json()) as { ok?: boolean; can_propose_and_apply_workflow_assist?: boolean };
           if (cancelled) return;
           if (res.ok && j.ok === true && typeof j.can_propose_and_apply_workflow_assist === "boolean") {
@@ -1661,10 +1659,7 @@ export default function AICommandSurfaceShell() {
     const cancelDefer = runWhenAdminV2PrimarySurfaceReady(
       async () => {
         try {
-          const res = await fetch("/api/admin/ai/config-layout-assist/capabilities", {
-            credentials: "include",
-            headers: { Accept: "application/json" },
-          });
+          const res = await fetchAdminV2Sidecar("config_layout_assist_capabilities");
           const j = (await res.json()) as { ok?: boolean };
           if (!cancelled && j.ok) setConfigLayoutAssistCaps(j as ConfigLayoutAssistCapabilitiesV1);
         } catch {

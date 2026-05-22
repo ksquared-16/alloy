@@ -1,6 +1,5 @@
 "use client";
 
-import { AdminV2DrawerLoadingState } from "@/components/admin/workspace/AdminV2DrawerLoadingState";
 import { formatDate } from "@/lib/adminFormatters";
 import {
     buildCustomerMemberPatch,
@@ -14,6 +13,9 @@ import { loadWorkspaceChildcareInquiryOptionSets } from "@/lib/workspace/workspa
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { logInquiryChildrenDebug, summarizeInquiryChildrenRows } from "@/lib/admin/drawer/inquiryChildrenDebug";
+import { OPPORTUNITY_INQUIRY_CHILDREN_COLLAPSED_SHELL_CLASS } from "@/lib/admin/drawer/opportunityDrawerLayoutStability";
+
+const INQUIRY_CHILD_ROW_SHELL_MIN_H = "min-h-[2.25rem]";
 import {
     INQUIRY_CHILD_ENTITY_TYPE,
     inquiryChildDrawerShowsDesiredStart,
@@ -162,12 +164,13 @@ export default function OpportunityInquiryChildrenSection({
     opportunityDesiredStartDate = null,
     onOpenChild,
     onChildrenMutated,
-    /** When true and rows are empty, show a loading shell (full inquiry payload still fetching). */
+    /** When true and rows are empty, reserve row shells until drawer owner supplies rows. */
     recordDetailPending = false,
     /** When true, outer EntityDrawerSection already provides premium card chrome — avoid nested heavy cards. */
     embeddedInPremiumSection = false,
     /** When false, defers field-definitions / option-set / status-definitions until edit. */
     enrichmentFetchEnabled = false,
+    shellReservedRowCount = 0,
 }: {
     rows: InquiryChildRow[];
     canEdit: boolean;
@@ -179,6 +182,7 @@ export default function OpportunityInquiryChildrenSection({
     recordDetailPending?: boolean;
     embeddedInPremiumSection?: boolean;
     enrichmentFetchEnabled?: boolean;
+    shellReservedRowCount?: number;
 }) {
     const rootCol = embeddedInPremiumSection ? "min-w-0 w-full" : "md:col-span-2";
     const emptyBox = embeddedInPremiumSection
@@ -435,21 +439,63 @@ export default function OpportunityInquiryChildrenSection({
         });
     };
 
-    if (!rows.length) {
-        if (recordDetailPending) {
-            return (
-                <div className={rootCol}>
-                    <AdminV2DrawerLoadingState
-                        density="inline"
-                        title="Loading inquiry children"
-                        description="Programs, schedules, and child rows appear after the full enrollment payload loads."
-                        className="border-alloy-stone/12 bg-alloy-stone/[0.02]"
-                    />
-                </div>
-            );
-        }
+    const reservedRowCount = Math.max(shellReservedRowCount, recordDetailPending ? 1 : 0);
+
+    if (!rows.length && reservedRowCount > 0) {
+        const listWrap = embeddedInPremiumSection
+            ? "rounded-md border border-alloy-stone/15 bg-white/75"
+            : "rounded-lg border border-alloy-stone/25 bg-white";
+        const placeholderGrid = inquiryChildDesktopGridClass(false, 0);
         return (
-            <div className={`${rootCol} ${emptyBox}`}>No children added to this inquiry yet.</div>
+            <div
+                className={`${rootCol} ${OPPORTUNITY_INQUIRY_CHILDREN_COLLAPSED_SHELL_CLASS}`}
+                data-inquiry-children-section="OpportunityInquiryChildrenSection"
+                data-inquiry-children-shell-placeholder="true"
+                data-inquiry-children-placeholder-count={reservedRowCount}
+            >
+                <div className={`${listWrap} overflow-x-auto`} role="region" aria-label="Inquiry children">
+                    <div className="min-w-[1100px]">
+                        <div
+                            className={`${placeholderGrid} sticky left-0 z-[1] border-b border-alloy-stone/15 bg-alloy-stone/[0.04] px-3 py-2`}
+                            data-inquiry-children-header-row="true"
+                        >
+                            <div className={INQUIRY_CHILD_COL_HDR}>Child</div>
+                            <div className={INQUIRY_CHILD_COL_HDR}>DOB / Age</div>
+                            <div className={INQUIRY_CHILD_COL_HDR}>Program</div>
+                            <div className={INQUIRY_CHILD_COL_HDR}>Schedule</div>
+                            <div className={INQUIRY_CHILD_COL_HDR}>Outcome</div>
+                            <div className={INQUIRY_CHILD_COL_HDR}>Notes</div>
+                            <div className={`${INQUIRY_CHILD_COL_HDR} text-right`}>View</div>
+                        </div>
+                        <div className="divide-y divide-alloy-stone/10">
+                            {Array.from({ length: reservedRowCount }, (_, i) => (
+                                <div
+                                    key={`shell-row-${i}`}
+                                    className={`${placeholderGrid} px-3 py-2 ${INQUIRY_CHILD_ROW_SHELL_MIN_H}`}
+                                    data-inquiry-children-placeholder-row={i}
+                                    aria-hidden
+                                >
+                                    <div className="h-5 w-32 skeleton-pulse rounded bg-alloy-stone/12" />
+                                    <div className="h-5 w-20 skeleton-pulse rounded bg-alloy-stone/10" />
+                                    <div className="h-5 w-24 skeleton-pulse rounded bg-alloy-stone/10" />
+                                    <div className="h-5 w-24 skeleton-pulse rounded bg-alloy-stone/10" />
+                                    <div className="h-5 w-16 skeleton-pulse rounded bg-alloy-stone/10" />
+                                    <div className="h-5 w-full skeleton-pulse rounded bg-alloy-stone/8" />
+                                    <div className="h-5 w-10 skeleton-pulse rounded bg-alloy-stone/10 justify-self-end" />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (!rows.length) {
+        return (
+            <div className={`${rootCol} ${emptyBox}`} data-inquiry-children-empty-confirmed="true">
+                No children added to this inquiry yet.
+            </div>
         );
     }
 

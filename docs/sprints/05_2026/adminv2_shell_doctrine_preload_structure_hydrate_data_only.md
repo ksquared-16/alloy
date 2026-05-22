@@ -1,7 +1,7 @@
 # AdminV2 UI Shell Doctrine — Preload Structure, Hydrate Data Only
 
 **Path:** `docs/sprints/05_2026/adminv2_shell_doctrine_preload_structure_hydrate_data_only.md`  
-**Status:** Audit + design only — **do not implement yet**  
+**Status:** Audit + design complete; **P1-1 + P1-2 implemented** (2026-05-22). P1-3+ remain gated.  
 **Date:** 2026-05-22  
 **Sprint type:** Platform doctrine (extends performance/runtime work; not an isolated perf patch)
 
@@ -17,9 +17,11 @@
 
 ---
 
-## Do not implement yet
+## Implementation gate
 
-This sprint produces **doctrine, audit, architecture, and phased rollout only**. No production code changes until a follow-up implementation sprint with explicit cards. Next sprint should open with implementation cards derived from **Phase 1** below.
+**P1-1 + P1-2 (opportunity drawer shell map)** — implemented in `web/lib/adminV2/shellContracts/*` and `AdminEntityDrawer.tsx`.
+
+**Still gated:** P1-3 placeholders polish, P1-4 postDrawerVisible fold, P1-5 slot owners, P1-6 geometry e2e, Phase 2+ shells.
 
 ---
 

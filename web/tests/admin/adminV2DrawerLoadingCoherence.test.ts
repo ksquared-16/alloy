@@ -115,6 +115,13 @@ describe("Opportunity drawer above-fold layout stability", () => {
         expect(src).toContain("OPPORTUNITY_DRAWER_BELOW_FOLD_SCROLL_PX");
         expect(src).toContain("overflow-anchor-none");
     });
+
+    it("uses bootstrap shell contract for frozen overview sections (P1-2)", () => {
+        const src = read("components/admin/AdminEntityDrawer.tsx");
+        expect(src).toContain("opportunityDrawerShellContract");
+        expect(src).toContain("data-shell-slot");
+        expect(src).toContain("data-opportunity-drawer-shell-contract");
+    });
 });
 
 describe("Deferred opportunity drawer open (first-paint gate)", () => {

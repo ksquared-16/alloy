@@ -1,4 +1,5 @@
 import { appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClient";
+import { recordAdminV2JankBudgetRequest } from "@/lib/perf/adminV2JankBudget";
 import {
     dedupeAdminFetchWithTtl,
     resetWorkspaceAdminFetchDedupeForTests,
@@ -117,6 +118,7 @@ export async function fetchWorkUnitOperationalBootstrapSession(
     inflightOwnershipKey = ownershipKey;
     canonicalUrlForOwnership = url;
     logWuBootstrapOwner("page", { ownershipKey, url });
+    recordAdminV2JankBudgetRequest({ phase: "wu_bootstrap", url });
     const t0 = typeof performance !== "undefined" ? performance.now() : 0;
 
     inflightPromise = dedupeAdminFetchWithTtl(url, init, BOOTSTRAP_TTL_MS).finally(() => {

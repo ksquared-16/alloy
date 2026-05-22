@@ -94,7 +94,7 @@ describe("jank-stop wiring", () => {
     it("sidecars use hard primary gate without idle fallback", () => {
         const defer = readFileSync(join(root, "../../lib/workspace/adminV2DeferBackgroundWork.ts"), "utf8");
         expect(defer).toContain("runWhenAdminV2PrimarySurfaceReady");
-        expect(defer).toContain("isAdminV2PrimarySurfacePending");
+        expect(defer).toContain("isAdminV2SidecarNetworkBlocked");
         const tasks = readFileSync(join(root, "../../app/adminV2/components/OperationalTasksNavBadge.tsx"), "utf8");
         expect(tasks).toContain("runWhenAdminV2PrimarySurfaceReady");
         expect(tasks).not.toContain("fallbackMs: 1200");

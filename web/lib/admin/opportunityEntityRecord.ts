@@ -480,6 +480,118 @@ function applyInquiryChildrenMetadataFallbacks(
   return inquiryChildrenOut;
 }
 
+/**
+ * Drawer shell / drawer_primary: resolve inquiry children rows for immediate section paint.
+ * Skips bulk person lookup and custom-field attach (values hydrate on full surface or edit).
+ */
+export async function attachOpportunityInquiryChildrenShell(
+  supabase: AdminSupabase,
+  orgId: string,
+  host: Record<string, unknown>,
+): Promise<void> {
+  const opportunityId = trimOrNull(host.id);
+  if (!opportunityId) {
+    host._inquiry_children = [];
+    return;
+  }
+  const householdId = trimOrNull(host.customer_id);
+  const oppMeta = (host.metadata as Record<string, unknown> | null) ?? null;
+  const oppDefaultProgramType = trimOrNull(host.program_type);
+  const oppDefaultScheduleType = trimOrNull(host.schedule_type);
+
+  const ocmJoinP = supabase
+    .from("opportunity_customer_members")
+    .select(
+      "id, customer_member_id, desired_start_date, desired_program_type, desired_schedule_type, outcome_status_key, fit_status, notes, metadata, created_at, updated_at",
+    )
+    .eq("org_id", orgId)
+    .eq("opportunity_id", opportunityId)
+    .order("created_at", { ascending: true });
+
+  const customerMembersP = householdId
+    ? supabase
+        .from("customer_members")
+        .select(
+          "id, display_name, relationship, dob, person_id, first_name, last_name, metadata, is_active",
+        )
+        .eq("org_id", orgId)
+        .eq("customer_id", householdId)
+        .eq("is_active", true)
+        .limit(25)
+    : Promise.resolve({ data: [] as CmBootstrapRow[], error: null });
+
+  const [joinRes, cmsRes, ocmMemberDefsTaggedPack] = await Promise.all([
+    ocmJoinP,
+    customerMembersP,
+    fetchEffectiveStatusDefinitionsTagged(supabase, orgId, "opportunity_customer_members", {
+      activeOnly: true,
+      processLruTtlMs: 600_000,
+      nextRevalidateSeconds: 900,
+    }),
+  ]);
+
+  const jrows = (joinRes.data ?? []) as OcmJoinRow[];
+  const bootstrapList = ((cmsRes.data ?? []) ?? []) as CmBootstrapRow[];
+  const memberIds = [...new Set(jrows.map((r) => r.customer_member_id).filter(Boolean))] as string[];
+  const bootstrapById = new Map(bootstrapList.map((r) => [r.id, r]));
+  const needingMemberForOcm = memberIds.filter((mid) => !bootstrapById.has(mid));
+  if (needingMemberForOcm.length > 0) {
+    const { data: supplemental } = await supabase
+      .from("customer_members")
+      .select(
+        "id, display_name, relationship, dob, person_id, first_name, last_name, metadata",
+      )
+      .eq("org_id", orgId)
+      .in("id", needingMemberForOcm);
+    for (const row of supplemental ?? []) {
+      const m = row as CmBootstrapRow;
+      bootstrapById.set(m.id, m);
+    }
+  }
+
+  const memList: CmBootstrapRow[] = [];
+  for (const mid of memberIds) {
+    const hit = bootstrapById.get(mid);
+    if (hit) memList.push(hit);
+  }
+
+  const memberMap = new Map(memList.map((m) => [m.id, m]));
+  const pmap = new Map<string, WarmPersonRow>();
+
+  const optionPairs: { setKey: string; itemKey: string }[] = [];
+  for (const r of jrows) {
+    const desiredProgramType = trimOrNull(r.desired_program_type) ?? oppDefaultProgramType;
+    const desiredScheduleType = trimOrNull(r.desired_schedule_type) ?? oppDefaultScheduleType;
+    if (desiredProgramType) optionPairs.push({ setKey: "childcare_program_type", itemKey: desiredProgramType });
+    if (desiredScheduleType) optionPairs.push({ setKey: "childcare_schedule_type", itemKey: desiredScheduleType });
+  }
+
+  const optionLabelMap = await batchOptionItemLabelsForOrg(supabase, orgId, optionPairs);
+  const ocmStatusLabelByKey = displayLabelsFromDefinitions(ocmMemberDefsTaggedPack.rows);
+
+  let inquiryBlocks = mapOcmJoinRowsToInquiryChildrenBlock(
+    jrows,
+    memberMap,
+    pmap,
+    oppDefaultProgramType,
+    oppDefaultScheduleType,
+    optionLabelMap,
+    ocmStatusLabelByKey,
+  );
+  let inquiryChildrenMerged = mergeHouseholdActiveChildrenIntoInquiryChildren(
+    inquiryBlocks as InquiryChildHydrateRow[],
+    bootstrapList,
+    pmap,
+    oppDefaultProgramType,
+    oppDefaultScheduleType,
+    optionLabelMap,
+  );
+  let inquiryChildrenOut = applyInquiryChildrenMetadataFallbacks(inquiryChildrenMerged, oppMeta, opportunityId);
+
+  host._inquiry_children = inquiryChildrenOut;
+  host._member_person_graph_pending = memList.some((m) => trimOrNull(m.person_id) != null);
+}
+
 /** Lazy member→person hydrate for `_inquiry_children` enrichment (skipped on main full hydrate Pass 6). */
 async function respondOpportunityRelationshipMemberOverlay(
   supabase: AdminSupabase,
@@ -835,7 +947,7 @@ export async function buildOpportunityDrawerVisiblePayload(
   );
   vis._field_definitions = [];
   vis._record_surface = "drawer_visible";
-  vis._inquiry_children = [];
+  await attachOpportunityInquiryChildrenShell(supabase, orgId, vis);
   vis._opportunity_persons = [];
   vis._relationship_displays = {};
   const householdIdV =
@@ -1223,7 +1335,7 @@ export async function respondOpportunityEntityGet(
   lapSegment("field_definitions_and_values_attach");
   if (drawerInitial) {
     markPhase("drawer_primary_skip_rel_inquiry_persons");
-    out._inquiry_children = [];
+    await attachOpportunityInquiryChildrenShell(supabase, orgId, out);
     out._opportunity_persons = [];
     out._record_surface = "drawer_primary";
     const inquiryLinesPrimary = buildOpportunityInquiryLinesLite(out);

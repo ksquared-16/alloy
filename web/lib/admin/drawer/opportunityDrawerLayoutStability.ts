@@ -80,17 +80,15 @@ export function stabilizeOpportunityWorkflowOverviewSections(
     }
 ): EntityDrawerSectionConfig[] {
     if (params.aboveFoldLocked) {
-        const withoutDeferred = sections.filter(
-            (s) =>
-                !OPPORTUNITY_ENRICHMENT_DEFERRED_OVERVIEW_SECTION_KEYS.has(s.key) || s.key === "inquiry_children"
-        );
-        const withoutChildren = withoutDeferred.filter((s) => s.key !== "inquiry_children");
-        const children = withoutDeferred.find((s) => s.key === "inquiry_children");
-        const collapsedChildren =
-            children ?
-                [{ ...children, defaultExpanded: false, collapsible: true } as EntityDrawerSectionConfig]
-            :   [];
-        return [...withoutChildren, ...collapsedChildren];
+        return sections.map((s) => {
+            if (s.key === "inquiry_children") {
+                return { ...s, defaultExpanded: true, collapsible: true };
+            }
+            if (OPPORTUNITY_ENRICHMENT_DEFERRED_OVERVIEW_SECTION_KEYS.has(s.key)) {
+                return { ...s, defaultExpanded: false, collapsible: true };
+            }
+            return s;
+        });
     }
 
     return filterOpportunityOverviewSectionsForFirstPaint(

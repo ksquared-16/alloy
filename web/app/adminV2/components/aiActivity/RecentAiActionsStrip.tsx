@@ -6,6 +6,7 @@ import { neutral, derived, brand } from "@/styles/tokens/colors";
 import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
 import { activitySummaryLine, type ActivityItem } from "@/lib/adminV2/aiActivity/activityTypes";
 import AiActivityDetailModal from "./AiActivityDetailModal";
+import { fetchAdminV2Sidecar } from "@/lib/adminV2/adminV2SidecarSession";
 import { runWhenAdminV2PrimarySurfaceReady } from "@/lib/workspace/adminV2DeferBackgroundWork";
 
 const REFRESH_EVENT = "adminv2-ai-activity-refresh";
@@ -47,7 +48,7 @@ export default function RecentAiActionsStrip() {
     const load = useCallback(async (opts?: { soft?: boolean }) => {
         if (!opts?.soft) setPhase((p) => (p === "ready" || p === "empty" ? p : "loading"));
         try {
-            const res = await fetch(`/api/admin/agent/v1/activity?limit=${STRIP_MAX}`, { credentials: "include" });
+            const res = await fetchAdminV2Sidecar("agent_activity");
             const data = (await res.json()) as { ok?: boolean; items?: ActivityItem[] };
             if (!res.ok) {
                 setItems([]);

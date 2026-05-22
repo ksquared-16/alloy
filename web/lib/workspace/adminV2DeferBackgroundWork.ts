@@ -1,5 +1,4 @@
-import { ALLOY_PERF_TICK_EVENT } from "@/lib/perf/alloyPerfGlobal";
-import { isAdminV2PrimarySurfacePending } from "@/lib/perf/adminV2PrimarySurfaceGate";
+import { isAdminV2SidecarNetworkBlocked } from "@/lib/perf/adminV2PrimarySurfaceGate";
 
 /**
  * Schedules non-critical AdminV2 client work after the navigation paint / idle window.
@@ -30,47 +29,40 @@ export function scheduleAdminV2BackgroundWork(
 }
 
 /**
- * Hard-deferred shell sidecars: no idle/timer fallback until primary surface paint mark clears the gate.
+ * Runs once after WU/dept/drawer primary gate clears — no idle fallback, no perf-tick re-fire.
  */
 export function runWhenAdminV2PrimarySurfaceReady(
     fn: () => void | Promise<void>,
     _label?: string
 ): () => void {
     let cancelled = false;
+    let ran = false;
 
-    const runIfReady = () => {
-        if (cancelled) return;
-        if (isAdminV2PrimarySurfacePending()) return;
+    const tryRun = () => {
+        if (cancelled || ran) return;
+        if (isAdminV2SidecarNetworkBlocked()) return;
+        ran = true;
         void fn();
     };
 
-    const scheduleCheck = () => {
-        if (cancelled) return;
-        if (!isAdminV2PrimarySurfacePending()) {
-            runIfReady();
+    const schedule = () => {
+        if (cancelled || ran) return;
+        if (!isAdminV2SidecarNetworkBlocked()) {
+            tryRun();
             return;
         }
         if (typeof window !== "undefined") {
-            window.requestAnimationFrame(scheduleCheck);
+            window.requestAnimationFrame(schedule);
         }
     };
 
-    scheduleCheck();
-
-    const onTick = () => runIfReady();
-    if (typeof window !== "undefined") {
-        window.addEventListener(ALLOY_PERF_TICK_EVENT, onTick);
-    }
-
+    schedule();
     return () => {
         cancelled = true;
-        if (typeof window !== "undefined") {
-            window.removeEventListener(ALLOY_PERF_TICK_EVENT, onTick);
-        }
     };
 }
 
-/** @deprecated Prefer {@link runWhenAdminV2PrimarySurfaceReady} — no idle fallback during primary paint. */
+/** @deprecated Prefer {@link runWhenAdminV2PrimarySurfaceReady}. */
 export function scheduleAdminV2SidecarWork(
     fn: () => void | Promise<void>,
     _options?: { idleTimeoutMs?: number; fallbackMs?: number; maxWaitMs?: number }

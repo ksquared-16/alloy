@@ -11,7 +11,7 @@ import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operat
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
 import { neutral } from "@/styles/tokens/colors";
 import { runWhenAdminV2PrimarySurfaceReady } from "@/lib/workspace/adminV2DeferBackgroundWork";
-import { isAdminV2PrimarySurfacePending } from "@/lib/perf/adminV2PrimarySurfaceGate";
+import { isAdminV2SidecarNetworkBlocked } from "@/lib/perf/adminV2PrimarySurfaceGate";
 
 type TaskCounts = { open: number; due_soon: number; overdue: number };
 
@@ -29,7 +29,7 @@ export default function OperationalTasksNavBadge({
 
     const load = useCallback(async () => {
         if (!enabled) return;
-        if (isAdminV2PrimarySurfacePending()) return;
+        if (isAdminV2SidecarNetworkBlocked()) return;
         try {
             const res = await fetchOperationalTasksSummary();
             const json = await readJson<{ ok?: boolean; counts?: TaskCounts }>(res);
@@ -44,7 +44,9 @@ export default function OperationalTasksNavBadge({
     useEffect(() => {
         if (!enabled) return;
         const cancelDefer = runWhenAdminV2PrimarySurfaceReady(() => load(), "operational_tasks_nav");
-        const id = window.setInterval(() => void load(), 120_000);
+        const id = window.setInterval(() => {
+            if (!isAdminV2SidecarNetworkBlocked()) void load();
+        }, 120_000);
         const onRefresh = () => void load();
         const onOpen = () => onOpenModal();
         window.addEventListener(ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH, onRefresh);

@@ -34,21 +34,27 @@ describe("opportunityDrawerFirstPaintContract", () => {
         expect(opportunityInquirySummaryRightPanelFromPrimaryOnly({})).toBe(false);
     });
 
-    it("hides overview sections until enrichment layout ready", () => {
+    it("keeps overview section structure while collapsed until enrichment layout ready", () => {
         const sections = [
             { key: "inquiry_children", title: "Children", defaultExpanded: true, collapsible: true, fields: [] },
             { key: "quote", title: "Quote", defaultExpanded: true, collapsible: true, fields: [] },
         ];
-        expect(filterOpportunityOverviewSectionsForFirstPaint(sections, true, false)).toEqual([]);
+        const before = filterOpportunityOverviewSectionsForFirstPaint(sections, true, false);
+        expect(before).toHaveLength(2);
+        expect(before.map((s) => s.key)).toEqual(["inquiry_children", "quote"]);
+        expect(before.find((s) => s.key === "inquiry_children")?.defaultExpanded).toBe(false);
+        expect(before.find((s) => s.key === "quote")?.defaultExpanded).toBe(true);
         const after = filterOpportunityOverviewSectionsForFirstPaint(sections, true, true);
-        expect(after).toHaveLength(2);
-        expect(after[0]?.defaultExpanded).toBe(false);
+        expect(after.map((s) => s.key)).toEqual(["inquiry_children", "quote"]);
     });
 
-    it("holds all overview sections when enrichment is held pre-open", () => {
+    it("holds section structure when enrichment is held pre-open", () => {
         const sections = [
             { key: "quote", title: "Quote", defaultExpanded: true, collapsible: true, fields: [] },
         ];
-        expect(filterOpportunityOverviewSectionsForFirstPaint(sections, false, true, true)).toEqual([]);
+        const held = filterOpportunityOverviewSectionsForFirstPaint(sections, false, true, true);
+        expect(held).toHaveLength(1);
+        expect(held[0]?.key).toBe("quote");
+        expect(held[0]?.defaultExpanded).toBe(false);
     });
 });
