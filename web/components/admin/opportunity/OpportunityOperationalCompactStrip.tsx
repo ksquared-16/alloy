@@ -38,6 +38,7 @@ import {
     operationalStripShowEmptyState,
     type OpportunityOperationalStripLayout,
 } from "@/lib/admin/drawer/opportunityOperationalStripPresentation";
+import type { DrawerInquirySummaryRightColumnRenderModel } from "@/lib/adminV2/drawerPipeline/types";
 
 function OrchestratorHandoffCard(props: {
     entityLabel?: string | null;
@@ -154,10 +155,22 @@ export type OpportunityOperationalCompactStripProps = {
     tasksLoadMode?: "auto" | "on_demand";
     /** When true, tasks render from shell preview; strip loads reminders/sends only. */
     hideTasksSection?: boolean;
+    /** Pipeline-owned right-column structure (reminders + handoff slots). */
+    rightColumnModel?: DrawerInquirySummaryRightColumnRenderModel;
 };
 
 const GROUP_LABEL =
     "text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45";
+
+function ReminderRowSkeleton() {
+    return (
+        <span
+            className="inline-flex min-h-[1.75rem] min-w-[8rem] max-w-[16rem] flex-1 items-center rounded-full skeleton-pulse bg-alloy-stone/10 px-2 py-1"
+            aria-hidden
+            data-reminders-row-skeleton="true"
+        />
+    );
+}
 
 export default function OpportunityOperationalCompactStrip({
     opportunityId,
@@ -167,6 +180,7 @@ export default function OpportunityOperationalCompactStrip({
     fetchEnabled = true,
     tasksLoadMode = "auto",
     hideTasksSection = false,
+    rightColumnModel,
 }: OpportunityOperationalCompactStripProps) {
     const v11 = isTaskAssistV1UiEnabled();
     const onDemandTasks = tasksLoadMode === "on_demand";
@@ -359,10 +373,11 @@ export default function OpportunityOperationalCompactStrip({
     if (!v11) return null;
 
     const inquirySummary = layout === "inquiry_summary";
+    const atomicRightColumn = inquirySummary && hideTasksSection && rightColumnModel != null;
 
-    if (inquirySummary && hideTasksSection) {
-        /* Tasks owned by OpportunityInquirySummaryTaskPreview — reminders/sends only below. */
-    } else if (inquirySummary && onDemandTasks && !tasksExpanded) {
+    if (inquirySummary && hideTasksSection && !atomicRightColumn) {
+        /* Legacy path without pipeline right_column model. */
+    } else if (inquirySummary && onDemandTasks && !tasksExpanded && !atomicRightColumn) {
         const nextFollowUpIso = parseNextFollowUpAt(overviewData);
         return (
             <div
@@ -391,7 +406,17 @@ export default function OpportunityOperationalCompactStrip({
     if (!inquirySummary && !hasChips && !loading && !error) return null;
 
     const chipRowClass = inquirySummary ? "flex w-full flex-wrap gap-1" : "flex w-full flex-wrap justify-end gap-1";
-    const hasReminders = stripSends.length > 0 || showNextFollowUp;
+    const hasReminderValues = stripSends.length > 0 || showNextFollowUp;
+    const remindersFetchSettled = !loading || hasReminderValues || Boolean(error);
+    const showRemindersSection =
+        atomicRightColumn ?
+            rightColumnModel.reminders.visible
+        :   hasReminderValues;
+    const showHandoffCard =
+        atomicRightColumn ?
+            rightColumnModel.orchestrator_handoff.visible &&
+            rightColumnModel.orchestrator_handoff.state === "ready"
+        :   true;
 
     const renderTaskChips = () =>
         openTasks.map((t) => {
@@ -536,7 +561,7 @@ export default function OpportunityOperationalCompactStrip({
             ) : null}
             {inquirySummary ? (
                 <>
-                    {loading && !hasChips ? (
+                    {loading && !hasChips && !atomicRightColumn ? (
                         <p className="text-[11px] text-alloy-midnight/50">Loading tasks and reminders…</p>
                     ) : null}
                     {!hideTasksSection && openTasks.length > 0 ? (
@@ -545,20 +570,32 @@ export default function OpportunityOperationalCompactStrip({
                             <div className={`mt-1 ${chipRowClass}`}>{renderTaskChips()}</div>
                         </div>
                     ) : null}
-                    {hasReminders ? (
-                        <div data-operational-strip-group="reminders">
+                    {showRemindersSection ? (
+                        <div
+                            className="min-h-[3.25rem]"
+                            data-operational-strip-group="reminders"
+                            data-right-column-slot="reminders"
+                        >
                             <div className={GROUP_LABEL}>Reminders</div>
-                            <div className={`mt-1 ${chipRowClass}`}>{renderReminderChips()}</div>
+                            <div className={`mt-1 min-h-[1.75rem] ${chipRowClass}`}>
+                                {atomicRightColumn && !remindersFetchSettled ? (
+                                    <ReminderRowSkeleton />
+                                ) : hasReminderValues ? (
+                                    renderReminderChips()
+                                ) : atomicRightColumn || hideTasksSection ? (
+                                    <p
+                                        className="text-[11px] text-alloy-midnight/50"
+                                        data-reminders-empty="true"
+                                    >
+                                        No scheduled reminders
+                                    </p>
+                                ) : null}
+                            </div>
                         </div>
                     ) : null}
                     {showEmpty && !hideTasksSection ? (
                         <p className="text-[11px] text-alloy-midnight/50" data-operational-strip-empty="true">
                             No active tasks or reminders.
-                        </p>
-                    ) : null}
-                    {hideTasksSection && !hasReminders && !loading && !error ? (
-                        <p className="text-[11px] text-alloy-midnight/50" data-operational-strip-empty="true">
-                            No scheduled reminders
                         </p>
                     ) : null}
                 </>
@@ -571,7 +608,7 @@ export default function OpportunityOperationalCompactStrip({
                     {renderTaskChips()}
                 </div>
             )}
-            {globalAssistant ? (
+            {globalAssistant && showHandoffCard ? (
                 <OrchestratorHandoffCard
                     entityLabel={entityLabel}
                     layout={layout}

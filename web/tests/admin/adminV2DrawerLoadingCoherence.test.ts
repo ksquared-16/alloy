@@ -510,7 +510,8 @@ describe("Opportunity drawer first-paint contract", () => {
         expect(src).toContain("inqModel?.show_right_column");
         expect(src).toContain("drawerFullBoundValuesReady");
         expect(src).toContain("FamilyContactsPanel");
-        expect(src).toContain("OpportunityInquirySummaryTaskPreview");
+        expect(src).toContain("OpportunityInquirySummaryRightColumn");
+        expect(src).toContain("rightColumnModel");
         expect(src).toContain('data-shell-slot-placeholder="inquiry_summary_activity"');
         const pipelineMod = read("lib/adminV2/drawerPipeline/adapters/opportunity/buildAboveFoldRenderModel.ts");
         expect(pipelineMod).toContain("resolveShowRightColumn");

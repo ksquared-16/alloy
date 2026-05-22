@@ -20,14 +20,16 @@ describe("opportunity orchestrator handoff on drawer_primary", () => {
         expect(drawerOperationalStripReady(true, false, enrichment)).toBe(true);
     });
 
-    it("inquiry summary render gates strip on task_preview.show_operational_strip", () => {
+    it("inquiry summary uses atomic right_column model for handoff on primary", () => {
         const drawer = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(drawer).toContain("taskPreviewSlot?.show_operational_strip");
+        expect(drawer).toContain("rightColumnModel");
+        expect(drawer).toContain("OpportunityInquirySummaryRightColumn");
         const strip = readFileSync(
             join(webRoot, "components/admin/opportunity/OpportunityOperationalCompactStrip.tsx"),
             "utf8"
         );
         expect(strip).toContain('data-drawer-slot="operational_orchestrator_handoff"');
         expect(strip).toContain("Continue in Orchestrator");
+        expect(strip).toContain("showHandoffCard");
     });
 });

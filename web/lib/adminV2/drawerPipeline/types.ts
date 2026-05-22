@@ -81,8 +81,11 @@ export type DrawerSectionRenderModel = {
 
 export type DrawerInquirySummaryColumnMode = "one" | "two";
 
-export type DrawerTaskPreviewRenderSlot = {
-    confirmed: boolean;
+export type DrawerRightColumnSlotState = "ready" | "empty" | "skeleton" | "pending" | "hidden";
+
+export type DrawerInquirySummaryTasksSlot = {
+    visible: boolean;
+    state: DrawerRightColumnSlotState;
     open_count: number;
     open_tasks: Array<{
         id: string;
@@ -91,6 +94,32 @@ export type DrawerTaskPreviewRenderSlot = {
         status: string;
         source: string;
     }>;
+};
+
+export type DrawerInquirySummaryRemindersSlot = {
+    visible: boolean;
+    /** `skeleton` until client scheduled-send fetch settles; then `ready` or `empty`. */
+    state: DrawerRightColumnSlotState;
+    next_follow_up_iso: string | null;
+};
+
+export type DrawerInquirySummaryOrchestratorHandoffSlot = {
+    visible: boolean;
+    state: "ready" | "hidden";
+};
+
+/** Atomic inquiry-summary right column — structure fixed on drawer_primary. */
+export type DrawerInquirySummaryRightColumnRenderModel = {
+    tasks: DrawerInquirySummaryTasksSlot;
+    reminders: DrawerInquirySummaryRemindersSlot;
+    orchestrator_handoff: DrawerInquirySummaryOrchestratorHandoffSlot;
+};
+
+/** @deprecated Prefer `right_column`; kept for legacy readers during migration. */
+export type DrawerTaskPreviewRenderSlot = {
+    confirmed: boolean;
+    open_count: number;
+    open_tasks: DrawerInquirySummaryTasksSlot["open_tasks"];
     show_reminders_placeholder: boolean;
     show_operational_strip: boolean;
 };
@@ -133,6 +162,7 @@ export type DrawerAboveFoldRenderModel = {
         show_right_column: boolean;
         family_contacts: DrawerFamilyContactsRenderSlot;
         what_matters: DrawerWhatMattersRenderSlot;
+        right_column: DrawerInquirySummaryRightColumnRenderModel;
         task_preview: DrawerTaskPreviewRenderSlot;
     };
     sections: DrawerSectionRenderModel[];

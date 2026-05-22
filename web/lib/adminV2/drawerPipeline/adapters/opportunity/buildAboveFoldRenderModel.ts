@@ -1,11 +1,8 @@
 import { opportunityInquirySummaryRightPanelFromPrimaryOnly } from "@/lib/admin/drawer/opportunityDrawerFirstPaintContract";
 import { opportunityInquiryTourDisplayFromPrimaryMetadata } from "@/lib/admin/drawer/opportunityDrawerFirstPaintContract";
-import { parseInquirySummaryTaskPreview } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
 import { drawerRelationshipsFullHydrateFailed } from "@/lib/adminV2/drawerPipeline/enrichmentState";
-import {
-    drawerFullBoundValuesReady,
-    drawerOperationalStripReady,
-} from "@/lib/adminV2/drawerPipeline/layoutLock";
+import { drawerFullBoundValuesReady } from "@/lib/adminV2/drawerPipeline/layoutLock";
+import { buildInquirySummaryRightColumnModel } from "@/lib/adminV2/drawerPipeline/adapters/opportunity/buildInquirySummaryRightColumn";
 import { overviewSectionsFromAboveFoldModel } from "@/lib/adminV2/drawerPipeline/overviewSections";
 import {
     buildSectionRenderModels,
@@ -99,8 +96,13 @@ export function buildOpportunityAboveFoldRenderModel(
         input.enrichment,
         input.task_assist_enabled
     );
-    const task_preview = parseInquirySummaryTaskPreview(input.record);
     const full_bound = drawerFullBoundValuesReady(input.below_fold_enrichment_ready, input.enrichment);
+    const right_column = buildInquirySummaryRightColumnModel({
+        record: input.record,
+        enrichment: input.enrichment,
+        below_fold_enrichment_ready: input.below_fold_enrichment_ready,
+        task_assist_enabled: input.task_assist_enabled,
+    });
 
     return {
         sections,
@@ -123,16 +125,13 @@ export function buildOpportunityAboveFoldRenderModel(
                 show_tour_bookings_enrichment:
                     !input.above_fold_locked && input.below_fold_enrichment_ready,
             },
+            right_column,
             task_preview: {
-                confirmed: task_preview != null,
-                open_count: task_preview?.open_count ?? 0,
-                open_tasks: task_preview?.open_tasks ?? [],
-                show_reminders_placeholder: !full_bound,
-                show_operational_strip: drawerOperationalStripReady(
-                    input.task_assist_enabled,
-                    input.below_fold_enrichment_ready,
-                    input.enrichment
-                ),
+                confirmed: right_column.tasks.state === "ready" || right_column.tasks.state === "empty",
+                open_count: right_column.tasks.open_count,
+                open_tasks: right_column.tasks.open_tasks,
+                show_reminders_placeholder: false,
+                show_operational_strip: right_column.orchestrator_handoff.visible,
             },
         },
     };

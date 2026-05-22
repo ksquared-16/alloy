@@ -36,7 +36,7 @@ describe("opportunity drawer primary shell payloads", () => {
         expect(drawer).toContain("data-drawer-last-activity-line");
         expect(drawer).toContain("_activity_signal");
         expect(drawer).toContain("reportDrawerAboveFoldStable");
-        expect(drawer).toContain("OpportunityInquirySummaryTaskPreview");
+        expect(drawer).toContain("OpportunityInquirySummaryRightColumn");
         expect(drawer).toContain("opportunityBackgroundFullHydrateFailed");
         expect(drawer).toContain("opportunityRelationshipsFullHydrateFailed");
     });

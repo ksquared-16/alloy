@@ -49,8 +49,7 @@ import EntityDocumentsSection from "@/components/admin/EntityDocumentsSection";
 import { normalizeDocumentRows } from "@/lib/admin/normalizeDocumentRow";
 import CommunicationsDrawerSection from "@/components/admin/communications/CommunicationsDrawerSection";
 import OpportunityOperationalCompactStrip from "@/components/admin/opportunity/OpportunityOperationalCompactStrip";
-import { OpportunityInquirySummaryTaskPreview } from "@/components/admin/opportunity/OpportunityInquirySummaryTaskPreview";
-import { parseInquirySummaryTaskPreview } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
+import { OpportunityInquirySummaryRightColumn } from "@/components/admin/opportunity/OpportunityInquirySummaryRightColumn";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { buildOpportunityOperationalContext } from "@/lib/adminV2/bos/activeOperationalContext";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
@@ -12261,6 +12260,7 @@ export default function AdminEntityDrawer() {
                                                             showRightColumn: showInquirySummaryRightColumn === true,
                                                         });
                                                     const fcSlot = inqModel?.family_contacts;
+                                                    const rightColumnModel = inqModel?.right_column;
                                                     const taskPreviewSlot = inqModel?.task_preview;
                                                     const showWhatMattersSection =
                                                         inqModel?.what_matters.reserved === true;
@@ -12510,38 +12510,15 @@ export default function AdminEntityDrawer() {
                                                                 >
                                                                     {drawer.id &&
                                                                     drawer.id !== "new" &&
-                                                                    isTaskAssistV1UiEnabled() ? (
-                                                                        <>
-                                                                            <OpportunityInquirySummaryTaskPreview
-                                                                                record={d}
-                                                                                previewConfirmed={
-                                                                                    taskPreviewSlot?.confirmed ??
-                                                                                    parseInquirySummaryTaskPreview(d) != null
-                                                                                }
-                                                                                showRemindersPlaceholder={
-                                                                                    taskPreviewSlot?.show_reminders_placeholder ??
-                                                                                    !opportunityInquiryFullBoundReady
-                                                                                }
-                                                                            />
-                                                                            {(taskPreviewSlot?.show_operational_strip ??
-                                                                            opportunityInquiryFullBoundReady) ? (
-                                                                                <div className="adminv2-ws-soft-content-reveal">
-                                                                                    <OpportunityOperationalCompactStrip
-                                                                                        layout="inquiry_summary"
-                                                                                        opportunityId={drawer.id}
-                                                                                        entityLabel={String(d.name ?? "").trim() || null}
-                                                                                        overviewData={d}
-                                                                                        fetchEnabled
-                                                                                        tasksLoadMode="auto"
-                                                                                        hideTasksSection={
-                                                                                            taskPreviewSlot?.confirmed ??
-                                                                                            parseInquirySummaryTaskPreview(d) !=
-                                                                                                null
-                                                                                        }
-                                                                                    />
-                                                                                </div>
-                                                                            ) : null}
-                                                                        </>
+                                                                    isTaskAssistV1UiEnabled() &&
+                                                                    rightColumnModel ? (
+                                                                        <OpportunityInquirySummaryRightColumn
+                                                                            model={rightColumnModel}
+                                                                            opportunityId={drawer.id}
+                                                                            entityLabel={String(d.name ?? "").trim() || null}
+                                                                            overviewData={d}
+                                                                            fetchEnabled
+                                                                        />
                                                                     ) : null}
                                                                     {drawer.id && drawer.id !== "new" ? (
                                                                         opportunityInquiryFullBoundReady ? (
