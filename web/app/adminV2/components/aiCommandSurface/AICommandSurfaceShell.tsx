@@ -1610,26 +1610,16 @@ export default function AICommandSurfaceShell() {
     () => ({
       onProposePause: (workflowId) => proposeWorkflowAssistBody(buildWorkflowAssistPauseProposeBody(workflowId)),
       onProposeRename: async (workflowId, currentName) => {
-        const prompted =
-          typeof window !== "undefined" ?
-            window.prompt("Proposed workflow name", currentName)?.trim()
-            : null;
-        const proposed =
-          prompted && prompted !== currentName.trim() ? prompted : workflowAssistRenameFallbackName(currentName);
+        const proposed = workflowAssistRenameFallbackName(currentName);
         await proposeWorkflowAssistBody(
           buildWorkflowAssistEditRenameProposeBody({ workflow_id: workflowId, proposed_name: proposed })
         );
       },
       onProposeDescription: async (workflowId) => {
-        const prompted =
-          typeof window !== "undefined" ?
-            window.prompt("Proposed description", WORKFLOW_ASSIST_DESCRIPTION_NOTE_DEFAULT)?.trim()
-            : null;
-        const proposed = prompted || WORKFLOW_ASSIST_DESCRIPTION_NOTE_DEFAULT;
         await proposeWorkflowAssistBody(
           buildWorkflowAssistEditDescriptionProposeBody({
             workflow_id: workflowId,
-            proposed_description: proposed,
+            proposed_description: WORKFLOW_ASSIST_DESCRIPTION_NOTE_DEFAULT,
           })
         );
       },

@@ -52,6 +52,16 @@ describe("work-unit operational bootstrap runtime", () => {
         expect(src).toContain("preloadedAttention");
     });
 
+    it("exposes lane-previews route for post-primary cache warm-up", () => {
+        const routePath = path.join(
+            repoRoot,
+            "web/app/api/admin/work-units/[id]/lane-previews/route.ts"
+        );
+        expect(fs.existsSync(routePath)).toBe(true);
+        const src = fs.readFileSync(routePath, "utf8");
+        expect(src).toContain("loadWorkUnitLanePreviewBundle");
+    });
+
     it("work-unit page prefers operational-bootstrap before legacy fan-out", () => {
         const pagePath = path.join(
             repoRoot,

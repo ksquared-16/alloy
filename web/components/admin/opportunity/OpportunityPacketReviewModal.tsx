@@ -8,13 +8,8 @@ import {
     patchPacketReview,
     type PacketReviewPatchStatus,
 } from "@/lib/forms/packets/packetReviewApi";
-import { FormsReviewStatePanel } from "@/components/forms/review";
-import {
-    FORMS_REVIEW_ERROR,
-    FORMS_REVIEW_LOADING,
-    isPacketReviewAwaitingDecision,
-    operatorReviewStatusLabel,
-} from "@/lib/forms/review/formsReviewPresentation";
+import { FormsReviewStatePanel, PacketReviewActionsForm } from "@/components/forms/review";
+import { FORMS_REVIEW_ERROR, FORMS_REVIEW_LOADING } from "@/lib/forms/review/formsReviewPresentation";
 import { enrollmentPacketSubjectLine } from "@/lib/admin/opportunity/enrollmentPacketSummaryPresentation";
 import type { OpportunityPacketPendingSession } from "@/components/admin/opportunity/OpportunityPacketPendingReviewList";
 
@@ -50,59 +45,18 @@ export function OpportunityPacketReviewModalBody({
     onClose,
     onApplyReview,
 }: ModalBodyProps) {
-    const reviewAwaiting =
-        rollup != null && isPacketReviewAwaitingDecision(rollup.status, rollup.operator_review.status);
-
     const reviewActions =
         rollup && rollupPhase === "ready" ?
-            <div className="space-y-3 border-t border-alloy-stone/20 pt-3">
-                <p className="text-[11px] font-semibold text-alloy-midnight/85">Operator review</p>
-                {reviewAwaiting ?
-                    <>
-                        <label className="block text-[11px] font-medium text-alloy-midnight/75">
-                            Notes (optional)
-                            <textarea
-                                className="mt-1 block w-full rounded border border-alloy-stone/35 px-2 py-1 text-xs text-alloy-midnight"
-                                rows={2}
-                                value={notes}
-                                disabled={!canMutate || saving}
-                                onChange={(e) => onNotesChange(e.target.value)}
-                            />
-                        </label>
-                        {saveErr ? <p className="text-xs text-red-700">{saveErr}</p> : null}
-                        <div className="flex flex-wrap justify-end gap-2">
-                            <button
-                                type="button"
-                                className="rounded border border-alloy-stone/40 px-3 py-1.5 text-xs font-medium text-alloy-midnight/85 hover:bg-alloy-stone/10 disabled:opacity-40"
-                                disabled={!canMutate || saving}
-                                onClick={() => onApplyReview("needs_correction")}
-                            >
-                                Needs correction
-                            </button>
-                            <button
-                                type="button"
-                                className="rounded border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-800 hover:bg-red-50 disabled:opacity-40"
-                                disabled={!canMutate || saving}
-                                onClick={() => onApplyReview("rejected")}
-                            >
-                                Reject
-                            </button>
-                            <button
-                                type="button"
-                                className="rounded bg-alloy-blue px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-40"
-                                disabled={!canMutate || saving}
-                                onClick={() => onApplyReview("approved")}
-                            >
-                                {saving ? "Saving…" : "Approve"}
-                            </button>
-                        </div>
-                    </>
-                :   <p className="text-xs text-alloy-midnight/70">
-                        Review decision:{" "}
-                        <span className="font-medium">{operatorReviewStatusLabel(rollup.operator_review.status)}</span>
-                    </p>
-                }
-            </div>
+            <PacketReviewActionsForm
+                rollup={rollup}
+                notes={notes}
+                saving={saving}
+                saveErr={saveErr}
+                canMutate={canMutate}
+                variant="modal"
+                onNotesChange={onNotesChange}
+                onApplyReview={onApplyReview}
+            />
         : null;
 
     return (

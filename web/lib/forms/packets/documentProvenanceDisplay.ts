@@ -39,7 +39,7 @@ export function formatPacketDocumentProvenanceLine(provenance: DocumentProvenanc
 
 /** Currentness heuristic labels (latest PDF = current). */
 export function generationLabelDisplay(label: "current" | "also_generated"): string {
-    return label === "current" ? "Current generated PDF" : "Also generated";
+    return label === "current" ? "Current PDF" : "Earlier PDF";
 }
 
 export function artifactKindDisplayLabel(kind: PacketArtifactKind): string {
@@ -68,6 +68,7 @@ export function packetDocumentIndexEntryToRow(entry: PacketReviewDocumentIndexEn
         uploaded_at: submittedAt,
         artifact_kind: entry.kind,
         provenance_line: formatPacketDocumentProvenanceLine(entry.provenance),
+        document_provenance: entry.provenance,
         generation_label,
         generation_label_display: generation_label ? generationLabelDisplay(generation_label) : null,
         open_target: isPdf ? "signed_url" : "submission_link",
@@ -87,6 +88,7 @@ export function enrichPacketPdfRowFromIndexEntry(
         ...row,
         artifact_kind: "generated_pdf" as const,
         provenance_line: formatPacketDocumentProvenanceLine(entry.provenance),
+        document_provenance: entry.provenance,
         generation_label: entry.provenance.generation_label,
         generation_label_display: generationLabelDisplay(entry.provenance.generation_label),
         open_target: "signed_url" as const,

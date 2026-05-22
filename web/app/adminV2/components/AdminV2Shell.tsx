@@ -1,6 +1,10 @@
 "use client";
 
-import { Suspense, useState, type CSSProperties } from "react";
+import { Suspense, useState, useCallback, type CSSProperties } from "react";
+import {
+    readAdminV2SidebarCollapsed,
+    writeAdminV2SidebarCollapsed,
+} from "@/lib/adminV2/navigation/adminV2SidebarCollapsed";
 import { usePathname } from "next/navigation";
 import { neutral, derived, palette } from "@/styles/tokens/colors";
 
@@ -102,7 +106,14 @@ export default function AdminV2Shell({
     pathname === "/admin/v2/workspace" ||
     pathname.startsWith("/admin/v2/workspace/");
 
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => readAdminV2SidebarCollapsed() ?? true);
+  const toggleSidebarCollapsed = useCallback(() => {
+    setSidebarCollapsed((c) => {
+      const next = !c;
+      writeAdminV2SidebarCollapsed(next);
+      return next;
+    });
+  }, []);
   const [zoomLevel, setZoomLevel] = useState<"company" | "department">("company");
   const [selectedDepartmentKey, setSelectedDepartmentKey] = useState<DepartmentKey | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -132,10 +143,7 @@ export default function AdminV2Shell({
         className="flex h-screen w-full overflow-hidden"
         style={{ backgroundColor: neutral.background }}
       >
-        <Sidebar
-          collapsed={sidebarCollapsed}
-          onToggle={() => setSidebarCollapsed((c) => !c)}
-        />
+        <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebarCollapsed} />
         <div className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">
           {workspaceSiteFilterSubtree ? (
             <WorkspaceSiteFilterGate>
@@ -143,7 +151,7 @@ export default function AdminV2Shell({
                 <Suspense
                   fallback={
                     <div
-                      className="flex h-12 flex-shrink-0 items-center px-4 text-sm text-white/70"
+                      className="adminv2-shell-header flex h-14 flex-shrink-0 items-center px-4 text-sm text-white/70"
                       style={{ backgroundColor: palette.midnightForge }}
                       aria-hidden
                     >
@@ -188,7 +196,7 @@ export default function AdminV2Shell({
                 <Suspense
                   fallback={
                     <div
-                      className="flex h-12 flex-shrink-0 items-center px-4 text-sm text-white/70"
+                      className="adminv2-shell-header flex h-14 flex-shrink-0 items-center px-4 text-sm text-white/70"
                       style={{ backgroundColor: palette.midnightForge }}
                       aria-hidden
                     >
@@ -240,7 +248,7 @@ export default function AdminV2Shell({
     >
       <Sidebar
         collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed((c) => !c)}
+        onToggle={toggleSidebarCollapsed}
       />
       <div className="flex flex-1 flex-col min-w-0">
         <Suspense

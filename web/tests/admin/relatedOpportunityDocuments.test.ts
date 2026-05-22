@@ -72,7 +72,8 @@ describe("mergeOpportunityPacketDocumentRows", () => {
         const pdf = merged.find((r) => r.id === DOC);
         const rec = merged.find((r) => r.artifact_kind === "submitted_record");
         expect(pdf?.provenance_line).toContain("Guardian PDF Form");
-        expect(pdf?.generation_label_display).toBe("Current generated PDF");
+        expect(pdf?.generation_label_display).toBe("Current PDF");
+        expect(pdf?.document_provenance?.form_name).toBe("Guardian PDF Form");
         expect(pdf?.open_target).toBe("signed_url");
         expect(rec?.open_target).toBe("submission_link");
         expect(rec?.name).toBe("Acknowledgement");

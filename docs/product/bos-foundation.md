@@ -12,6 +12,8 @@ Define **BOS** as Alloy’s unified **orchestration intelligence layer**: how as
 
 **May 2026:** **Deeper BOS capability expansion is paused.** Shipped surfaces are **assistive groundwork** — narrow, policy-gated, **human-in-the-loop**. Operational product loops take precedence — see **`docs/execution/roadmap-and-gaps.md`**.
 
+**UX coherence (May 2026):** AdminV2 BOS surfaces were unified in **`docs/sprints/05_2026/bos_ux_coherence_sprint.md`** (with **`bos_ux_coherence_design.md`**). That sprint is **workflow-native operational intelligence** polish only — **active operational context**, **Operational Proposal** framing, routing/governance copy, execution receipts, and perceived-performance stability — **not** autonomous agents or recommendation-intelligence expansion (those remain separate / V1.5 backlog).
+
 | Category | Status |
 |----------|--------|
 | **Shipped BOS capabilities** | Orchestrator, Task Assist, Workflow Assist (narrow), Needs Attention insight, Config/Layout Assist foundation, legacy `admin/agent` config commits |

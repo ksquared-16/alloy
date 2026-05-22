@@ -36,8 +36,9 @@ describe("PacketReviewRollupView UX-E technical disclosure", () => {
         expect(html.slice(0, intakeEnd)).not.toContain("22222222-2222-4222-8222-222222222222");
     });
 
-    it("dedupes step provenance — points to documents section", () => {
+    it("groups documents section without per-step artifact footers", () => {
         const html = renderToStaticMarkup(<PacketReviewRollupView rollup={fixtureRollup()} />);
-        expect(html).toContain("Provenance and artifact types are listed under Documents");
+        expect(html).toContain("Documents &amp; records");
+        expect(html).not.toContain("Provenance and artifact types are listed under Documents");
     });
 });

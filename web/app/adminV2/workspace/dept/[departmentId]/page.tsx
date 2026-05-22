@@ -1,6 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+    useSyncExternalStore,
+    type MouseEvent,
+} from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
@@ -55,11 +64,21 @@ import {
 import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
+import { logAdminV2LegacyFanOut } from "@/lib/adminV2/runtime/adminV2LegacyFanOutDiagnostics";
 import { isAdminV2OperNavigationActive } from "@/lib/perf/alloyPerfGlobal";
 import { isEnrollmentLikeDepartmentKey } from "@/lib/workspace/enrollmentDepartmentKey";
 import { resolveDeptPipelineExecSurface } from "@/lib/workspace/resolveDeptPipelineExecSurface";
 import { WorkspaceOperIcon } from "@/components/admin/workspace/WorkspaceOperIcon";
 import { compareNeedsAttentionBuckets } from "@/lib/opportunities/needsAttentionBuckets";
+import {
+    deptOperNavClickAckProps,
+    deptOperNavClickedKey,
+    markDeptOperNavClickAck,
+    parseWorkUnitNavFromDeptOperHref,
+    prefetchWorkUnitOperationalBootstrap,
+    subscribeDeptOperNavClickAck,
+    getDeptOperNavClickAckSnapshot,
+} from "@/lib/adminV2/navigation";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
 
@@ -132,6 +151,18 @@ type DeptPipelineExecSurface = {
     }>;
 };
 
+function isModifiedDeptOperNavClick(e: MouseEvent<HTMLAnchorElement>): boolean {
+    return e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.defaultPrevented;
+}
+
+function warmWorkUnitBootstrapFromDeptOperHref(href: string, selectedSiteId: string | null | undefined): void {
+    const parsed = parseWorkUnitNavFromDeptOperHref(href);
+    if (!parsed) return;
+    void prefetchWorkUnitOperationalBootstrap({ ...parsed, selectedSiteId }).catch(() => {
+        /* best-effort — hard nav proceeds regardless */
+    });
+}
+
 function DeptOperConsoleQueueRow(props: {
     href: string;
     title: string;
@@ -145,6 +176,10 @@ function DeptOperConsoleQueueRow(props: {
 }) {
     const { href, title, label, iconKey, total, countsDeferred, totalPending, variant, attentionBucketKey } = props;
     const adminDrawer = useAdminDrawerOptional();
+    const { selectedSiteId } = useWorkspaceSiteFilter();
+    useSyncExternalStore(subscribeDeptOperNavClickAck, getDeptOperNavClickAckSnapshot, () => null);
+    const clickedKey = deptOperNavClickedKey(href);
+    const ackProps = deptOperNavClickAckProps(clickedKey);
     const tier =
         variant === "attention"
             ? "adminv2-ws-wu-queue-card--tier-warning adminv2-ws-dept-attention-bucket-tile"
@@ -164,23 +199,36 @@ function DeptOperConsoleQueueRow(props: {
                 aria-hidden
             />
         );
+
+    const commitHardNav = () => {
+        logAdminV2NavDebug({
+            event: "deptQueueCardClick",
+            clickedHref: href,
+            routerAction: "location.assign",
+        });
+        adminV2CommitNavigation(href, { closeDrawer: adminDrawer?.closeDrawer });
+    };
+
     return (
         <a
             href={href}
+            onPointerDown={(e) => {
+                if (isModifiedDeptOperNavClick(e)) return;
+                markDeptOperNavClickAck(clickedKey);
+                warmWorkUnitBootstrapFromDeptOperHref(href, selectedSiteId);
+            }}
             onClick={(e) => {
-                if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-                logAdminV2NavDebug({
-                    event: "deptQueueCardClick",
-                    clickedHref: href,
-                    routerAction: "location.assign",
-                });
+                if (isModifiedDeptOperNavClick(e)) return;
                 e.preventDefault();
-                adminV2CommitNavigation(href, { closeDrawer: adminDrawer?.closeDrawer });
+                markDeptOperNavClickAck(clickedKey);
+                warmWorkUnitBootstrapFromDeptOperHref(href, selectedSiteId);
+                commitHardNav();
             }}
             className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-dept-oper-queue-link adminv2-interactive-surface relative z-[1] cursor-pointer pointer-events-auto ${tier} no-underline text-inherit`}
             data-ws-wu-urgency={urgency}
             data-attention-bucket-key={attentionBucketKey}
             title={title}
+            {...ackProps}
         >
             <div className="adminv2-ws-wu-queue-card-compact-text min-w-0">
                 <div className="adminv2-ws-dept-oper-row-title">
@@ -731,6 +779,14 @@ export default function AdminV2WorkspaceDepartmentPage() {
 
                 try {
                     const bootstrapRes = await dedupeAdminFetch(bootstrapRoute, init);
+                    if (!bootstrapRes.ok && !cancelled) {
+                        logAdminV2LegacyFanOut({
+                            surface: "department",
+                            reason: "bootstrap_unavailable",
+                            departmentId,
+                            status: bootstrapRes.status,
+                        });
+                    }
                     if (bootstrapRes.ok && !cancelled) {
                         const b = (await bootstrapRes.json().catch(() => ({}))) as {
                             error?: string;
@@ -857,11 +913,17 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         return;
                     }
                 } catch {
+                    if (!cancelled) {
+                        logAdminV2LegacyFanOut({
+                            surface: "department",
+                            reason: "bootstrap_error",
+                            departmentId,
+                        });
+                    }
                     /* fall through to legacy fan-out */
                 }
 
-                /** Legacy fan-out when bootstrap unavailable. */
-                void fetchDeptAttentionPreview(cacheNaWuId);
+                /** Legacy fan-out when bootstrap unavailable — no parallel bootstrap work. */
                 const summariesFetchPromise = refreshQueueSummaries(null, []);
 
                 const deptRoute = `/api/admin/departments/${encodeURIComponent(departmentId)}`;
@@ -947,10 +1009,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     void runDeptPipelineProbe(wuCommit);
 
                     const naWu = wuCommit.find((w) => (w.key ?? "").trim().toLowerCase() === "needs_attention");
-                    const naWuId = naWu?.id ?? null;
-                    if (naWuId && naWuId !== cacheNaWuId) {
-                        void fetchDeptAttentionPreview(naWuId);
-                    }
+                    const naWuId = naWu?.id ?? cacheNaWuId ?? null;
+                    void fetchDeptAttentionPreview(naWuId);
 
                     runDeferredKpiPlacements();
                 } else if (!cancelled) {
@@ -983,12 +1043,13 @@ export default function AdminV2WorkspaceDepartmentPage() {
         };
     }, [departmentId, orgId, principalUserId, accessScopeFingerprint, selectedSiteId]);
 
+    /** Full cold shell only until department identity exists — revisit/cache keeps bridge chrome (shell-first). */
     const departmentPageBlockingLoad = useMemo(() => {
         if (!departmentId) return false;
-        return deptLoading;
-    }, [departmentId, deptLoading]);
+        return deptLoading && !dept?.id;
+    }, [departmentId, deptLoading, dept?.id]);
 
-    const deptKpiPlacementPending = !dept || departmentPageBlockingLoad || deptPlacementRows === undefined;
+    const deptKpiPlacementPending = !dept || deptPlacementRows === undefined;
 
     const deptExpectsPipelineLanes = useMemo(() => {
         const list = deptWorkUnits ?? [];
@@ -1451,7 +1512,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
     );
 
     if (departmentPageBlockingLoad) {
-        return <DepartmentWorkspaceColdShell departmentTitle={dept?.name?.trim() || "Department"} />;
+        return <DepartmentWorkspaceColdShell departmentTitle="Department" />;
     }
 
     return (

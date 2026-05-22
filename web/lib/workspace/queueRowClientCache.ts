@@ -8,6 +8,12 @@ import { perfQueueRowsClientSide } from "@/lib/perf/adminV2PerfLog";
 export const QUEUE_ROW_CLIENT_CACHE_TTL_MS = 90_000;
 const STALE_REFRESH_AFTER_MS = 45_000;
 
+/**
+ * Max logical cache entries per work-unit session (insertion-order eviction).
+ * Documented cap for Card 4 lane preview warm-up — not a global store.
+ */
+export const QUEUE_ROW_CLIENT_CACHE_MAX_ENTRIES = 48;
+
 export type QueueRowClientCacheBucket<TPayload> = {
     payload: TPayload;
     fetchedAt: number;
@@ -59,6 +65,19 @@ export function putQueueRowCache<TPayload>(
     };
     for (const k of queueRowPrefetchLogicalKeys(accessScopeFingerprint, workUnitId, queueKey, attentionBucketKey)) {
         map.set(k, ent);
+    }
+    enforceQueueRowCacheLru(map);
+}
+
+/** Evict oldest entries when the session Map exceeds the documented cap. */
+export function enforceQueueRowCacheLru<TPayload>(
+    map: Map<string, QueueRowClientCacheBucket<TPayload>>,
+    maxEntries: number = QUEUE_ROW_CLIENT_CACHE_MAX_ENTRIES
+): void {
+    while (map.size > maxEntries) {
+        const oldest = map.keys().next().value;
+        if (!oldest) break;
+        map.delete(oldest);
     }
 }
 

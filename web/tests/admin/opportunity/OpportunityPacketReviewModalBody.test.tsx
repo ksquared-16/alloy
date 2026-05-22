@@ -73,7 +73,9 @@ describe("OpportunityPacketReviewModalBody", () => {
                 onApplyReview={vi.fn()}
             />
         );
+        expect(html).toContain('data-testid="packet-case-file-header"');
         expect(html).toContain("Intake context");
+        expect(html).toContain("What changed");
         expect(html).toContain("data-testid=\"bos-review-summary-placeholder\"");
         expect(html).toContain("Documents &amp; records");
         expect(html).toContain("Submitted form record");

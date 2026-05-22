@@ -73,6 +73,7 @@ import { markDrawerRowClickStart } from "@/lib/perf/adminV2DrawerPerf";
 import { markWorkUnitNavigationStart } from "@/lib/perf/markWorkUnitNavigationStart";
 import { dedupeAdminFetch, dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
+import { logAdminV2LegacyFanOut } from "@/lib/adminV2/runtime/adminV2LegacyFanOutDiagnostics";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import type { NeedsAttentionBucketWithCount } from "@/lib/opportunities/needsAttentionBuckets";
 import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions/UpdateStatusAddNoteModal";
@@ -102,6 +103,11 @@ import {
     shouldStaleBackgroundRefresh,
     type QueueRowClientCacheBucket,
 } from "@/lib/workspace/queueRowClientCache";
+import { seedWorkUnitLanePreviewBundleIntoCache } from "@/lib/workspace/seedWorkUnitLanePreviewCache";
+import {
+    WORK_UNIT_LANE_PREVIEW_MAX_ATTENTION_BUCKETS,
+    type WorkUnitLanePreviewEntry,
+} from "@/lib/workspace/workUnitLanePreviewBundle";
 import {
     resolveNeedsAttentionBucketsWithPrecedence,
     type NeedsAttentionBucketConfig,
@@ -438,9 +444,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const queueRowClientCacheRef = useRef(new Map<string, QueueRowClientCacheBucket<QueueItemsResult>>());
     const selectedQueueKeyRef = useRef<string | null>(null);
     const laneUnmappedOnlyRef = useRef(false);
-    /** Cancel token for idle prefetch of neighboring queue lanes. */
-    const queueAdjacentPrefetchTokenRef = useRef(0);
-    /** True after first foreground (non-prefetch) rows attempt settles for selection — gates idle prefetch. */
+    /** Deferred queue keys from bootstrap — background lane preview bundle targets these lanes. */
+    const wuDeferredQueueKeysRef = useRef<string[]>([]);
+    /** One-shot lane preview bundle per work-unit navigation. */
+    const wuLanePreviewBundleDoneRef = useRef(false);
+    /** True after first foreground (non-prefetch) rows attempt settles for selection — gates lane preview warm-up. */
     const primaryLaneRowsSettledOnceRef = useRef(false);
 
     const [workflowKpis, setWorkflowKpis] = useState<WorkflowKpis>(DEFAULT_WF_KPIS);
@@ -649,7 +657,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
         suppressQueueFetchEffectOnceRef.current = false;
         queueItemsRequestSeq.current += 1;
         queueSummariesRequestSeq.current += 1;
-        queueAdjacentPrefetchTokenRef.current += 1;
+        wuDeferredQueueKeysRef.current = [];
+        wuLanePreviewBundleDoneRef.current = false;
         queueItemsLastFetchSigRef.current = null;
         queueRowLeaseSigsRef.current.clear();
         queueRowClientCacheRef.current.clear();
@@ -1153,6 +1162,59 @@ export default function AdminV2OpportunityWorkUnitPage() {
         [requestWorkUnitDeferredSupplement, markFirstUsefulPaintOnce, laneUnmappedOnly, viewScopeFingerprint, selectedSiteId]
     );
 
+    const warmWorkUnitLanePreviewCache = useCallback(async () => {
+        if (!departmentId || !workUnitId || wuLanePreviewBundleDoneRef.current) return;
+        const deferred = wuDeferredQueueKeysRef.current;
+        const buckets = (wuBootstrapAttentionRef.current?.needs_attention_buckets ?? [])
+            .slice(0, WORK_UNIT_LANE_PREVIEW_MAX_ATTENTION_BUCKETS)
+            .map((b) => String(b.key ?? "").trim())
+            .filter(Boolean);
+        const primaryKey = bootstrapPrimaryRowKeyRef.current ?? selectedQueueKeyRef.current;
+        if (deferred.length === 0 && buckets.length === 0) {
+            wuLanePreviewBundleDoneRef.current = true;
+            return;
+        }
+        wuLanePreviewBundleDoneRef.current = true;
+        const qs = new URLSearchParams({
+            department_id: departmentId,
+            lane_row_limit: "20",
+            omit_total_count: "true",
+        });
+        if (primaryKey) qs.set("primary_queue_key", primaryKey);
+        for (const k of deferred) qs.append("queue_key", k);
+        for (const b of buckets) qs.append("attention_bucket", b);
+        if (buckets.length > 0) qs.append("attention_bucket", "");
+        const route = appendWorkspaceSiteToUrl(
+            `/api/admin/work-units/${encodeURIComponent(workUnitId)}/lane-previews?${qs.toString()}`,
+            selectedSiteId
+        );
+        try {
+            const init = workspaceDataFetchInit();
+            const res = await dedupeAdminFetch(route, init);
+            if (!res.ok) return;
+            const json = (await res.json().catch(() => ({}))) as {
+                previews?: WorkUnitLanePreviewEntry[];
+            };
+            const previews = json.previews ?? [];
+            seedWorkUnitLanePreviewBundleIntoCache(
+                queueRowClientCacheRef.current,
+                viewScopeFingerprint,
+                workUnitId,
+                previews
+            );
+            if (typeof window !== "undefined") {
+                console.warn("[wu-lane-preview-cache]", {
+                    work_unit_id: workUnitId,
+                    seeded: previews.length,
+                    deferred: deferred.length,
+                    buckets: buckets.length,
+                });
+            }
+        } catch {
+            /* best-effort warm-up */
+        }
+    }, [departmentId, workUnitId, selectedSiteId, viewScopeFingerprint]);
+
     const handleQueueTabChange = useCallback(
         (nextKey: string, opts?: { unmappedActive?: boolean }) => {
             const unmappedActive = opts?.unmappedActive ?? false;
@@ -1177,8 +1239,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
             if (na) {
                 setAttentionBucketKey("");
             }
+            if (workUnitId) {
+                suppressQueueFetchEffectOnceRef.current = true;
+                void fetchQueueItems(workUnitId, nextKey, null, {
+                    logicalUnmapped: unmappedActive,
+                    ...(na ? { attentionBucketOverride: "" } : {}),
+                });
+            }
         },
-        [setSelectedQueueKeyTraced]
+        [fetchQueueItems, setSelectedQueueKeyTraced, workUnitId]
     );
 
     const handleAttentionBucketSelect = useCallback(
@@ -1191,7 +1260,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
             setLaneUnmappedOnly(false);
             setAttentionBucketKey(next);
             void fetchQueueItems(workUnitId, "needs_attention", null, {
-                force: true,
                 attentionBucketOverride: next,
             });
         },
@@ -1365,6 +1433,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
                 try {
                     const bootstrapRes = await dedupeAdminFetch(bootstrapRoute, init);
+                    if (!bootstrapRes.ok && !cancelled) {
+                        logAdminV2LegacyFanOut({
+                            surface: "work_unit",
+                            reason: "bootstrap_unavailable",
+                            departmentId,
+                            workUnitId,
+                            status: bootstrapRes.status,
+                        });
+                    }
                     if (bootstrapRes.ok && !cancelled) {
                         const b = (await bootstrapRes.json().catch(() => ({}))) as {
                             error?: string;
@@ -1422,6 +1499,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         bootstrapWuRef.current = wu;
 
                         const qs = (b.queue?.summaries ?? []) as QueueSummary[];
+                        wuDeferredQueueKeysRef.current = Array.isArray(b.queue?.deferred_queue_keys)
+                            ? b.queue.deferred_queue_keys
+                            : [];
                         setQueueSummaries(qs);
                         setQueueSummariesError(null);
                         setQueueSummariesRoute(buildWorkUnitQueuesListRoute(workUnitId, selectedSiteId));
@@ -1458,7 +1538,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 count: pl.items?.length ?? 0,
                                 preview: [],
                             };
-                            setQueueItems({
+                            const primaryPayload: QueueItemsResult = {
                                 queue: {
                                     key: queueMeta.key,
                                     label: queueMeta.label,
@@ -1472,11 +1552,23 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 limit: 20,
                                 offset: 0,
                                 ...(pl.total_omitted ? { total_omitted: true } : {}),
-                            });
+                            };
+                            setQueueItems(primaryPayload);
                             setQueueItemsError(null);
                             setQueueItemsRoute(pl.route);
                             setQueueItemsLoading(false);
                             suppressQueueFetchEffectOnceRef.current = true;
+                            const primaryAb =
+                                pl.queue_key.trim().toLowerCase() === "needs_attention" ? abInit : "";
+                            putQueueRowCache(
+                                queueRowClientCacheRef.current,
+                                viewScopeFingerprint,
+                                workUnitId,
+                                pl.queue_key,
+                                primaryPayload,
+                                primaryAb
+                            );
+                            primaryLaneRowsSettledOnceRef.current = true;
                         }
                         setWuQueueLaneAuthorityReady(true);
 
@@ -1497,10 +1589,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         return;
                     }
                 } catch {
+                    if (!cancelled) {
+                        logAdminV2LegacyFanOut({
+                            surface: "work_unit",
+                            reason: "bootstrap_error",
+                            departmentId,
+                            workUnitId,
+                        });
+                    }
                     /* fall through to legacy fan-out */
                 }
 
-                /** Legacy fan-out when operational-bootstrap unavailable. */
+                /** Legacy fan-out when operational-bootstrap unavailable — bootstrap path already exited on success. */
                 const wuUrl = `/api/admin/work-units/${encodeURIComponent(workUnitId)}`;
                 const deptUrl = `/api/admin/departments/${encodeURIComponent(departmentId)}`;
                 const queueListRoute = buildWorkUnitQueuesListRoute(workUnitId, selectedSiteId);
@@ -1624,6 +1724,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 } catch {
                     shouldFallbackToLegacy = true;
                     if (!cancelled) {
+                        logAdminV2LegacyFanOut({
+                            surface: "work_unit",
+                            reason: "queue_summaries_failed",
+                            departmentId,
+                            workUnitId,
+                        });
                         setQueueSummaries(null);
                         setQueueSummariesError("Queue request failed");
                         setQueueSummariesRoute(queueListRoute);
@@ -1645,6 +1751,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         usedNewQueueApi = true;
                         if (!cancelled) {
                             const qs = (j.queues ?? []) as QueueSummary[];
+                            wuDeferredQueueKeysRef.current = Array.isArray(j.deferred_queue_keys)
+                                ? j.deferred_queue_keys
+                                : [];
                             setQueueSummaries(qs);
                             setQueueSummariesError(null);
                             setQueueSummariesRoute(route);
@@ -1669,6 +1778,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     } else if (queuesRes.status === 501) {
                         shouldFallbackToLegacy = true;
                         if (!cancelled) {
+                            logAdminV2LegacyFanOut({
+                                surface: "work_unit",
+                                reason: "queue_api_unsupported",
+                                departmentId,
+                                workUnitId,
+                                status: 501,
+                            });
                             setQueueSummaries(null);
                             setQueueSummariesError("Queue type not supported yet");
                             setQueueSummariesRoute(route);
@@ -1686,6 +1802,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 } catch (e) {
                     shouldFallbackToLegacy = true;
                     if (!cancelled) {
+                        logAdminV2LegacyFanOut({
+                            surface: "work_unit",
+                            reason: "queue_summaries_failed",
+                            departmentId,
+                            workUnitId,
+                        });
                         setQueueSummaries(null);
                         setQueueSummariesError(e instanceof Error ? e.message : "Failed to load queues");
                         setQueueSummariesRoute(route);
@@ -1812,59 +1934,29 @@ export default function AdminV2OpportunityWorkUnitPage() {
             suppressQueueFetchEffectOnceRef.current = false;
             return;
         }
-        const force = skipNextQueueFetchEffectRef.current;
-        if (force) skipNextQueueFetchEffectRef.current = false;
-        void fetchQueueItems(workUnitId, selectedQueueKey, null, force ? { force: true } : undefined);
+        if (skipNextQueueFetchEffectRef.current) skipNextQueueFetchEffectRef.current = false;
+        void fetchQueueItems(workUnitId, selectedQueueKey, null);
     }, [fetchQueueItems, selectedQueueKey, workUnitId, workUnit, loading, laneUnmappedOnly, selectedSiteId, wuQueueLaneAuthorityReady]);
 
     useEffect(() => {
         if (typeof window === "undefined") return;
-        if (!workUnitId || !queueSummaries?.length || !selectedQueueKey || loading || !workUnit) return;
+        if (!workUnitId || !departmentId || loading || !workUnit) return;
         if (!primaryLaneRowsSettledOnceRef.current) return;
-        if (queueItemsLoading || !queueItems || queueItemsError) return;
-        const token = ++queueAdjacentPrefetchTokenRef.current;
-        const run = () => {
-            if (queueAdjacentPrefetchTokenRef.current !== token) return;
-            const keys = queueSummaries.map((q) => q.key);
-            const ix = keys.indexOf(selectedQueueKey);
-            const want = new Set<string>();
-            if (ix >= 0) {
-                if (ix > 0) want.add(keys[ix - 1]!);
-                if (ix + 1 < keys.length) want.add(keys[ix + 1]!);
-            }
-            for (const hk of ["new_inquiry", "contact_attempted", "tour_scheduled"]) {
-                if (keys.includes(hk) && hk !== selectedQueueKey) want.add(hk);
-            }
-            let n = 0;
-            for (const k of want) {
-                if (n >= 2) break;
-                void fetchQueueItems(workUnitId, k, null, { prefetchOnly: true, logicalUnmapped: false });
-                n++;
-            }
-        };
-        const ric = typeof requestIdleCallback !== "undefined";
-        if (ric) {
-            const id = requestIdleCallback(run, { timeout: 2800 });
-            return () => {
-                cancelIdleCallback(id);
-                queueAdjacentPrefetchTokenRef.current++;
-            };
-        }
-        const tid = window.setTimeout(run, 400);
-        return () => {
-            clearTimeout(tid);
-            queueAdjacentPrefetchTokenRef.current++;
-        };
+        if (wuLanePreviewBundleDoneRef.current) return;
+        return scheduleAdminV2BackgroundWork(
+            () => {
+                void warmWorkUnitLanePreviewCache();
+            },
+            { idleTimeoutMs: 1200, fallbackMs: 80 }
+        );
     }, [
         workUnitId,
-        selectedQueueKey,
-        queueSummaries,
-        queueItems,
-        queueItemsLoading,
-        queueItemsError,
+        departmentId,
         loading,
         workUnit,
-        fetchQueueItems,
+        warmWorkUnitLanePreviewCache,
+        wuQueueLaneAuthorityReady,
+        queueSummaries,
     ]);
 
     const queuePicker = useMemo(() => {

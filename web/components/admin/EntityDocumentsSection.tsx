@@ -5,10 +5,18 @@ import { formatDateTime } from "@/lib/adminFormatters";
 import { isV1DocumentEntityType } from "@/lib/admin/v1DocumentEntities";
 import type { V1DocumentEntityValue } from "@/lib/admin/v1DocumentEntities";
 import AssociatedDocumentUploadModal from "@/components/admin/AssociatedDocumentUploadModal";
-import { FormsArtifactBadge, FormsReviewBadge } from "@/components/forms/review";
-import { generationLabelOperatorText, generationLabelTone } from "@/lib/forms/review/formsReviewPresentation";
+import {
+    ArtifactsPanel,
+    intakeArtifactsFromNormalizedRows,
+} from "@/components/forms/review/ArtifactsPanel";
+import { partitionIntakeArtifacts } from "@/lib/forms/review/intakeArtifactPresentation";
 import { isSyntheticPacketDocumentId } from "@/lib/forms/packets/documentProvenanceDisplay";
 import type { NormalizedDocumentRow } from "@/lib/admin/normalizeDocumentRow";
+import {
+    formsCaseFileActionLink,
+    formsCaseFileRegionDescription,
+    formsCaseFileRegionTitle,
+} from "@/lib/forms/review/formsReviewClassTokens";
 
 /** Aligned with `NormalizedDocumentRow` from `/api/admin/related/...` and upload response. */
 export type EntityDocumentListItem = NormalizedDocumentRow;
@@ -26,6 +34,68 @@ type Props = {
     onAfterUpload: () => void;
     showUpload?: boolean;
 };
+
+function AttachedDocumentRow({
+    doc,
+    openingId,
+    onOpen,
+    grouped,
+}: {
+    doc: EntityDocumentListItem;
+    openingId: string | null;
+    onOpen: (docId: string) => void;
+    grouped?: boolean;
+}) {
+    const displayName =
+        (doc.name && String(doc.name).trim()) ||
+        (doc.original_filename && String(doc.original_filename).trim()) ||
+        "Untitled";
+    const when = doc.uploaded_at || doc.created_at;
+
+    const body = (
+        <>
+            <div className="min-w-0 flex-1">
+                <p className="font-medium text-alloy-midnight truncate">{displayName}</p>
+                {doc.document_type || doc.status || when ?
+                    <p className="mt-0.5 text-[11px] text-alloy-midnight/55">
+                        {[doc.document_type, doc.status, when ? formatDateTime(when) : null]
+                            .filter(Boolean)
+                            .join(" · ")}
+                    </p>
+                : null}
+            </div>
+            {doc.open_target === "submission_link" || isSyntheticPacketDocumentId(doc.id) ?
+                doc.source_form_submission_admin_path ?
+                    <a href={doc.source_form_submission_admin_path} className={formsCaseFileActionLink}>
+                        View submission
+                    </a>
+                :   null
+            :   <button
+                    type="button"
+                    disabled={openingId === doc.id}
+                    onClick={() => onOpen(doc.id)}
+                    className={`${formsCaseFileActionLink} disabled:opacity-50`}
+                >
+                    {openingId === doc.id ? "Opening…" : "Open"}
+                </button>
+            }
+        </>
+    );
+
+    if (grouped) {
+        return (
+            <li className="flex flex-wrap items-start justify-between gap-2 px-3 py-2.5 text-sm border-b border-admin-border last:border-b-0">
+                {body}
+            </li>
+        );
+    }
+
+    return (
+        <li className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-alloy-stone/20 px-3 py-2 bg-white/80">
+            {body}
+        </li>
+    );
+}
 
 export default function EntityDocumentsSection({
     documents,
@@ -46,6 +116,10 @@ export default function EntityDocumentsSection({
     const [title, setTitle] = useState("");
     const [openingId, setOpeningId] = useState<string | null>(null);
     const [openError, setOpenError] = useState<string | null>(null);
+
+    const { intake: intakeRows, other: otherRows } = partitionIntakeArtifacts(documents);
+    const intakeItems = intakeArtifactsFromNormalizedRows(intakeRows);
+    const hasIntakeOutputs = intakeItems.length > 0;
 
     const openSignedUrl = async (docId: string) => {
         setOpenError(null);
@@ -106,20 +180,10 @@ export default function EntityDocumentsSection({
         }
     };
 
-    const displayName = (doc: EntityDocumentListItem) =>
-        (doc.name && String(doc.name).trim()) ||
-        (doc.original_filename && String(doc.original_filename).trim()) ||
-        "Untitled";
-
-    const displayWhen = (doc: EntityDocumentListItem) => {
-        const raw = doc.uploaded_at || doc.created_at;
-        return raw ? formatDateTime(raw) : "";
-    };
-
     const listEmpty = documents.length === 0;
 
     return (
-        <div className="space-y-3">
+        <div className="space-y-4">
             {showUpload && canMutate && fileUploadSupported && (
                 <>
                     <div className="rounded-lg border border-alloy-stone/30 bg-alloy-pine/5 p-3 space-y-2">
@@ -197,91 +261,72 @@ export default function EntityDocumentsSection({
                 </div>
             )}
 
-            {loading ? (
-                <div className="rounded-lg border border-alloy-stone/20 bg-alloy-stone/5 px-3 py-4 text-sm text-alloy-midnight/60" aria-busy="true">
+            {loading ?
+                <div
+                    className="rounded-lg border border-alloy-stone/20 bg-alloy-stone/5 px-3 py-4 text-sm text-alloy-midnight/60"
+                    aria-busy="true"
+                >
                     Loading documents…
                 </div>
-            ) : listEmpty && !fetchError ? (
+            : listEmpty && !fetchError ?
                 <div className="rounded-lg border border-dashed border-alloy-stone/40 bg-alloy-stone/5 px-3 py-4 text-center text-sm text-alloy-midnight/60">
                     <p className="font-medium text-alloy-midnight/70">No documents linked yet</p>
                     <p className="mt-1 text-xs text-alloy-midnight/50">
-                        {canMutate ? "Upload a file to attach it to this record." : "Documents will appear here after upload."}
+                        {canMutate ?
+                            "Upload a file to attach it to this record."
+                        :   "Documents will appear here after upload."}
                     </p>
                 </div>
-            ) : listEmpty && fetchError ? null : (
-                <ul className="space-y-2">
-                    {documents.map((doc) => (
-                        <li
-                            key={doc.id}
-                            className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-alloy-stone/20 px-3 py-2 bg-white/80"
-                        >
-                            <div className="min-w-0 flex-1">
-                                <div className="flex flex-wrap items-center gap-1.5">
-                                    <p className="text-sm font-medium text-alloy-forge/90 truncate">{displayName(doc)}</p>
-                                    {doc.artifact_kind === "generated_pdf" || doc.artifact_kind === "submitted_record" ?
-                                        <FormsArtifactBadge kind={doc.artifact_kind} className="shrink-0" />
-                                    : null}
-                                    {doc.generation_label === "current" || doc.generation_label === "also_generated" ?
-                                        <FormsReviewBadge
-                                            className="shrink-0"
-                                            label={generationLabelOperatorText(doc.generation_label)}
-                                            tone={generationLabelTone(doc.generation_label)}
-                                        />
-                                    : doc.generation_label_display ?
-                                        <span className="shrink-0 text-[10px] text-alloy-midnight/55">
-                                            {doc.generation_label_display}
-                                        </span>
-                                    : null}
-                                </div>
-                                {doc.provenance_line ?
-                                    <p className="mt-0.5 text-[11px] text-alloy-midnight/65">{doc.provenance_line}</p>
-                                : null}
-                                <p className="text-xs text-alloy-muted">
-                                    {[doc.document_type, doc.status, displayWhen(doc)].filter(Boolean).join(" · ") || "—"}
-                                </p>
-                                {(doc.source_form_submission_admin_path || doc.source_packet_session_admin_path) && (
-                                    <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px]">
-                                        {doc.source_form_submission_admin_path ?
-                                            <a
-                                                href={doc.source_form_submission_admin_path}
-                                                className="font-medium text-alloy-blue hover:underline"
-                                            >
-                                                {doc.open_target === "submission_link" ? "View submission" : "Form submission"}
-                                            </a>
-                                        : null}
-                                        {doc.source_packet_session_admin_path ?
-                                            <a
-                                                href={doc.source_packet_session_admin_path}
-                                                className="font-medium text-alloy-blue hover:underline"
-                                            >
-                                                Packet session
-                                            </a>
-                                        : null}
-                                    </p>
-                                )}
+            : listEmpty && fetchError ?
+                null
+            :   <>
+                    {hasIntakeOutputs ?
+                        <section data-testid="entity-intake-outputs">
+                            <h3 className={formsCaseFileRegionTitle}>Intake outputs</h3>
+                            <p className={formsCaseFileRegionDescription}>
+                                PDFs and submitted records produced through forms and packets linked to this record.
+                            </p>
+                            <div className="mt-2">
+                                <ArtifactsPanel
+                                    displayItems={intakeItems}
+                                    openingDocId={openingId}
+                                    onOpenPdf={openSignedUrl}
+                                />
                             </div>
-                            {doc.open_target === "submission_link" || isSyntheticPacketDocumentId(doc.id) ?
-                                doc.source_form_submission_admin_path ?
-                                    <a
-                                        href={doc.source_form_submission_admin_path}
-                                        className="shrink-0 text-xs px-2 py-1 border border-alloy-blue/50 rounded text-alloy-blue hover:bg-alloy-blue/10 font-medium"
-                                    >
-                                        View submission
-                                    </a>
-                                :   null
-                            :   <button
-                                    type="button"
-                                    disabled={openingId === doc.id}
-                                    onClick={() => openSignedUrl(doc.id)}
-                                    className="text-xs px-2 py-1 border border-alloy-blue/50 rounded text-alloy-blue hover:bg-alloy-blue/10 shrink-0 disabled:opacity-50"
-                                >
-                                    {openingId === doc.id ? "Opening…" : "Open"}
-                                </button>
-                            }
-                        </li>
-                    ))}
-                </ul>
-            )}
+                        </section>
+                    : null}
+
+                    {otherRows.length > 0 ?
+                        <section data-testid="entity-attached-documents">
+                            {hasIntakeOutputs ?
+                                <>
+                                    <h3 className={formsCaseFileRegionTitle}>Attached documents</h3>
+                                    <p className={formsCaseFileRegionDescription}>
+                                        Files uploaded directly to this record.
+                                    </p>
+                                </>
+                            : null}
+                            <ul
+                                className={
+                                    hasIntakeOutputs ?
+                                        "mt-2 rounded-lg border border-admin-border bg-white divide-y divide-admin-border"
+                                    :   "space-y-2"
+                                }
+                            >
+                                {otherRows.map((doc) => (
+                                    <AttachedDocumentRow
+                                        key={doc.id}
+                                        doc={doc}
+                                        openingId={openingId}
+                                        onOpen={openSignedUrl}
+                                        grouped={hasIntakeOutputs}
+                                    />
+                                ))}
+                            </ul>
+                        </section>
+                    : null}
+                </>
+            }
 
             {openError && (
                 <div className="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-sm text-red-800" role="alert">

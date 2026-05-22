@@ -142,6 +142,31 @@ export function warningPresentationTone(kind: string | undefined): FormsReviewBa
     return "warning";
 }
 
+/** Operator-facing label for rollup warning `kind` (not field paths). */
+export function warningKindPresentationLabel(kind: string | undefined): string {
+    switch (kind) {
+        case "submitted_text_differs_from_crm":
+            return "Differs from records";
+        case "missing_info":
+            return "Missing information";
+        default:
+            return "Review hint";
+    }
+}
+
+/** Ordered section ids for UX-D hierarchy tests. */
+export const CASE_FILE_SECTION_ORDER = [
+    FORMS_CASE_FILE_SECTION.header,
+    FORMS_CASE_FILE_SECTION.intakeContext,
+    FORMS_CASE_FILE_SECTION.bosSummary,
+    FORMS_CASE_FILE_SECTION.whatChanged,
+    FORMS_CASE_FILE_SECTION.needsAttention,
+    FORMS_CASE_FILE_SECTION.submittedForms,
+    FORMS_CASE_FILE_SECTION.documents,
+    FORMS_CASE_FILE_SECTION.reviewActions,
+    FORMS_CASE_FILE_SECTION.technical,
+] as const;
+
 /** Operator-facing provenance line (delegates to packet provenance formatter). */
 export function formatFormsProvenanceLine(provenance: DocumentProvenanceV1): string {
     return formatPacketDocumentProvenanceLine(provenance);

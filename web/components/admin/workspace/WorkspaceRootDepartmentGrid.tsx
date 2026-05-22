@@ -9,6 +9,7 @@ import {
     runAdminV2NavigationTransition,
     useAdminV2NavigationTransition,
 } from "@/lib/adminV2/navigation";
+import { appendWorkspaceSiteToPath } from "@/lib/adminV2/workspaceSiteFilterClient";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import {
     alloyFamilyToWorkspaceTileTone,
@@ -152,7 +153,10 @@ export function WorkspaceRootDepartmentGrid({
                         : wu != null && wu >= 0
                           ? `${wu} work unit${wu === 1 ? "" : "s"}`
                           : null;
-                const href = `${base}/dept/${encodeURIComponent(d.id)}`;
+                const href = appendWorkspaceSiteToPath(
+                    `${base}/dept/${encodeURIComponent(d.id)}`,
+                    selectedSiteId
+                );
                 const clickedKey = workspaceDeptClickedKey(d.id);
                 const pendingProps = adminV2NavigationClickedItemProps(clickedKey);
                 return (

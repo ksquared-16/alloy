@@ -50,3 +50,9 @@ export {
 } from "@/lib/adminV2/bos/recommendations/validation/validateOperationalRecommendationV1";
 
 export * from "@/lib/adminV2/bos/recommendations/catalog";
+
+export * from "@/lib/adminV2/bos/recommendations/signals";
+
+export * from "@/lib/adminV2/bos/recommendations/fingerprints";
+
+export * from "@/lib/adminV2/bos/recommendations/builders";

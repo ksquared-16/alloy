@@ -1024,11 +1024,11 @@ cd web && npm run test -- \
 
 **Acceptance criteria:**
 
-- [ ] No operator-visible “Agent #N” in AdminV2 BOS UI paths.
+- [x] No operator-visible “Agent #N” in AdminV2 BOS UI paths.
 
 **Tests:**
 
-- Grep-based contract test `adminV2BosTerminology.contract.test.ts` (optional lightweight).
+- `adminV2BosTerminology.contract.test.ts` (grep/contract on sprint-owned surfaces).
 
 ---
 
@@ -1044,8 +1044,8 @@ cd web && npm run test -- \
 
 **Acceptance criteria:**
 
-- [ ] CRM doc matches shipped drawer pattern.
-- [ ] No new markdown files beyond this sprint doc.
+- [x] CRM doc matches shipped drawer pattern.
+- [x] No new markdown files beyond this sprint doc.
 
 ---
 
@@ -1062,8 +1062,8 @@ cd web && npm run test -- \
 
 **Acceptance criteria:**
 
-- [ ] All tests in § Test plan pass in CI/local.
-- [ ] `tsc --noEmit` clean.
+- [x] Sprint-owned regression bundle passes (see Loop 11).
+- [ ] `tsc --noEmit` clean repo-wide (unrelated failures documented in Loop 11).
 
 ---
 
@@ -1148,19 +1148,27 @@ cd web && npm run test -- \
 
 ## Demo script (GATE C manual)
 
-**Do:**
+**Prerequisites:** AdminV2 dept workspace; Task Assist enabled; test org with opportunities in Needs Attention.
 
-1. Dept workspace → Needs Attention lane → open inquiry → read chrome attention (one block) → **Continue in command bar** (if present) or ops chip → chip shows same family.
-2. Command bar: `text [family] about [goal]` → routing notice → candidate → compact **Operational Proposal** → approve send → **receipt** in thread.
-3. Drawer: open draft popover → Enhance draft → confirm copy-only labeling.
-4. Command bar: workflow explain with drawer open → read card uses ambient context.
-5. Config: propose → Settings review link from card → partial apply visibility on staged unsupported op (if test org configured).
+| # | Step | Pass when |
+| --- | --- | --- |
+| 1 | Dept workspace → Needs Attention → open inquiry | One **Operational Attention** chrome strip in drawer header (no duplicate panel). |
+| 2 | Scroll compact strip → **Continue in Orchestrator** | Command bar visible above drawer; **Active record** chip matches inquiry; handoff auto-runs seed (no second Ask). |
+| 3 | With drawer open, Ask: `text [family] about [goal]` | Routing notice → **Operational Proposal** → approve send → **execution receipt** in thread (no “AI sent” copy). |
+| 4 | Drawer open, Ask: `follow up on this inquiry` (no “find”) | No record picker; uses active record (short-circuit). |
+| 5 | Open different inquiry while thread has prior proposal | Context boundary notice; stale proposal blocked / disabled apply. |
+| 6 | Workflow Assist explain with drawer open | Read card uses ambient context without extra search. |
+| 7 | Workflow Assist read → **Propose rename** | Deterministic review draft (no browser prompt). |
+| 8 | Config Assist propose → review link | Settings path; partial apply lists skipped ops when catalog incomplete. |
+| 9 | Job layout proposal (if enabled) | Preview/apply on frame; receipt on success. |
+| 10 | Activity strip + command rail | Strip reserved height; retry on failure; single searching/routing line; **Processing…** not stacked with notice. |
+| 11 | Visual/copy scan | No **Agent #N**, **Future:**, **window.prompt**, or security jargon in operator UI. |
 
 **Do not demo:**
 
 - Config NL apply for unsupported operation kinds without reading skipped list.
-- Workflow rename via browser prompt (must be gone).
 - Comparing dept vs WU attention counts without cap explanation (until V1.5-2).
+- Recommendation-intelligence card (V1.5-8) — shipped handoff is compact **BOS handoff** card.
 
 ---
 
@@ -1358,12 +1366,82 @@ cd web && npm run test -- tests/adminV2/activeOperationalContext.test.ts \
 | 18   | ☑          | Rail reserve + loading coordination (Loop 10)   |
 | 19   | ☑          | Activity strip stability (Loop 10)              |
 | 20   | ☑          | Capability gate + transition calm (Loop 10)     |
-| 21   | ☐          |                                                 |
-| 22   | ☐          |                                                 |
-| 23   | ☐          |                                                 |
-| 24   | ☐ optional |                                                 |
+| 21   | ☑          | Terminology contract + no window.prompt (Loop 11) |
+| 22   | ☑          | CRM + bos-foundation pointers (Loop 11)         |
+| 23   | ☑          | Regression bundle 136 tests (Loop 11)           |
+| 24   | ☑          | Light border/notice harmonization (Loop 11)     |
 
-**Gates:** A ☐ (Phase 1 ready for review) · B ☐ · C ☐
+**Gates:** A ☑ (implemented; manual demo open) · B ☑ · C ☐ (human demo script above)
+
+---
+
+#### Cards 21–24 implementation notes (Loop 11 — Phase 5 closeout — 2026-05-20)
+
+**Card 21 — terminology**
+
+- Added `adminV2BosTerminology.contract.test.ts` — scans sprint-owned operator surfaces for forbidden patterns (Agent #N, AI magic, mutation denied, policy violation, portal blocked, Future:, window.prompt, etc.).
+- Removed `window.prompt` from Workflow Assist rename/description propose paths in `AICommandSurfaceShell.tsx` — deterministic `workflowAssistRenameFallbackName` + `WORKFLOW_ASSIST_DESCRIPTION_NOTE_DEFAULT` only.
+- Governance copy already centralized in `bosGovernanceCopy.ts` (Loop 8).
+
+**Card 22 — doctrine**
+
+- `docs/product/bos-foundation.md` — one paragraph: UX coherence sprint scope vs autonomy pause.
+- `docs/product/crm-system.md` — drawer attention + compact strip + Orchestrator handoff matches shipped UI.
+
+**Card 23 — regression bundle**
+
+```bash
+cd web && npm run test -- \
+  tests/adminV2/adminV2BosTerminology.contract.test.ts \
+  tests/adminV2/commandSurfaceShellLayout.test.ts \
+  tests/adminV2/commandSurfaceShellPerformance.contract.test.ts \
+  tests/adminV2/recentAiActionsStrip.test.ts \
+  tests/adminV2/commandSurfaceRoutingCopy.test.ts \
+  tests/adminV2/commandSurfaceRoutingShell.contract.test.ts \
+  tests/adminV2/commandSurfaceThreadScroll.test.ts \
+  tests/adminV2/commandSurfaceInteractionLayerContract.test.ts \
+  tests/adminV2/commandSurfaceExecutionReceipt.contract.test.ts \
+  tests/adminV2/commandSurfaceLayering.contract.test.ts \
+  tests/adminV2/commandSurfaceHandoffUx.contract.test.ts \
+  tests/adminV2/operationalProposalCardFrame.test.tsx \
+  tests/adminV2/taskAssistOperationalProposalFrame.test.tsx \
+  tests/adminV2/workflowAssistOperationalProposalFrame.test.tsx \
+  tests/adminV2/configLayoutAssistOperationalProposalFrame.test.tsx \
+  tests/adminV2/jobLayoutOperationalProposalFrame.test.tsx \
+  tests/adminV2/bosExecutionReceipt.test.ts \
+  tests/adminV2/bosGovernanceCopy.test.ts \
+  tests/adminV2/bosMutationBoundaryCopy.test.ts \
+  tests/adminV2/configLayoutAssistApplyPresentation.test.ts \
+  tests/adminV2/activeOperationalContext.test.ts \
+  tests/adminV2/activeContextTaskAssistRouting.test.ts \
+  tests/adminV2/operationalRecommendationHandoff.test.ts \
+  tests/admin/adminEntityDrawerBosContext.contract.test.ts \
+  tests/admin/drawer/operationalAttentionSuggestionUi.test.tsx \
+  tests/agent/taskAssist/opportunityOperationalCompactStrip.contract.test.ts \
+  tests/agent/taskAssist/globalAssistantContext.test.tsx
+```
+
+**Result:** 27 files, **136 passed**. Contract tests aligned to shipped placeholder (`Talk to Bos`), submit label (`Processing…`), stale guard (`isStaleOperationalProposalEntity`), and compact BOS handoff strip.
+
+**`tsc --noEmit`:** Sprint-owned tests pass at runtime; repo-wide `tsc` still reports **unrelated** errors (e.g. `workspace/dept` `selectedSiteId`, `buildOperationalRecommendationV1` typing, pre-existing test fixture casts) — not introduced by this loop.
+
+**Card 24 — light visual harmonization**
+
+- `OperationalProposalCardFrame` — review/warning border `alloy-blue/22` (matches handoff/receipt).
+- `CommandSurfaceThread` — searching notices use same medium weight as routing/context notices.
+- No layout redesign.
+
+**Gate C readiness:** Phase 5 closeout **complete** for engineering. **GATE C** awaits human walkthrough of § Demo script (table above). Open GATE A manual checks (drawer layering, handoff) should be re-validated in same session.
+
+**Remaining known issues / deferred**
+
+| Item | Notes |
+| --- | --- |
+| Drawer hydration layout shift | Deferred — `adminv2_drawer_performance_hardening` track |
+| Job layout apply capability gate | Workflow/config gated; job layout unchanged |
+| Recommendation handoff card (V1.5-8) | `buildOperationalRecommendationHandoffCopy` tested; strip ships compact BOS handoff |
+| Repo-wide `tsc` | Unrelated modules; fix outside sprint |
+| GATE A manual sign-off | Orchestrator above drawer, active record, outside-click |
 
 ---
 

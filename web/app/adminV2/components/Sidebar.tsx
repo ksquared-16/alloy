@@ -1,19 +1,39 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { usePathname } from "next/navigation";
-import { Building2, Boxes, GitBranch, LayoutGrid, PanelLeftClose, PanelLeft, Settings } from "lucide-react";
+import {
+    Building2,
+    Boxes,
+    ChevronDown,
+    ChevronRight,
+    GitBranch,
+    Home,
+    PanelLeftClose,
+    PanelLeft,
+    Settings,
+} from "lucide-react";
 import { neutral, brand } from "@/styles/tokens/colors";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
-import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import { appendWorkspaceSiteToPath, readStickyWorkspaceSiteIdForNavigation } from "@/lib/adminV2/workspaceSiteFilterClient";
+import {
+    getWorkspaceNavTreeSnapshot,
+    loadWorkspaceNavTree,
+    type WorkspaceNavTreeDept,
+    type WorkspaceNavTreeWu,
+} from "@/lib/adminV2/navigation/workspaceNavTreeCache";
+import {
+    readExpandedDeptIds,
+    writeExpandedDeptIds,
+} from "@/lib/adminV2/navigation/adminV2SidebarDeptExpanded";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
-import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 
 const WORKSPACE = "/adminV2/workspace";
+const WORKFLOWS_HREF = "/adminV2/workflows";
 const SETTINGS_HREF = "/adminV2/settings";
 
-type Dept = { id: string; name: string | null; key?: string | null };
-type WU = { id: string; name: string | null; department_id: string };
+const EXPANDED_PRIMARY_LINK =
+    "block w-full rounded-md px-2 py-1.5 font-medium hover:bg-alloy-stone/10";
 
 function normalizeAdminPath(pathname: string): string {
     if (pathname === "/admin/v2" || pathname.startsWith("/admin/v2/")) {
@@ -32,6 +52,35 @@ function parseWorkspaceRoute(path: string): { departmentId: string | null; workU
     return { departmentId: m[1] ?? null, workUnitId: m[2] ?? null };
 }
 
+function workspaceHref(path: string): string {
+    return appendWorkspaceSiteToPath(path, readStickyWorkspaceSiteIdForNavigation());
+}
+
+function filterDepts(depts: WorkspaceNavTreeDept[]): WorkspaceNavTreeDept[] {
+    return [...depts]
+        .filter((d) => {
+            const key = String(d.key ?? "").trim().toLowerCase();
+            const name = String(d.name ?? "").trim().toLowerCase();
+            return key !== "system" && name !== "system";
+        })
+        .sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id));
+}
+
+function groupWusByDept(wus: WorkspaceNavTreeWu[]): Map<string, WorkspaceNavTreeWu[]> {
+    const m = new Map<string, WorkspaceNavTreeWu[]>();
+    for (const w of wus) {
+        const k = w.department_id;
+        if (!m.has(k)) m.set(k, []);
+        m.get(k)!.push(w);
+    }
+    for (const arr of m.values()) {
+        arr.sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id));
+    }
+    return m;
+}
+
+const primaryLinkStyle = { color: brand.primary } as CSSProperties;
+
 export default function Sidebar({
     collapsed,
     onToggle,
@@ -42,69 +91,251 @@ export default function Sidebar({
     const pathname = usePathname();
     const path = useMemo(() => normalizeAdminPath(pathname), [pathname]);
     const { departmentId, workUnitId } = parseWorkspaceRoute(path);
-    const onWorkspace = path === WORKSPACE || path.startsWith(`${WORKSPACE}/`);
     const onSettings = path.startsWith(SETTINGS_HREF);
-    const onWorkflows = path.startsWith("/adminV2/workflows");
+    const onWorkflows = path.startsWith(WORKFLOWS_HREF);
 
-    const [depts, setDepts] = useState<Dept[]>([]);
-    const [wus, setWus] = useState<WU[]>([]);
-    const [treeError, setTreeError] = useState<string | null>(null);
+    const cached = getWorkspaceNavTreeSnapshot();
+    const [depts, setDepts] = useState<WorkspaceNavTreeDept[]>(cached?.depts ?? []);
+    const [wus, setWus] = useState<WorkspaceNavTreeWu[]>(cached?.wus ?? []);
+    const [treeError, setTreeError] = useState<string | null>(cached?.error ?? null);
+    const [treeLoading, setTreeLoading] = useState(!cached?.depts.length && !cached?.error);
+    const [expandedDeptIds, setExpandedDeptIds] = useState<Set<string>>(() => readExpandedDeptIds());
 
     useEffect(() => {
-        if (collapsed) return;
         let cancelled = false;
         const cancelDefer = scheduleAdminV2BackgroundWork(
             async () => {
                 if (cancelled) return;
-                try {
-                    const init = workspaceDataFetchInit();
-                    const [dRes, wRes] = await Promise.all([
-                        dedupeAdminFetch("/api/admin/departments", init),
-                        dedupeAdminFetch("/api/admin/work-units", init),
-                    ]);
-                    const dj = (await dRes.json().catch(() => ({}))) as { items?: Dept[] };
-                    const wj = (await wRes.json().catch(() => ({}))) as { items?: WU[] };
-                    if (cancelled) return;
-                    setTreeError(null);
-                    if (dRes.ok) setDepts(dj.items ?? []);
-                    else setTreeError("Departments unavailable");
-                    if (wRes.ok) setWus(wj.items ?? []);
-                } catch {
-                    if (!cancelled) setTreeError("Navigation data unavailable");
+                const snap = getWorkspaceNavTreeSnapshot();
+                if (snap?.depts.length) {
+                    setDepts(snap.depts);
+                    setWus(snap.wus);
+                    setTreeError(snap.error);
+                    setTreeLoading(false);
+                    return;
                 }
+                setTreeLoading(true);
+                const loaded = await loadWorkspaceNavTree();
+                if (cancelled) return;
+                setDepts(loaded.depts);
+                setWus(loaded.wus);
+                setTreeError(loaded.error);
+                setTreeLoading(false);
             },
-            { idleTimeoutMs: 4500, fallbackMs: 600 }
+            { idleTimeoutMs: 200, fallbackMs: 100 }
         );
         return () => {
             cancelled = true;
             cancelDefer();
         };
-    }, [collapsed]);
+    }, []);
 
-    const deptsSorted = useMemo(() => {
-        return [...depts]
-            .filter((d) => {
-                const key = String(d.key ?? "").trim().toLowerCase();
-                const name = String(d.name ?? "").trim().toLowerCase();
-                return key !== "system" && name !== "system";
-            })
-            .sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id));
-    }, [depts]);
+    useEffect(() => {
+        if (!departmentId) return;
+        setExpandedDeptIds((prev) => {
+            if (prev.has(departmentId)) return prev;
+            const next = new Set(prev);
+            next.add(departmentId);
+            writeExpandedDeptIds(next);
+            return next;
+        });
+    }, [departmentId]);
 
-    const wusByDept = useMemo(() => {
-        const m = new Map<string, WU[]>();
-        for (const w of wus) {
-            const k = w.department_id;
-            if (!m.has(k)) m.set(k, []);
-            m.get(k)!.push(w);
-        }
-        for (const arr of m.values()) {
-            arr.sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id));
-        }
-        return m;
-    }, [wus]);
+    const toggleDeptExpanded = useCallback((deptId: string) => {
+        setExpandedDeptIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(deptId)) next.delete(deptId);
+            else next.add(deptId);
+            writeExpandedDeptIds(next);
+            return next;
+        });
+    }, []);
 
+    const deptsSorted = useMemo(() => filterDepts(depts), [depts]);
+    const wusByDept = useMemo(() => groupWusByDept(wus), [wus]);
+
+    const homeHref = workspaceHref(WORKSPACE);
     const railWidth = collapsed ? 56 : 280;
+    const showContextual = Boolean(departmentId);
+
+    const homeLink = (
+        <AdminV2NavLink
+            href={homeHref}
+            title="Home"
+            aria-label="Home"
+            active={path === WORKSPACE}
+            className={collapsed ? "adminv2-sidebar-rail-link" : EXPANDED_PRIMARY_LINK}
+            style={primaryLinkStyle}
+        >
+            {collapsed ? (
+                <Home size={20} strokeWidth={1.75} />
+            ) : (
+                <span className="inline-flex items-center gap-2">
+                    <Home size={16} strokeWidth={1.75} />
+                    Home
+                </span>
+            )}
+        </AdminV2NavLink>
+    );
+
+    const automationsLink = (
+        <AdminV2NavLink
+            href={WORKFLOWS_HREF}
+            title="Automations"
+            aria-label="Automations"
+            active={onWorkflows}
+            className={collapsed ? "adminv2-sidebar-rail-link" : EXPANDED_PRIMARY_LINK}
+            style={primaryLinkStyle}
+        >
+            {collapsed ? (
+                <GitBranch size={20} strokeWidth={1.75} />
+            ) : (
+                <span className="inline-flex items-center gap-2">
+                    <GitBranch size={16} strokeWidth={1.75} />
+                    Automations
+                </span>
+            )}
+        </AdminV2NavLink>
+    );
+
+    const settingsLink = (
+        <AdminV2NavLink
+            href={SETTINGS_HREF}
+            title="Settings"
+            aria-label="Settings"
+            active={onSettings}
+            className={collapsed ? "adminv2-sidebar-rail-link" : EXPANDED_PRIMARY_LINK}
+            style={primaryLinkStyle}
+        >
+            {collapsed ? (
+                <Settings size={20} strokeWidth={1.75} />
+            ) : (
+                <span className="inline-flex items-center gap-2">
+                    <Settings size={16} strokeWidth={1.75} />
+                    Settings
+                </span>
+            )}
+        </AdminV2NavLink>
+    );
+
+    const contextualRailLinks =
+        showContextual ?
+            <>
+                {departmentId ? (
+                    <AdminV2NavLink
+                        href={workspaceHref(`${WORKSPACE}/dept/${departmentId}`)}
+                        title="Department"
+                        aria-label="Department"
+                        active={Boolean(departmentId && !workUnitId)}
+                        className="adminv2-sidebar-rail-link"
+                        style={primaryLinkStyle}
+                    >
+                        <Building2 size={20} strokeWidth={1.75} />
+                    </AdminV2NavLink>
+                ) : null}
+                {departmentId && workUnitId ? (
+                    <AdminV2NavLink
+                        href={workspaceHref(`${WORKSPACE}/dept/${departmentId}/work-unit/${workUnitId}`)}
+                        title="Work unit"
+                        aria-label="Work unit"
+                        active
+                        className="adminv2-sidebar-rail-link"
+                        style={primaryLinkStyle}
+                    >
+                        <Boxes size={20} strokeWidth={1.75} />
+                    </AdminV2NavLink>
+                ) : null}
+            </>
+        :   null;
+
+    const departmentTreeExpanded = (
+        <div className="pt-2 min-h-0">
+            <div
+                className="mb-1 flex items-center justify-between px-2 text-[11px] font-semibold tracking-wide"
+                style={{ color: neutral.textSecondary }}
+            >
+                <span>Departments</span>
+                {treeError ? <span className="normal-case font-medium text-red-700/70">Unavailable</span> : null}
+            </div>
+            {treeLoading && !deptsSorted.length ? (
+                <p className="px-2 py-2 text-xs text-alloy-midnight/50" aria-busy="true">
+                    Loading departments…
+                </p>
+            ) : null}
+            <div className="space-y-1">
+                {deptsSorted.map((d) => {
+                    const name = (d.name ?? "").trim() || "Untitled department";
+                    const deptHref = workspaceHref(`${WORKSPACE}/dept/${d.id}`);
+                    const deptActive = departmentId === d.id && !workUnitId;
+                    const deptWus = wusByDept.get(d.id) ?? [];
+                    const hasWus = deptWus.length > 0;
+                    const isExpanded = expandedDeptIds.has(d.id);
+                    return (
+                        <div key={d.id} className="space-y-0.5">
+                            <div className="flex items-stretch gap-0.5">
+                                {hasWus ? (
+                                    <button
+                                        type="button"
+                                        className="flex h-8 w-7 shrink-0 items-center justify-center rounded-md hover:bg-alloy-stone/10"
+                                        style={{ color: brand.primary }}
+                                        aria-expanded={isExpanded}
+                                        aria-label={isExpanded ? `Collapse ${name}` : `Expand ${name}`}
+                                        onClick={() => toggleDeptExpanded(d.id)}
+                                    >
+                                        {isExpanded ? (
+                                            <ChevronDown size={16} strokeWidth={1.75} aria-hidden />
+                                        ) : (
+                                            <ChevronRight size={16} strokeWidth={1.75} aria-hidden />
+                                        )}
+                                    </button>
+                                ) : (
+                                    <span className="w-7 shrink-0" aria-hidden />
+                                )}
+                                <AdminV2NavLink
+                                    href={deptHref}
+                                    active={deptActive}
+                                    className={`min-w-0 flex-1 ${EXPANDED_PRIMARY_LINK}`}
+                                    style={primaryLinkStyle}
+                                    title={name}
+                                >
+                                    <span className="inline-flex min-w-0 items-center gap-2">
+                                        <Building2 size={16} strokeWidth={1.75} className="shrink-0" />
+                                        <span className="truncate">{name}</span>
+                                    </span>
+                                </AdminV2NavLink>
+                            </div>
+                            {hasWus && isExpanded ? (
+                                <div className="ml-7 space-y-0.5">
+                                    {deptWus.map((wu) => {
+                                        const wuName = (wu.name ?? "").trim() || "Untitled work unit";
+                                        const wuHref = workspaceHref(
+                                            `${WORKSPACE}/dept/${d.id}/work-unit/${wu.id}`
+                                        );
+                                        const wuActive = departmentId === d.id && workUnitId === wu.id;
+                                        return (
+                                            <AdminV2NavLink
+                                                key={wu.id}
+                                                href={wuHref}
+                                                active={wuActive}
+                                                className={EXPANDED_PRIMARY_LINK}
+                                                style={primaryLinkStyle}
+                                                title={wuName}
+                                            >
+                                                <span className="inline-flex min-w-0 items-center gap-2">
+                                                    <Boxes size={15} strokeWidth={1.75} className="shrink-0" />
+                                                    <span className="truncate">{wuName}</span>
+                                                </span>
+                                            </AdminV2NavLink>
+                                        );
+                                    })}
+                                </div>
+                            ) : null}
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
 
     return (
         <aside
@@ -118,7 +349,7 @@ export default function Sidebar({
             <button
                 type="button"
                 onClick={onToggle}
-                className="flex items-center justify-center h-12 w-full flex-shrink-0 hover:opacity-90 active:scale-[0.98] transition-transform"
+                className="flex h-14 w-full flex-shrink-0 items-center justify-center hover:opacity-90 active:scale-[0.98] transition-transform"
                 style={{ color: brand.primary }}
                 aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
@@ -126,169 +357,37 @@ export default function Sidebar({
             </button>
 
             {collapsed ? (
-                <nav
-                    className="flex flex-col flex-1 min-h-0 px-1.5 pb-2"
-                    aria-label="Workspace navigation"
-                >
-                    <div className="flex min-h-0 flex-1 flex-col items-stretch gap-1 overflow-y-auto">
-                        <AdminV2NavLink
-                            href={WORKSPACE}
-                            title="Workspace"
-                            aria-label="Workspace"
-                            active={path === WORKSPACE}
-                            className="adminv2-sidebar-rail-link"
-                            style={{ color: brand.primary }}
-                        >
-                            <LayoutGrid size={20} strokeWidth={1.75} />
-                        </AdminV2NavLink>
-                        {departmentId ? (
-                            <AdminV2NavLink
-                                href={`${WORKSPACE}/dept/${departmentId}`}
-                                title="Department"
-                                aria-label="Department"
-                                active={Boolean(departmentId && !workUnitId)}
-                                className="adminv2-sidebar-rail-link"
-                                style={{ color: brand.primary }}
-                            >
-                                <Building2 size={20} strokeWidth={1.75} />
-                            </AdminV2NavLink>
-                        ) : null}
-                        {departmentId && workUnitId ? (
-                            <AdminV2NavLink
-                                href={`${WORKSPACE}/dept/${departmentId}/work-unit/${workUnitId}`}
-                                title="Work unit"
-                                aria-label="Work unit"
-                                active
-                                className="adminv2-sidebar-rail-link"
-                                style={{ color: brand.primary }}
-                            >
-                                <Boxes size={20} strokeWidth={1.75} />
-                            </AdminV2NavLink>
-                        ) : null}
+                <nav className="flex min-h-0 flex-1 flex-col px-1.5 pb-2" aria-label="Workspace navigation">
+                    <div className="flex shrink-0 flex-col items-stretch gap-1">
+                        {homeLink}
+                        {automationsLink}
                     </div>
-                    <div className="mt-auto flex flex-shrink-0 flex-col items-stretch gap-1 border-t pt-1" style={{ borderColor: neutral.border }}>
-                        <AdminV2NavLink
-                            href="/adminV2/workflows"
-                            title="Automations"
-                            aria-label="Automations"
-                            active={onWorkflows}
-                            className="adminv2-sidebar-rail-link"
-                            style={{ color: brand.primary }}
-                        >
-                            <GitBranch size={20} strokeWidth={1.75} />
-                        </AdminV2NavLink>
-                        <AdminV2NavLink
-                            href={SETTINGS_HREF}
-                            title="Settings"
-                            aria-label="Settings"
-                            active={onSettings}
-                            className="adminv2-sidebar-rail-link"
-                            style={{ color: brand.primary }}
-                        >
-                            <Settings size={20} strokeWidth={1.75} />
-                        </AdminV2NavLink>
+                    {contextualRailLinks ? (
+                        <div className="flex min-h-0 flex-1 flex-col items-stretch gap-1 overflow-y-auto py-1">
+                            {contextualRailLinks}
+                        </div>
+                    ) : (
+                        <div className="min-h-0 flex-1" aria-hidden />
+                    )}
+                    <div
+                        className="flex shrink-0 flex-col items-stretch gap-1 border-t pt-1"
+                        style={{ borderColor: neutral.border }}
+                    >
+                        {settingsLink}
                     </div>
                 </nav>
             ) : (
                 <div
-                    className="flex flex-col flex-1 min-h-0 px-2 pb-3 gap-2 text-[13px] overflow-y-auto"
+                    className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-2 pb-3 text-[13px]"
                     style={{ color: neutral.textSecondary }}
                 >
-                    <div className="pt-1 font-semibold text-[11px] tracking-wide" style={{ color: neutral.textSecondary }}>
-                        Navigate
+                    <div className="shrink-0 space-y-1 pt-1">
+                        {homeLink}
+                        {automationsLink}
                     </div>
-                    <AdminV2NavLink
-                        href={WORKSPACE}
-                        active={path === WORKSPACE}
-                        className="rounded-md px-2 py-1.5 font-medium text-alloy-midnight/85 hover:bg-alloy-stone/10"
-                        style={{ color: brand.primary }}
-                    >
-                        <span className="inline-flex items-center gap-2">
-                            <LayoutGrid size={16} strokeWidth={1.75} />
-                            Workspace
-                        </span>
-                    </AdminV2NavLink>
-                    <AdminV2NavLink
-                        href="/adminV2/workflows"
-                        active={onWorkflows}
-                        className="rounded-md px-2 py-1.5 font-medium text-alloy-midnight/85 hover:bg-alloy-stone/10"
-                        style={{ color: brand.primary }}
-                    >
-                        <span className="inline-flex items-center gap-2">
-                            <GitBranch size={16} strokeWidth={1.75} />
-                            Automations
-                        </span>
-                    </AdminV2NavLink>
-
-                    <div className="pt-2">
-                        <div
-                            className="mb-1 flex items-center justify-between px-2 text-[11px] font-semibold tracking-wide"
-                            style={{ color: neutral.textSecondary }}
-                        >
-                            <span>Departments</span>
-                            {treeError ? <span className="normal-case font-medium text-red-700/70">Unavailable</span> : null}
-                        </div>
-                        <div className="space-y-1">
-                            {deptsSorted.map((d) => {
-                                const name = (d.name ?? "").trim() || "Untitled department";
-                                const deptHref = `${WORKSPACE}/dept/${d.id}`;
-                                const deptActive = departmentId === d.id && !workUnitId;
-                                return (
-                                    <div key={d.id} className="space-y-1">
-                                        <AdminV2NavLink
-                                            href={deptHref}
-                                            active={deptActive}
-                                            className="rounded-md px-2 py-1.5 font-medium hover:bg-alloy-stone/10"
-                                            style={{ color: brand.primary }}
-                                            title={name}
-                                        >
-                                            <span className="inline-flex items-center gap-2">
-                                                <Building2 size={16} strokeWidth={1.75} />
-                                                <span className="truncate">{name}</span>
-                                            </span>
-                                        </AdminV2NavLink>
-                                        {(wusByDept.get(d.id) ?? []).length ? (
-                                            <div className="ml-6 space-y-1">
-                                                {(wusByDept.get(d.id) ?? []).map((wu) => {
-                                                    const wuName = (wu.name ?? "").trim() || "Untitled work unit";
-                                                    const wuHref = `${WORKSPACE}/dept/${d.id}/work-unit/${wu.id}`;
-                                                    const wuActive = departmentId === d.id && workUnitId === wu.id;
-                                                    return (
-                                                        <AdminV2NavLink
-                                                            key={wu.id}
-                                                            href={wuHref}
-                                                            active={wuActive}
-                                                            className="rounded-md px-2 py-1.5 font-medium hover:bg-alloy-stone/10"
-                                                            style={{ color: brand.primary }}
-                                                            title={wuName}
-                                                        >
-                                                            <span className="inline-flex items-center gap-2">
-                                                                <Boxes size={15} strokeWidth={1.75} />
-                                                                <span className="truncate">{wuName}</span>
-                                                            </span>
-                                                        </AdminV2NavLink>
-                                                    );
-                                                })}
-                                            </div>
-                                        ) : null}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-
-                    <div className="mt-auto pt-2 border-t" style={{ borderColor: neutral.border }}>
-                        <AdminV2NavLink
-                            href={SETTINGS_HREF}
-                            active={onSettings}
-                            className="rounded-md px-2 py-1.5 font-medium hover:bg-alloy-stone/10"
-                            style={{ color: brand.primary }}
-                        >
-                            <span className="inline-flex items-center gap-2">
-                                <Settings size={16} strokeWidth={1.75} />
-                                Settings
-                            </span>
-                        </AdminV2NavLink>
+                    <div className="min-h-0 flex-1 overflow-y-auto">{departmentTreeExpanded}</div>
+                    <div className="shrink-0 border-t pt-2" style={{ borderColor: neutral.border }}>
+                        {settingsLink}
                     </div>
                 </div>
             )}

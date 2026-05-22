@@ -60,7 +60,7 @@ describe("AdminEntityDrawer BOS context contract (Loop 1)", () => {
         );
         const src = readFileSync(threadPath, "utf8");
         expect(src).toContain("activeOperationalEntityId");
-        expect(src).toContain("data-command-surface-stale-proposal");
+        expect(src).toContain("isStaleOperationalProposalEntity");
         expect(src).toContain("mutationsBlocked={staleProposal}");
     });
 });

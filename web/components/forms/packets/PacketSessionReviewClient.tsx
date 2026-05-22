@@ -7,13 +7,8 @@ import {
     type PacketReviewTechnicalDetails,
 } from "@/components/forms/packets/PacketReviewRollupView";
 import type { PacketReviewRollupV1 } from "@/lib/forms/packets/packetReviewRollupTypes";
-import { FormsReviewStatePanel } from "@/components/forms/review";
-import {
-    FORMS_REVIEW_ERROR,
-    FORMS_REVIEW_LOADING,
-    isPacketReviewAwaitingDecision,
-    operatorReviewStatusLabel,
-} from "@/lib/forms/review/formsReviewPresentation";
+import { FormsReviewStatePanel, PacketReviewActionsForm } from "@/components/forms/review";
+import { FORMS_REVIEW_ERROR, FORMS_REVIEW_LOADING } from "@/lib/forms/review/formsReviewPresentation";
 
 type Props = {
     packetSessionId: string;
@@ -94,80 +89,24 @@ export function PacketSessionReviewClient({
         }
     };
 
-    const reviewAwaiting =
-        rollup != null && isPacketReviewAwaitingDecision(rollup.status, rollup.operator_review.status);
-
     const reviewActions =
         rollup ?
-            <div className="space-y-3">
-                <h2 className="text-sm font-semibold text-[#0f172a]">Operator review</h2>
-                {reviewAwaiting ?
-                    <>
-                        <p className="text-xs text-[#59678b]">
-                            Approve triggers idempotent PDF generation for mapped steps (existing platform behavior).
-                        </p>
-                        <label className="block text-[11px] font-medium text-[#59678b]">
-                            Notes (optional)
-                            <textarea
-                                className="mt-1 block w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm text-[#31394d]"
-                                rows={2}
-                                value={notes}
-                                disabled={!canMutate || saving}
-                                onChange={(e) => setNotes(e.target.value)}
-                            />
-                        </label>
-                        {saveErr ?
-                            <p className="text-xs text-red-700" role="alert">
-                                {saveErr}
-                            </p>
-                        : null}
-                        <div className="flex flex-wrap justify-end gap-2">
-                            <button
-                                type="button"
-                                className="rounded border border-[#e6e8ec] px-3 py-1.5 text-xs font-medium text-[#59678b] hover:bg-[#f4f6f9] disabled:opacity-40"
-                                disabled={!canMutate || saving}
-                                onClick={() => void applyReview("needs_correction")}
-                            >
-                                Needs correction
-                            </button>
-                            <button
-                                type="button"
-                                className="rounded border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-800 hover:bg-red-50 disabled:opacity-40"
-                                disabled={!canMutate || saving}
-                                onClick={() => void applyReview("rejected")}
-                            >
-                                Reject
-                            </button>
-                            <button
-                                type="button"
-                                className="rounded bg-[#2563eb] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-40"
-                                disabled={!canMutate || saving}
-                                onClick={() => void applyReview("approved")}
-                            >
-                                {saving ? "Saving…" : "Approve"}
-                            </button>
-                        </div>
-                    </>
-                :   <p className="text-sm text-[#59678b]">
-                        Review decision:{" "}
-                        <span className="font-medium text-[#31394d]">
-                            {operatorReviewStatusLabel(rollup.operator_review.status)}
-                        </span>
-                        {rollup.operator_review.reviewed_at ?
-                            <span className="text-[#59678b]">
-                                {" "}
-                                · {new Date(rollup.operator_review.reviewed_at).toLocaleString()}
-                            </span>
-                        : null}
-                    </p>
-                }
-            </div>
+            <PacketReviewActionsForm
+                rollup={rollup}
+                notes={notes}
+                saving={saving}
+                saveErr={saveErr}
+                canMutate={canMutate}
+                variant="page"
+                onNotesChange={setNotes}
+                onApplyReview={(status) => void applyReview(status)}
+            />
         : null;
 
     return (
-        <div className="mx-auto max-w-4xl space-y-4 p-6 text-[#31394d]">
+        <div className="mx-auto max-w-4xl space-y-4 p-6 text-alloy-midnight">
             <div className="flex flex-wrap items-center gap-3">
-                <Link href="/adminV2/forms/packets" className="text-sm font-medium text-[#59678b] hover:text-[#0f172a]">
+                <Link href="/adminV2/forms/packets" className="text-sm font-medium text-alloy-midnight/60 hover:text-alloy-midnight">
                     ← Packet sessions
                 </Link>
             </div>
@@ -181,20 +120,12 @@ export function PacketSessionReviewClient({
                     onRetry={() => void load()}
                 />
             : rollup ?
-                <>
-                    <div>
-                        <h1 className="text-xl font-semibold text-[#0f172a]">{rollup.packet_definition.name}</h1>
-                        <p className="mt-1 text-sm text-[#59678b]">
-                            Packet session review — identifiers are under Technical details below.
-                        </p>
-                    </div>
-                    <PacketReviewRollupView
-                        rollup={rollup}
-                        technicalDetails={technicalDetails}
-                        placement="page"
-                        reviewActionsSlot={reviewActions}
-                    />
-                </>
+                <PacketReviewRollupView
+                    rollup={rollup}
+                    technicalDetails={technicalDetails}
+                    placement="page"
+                    reviewActionsSlot={reviewActions}
+                />
             : null}
         </div>
     );

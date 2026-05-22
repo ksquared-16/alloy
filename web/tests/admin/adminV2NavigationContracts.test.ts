@@ -58,8 +58,33 @@ describe("AdminV2 shell navigation helpers", () => {
     it("sidebar uses AdminV2NavLink without duplicate navigation handlers", () => {
         const src = read("app/adminV2/components/Sidebar.tsx");
         expect(src).toContain("AdminV2NavLink");
+        expect(src).toContain("Home");
+        expect(src).toContain("loadWorkspaceNavTree");
+        expect(src).toContain("readExpandedDeptIds");
+        expect(src).toContain("toggleDeptExpanded");
         expect(src).not.toContain("onShellNavigate");
         expect(src).not.toMatch(/\brouter\.push\s*\(/);
+    });
+
+    it("sidebar nests work units under expandable department rows", () => {
+        const src = read("app/adminV2/components/Sidebar.tsx");
+        expect(src).toContain("ChevronRight");
+        expect(src).toContain("expandedDeptIds.has");
+        expect(src).toMatch(/hasWus && isExpanded/);
+    });
+
+    it("profile menu is avatar-only in header with dropdown account details", () => {
+        const profile = read("app/adminV2/components/AdminV2ProfileMenu.tsx");
+        expect(profile).toContain("rounded-full");
+        expect(profile).toContain("h-9 w-9");
+        const triggerOnly = profile.slice(0, profile.indexOf("{open ?"));
+        expect(triggerOnly).not.toContain("text-alloy-midnight/60");
+        expect(profile).toContain("Sign out");
+        expect(profile).toContain("Settings");
+        const topNav = read("app/adminV2/components/TopNavBar.tsx");
+        expect(topNav).not.toContain("signOut");
+        expect(topNav).toContain("h-[3.75rem]");
+        expect(topNav).toContain("text-[15px]");
     });
 
     it("config assist review CTA uses adminV2CommitNavigation like other shell links", () => {
@@ -103,10 +128,13 @@ describe("Work-unit queue tab shallow routing", () => {
         expect(src).toContain("laneUnmappedOnly");
     });
 
-    it("TopNavBar queue tab is a no-op span when already on work-unit route", () => {
+    it("TopNavBar shell IA: site filter and profile on the right; perspective tabs removed", () => {
         const src = read("app/adminV2/components/TopNavBar.tsx");
-        expect(src).toContain("isQueueContext ?");
-        expect(src).toContain('aria-current="page"');
+        expect(src).toContain("AdminV2ProfileMenu");
+        expect(src).toContain("WorkspaceSiteFilterStrip");
+        expect(src).not.toContain(">Overview<");
+        expect(src).not.toContain(">Queue<");
+        expect(src).not.toContain("AI log");
     });
 
     it("AdminV2NavLink commits navigation via location.assign", () => {

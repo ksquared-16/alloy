@@ -184,7 +184,8 @@ export default function CommandSurfaceThread({
                         return <UserBubble key={turn.id} text={turn.text} />;
                     case "assistant_notice": {
                         const isContextBoundary = turn.noticeRole === "context_boundary";
-                        const isRouting = turn.noticeRole === "routing" || turn.noticeRole === "searching";
+                        const isRouting = turn.noticeRole === "routing";
+                        const isSearching = turn.noticeRole === "searching";
                         return (
                             <div
                                 key={turn.id}
@@ -197,7 +198,7 @@ export default function CommandSurfaceThread({
                                     <span
                                         data-command-surface-assistant-notice="true"
                                         className={
-                                            isContextBoundary || isRouting ?
+                                            isContextBoundary || isRouting || isSearching ?
                                                 "font-medium text-alloy-midnight/80"
                                             :   undefined
                                         }

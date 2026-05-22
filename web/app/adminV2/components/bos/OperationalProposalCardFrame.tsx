@@ -83,7 +83,7 @@ function frameShellClass(variant: OperationalProposalFrameVariant): string {
             return `${base} border-amber-200/75 bg-amber-50/35`;
         case "review_required":
         case "warning":
-            return `${base} border-alloy-blue/25 bg-alloy-blue/[0.03]`;
+            return `${base} border-alloy-blue/22 bg-alloy-blue/[0.03]`;
         default:
             return `${base} border-alloy-stone/22 bg-alloy-stone/[0.02]`;
     }

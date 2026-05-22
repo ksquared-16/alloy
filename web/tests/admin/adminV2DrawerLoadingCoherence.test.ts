@@ -237,13 +237,14 @@ describe("Dept operational panel render-state", () => {
         );
     });
 
-    it("starts attention and summaries before dept/wu Promise.all (PERF-B-04)", () => {
+    it("legacy path parallelizes summaries with dept/wu; single attention fetch after WU list (Card 5)", () => {
         const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
         expect(src).toContain("summariesFetchPromise");
-        expect(src).toMatch(/void fetchDeptAttentionPreview\(cacheNaWuId\)/);
+        expect(src).not.toMatch(/void fetchDeptAttentionPreview\(cacheNaWuId\)/);
         expect(src).toMatch(
-            /fetchDeptAttentionPreview\(cacheNaWuId\)[\s\S]*?summariesFetchPromise[\s\S]*?Promise\.all\(\[[\s\S]*?deptRoute/,
+            /legacy fan-out[\s\S]*summariesFetchPromise[\s\S]*Promise\.all\(\[[\s\S]*?deptRoute/,
         );
+        expect(src).toMatch(/void fetchDeptAttentionPreview\(naWuId\)/);
         expect(src).toMatch(/if \(!deptOperationalRegionReady\) return/);
         const operReadyGate =
             src.match(/const deptOperationalRegionReady = useMemo\([\s\S]*?\]\);/)?.[0] ?? "";

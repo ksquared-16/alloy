@@ -12,6 +12,7 @@ import {
     packetSessionStatusTone,
     submissionStatusLabel,
     submissionStatusTone,
+    warningKindPresentationLabel,
 } from "@/lib/forms/review/formsReviewPresentation";
 import { formsReviewBadgeClassName, legacyArtifactKindBadgeClass } from "@/lib/forms/review/formsReviewBadgeStyles";
 import type { DocumentProvenanceV1 } from "@/lib/forms/packets/packetReviewRollupTypes";
@@ -81,6 +82,11 @@ describe("formsReviewPresentation", () => {
     it("exposes stable case-file section ids", () => {
         expect(FORMS_CASE_FILE_SECTION.bosSummary).toBe("bos-review-summary");
         expect(FORMS_CASE_FILE_SECTION.technical).toBe("technical-details");
+    });
+
+    it("maps warning kinds for operator badges", () => {
+        expect(warningKindPresentationLabel("submitted_text_differs_from_crm")).toBe("Differs from records");
+        expect(warningKindPresentationLabel(undefined)).toBe("Review hint");
     });
 });
 

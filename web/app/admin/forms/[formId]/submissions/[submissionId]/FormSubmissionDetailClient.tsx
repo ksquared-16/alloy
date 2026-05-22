@@ -35,7 +35,8 @@ import {
 } from "@/lib/forms/submissionLinkageReviewUx";
 import { effectiveManualLinkUuid } from "@/lib/admin/forms/crmEntitySearchShared";
 import CrmEntitySearchPicker from "@/components/forms/admin/CrmEntitySearchPicker";
-import { SubmissionReviewTechnicalPanel } from "@/components/forms/review";
+import { CaseFileSection, SubmissionCaseFileHeader, SubmissionReviewTechnicalPanel } from "@/components/forms/review";
+import { FORMS_CASE_FILE_SECTION } from "@/lib/forms/review/formsReviewPresentation";
 
 type LinkedDoc = {
     role: string;
@@ -401,29 +402,37 @@ export default function FormSubmissionDetailClient() {
                 <p className="text-sm text-red-700">This submission does not belong to the form in the URL.</p>
             ) : row && lifecycle && documentOutcome ? (
                 <>
-                    {linkageCalloutVisible ? (
-                        <div
-                            className="rounded-lg border-2 border-amber-400 bg-amber-50 px-4 py-4 shadow-sm"
-                            role="status"
-                            aria-live="polite"
-                            data-testid="linkage-review-callout"
-                        >
-                            <p className="text-base font-semibold text-amber-950">
-                                Record linkage needs review before document generation.
-                            </p>
-                            <p className="mt-2 text-sm leading-relaxed text-amber-950/90">
-                                Resolve the items below (confirm, correct CRM links, or ask an admin). Document generation
-                                stays blocked until Alloy can attach to the right CRM parent safely.
-                            </p>
-                            {linkageCalloutReasons.length ? (
-                                <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-[#31394d]">
-                                    {linkageCalloutReasons.map((line, i) => (
-                                        <li key={`lr-${i}`}>{line}</li>
-                                    ))}
-                                </ul>
-                            ) : null}
-                        </div>
-                    ) : null}
+                    <div className="space-y-4">
+                        <SubmissionCaseFileHeader
+                            formName={schema?.title ?? "Form submission"}
+                            submissionStatus={row.status}
+                            lifecycleHeadline={lifecycle.headline}
+                            submittedAt={row.submitted_at}
+                            createdAt={row.created_at}
+                            viewerTimezone={viewerTz}
+                        />
+
+                        {linkageCalloutVisible ?
+                            <CaseFileSection
+                                id={FORMS_CASE_FILE_SECTION.needsAttention}
+                                title="Needs attention"
+                                variant="attention"
+                                description="Resolve linkage before generating documents or closing this review."
+                            >
+                                <p className="text-sm text-alloy-midnight/85">
+                                    Record linkage needs review. Confirm or correct CRM links below — document generation
+                                    stays blocked until Alloy can attach safely.
+                                </p>
+                                {linkageCalloutReasons.length ?
+                                    <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm text-alloy-midnight/85">
+                                        {linkageCalloutReasons.map((line, i) => (
+                                            <li key={`lr-${i}`}>{line}</li>
+                                        ))}
+                                    </ul>
+                                : null}
+                            </CaseFileSection>
+                        : null}
+                    </div>
 
                     <SectionCard title="Outcome summary">
                         <section className="space-y-2 border-b border-[#e6e8ec] pb-4">

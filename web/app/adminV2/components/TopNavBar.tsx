@@ -1,17 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
-import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
-import { createClient } from "@/lib/supabaseClient";
+import { useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import { palette, neutral, derived } from "@/styles/tokens/colors";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import MyTasksModal from "@/app/adminV2/components/MyTasksModal";
 import OperationalTasksNavBadge from "@/app/adminV2/components/OperationalTasksNavBadge";
 import QuickMessageModal from "@/app/adminV2/components/QuickMessageModal";
+import AdminV2ProfileMenu from "@/app/adminV2/components/AdminV2ProfileMenu";
 import { MessageSquare } from "lucide-react";
-import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
-import { isAdminV2OperNavigationActive } from "@/lib/perf/alloyPerfGlobal";
 
 function normalizeAdminPath(pathname: string): string {
   if (pathname === "/admin/v2" || pathname.startsWith("/admin/v2/")) {
@@ -24,7 +21,8 @@ function normalizeAdminPath(pathname: string): string {
   return pathname;
 }
 
-const WORK_UNIT_QUEUE_PATH = /^\/adminV2\/workspace\/dept\/[^/]+\/work-unit\/[^/]+\/?$/;
+const HEADER_UTILITY_BTN =
+  "inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-[15px] font-medium leading-none";
 
 function WorkspaceSiteFilterStrip({ normalizedPath }: { normalizedPath: string }) {
   const wf = useWorkspaceSiteFilter();
@@ -35,7 +33,7 @@ function WorkspaceSiteFilterStrip({ normalizedPath }: { normalizedPath: string }
 
   if (bootstrap.show_dropdown && bootstrap.sites.length > 1) {
     return (
-      <div className="flex shrink-0 items-center gap-1.5 min-w-0 max-w-[min(240px,28vw)]">
+      <div className="flex shrink-0 items-center gap-1.5 min-w-0 max-w-[min(280px,34vw)]">
         <label htmlFor="adminv2-workspace-site-filter" className="sr-only">
           Site filter
         </label>
@@ -43,7 +41,7 @@ function WorkspaceSiteFilterStrip({ normalizedPath }: { normalizedPath: string }
           id="adminv2-workspace-site-filter"
           value={selectedSiteId ?? ""}
           onChange={(e) => setSelectedSiteId(e.target.value === "" ? null : e.target.value)}
-          className="min-w-0 flex-1 truncate rounded border px-2 py-1 text-[11px] font-medium outline-none focus:ring-1 focus:ring-white/35"
+          className="min-w-0 flex-1 truncate rounded-md border px-3 py-2 text-[15px] font-medium outline-none focus:ring-1 focus:ring-white/35"
           style={{
             backgroundColor: derived.searchBgOnPrimary,
             borderColor: derived.topBarDivider,
@@ -65,7 +63,7 @@ function WorkspaceSiteFilterStrip({ normalizedPath }: { normalizedPath: string }
   if (bootstrap.single_site_label) {
     return (
       <span
-        className="shrink-0 truncate max-w-[min(200px,26vw)] text-[11px] font-medium opacity-90"
+        className="shrink-0 truncate max-w-[min(240px,32vw)] text-[15px] font-medium opacity-90"
         title="Your access is scoped to this site."
       >
         {bootstrap.single_site_label}
@@ -78,155 +76,69 @@ function WorkspaceSiteFilterStrip({ normalizedPath }: { normalizedPath: string }
 
 export default function TopNavBar() {
   const pathname = usePathname();
-  const router = useRouter();
   const [quickMessageOpen, setQuickMessageOpen] = useState(false);
   const [tasksModalOpen, setTasksModalOpen] = useState(false);
-  // NOTE:
-  // Header-level unread indicators removed in V1.
-  // Future notification system will use a dedicated bell icon with aggregated counts.
-
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      if (isAdminV2OperNavigationActive(10_000)) return;
-      try {
-        const r = await fetch("/api/admin/communications/unread-count", { credentials: "include" });
-        if (cancelled) return;
-        await r.json().catch(() => ({}));
-        // Response intentionally unused in UI; polling retained for a future header bell.
-      } catch {
-        /* ignore */
-      }
-    };
-    const cancelDefer = scheduleAdminV2BackgroundWork(() => load(), { idleTimeoutMs: 4000, fallbackMs: 500 });
-    const id = window.setInterval(() => void load(), 120_000);
-    const onRefresh = () => void load();
-    window.addEventListener("alloy-comms-unread-refresh", onRefresh);
-    return () => {
-      cancelled = true;
-      cancelDefer();
-      window.clearInterval(id);
-      window.removeEventListener("alloy-comms-unread-refresh", onRefresh);
-    };
-  }, []);
 
   const normalizedPath = useMemo(() => normalizeAdminPath(pathname), [pathname]);
-
-  const isQueueContext = WORK_UNIT_QUEUE_PATH.test(normalizedPath);
-  const isWorkspaceOverviewExact = normalizedPath === "/adminV2/workspace";
-  const isWorkspaceOverviewSection =
-    (isWorkspaceOverviewExact ||
-      /^\/adminV2\/workspace\/dept\/[^/]+\/?$/.test(normalizedPath)) &&
-    !isQueueContext;
-  const isAiActivity = normalizedPath === "/adminV2/ai-activity";
   const isMessaging = normalizedPath === "/adminV2/messages";
 
-  /** Pathname only — avoids stale Next `searchParams` re-navigating work-unit queue tabs. */
-  const queueHref = isQueueContext ? normalizedPath : "/adminV2/workspace";
-
-  const tabStyle = (active: boolean) =>
-    active
-      ? { backgroundColor: derived.tabActiveOnPrimary, color: neutral.surface }
-      : { opacity: 0.88, color: neutral.surface };
-
-  const secondaryTabStyle = (active: boolean) =>
+  const utilityBtnStyle = (active: boolean) =>
     active
       ? { backgroundColor: "rgba(255,255,255,0.16)", color: neutral.surface, opacity: 1 }
-      : { opacity: 0.62, color: neutral.surface };
-
-  const onSignOut = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
-  };
+      : { opacity: 0.82, color: neutral.surface };
 
   return (
     <header
-      className="flex items-center h-12 flex-shrink-0 px-4 gap-3 border-b"
+      className="adminv2-shell-header flex h-[3.75rem] flex-shrink-0 items-center gap-3 border-b px-4"
       style={{
         backgroundColor: palette.midnightForge,
         borderColor: derived.topBarDivider,
         color: neutral.surface,
       }}
     >
-      <div className="flex items-center shrink-0" aria-label="Alloy">
-        <img
-          src="/brand/alloy-brandmark-gradient.svg"
-          alt=""
-          width={32}
-          height={32}
-          className="h-8 w-8 shrink-0"
-        />
-      </div>
-      <WorkspaceSiteFilterStrip normalizedPath={normalizedPath} />
-      <div
-        className="flex-1 max-w-md rounded-md px-3 py-1.5 text-sm"
-        style={{
-          backgroundColor: derived.searchBgOnPrimary,
-          color: neutral.surface,
-        }}
-      >
-        <span style={{ opacity: 0.92 }}>Search</span>
-      </div>
-      <nav className="flex items-center gap-1.5 shrink-0 pl-1" aria-label="Perspective tabs">
-        <AdminV2NavLink
-          href="/adminV2/workspace"
-          active={isWorkspaceOverviewSection}
-          className="px-2 py-1 rounded text-xs font-medium"
-          style={tabStyle(isWorkspaceOverviewSection)}
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <div className="flex shrink-0 items-center" aria-label="Alloy">
+          <img
+            src="/brand/alloy-brandmark-gradient.svg"
+            alt=""
+            width={36}
+            height={36}
+            className="h-9 w-9 shrink-0"
+          />
+        </div>
+        <div
+          className="min-w-0 flex-1 max-w-xl rounded-md px-3.5 py-2.5 text-[15px]"
+          style={{
+            backgroundColor: derived.searchBgOnPrimary,
+            color: neutral.surface,
+          }}
         >
-          Overview
-        </AdminV2NavLink>
-        {isQueueContext ? (
-          <span
-            className="adminv2-nav-link adminv2-nav-link--active px-2 py-1 rounded text-xs font-medium"
-            style={tabStyle(true)}
-            aria-current="page"
-            title="Current work unit queue"
+          <span className="opacity-90">Search</span>
+        </div>
+        <div className="hidden items-center gap-2 shrink-0 md:flex" aria-label="Quick actions">
+          <OperationalTasksNavBadge
+            tabStyle={utilityBtnStyle}
+            buttonClassName={HEADER_UTILITY_BTN}
+            onOpenModal={() => setTasksModalOpen(true)}
+          />
+          <button
+            type="button"
+            onClick={() => setQuickMessageOpen(true)}
+            className={HEADER_UTILITY_BTN}
+            style={utilityBtnStyle(isMessaging || quickMessageOpen)}
+            title="Send a quick email or SMS (opens modal)"
           >
-            <span className="adminv2-nav-link__inner">Queue</span>
-          </span>
-        ) : (
-          <AdminV2NavLink
-            href={queueHref}
-            active={false}
-            className="px-2 py-1 rounded text-xs font-medium"
-            style={tabStyle(false)}
-            title="Workspace queue context"
-          >
-            Queue
-          </AdminV2NavLink>
-        )}
-        <OperationalTasksNavBadge tabStyle={secondaryTabStyle} onOpenModal={() => setTasksModalOpen(true)} />
-        <button
-          type="button"
-          onClick={() => setQuickMessageOpen(true)}
-          className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium leading-none"
-          style={secondaryTabStyle(isMessaging || quickMessageOpen)}
-          title="Send a quick email or SMS (opens modal)"
-        >
-          <MessageSquare className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden strokeWidth={2} />
-          Messages
-        </button>
-        <AdminV2NavLink
-          href="/adminV2/ai-activity"
-          active={isAiActivity}
-          className="px-2.5 py-1 rounded-md text-[11px] font-medium"
-          style={secondaryTabStyle(isAiActivity)}
-          title="Full AI apply history (recent actions also appear above the command bar)"
-        >
-          AI log
-        </AdminV2NavLink>
-      </nav>
-      <button
-        type="button"
-        onClick={onSignOut}
-        className="px-2 py-1 rounded text-[11px] font-medium"
-        style={{ opacity: 0.78, color: neutral.surface, border: `1px solid ${derived.topBarDivider}` }}
-      >
-        Sign out
-      </button>
+            <MessageSquare className="h-[18px] w-[18px] shrink-0 opacity-90" aria-hidden strokeWidth={2} />
+            <span className="hidden lg:inline">Messages</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-3">
+        <WorkspaceSiteFilterStrip normalizedPath={normalizedPath} />
+        <AdminV2ProfileMenu />
+      </div>
+
       <QuickMessageModal open={quickMessageOpen} onClose={() => setQuickMessageOpen(false)} />
       <MyTasksModal open={tasksModalOpen} onClose={() => setTasksModalOpen(false)} />
     </header>

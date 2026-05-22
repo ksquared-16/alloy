@@ -48,10 +48,11 @@ describe("forms review components", () => {
         expect(artifact).toContain("alloy-pine");
     });
 
-    it("FormsProvenanceLine renders line and generation chip", () => {
+    it("FormsProvenanceLine renders structured provenance and generation chip", () => {
         const html = renderToStaticMarkup(<FormsProvenanceLine provenance={provenance} />);
         expect(html).toContain("From Guardian Form");
-        expect(html).toContain("Current generated PDF");
+        expect(html).toContain("Current PDF");
+        expect(html).toContain('data-testid="forms-provenance-detail"');
     });
 
     it("TechnicalDetailDisclosure defaults collapsed (no open attribute)", () => {

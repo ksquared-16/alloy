@@ -346,15 +346,15 @@ Small PR/card slices. **Do not start Card 2 until Card 1 is merged and measured.
 
 ---
 
-### Card 4 — WU pill cache design and preload bundle
+### Card 4 — WU pill cache design and preload bundle — **DONE**
 
 | Field | Content |
 |-------|---------|
-| **Files** | `work-unit/[workUnitId]/page.tsx`, `loadWorkUnitOperationalBootstrap.ts`, operational-bootstrap route, `adminV2WorkUnitLaneLocalState.test.ts`, optional `workUnitLanePreviewCache.ts` |
-| **Work** | Client `Map` cache keyed by `(workUnitId, laneKey, bucketKey, scope)`; bootstrap idle fill for `deferred_queue_keys`; pill click synchronous swap on hit; miss = stale-while-revalidate; bucket select uses cache when bucket preview exists |
-| **Acceptance** | Pill switch on preloaded lane: **0** required row fetch before paint; no empty lane flash; attention bucket switch instant when bootstrap included bucket rows |
-| **Tests** | `adminV2WorkUnitLaneLocalState.test.ts`, `workUnitOperationalBootstrap.test.ts`; `adminV2QueueRowClick` unchanged |
-| **Rollback risk** | **Medium** — stale preview until invalidation; mitigated by event listener + TTL |
+| **Files** | `work-unit/[workUnitId]/page.tsx`, `workUnitLanePreviewBundle.ts`, `lane-previews/route.ts`, `seedWorkUnitLanePreviewCache.ts`, `queueRowClientCache.ts` (LRU cap), tests |
+| **Shipped** | Session `Map` keyed by `(scopeFingerprint, workUnitId, queueKey, unmapped|all[, attn:bucket])`; primary lane `putQueueRowCache` on bootstrap; post-paint `lane-previews` bundle for `deferred_queue_keys` + top attention buckets; pill click uses cache (no `force: true`); SWR via `shouldStaleBackgroundRefresh` |
+| **Acceptance** | Preloaded pill: cache hit → instant list swap, list-local loading only on miss; no oper-region loader on pill change |
+| **Tests** | `workUnitLanePreviewBundle.test.ts`, `queueRowClientCache.test.ts`, `adminV2WorkUnitLaneLocalState.test.ts`; `adminV2QueueRowClick` unchanged |
+| **Rollback risk** | **Medium** — stale preview until invalidation; mitigated by event listener + TTL + LRU cap (48 entries) |
 
 ---
 

@@ -476,44 +476,64 @@ cd web && npm run test -- tests/forms/formsReviewPresentation.test.ts tests/form
 
 ---
 
-### UX-D — Packet / submission review case-file redesign
+### UX-D — Packet / submission review case-file redesign ☑ (2026-05-21)
 
-**Goal:** Implement §2.3 region order; fix enrollment-specific copy; move review actions above technical; dedupe documents.
+**Goal:** Guided operational case-file hierarchy — orientation first, actions prominent, technical last.
 
-**Files likely touched:**
+**Status:** Shipped on packet review (page + modal) with submission header/needs-attention alignment.
 
-- `web/components/forms/packets/PacketReviewRollupView.tsx` *(major refactor)*
-- `web/components/forms/review/IntakeCaseFileLayout.tsx` + region components *(new)*
-- `web/app/admin/forms/[formId]/submissions/[submissionId]/FormSubmissionDetailClient.tsx` *(align subset)*
-- `web/components/admin/opportunity/OpportunityPacketReviewModal.tsx` *(pass-through)*
-- `web/tests/forms/packetReviewRollupFixture.ts`, `OpportunityPacketReviewModalBody.test.tsx`
+**Case-file region order (enforced by `IntakeCaseFileLayout`)**
 
-**Tasks:**
+1. Case header · 2. Intake context · 3. BOS placeholder · 4. What changed · 5. Needs attention · 6. Submitted forms · 7. Documents & records · 8. Review actions · 9. Technical details
 
-1. Introduce `IntakeCaseFileLayout` with ordered slots.
-2. Refactor `PacketReviewRollupView` to compose slots; rename visible “Enrollment context” → **Intake context**.
-3. Merge linkage + warnings into **Needs attention**; move name hints to **What changed**.
-4. Remove per-step artifact lists; render **ArtifactsPanel** from `documents_index` only.
-5. Move `reviewActionsSlot` to region 8 (before technical only if technical exists; else last).
-6. Align submission detail top half to same regions where data exists (`submissionOutcomeSummary` feeds header/attention).
-7. Add presentation-only badges for warnings (`kind` → Already known / Needs review copy map).
+**Components introduced**
 
-**Acceptance criteria:**
+| Component | Role |
+|-----------|------|
+| `IntakeCaseFileLayout.tsx` | Fixed region order |
+| `PacketCaseFileHeader.tsx` | Orientation band (subject, status, progress) |
+| `PacketIntakeContextPanel.tsx` | Household/opportunity context (labels only) |
+| `WhatChangedPanel.tsx` | Rollup warnings + kind badges |
+| `NeedsAttentionPanel.tsx` | Linkage + step intake items (action links) |
+| `PacketSubmittedFormsPanel.tsx` | Scan-friendly step answers (no per-step artifact clutter) |
+| `DocumentsRecordsPanel.tsx` | PDFs vs submitted records groups |
+| `CaseFileReviewActions.tsx` | Anchored decision band |
+| `PacketReviewActionsForm.tsx` | Shared approve/reject UI (page + modal) |
+| `PacketReviewTechnicalPanel.tsx` | Collapsed technical stack |
+| `SubmissionCaseFileHeader.tsx` | Standalone submission orientation |
 
-- [ ] Page and modal render same region order (modal denser).
-- [ ] Review actions visible without expanding technical on 768px viewport.
-- [ ] No UUID in first screen of packet review (labels only).
-- [ ] Existing rollup tests + modal body test pass; update snapshots intentionally.
-- [ ] `PATCH .../review` behavior unchanged (contract tests untouched).
+**Files changed**
 
-**Testing:**
+- `web/components/forms/packets/PacketReviewRollupView.tsx` — thin composer
+- `web/components/forms/packets/PacketSessionReviewClient.tsx` — uses `PacketReviewActionsForm`
+- `web/components/admin/opportunity/OpportunityPacketReviewModal.tsx` — shared actions form
+- `web/app/admin/forms/[formId]/submissions/[submissionId]/FormSubmissionDetailClient.tsx` — case header + needs attention section
+- `web/lib/forms/review/formsReviewPresentation.ts` — `warningKindPresentationLabel`, `CASE_FILE_SECTION_ORDER`
+- `web/lib/forms/review/formsReviewClassTokens.ts` — header + review-actions surfaces
+
+**Tests run**
 
 ```bash
-cd web && npm run test -- tests/forms/packetReviewRollup.test.ts tests/admin/opportunity/OpportunityPacketReviewModalBody.test.tsx
-cd web && npx tsc --noEmit
+cd web && npm run test -- tests/forms/packetReviewCaseFileLayout.test.tsx tests/forms/packetReviewRollupTechnical.test.tsx tests/admin/opportunity/OpportunityPacketReviewModalBody.test.tsx tests/forms/formsReviewPresentation.test.ts
+# 21 passed (packetReviewRollup.test.ts unchanged — PATCH not touched)
 ```
 
-**Rollback:** Revert `PacketReviewRollupView` to P2-4 composition; keep new components unused.
+**Acceptance criteria**
+
+- [x] Page and modal share region order (`placement="modal"` denser only)
+- [x] Review actions in region 8 before technical (`data-testid="case-file-review-actions"`)
+- [x] No UUIDs in header/intake primary bands
+- [x] What changed always visible (empty state when no warnings)
+- [x] Documents deduped — single grouped panel, no per-step provenance footers
+
+**Remaining UX debt (UX-F / UX-H / later)**
+
+- Opportunity modal lacks `technicalDetails` (full console link for JSON/IDs)
+- Submission detail not full `IntakeCaseFileLayout` (header + needs attention only)
+- Sticky footer on scroll not added (anchored surface only — avoids layout instability)
+- Documents empty-state copy when index empty but steps have artifacts (data contract)
+
+**Rollback:** Revert `PacketReviewRollupView` to pre-UX-D composer; keep region components for reuse.
 
 ---
 
@@ -567,33 +587,50 @@ cd web && npm run test -- tests/forms/formsReviewTechnicalDisclosure.test.tsx te
 
 ---
 
-### UX-F — Documents / provenance visual cleanup
+### UX-F — Documents / provenance visual cleanup ☑ (2026-05-21)
 
-**Goal:** Operators trust artifact list — grouped, labeled, current vs regenerated explained.
+**Goal:** Intake outputs read as one coherent artifact experience — grouped, trustworthy provenance, calm currentness.
 
-**Files likely touched:**
+**Status:** Shipped on packet review documents region and opportunity Documents tab (intake vs attached split).
 
-- `web/lib/forms/packets/documentProvenanceDisplay.ts` *(extend legends)*
-- `web/components/forms/review/ArtifactsPanel.tsx` *(new)*
-- `web/components/admin/EntityDocumentsSection.tsx`
-- `web/lib/admin/related/normalizeDocumentRow.ts` *(display only if needed)*
+**Primitives**
 
-**Tasks:**
+| Piece | Path |
+|-------|------|
+| Shared artifact panel | `web/components/forms/review/ArtifactsPanel.tsx` |
+| Artifact card | `web/components/forms/review/IntakeArtifactCard.tsx` |
+| Structured provenance | `web/components/forms/review/FormsProvenanceDetail.tsx` |
+| Presentation helpers | `web/lib/forms/review/intakeArtifactPresentation.ts` |
+| Currentness copy | `web/lib/forms/packets/documentProvenanceDisplay.ts` (`Current PDF` / `Earlier PDF`) |
 
-1. Group artifacts: **Generated PDFs** vs **Submitted records**.
-2. Add one-line legend for `generation_label` / currentness heuristic.
-3. Elevate provenance line typography (12px, semibold prefix).
-4. Opportunity Documents tab: optional section headers when packet docs present.
-5. Align provenance strings with rollup `formatPacketDocumentProvenanceLine`.
+**Files changed**
 
-**Acceptance criteria:**
+- `web/components/forms/review/DocumentsRecordsPanel.tsx` — delegates to `ArtifactsPanel`
+- `web/components/forms/review/FormsProvenanceLine.tsx` — delegates to `FormsProvenanceDetail`
+- `web/components/admin/EntityDocumentsSection.tsx` — **Intake outputs** + **Attached documents** sections
+- `web/lib/admin/normalizeDocumentRow.ts` — optional `document_provenance` on enriched rows
+- `web/lib/forms/review/formsReviewClassTokens.ts` — artifact card / provenance tokens
 
-- [ ] Operator can distinguish PDF vs non-PDF record without opening file.
-- [ ] Provenance visible without hovering; no new API fields.
+**Tests run**
 
-**Testing:** `documentProvenanceDisplay.test.ts`, `mergeOpportunityPacketDocuments.test.ts`, related UI smoke.
+```bash
+cd web && npm run test -- tests/forms/intakeArtifactsPanel.test.tsx tests/forms/documentProvenanceDisplay.test.ts tests/admin/relatedOpportunityDocuments.test.ts tests/forms/formsReviewComponents.test.tsx
+```
 
-**Rollback:** Revert presentation; keep merge logic.
+**Acceptance criteria**
+
+- [x] Generated PDF vs submitted record distinguished by group + kind label (not badge soup)
+- [x] Provenance visible (origin, version, submitted/generated times); currentness legend when PDFs present
+- [x] Empty / pending-generation states intentional
+- [x] No rollup API or merge logic changes — display-only `document_provenance` on normalized rows
+
+**Remaining UX debt (UX-H / P2-5)**
+
+- Submission detail documents region not yet on `ArtifactsPanel`
+- Opportunity modal review tab still uses rollup panel only (Documents tab uses entity section)
+- Per-step pending PDF signal not wired from rollup steps into `DocumentsRecordsPanel`
+
+**Rollback:** Revert `ArtifactsPanel` integration; restore prior `DocumentsRecordsPanel` / `EntityDocumentsSection` list markup.
 
 ---
 

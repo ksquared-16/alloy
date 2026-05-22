@@ -1,7 +1,7 @@
 # AdminV2 Platform Navigation + Performance Sprint
 
 **Date:** 2026-05-22  
-**Status:** Card 3A complete — **work-unit shell-first loading**  
+**Status:** Closed pending staging QA  
 **Scope:** `/adminV2/workspace`, `/adminV2/workspace/dept/[departmentId]`, `/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]` — navigation transitions and page runtime only  
 **Out of scope:** Drawer open/hydrate sprint ([`adminv2_drawer_performance_hardening_phase0.md`](./adminv2_drawer_performance_hardening_phase0.md)) except shared loading primitives that do not change drawer lifecycle  
 
@@ -309,11 +309,12 @@ Drawer continues to use `AdminV2DrawerLoadingState` — **do not merge** drawer 
 | **0** | Audit + document | **This file** — no product code |
 | **1** | Shared transition contract | ✅ **Done** — see [Card 1 closeout](#card-1-closeout-shared-transition-helper) |
 | **2** | Workspace transition cleanup | ✅ **Done** — see [Card 2 closeout](#card-2-closeout-workspace--department-transition) |
-| **3** | Department transition cleanup | Prefetch on oper card intent; align `loading.tsx` with bridge shell; ensure oper-only loader (no regressions to bootstrap) |
+| **3** | Department transition cleanup | Merged into **3B** |
 | **3A** | Work unit shell-first loading | ✅ **Done** — see [Card 3A closeout](#card-3a-closeout-work-unit-shell-first-loading) |
-| **4** | Work unit transition cleanup (deferred) | Dept oper-card prefetch + `loading.tsx` parity if needed after 3A |
-| **5** | Performance pass | Legacy path metrics; growth rollup deferral; confirm dedupe on prefetch; bootstrap-only happy path tests |
-| **6** | Verification + closeout | Extend `adminV2NavigationContracts` / loading geometry tests; perf notes; remaining debt list |
+| **3B** | Dept loading + WU prefetch seam | ✅ **Done** — see [Card 3B closeout](#card-3b-closeout-department-loading--wu-prefetch-seam) |
+| **4** | Orchestrated dept → WU (future) | Optional; uses prefetch seam + click ack from 3B |
+| **5** | Performance pass | ✅ **Done** — see [Card 5 closeout](#card-5-closeout--runtime-performance-pass) |
+| **6** | Verification + closeout | ✅ **Done** — see [Card 6 closeout](#card-6-closeout--verification--sprint-close) |
 
 **Explicit stop point:** **Do not start Cards 1–6 until this audit is reviewed.** Implementation PRs should cite this doc and Phase 1 contracts; any change to hard vs soft nav requires test updates called out in Card 1.
 
@@ -562,10 +563,299 @@ npm run test -- tests/admin/adminV2WorkUnitShellFirstLoading.test.ts \
   tests/lib/adminV2/workspaceDeptNavigationTransition.test.ts
 ```
 
-### Next card recommendation
+### Next card recommendation (superseded by Card 3B)
 
-**Card 3 — Department transition cleanup:** oper-card intent prefetch + align `dept/loading.tsx` with revisit cache (optional polish). **Card 5 — Performance pass:** legacy fan-out metrics, growth rollup deferral.
+See Card 3B closeout below.
 
 ---
 
-**Next step:** Card 3 (dept polish) or Card 5 (performance pass).
+## Card 3B closeout — department loading + WU prefetch seam
+
+**Date:** 2026-05-22  
+**Status:** Complete — hard dept → WU nav preserved; prefetch + click ack only.
+
+### Audit — department loading (before)
+
+| Item | Finding |
+|------|---------|
+| `dept/loading.tsx` | Already `DepartmentWorkspaceColdShell` only — **aligned** with shell-first doctrine |
+| `departmentPageBlockingLoad` | Was `deptLoading` alone — revisit with cache could still flash full cold shell when `dept` existed |
+| `deptKpiPlacementPending` | Included `departmentPageBlockingLoad` — delayed KPI quiet reserve unnecessarily on revisit |
+| Dept oper cards | Hard `adminV2CommitNavigation` only — no prefetch or click ack |
+
+### Files changed
+
+| File | Purpose |
+|------|---------|
+| `web/lib/adminV2/navigation/prefetchWorkUnitOperationalBootstrap.ts` | WU bootstrap URL builder + GET prefetch + href parser |
+| `web/lib/adminV2/navigation/deptOperNavClickAck.ts` | Ephemeral pending state before hard nav (not transition orchestrator) |
+| `web/lib/adminV2/navigation/index.ts` | Exports |
+| `web/app/adminV2/workspace/dept/[departmentId]/page.tsx` | Shell-first gate; oper card prefetch + ack; KPI pending tweak |
+| `web/app/adminV2/workspace/dept/[departmentId]/loading.tsx` | Documented shell-first comment |
+| `web/app/adminV2/components/workspace/workspace.css` | Pending affordance on dept oper cards |
+| `web/tests/lib/adminV2/prefetchWorkUnitOperationalBootstrap.test.ts` | Prefetch tests |
+| `web/tests/lib/adminV2/deptOperNavClickAck.test.ts` | Click ack tests |
+| `web/tests/admin/adminV2DeptLoadingCard3B.test.ts` | Card 3B contracts |
+
+### Dept loading before / after
+
+| Moment | Before | After |
+|--------|--------|-------|
+| Route `loading.tsx` | `DepartmentWorkspaceColdShell` | **Unchanged** (confirmed shell-first) |
+| Session cache revisit | `deptLoading` could block entire page | `departmentPageBlockingLoad = deptLoading && !dept?.id` → bridge chrome + oper loader |
+| KPI strip on revisit | Blocked while `departmentPageBlockingLoad` | Quiet reserve as soon as `dept` exists |
+| Oper card click | Immediate hard nav | Pending ack + **best-effort** WU bootstrap prefetch, then hard nav |
+
+### Prefetch seam (future Card 4)
+
+```typescript
+prefetchWorkUnitOperationalBootstrap({ departmentId, workUnitId, focusQueue?, attentionBucket?, selectedSiteId? })
+parseWorkUnitNavFromDeptOperHref(href) // used on dept oper cards today
+```
+
+- Same query params as work-unit `operational-bootstrap` page fetch
+- `dedupeAdminFetch` — shares in-flight with destination page when timing aligns
+- Failures swallowed before hard nav — **no navigation delay**
+
+### Click acknowledgement
+
+- `markDeptOperNavClickAck` on `pointerdown` + primary `click` (before `adminV2CommitNavigation`)
+- Visible only briefly before full document unload — still improves perceived response
+- **Why not transition orchestrator:** hard nav must not wait; separate ack store avoids blocking second clicks on transition store
+
+### Intentionally not changed
+
+- `adminV2CommitNavigation` on dept oper cards (hard nav)
+- No `runAdminV2NavigationTransition` on dept → WU
+- Cards 2 and 3A behavior
+- Drawer, QueueService, bootstrap response contracts
+
+### Tests run
+
+```bash
+npm run test -- tests/admin/adminV2DeptLoadingCard3B.test.ts \
+  tests/lib/adminV2/prefetchWorkUnitOperationalBootstrap.test.ts \
+  tests/lib/adminV2/deptOperNavClickAck.test.ts \
+  tests/admin/adminV2WorkUnitShellFirstLoading.test.ts \
+  tests/lib/adminV2/workspaceDeptNavigationTransition.test.ts \
+  tests/admin/adminV2NavigationContracts.test.ts \
+  tests/admin/adminV2LoadingGeometry.test.ts
+```
+
+### Next card recommendation
+
+**Card 5 — Performance pass** (legacy fan-out, growth rollup deferral) or **Card 4 — orchestrated dept → WU** only after measuring prefetch hit rate on hard nav.
+
+---
+
+---
+
+## Card 5 closeout — runtime performance pass
+
+**Date:** 2026-05-22  
+**Status:** Complete — navigation UX from Cards 2–3B unchanged.
+
+### Bottlenecks found (audit)
+
+| Area | Confirmed | Suspected / deferred |
+|------|-----------|----------------------|
+| Workspace growth rollup | 2×N lifecycle + pipeline calls per growth dept ran immediately after quick rollup | Now idle-deferred (~2.5s timeout, 400ms fallback) |
+| Workspace KPI placements | Started early with `dedupeAdminFetchWithTtl`; resolved after growth rollup | Still coupled to growth snapshots for resolver — acceptable |
+| Dept legacy path | Duplicate attention preview (cache + post-WU) on fallback | Fixed: single attention fetch after dept+WU resolve |
+| Dept/WU bootstrap happy path | Early `return` before legacy — no duplicate fan-out when bootstrap OK | Unchanged; tests assert ordering |
+| WU legacy opportunity-queue | Still runs only when summaries API fails / 501 | Logged via `logAdminV2LegacyFanOut` |
+| Sidebar expanded dept/WU list | Deduped via `dedupeAdminFetch` | No change this card |
+| Hard nav reload tax | Full document reload on dept→WU | Out of scope (Card 4) |
+
+### Files changed
+
+| File | Purpose |
+|------|---------|
+| `web/lib/adminV2/runtime/loadWorkspaceGrowthRollup.ts` | Extracted 2×N growth fan-out |
+| `web/lib/adminV2/runtime/adminV2LegacyFanOutDiagnostics.ts` | Structured legacy-path logging + perf mark |
+| `web/app/adminV2/workspace/page.tsx` | Idle-defer growth rollup; quick rollup unchanged for first paint |
+| `web/app/adminV2/workspace/dept/[departmentId]/page.tsx` | Legacy diagnostics; single attention fetch on fallback |
+| `web/app/adminV2/workspace/dept/.../work-unit/[workUnitId]/page.tsx` | Legacy diagnostics on bootstrap/queue fallback |
+| `web/tests/admin/adminV2RuntimePerformanceCard5.test.ts` | Card 5 contracts + regression guards |
+| `web/tests/lib/adminV2/adminV2LegacyFanOutDiagnostics.test.ts` | Diagnostic helper unit test |
+
+### Optimizations made
+
+1. **Workspace:** Critical path remains `departments` + `work-units` → `buildWorkspaceQuickRollup` → `setLoading(false)`. Growth KPI/pipeline fan-out runs via `scheduleAdminV2BackgroundWork` so it does not compete with first paint.
+2. **Department legacy:** Removed parallel `fetchDeptAttentionPreview(cacheNaWuId)` before dept+WU load; one attention call after WU list known.
+3. **Diagnostics:** `logAdminV2LegacyFanOut` on bootstrap failure and WU queue fallback paths (`[adminv2-legacy-fan-out]` + `legacy_fan_out_*` perf mark).
+
+### Intentionally not changed
+
+- Navigation matrix (workspace→dept orchestrated; dept→WU hard)
+- Drawer, QueueService, bootstrap API contracts
+- Shell-first loading gates (Cards 3A/3B)
+- Prefetch seams (Card 3B)
+
+### Known remaining performance debt
+
+- Workspace KPI strip still waits for deferred growth rollup + placements (quiet reserve — no 0→real on strip)
+- Dept→WU full reload; prefetch warms cache but hard nav still discards client state
+- Legacy multi-request paths remain for bootstrap outages (now diagnosable)
+- No server-combined workspace growth rollup endpoint
+
+### Tests run
+
+```bash
+npm run test -- tests/admin/adminV2RuntimePerformanceCard5.test.ts \
+  tests/lib/adminV2/adminV2LegacyFanOutDiagnostics.test.ts \
+  tests/admin/adminV2DeptLoadingCard3B.test.ts \
+  tests/admin/adminV2WorkUnitShellFirstLoading.test.ts \
+  tests/lib/adminV2/workspaceDeptNavigationTransition.test.ts \
+  tests/workspace/deptOperationalBootstrap.test.ts \
+  tests/workspace/workUnitOperationalBootstrap.test.ts
+```
+
+### Next card recommendation (superseded by Card 6)
+
+See [Card 6 closeout](#card-6-closeout--verification--sprint-close).
+
+---
+
+## Card 6 closeout — verification + sprint close
+
+**Date:** 2026-05-22  
+**Status:** Complete — **no new runtime behavior**; test maintenance only for Card 5 legacy-path contract.
+
+### Completed cards
+
+| Card | Deliverable |
+|------|-------------|
+| **0** | Audit + this sprint doc |
+| **1** | Shared transition helper (`runAdminV2NavigationTransition`, route loading vocabulary, ribbon seam) |
+| **2** | Workspace → dept orchestrated soft nav + dept bootstrap prefetch |
+| **3A** | Work-unit shell-first loading (bridge shell; oper lane reserve only) |
+| **3B** | Dept shell-first alignment + WU prefetch seam + oper click ack (hard nav preserved) |
+| **5** | Runtime performance pass (deferred growth rollup, legacy diagnostics, legacy attention dedupe) |
+| **6** | Verification, closeout tests, manual QA checklist, staging notes |
+
+**Not implemented (future):** Card 4 — orchestrated dept → WU soft transition.
+
+### Final behavior contract
+
+| Transition / surface | Behavior |
+|---------------------|----------|
+| Workspace first paint | `departments` + `work-units` → quick rollup → stable tiles; cold shell only when no cache |
+| Workspace growth / KPI intelligence | Idle-deferred (`scheduleAdminV2BackgroundWork`); KPI strip uses quiet reserve until placements resolve |
+| Workspace → department | Orchestrated: tile ack → ribbon → prefetch dept bootstrap → `router.push`; source page stays mounted until commit |
+| Department route `loading.tsx` | `DepartmentWorkspaceColdShell` only (shell-first) |
+| Department page blocking | `deptLoading && !dept?.id` — revisit shows bridge chrome + oper loader |
+| Department → work unit | **Hard** `adminV2CommitNavigation` + best-effort WU bootstrap prefetch + click ack |
+| Work-unit route / page | Shell-first: `WorkUnitWorkspaceColdShell` / bridge; `workUnitPageBlockingLoad = loading && !workUnitShellReady` |
+| Work-unit oper lane | Spinner reserve after shell; queue rows remain previews |
+| Legacy degradation | Multi-request fan-out only when bootstrap fails; logged as `[adminv2-legacy-fan-out]` |
+| Drawer | Lifecycle unchanged; queue row open still separate from hierarchy nav |
+| QueueService | Preview/summary semantics unchanged |
+
+### Files changed (sprint summary)
+
+| Area | Key paths |
+|------|-----------|
+| Navigation | `web/lib/adminV2/navigation/*`, `web/lib/adminV2/runtime/*`, `web/components/admin/workspace/AdminV2NavigationTransitionRibbon.tsx` |
+| Workspace | `web/app/adminV2/workspace/page.tsx`, `WorkspaceRootDepartmentGrid.tsx`, `workspace.css` |
+| Department | `web/app/adminV2/workspace/dept/[departmentId]/page.tsx`, `loading.tsx` |
+| Work unit | `web/app/adminV2/workspace/dept/.../work-unit/[workUnitId]/page.tsx`, `loading.tsx`, `WorkUnitWorkspaceColdShell.tsx` |
+| Shell | `web/app/adminV2/components/AdminV2Shell.tsx` |
+| Tests | `web/tests/admin/adminV2*.test.ts`, `web/tests/lib/adminV2/*`, `web/tests/workspace/*OperationalBootstrap.test.ts` |
+| Docs | This file |
+
+**Explicitly not in sprint scope:** `AdminEntityDrawer.tsx`, drawer bootstrap routes, `QueueService` truth semantics.
+
+### Regression tests run (Card 6)
+
+```bash
+cd web && npm run test -- \
+  tests/lib/adminV2/adminV2NavigationTransition.test.ts \
+  tests/lib/adminV2/workspaceDeptNavigationTransition.test.ts \
+  tests/lib/adminV2/prefetchDepartmentOperationalBootstrap.test.ts \
+  tests/lib/adminV2/prefetchWorkUnitOperationalBootstrap.test.ts \
+  tests/lib/adminV2/deptOperNavClickAck.test.ts \
+  tests/admin/adminV2NavigationContracts.test.ts \
+  tests/admin/adminV2DeptLoadingCard3B.test.ts \
+  tests/admin/adminV2WorkUnitShellFirstLoading.test.ts \
+  tests/admin/adminV2RuntimePerformanceCard5.test.ts \
+  tests/lib/adminV2/adminV2LegacyFanOutDiagnostics.test.ts \
+  tests/admin/adminV2LoadingGeometry.test.ts \
+  tests/admin/adminV2DrawerLoadingCoherence.test.ts \
+  tests/admin/adminV2QueueRowClick.test.ts \
+  tests/admin/adminV2WorkUnitLaneLocalState.test.ts \
+  tests/workspace/deptOperationalBootstrap.test.ts \
+  tests/workspace/workUnitOperationalBootstrap.test.ts \
+  tests/admin/adminV2PlatformSprintCloseout.test.ts
+```
+
+**Result:** **17 files, 157 tests passed** (2026-05-22).
+
+**Card 6 test maintenance:** Updated `adminV2DrawerLoadingCoherence` legacy-path assertion for Card 5 single attention fetch; added `adminV2PlatformSprintCloseout.test.ts` (drawer scope lock, hard dept→WU, deferred growth rollup, QueueService symbols).
+
+**Pre-existing:** Full-repo `npx tsc --noEmit` may report unrelated errors outside this sprint scope.
+
+### Manual QA checklist (staging)
+
+- [ ] **Cold load workspace** — department tiles appear without long full-frame skeleton; KPI strip may show quiet reserve then fill in.
+- [ ] **Click workspace dept tile** — tile shows pending/pressed affordance; page does not blank.
+- [ ] **Transition ribbon** — short-lived ribbon with consistent loading copy during workspace → dept.
+- [ ] **Dept page opens** — bridge chrome visible; oper region spinner/reserve (not full cold shell on revisit with cache).
+- [ ] **Click work-unit oper card** — brief pending ack; **full navigation** (hard reload) to work-unit URL.
+- [ ] **Work-unit shell-first** — breadcrumb/shell structure before queue lane populates; no full `WorkUnitRouteSkeletonBody` blocking entire frame when dept+WU known.
+- [ ] **Drawer** — open opportunity/record from queue row; reveal gates behave as before sprint.
+- [ ] **No 0→real flashes** — primary frame KPI/oper totals use `—` or reserves until bootstrap numbers arrive.
+- [ ] **Browser back/forward** — reasonable; work-unit queue tabs remain local state (no URL tab churn).
+- [ ] **Right-click / open in new tab** on dept tiles — native `<a href>` still works (orchestrated path skips modified clicks only).
+
+### Remaining performance debt
+
+| Debt | Notes |
+|------|-------|
+| **Dept → WU full reload tax** | Dominant cost; `adminV2CommitNavigation` discards client state; prefetch may dedupe bootstrap fetch only when timing aligns |
+| **Future Card 4** | Orchestrated dept → WU using `prefetchWorkUnitOperationalBootstrap` + `runAdminV2NavigationTransition` — requires Phase 1 QA + prefetch hit-rate measurement |
+| **Server-side bootstrap consolidation** | Combined workspace growth rollup endpoint would remove 2×N client fan-out |
+| **Route-level prefetch cache** | Stronger session/route cache for oper summaries across hard nav |
+| **Legacy fallback paths** | Retained for bootstrap outage / 501 queue API; now diagnosable via `[adminv2-legacy-fan-out]` |
+| **KPI / growth intelligence** | Deferred off critical path but still costs network after idle window — not “free” |
+| **Post-soft-nav cold shell flash** | Next segment `loading.tsx` may still flash briefly on workspace → dept |
+
+### Suggested deployment / staging verification
+
+**Logs to watch**
+
+- `[adminv2-legacy-fan-out]` — should be **absent** on happy-path staging; presence indicates bootstrap or queue API degradation.
+- `[pipeline-count-unify]` — workspace growth rollup (deferred path); expected after idle, not blocking first paint.
+- `perfWorkspaceLoad` / `perfDeptLoad` phases in devtools (when perf debug enabled): `critical_deps` → `rollup_refined` (background) → `kpi_placements_ready`.
+
+**Route timings to compare (before/after baseline)**
+
+- Workspace: time to first department tiles visible (critical deps).
+- Workspace → dept: click → dept bridge shell visible.
+- Dept → WU: click → work-unit shell visible (hard nav — expect layout + bootstrap window).
+- Work-unit: shell ready → oper lane authority / first queue rows.
+
+**User-visible behaviors**
+
+- Tile/card pending feedback on workspace and dept oper cards.
+- Transition ribbon on workspace → dept only.
+- Quiet KPI reserves instead of skeleton number swaps.
+- No drawer regression on row open.
+
+**Regression signals**
+
+- Workspace dept tile uses `location.assign` (lost orchestration).
+- Dept oper card uses `router.push` without hard reload (accidental softening).
+- Full-page skeleton returns on dept/WU revisit with session cache.
+- Frequent `[adminv2-legacy-fan-out]` on healthy staging.
+- Drawer open/hydrate contract tests failing.
+
+### Recommended next work
+
+1. **Staging QA** — complete manual checklist above.
+2. **Optional Card 4** — only if staging shows prefetch hit rate justifies softening dept → WU.
+3. **Separate drawer sprint** — [`adminv2_drawer_performance_hardening_phase0.md`](./adminv2_drawer_performance_hardening_phase0.md) remains the right venue for drawer hydrate performance.
+
+---
+
+**Sprint closed for implementation.** Awaiting staging sign-off.

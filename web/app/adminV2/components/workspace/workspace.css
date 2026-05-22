@@ -175,7 +175,8 @@
   transform: scale(0.995) translateY(1px);
 }
 
-[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-dept-tile[data-adminv2-nav-pending="true"] {
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-dept-tile[data-adminv2-nav-pending="true"],
+.adminv2-ws-dept-oper-queue-link[data-adminv2-nav-pending="true"] {
   opacity: 0.92;
   pointer-events: none;
   cursor: wait;

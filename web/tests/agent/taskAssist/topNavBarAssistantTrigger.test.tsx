@@ -13,10 +13,10 @@ describe("TopNavBar assistant entry (Interaction Layer V1 Card 6)", () => {
         expect(src).not.toContain("focusCommandBar");
     });
 
-    it("retains AI log and Messages nav", () => {
+    it("retains Messages quick action without AI log tab", () => {
         const src = readFileSync(topNavPath, "utf8");
-        expect(src).toContain("/adminV2/ai-activity");
-        expect(src).toContain("AI log");
+        expect(src).not.toContain("AI log");
+        expect(src).not.toContain("/adminV2/ai-activity");
         expect(src).toContain("Messages");
     });
 });

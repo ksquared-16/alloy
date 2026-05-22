@@ -16,9 +16,11 @@ type TaskCounts = { open: number; due_soon: number; overdue: number };
 
 export default function OperationalTasksNavBadge({
     tabStyle,
+    buttonClassName,
     onOpenModal,
 }: {
     tabStyle: (active: boolean) => CSSProperties;
+    buttonClassName?: string;
     onOpenModal: () => void;
 }) {
     const enabled = isTaskAssistV1UiEnabled();
@@ -67,12 +69,15 @@ export default function OperationalTasksNavBadge({
         <button
             type="button"
             onClick={onOpenModal}
-            className="relative inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium leading-none"
+            className={
+                buttonClassName ??
+                "relative inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium leading-none"
+            }
             style={tabStyle(false)}
             title={title}
             data-adminv2-operational-tasks-nav="true"
         >
-            <ListTodo className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden strokeWidth={2} />
+            <ListTodo className="h-[18px] w-[18px] shrink-0 opacity-90" aria-hidden strokeWidth={2} />
             Tasks
             {alertCount > 0 ? (
                 <span

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
     deleteQueueRowCacheKeysForWorkUnit,
+    enforceQueueRowCacheLru,
     peekFreshQueueRowCache,
     putQueueRowCache,
+    QUEUE_ROW_CLIENT_CACHE_MAX_ENTRIES,
     queueRowLogicalCacheKey,
 } from "@/lib/workspace/queueRowClientCache";
 
@@ -23,6 +25,16 @@ describe("queueRowClientCache", () => {
         const longTtl = 9_000_000;
         expect(peekFreshQueueRowCache(m, `${FP}:wu1:q1:all`, longTtl)?.payload).toEqual({ n: 1 });
         expect(peekFreshQueueRowCache(m, `${FP}:wu1:q1:unmapped`, longTtl)?.payload).toEqual({ n: 1 });
+    });
+
+    it("documents LRU cap for session cache", () => {
+        expect(QUEUE_ROW_CLIENT_CACHE_MAX_ENTRIES).toBe(48);
+        const m = new Map<string, { payload: object; fetchedAt: number }>();
+        for (let i = 0; i < 50; i++) {
+            m.set(`k${i}`, { payload: { i }, fetchedAt: Date.now() });
+            enforceQueueRowCacheLru(m, 48);
+        }
+        expect(m.size).toBeLessThanOrEqual(48);
     });
 
     it("deleteQueueRowCacheKeysForWorkUnit removes only matching scope + work unit prefix", () => {

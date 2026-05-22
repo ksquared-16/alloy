@@ -7,6 +7,21 @@
 export const formsCaseFileStack = "space-y-4";
 export const formsCaseFileStackCompact = "space-y-3";
 
+/** Case header (orientation band) */
+export const formsCaseFileHeaderSurface =
+    "rounded-lg border border-admin-border bg-white px-4 py-4 shadow-sm";
+
+export const formsCaseFileHeaderTitle = "text-lg font-semibold text-alloy-midnight";
+
+export const formsCaseFileHeaderSubtitle = "mt-1 text-sm text-alloy-midnight/70";
+
+/** Review actions band — visually anchored before technical */
+export const formsCaseFileReviewActionsSurface =
+    "rounded-lg border border-alloy-blue/25 bg-alloy-blue/[0.03] px-4 py-4 shadow-sm";
+
+/** Submitted step card — lighter than nested gray stacks */
+export const formsCaseFileStepCard = "rounded-lg border border-admin-border/80 bg-white px-3 py-3";
+
 /** Region title (Submitted forms, Documents & records, …) */
 export const formsCaseFileRegionTitle = "text-sm font-semibold text-alloy-midnight";
 
@@ -32,6 +47,22 @@ export const formsCaseFileGroupedRow = "px-3 py-2.5 text-sm";
 
 /** Divider between major blocks inside a region */
 export const formsCaseFileDivider = "border-t border-admin-border";
+
+/** Intake artifact card — calm archival row inside grouped surface */
+export const formsIntakeArtifactCard =
+    "px-3 py-3 text-sm bg-white first:rounded-t-lg last:rounded-b-lg";
+
+/** Artifact kind label (text, not badge) */
+export const formsIntakeArtifactKindLabel = "text-[11px] font-medium uppercase tracking-wide text-alloy-midnight/45";
+
+/** Provenance origin line */
+export const formsIntakeProvenanceOrigin = "text-xs font-medium text-alloy-midnight/75";
+
+/** Provenance timing / secondary */
+export const formsIntakeProvenanceMeta = "text-[11px] leading-snug text-alloy-midnight/55";
+
+/** Group legend under artifact groups */
+export const formsIntakeArtifactLegend = "text-[11px] leading-snug text-alloy-midnight/50";
 
 /** Read-only answer embed container */
 export const formsCaseFileAnswerSurface = "rounded-lg border border-admin-border bg-alloy-stone/15 p-3";

@@ -26,3 +26,20 @@ export {
     buildDepartmentOperationalBootstrapUrl,
     prefetchDepartmentOperationalBootstrap,
 } from "@/lib/adminV2/navigation/prefetchDepartmentOperationalBootstrap";
+
+export {
+    buildWorkUnitOperationalBootstrapUrl,
+    parseWorkUnitNavFromDeptOperHref,
+    prefetchWorkUnitOperationalBootstrap,
+    type WorkUnitOperationalBootstrapPrefetchOpts,
+} from "@/lib/adminV2/navigation/prefetchWorkUnitOperationalBootstrap";
+
+export {
+    deptOperNavClickAckProps,
+    deptOperNavClickedKey,
+    getDeptOperNavClickAckSnapshot,
+    isDeptOperNavClickPending,
+    markDeptOperNavClickAck,
+    resetDeptOperNavClickAckForTests,
+    subscribeDeptOperNavClickAck,
+} from "@/lib/adminV2/navigation/deptOperNavClickAck";

@@ -1,3 +1,5 @@
+import type { DocumentProvenanceV1 } from "@/lib/forms/packets/packetReviewRollupTypes";
+
 /**
  * Maps public.documents rows to a stable shape for admin UI (legacy + canonical columns).
  * All `/api/admin/related/...` document arrays use this shape so drawers and Related tabs stay consistent.
@@ -17,6 +19,8 @@ export type NormalizedDocumentRow = {
     /** Packet artifact from rollup (`generated_pdf` | `submitted_record`). */
     artifact_kind?: "generated_pdf" | "submitted_record" | null;
     provenance_line?: string | null;
+    /** Structured provenance from packet rollup merge (display-only). */
+    document_provenance?: DocumentProvenanceV1 | null;
     generation_label?: "current" | "also_generated" | null;
     generation_label_display?: string | null;
     /** `signed_url` for real documents; `submission_link` for synthetic submitted_record rows. */
@@ -53,6 +57,11 @@ export function normalizeDocumentRow(row: Record<string, unknown>): NormalizedDo
     const provenanceLineRaw = row.provenance_line;
     const provenance_line =
         typeof provenanceLineRaw === "string" && provenanceLineRaw.trim() ? provenanceLineRaw.trim() : null;
+    const provObj = row.document_provenance;
+    const document_provenance =
+        provObj != null && typeof provObj === "object" && "form_submission_id" in provObj ?
+            (provObj as DocumentProvenanceV1)
+        :   null;
     const genRaw = row.generation_label;
     const generation_label = genRaw === "current" || genRaw === "also_generated" ? genRaw : null;
     const genDisplayRaw = row.generation_label_display;
@@ -79,6 +88,7 @@ export function normalizeDocumentRow(row: Record<string, unknown>): NormalizedDo
             : {}),
         ...(artifact_kind ? { artifact_kind } : {}),
         ...(provenance_line ? { provenance_line } : {}),
+        ...(document_provenance ? { document_provenance } : {}),
         ...(generation_label ? { generation_label } : {}),
         ...(generation_label_display ? { generation_label_display } : {}),
         ...(open_target ? { open_target } : {}),

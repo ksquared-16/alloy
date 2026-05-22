@@ -43,8 +43,8 @@ describe("documentProvenanceDisplay", () => {
     });
 
     it("generation label display strings are stable", () => {
-        expect(generationLabelDisplay("current")).toBe("Current generated PDF");
-        expect(generationLabelDisplay("also_generated")).toBe("Also generated");
+        expect(generationLabelDisplay("current")).toBe("Current PDF");
+        expect(generationLabelDisplay("also_generated")).toBe("Earlier PDF");
     });
 
     it("submitted_record row uses synthetic id and submission link", () => {

@@ -105,15 +105,14 @@ describe("buildOperationalRecommendationHandoffCopy", () => {
     });
 });
 
-describe("OpportunityOperationalCompactStrip recommendation handoff", () => {
-    it("renders recommendation semantics and preserves auto-submit handoff", () => {
+describe("OpportunityOperationalCompactStrip BOS handoff (shipped V1)", () => {
+    it("renders compact handoff card and preserves auto-submit handoff", () => {
         const src = readFileSync(stripPath, "utf8");
-        expect(src).toContain("buildOperationalRecommendationHandoffCopy");
-        expect(src).toContain("data-operational-recommendation-primary");
-        expect(src).toContain("data-operational-recommendation-reason");
+        expect(src).toContain("OrchestratorHandoffCard");
+        expect(src).toContain("BOS handoff");
+        expect(src).toContain("Continue in Orchestrator");
         expect(src).toContain("autoSubmitSeedCommand: true");
-        expect(src).not.toContain("BOS handoff");
-        expect(src).not.toContain("Continue in Orchestrator");
+        expect(src).not.toContain("buildOperationalRecommendationHandoffCopy");
         expect(src).not.toContain("Ask AI");
     });
 });

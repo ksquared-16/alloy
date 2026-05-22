@@ -25,7 +25,7 @@ describe("work-unit lane local state (no URL churn)", () => {
 
     it("queue tab handler does not call router navigation", () => {
         const handler = pageSource.match(
-            /const handleQueueTabChange = useCallback\([\s\S]*?\[setSelectedQueueKeyTraced\]/
+            /const handleQueueTabChange = useCallback\([\s\S]*?\[fetchQueueItems, setSelectedQueueKeyTraced, workUnitId\]/
         )?.[0];
         expect(handler).toBeTruthy();
         expect(handler).not.toMatch(/router\.(push|replace|refresh)/);
@@ -62,6 +62,15 @@ describe("work-unit queue stability (PERF-C-01 / C-02)", () => {
     it("does not reveal queue from stale row buffer on another work unit", () => {
         expect(pageSource).toMatch(
             /queueRowsBufferWorkUnitIdRef\.current === workUnitId/,
+        );
+    });
+
+    it("uses lane preview bundle cache for pill switches (Card 4)", () => {
+        expect(pageSource).toContain("warmWorkUnitLanePreviewCache");
+        expect(pageSource).toContain("queueRowLogicalCacheKey");
+        expect(pageSource).toContain("peekFreshQueueRowCache");
+        expect(pageSource).not.toMatch(
+            /handleAttentionBucketSelect[\s\S]{0,300}force:\s*true/,
         );
     });
 
