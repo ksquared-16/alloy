@@ -333,21 +333,15 @@ Small PR/card slices. **Do not start Card 2 until Card 1 is merged and measured.
 | **Tests** | `opportunityDrawerRevealReadiness.test.ts`, `adminV2DrawerLoadingCoherence.test.ts`, `opportunityDrawerLayoutStability.test.ts` |
 | **Rollback risk** | **Medium-high** — revert postDrawerVisible effect + secondary ready effect |
 
-**Card 3 must handle next**
-
-- Tab pane mount cache + fixed tab panel geometry
-- Repeated tab switch without remount/refetch
-
 ---
 
-### Card 3 — Stable drawer tab panes and tab cache
+### Card 3 — Stable drawer tab panes and tab cache — **DONE**
 
 | Field | Content |
 |-------|---------|
-| **Files** | `AdminEntityDrawer.tsx`, `adminV2LoadingGeometry.ts`, comms/activity/related tab components, `adminV2DrawerLoadingCoherence.test.ts` |
-| **Work** | Tab panel container with fixed `min-height`; session mount cache; overview not refetched on tab switch; tab-local skeleton only; `drawerGateLoading` does not disable tabs after initial reveal |
-| **Acceptance** | Repeated tab switch: no header/tab strip resize; no global loading shell; second visit to comms has no remount flash (network may SWR quietly) |
-| **Tests** | New/extended `adminV2DrawerLoadingCoherence` — tab panel `min-h`, no `drawerGateLoading` on tab click post-reveal; `adminV2LoadingGeometry.test.ts` |
+| **Files** | `AdminEntityDrawer.tsx`, `opportunityDrawerTabSession.ts`, `adminV2LoadingGeometry.ts`, `adminV2DrawerLoadingCoherence.test.ts`, `opportunityDrawerTabSession.test.ts`, `adminV2LoadingGeometry.test.ts` |
+| **Shipped** | Session visit `Set` + keep-mounted hidden panes (`renderOpportunityWorkflowTabPane`); `ADMINV2_DRAWER_TAB_PANEL_MIN_H` on pane host + body; `selectDrawerTab` on inquiry strip; visit set reset on drawer close; activity fetch tab-gated; overview panel via shared IIFE + mount cache (no remount on tab return) |
+| **Tests** | `opportunityDrawerTabSession.test.ts`, extended `adminV2DrawerLoadingCoherence`, `adminV2LoadingGeometry` tab panel geometry |
 | **Rollback risk** | **Low-medium** — memory per open drawer; verify drawer close clears cache |
 
 ---

@@ -379,6 +379,36 @@ describe("Drawer operational bootstrap (Cards 4–7)", () => {
     });
 });
 
+describe("Opportunity workflow drawer tab session (Card 3)", () => {
+    it("uses session visit set and keep-mounted panes with stable tab panel min-height", () => {
+        const src = read("components/admin/AdminEntityDrawer.tsx");
+        expect(src).toContain("opportunityDrawerVisitedTabsRef");
+        expect(src).toContain("markOpportunityDrawerTabVisited");
+        expect(src).toContain("renderOpportunityWorkflowTabPane");
+        expect(src).toContain("ADMINV2_DRAWER_TAB_PANEL_MIN_H");
+        expect(src).toContain("data-adminv2-drawer-tab-panel-host");
+        expect(src).toMatch(/style=\{adminV2DrawerTabPanelHostStyle\(\)\}/);
+    });
+
+    it("routes inquiry workflow tab strip through selectDrawerTab without drawerGateLoading lock", () => {
+        const src = read("components/admin/AdminEntityDrawer.tsx");
+        expect(src).toMatch(/onClick=\{\(\) => selectDrawerTab\(tab\)\}/);
+        const workflowStrip = src.match(
+            /opportunityInquiryWorkflowDrawer[\s\S]{0,900}selectDrawerTab/,
+        )?.[0];
+        expect(workflowStrip).toBeTruthy();
+        expect(workflowStrip).not.toContain("disabled={drawerGateLoading}");
+    });
+
+    it("gates opportunity related/documents fetch to those tabs (not overview)", () => {
+        const src = read("components/admin/AdminEntityDrawer.tsx");
+        expect(src).toMatch(
+            /drawer\.type !== "opportunities"[\s\S]{0,400}drawerTab === "related" \|\| drawerTab === "documents"/,
+        );
+        expect(src).toMatch(/if \(drawerTab !== "activity"\) return;/);
+    });
+});
+
 describe("Drawer single-reveal bootstrap body", () => {
     it("holds pre-overview shell until oper reveal and defers secondary surfaces", () => {
         const src = read("components/admin/AdminEntityDrawer.tsx");

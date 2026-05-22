@@ -41,6 +41,9 @@ export const ADMINV2_DRAWER_OPPORTUNITY_TIMELINE_MIN_H = "36px";
 /** Opportunity drawer title-rail quick-action reserve (workflow v1). */
 export const ADMINV2_DRAWER_OPPORTUNITY_TITLE_RAIL_MIN_H = "2.75rem";
 
+/** AdminV2 opportunity workflow drawer tab panel host (Card 3 — stable tab switch). */
+export const ADMINV2_DRAWER_TAB_PANEL_MIN_H = "22rem";
+
 /** Drawer panel opens immediately on `openDrawer` — geometry locked before bootstrap returns. */
 export const ADMINV2_DRAWER_SHELL_INSTANT_ATTR = "data-adminv2-drawer-shell-instant";
 
@@ -57,4 +60,8 @@ export function adminV2DeptKpiQuietReserveStyle(): { minHeight: string } {
 
 export function adminV2WorkUnitQueueLaneReserveStyle(): { minHeight: string } {
     return { minHeight: ADMINV2_WORK_UNIT_QUEUE_LANE_MIN_H };
+}
+
+export function adminV2DrawerTabPanelHostStyle(): { minHeight: string } {
+    return { minHeight: ADMINV2_DRAWER_TAB_PANEL_MIN_H };
 }

@@ -7,6 +7,8 @@ import {
     ADMINV2_DEPT_PAIRED_OPER_PANEL_MIN_H,
     ADMINV2_DEPT_ATTENTION_LOADING_ROW_COUNT,
     ADMINV2_DRAWER_OPPORTUNITY_BOOTSTRAP_BODY_MIN_H,
+    ADMINV2_DRAWER_TAB_PANEL_MIN_H,
+    adminV2DrawerTabPanelHostStyle,
     ADMINV2_KPI_STRIP_CELL_COUNT,
     ADMINV2_QUIET_RESERVE_PANEL_CLASS,
     ADMINV2_WORK_UNIT_QUEUE_LANE_MIN_H,
@@ -39,6 +41,11 @@ describe("adminV2LoadingGeometry", () => {
 
     it("uses drawer bootstrap body reserve shorter than legacy workflow block", () => {
         expect(ADMINV2_DRAWER_OPPORTUNITY_BOOTSTRAP_BODY_MIN_H).toBe("10.5rem");
+    });
+
+    it("exports opportunity workflow tab panel host geometry (Card 3)", () => {
+        expect(ADMINV2_DRAWER_TAB_PANEL_MIN_H).toBe("22rem");
+        expect(adminV2DrawerTabPanelHostStyle()).toEqual({ minHeight: "22rem" });
     });
 
     it("exports work-unit queue lane quiet reserve geometry (PERF-A-03)", () => {
@@ -99,6 +106,11 @@ describe("Dept loader alignment (PERF-A-02 / PR-4.6)", () => {
         expect(page).toContain("deptOperationalSurfaceReady");
         expect(page).toContain("deptThroughputBodyReady");
         expect(page).not.toContain("deptThroughputRevealReady");
+    });
+
+    it("dept page shell-first blocking gate (Card 3B)", () => {
+        const page = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
+        expect(page).toMatch(/departmentPageBlockingLoad[\s\S]*deptLoading && !dept/);
     });
 
     it("dept page uses oper-region loader under split readiness gates (PR-4.6+)", () => {

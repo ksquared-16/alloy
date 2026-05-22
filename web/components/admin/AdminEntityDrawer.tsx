@@ -193,6 +193,14 @@ import {
     opportunityDrawerSecondaryWindowOpen as computeSecondaryWindowOpen,
 } from "@/lib/admin/drawer/opportunityDrawerRevealReadiness";
 import {
+    adminV2DrawerTabPanelHostStyle,
+    createOpportunityDrawerTabVisitSet,
+    markOpportunityDrawerTabVisited,
+    opportunityDrawerWorkflowTabMountEnabled,
+    opportunityDrawerWorkflowTabPaneClass,
+} from "@/lib/admin/drawer/opportunityDrawerTabSession";
+import { ADMINV2_DRAWER_TAB_PANEL_MIN_H } from "@/lib/ui-v2/adminV2LoadingGeometry";
+import {
     clearOpportunityDrawerBackgroundFullSchedule,
     finishOpportunityDrawerHydrate,
     markOpportunityDrawerHydrateDone,
@@ -1480,6 +1488,8 @@ export default function AdminEntityDrawer() {
     useEffect(() => {
         setPostDrawerVisibleKey(null);
         postRevealEnrichEndReportedRef.current = null;
+        opportunityDrawerVisitedTabsRef.current = createOpportunityDrawerTabVisitSet();
+        setOpportunityDrawerTabVisitTick((n) => n + 1);
         setOpportunityDrawerSecondaryReady(false);
         setOpportunityDrawerRevealCoordTimedOut(false);
         opportunityDrawerRevealCoordStartedAtRef.current = null;
@@ -1694,6 +1704,8 @@ export default function AdminEntityDrawer() {
     const [jobContactOptionsLoading, setJobContactOptionsLoading] = useState(false);
     const [jobCreateSaving, setJobCreateSaving] = useState(false);
     const [drawerTab, setDrawerTab] = useState<DrawerTabKey>("overview");
+    const opportunityDrawerVisitedTabsRef = useRef(createOpportunityDrawerTabVisitSet());
+    const [opportunityDrawerTabVisitTick, setOpportunityDrawerTabVisitTick] = useState(0);
     /** Set default tab once per open; avoids resetting tab when pathname changes while drawer stays open. */
     const entityDrawerTabInitKeyRef = useRef<string>("");
     type WorkflowRunPreviewRow = {
@@ -2156,6 +2168,8 @@ export default function AdminEntityDrawer() {
             entityDrawerTabInitKeyRef.current = "";
             opportunityDrawerFirstPaintPreloadedRef.current = null;
             postRevealEnrichEndReportedRef.current = null;
+            opportunityDrawerVisitedTabsRef.current = createOpportunityDrawerTabVisitSet();
+            setOpportunityDrawerTabVisitTick((n) => n + 1);
             setPostDrawerVisibleKey(null);
             setOpportunityDrawerLayoutFrozen(false);
             setOpportunityDrawerBelowFoldRevealed(false);
@@ -2226,6 +2240,8 @@ export default function AdminEntityDrawer() {
         }
         if (entityDrawerTabInitKeyRef.current !== entityOpenKey) {
             entityDrawerTabInitKeyRef.current = entityOpenKey;
+            opportunityDrawerVisitedTabsRef.current = createOpportunityDrawerTabVisitSet();
+            setOpportunityDrawerTabVisitTick((n) => n + 1);
             setDrawerTab("overview");
         }
         setContactRelatedData(null);
@@ -5854,6 +5870,60 @@ export default function AdminEntityDrawer() {
         !!drawer.id &&
         drawer.id !== "new" &&
         (!recordChromeOpportunity.configResolved || opportunityInquiryWorkflowDrawer);
+
+    const opportunityWorkflowTabSessionActive = opportunityRecordGateWorkflowLayout;
+
+    const selectDrawerTab = useCallback(
+        (tab: DrawerTabKey) => {
+            if (opportunityWorkflowTabSessionActive) {
+                markOpportunityDrawerTabVisited(opportunityDrawerVisitedTabsRef.current, tab);
+                setOpportunityDrawerTabVisitTick((n) => n + 1);
+            }
+            setDrawerTab(tab);
+        },
+        [opportunityWorkflowTabSessionActive]
+    );
+
+    const opportunityWorkflowTabMount = useCallback(
+        (tab: DrawerTabKey) => {
+            if (!opportunityWorkflowTabSessionActive) return false;
+            return opportunityDrawerWorkflowTabMountEnabled(
+                true,
+                opportunityDrawerVisitedTabsRef.current,
+                tab
+            );
+        },
+        [opportunityWorkflowTabSessionActive, opportunityDrawerTabVisitTick]
+    );
+
+    const renderOpportunityWorkflowTabPane = useCallback(
+        (tab: DrawerTabKey, children: React.ReactNode) => {
+            if (!opportunityWorkflowTabMount(tab)) return null;
+            return (
+                <div
+                    className={opportunityDrawerWorkflowTabPaneClass(drawerTab, tab)}
+                    style={adminV2DrawerTabPanelHostStyle()}
+                    aria-hidden={drawerTab !== tab}
+                    data-adminv2-drawer-tab-pane={tab}
+                    data-adminv2-drawer-tab-pane-active={drawerTab === tab ? "true" : "false"}
+                >
+                    {children}
+                </div>
+            );
+        },
+        [drawerTab, opportunityWorkflowTabMount]
+    );
+
+    const opportunityWorkflowTabBodyHostProps =
+        opportunityWorkflowTabSessionActive
+            ? {
+                  style: adminV2DrawerTabPanelHostStyle(),
+                  "data-adminv2-drawer-tab-panel-host": "true",
+                  "data-adminv2-drawer-tab-active": drawerTab,
+                  "data-adminv2-drawer-tab-panel-min-h": ADMINV2_DRAWER_TAB_PANEL_MIN_H,
+              }
+            : undefined;
+
     /** Modal shell for /adminV2 jobs — use before data loads so geometry never flashes sidebar-first. */
     const isJobRecordModalTarget =
         drawerShellVariant === "adminV2" &&
@@ -9274,7 +9344,7 @@ export default function AdminEntityDrawer() {
                     <button
                         key={tab}
                         type="button"
-                        onClick={() => setDrawerTab(tab)}
+                        onClick={() => selectDrawerTab(tab)}
                         className={`rounded-md px-3 py-1.5 text-xs font-medium leading-snug transition-colors adminv2-record-modal-tab ${drawerTab === tab ? "adminv2-record-modal-tab--active" : "text-alloy-forge/80 hover:bg-alloy-stone/50"}`}
                     >
                         {tabLabels[tab] ?? tab}
@@ -9631,6 +9701,7 @@ export default function AdminEntityDrawer() {
                     data-adminv2-job-drawer-body={isJobDrawerV2 && drawer.type === "jobs" ? "true" : undefined}
                     data-adminv2-schedule-drawer-body={showScheduleRecordModalV2 ? "true" : undefined}
                     data-adminv2-opportunity-drawer-body={showOpportunityRecordModalV2 ? "true" : undefined}
+                    {...(opportunityWorkflowTabBodyHostProps ?? {})}
                 >
                     {saveError && <p className="text-alloy-ember text-sm">{saveError}</p>}
                     {registryActionFeedback ? (
@@ -11217,28 +11288,34 @@ export default function AdminEntityDrawer() {
                             />
                         </div>
                     )}
-                    {drawerTab === "communications" &&
-                        drawer.type === "opportunities" &&
-                        drawer.id &&
-                        drawer.id !== "new" &&
-                        opportunityRecordGateWorkflowLayout && (
-                            <div className="pt-2 space-y-3" data-admin-opportunity-comms-panel="true">
-                                <CommunicationsDrawerSection
-                                    embedded
-                                    apiEntityType="opportunities"
-                                    entityId={drawer.id}
-                                    active={drawerTab === "communications"}
-                                    opportunityComposeContext={opportunityCommunicationsComposeContext}
-                                />
-                            </div>
-                        )}
-                    {drawerTab === "notes" &&
-                        drawer.type === "opportunities" &&
-                        drawer.id &&
-                        drawer.id !== "new" &&
-                        overviewData &&
-                        !(overviewData as { _create?: boolean })._create &&
-                        opportunityRecordGateWorkflowLayout && (
+                    {opportunityWorkflowTabSessionActive
+                        ? renderOpportunityWorkflowTabPane(
+                              "communications",
+                              drawer.type === "opportunities" &&
+                                  drawer.id &&
+                                  drawer.id !== "new" &&
+                                  opportunityRecordGateWorkflowLayout ? (
+                                  <div className="pt-2 space-y-3" data-admin-opportunity-comms-panel="true">
+                                      <CommunicationsDrawerSection
+                                          embedded
+                                          apiEntityType="opportunities"
+                                          entityId={drawer.id}
+                                          active={drawerTab === "communications"}
+                                          opportunityComposeContext={opportunityCommunicationsComposeContext}
+                                      />
+                                  </div>
+                              ) : null,
+                          )
+                        : null}
+                    {opportunityWorkflowTabSessionActive
+                        ? renderOpportunityWorkflowTabPane(
+                              "notes",
+                              drawer.type === "opportunities" &&
+                                  drawer.id &&
+                                  drawer.id !== "new" &&
+                                  overviewData &&
+                                  !(overviewData as { _create?: boolean })._create &&
+                                  opportunityRecordGateWorkflowLayout ? (
                             <div className="pt-2 space-y-3">
                                 {(() => {
                                     const d = overviewData as Record<string, unknown>;
@@ -11271,7 +11348,7 @@ export default function AdminEntityDrawer() {
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    onClick={() => setDrawerTab("activity")}
+                                                    onClick={() => selectDrawerTab("activity")}
                                                     className="rounded-md border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight/75 hover:border-alloy-blue/35 hover:text-alloy-blue"
                                                 >
                                                     View activity
@@ -11313,20 +11390,39 @@ export default function AdminEntityDrawer() {
                                     );
                                 })()}
                             </div>
-                        )}
-                    {drawerTab === "documents" && drawer.type === "opportunities" && drawer.id && drawer.id !== "new" && (
-                        <div className="pt-2 space-y-3">
-                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
-                            <EntityDocumentsSection
-                                documents={normalizeDocumentRows(opportunityRelatedData?.documents)}
-                                loading={opportunityRelatedLoading}
-                                uploadEntityType="opportunity"
-                                entityId={drawer.id}
-                                canMutate={canMutate}
-                                onAfterUpload={() => setOpportunityRelatedData(null)}
-                            />
-                        </div>
-                    )}
+                              ) : null,
+                          )
+                        : null}
+                    {opportunityWorkflowTabSessionActive
+                        ? renderOpportunityWorkflowTabPane(
+                              "documents",
+                              drawer.type === "opportunities" && drawer.id && drawer.id !== "new" ? (
+                                  <div className="pt-2 space-y-3">
+                                      <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
+                                      <EntityDocumentsSection
+                                          documents={normalizeDocumentRows(opportunityRelatedData?.documents)}
+                                          loading={opportunityRelatedLoading}
+                                          uploadEntityType="opportunity"
+                                          entityId={drawer.id}
+                                          canMutate={canMutate}
+                                          onAfterUpload={() => setOpportunityRelatedData(null)}
+                                      />
+                                  </div>
+                              ) : null,
+                          )
+                        : drawerTab === "documents" && drawer.type === "opportunities" && drawer.id && drawer.id !== "new" && (
+                              <div className="pt-2 space-y-3">
+                                  <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
+                                  <EntityDocumentsSection
+                                      documents={normalizeDocumentRows(opportunityRelatedData?.documents)}
+                                      loading={opportunityRelatedLoading}
+                                      uploadEntityType="opportunity"
+                                      entityId={drawer.id}
+                                      canMutate={canMutate}
+                                      onAfterUpload={() => setOpportunityRelatedData(null)}
+                                  />
+                              </div>
+                          )}
                     {drawerTab === "documents" && drawer.type === "jobs" && drawer.id && drawer.id !== "new" && (
                         <div className="pt-2 space-y-3">
                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
@@ -11389,7 +11485,129 @@ export default function AdminEntityDrawer() {
                             />
                         </div>
                     )}
-                    {drawerTab === "activity" && (
+                    {opportunityWorkflowTabSessionActive
+                        ? renderOpportunityWorkflowTabPane(
+                              "activity",
+                              drawer.type === "opportunities" && drawer.id && drawer.id !== "new" ? (
+                                  <div className={`${DRAWER_ROW_SPACING} pt-2`}>
+                                      <div className="space-y-4">
+                                          <section>
+                                              <h3 className={DRAWER_SECTION_HEADER_CLASS}>Activity</h3>
+                                              {opportunityActivityLoading ? (
+                                                  <p className="text-sm text-alloy-midnight/60">Loading activity…</p>
+                                              ) : opportunityActivityError ? (
+                                                  <p className="text-sm text-alloy-ember">{opportunityActivityError}</p>
+                                              ) : (opportunityActivityEvents?.length ?? 0) > 0 ? (
+                                                  <ul className="mt-2 space-y-3">
+                                                      {(opportunityActivityEvents ?? []).map((ev) => {
+                                                          const p = (ev.payload && typeof ev.payload === "object"
+                                                              ? ev.payload
+                                                              : {}) as Record<string, unknown>;
+                                                          const preview =
+                                                              p.body_preview != null && String(p.body_preview).trim()
+                                                                  ? String(p.body_preview)
+                                                                  : null;
+                                                          const act = formatOpportunityActivityTimelineEvent({
+                                                              event_type: ev.event_type,
+                                                              payload: p,
+                                                          });
+                                                          return (
+                                                              <li
+                                                                  key={ev.id}
+                                                                  className="rounded-lg border border-alloy-stone/15 bg-white px-3 py-2 text-sm"
+                                                              >
+                                                                  <div className="font-semibold text-alloy-forge">{act.title}</div>
+                                                                  {act.detail ? (
+                                                                      <div className="mt-0.5 text-[13px] font-normal text-alloy-forge/80">
+                                                                          {act.detail}
+                                                                      </div>
+                                                                  ) : null}
+                                                                  <div className="mt-0.5 text-[12px] text-alloy-forge/65">
+                                                                      {displayDateTime(ev.occurred_at)} · {act.actorLabel}
+                                                                  </div>
+                                                                  {preview ? (
+                                                                      <div className="mt-1.5 text-[13px] text-alloy-forge/85 whitespace-pre-wrap">
+                                                                          {preview}
+                                                                      </div>
+                                                                  ) : null}
+                                                              </li>
+                                                          );
+                                                      })}
+                                                  </ul>
+                                              ) : (
+                                                  <p className="text-sm text-alloy-midnight/60">No workflow events yet.</p>
+                                              )}
+                                          </section>
+                                          <section>
+                                              <div className="flex items-center justify-between gap-3">
+                                                  <h3 className={DRAWER_SECTION_HEADER_CLASS}>Workflow runs</h3>
+                                                  <a
+                                                      href="/adminV2/workflows"
+                                                      className="text-sm font-semibold text-alloy-blue hover:underline"
+                                                  >
+                                                      Workflows
+                                                  </a>
+                                              </div>
+                                              {opportunityWorkflowRunsLoading ? (
+                                                  <p className="text-sm text-alloy-midnight/60">Loading workflow runs…</p>
+                                              ) : opportunityWorkflowRunsError ? (
+                                                  <p className="text-sm text-alloy-ember">{opportunityWorkflowRunsError}</p>
+                                              ) : (opportunityWorkflowRuns?.length ?? 0) > 0 ? (
+                                                  <div className="mt-2 divide-y divide-alloy-stone/10 rounded-lg border border-alloy-stone/15 bg-white">
+                                                      {(opportunityWorkflowRuns ?? []).map((r) => {
+                                                          const bad = r.status === "failed" || !!r.has_failed_action;
+                                                          return (
+                                                              <a
+                                                                  key={r.id}
+                                                                  href={`/adminV2/workflows?run=${encodeURIComponent(r.id)}`}
+                                                                  className="flex items-center justify-between gap-3 px-3 py-2 text-sm hover:bg-alloy-stone/10"
+                                                              >
+                                                                  <div className="min-w-0">
+                                                                      <div className="truncate font-semibold text-alloy-forge">
+                                                                          {r.workflow_name ?? r.workflow_id}
+                                                                      </div>
+                                                                      <div className="truncate text-[12px] text-alloy-forge/60">
+                                                                          {displayDateTime(r.started_at)} ·{" "}
+                                                                          <span
+                                                                              className={
+                                                                                  bad ? "text-alloy-ember font-semibold" : ""
+                                                                              }
+                                                                          >
+                                                                              {bad ? "Failed" : r.status}
+                                                                          </span>
+                                                                      </div>
+                                                                  </div>
+                                                                  <div className="shrink-0 text-[12px] font-semibold text-alloy-blue">
+                                                                      View
+                                                                  </div>
+                                                              </a>
+                                                          );
+                                                      })}
+                                                  </div>
+                                              ) : (
+                                                  <p className="text-sm text-alloy-midnight/60">No workflow runs recorded.</p>
+                                              )}
+                                          </section>
+                                          <section>
+                                              <h3 className={DRAWER_SECTION_HEADER_CLASS}>Record</h3>
+                                              <ul className="space-y-1.5 text-sm text-alloy-forge/90">
+                                                  {data?.created_at != null ? (
+                                                      <li>Created: {displayDateTime(String(data.created_at))}</li>
+                                                  ) : null}
+                                                  {data?.updated_at != null ? (
+                                                      <li>Updated: {displayDateTime(String(data.updated_at))}</li>
+                                                  ) : null}
+                                              </ul>
+                                              {!data?.created_at && !data?.updated_at && (
+                                                  <p className="text-sm text-alloy-midnight/60">No record timestamps.</p>
+                                              )}
+                                          </section>
+                                      </div>
+                                  </div>
+                              ) : null,
+                          )
+                        : null}
+                    {drawerTab === "activity" && !opportunityWorkflowTabSessionActive && (
                         <div className={`${DRAWER_ROW_SPACING} pt-2`}>
                             {drawer.type === "payments" && drawer.id ? (
                                 <div className="space-y-4">
@@ -11688,8 +11906,14 @@ export default function AdminEntityDrawer() {
                                 <JobRrsOverviewTab jobId={drawer.id} variant="legacy" />
                             </div>
                         )}
-                    {drawerTab === "overview" && useConfigDrivenOverview && presentationType && (
-                        isJobDrawerV2 && drawer.type === "jobs" ? (
+                    {(opportunityWorkflowTabSessionActive
+                        ? opportunityWorkflowTabMount("overview")
+                        : drawerTab === "overview") &&
+                        useConfigDrivenOverview &&
+                        presentationType &&
+                        (() => {
+                            const configDrivenOverviewPanel =
+                                isJobDrawerV2 && drawer.type === "jobs" ? (
                             showJobRecordModalV2 ? (
                                 <JobRecordModalV2
                                     record={(entityDrawerOverviewData ?? null) as Record<string, unknown> | null}
@@ -12147,7 +12371,7 @@ export default function AdminEntityDrawer() {
                                                                                 setOpportunityRelatedData(null);
                                                                                 setOpportunityActivitySignalNonce((n) => n + 1);
                                                                             }}
-                                                                            onGoToTab={(tab) => setDrawerTab(tab)}
+                                                                            onGoToTab={(tab) => selectDrawerTab(tab)}
                                                                         />
                                                                     ) : null}
                                                                 </div>
@@ -12315,8 +12539,11 @@ export default function AdminEntityDrawer() {
                                         </div>
                                     )}
                             </>
-                        )
-                    )}
+                        );
+                            return opportunityWorkflowTabSessionActive
+                                ? renderOpportunityWorkflowTabPane("overview", configDrivenOverviewPanel)
+                                : configDrivenOverviewPanel;
+                        })()}
                     {drawerTab === "overview" && !useConfigDrivenOverview && (
                         <>
                             {drawer.type === "persons" && (data as { _create?: boolean })?._create ? (
