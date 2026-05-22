@@ -2,7 +2,10 @@
  * Deterministic urgency + confidence resolution (Phase 1 / Card 1.3).
  */
 
-import type { OperationalRecommendationCatalogEntryV1 } from "@/lib/adminV2/bos/recommendations/catalog/recommendationCatalogTypes";
+import type {
+    CatalogInterpolationValues,
+    OperationalRecommendationCatalogEntryV1,
+} from "@/lib/adminV2/bos/recommendations/catalog/recommendationCatalogTypes";
 import type { GroundingSignalV1, UrgencyBandV1, ConfidenceLevelV1 } from "@/lib/adminV2/bos/recommendations/types";
 
 export function resolveUrgencyBand(args: {
@@ -22,7 +25,7 @@ export function resolveConfidence(args: {
     catalog: OperationalRecommendationCatalogEntryV1;
     normalized_signals: GroundingSignalV1[];
     secondary_factor_count: number;
-    template_values: { timing_phrase?: string | null };
+    template_values: CatalogInterpolationValues;
 }): { confidence_level: ConfidenceLevelV1; confidence_reason: string } {
     const lowClock = args.normalized_signals.some(
         (s) => s.code.includes("approximate") || s.provenance.includes("activity")
@@ -30,7 +33,11 @@ export function resolveConfidence(args: {
     const breached = args.normalized_signals.some((s) => s.sla_tier === "breached");
     const multi = args.secondary_factor_count > 0 || args.normalized_signals.length > 3;
 
-    if (lowClock && !args.template_values.timing_phrase?.trim()) {
+    const timingRaw = args.template_values.timing_phrase;
+    const timingPhrase =
+        typeof timingRaw === "string" ? timingRaw : timingRaw != null ? String(timingRaw) : "";
+
+    if (lowClock && !timingPhrase.trim()) {
         return {
             confidence_level: "low",
             confidence_reason: "Timing approximate · based on latest record activity",

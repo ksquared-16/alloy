@@ -176,7 +176,7 @@ function DeptOperConsoleQueueRow(props: {
 }) {
     const { href, title, label, iconKey, total, countsDeferred, totalPending, variant, attentionBucketKey } = props;
     const adminDrawer = useAdminDrawerOptional();
-    const { selectedSiteId } = useWorkspaceSiteFilter();
+    const selectedSiteId = useWorkspaceSiteFilter()?.selectedSiteId ?? null;
     useSyncExternalStore(subscribeDeptOperNavClickAck, getDeptOperNavClickAckSnapshot, () => null);
     const clickedKey = deptOperNavClickedKey(href);
     const ackProps = deptOperNavClickAckProps(clickedKey);

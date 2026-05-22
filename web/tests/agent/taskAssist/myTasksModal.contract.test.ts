@@ -38,6 +38,8 @@ describe("My tasks modal UX", () => {
         expect(src).not.toContain("fetchCommunicationScheduledSends");
         expect(src).not.toContain("scheduledSends");
         expect(src).toContain("Array.isArray(json.tasks) ? json.tasks : []");
+        expect(src).toContain("getCachedWorkspaceOperationalTasks");
+        expect(readFileSync(topNav, "utf8")).toContain("prefetchWorkspaceOperationalTasks");
         expect(readFileSync(panel, "utf8")).toContain("data-adminv2-new-task");
         expect(readFileSync(panel, "utf8")).toContain("createOperationalTask");
     });

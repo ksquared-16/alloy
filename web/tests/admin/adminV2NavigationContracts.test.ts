@@ -71,6 +71,16 @@ describe("AdminV2 shell navigation helpers", () => {
         expect(src).toContain("ChevronRight");
         expect(src).toContain("expandedDeptIds.has");
         expect(src).toMatch(/hasWus && isExpanded/);
+        expect(src).toContain("resolveWorkspaceNavWorkUnitLabel");
+    });
+
+    it("tasks modal opens from header without waiting on fetch in TopNavBar", () => {
+        const topNav = read("app/adminV2/components/TopNavBar.tsx");
+        expect(topNav).toContain("prefetchWorkspaceOperationalTasks");
+        expect(topNav).toContain("openTasksModal");
+        const panel = read("app/adminV2/components/MyTasksPanel.tsx");
+        expect(panel).toContain("getCachedWorkspaceOperationalTasks");
+        expect(panel).toMatch(/loading && tasks\.length === 0/);
     });
 
     it("profile menu is avatar-only in header with dropdown account details", () => {

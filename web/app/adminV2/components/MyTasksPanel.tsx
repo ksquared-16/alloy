@@ -19,6 +19,10 @@ import {
     readJson,
     type OperationalTaskWorkspaceFilter,
 } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
+import {
+    getCachedWorkspaceOperationalTasks,
+    setCachedWorkspaceOperationalTasks,
+} from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
 import { minDatetimeLocalValue } from "@/components/admin/taskAssist/TaskAssistOpportunityWorkspace";
 
@@ -74,8 +78,10 @@ export default function MyTasksPanel({ compact = false, onClose }: MyTasksPanelP
             globalAssistant.currentContext.entity_id?.trim() || null
         :   null;
     const [filter, setFilter] = useState<OperationalTaskWorkspaceFilter>("open");
-    const [tasks, setTasks] = useState<MyTasksTaskRow[]>([]);
-    const [loading, setLoading] = useState(false);
+    const [tasks, setTasks] = useState<MyTasksTaskRow[]>(
+        () => getCachedWorkspaceOperationalTasks("open") ?? []
+    );
+    const [loading, setLoading] = useState(() => getCachedWorkspaceOperationalTasks("open") == null);
     const [error, setError] = useState<string | null>(null);
     const [actionId, setActionId] = useState<string | null>(null);
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -90,7 +96,13 @@ export default function MyTasksPanel({ compact = false, onClose }: MyTasksPanelP
 
     const load = useCallback(async () => {
         if (!v11) return;
-        setLoading(true);
+        const cached = getCachedWorkspaceOperationalTasks(filter);
+        if (cached) {
+            setTasks(cached);
+            setLoading(false);
+        } else {
+            setLoading(true);
+        }
         setError(null);
         try {
             const res = await fetchWorkspaceOperationalTasks(filter);
@@ -98,10 +110,12 @@ export default function MyTasksPanel({ compact = false, onClose }: MyTasksPanelP
             if (!res.ok || !json.ok) {
                 throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
             }
-            setTasks(Array.isArray(json.tasks) ? json.tasks : []);
+            const rows = Array.isArray(json.tasks) ? json.tasks : [];
+            setTasks(rows);
+            setCachedWorkspaceOperationalTasks(filter, rows);
         } catch (e: unknown) {
             setError(formatTaskAssistClientError((e as Error).message));
-            setTasks([]);
+            if (!cached) setTasks([]);
         } finally {
             setLoading(false);
         }
@@ -334,7 +348,11 @@ export default function MyTasksPanel({ compact = false, onClose }: MyTasksPanelP
                     {error}
                 </p>
             ) : null}
-            {loading ? <p className="text-sm text-alloy-midnight/60">Loading tasks…</p> : null}
+            {loading && tasks.length === 0 ? (
+                <p className="text-sm text-alloy-midnight/60" aria-busy="true">
+                    Loading tasks…
+                </p>
+            ) : null}
             {!loading && tasks.length === 0 ? <p className="text-sm text-alloy-midnight/60">{emptyLabel}</p> : null}
 
             <ul className={`space-y-2 ${compact ? "max-h-[min(52vh,420px)] overflow-y-auto pr-1" : ""}`}>

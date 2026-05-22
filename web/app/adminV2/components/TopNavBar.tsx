@@ -1,6 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
+import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
+import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { usePathname } from "next/navigation";
 import { palette, neutral, derived } from "@/styles/tokens/colors";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
@@ -79,6 +82,20 @@ export default function TopNavBar() {
   const [quickMessageOpen, setQuickMessageOpen] = useState(false);
   const [tasksModalOpen, setTasksModalOpen] = useState(false);
 
+  useEffect(() => {
+    if (!isTaskAssistV1UiEnabled()) return;
+    const cancelDefer = scheduleAdminV2BackgroundWork(
+      () => prefetchWorkspaceOperationalTasks("open"),
+      { idleTimeoutMs: 1500, fallbackMs: 600 }
+    );
+    return cancelDefer;
+  }, []);
+
+  const openTasksModal = useCallback(() => {
+    prefetchWorkspaceOperationalTasks("open");
+    setTasksModalOpen(true);
+  }, []);
+
   const normalizedPath = useMemo(() => normalizeAdminPath(pathname), [pathname]);
   const isMessaging = normalizedPath === "/adminV2/messages";
 
@@ -119,7 +136,7 @@ export default function TopNavBar() {
           <OperationalTasksNavBadge
             tabStyle={utilityBtnStyle}
             buttonClassName={HEADER_UTILITY_BTN}
-            onOpenModal={() => setTasksModalOpen(true)}
+            onOpenModal={openTasksModal}
           />
           <button
             type="button"

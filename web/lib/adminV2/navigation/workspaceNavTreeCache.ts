@@ -7,7 +7,13 @@ import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
 export type WorkspaceNavTreeDept = { id: string; name: string | null; key?: string | null };
-export type WorkspaceNavTreeWu = { id: string; name: string | null; department_id: string };
+export type WorkspaceNavTreeWu = {
+    id: string;
+    name: string | null;
+    key?: string | null;
+    department_id: string;
+    metadata?: unknown;
+};
 
 export type WorkspaceNavTreeSnapshot = {
     depts: WorkspaceNavTreeDept[];

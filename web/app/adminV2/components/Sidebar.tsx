@@ -26,6 +26,7 @@ import {
     readExpandedDeptIds,
     writeExpandedDeptIds,
 } from "@/lib/adminV2/navigation/adminV2SidebarDeptExpanded";
+import { resolveWorkspaceNavWorkUnitLabel } from "@/lib/adminV2/navigation/workspaceNavWorkUnitLabel";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 
 const WORKSPACE = "/adminV2/workspace";
@@ -130,8 +131,9 @@ export default function Sidebar({
         };
     }, []);
 
+    /** Reveal work units only when the user is on a work-unit route (not on dept-only). */
     useEffect(() => {
-        if (!departmentId) return;
+        if (!departmentId || !workUnitId) return;
         setExpandedDeptIds((prev) => {
             if (prev.has(departmentId)) return prev;
             const next = new Set(prev);
@@ -139,7 +141,7 @@ export default function Sidebar({
             writeExpandedDeptIds(next);
             return next;
         });
-    }, [departmentId]);
+    }, [departmentId, workUnitId]);
 
     const toggleDeptExpanded = useCallback((deptId: string) => {
         setExpandedDeptIds((prev) => {
@@ -307,7 +309,7 @@ export default function Sidebar({
                             {hasWus && isExpanded ? (
                                 <div className="ml-7 space-y-0.5">
                                     {deptWus.map((wu) => {
-                                        const wuName = (wu.name ?? "").trim() || "Untitled work unit";
+                                        const wuName = resolveWorkspaceNavWorkUnitLabel(wu);
                                         const wuHref = workspaceHref(
                                             `${WORKSPACE}/dept/${d.id}/work-unit/${wu.id}`
                                         );

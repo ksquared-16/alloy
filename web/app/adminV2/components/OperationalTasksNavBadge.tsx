@@ -7,6 +7,7 @@ import {
     ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH,
 } from "@/lib/adminV2/opportunityDrawerTaskEvents";
 import { ADMIN_V2_OPEN_TASKS_MODAL, fetchOperationalTasksSummary, readJson } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
+import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
 import { neutral } from "@/styles/tokens/colors";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
@@ -68,6 +69,8 @@ export default function OperationalTasksNavBadge({
     return (
         <button
             type="button"
+            onMouseEnter={() => prefetchWorkspaceOperationalTasks("open")}
+            onFocus={() => prefetchWorkspaceOperationalTasks("open")}
             onClick={onOpenModal}
             className={
                 buttonClassName ??
