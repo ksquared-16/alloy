@@ -2091,6 +2091,8 @@ export async function respondOpportunityEntityGet(
   const serialization_ms = Date.now() - tSerialize0;
   const payload_kb = Buffer.byteLength(bodyJson, "utf8") / 1024;
 
+  const fieldRegistryMetaFull: FieldRegistryAttachMeta = {};
+
   if (process.env.NODE_ENV !== "production" || enrichTotalMs > 250) {
     perfDrawerFullHydrate({
       entity_id: id,

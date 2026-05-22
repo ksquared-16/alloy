@@ -56,7 +56,7 @@ export function reportDrawerAboveFoldStable(opportunityId: string): void {
         post_open_fetch_count: Object.values(postOpenFetchCounts).reduce((a, b) => a + b, 0),
         post_open_fetch_by_kind: { ...postOpenFetchCounts },
         post_open_fetch_kinds: [...postOpenFetchKinds],
-        source: "client",
+        source: "network",
     });
 }
 
@@ -73,6 +73,6 @@ export function reportDrawerFirstPaintHydrateWave(
         wave,
         changed_keys: changedKeys.slice(0, 24),
         changed_key_count: changedKeys.length,
-        source: "client",
+        source: "network",
     });
 }
