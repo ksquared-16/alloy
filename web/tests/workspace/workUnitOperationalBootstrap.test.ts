@@ -47,6 +47,16 @@ describe("work-unit operational bootstrap runtime", () => {
         expect(primaryLaneIdx).toBeGreaterThan(parallelAwaitIdx);
     });
 
+    it("defers primary lane rows when deferPrimaryLaneRows (Card 3)", () => {
+        const src = fs.readFileSync(
+            path.join(repoRoot, "web/lib/workspace/loadWorkUnitOperationalBootstrap.ts"),
+            "utf8"
+        );
+        expect(src).toContain("deferPrimaryLaneRows");
+        expect(src).toContain("rows_deferred");
+        expect(src).toContain("primary_lane_rows_deferred");
+    });
+
     it("runs queue summaries and attention in parallel (Card 2)", () => {
         const src = fs.readFileSync(
             path.join(repoRoot, "web/lib/workspace/loadWorkUnitOperationalBootstrap.ts"),

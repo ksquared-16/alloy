@@ -27,8 +27,10 @@ export type WorkUnitOperationalBootstrapQueue = {
     primary_lane?: {
         queue_key: string;
         route: string;
-        items: unknown[];
+        items?: unknown[];
         total_omitted?: boolean;
+        /** When true, client loads rows via queue items API after shell paint (Card 3). */
+        rows_deferred?: boolean;
     };
     attention?: {
         source: "work_unit_needs_attention_lane";
@@ -80,6 +82,8 @@ export type WorkUnitOperBootstrapContext = {
     omitTotalCount: boolean;
     summariesLimit: number;
     attentionResolverPasses: { count: number };
+    /** Skip blocking getWorkUnitQueueItems — return lane key + route only. */
+    deferPrimaryLaneRows?: boolean;
 };
 
 type AttentionBootstrapOutcome = {
@@ -214,6 +218,7 @@ export async function loadWorkUnitOperationalBootstrap(params: {
         omitTotalCount,
         summariesLimit,
         attentionResolverPasses,
+        deferPrimaryLaneRows,
     } = ctx;
 
     if (!departmentIdAllowed(accessDim, departmentId)) {
@@ -337,30 +342,45 @@ export async function loadWorkUnitOperationalBootstrap(params: {
 
     let primary_lane: WorkUnitOperationalBootstrapQueue["primary_lane"];
     if (primaryQueueKey) {
-        const tRows0 = Date.now();
         const rowRoute = `/api/admin/queues/${encodeURIComponent(workUnitId)}/${encodeURIComponent(primaryQueueKey)}`;
-        const { result } = await getWorkUnitQueueItems({
-            orgId,
-            workUnitId,
-            queueKey: primaryQueueKey,
-            limit: primaryRowLimit,
-            offset: 0,
-            omitTotalCount,
-            recordScopeImpossible,
-            recordScopeConstraints,
-            viewerDisplayTimeZone,
-            attentionBucketKey: primaryIsNeedsAttention ? attentionBucketKey : null,
-            preloadedQueueDefinition,
-            sharedBootstrap,
-            preloadedAttentionPack: primaryIsNeedsAttention ? preloadedAttention : undefined,
-        });
-        phases.primary_lane_rows_ms = Date.now() - tRows0;
-        primary_lane = {
-            queue_key: primaryQueueKey,
-            route: rowRoute,
-            items: result.items as unknown[],
-            ...(result.total_omitted ? { total_omitted: true } : {}),
-        };
+        if (deferPrimaryLaneRows) {
+            phases.primary_lane_rows_deferred = true;
+            phases.primary_lane_rows_ms = 0;
+            phases.deferred_rows_source = "client_queue_items_api";
+            primary_lane = {
+                queue_key: primaryQueueKey,
+                route: rowRoute,
+                rows_deferred: true,
+                ...(omitTotalCount ? { total_omitted: true } : {}),
+            };
+        } else {
+            const tRows0 = Date.now();
+            const { result } = await getWorkUnitQueueItems({
+                orgId,
+                workUnitId,
+                queueKey: primaryQueueKey,
+                limit: primaryRowLimit,
+                offset: 0,
+                omitTotalCount,
+                recordScopeImpossible,
+                recordScopeConstraints,
+                viewerDisplayTimeZone,
+                attentionBucketKey: primaryIsNeedsAttention ? attentionBucketKey : null,
+                preloadedQueueDefinition,
+                sharedBootstrap,
+                preloadedAttentionPack: primaryIsNeedsAttention ? preloadedAttention : undefined,
+            });
+            phases.primary_lane_rows_ms = Date.now() - tRows0;
+            phases.primary_lane_rows_deferred = false;
+            primary_lane = {
+                queue_key: primaryQueueKey,
+                route: rowRoute,
+                items: result.items as unknown[],
+                ...(result.total_omitted ? { total_omitted: true } : {}),
+            };
+        }
+    } else {
+        phases.primary_lane_rows_deferred = deferPrimaryLaneRows ? true : undefined;
     }
 
     phases.pipeline_ms = 0;

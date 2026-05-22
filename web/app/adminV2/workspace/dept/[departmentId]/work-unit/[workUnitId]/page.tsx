@@ -71,6 +71,7 @@ import {
 import { prefetchOpportunityDrawerOnRowIntent } from "@/lib/admin/opportunityDrawerIntentPrefetch";
 import { markDrawerRowClickStart } from "@/lib/perf/adminV2DrawerPerf";
 import { markWorkUnitNavigationStart } from "@/lib/perf/markWorkUnitNavigationStart";
+import { setAdminV2PrimarySurfacePending } from "@/lib/perf/adminV2PrimarySurfaceGate";
 import { dedupeAdminFetch, dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import {
@@ -78,7 +79,7 @@ import {
     fetchWorkUnitOperationalBootstrapSession,
 } from "@/lib/adminV2/workUnitBootstrapClientSession";
 import { logAdminV2LegacyFanOut } from "@/lib/adminV2/runtime/adminV2LegacyFanOutDiagnostics";
-import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
+import { alloyPerfGet, alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import type { NeedsAttentionBucketWithCount } from "@/lib/opportunities/needsAttentionBuckets";
 import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions/UpdateStatusAddNoteModal";
 import { ContactAttemptedModal } from "@/components/admin/opportunity/actions/ContactAttemptedModal";
@@ -1392,6 +1393,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         let cancelled = false;
         void (async () => {
             markWorkUnitNavigationStart();
+            setAdminV2PrimarySurfacePending(true, "work_unit_bootstrap_effect");
             const routeStart = typeof performance !== "undefined" ? performance.now() : 0;
             if (typeof performance !== "undefined" && typeof window !== "undefined") {
                 alloyPerfSet("work_unit_start", routeStart);
@@ -1447,22 +1449,20 @@ export default function AdminV2OpportunityWorkUnitPage() {
             try {
                 const abInit = initialLocationRef.current.attentionBucket.trim();
                 try {
-                    const { response: bootstrapRes, duplicateSuppressed, cacheHit } =
-                        await fetchWorkUnitOperationalBootstrapSession({
-                            departmentId,
-                            workUnitId,
-                            selectedSiteId,
-                            focusQueue: qFromUrlEffective || undefined,
-                            attentionBucket: abInit || undefined,
-                            deferBundle: true,
-                        });
-                    if (duplicateSuppressed || cacheHit) {
+                    const { response: bootstrapRes, bootstrapOwner } =
+                        await fetchWorkUnitOperationalBootstrapSession(
+                            {
+                                departmentId,
+                                workUnitId,
+                                selectedSiteId,
+                            },
+                            "page"
+                        );
+                    if (bootstrapOwner !== "page") {
                         console.info("[wu-route-perf]", {
-                            event: "bootstrap_deduped",
+                            bootstrap_owner: bootstrapOwner,
                             departmentId,
                             workUnitId,
-                            duplicateSuppressed,
-                            cacheHit,
                         });
                     }
                     if (!bootstrapRes.ok && !cancelled) {
@@ -1490,8 +1490,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 primary_lane?: {
                                     queue_key: string;
                                     route: string;
-                                    items: unknown[];
+                                    items?: unknown[];
                                     total_omitted?: boolean;
+                                    rows_deferred?: boolean;
                                 };
                                 attention?: {
                                     source?: string;
@@ -1548,70 +1549,83 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         }
 
                         const pl = b.queue?.primary_lane;
+                        const primaryRowsDeferred = pl?.rows_deferred === true;
+                        let primaryLaneHydratedInline = false;
+
                         if (pl?.queue_key && !userLaneTouchedRef.current) {
-                            bootstrapPrimaryRowFetchScheduledRef.current = true;
                             bootstrapPrimaryRowKeyRef.current = pl.queue_key;
                             setSelectedQueueKeyTraced("bootstrapPrimaryLane", pl.queue_key);
-                            const summaryForLane = qs.find((x) => x.key === pl.queue_key);
-                            const queueMeta = summaryForLane ?? {
-                                key: pl.queue_key,
-                                label: pl.queue_key,
-                                entity_type: "opportunity" as const,
-                                priority: "standard" as const,
-                                display: "list" as const,
-                                count: pl.items?.length ?? 0,
-                                preview: [],
-                            };
-                            const primaryPayload: QueueItemsResult = {
-                                queue: {
-                                    key: queueMeta.key,
-                                    label: queueMeta.label,
-                                    description: summaryForLane?.description,
-                                    entity_type: queueMeta.entity_type,
-                                    priority: queueMeta.priority,
-                                    display: queueMeta.display,
-                                },
-                                items: pl.items ?? [],
-                                total: pl.items?.length ?? 0,
-                                limit: 20,
-                                offset: 0,
-                                ...(pl.total_omitted ? { total_omitted: true } : {}),
-                            };
-                            setQueueItems(primaryPayload);
-                            setQueueItemsError(null);
-                            setQueueItemsRoute(pl.route);
-                            setQueueItemsLoading(false);
-                            suppressQueueFetchEffectOnceRef.current = true;
-                            const primaryAb =
-                                pl.queue_key.trim().toLowerCase() === "needs_attention" ? abInit : "";
-                            putQueueRowCache(
-                                queueRowClientCacheRef.current,
-                                viewScopeFingerprint,
-                                workUnitId,
-                                pl.queue_key,
-                                primaryPayload,
-                                primaryAb
-                            );
-                            primaryLaneRowsSettledOnceRef.current = true;
-                            if (typeof window !== "undefined" && typeof performance !== "undefined") {
-                                const laneAt = performance.now();
-                                alloyPerfSet("work_unit_primary_lane_ready", laneAt);
-                                console.info("[wu-route-perf]", {
-                                    event: "work_unit_primary_lane_ready",
-                                    departmentId,
+
+                            if (!primaryRowsDeferred && Array.isArray(pl.items)) {
+                                bootstrapPrimaryRowFetchScheduledRef.current = true;
+                                const summaryForLane = qs.find((x) => x.key === pl.queue_key);
+                                const queueMeta = summaryForLane ?? {
+                                    key: pl.queue_key,
+                                    label: pl.queue_key,
+                                    entity_type: "opportunity" as const,
+                                    priority: "standard" as const,
+                                    display: "list" as const,
+                                    count: pl.items.length,
+                                    preview: [],
+                                };
+                                const primaryPayload: QueueItemsResult = {
+                                    queue: {
+                                        key: queueMeta.key,
+                                        label: queueMeta.label,
+                                        description: summaryForLane?.description,
+                                        entity_type: queueMeta.entity_type,
+                                        priority: queueMeta.priority,
+                                        display: queueMeta.display,
+                                    },
+                                    items: pl.items,
+                                    total: pl.items.length,
+                                    limit: 20,
+                                    offset: 0,
+                                    ...(pl.total_omitted ? { total_omitted: true } : {}),
+                                };
+                                setQueueItems(primaryPayload);
+                                setQueueItemsError(null);
+                                setQueueItemsRoute(pl.route);
+                                setQueueItemsLoading(false);
+                                suppressQueueFetchEffectOnceRef.current = true;
+                                const primaryAb =
+                                    pl.queue_key.trim().toLowerCase() === "needs_attention" ? abInit : "";
+                                putQueueRowCache(
+                                    queueRowClientCacheRef.current,
+                                    viewScopeFingerprint,
                                     workUnitId,
-                                    queue_key: pl.queue_key,
-                                });
-                                requestAnimationFrame(() => {
+                                    pl.queue_key,
+                                    primaryPayload,
+                                    primaryAb
+                                );
+                                primaryLaneRowsSettledOnceRef.current = true;
+                                primaryLaneHydratedInline = true;
+                                if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                                    const laneAt = performance.now();
+                                    alloyPerfSet("work_unit_primary_lane_ready", laneAt);
                                     console.info("[wu-route-perf]", {
-                                        event: "work_unit_first_list_paint",
+                                        event: "work_unit_primary_lane_ready",
                                         departmentId,
                                         workUnitId,
+                                        queue_key: pl.queue_key,
                                     });
-                                });
+                                    requestAnimationFrame(() => {
+                                        console.info("[wu-route-perf]", {
+                                            event: "work_unit_first_list_paint",
+                                            departmentId,
+                                            workUnitId,
+                                        });
+                                    });
+                                }
+                                setWuQueueLaneAuthorityReady(true);
+                            } else if (primaryRowsDeferred) {
+                                setQueueItemsRoute(pl.route);
+                                setQueueItemsLoading(true);
+                                suppressQueueFetchEffectOnceRef.current = true;
                             }
+                        } else {
+                            setWuQueueLaneAuthorityReady(true);
                         }
-                        setWuQueueLaneAuthorityReady(true);
 
                         if (!cancelled) {
                             setLoading(false);
@@ -1620,8 +1634,28 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 alloyPerfSet("shell_ready", shellAt);
                                 alloyPerfSet("work_unit_shell_ready", shellAt);
                                 alloyPerfSet("work_unit_bootstrap_ready", shellAt);
+                                if (alloyPerfGet("work_unit_primary_lane_ready") == null) {
+                                    alloyPerfSet("work_unit_primary_lane_ready", shellAt);
+                                }
                             }
                             markFirstUsefulPaintOnceRef.current();
+                        }
+
+                        if (
+                            !cancelled &&
+                            primaryRowsDeferred &&
+                            pl?.queue_key &&
+                            !userLaneTouchedRef.current
+                        ) {
+                            runBootstrapPrimaryRowFetch(wu, qs);
+                        } else if (
+                            !cancelled &&
+                            !primaryLaneHydratedInline &&
+                            !primaryRowsDeferred &&
+                            pl?.queue_key &&
+                            !userLaneTouchedRef.current
+                        ) {
+                            setWuQueueLaneAuthorityReady(true);
                         }
 
                         if (!cancelled) {

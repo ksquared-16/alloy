@@ -3601,6 +3601,15 @@ export default function AdminEntityDrawer() {
         }
         const ctxWu = (drawer.opportunityWorkspaceContext?.work_unit_id ?? "").trim();
         const ctxDept = (drawer.opportunityWorkspaceContext?.department_id ?? "").trim();
+        if (
+            drawerShellVariant === "adminV2" &&
+            adminV2DrawerBootstrapEnabled() &&
+            !opportunityDrawerBootstrapLegacy &&
+            (!ctxWu || !ctxDept)
+        ) {
+            setOpportunityResolvedHeaderLoading(false);
+            return;
+        }
         const dataIdMatchesDrawer =
             !!data && typeof data === "object" && String((data as { id?: unknown }).id ?? "") === String(drawer.id);
         const departmentIdFromRecord = dataIdMatchesDrawer
@@ -12318,7 +12327,12 @@ export default function AdminEntityDrawer() {
                                                                                                 onRefresh={refetch}
                                                                                                 labelClassName={tinyLabel}
                                                                                                 readonlyFieldClassName={oppInqReadonlyField}
-                                                                                                fetchEnabled={tourBookingsFetchEnabled}
+                                                                                                sharedActiveBookings={
+                                                                                                    inquiryTourFetchArmed
+                                                                                                        ? opportunityRecordHeaderActiveTours
+                                                                                                        : undefined
+                                                                                                }
+                                                                                                fetchEnabled={false}
                                                                                             />
                                                                                         </div>
                                                                                     ) : showTourFromPrimaryOnly ? (

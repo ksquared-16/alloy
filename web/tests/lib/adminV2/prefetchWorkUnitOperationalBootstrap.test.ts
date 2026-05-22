@@ -4,11 +4,13 @@ import {
     parseWorkUnitNavFromDeptOperHref,
     prefetchWorkUnitOperationalBootstrap,
 } from "@/lib/adminV2/navigation/prefetchWorkUnitOperationalBootstrap";
+import { resetWorkUnitBootstrapClientSession } from "@/lib/adminV2/workUnitBootstrapClientSession";
 
 describe("prefetchWorkUnitOperationalBootstrap", () => {
     afterEach(() => {
         vi.unstubAllGlobals();
         vi.restoreAllMocks();
+        resetWorkUnitBootstrapClientSession();
     });
 
     it("builds operational-bootstrap URL aligned with work-unit page", () => {
@@ -22,8 +24,8 @@ describe("prefetchWorkUnitOperationalBootstrap", () => {
         expect(url).toContain("department_id=dept-1");
         expect(url).toContain("summary_mode=all");
         expect(url).toContain("primary_row_limit=20");
-        expect(url).toContain("focus_queue=pipeline_total");
-        expect(url).toContain("attention_bucket=stale_quote");
+        expect(url).not.toContain("focus_queue");
+        expect(url).not.toContain("attention_bucket");
         expect(url).toContain("workspace_site_id=site-9");
         expect(url).toContain("defer_bundle=true");
     });
@@ -64,6 +66,6 @@ describe("prefetchWorkUnitOperationalBootstrap", () => {
 
         await expect(
             prefetchWorkUnitOperationalBootstrap({ departmentId: "dept-1", workUnitId: "wu-1" })
-        ).rejects.toThrow(/prefetch failed/i);
+        ).rejects.toThrow(/prefetch failed|failed \(500\)/i);
     });
 });

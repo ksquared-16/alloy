@@ -1,6 +1,7 @@
 "use client";
 
 import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
+import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import { useOpportunityActiveTourBookings } from "@/lib/tours/hooks/useOpportunityActiveTourBookings";
 import { formatTourBookingInstantSiteLocal } from "@/lib/tours/opportunity/formatTourBookingSiteLocalDisplay";
 import { resolveOpportunityInquiryTourDateDisplay } from "@/lib/tours/opportunity/resolveOpportunityInquiryTourDateDisplay";
@@ -17,6 +18,8 @@ export type OpportunityInquiryTourDateBlockProps = {
     readonlyFieldClassName: string;
     /** When false, skips tour_bookings GET until section is visible and full hydrate has applied. */
     fetchEnabled?: boolean;
+    /** Parent-owned bookings — avoids duplicate GET with drawer header hook. */
+    sharedActiveBookings?: TourBookingRow[];
 };
 
 /**
@@ -34,9 +37,14 @@ export function OpportunityInquiryTourDateBlock(props: OpportunityInquiryTourDat
         labelClassName,
         readonlyFieldClassName,
         fetchEnabled = true,
+        sharedActiveBookings,
     } = props;
 
-    const { activeBookings } = useOpportunityActiveTourBookings(opportunityId, fetchEnabled);
+    const hookBookings = useOpportunityActiveTourBookings(
+        opportunityId,
+        fetchEnabled && sharedActiveBookings == null
+    );
+    const activeBookings = sharedActiveBookings ?? hookBookings.activeBookings;
 
     const primary = activeBookings[0];
     const bookingBacked = Boolean(primary && typeof primary.start_at === "string" && primary.start_at.trim());

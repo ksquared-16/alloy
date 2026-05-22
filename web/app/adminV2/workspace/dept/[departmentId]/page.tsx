@@ -63,6 +63,7 @@ import {
 } from "@/lib/workspace/synthesizeDeptKpiWorkUnitSummaries";
 import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
+import { setAdminV2PrimarySurfacePending } from "@/lib/perf/adminV2PrimarySurfaceGate";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { logAdminV2LegacyFanOut } from "@/lib/adminV2/runtime/adminV2LegacyFanOutDiagnostics";
 import { isAdminV2OperNavigationActive } from "@/lib/perf/alloyPerfGlobal";
@@ -76,7 +77,6 @@ import {
     markDeptOperNavClickAck,
     parseWorkUnitNavFromDeptOperHref,
     workspaceDeptQueueNavHref,
-    prefetchWorkUnitOperationalBootstrap,
     subscribeDeptOperNavClickAck,
     getDeptOperNavClickAckSnapshot,
 } from "@/lib/adminV2/navigation";
@@ -156,12 +156,9 @@ function isModifiedDeptOperNavClick(e: MouseEvent<HTMLAnchorElement>): boolean {
     return e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.defaultPrevented;
 }
 
-function warmWorkUnitBootstrapFromDeptOperHref(href: string, selectedSiteId: string | null | undefined): void {
-    const parsed = parseWorkUnitNavFromDeptOperHref(href);
-    if (!parsed) return;
-    void prefetchWorkUnitOperationalBootstrap({ ...parsed, selectedSiteId }).catch(() => {
-        /* best-effort — hard nav proceeds regardless */
-    });
+/** WU bootstrap prefetch disabled — page mount is canonical owner (jank-stop Card A). */
+function warmWorkUnitBootstrapFromDeptOperHref(_href: string, _selectedSiteId: string | null | undefined): void {
+    /* no-op */
 }
 
 function DeptOperConsoleQueueRow(props: {
@@ -759,6 +756,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         };
 
         void (async () => {
+            setAdminV2PrimarySurfacePending(true, "department_bootstrap_effect");
             const routeStart = typeof performance !== "undefined" ? performance.now() : 0;
             if (typeof performance !== "undefined" && typeof window !== "undefined") {
                 alloyPerfSet("department_start", routeStart);

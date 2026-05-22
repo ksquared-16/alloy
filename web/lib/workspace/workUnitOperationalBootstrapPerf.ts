@@ -17,6 +17,10 @@ export type WorkUnitBootstrapPerfPhases = {
     attention_rules_ms?: number;
     attention_bucket_merge_ms?: number;
     primary_lane_rows_ms?: number;
+    primary_lane_rows_deferred?: boolean;
+    /** Loader wall-clock excluding blocking primary row fetch when deferred. */
+    blocking_loader_ms?: number;
+    deferred_rows_source?: string;
     pipeline_ms?: number;
     kpi_placements_ms?: number;
     kpi_placements_cache_hit?: boolean;

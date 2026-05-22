@@ -50,5 +50,6 @@ describe("Card 2 — WU bootstrap parallelization", () => {
         expect(perf).toContain("queue_summaries_ms");
         expect(perf).toContain("attention_ms");
         expect(perf).toContain("primary_lane_rows_ms");
+        expect(perf).toContain("primary_lane_rows_deferred");
     });
 });

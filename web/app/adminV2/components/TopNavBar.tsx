@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
-import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
+import { runWhenAdminV2PrimarySurfaceReady } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { usePathname } from "next/navigation";
 import { palette, neutral, derived } from "@/styles/tokens/colors";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
@@ -84,9 +84,9 @@ export default function TopNavBar() {
 
   useEffect(() => {
     if (!isTaskAssistV1UiEnabled()) return;
-    const cancelDefer = scheduleAdminV2BackgroundWork(
+    const cancelDefer = runWhenAdminV2PrimarySurfaceReady(
       () => prefetchWorkspaceOperationalTasks("open"),
-      { idleTimeoutMs: 1500, fallbackMs: 600 }
+      "operational_tasks_topnav_prefetch"
     );
     return cancelDefer;
   }, []);

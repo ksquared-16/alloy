@@ -1,7 +1,7 @@
 # AdminV2 Performance Sprint 2 — Bootstrap Speed + Admin Context Tax
 
 **Date:** 2026-05-22  
-**Status:** Card 2 complete — **WU bootstrap parallelization**  
+**Status:** Card 3 complete — **WU bootstrap primary lane defer**  
 **Predecessor:** [`adminv2_platform_navigation_performance_sprint.md`](./adminv2_platform_navigation_performance_sprint.md) (navigation/loading UX — closed pending staging QA)  
 **Scope:** Server bootstrap latency, admin auth/context tax, duplicate background API calls — **not** visual loading UX  
 
@@ -207,7 +207,7 @@ dept + wu fetch (parallel)     ~small
 | **0** | Audit + timing map | **This document** | — |
 | **1** | Admin context fast path | ✅ **Done** — see [Card 1 closeout](#card-1-closeout--admin-context-fast-path) |
 | **2** | WU bootstrap parallelization | ✅ **Done** — see [Card 2 closeout](#card-2-closeout--wu-bootstrap-parallelization) |
-| **3** | First-render bootstrap trimming | Move `primary_lane` / optional `attention` / `right_rail` out of blocking JSON when shell-first client allows | 2 |
+| **3** | First-render bootstrap trimming | ✅ **Done** — defer `primary_lane` rows when `defer_bundle=true` | 2 |
 | **4** | Duplicate background API cleanup | Stagger/defer polls; dedupe client fetches; respect `isAdminV2OperNavigationActive`; avoid workflow summary during transition | 1 |
 | **5** | Verification | Phase timing tests; staging log comparison; no UX/nav regressions | 1–4 |
 
@@ -273,7 +273,7 @@ dept + wu fetch (parallel)     ~small
 
 ## 9. Explicit stop point (Card 0 — superseded)
 
-Card 0 audit complete. **Cards 1–2 implemented.** Next: **Card 3 — first-render bootstrap trimming** (optional) or **Card 4 — background API cleanup**.
+Card 0 audit complete. **Cards 1–3 implemented.** Next: **Card 4 — background API cleanup** (or Card 5 verification).
 
 ---
 
@@ -341,7 +341,94 @@ cd web && npm run test -- \
 
 ### Next card
 
-**Card 3** (defer primary lane from blocking bootstrap) or **Card 4** (background poll cleanup).
+**Card 4** (background poll cleanup).
+
+---
+
+## Card 3 closeout — Work unit bootstrap first-render trim
+
+**Date:** 2026-05-22  
+**Status:** Complete — `defer_bundle=true` (WU page default) no longer blocks on `getWorkUnitQueueItems`.
+
+### Audit answers (pre-implementation)
+
+| Question | Answer |
+|----------|--------|
+| Shell-required bootstrap fields | `department`, `work_unit`, `queue.summaries` |
+| Queue tabs/counts | `queue.summaries` (+ deferred_queue_keys metadata) |
+| Primary lane rows | **Not** required for shell — only for in-lane list authority |
+| Post-shell row source | `GET /api/admin/queues/{wu}/{queueKey}` via `fetchQueueItems` / `runBootstrapPrimaryRowFetch` |
+| Omit rows safe? | **Yes** when client already shell-first (`deferBundle: true`) |
+| Needs-attention | Attention buckets still in bootstrap (parallel with summaries); row fetch uses `attention_bucket` query param on client |
+
+### Bootstrap sequence
+
+| Step | Before (Card 2) | After (Card 3, `defer_bundle=true`) |
+|------|-----------------|-------------------------------------|
+| Route gate | ~310ms | unchanged |
+| Loader | summaries ∥ attention → **primary rows (~520–600ms)** | summaries ∥ attention → **lane key/route only** |
+| Response | `primary_lane.items[]` inline | `primary_lane.rows_deferred: true` |
+| Client | Hydrate rows from bootstrap JSON | `setLoading(false)` → `runBootstrapPrimaryRowFetch` → queue items API |
+
+**Non-defer callers** (`defer_bundle` absent/false): unchanged — full `primary_lane.items` inline.
+
+### Payload contract
+
+```json
+"primary_lane": {
+  "queue_key": "pipeline_total",
+  "route": "/api/admin/queues/{id}/pipeline_total",
+  "rows_deferred": true,
+  "total_omitted": true
+}
+```
+
+`items` omitted when deferred. `runtime.deferred` includes `primary_lane_rows` when `defer_bundle=true`.
+
+### Files changed
+
+| File | Purpose |
+|------|---------|
+| `web/lib/workspace/loadWorkUnitOperationalBootstrap.ts` | `deferPrimaryLaneRows`; metadata-only `primary_lane` |
+| `web/app/api/admin/work-units/[id]/operational-bootstrap/route.ts` | Pass defer flag; log `blocking_loader_ms` |
+| `web/lib/workspace/workUnitOperationalBootstrapPerf.ts` | `primary_lane_rows_deferred`, `deferred_rows_source` |
+| `web/app/adminV2/workspace/dept/.../work-unit/[workUnitId]/page.tsx` | Shell-first; client row fetch after `rows_deferred` |
+| `web/tests/workspace/workUnitBootstrapPrimaryLaneDefer.test.ts` | Card 3 contracts |
+| `web/tests/workspace/workUnitOperationalBootstrap.test.ts` | Defer marker |
+| `web/tests/admin/adminV2WorkUnitRouteLoadConsolidation.test.ts` | Client defer path |
+
+### Timing fields (`[wu-bootstrap-perf]`)
+
+| Field | Meaning |
+|-------|---------|
+| `primary_lane_rows_deferred` | `true` when rows not fetched in loader |
+| `primary_lane_rows_ms` | `0` when deferred; else row fetch duration |
+| `blocking_loader_ms` | Loader wall-clock (should drop ~500ms when deferred) |
+| `deferred_rows_source` | `client_queue_items_api` when deferred |
+
+### Expected staging metrics
+
+| Metric | Before Card 3 | Target after |
+|--------|---------------|--------------|
+| WU `total_ms` | ~1409–1434ms | **< 900ms** |
+| WU `loader_ms` | ~983–989ms | **< 450ms** (no primary row block) |
+| `primary_lane_rows_ms` | ~522–598ms | **0** in bootstrap log (moves to client queue fetch) |
+
+**Remaining debt:** `route_gate_ms` (~310ms), entity-label/department/work-unit list routes (~750–800ms) — not Card 3 scope.
+
+### Tests run
+
+```bash
+cd web && npm run test -- \
+  tests/workspace/workUnitBootstrapPrimaryLaneDefer.test.ts \
+  tests/workspace/workUnitOperationalBootstrap.test.ts \
+  tests/workspace/workUnitBootstrapParallelization.test.ts \
+  tests/admin/adminV2WorkUnitRouteLoadConsolidation.test.ts
+```
+
+### Next card
+
+**Card 4** — duplicate background API cleanup.
 
 ---
 

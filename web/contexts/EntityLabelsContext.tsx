@@ -1,10 +1,10 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
+import { runWhenAdminV2PrimarySurfaceReady } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
-import { isAdminV2OperNavigationActive } from "@/lib/perf/alloyPerfGlobal";
+import { isAdminV2PrimarySurfacePending } from "@/lib/perf/adminV2PrimarySurfaceGate";
 
 const CACHE_KEY = "entity_labels_cache";
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -131,21 +131,20 @@ export function EntityLabelsProvider({
     }, [seeded]);
 
     useEffect(() => {
-        const navActive = isAdminV2OperNavigationActive(12_000);
-        const idleTimeoutMs = seeded ? (navActive ? 20_000 : 8_000) : 3500;
-        const fallbackMs = seeded ? (navActive ? 12_000 : 3_000) : 400;
-
         if (seeded) {
-            return scheduleAdminV2BackgroundWork(() => {
-                if (isAdminV2OperNavigationActive(12_000)) return;
+            return runWhenAdminV2PrimarySurfaceReady(() => {
+                if (isAdminV2PrimarySurfacePending()) return;
                 void refreshEntityLabels();
-            }, { idleTimeoutMs, fallbackMs });
+            }, "entity_labels_seeded");
         }
         const cached = loadFromCache();
         if (Object.keys(cached ?? {}).length > 0) {
             setLabels(cached!);
             setLoading(false);
-            return scheduleAdminV2BackgroundWork(() => refreshEntityLabels(), { idleTimeoutMs: 3500, fallbackMs: 400 });
+            return runWhenAdminV2PrimarySurfaceReady(() => refreshEntityLabels(), "entity_labels_cached");
+        }
+        if (isAdminV2PrimarySurfacePending()) {
+            return runWhenAdminV2PrimarySurfaceReady(() => refreshEntityLabels(), "entity_labels_unseeded");
         }
         void refreshEntityLabels();
     }, [seeded, refreshEntityLabels]);

@@ -1,8 +1,7 @@
-import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
-import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import type { WorkUnitBootstrapOwnership } from "@/lib/adminV2/workUnitBootstrapClientSession";
 import {
-    buildWorkUnitOperationalBootstrapClientUrl,
-    type WorkUnitBootstrapRequestParams,
+    buildCanonicalWorkUnitOperationalBootstrapUrl,
+    fetchWorkUnitOperationalBootstrapSession,
 } from "@/lib/adminV2/workUnitBootstrapClientSession";
 
 export type WorkUnitOperationalBootstrapPrefetchOpts = {
@@ -13,18 +12,15 @@ export type WorkUnitOperationalBootstrapPrefetchOpts = {
     attentionBucket?: string | null;
 };
 
-/** Query params aligned with `work-unit/[workUnitId]/page.tsx` operational-bootstrap request. */
+/** Query params aligned with canonical work-unit bootstrap (no focus/bucket in URL). */
 export function buildWorkUnitOperationalBootstrapUrl(
     workUnitId: string,
     opts: WorkUnitOperationalBootstrapPrefetchOpts
 ): string {
-    return buildWorkUnitOperationalBootstrapClientUrl({
+    return buildCanonicalWorkUnitOperationalBootstrapUrl({
         departmentId: opts.departmentId,
         workUnitId,
         selectedSiteId: opts.selectedSiteId ?? null,
-        focusQueue: opts.focusQueue ?? undefined,
-        attentionBucket: opts.attentionBucket ?? undefined,
-        deferBundle: true,
     });
 }
 
@@ -46,18 +42,19 @@ export function parseWorkUnitNavFromDeptOperHref(href: string): WorkUnitOperatio
 }
 
 /**
- * Best-effort warm-up for dept → work-unit navigation (GET only; does not change routing).
- * Intended for pointer/click intent before `adminV2CommitNavigation` in a future orchestrated card.
+ * Disabled for route load — page mount owns bootstrap. Joins in-flight/completed session only.
  */
 export async function prefetchWorkUnitOperationalBootstrap(
     opts: WorkUnitOperationalBootstrapPrefetchOpts
 ): Promise<void> {
-    const url = buildWorkUnitOperationalBootstrapUrl(opts.workUnitId, opts);
-    const res = await dedupeAdminFetch(url, workspaceDataFetchInit());
-    if (!res.ok) {
-        throw new Error(`work-unit operational-bootstrap prefetch failed (${res.status})`);
+    const ownership: WorkUnitBootstrapOwnership = {
+        departmentId: opts.departmentId,
+        workUnitId: opts.workUnitId,
+        selectedSiteId: opts.selectedSiteId ?? null,
+    };
+    const { response } = await fetchWorkUnitOperationalBootstrapSession(ownership, "prefetch");
+    if (!response.ok) {
+        throw new Error(`work-unit operational-bootstrap prefetch failed (${response.status})`);
     }
-    await res.json().catch(() => ({}));
+    await response.json().catch(() => ({}));
 }
-
-export type { WorkUnitBootstrapRequestParams };

@@ -37,10 +37,7 @@ import {
   usingActiveRecordNoticeText,
 } from "@/lib/adminV2/bos/activeOperationalContext";
 import { operationalContextSwitchNoticeText } from "@/lib/adminV2/bos/operationalContextSwitchNotice";
-import {
-  scheduleAdminV2BackgroundWork,
-  scheduleAdminV2SidecarWork,
-} from "@/lib/workspace/adminV2DeferBackgroundWork";
+import { runWhenAdminV2PrimarySurfaceReady } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import {
@@ -1633,7 +1630,7 @@ export default function AICommandSurfaceShell() {
 
   useEffect(() => {
     let cancelled = false;
-    const cancelDefer = scheduleAdminV2SidecarWork(
+    const cancelDefer = runWhenAdminV2PrimarySurfaceReady(
       async () => {
         try {
           const res = await fetch("/api/admin/ai/workflow-assist/capabilities", {
@@ -1651,7 +1648,7 @@ export default function AICommandSurfaceShell() {
           if (!cancelled) setWorkflowAssistMutationCapable(false);
         }
       },
-      { idleTimeoutMs: 8000, fallbackMs: 1200 }
+      "workflow_assist_capabilities"
     );
     return () => {
       cancelled = true;
@@ -1661,7 +1658,7 @@ export default function AICommandSurfaceShell() {
 
   useEffect(() => {
     let cancelled = false;
-    const cancelDefer = scheduleAdminV2SidecarWork(
+    const cancelDefer = runWhenAdminV2PrimarySurfaceReady(
       async () => {
         try {
           const res = await fetch("/api/admin/ai/config-layout-assist/capabilities", {
@@ -1674,7 +1671,7 @@ export default function AICommandSurfaceShell() {
           /* non-fatal */
         }
       },
-      { idleTimeoutMs: 8000, fallbackMs: 1200 }
+      "config_layout_assist_capabilities"
     );
     return () => {
       cancelled = true;

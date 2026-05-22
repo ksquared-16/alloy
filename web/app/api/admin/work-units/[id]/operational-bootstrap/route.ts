@@ -98,6 +98,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
                 omitTotalCount,
                 summariesLimit: parseSummariesLimit(request.nextUrl.searchParams),
                 attentionResolverPasses,
+                deferPrimaryLaneRows: deferBundle,
             },
             phases,
         });
@@ -150,6 +151,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         }
 
         const { payload, phases: loaderPhases } = bootstrapResult;
+        const blockingLoaderMs = loaderMs;
         const totalMs = Date.now() - routeT0;
 
         logWorkUnitOperationalBootstrapPerf({
@@ -161,6 +163,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             loaderMs,
             phases: {
                 ...loaderPhases,
+                blocking_loader_ms: blockingLoaderMs,
                 kpi_placements_ms: kpiResult.ms,
                 kpi_placements_cache_hit: kpiResult.cache_hit,
                 kpi_placements_deferred: deferBundle,
@@ -182,6 +185,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
                 bootstrap_total_ms: totalMs,
                 defer_bundle: deferBundle,
                 deferred: [
+                    ...(deferBundle ? (["primary_lane_rows"] as const) : []),
                     "workflow_kpis",
                     "queue_row_actions",
                     "adjacent_lane_prefetch",

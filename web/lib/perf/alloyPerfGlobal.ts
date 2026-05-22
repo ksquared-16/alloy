@@ -3,7 +3,15 @@
  * Active in development or when overlay is explicitly enabled (URL / localStorage).
  */
 
+import { clearAdminV2PrimarySurfacePendingFromMark } from "@/lib/perf/adminV2PrimarySurfaceGate";
+
 export const ALLOY_PERF_TICK_EVENT = "alloy-perf-tick";
+
+const PRIMARY_SURFACE_CLEAR_MARKS = new Set([
+    "work_unit_primary_lane_ready",
+    "department_ready",
+    "drawer_primary_ready",
+]);
 
 declare global {
     interface Window {
@@ -37,6 +45,9 @@ export function ensureAlloyPerf(): AlloyPerfGlobal | null {
 /** Convenience: set mark if perf API is available (client-only). */
 export function alloyPerfSet(name: string, value: number): void {
     ensureAlloyPerf()?.set(name, value);
+    if (PRIMARY_SURFACE_CLEAR_MARKS.has(name)) {
+        clearAdminV2PrimarySurfacePendingFromMark(name);
+    }
 }
 
 export function alloyPerfGet(name: string): number | undefined {

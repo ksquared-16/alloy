@@ -8,6 +8,12 @@
  */
 const inflight = new Map<string, Promise<Response>>();
 
+/** Test-only — clears in-flight and TTL caches between vitest cases. */
+export function resetWorkspaceAdminFetchDedupeForTests(): void {
+    inflight.clear();
+    shortCache.clear();
+}
+
 export function dedupeAdminFetch(input: string, init?: RequestInit): Promise<Response> {
     const key = input;
     let p = inflight.get(key);
