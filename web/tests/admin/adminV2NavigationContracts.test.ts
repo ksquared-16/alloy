@@ -46,7 +46,14 @@ describe("AdminV2 shell navigation helpers", () => {
     it("adminV2BeforeRouteNavigation never calls preventDefault", () => {
         const src = read("lib/adminV2/shellNavigation.ts");
         expect(src).toContain("markWorkUnitNavigationStart");
+        expect(src).toContain("clearDeptOperNavClickAck");
         expect(src).not.toMatch(/\bpreventDefault\s*\(/);
+    });
+
+    it("dept oper queue hrefs use configured queue nav helper", () => {
+        const dept = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
+        expect(dept).toContain("workspaceDeptQueueNavHref");
+        expect(dept).not.toMatch(/markDeptOperNavClickAck\(clickedKey\)[\s\S]*?onPointerDown/);
     });
 
     it("dept queue row uses adminV2CommitNavigation", () => {
@@ -60,6 +67,9 @@ describe("AdminV2 shell navigation helpers", () => {
         expect(src).toContain("AdminV2NavLink");
         expect(src).toContain("Home");
         expect(src).toContain("loadWorkspaceNavTree");
+        expect(src).toContain("getInitialWorkspaceNavTreeState");
+        expect(src).not.toContain("scheduleAdminV2BackgroundWork");
+        expect(read("app/adminV2/components/AdminV2Shell.tsx")).toContain("prefetchWorkspaceNavTree");
         expect(src).toContain("readExpandedDeptIds");
         expect(src).toContain("toggleDeptExpanded");
         expect(src).not.toContain("onShellNavigate");

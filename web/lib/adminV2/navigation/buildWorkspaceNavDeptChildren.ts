@@ -83,9 +83,25 @@ export function workspaceNavChildHref(
     departmentId: string,
     child: WorkspaceNavTreeChild
 ): string {
-    const base = `${workspaceBase}/dept/${departmentId}/work-unit/${child.workUnitId}`;
+    const base = `${workspaceBase}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(child.workUnitId)}`;
     if (!child.queueKey) return base;
     return `${base}?queue=${encodeURIComponent(child.queueKey)}`;
+}
+
+/** Dept oper console + sidebar — path/queue only; caller applies sticky site via `appendWorkspaceSiteToPath`. */
+export function workspaceDeptQueueNavHref(
+    workspaceBase: string,
+    departmentId: string,
+    workUnitId: string,
+    queueKey: string | null
+): string {
+    return workspaceNavChildHref(workspaceBase, departmentId, {
+        rowKey: queueKey ? `${workUnitId}:${queueKey}` : workUnitId,
+        label: "",
+        workUnitId,
+        queueKey,
+        kind: queueKey ? "configured_queue" : "work_unit",
+    });
 }
 
 export function isWorkspaceNavChildActive(args: {

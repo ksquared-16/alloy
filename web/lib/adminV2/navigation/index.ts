@@ -37,9 +37,18 @@ export {
 export {
     deptOperNavClickAckProps,
     deptOperNavClickedKey,
+    clearDeptOperNavClickAck,
     getDeptOperNavClickAckSnapshot,
     isDeptOperNavClickPending,
     markDeptOperNavClickAck,
     resetDeptOperNavClickAckForTests,
     subscribeDeptOperNavClickAck,
 } from "@/lib/adminV2/navigation/deptOperNavClickAck";
+
+export {
+    buildWorkspaceNavDeptChildren,
+    isWorkspaceNavChildActive,
+    workspaceDeptQueueNavHref,
+    workspaceNavChildHref,
+    type WorkspaceNavTreeChild,
+} from "@/lib/adminV2/navigation/buildWorkspaceNavDeptChildren";

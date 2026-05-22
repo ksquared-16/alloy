@@ -75,6 +75,7 @@ import {
     deptOperNavClickedKey,
     markDeptOperNavClickAck,
     parseWorkUnitNavFromDeptOperHref,
+    workspaceDeptQueueNavHref,
     prefetchWorkUnitOperationalBootstrap,
     subscribeDeptOperNavClickAck,
     getDeptOperNavClickAckSnapshot,
@@ -214,14 +215,13 @@ function DeptOperConsoleQueueRow(props: {
             href={href}
             onPointerDown={(e) => {
                 if (isModifiedDeptOperNavClick(e)) return;
-                markDeptOperNavClickAck(clickedKey);
                 warmWorkUnitBootstrapFromDeptOperHref(href, selectedSiteId);
             }}
             onClick={(e) => {
                 if (isModifiedDeptOperNavClick(e)) return;
                 e.preventDefault();
-                markDeptOperNavClickAck(clickedKey);
                 warmWorkUnitBootstrapFromDeptOperHref(href, selectedSiteId);
+                markDeptOperNavClickAck(clickedKey);
                 commitHardNav();
             }}
             className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-dept-oper-queue-link adminv2-interactive-surface relative z-[1] cursor-pointer pointer-events-auto ${tier} no-underline text-inherit`}
@@ -1389,11 +1389,15 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     {showPipelineLanes ? (
                         <>
                             {deptPipelineExecSurface!.lanes.map((lane) => {
-                                const wuHref = appendWorkspaceSiteToPath(
-                                    `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(deptPipelineExecSurface!.workUnitId)}`,
+                                const href = appendWorkspaceSiteToPath(
+                                    workspaceDeptQueueNavHref(
+                                        WORKSPACE_BASE,
+                                        departmentId,
+                                        deptPipelineExecSurface!.workUnitId,
+                                        lane.key
+                                    ),
                                     selectedSiteId
                                 );
-                                const href = `${wuHref}${wuHref.includes("?") ? "&" : "?"}queue=${encodeURIComponent(lane.key)}`;
                                 return (
                                     <li key={`pipe:${lane.key}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                                         <DeptOperConsoleQueueRow
@@ -1414,14 +1418,14 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             {deptThroughputWuRows.map((wu) => {
                                 const s = deptWorkUnitSummaries[wu.id];
                                 const total = s ? s.total : null;
-                                const wuHref = appendWorkspaceSiteToPath(
-                                    `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(wu.id)}`,
+                                const href = appendWorkspaceSiteToPath(
+                                    workspaceDeptQueueNavHref(WORKSPACE_BASE, departmentId, wu.id, null),
                                     selectedSiteId
                                 );
                                 return (
                                     <li key={`wu:${wu.id}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                                         <DeptOperConsoleQueueRow
-                                            href={wuHref}
+                                            href={href}
                                             title={`${wu.name?.trim() || "Work unit"}. Total ${total ?? "—"}.`}
                                             label={wu.name?.trim() || "Work unit"}
                                             iconKey={null}

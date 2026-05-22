@@ -18,6 +18,8 @@ export type AdminV2NavLinkProps = {
     title?: string;
     /** Marks the current route (or section) for persistent highlight. */
     active?: boolean;
+    /** When true, only `active` controls highlight (not pathname-only match). Use for ?queue= sidebar rows. */
+    highlightFromActiveOnly?: boolean;
     "aria-label"?: string;
     onClick?: (e: MouseEvent<HTMLAnchorElement>) => void;
 };
@@ -29,6 +31,7 @@ export type AdminV2NavLinkProps = {
 export function AdminV2NavLink({
     className,
     active,
+    highlightFromActiveOnly = false,
     children,
     href,
     style,
@@ -40,7 +43,7 @@ export function AdminV2NavLink({
     const adminDrawer = useAdminDrawerOptional();
     const hrefPath = href.split(/[?#]/)[0] ?? href;
     const isCurrentRoute = normalizeNavPath(pathname) === normalizeNavPath(hrefPath);
-    const isHighlighted = Boolean(active || isCurrentRoute);
+    const isHighlighted = Boolean(active || (!highlightFromActiveOnly && isCurrentRoute));
     const merged = [
         "adminv2-nav-link",
         isHighlighted ? "adminv2-nav-link--active" : "",

@@ -1,3 +1,4 @@
+import { clearDeptOperNavClickAck } from "@/lib/adminV2/navigation/deptOperNavClickAck";
 import { markWorkUnitNavigationStart } from "@/lib/perf/markWorkUnitNavigationStart";
 import {
     appendWorkspaceSiteToPath,
@@ -48,6 +49,7 @@ export function adminV2CommitNavigation(href: string, opts?: AdminV2CommitNaviga
 
     const current = `${window.location.pathname}${window.location.search}`;
     if (!target.startsWith("http") && current === next.split("#")[0]) {
+        clearDeptOperNavClickAck();
         return;
     }
     window.location.assign(next);

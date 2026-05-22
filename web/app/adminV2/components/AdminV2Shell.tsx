@@ -1,10 +1,11 @@
 "use client";
 
-import { Suspense, useState, useCallback, type CSSProperties } from "react";
+import { Suspense, useEffect, useState, useCallback, type CSSProperties } from "react";
 import {
     readAdminV2SidebarCollapsed,
     writeAdminV2SidebarCollapsed,
 } from "@/lib/adminV2/navigation/adminV2SidebarCollapsed";
+import { prefetchWorkspaceNavTree } from "@/lib/adminV2/navigation/workspaceNavTreeCache";
 import { usePathname } from "next/navigation";
 import { neutral, derived, palette } from "@/styles/tokens/colors";
 
@@ -114,6 +115,11 @@ export default function AdminV2Shell({
       return next;
     });
   }, []);
+
+  useEffect(() => {
+    prefetchWorkspaceNavTree();
+  }, []);
+
   const [zoomLevel, setZoomLevel] = useState<"company" | "department">("company");
   const [selectedDepartmentKey, setSelectedDepartmentKey] = useState<DepartmentKey | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);

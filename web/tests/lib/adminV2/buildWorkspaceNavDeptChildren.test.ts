@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     buildWorkspaceNavDeptChildren,
     isWorkspaceNavChildActive,
+    workspaceDeptQueueNavHref,
     workspaceNavChildHref,
 } from "@/lib/adminV2/navigation/buildWorkspaceNavDeptChildren";
 import type { WorkspaceNavTreeWu } from "@/lib/adminV2/navigation/workspaceNavTreeCache";
@@ -72,6 +73,9 @@ describe("buildWorkspaceNavDeptChildren", () => {
             kind: "configured_queue" as const,
         };
         expect(workspaceNavChildHref("/adminV2/workspace", "dept-1", child)).toBe(
+            "/adminV2/workspace/dept/dept-1/work-unit/wu-pipe?queue=new_inquiry"
+        );
+        expect(workspaceDeptQueueNavHref("/adminV2/workspace", "dept-1", "wu-pipe", "new_inquiry")).toBe(
             "/adminV2/workspace/dept/dept-1/work-unit/wu-pipe?queue=new_inquiry"
         );
     });

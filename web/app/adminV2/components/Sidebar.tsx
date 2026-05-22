@@ -4,7 +4,6 @@ import { Suspense, useCallback, useEffect, useMemo, useState, type CSSProperties
 import { usePathname, useSearchParams } from "next/navigation";
 import {
     Building2,
-    Boxes,
     ChevronDown,
     ChevronRight,
     GitBranch,
@@ -17,7 +16,9 @@ import { neutral, brand } from "@/styles/tokens/colors";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import { appendWorkspaceSiteToPath, readStickyWorkspaceSiteIdForNavigation } from "@/lib/adminV2/workspaceSiteFilterClient";
 import {
+    getInitialWorkspaceNavTreeState,
     getWorkspaceNavTreeSnapshot,
+    hydrateWorkspaceNavTreeCache,
     loadWorkspaceNavTree,
     type WorkspaceNavTreeDept,
     type WorkspaceNavTreeWu,
@@ -31,7 +32,6 @@ import {
     isWorkspaceNavChildActive,
     workspaceNavChildHref,
 } from "@/lib/adminV2/navigation/buildWorkspaceNavDeptChildren";
-import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 
 const WORKSPACE = "/adminV2/workspace";
 const WORKFLOWS_HREF = "/adminV2/workflows";
@@ -39,6 +39,9 @@ const SETTINGS_HREF = "/adminV2/settings";
 
 const EXPANDED_PRIMARY_LINK =
     "block w-full rounded-md px-2 py-1.5 font-medium hover:bg-alloy-stone/10";
+
+/** Nested queue rows under a department — indented, no icon, quieter than dept row. */
+const EXPANDED_QUEUE_LINK = "adminv2-sidebar-queue-link";
 
 function normalizeAdminPath(pathname: string): string {
     if (pathname === "/admin/v2" || pathname.startsWith("/admin/v2/")) {
@@ -88,53 +91,42 @@ function SidebarNav({
     const onSettings = path.startsWith(SETTINGS_HREF);
     const onWorkflows = path.startsWith(WORKFLOWS_HREF);
 
-    const cached = getWorkspaceNavTreeSnapshot();
-    const [depts, setDepts] = useState<WorkspaceNavTreeDept[]>(cached?.depts ?? []);
-    const [wus, setWus] = useState<WorkspaceNavTreeWu[]>(cached?.wus ?? []);
-    const [treeError, setTreeError] = useState<string | null>(cached?.error ?? null);
-    const [treeLoading, setTreeLoading] = useState(!cached?.depts.length && !cached?.error);
+    const initialTree = getInitialWorkspaceNavTreeState();
+    const [depts, setDepts] = useState<WorkspaceNavTreeDept[]>(initialTree.depts);
+    const [wus, setWus] = useState<WorkspaceNavTreeWu[]>(initialTree.wus);
+    const [treeError, setTreeError] = useState<string | null>(initialTree.error);
+    const [treeLoading, setTreeLoading] = useState(initialTree.showLoading);
     const [expandedDeptIds, setExpandedDeptIds] = useState<Set<string>>(() => readExpandedDeptIds());
 
     useEffect(() => {
         let cancelled = false;
-        const cancelDefer = scheduleAdminV2BackgroundWork(
-            async () => {
-                if (cancelled) return;
-                const snap = getWorkspaceNavTreeSnapshot();
-                if (snap?.depts.length) {
-                    setDepts(snap.depts);
-                    setWus(snap.wus);
-                    setTreeError(snap.error);
-                    setTreeLoading(false);
-                    return;
-                }
-                setTreeLoading(true);
-                const loaded = await loadWorkspaceNavTree();
-                if (cancelled) return;
-                setDepts(loaded.depts);
-                setWus(loaded.wus);
-                setTreeError(loaded.error);
-                setTreeLoading(false);
-            },
-            { idleTimeoutMs: 200, fallbackMs: 100 }
-        );
+        const applySnapshot = (snap: ReturnType<typeof getWorkspaceNavTreeSnapshot>) => {
+            if (!snap || cancelled) return;
+            setDepts(snap.depts);
+            setWus(snap.wus);
+            setTreeError(snap.error);
+            setTreeLoading(false);
+        };
+
+        const snap = getWorkspaceNavTreeSnapshot() ?? hydrateWorkspaceNavTreeCache();
+        if (snap?.depts.length) {
+            applySnapshot(snap);
+            void loadWorkspaceNavTree().then((fresh) => {
+                if (!cancelled && fresh.depts.length) applySnapshot(fresh);
+            });
+            return () => {
+                cancelled = true;
+            };
+        }
+
+        if (!initialTree.depts.length) setTreeLoading(true);
+        void loadWorkspaceNavTree().then((loaded) => {
+            if (!cancelled) applySnapshot(loaded);
+        });
         return () => {
             cancelled = true;
-            cancelDefer();
         };
     }, []);
-
-    /** Auto-expand only the active department (dept or work-unit route under it). */
-    useEffect(() => {
-        if (!departmentId) return;
-        setExpandedDeptIds((prev) => {
-            if (prev.has(departmentId)) return prev;
-            const next = new Set(prev);
-            next.add(departmentId);
-            writeExpandedDeptIds(next);
-            return next;
-        });
-    }, [departmentId]);
 
     const toggleDeptExpanded = useCallback((deptId: string) => {
         setExpandedDeptIds((prev) => {
@@ -243,7 +235,7 @@ function SidebarNav({
                         className="adminv2-sidebar-rail-link"
                         style={primaryLinkStyle}
                     >
-                        <Boxes size={20} strokeWidth={1.75} />
+                        <Building2 size={20} strokeWidth={1.75} />
                     </AdminV2NavLink>
                 ) : null}
             </>
@@ -306,7 +298,12 @@ function SidebarNav({
                                 </AdminV2NavLink>
                             </div>
                             {hasChildren && isExpanded ? (
-                                <div className="ml-7 space-y-0.5">
+                                <ul
+                                    className="adminv2-sidebar-queue-list ml-8 list-none space-y-0.5 border-l pl-2.5"
+                                    style={{ borderColor: neutral.border }}
+                                    role="group"
+                                    aria-label={`${name} queues`}
+                                >
                                     {deptChildren.map((child) => {
                                         const childHref = workspaceHref(
                                             workspaceNavChildHref(WORKSPACE, d.id, child)
@@ -319,22 +316,20 @@ function SidebarNav({
                                             deptId: d.id,
                                         });
                                         return (
-                                            <AdminV2NavLink
-                                                key={child.rowKey}
-                                                href={childHref}
-                                                active={childActive}
-                                                className={EXPANDED_PRIMARY_LINK}
-                                                style={primaryLinkStyle}
-                                                title={child.label}
-                                            >
-                                                <span className="inline-flex min-w-0 items-center gap-2">
-                                                    <Boxes size={15} strokeWidth={1.75} className="shrink-0" />
+                                            <li key={child.rowKey} role="none">
+                                                <AdminV2NavLink
+                                                    href={childHref}
+                                                    active={childActive}
+                                                    highlightFromActiveOnly
+                                                    className={EXPANDED_QUEUE_LINK}
+                                                    title={child.label}
+                                                >
                                                     <span className="truncate">{child.label}</span>
-                                                </span>
-                                            </AdminV2NavLink>
+                                                </AdminV2NavLink>
+                                            </li>
                                         );
                                     })}
-                                </div>
+                                </ul>
                             ) : null}
                         </div>
                     );

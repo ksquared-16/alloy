@@ -45,8 +45,14 @@ export function deptOperNavClickAckProps(clickedKey: string | null | undefined):
     return { "aria-busy": true, "data-adminv2-nav-pending": "true" };
 }
 
-/** Test-only reset. */
-export function resetDeptOperNavClickAckForTests(): void {
+/** Clear pending state when navigation does not occur (e.g. same-URL guard). */
+export function clearDeptOperNavClickAck(): void {
+    if (!pendingClickedKey) return;
     pendingClickedKey = null;
     emit();
+}
+
+/** Test-only reset. */
+export function resetDeptOperNavClickAckForTests(): void {
+    clearDeptOperNavClickAck();
 }

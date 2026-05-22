@@ -3,6 +3,10 @@
  * Avoids refetch-on-every-expand; does not bypass access control (APIs enforce scope).
  */
 
+import {
+    readWorkspaceNavTreeSession,
+    writeWorkspaceNavTreeSession,
+} from "@/lib/adminV2/navigation/workspaceNavTreeSession";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
@@ -33,6 +37,43 @@ export function getWorkspaceNavTreeSnapshot(): WorkspaceNavTreeSnapshot | null {
 export function clearWorkspaceNavTreeCache(): void {
     memorySnapshot = null;
     inflight = null;
+}
+
+/** Memory first, then session — survives hard `location.assign` shell navigation. */
+export function hydrateWorkspaceNavTreeCache(): WorkspaceNavTreeSnapshot | null {
+    if (memorySnapshot?.depts.length) return memorySnapshot;
+    const session = readWorkspaceNavTreeSession();
+    if (session?.depts.length) {
+        memorySnapshot = session;
+        return session;
+    }
+    return null;
+}
+
+/** Warm nav tree as soon as AdminV2 shell mounts (non-blocking). */
+export function prefetchWorkspaceNavTree(): void {
+    if (memorySnapshot?.depts.length) return;
+    const session = readWorkspaceNavTreeSession();
+    if (session?.depts.length) {
+        memorySnapshot = session;
+    }
+    void loadWorkspaceNavTree();
+}
+
+export function getInitialWorkspaceNavTreeState(): {
+    depts: WorkspaceNavTreeDept[];
+    wus: WorkspaceNavTreeWu[];
+    error: string | null;
+    showLoading: boolean;
+} {
+    const snap = hydrateWorkspaceNavTreeCache();
+    const hasDepts = Boolean(snap?.depts.length);
+    return {
+        depts: snap?.depts ?? [],
+        wus: snap?.wus ?? [],
+        error: snap?.error ?? null,
+        showLoading: !hasDepts && !snap?.error,
+    };
 }
 
 export async function loadWorkspaceNavTree(options?: { force?: boolean }): Promise<WorkspaceNavTreeSnapshot> {
@@ -80,6 +121,9 @@ export async function loadWorkspaceNavTree(options?: { force?: boolean }): Promi
             loadedAtMs: Date.now(),
         };
         memorySnapshot = snapshot;
+        if (snapshot.depts.length) {
+            writeWorkspaceNavTreeSession(snapshot);
+        }
         return snapshot;
     })();
 

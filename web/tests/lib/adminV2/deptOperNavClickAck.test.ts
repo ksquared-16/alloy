@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+    clearDeptOperNavClickAck,
     deptOperNavClickAckProps,
     deptOperNavClickedKey,
     isDeptOperNavClickPending,
@@ -25,5 +26,13 @@ describe("deptOperNavClickAck", () => {
             "data-adminv2-nav-pending": "true",
         });
         expect(isDeptOperNavClickPending(deptOperNavClickedKey("/other"))).toBe(false);
+    });
+
+    it("clearDeptOperNavClickAck releases pending pointer-events lock", () => {
+        const key = deptOperNavClickedKey("/adminV2/workspace/dept/a/work-unit/b?queue=new_inquiry");
+        markDeptOperNavClickAck(key);
+        clearDeptOperNavClickAck();
+        expect(isDeptOperNavClickPending(key)).toBe(false);
+        expect(deptOperNavClickAckProps(key)).toEqual({});
     });
 });

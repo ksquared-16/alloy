@@ -2,9 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
     clearWorkspaceNavTreeCache,
+    getInitialWorkspaceNavTreeState,
     getWorkspaceNavTreeSnapshot,
+    hydrateWorkspaceNavTreeCache,
     loadWorkspaceNavTree,
 } from "@/lib/adminV2/navigation/workspaceNavTreeCache";
+import { clearWorkspaceNavTreeSession } from "@/lib/adminV2/navigation/workspaceNavTreeSession";
 
 vi.mock("@/lib/workspace/workspaceAdminFetchDedupe", () => ({
     dedupeAdminFetch: vi.fn(async (url: string) => {
@@ -28,12 +31,28 @@ vi.mock("@/lib/workspace/workspaceDataFetch", () => ({
 }));
 
 describe("workspaceNavTreeCache", () => {
+    const store: Record<string, string> = {};
+
     beforeEach(() => {
         clearWorkspaceNavTreeCache();
+        clearWorkspaceNavTreeSession();
+        vi.stubGlobal("sessionStorage", {
+            getItem: (k: string) => store[k] ?? null,
+            setItem: (k: string, v: string) => {
+                store[k] = v;
+            },
+            removeItem: (k: string) => {
+                delete store[k];
+            },
+        });
+        vi.stubGlobal("window", { sessionStorage: globalThis.sessionStorage });
     });
 
     afterEach(() => {
         clearWorkspaceNavTreeCache();
+        clearWorkspaceNavTreeSession();
+        vi.unstubAllGlobals();
+        Object.keys(store).forEach((k) => delete store[k]);
         vi.clearAllMocks();
     });
 
@@ -51,5 +70,13 @@ describe("workspaceNavTreeCache", () => {
         await new Promise((r) => setTimeout(r, 2));
         const refreshed = await loadWorkspaceNavTree({ force: true });
         expect(refreshed.loadedAtMs).toBeGreaterThanOrEqual(before);
+    });
+
+    it("hydrates from session after memory cache clear", async () => {
+        await loadWorkspaceNavTree();
+        clearWorkspaceNavTreeCache();
+        const hydrated = hydrateWorkspaceNavTreeCache();
+        expect(hydrated?.depts).toHaveLength(1);
+        expect(getInitialWorkspaceNavTreeState().showLoading).toBe(false);
     });
 });

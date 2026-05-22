@@ -25,7 +25,7 @@ describe("adminV2DeferBackgroundWork", () => {
 
 describe("Dept nav background defer contracts", () => {
     it("defers shell background polls during workspace navigation", () => {
-        expect(read("app/adminV2/components/Sidebar.tsx")).toContain("scheduleAdminV2BackgroundWork");
+        expect(read("app/adminV2/components/AdminV2Shell.tsx")).toContain("prefetchWorkspaceNavTree");
         expect(read("app/adminV2/components/TopNavBar.tsx")).toContain("scheduleAdminV2BackgroundWork");
         expect(read("app/adminV2/components/aiActivity/RecentAiActionsStrip.tsx")).toContain(
             "scheduleAdminV2BackgroundWork"
