@@ -78,7 +78,7 @@ export function WorkspaceRootDepartmentGrid({
     const base = workspaceBasePath.replace(/\/$/, "");
     const root = tileVariant === "workspaceRoot";
     const router = useRouter();
-    const { selectedSiteId } = useWorkspaceSiteFilter();
+    const selectedSiteId = useWorkspaceSiteFilter()?.selectedSiteId ?? null;
     useAdminV2NavigationTransition();
 
     const handleDepartmentTileClick = (e: MouseEvent<HTMLAnchorElement>, departmentId: string, href: string) => {
