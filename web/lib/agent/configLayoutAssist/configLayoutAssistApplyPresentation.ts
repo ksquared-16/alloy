@@ -3,8 +3,10 @@
  * Uses server `apply_results` payloads only — no invented granularity.
  */
 
-import type { ApplyOperationResult } from "@/lib/agent/configLayoutAssist/apply/configurationProposalApply";
-import { CONFIG_LAYOUT_APPLY_SUPPORTED_KINDS } from "@/lib/agent/configLayoutAssist/apply/configurationProposalApply";
+import {
+    CONFIG_LAYOUT_APPLY_SUPPORTED_KINDS,
+    type ApplyOperationResult,
+} from "@/lib/agent/configLayoutAssist/apply/configurationProposalApplyShared";
 import type {
     ConfigurationOperationKindV1,
     ConfigurationOperationV1,

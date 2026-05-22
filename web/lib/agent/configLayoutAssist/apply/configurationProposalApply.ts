@@ -8,7 +8,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ADMIN_FIELD_TYPES } from "@/lib/fields/adminFieldTypeList";
 import { validateSelectLikeConfig } from "@/lib/fields/fieldDefinitionConfig";
 import { mergeFieldDefinitionPoliciesFromBody } from "@/lib/fields/fieldDefinitionPolicyWrite";
-import { logAdminAudit } from "@/lib/adminAuth";
+import { logAdminAudit } from "@/lib/admin/adminAuditLog";
 
 import {
     CONFIGURATION_MUTATING_OPERATION_KINDS,
@@ -18,29 +18,14 @@ import {
 } from "../configurationProposalV1";
 import { assertPermissionsForOperationKinds } from "../configurationProposalAccess";
 import type { AdminAccessContextSuccess } from "@/lib/admin/getAdminAccessContext";
+import {
+    CONFIG_LAYOUT_APPLY_SUPPORTED_KINDS,
+    type ApplyOperationResult,
+} from "./configurationProposalApplyShared";
 
-export const CONFIG_LAYOUT_APPLY_SUPPORTED_KINDS: readonly ConfigurationOperationKindV1[] = [
-    "create_field",
-    "update_field",
-    "set_field_requirement",
-    "set_field_interaction",
-    "set_field_write_target",
-    "expose_field_on_layout",
-    "hide_field_on_layout",
-    "move_field_to_section",
-] as const;
+export { CONFIG_LAYOUT_APPLY_SUPPORTED_KINDS, type ApplyOperationResult };
 
 const FIELD_KEY_REGEX = /^[a-z0-9_]{2,64}$/;
-
-export type ApplyOperationResult = {
-    operation_id: string;
-    kind: ConfigurationOperationKindV1;
-    ok: boolean;
-    verified: boolean;
-    error?: string;
-    verification_warning?: string;
-    field_definition_id?: string;
-};
 
 export function assertProposalCanBeApplied(
     proposal: ConfigurationProposalV1,

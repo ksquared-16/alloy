@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useParams, useRouter } from "next/navigation";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
-import { appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClient";
+import { appendWorkspaceSiteToPath, appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClient";
 import { adminV2CommitNavigation } from "@/lib/adminV2/shellNavigation";
 import { logAdminV2NavDebug } from "@/lib/debug/adminV2NavDebug";
 import {
@@ -1255,16 +1255,17 @@ export default function AdminV2WorkspaceDepartmentPage() {
         const list = deptWorkUnits ?? [];
         const explicitNeedsAttentionWu = list.find((w) => (w.key ?? "").trim().toLowerCase() === "needs_attention") ?? null;
         const targetWu = explicitNeedsAttentionWu ?? list[0] ?? null;
-        const href =
+        const hrefRaw =
             targetWu != null
                 ? `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(targetWu.id)}?queue=needs_attention`
                 : `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}`;
+        const href = appendWorkspaceSiteToPath(hrefRaw, selectedSiteId);
         return {
             href,
             targetWuId: targetWu?.id ?? null,
             needsAttentionWorkUnitId: explicitNeedsAttentionWu?.id ?? null,
         };
-    }, [departmentId, deptWorkUnits]);
+    }, [departmentId, deptWorkUnits, selectedSiteId]);
 
     const needsAttentionHref = needsAttentionSummary.href;
 
@@ -1326,8 +1327,11 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     {showPipelineLanes ? (
                         <>
                             {deptPipelineExecSurface!.lanes.map((lane) => {
-                                const wuHref = `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(deptPipelineExecSurface!.workUnitId)}`;
-                                const href = `${wuHref}?queue=${encodeURIComponent(lane.key)}`;
+                                const wuHref = appendWorkspaceSiteToPath(
+                                    `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(deptPipelineExecSurface!.workUnitId)}`,
+                                    selectedSiteId
+                                );
+                                const href = `${wuHref}${wuHref.includes("?") ? "&" : "?"}queue=${encodeURIComponent(lane.key)}`;
                                 return (
                                     <li key={`pipe:${lane.key}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                                         <DeptOperConsoleQueueRow
@@ -1348,7 +1352,10 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             {deptThroughputWuRows.map((wu) => {
                                 const s = deptWorkUnitSummaries[wu.id];
                                 const total = s ? s.total : null;
-                                const wuHref = `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(wu.id)}`;
+                                const wuHref = appendWorkspaceSiteToPath(
+                                    `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(wu.id)}`,
+                                    selectedSiteId
+                                );
                                 return (
                                     <li key={`wu:${wu.id}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                                         <DeptOperConsoleQueueRow
@@ -1391,13 +1398,19 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             needsAttentionSummary.needsAttentionWorkUnitId ?? needsAttentionSummary.targetWuId;
                         const drillBase =
                             drillWuId != null
-                                ? `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(drillWuId)}`
+                                ? appendWorkspaceSiteToPath(
+                                      `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(drillWuId)}`,
+                                      selectedSiteId
+                                  )
                                 : needsAttentionHref;
                         const query =
                             drillWuId != null
                                 ? `queue=needs_attention&attention_bucket=${encodeURIComponent(b.key)}`
                                 : "";
-                        const href = query !== "" ? `${drillBase}?${query}` : drillBase;
+                        const href =
+                            query !== ""
+                                ? `${drillBase}${drillBase.includes("?") ? "&" : "?"}${query}`
+                                : drillBase;
                         return (
                             <li key={`attn:${b.key}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                                 <DeptOperConsoleQueueRow
@@ -1445,8 +1458,11 @@ export default function AdminV2WorkspaceDepartmentPage() {
         <WorkspaceChrome
             variant="bridge"
             breadcrumbs={[
-                { href: WORKSPACE_BASE, label: "Workspace" },
-                { href: `${WORKSPACE_BASE}/dept/${departmentId}`, label: title },
+                { href: appendWorkspaceSiteToPath(WORKSPACE_BASE, selectedSiteId), label: "Workspace" },
+                {
+                    href: appendWorkspaceSiteToPath(`${WORKSPACE_BASE}/dept/${departmentId}`, selectedSiteId),
+                    label: title,
+                },
             ]}
             title={title}
             subtitle=""

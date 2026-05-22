@@ -3,6 +3,11 @@
  */
 
 import type { TaskAssistCommandBootstrap } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
+import {
+    MUTATION_BOUNDARY_TASK_ASSIST_REMINDER,
+    MUTATION_BOUNDARY_TASK_ASSIST_SCHEDULE,
+    MUTATION_BOUNDARY_TASK_ASSIST_SEND,
+} from "@/lib/adminV2/bos/bosMutationBoundaryCopy";
 
 export function taskAssistDraftProposalTitle(bootstrap: TaskAssistCommandBootstrap): string {
     if (bootstrap.intent_type === "schedule_message") return "Schedule outbound message";
@@ -25,9 +30,13 @@ export function taskAssistDraftProposalSummary(
 
 export function taskAssistDraftMutationBoundaryCopy(bootstrap: TaskAssistCommandBootstrap): string {
     if (bootstrap.intent_type === "schedule_message") {
-        return "Nothing sends until you confirm Schedule send or Send now. Pick a future send time for scheduling.";
+        return MUTATION_BOUNDARY_TASK_ASSIST_SCHEDULE;
     }
-    return "Nothing sends until you confirm Send now or schedule.";
+    return MUTATION_BOUNDARY_TASK_ASSIST_SEND;
+}
+
+export function taskAssistReminderMutationBoundaryCopy(): string {
+    return MUTATION_BOUNDARY_TASK_ASSIST_REMINDER;
 }
 
 export function taskAssistReminderProposalTitle(bootstrap: TaskAssistCommandBootstrap): string {

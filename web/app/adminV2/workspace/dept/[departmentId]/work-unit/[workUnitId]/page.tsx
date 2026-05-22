@@ -20,6 +20,7 @@ import type { WorkflowScopePartitionV1 } from "@/lib/workflows/workflowScopeMeta
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import {
+    appendWorkspaceSiteToPath,
     appendWorkspaceSiteToUrl,
     workspaceViewCacheFingerprint,
 } from "@/lib/adminV2/workspaceSiteFilterClient";
@@ -2807,12 +2808,17 @@ export default function AdminV2OpportunityWorkUnitPage() {
     }, [enrollmentRightRailResolved]);
 
     const needsAttentionHref = useMemo(() => {
-        if (!departmentId) return `${WORKSPACE_BASE}`;
-        if (!needsAttentionWorkUnitId) return `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}`;
-        return `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(
-            needsAttentionWorkUnitId
-        )}?queue=needs_attention`;
-    }, [departmentId, needsAttentionWorkUnitId]);
+        if (!departmentId) return appendWorkspaceSiteToPath(WORKSPACE_BASE, selectedSiteId);
+        if (!needsAttentionWorkUnitId) {
+            return appendWorkspaceSiteToPath(`${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}`, selectedSiteId);
+        }
+        return appendWorkspaceSiteToPath(
+            `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(
+                needsAttentionWorkUnitId
+            )}?queue=needs_attention`,
+            selectedSiteId
+        );
+    }, [departmentId, needsAttentionWorkUnitId, selectedSiteId]);
 
     const queueRowResolvedByKey = useMemo(() => {
         const m = new Map<string, ResolvedActionForClient>();
@@ -3134,7 +3140,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
             }
             if (action.type === "actions.block") {
                 if (action.actionId === "back_department" || action.actionId === "wu_back_department") {
-                    window.location.href = `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}`;
+                    window.location.href = appendWorkspaceSiteToPath(
+                        `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}`,
+                        selectedSiteId
+                    );
                     return;
                 }
                 if (action.actionId === "open_admin_opportunities" || action.actionId === "wu_open_all_inquiries") {
@@ -3147,9 +3156,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 }
                 if (action.actionId === "wu_open_needs_attention") {
                     if (needsAttentionWorkUnitId) {
-                        window.location.href = `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(needsAttentionWorkUnitId)}`;
+                        window.location.href = appendWorkspaceSiteToPath(
+                            `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(needsAttentionWorkUnitId)}`,
+                            selectedSiteId
+                        );
                     } else {
-                        window.location.href = `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}`;
+                        window.location.href = appendWorkspaceSiteToPath(
+                            `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}`,
+                            selectedSiteId
+                        );
                     }
                     return;
                 }
@@ -3158,7 +3173,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     return;
                 }
                 if (action.actionId === "wu_workspace_root") {
-                    window.location.href = WORKSPACE_BASE;
+                    window.location.href = appendWorkspaceSiteToPath(WORKSPACE_BASE, selectedSiteId);
                 }
             }
         },
@@ -3174,9 +3189,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
             queueItems?.queue.entity_type,
             queueRowResolvedByKey,
             router,
+            selectedSiteId,
             workUnit?.id,
             invalidate,
-            needsAttentionHref,
         ]
     );
 
@@ -3244,8 +3259,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
         <WorkspaceChrome
             variant="bridge"
             breadcrumbs={[
-                { href: WORKSPACE_BASE, label: "Workspace" },
-                { href: `${WORKSPACE_BASE}/dept/${departmentId}`, label: deptName },
+                { href: appendWorkspaceSiteToPath(WORKSPACE_BASE, selectedSiteId), label: "Workspace" },
+                {
+                    href: appendWorkspaceSiteToPath(`${WORKSPACE_BASE}/dept/${departmentId}`, selectedSiteId),
+                    label: deptName,
+                },
                 { label: wuName },
             ]}
             title={wuName}

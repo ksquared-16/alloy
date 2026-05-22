@@ -110,15 +110,4 @@ export async function requireAdminOrOps(): Promise<NextResponse | null> {
     return null;
 }
 
-/**
- * V1 audit: log admin/ops change to console. Optionally write to audit_log table later.
- */
-export function logAdminAudit(params: {
-    entity: string;
-    id: string;
-    changed_fields: string[];
-    actor_user_id: string;
-    role: string;
-}) {
-    console.log("[ADMIN_AUDIT]", JSON.stringify(params));
-}
+export { logAdminAudit } from "@/lib/admin/adminAuditLog";

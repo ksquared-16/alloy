@@ -49,7 +49,7 @@ function WorkspaceSiteFilterStrip({ normalizedPath }: { normalizedPath: string }
             borderColor: derived.topBarDivider,
             color: neutral.surface,
           }}
-          title="View filter — narrows workspace data to one campus within your allowed sites (queue wiring deferred; see docs/sprints/05_2026/site_filter_workspace_card.md)."
+          title="View filter — narrows workspace data to one campus within your allowed sites. Selection persists across workspace navigation."
         >
           <option value="">All locations</option>
           {bootstrap.sites.map((s) => (

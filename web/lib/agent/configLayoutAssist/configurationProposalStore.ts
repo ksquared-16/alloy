@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { logAdminAudit } from "@/lib/adminAuth";
+import { logAdminAudit } from "@/lib/admin/adminAuditLog";
 
 import {
     CONFIG_LAYOUT_ASSIST_INITIAL_STATE,

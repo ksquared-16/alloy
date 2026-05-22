@@ -11,6 +11,7 @@ import type { EntityLabelsBootstrapMap } from "@/lib/admin/entityLabelsServer";
 import { AdminOrgOperationalTimezoneProvider } from "@/contexts/AdminOrgOperationalTimezoneContext";
 import { AdminViewerTimezoneProvider, type AdminViewerTimezoneValue } from "@/contexts/AdminViewerTimezoneContext";
 import { WorkspaceOrgProvider } from "@/contexts/WorkspaceOrgContext";
+import WorkspaceSiteFilterPersistenceScopeBridge from "@/app/adminV2/workspace/WorkspaceSiteFilterPersistenceScopeBridge";
 import type { CSSProperties, ReactNode } from "react";
 
 interface AdminV2WorkspaceClientProvidersProps {
@@ -86,6 +87,7 @@ export default function AdminV2WorkspaceClientProviders({
                 principalUserId={principalUserId}
                 accessScopeFingerprint={accessScopeFingerprint}
               >
+                <WorkspaceSiteFilterPersistenceScopeBridge />
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                   <AdminDrawerProvider>
                     <AdminV2ClickDebugInstaller />

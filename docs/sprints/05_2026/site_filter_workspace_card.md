@@ -31,10 +31,18 @@ Default (`selectedSiteId = null`) = all sites allowed by permission scope (uncha
 
 Product direction after the first-pass site filter is fully wired: **site first**, then optional **room / age grouping** where the org configures it. The current header dropdown is intentionally minimal; do not build the second layer until site-scoped list/workspace fetches are complete.
 
+## Sticky navigation (shipped May 2026)
+
+| Piece | Role |
+|-------|------|
+| `appendWorkspaceSiteToPath` + session helpers | URL + `sessionStorage` persistence; see **`sticky_location_filter_hotfix.md`** |
+| `adminV2CommitNavigation` | Merges sticky site onto workspace targets |
+| `WorkspaceSiteFilterPersistenceScopeBridge` | Registers org/principal/fingerprint for session keys |
+
 ## Remaining wiring (follow-up)
 
 1. **KPI resolvers** and legacy opportunity-queue endpoints — same `workspace_site_id` pattern where site-scoped counts are shown.
-2. **Optional:** persist header site selection in `sessionStorage` for reload continuity.
+2. **Workspace root** rollup/KPI site scoping (optional; not required for sticky nav).
 
 ## Verification
 

@@ -4,6 +4,19 @@
 
 Document **Admin V2 workspace**: departments, work units, queues, and how operators navigate work — without confusing queue UI data for canonical records.
 
+## Workspace view site (operator context)
+
+Under `/adminV2/workspace/**`, operators may narrow lists and queue/bootstrap fetches to one **allowed site** (`locations.location_type = site`). This is **session view context**, not configuration and not a permission elevation.
+
+| Mechanism | Role |
+|-----------|------|
+| Header dropdown (`WorkspaceSiteFilterProvider`) | Live selection; `null` = all sites allowed by access scope |
+| URL `workspace_site_id` | Survives `adminV2CommitNavigation` full reloads; merged on workspace path links |
+| `sessionStorage` | Reload continuity when URL omits param (keyed by org + principal + access fingerprint) |
+| API query `workspace_site_id` | Same param on queue/bootstrap routes → **`resolveQueueRecordScopeConstraints`** |
+
+Helpers: `web/lib/adminV2/workspaceSiteFilterClient.ts`. Sprint: **`docs/sprints/05_2026/sticky_location_filter_hotfix.md`**.
+
 ## Queue truth boundary (critical rule)
 
 Queue rows are **selection and preview surfaces only**.
