@@ -376,14 +376,15 @@ export default function AdminV2WorkspaceDepartmentPage() {
         });
     }, [departmentId, orgId, principalUserId, accessScopeFingerprint, selectedSiteId]);
 
+    const setGlobalAssistantWorkspaceScope = globalAssistant?.setWorkspaceScope;
     useEffect(() => {
-        if (!globalAssistant || !departmentId) return;
-        globalAssistant.setWorkspaceScope({
+        if (!setGlobalAssistantWorkspaceScope || !departmentId) return;
+        setGlobalAssistantWorkspaceScope({
             department_id: departmentId,
             department_name: dept?.name ?? null,
         });
-        return () => globalAssistant.setWorkspaceScope(null);
-    }, [globalAssistant, departmentId, dept?.name]);
+        return () => setGlobalAssistantWorkspaceScope(null);
+    }, [setGlobalAssistantWorkspaceScope, departmentId, dept?.name]);
 
     const refreshWorkflowPanels = useCallback(async () => {
         if (!departmentId) return;
