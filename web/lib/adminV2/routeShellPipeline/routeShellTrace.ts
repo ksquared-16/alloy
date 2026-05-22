@@ -16,10 +16,16 @@ function log(event: string, payload: Record<string, unknown>): void {
 
 export function resetRouteShellTrace(route: RouteShellTraceRoute): void {
     loadingOwnersByRoute.set(route, new Set());
-    alloyPerfSet(`route_${route}_shell_visible`, undefined);
-    alloyPerfSet(`route_${route}_bootstrap_returned`, undefined);
-    alloyPerfSet(`route_${route}_first_above_fold_stable`, undefined);
-    alloyPerfSet(`route_${route}_hydration_complete`, undefined);
+    const perf = typeof window !== "undefined" ? window.__alloyPerf : null;
+    if (perf) {
+        delete perf.marks[`route_${route}_shell_visible`];
+        delete perf.marks[`route_${route}_bootstrap_returned`];
+        delete perf.marks[`route_${route}_first_above_fold_stable`];
+        delete perf.marks[`route_${route}_hydration_complete`];
+        delete perf.marks[`route_${route}_queue_items_fetch_ms`];
+        delete perf.marks[`route_${route}_queue_summaries_fetch_ms`];
+        delete perf.marks[`route_${route}_oper_lane_fetch_ms`];
+    }
     alloyPerfSet(`route_${route}_post_shell_fetch_count`, 0);
 }
 
@@ -51,6 +57,22 @@ export function markRouteHydrationComplete(route: RouteShellTraceRoute, extra?: 
     const t = nowMs();
     alloyPerfSet(`route_${route}_hydration_complete`, t);
     log("hydration_complete_ms", { route, ms: Math.round(t), ...extra });
+}
+
+export function markRouteFetchTiming(
+    route: RouteShellTraceRoute,
+    kind: "queue_items" | "queue_summaries" | "oper_lane",
+    startedAt: number
+): void {
+    const elapsed = Math.round(nowMs() - startedAt);
+    const key =
+        kind === "queue_items"
+            ? `route_${route}_queue_items_fetch_ms`
+            : kind === "queue_summaries"
+              ? `route_${route}_queue_summaries_fetch_ms`
+              : `route_${route}_oper_lane_fetch_ms`;
+    alloyPerfSet(key, elapsed);
+    log(`${kind}_fetch_ms`, { route, ms: elapsed });
 }
 
 export function incrementRoutePostShellFetch(route: RouteShellTraceRoute, label: string): void {

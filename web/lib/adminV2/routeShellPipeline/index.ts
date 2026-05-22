@@ -12,6 +12,7 @@ export type {
 
 export {
     markRouteBootstrapReturned,
+    markRouteFetchTiming,
     markRouteFirstAboveFoldStable,
     markRouteHydrationComplete,
     markRouteShellVisible,

@@ -61,6 +61,15 @@ import {
     synthesizeDeptKpiWorkUnitSummaries,
 } from "@/lib/workspace/synthesizeDeptKpiWorkUnitSummaries";
 import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
+import {
+    markRouteBootstrapReturned,
+    markRouteFirstAboveFoldStable,
+    markRouteShellVisible,
+    registerRouteLoadingOwner,
+    resetRouteShellTrace,
+    unregisterRouteLoadingOwner,
+} from "@/lib/adminV2/routeShellPipeline";
+import { recordBootstrapPayloadBytes } from "@/lib/perf/adminV2SpeedSprintTrace";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import { setAdminV2PrimarySurfacePending } from "@/lib/perf/adminV2PrimarySurfaceGate";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
@@ -406,6 +415,14 @@ export default function AdminV2WorkspaceDepartmentPage() {
             expandThread: true,
         });
     }, [globalAssistant, dept?.name]);
+
+    useEffect(() => {
+        if (!departmentId) return;
+        resetRouteShellTrace("department");
+        registerRouteLoadingOwner("department", "page");
+        markRouteShellVisible("department", { departmentId });
+        return () => unregisterRouteLoadingOwner("department", "page");
+    }, [departmentId]);
 
     /** Workflow panels — far off critical path; never compete with dept bootstrap. */
     useEffect(() => {
@@ -799,6 +816,14 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             };
                             right_rail_actions?: ResolvedActionForClient[];
                         };
+                        try {
+                            recordBootstrapPayloadBytes(
+                                "department",
+                                new TextEncoder().encode(JSON.stringify(b)).length
+                            );
+                        } catch {
+                            /* non-fatal */
+                        }
                         const deptCommit =
                             b.department?.id != null
                                 ? {
@@ -888,6 +913,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             org_id: orgId,
                             department_id: departmentId,
                         });
+                        markRouteBootstrapReturned("department", { departmentId });
+                        markRouteFirstAboveFoldStable("department", { departmentId, source: "bootstrap" });
                         perfDeptLoad({
                             phase: "shell_ready",
                             ms: Math.round((typeof performance !== "undefined" ? performance.now() : 0) - tAnchor),
@@ -1019,6 +1046,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
 
                 if (typeof performance !== "undefined" && typeof window !== "undefined") {
                     alloyPerfSet("department_ready", performance.now());
+                    markRouteBootstrapReturned("department", { departmentId, path: "legacy_fanout" });
                 }
             } catch (e) {
                 if (!cancelled) {

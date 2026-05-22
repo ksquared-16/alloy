@@ -30,13 +30,17 @@ import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import {
     buildWorkUnitRoutePipelineState,
     buildWorkUnitRouteShellPlaceholder,
+    incrementRoutePostShellFetch,
     markRouteBootstrapReturned,
+    markRouteFetchTiming,
     markRouteFirstAboveFoldStable,
+    markRouteHydrationComplete,
     markRouteShellVisible,
     registerRouteLoadingOwner,
     resetRouteShellTrace,
     unregisterRouteLoadingOwner,
 } from "@/lib/adminV2/routeShellPipeline";
+import { recordBootstrapPayloadBytes } from "@/lib/perf/adminV2SpeedSprintTrace";
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import {
@@ -1046,11 +1050,17 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
             const runNetwork = async (seq: number, touchUiPerf: boolean) => {
                 const init = workspaceDataFetchInit();
+                const rowFetchStart =
+                    touchUiPerf && typeof performance !== "undefined" ? performance.now() : 0;
                 if (touchUiPerf && typeof window !== "undefined" && typeof performance !== "undefined") {
                     alloyPerfSet("queue_rows_request_start", performance.now());
                     alloyPerfSet("rows_req", performance.now());
+                    incrementRoutePostShellFetch("work_unit", "queue_items");
                 }
                 const res = await dedupeAdminFetch(route, init);
+                if (touchUiPerf && rowFetchStart) {
+                    markRouteFetchTiming("work_unit", "queue_items", rowFetchStart);
+                }
                 if (touchUiPerf && typeof window !== "undefined" && typeof performance !== "undefined") {
                     alloyPerfSet("queue_rows_response_headers", performance.now());
                     alloyPerfSet("rows_resp", performance.now());
@@ -1308,7 +1318,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
         [fetchQueueItems, setSelectedQueueKeyTraced, workUnitId]
     );
 
-    const fetchQueueSummaries = useCallback(async (wuId: string) => {
+    const fetchQueueSummaries = useCallback(
+        async (wuId: string, options?: { force?: boolean }) => {
         const seq = ++queueSummariesRequestSeq.current;
         const qs = new URLSearchParams({
             include_previews: "false",
@@ -1320,14 +1331,26 @@ export default function AdminV2OpportunityWorkUnitPage() {
             `/api/admin/work-units/${encodeURIComponent(wuId)}/queues?${qs.toString()}`,
             selectedSiteId
         );
+        if (
+            !options?.force &&
+            queueSummariesRef.current != null &&
+            queueSummariesRoute === route
+        ) {
+            incrementRoutePostShellFetch("work_unit", "queue_summaries_skip");
+            return;
+        }
         setQueueSummariesError(null);
         setQueueSummariesRoute(route);
+        const summariesFetchStart =
+            typeof performance !== "undefined" ? performance.now() : 0;
         try {
             const init = workspaceDataFetchInit();
             if (typeof window !== "undefined" && typeof performance !== "undefined") {
                 alloyPerfSet("work_unit_summaries_request_start", performance.now());
             }
+            incrementRoutePostShellFetch("work_unit", "queue_summaries");
             const res = await dedupeAdminFetch(route, init);
+            markRouteFetchTiming("work_unit", "queue_summaries", summariesFetchStart);
             if (typeof window !== "undefined" && typeof performance !== "undefined") {
                 alloyPerfSet("work_unit_summaries_response_headers", performance.now());
             }
@@ -1366,7 +1389,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 setQueueSummariesError(e instanceof Error ? e.message : "Failed to load queues");
             }
         }
-    }, [selectedSiteId]);
+    },
+        [selectedSiteId, queueSummariesRoute]
+    );
 
     useEffect(() => {
         if (!siteSelectionReady) {
@@ -1530,6 +1555,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         }
                         if (!deptRow?.id) {
                             throw new Error("Bootstrap department invalid");
+                        }
+
+                        try {
+                            recordBootstrapPayloadBytes(
+                                "work_unit",
+                                new TextEncoder().encode(JSON.stringify(b)).length
+                            );
+                        } catch {
+                            /* non-fatal */
                         }
 
                         setWorkUnit(wu);
@@ -1994,7 +2028,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             deleteQueueRowCacheKeysForWorkUnit(queueRowClientCacheRef.current, viewScopeFingerprint, workUnitId);
             void Promise.all([
                 fetchQueueItems(workUnitId, selectedQueueKey, queueSummaries, { force: true }),
-                fetchQueueSummaries(workUnitId),
+                fetchQueueSummaries(workUnitId, { force: true }),
             ]);
         },
         [fetchQueueItems, fetchQueueSummaries, queueSummaries, selectedQueueKey, viewScopeFingerprint, workUnitId]
@@ -2010,7 +2044,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             deleteQueueRowCacheKeysForWorkUnit(queueRowClientCacheRef.current, viewScopeFingerprint, workUnitId);
             void Promise.all([
                 fetchQueueItems(workUnitId, selectedQueueKey, summaries, { force: true }),
-                fetchQueueSummaries(workUnitId),
+                fetchQueueSummaries(workUnitId, { force: true }),
             ]);
         };
         /** Drawer saves dispatch `adminv2:opportunity-updated` — bust row cache + refetch summaries for this lane (not drawer-only). */
@@ -3417,7 +3451,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 workUnitId: workUnitId ?? undefined,
                 workUnitTitle: workUnit?.name?.trim() || wuName,
                 departmentTitle: dept?.name?.trim() || deptName,
-                departmentKey: dept?.key,
+                departmentKey: dept?.key ?? undefined,
                 reserveActionsRail: isEnrollmentLikeDepartmentKey(dept?.key),
             }),
         [workUnitId, workUnit?.name, workUnit?.key, dept?.name, dept?.key, wuName, deptName]
@@ -3456,7 +3490,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 work_unit_id: workUnitId,
                 department_title: deptName,
                 work_unit_title: wuName,
-                department_key: dept?.key,
+                department_key: dept?.key ?? undefined,
                 shell_identity_ready: workUnitShellReady,
                 oper_lane_loading: !workUnitShellReady || workUnitOperLanePending,
                 kpi_placeholder: workUnitKpiMetricsPending,
@@ -3484,6 +3518,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     useEffect(() => {
         if (!workUnitQueueRevealReady) return;
         markRouteFirstAboveFoldStable("work_unit", { departmentId, workUnitId });
+        markRouteHydrationComplete("work_unit", { departmentId, workUnitId });
     }, [workUnitQueueRevealReady, departmentId, workUnitId]);
 
     const workUnitRenderableModel =

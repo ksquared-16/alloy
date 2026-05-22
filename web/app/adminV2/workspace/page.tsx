@@ -21,6 +21,7 @@ import {
     writeWorkspaceRootCache,
 } from "@/lib/workspace/adminV2WorkspaceSessionCache";
 import {
+    markRouteBootstrapReturned,
     markRouteShellVisible,
     registerRouteLoadingOwner,
     resetRouteShellTrace,
@@ -316,7 +317,9 @@ export default function AdminV2WorkspaceIndexPage() {
                 }
 
                 if (typeof performance !== "undefined" && typeof window !== "undefined") {
-                    alloyPerfSet("workspace_ready", performance.now());
+                    const readyAt = performance.now();
+                    alloyPerfSet("workspace_ready", readyAt);
+                    markRouteBootstrapReturned("workspace", { departments: active.length });
                 }
 
                 if (perfDebug) {

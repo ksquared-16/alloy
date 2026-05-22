@@ -3,6 +3,7 @@ import type { OperationalSummaryRiskHint } from "@/lib/ai/enrichmentContracts";
 import type { OpportunityWorkspaceContext } from "@/contexts/AdminDrawerContext";
 import type { RecordLayoutRow } from "@/lib/recordChrome/types";
 import type { OpportunityDrawerOperationalBootstrapResponse } from "@/lib/admin/opportunityDrawerOperationalBootstrapTypes";
+import { recordBootstrapPayloadBytes } from "@/lib/perf/adminV2SpeedSprintTrace";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
@@ -102,7 +103,17 @@ export async function fetchOpportunityDrawerOperationalBootstrap(
             if (!res.ok) {
                 throw new Error(res.status === 404 ? "Not found" : "bootstrap_failed");
             }
-            return res.json() as Promise<OpportunityDrawerOperationalBootstrapResponse>;
+            return res.json().then((json: OpportunityDrawerOperationalBootstrapResponse) => {
+                try {
+                    recordBootstrapPayloadBytes(
+                        "drawer_opportunity",
+                        new TextEncoder().encode(JSON.stringify(json)).length
+                    );
+                } catch {
+                    /* non-fatal */
+                }
+                return json;
+            });
         })
         .catch((err) => {
             drawerBootstrapByOpportunityId.delete(cacheKey);

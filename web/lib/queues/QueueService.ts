@@ -1892,15 +1892,36 @@ export type QueueSummariesSharedBootstrap = {
     opportunityStatusDefs: StatusDefinitionRow[];
 };
 
-/** One operational-day + opportunity status-def fetch per dept bootstrap / batch. */
+const sharedBootstrapCacheByOrg = new Map<
+    string,
+    { atMs: number; value: QueueSummariesSharedBootstrap }
+>();
+const SHARED_BOOTSTRAP_TTL_MS = 45_000;
+
+/** Test-only — clears in-memory shared bootstrap cache. */
+export function resetQueueSummariesSharedBootstrapCacheForTests(): void {
+    sharedBootstrapCacheByOrg.clear();
+}
+
+/** One operational-day + opportunity status-def fetch per org per TTL (speed sprint — fewer duplicate loads). */
 export async function buildQueueSummariesSharedBootstrap(orgId: string): Promise<QueueSummariesSharedBootstrap> {
+    const cached = sharedBootstrapCacheByOrg.get(orgId);
+    if (cached && Date.now() - cached.atMs < SHARED_BOOTSTRAP_TTL_MS) {
+        return cached.value;
+    }
     const supabase = createAdminClient();
     const refUtc = new Date();
     const [operationalDay, opportunityStatusDefs] = await Promise.all([
         resolveOperationalDayPlanContext(supabase, orgId, refUtc),
         fetchEffectiveStatusDefinitions(supabase as never, orgId, "opportunities", { activeOnly: true }),
     ]);
-    return { operationalDay, opportunityStatusDefs };
+    const value = { operationalDay, opportunityStatusDefs };
+    sharedBootstrapCacheByOrg.set(orgId, { atMs: Date.now(), value });
+    if (sharedBootstrapCacheByOrg.size > 24) {
+        const oldest = sharedBootstrapCacheByOrg.keys().next().value;
+        if (oldest) sharedBootstrapCacheByOrg.delete(oldest);
+    }
+    return value;
 }
 
 export async function getWorkUnitQueueSummaries(params: {
@@ -3080,6 +3101,15 @@ export async function getWorkUnitQueueItems(params: {
             enrichment_subtimings_ms: queueListSubtimings ?? null,
         }
     );
+}
+
+/** Test-only — seed shared bootstrap cache without hitting Supabase. */
+export function seedSharedQueueSummariesBootstrapCacheForTests(
+    orgId: string,
+    value: QueueSummariesSharedBootstrap,
+    atMs = Date.now()
+): void {
+    sharedBootstrapCacheByOrg.set(orgId, { atMs, value });
 }
 
 export const __testing = {
