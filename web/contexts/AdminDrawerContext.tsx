@@ -103,7 +103,7 @@ export type DrawerStackItem = {
 
 interface AdminDrawerContextValue {
     drawer: AdminDrawerState;
-    /** External gate: bootstrap + primary in flight; modal stays unmounted. */
+    /** External gate: bootstrap + drawer_primary + header actions in flight; modal stays unmounted (full is background). */
     openingOpportunity: OpportunityDrawerOpeningParams | null;
     isOpportunityDrawerOpening: boolean;
     /** When opening a linked record from inside a drawer, the previous drawer is pushed here. */

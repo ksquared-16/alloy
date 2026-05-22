@@ -26,6 +26,8 @@ import {
     reportDrawerFullHydrated,
     reportDrawerPrimaryReady,
     reportDrawerVisibleApplied,
+    reportPostRevealEnrichEnd,
+    reportPostRevealEnrichStart,
 } from "@/lib/perf/adminV2DrawerPerf";
 import {
     ADMINV2_DRAWER_OPPORTUNITY_BOOTSTRAP_BODY_MIN_H,
@@ -1429,6 +1431,7 @@ export default function AdminEntityDrawer() {
     }, [opportunityResolvedHeaderActions, opportunityRecordHeaderActiveTours]);
     /** After `drawer_visible_ready` + two animation frames — defer non-critical fetches (activity-signal, deletion check). */
     const [postDrawerVisibleKey, setPostDrawerVisibleKey] = useState<string | null>(null);
+    const postRevealEnrichEndReportedRef = useRef<string | null>(null);
     /** Packet, activity strip, tour editor — after primary overview reveal (no extra visible phases). */
     const [opportunityDrawerSecondaryReady, setOpportunityDrawerSecondaryReady] = useState(false);
     /** Background `surface=full` after `drawer_visible` — avoids second loading shell; cleared on new entity fetch / drawer close. */
@@ -2146,6 +2149,8 @@ export default function AdminEntityDrawer() {
         if (!drawer.type || !drawer.id) {
             entityDrawerTabInitKeyRef.current = "";
             opportunityDrawerFirstPaintPreloadedRef.current = null;
+            postRevealEnrichEndReportedRef.current = null;
+            setPostDrawerVisibleKey(null);
             setOpportunityDrawerLayoutFrozen(false);
             setOpportunityDrawerBelowFoldRevealed(false);
             setOpportunityDrawerEnrichmentHeld(false);
@@ -6892,7 +6897,10 @@ export default function AdminEntityDrawer() {
         const raf1 = window.requestAnimationFrame(() => {
             if (cancelled) return;
             window.requestAnimationFrame(() => {
-                if (!cancelled) setPostDrawerVisibleKey(key);
+                if (!cancelled) {
+                    setPostDrawerVisibleKey(key);
+                    reportPostRevealEnrichStart(String(drawer.id));
+                }
             });
         });
         return () => {
@@ -6907,6 +6915,21 @@ export default function AdminEntityDrawer() {
         opportunityFullRecordHydrateApplied,
         postDrawerVisibleKey,
         opportunityDrawerAboveFoldLocked,
+    ]);
+
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        const key = `${drawer.type}:${drawer.id}`;
+        if (postDrawerVisibleKey !== key) return;
+        if (!opportunityFullRecordHydrateApplied) return;
+        if (postRevealEnrichEndReportedRef.current === key) return;
+        postRevealEnrichEndReportedRef.current = key;
+        reportPostRevealEnrichEnd(String(drawer.id));
+    }, [
+        drawer.type,
+        drawer.id,
+        postDrawerVisibleKey,
+        opportunityFullRecordHydrateApplied,
     ]);
 
     useEffect(() => {

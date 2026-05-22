@@ -18,6 +18,12 @@ import {
     fetchOpportunityDrawerPrimaryEntity,
     isOpportunityDrawerPrimaryWarm,
 } from "@/lib/admin/opportunityDrawerPrimaryPrefetch";
+import {
+    reportDrawerBootstrapReady,
+    reportDrawerComposedRevealReady,
+    reportDrawerHeaderActionsReady,
+    reportDrawerPrimaryReadyAtOpen,
+} from "@/lib/perf/adminV2DrawerPerf";
 
 /** Max overlay floor when cold — avoids sub-frame flash; skipped when intent prefetch is warm. */
 export const OPPORTUNITY_DRAWER_OPEN_ANTI_FLICKER_MS = 200;
@@ -26,10 +32,10 @@ export type OpportunityDrawerOpenPreload = {
     opportunityId: string;
     bootstrap: OpportunityDrawerOperationalBootstrapResponse;
     primaryEntity: Record<string, unknown>;
-    /** Merged `surface=full` row when pre-open fetch succeeded. */
+    /** Merged `surface=full` when warm cache resolved before commit (optional; never gates open). */
     fullEntity: Record<string, unknown> | null;
     headerActions: ResolvedActionsBySlot;
-    /** When true, enrichment overview sections stay unmounted until user edit/expand. */
+    /** When true, enrichment overview sections stay unmounted until user edit/expand or background full merges. */
     enrichmentHeldUntilInteraction: boolean;
 };
 
@@ -45,17 +51,22 @@ export type OpportunityDrawerOpenMetrics = {
     wait_for_composed_ms: number;
     anti_flicker_ms: number;
     enrichment_held: boolean;
+    full_attached_at_open: boolean;
 };
 
+/**
+ * Primary-gated composed reveal: bootstrap shell + drawer_primary + header actions.
+ * Does not require surface=full, comms, tours, or below-fold enrichments.
+ */
 export function opportunityDrawerComposedRevealReady(preload: OpportunityDrawerOpenPreload): boolean {
     if (!opportunityDrawerPrimaryContractReady(preload.primaryEntity, preload.opportunityId)) return false;
     if (preload.headerActions == null || typeof preload.headerActions !== "object") return false;
     if (preload.bootstrap?.entity == null) return false;
-    if (preload.fullEntity) {
-        return String(preload.fullEntity._record_surface ?? "").trim() === "full";
-    }
-    return preload.enrichmentHeldUntilInteraction === true;
+    return true;
 }
+
+/** @deprecated alias — same as {@link opportunityDrawerComposedRevealReady} */
+export const opportunityDrawerPrimaryGatedRevealReady = opportunityDrawerComposedRevealReady;
 
 export function shouldDeferOpportunityDrawerOpen(
     pathname: string | null | undefined,
@@ -68,9 +79,25 @@ export function shouldDeferOpportunityDrawerOpen(
     return p.startsWith("/adminV2") || p.startsWith("/admin/workspace");
 }
 
+/** Non-blocking peek: attach full entity only if the in-flight/full cache promise is already settled. */
+async function peekOpportunityDrawerFullEntity(
+    fullP: Promise<Record<string, unknown> | null>
+): Promise<Record<string, unknown> | null> {
+    try {
+        return await Promise.race([
+            fullP,
+            new Promise<null>((resolve) => {
+                setTimeout(() => resolve(null), 0);
+            }),
+        ]);
+    } catch {
+        return null;
+    }
+}
+
 /**
- * Loads bootstrap, drawer_primary, surface=full, and record_header actions before drawer mount.
- * Opens when composed reveal contract is satisfied (full present OR enrichment held).
+ * Loads bootstrap + drawer_primary + record_header actions before drawer mount.
+ * Starts surface=full in the background (intent warm / dedupe cache); full never gates commit.
  */
 export async function loadOpportunityDrawerComposedOpen(
     opportunityId: string,
@@ -84,13 +111,24 @@ export async function loadOpportunityDrawerComposedOpen(
     const bootstrapWarm = isOpportunityDrawerBootstrapWarm(id);
     const primaryWarm = isOpportunityDrawerPrimaryWarm(id);
     const fullWarm = isOpportunityDrawerFullWarm(id);
-    const prefetchHit = bootstrapWarm && primaryWarm && fullWarm;
+    const prefetchHit = bootstrapWarm && primaryWarm;
 
     const composedStart = typeof performance !== "undefined" ? performance.now() : 0;
     let bootstrapMs = 0;
     let primaryMs = 0;
     let fullMs: number | null = null;
     let headerActionsMs = 0;
+
+    const fullStart = typeof performance !== "undefined" ? performance.now() : 0;
+    const fullP = fetchOpportunityDrawerFullEntity(id, init)
+        .then((entity) => {
+            fullMs = Math.round((typeof performance !== "undefined" ? performance.now() : 0) - fullStart);
+            return entity;
+        })
+        .catch(() => {
+            fullMs = Math.round((typeof performance !== "undefined" ? performance.now() : 0) - fullStart);
+            return null;
+        });
 
     const bootstrapP = (async () => {
         const t0 = typeof performance !== "undefined" ? performance.now() : 0;
@@ -106,19 +144,9 @@ export async function loadOpportunityDrawerComposedOpen(
         return entity;
     })();
 
-    const fullP = (async () => {
-        const t0 = typeof performance !== "undefined" ? performance.now() : 0;
-        try {
-            const entity = await fetchOpportunityDrawerFullEntity(id, init);
-            fullMs = Math.round((typeof performance !== "undefined" ? performance.now() : 0) - t0);
-            return entity;
-        } catch {
-            fullMs = Math.round((typeof performance !== "undefined" ? performance.now() : 0) - t0);
-            return null;
-        }
-    })();
-
-    const [bootstrap, primaryEntity, fullEntity] = await Promise.all([bootstrapP, primaryP, fullP]);
+    const [bootstrap, primaryEntity] = await Promise.all([bootstrapP, primaryP]);
+    reportDrawerBootstrapReady(id, bootstrapMs);
+    reportDrawerPrimaryReadyAtOpen(id, primaryMs);
 
     const headerActionsUrl = buildOpportunityDrawerHeaderActionsUrl(
         id,
@@ -137,6 +165,13 @@ export async function loadOpportunityDrawerComposedOpen(
         init
     );
     headerActionsMs = Math.round((typeof performance !== "undefined" ? performance.now() : 0) - headerT0);
+    reportDrawerHeaderActionsReady(id, headerActionsMs);
+
+    const peekedFull = await peekOpportunityDrawerFullEntity(fullP);
+    let fullEntity: Record<string, unknown> | null = null;
+    if (peekedFull && String(peekedFull._record_surface ?? "").trim() === "full") {
+        fullEntity = peekedFull;
+    }
 
     const enrichmentHeldUntilInteraction = fullEntity == null;
     const preload: OpportunityDrawerOpenPreload = {
@@ -152,12 +187,13 @@ export async function loadOpportunityDrawerComposedOpen(
         throw new Error("drawer_composed_contract_not_ready");
     }
 
+    const waitForComposedMs = Math.round((typeof performance !== "undefined" ? performance.now() : 0) - composedStart);
+    reportDrawerComposedRevealReady(id, waitForComposedMs);
+
     markOpportunityDrawerHydrateDone(id, "primary");
     if (fullEntity) {
         markOpportunityDrawerHydrateDone(id, "full");
     }
-
-    const waitForComposedMs = Math.round((typeof performance !== "undefined" ? performance.now() : 0) - composedStart);
 
     let antiFlickerMs = 0;
     const warmEnough = prefetchHit || headerUrlWarm;
@@ -185,6 +221,7 @@ export async function loadOpportunityDrawerComposedOpen(
             wait_for_composed_ms: waitForComposedMs,
             anti_flicker_ms: antiFlickerMs,
             enrichment_held: enrichmentHeldUntilInteraction,
+            full_attached_at_open: fullEntity != null,
         },
     };
 }

@@ -339,6 +339,19 @@ describe("Drawer operational bootstrap (Cards 4–7)", () => {
         expect(src).toContain("tryBeginOpportunityDrawerHydrate");
     });
 
+    it("composed open gates on primary contract, not surface=full", () => {
+        const coord = read("lib/admin/opportunityDrawerOpenCoordinator.ts");
+        const gateFn = coord.match(
+            /export function opportunityDrawerComposedRevealReady\(preload[\s\S]*?\n\}/,
+        )?.[0];
+        expect(gateFn).toBeTruthy();
+        expect(gateFn).toContain("opportunityDrawerPrimaryContractReady");
+        expect(gateFn).not.toContain("fullEntity");
+        expect(gateFn).not.toContain("enrichmentHeldUntilInteraction");
+        expect(coord).toContain("peekOpportunityDrawerFullEntity");
+        expect(coord).toMatch(/prefetchHit = bootstrapWarm && primaryWarm/);
+    });
+
     it("gates ref option lists on edit for bootstrap opportunity drawer", () => {
         const src = read("components/admin/AdminEntityDrawer.tsx");
         expect(src).toMatch(

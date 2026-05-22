@@ -15,7 +15,7 @@ export type OpportunityDrawerIntentContext = {
 
 /**
  * Intent-time prefetch (hover / mousedown / focus before click).
- * Warms bootstrap + drawer_primary + surface=full in parallel.
+ * Warms bootstrap + drawer_primary (open gate) and surface=full (background enrich).
  * Header actions resolve on open (needs primary row for hints).
  */
 export function prefetchOpportunityDrawerOnRowIntent(

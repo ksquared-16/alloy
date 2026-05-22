@@ -11,8 +11,8 @@ import {
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
 /**
- * Runs bootstrap + drawer_primary before AdminDrawerContext commits the drawer.
- * Warm intent prefetch commits immediately; cold path shows overlay only for real network wait (+ ≤200ms floor).
+ * Primary-gated composed open: bootstrap + drawer_primary + header actions before drawer mount.
+ * surface=full warms in background and never blocks overlay dismissal.
  */
 export default function OpportunityDrawerOpenCoordinator() {
     const { openingOpportunity, commitOpportunityDrawerOpen, cancelOpportunityDrawerOpen } = useAdminDrawer();
