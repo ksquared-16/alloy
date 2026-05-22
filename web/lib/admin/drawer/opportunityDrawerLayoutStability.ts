@@ -33,15 +33,18 @@ export function opportunityDrawerLayoutFirstPaintGatesActive(
     return aboveFoldLocked || firstPaintActive;
 }
 
-/** Summary stays single-column until below-fold reveal — prevents grid column pop-in. */
+/**
+ * @deprecated Prefer `buildOpportunityDrawerPipelineState` → `above_fold.inquiry_summary`.
+ * Kept for unit tests and bootstrap races before shell pipeline is available.
+ */
 export function computeShowInquirySummaryRightColumn(params: {
-    aboveFoldLocked: boolean;
+    summaryRightColumnReserved: boolean;
     record: Record<string, unknown>;
     belowFoldEnrichmentReady: boolean;
     fullHydrateReady: boolean;
     taskAssistEnabled: boolean;
 }): boolean {
-    if (params.aboveFoldLocked) return false;
+    if (params.summaryRightColumnReserved) return true;
     if (opportunityInquirySummaryRightPanelFromPrimaryOnly(params.record)) {
         return true;
     }
@@ -52,14 +55,11 @@ export function computeShowInquirySummaryRightColumn(params: {
     );
 }
 
-/** Family block stays compact until below-fold — prevents FamilyContactsPanel height jump. */
+/** @deprecated Prefer drawer pipeline `family_contacts.use_full_panel`. */
 export function computeFamilySummaryUsesFullPanel(params: {
-    aboveFoldLocked: boolean;
     familyContactsInSummary: boolean;
-    firstPaintActive: boolean;
 }): boolean {
-    if (params.aboveFoldLocked) return false;
-    return params.familyContactsInSummary && !params.firstPaintActive;
+    return params.familyContactsInSummary;
 }
 
 export function shouldDeferOpportunityDrawerSecondaryReveal(aboveFoldLocked: boolean): boolean {
@@ -99,12 +99,9 @@ export function stabilizeOpportunityWorkflowOverviewSections(
     );
 }
 
-/** Contract: full hydrate must not widen summary columns while above-fold is locked. */
+/** @deprecated Prefer drawer pipeline `inquiry_summary.column_mode`. */
 export function opportunityDrawerSummaryLayoutMode(params: {
-    aboveFoldLocked: boolean;
-    recordSurface: string;
     showRightColumn: boolean;
 }): "one" | "two" {
-    if (params.aboveFoldLocked) return "one";
     return params.showRightColumn ? "two" : "one";
 }

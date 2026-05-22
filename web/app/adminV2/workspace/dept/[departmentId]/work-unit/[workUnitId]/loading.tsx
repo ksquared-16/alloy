@@ -1,6 +1,4 @@
-import { WorkUnitWorkspaceColdShell } from "@/components/admin/workspace/WorkUnitWorkspaceColdShell";
-
-/** Segment loader — bridge shell + oper-region-only reserve (matches dept `loading.tsx` doctrine). */
+/** Segment transition defers to the client page shell owner (no segment-level cold shell). */
 export default function Loading() {
-    return <WorkUnitWorkspaceColdShell />;
+    return null;
 }

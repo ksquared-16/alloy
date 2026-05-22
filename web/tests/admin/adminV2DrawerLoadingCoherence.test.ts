@@ -296,8 +296,8 @@ describe("Work-unit queue-first loading coherence", () => {
         const src = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
         expect(src).toContain("workUnitOperLanePending");
         expect(src).toMatch(/workUnitPageBlockingLoad = loading && !workUnitShellReady/);
-        expect(src).not.toMatch(/readWorkUnitPageCache[\s\S]{0,400}setLoading\(false\)/);
-        expect(src).toMatch(/setLoading\(true\)/);
+        expect(src).toMatch(/readWorkUnitPageCache[\s\S]{0,600}setLoading\(false\)/);
+        expect(src).toMatch(/if \(!seededWorkUnitShellRef\.current\) \{\s*setLoading\(true\)/);
     });
 });
 
@@ -495,12 +495,19 @@ describe("Opportunity drawer first-paint contract", () => {
         expect(mod).toContain("filterOpportunityOverviewSectionsForFirstPaint");
     });
 
-    it("hides right summary column and defers overview sections on first paint", () => {
+    it("inquiry summary uses drawer pipeline with bootstrap fallbacks", () => {
         const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("computeShowInquirySummaryRightColumn");
-        expect(src).toContain("computeFamilySummaryUsesFullPanel");
+        expect(src).toContain("buildOpportunityDrawerPipelineState");
+        expect(src).toContain("opportunityDrawerPipeline");
+        expect(src).toContain("inqModel?.show_right_column");
+        expect(src).toContain("drawerFullBoundValuesReady");
+        expect(src).toContain("FamilyContactsPanel");
+        expect(src).toContain("OpportunityInquirySummaryTaskPreview");
+        expect(src).toContain('data-shell-slot-placeholder="inquiry_summary_activity"');
+        const pipelineMod = read("lib/adminV2/drawerPipeline/adapters/opportunity/buildAboveFoldRenderModel.ts");
+        expect(pipelineMod).toContain("resolveShowRightColumn");
+        expect(pipelineMod).not.toMatch(/above_fold_locked[\s\S]{0,80}column_mode/);
         expect(src).toContain("stabilizeOpportunityWorkflowOverviewSections");
-        expect(src).toContain("opportunityDrawerLayoutFirstPaintGates");
         expect(src).toMatch(/opportunityDrawerLayoutFirstPaintGates \? "true" : "false"/);
         expect(src).not.toMatch(
             /min-h-\[3\.25rem\][\s\S]{0,120}aria-hidden[\s\S]{0,120}Tour date/,

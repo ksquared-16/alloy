@@ -24,7 +24,11 @@ import { logDbTiming, withDbTiming } from "@/lib/admin/dbQueryTiming";
 import { perfDrawerFullHydrate, timingOpportunityApiVisible } from "@/lib/perf/adminV2PerfLog";
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import { assertOpportunityInAccessScope } from "@/lib/admin/accessScope";
-import { fetchDepartmentMetadataForActivity } from "@/lib/admin/loadOpportunityActivitySignal";
+import {
+  fetchDepartmentMetadataForActivity,
+  loadOpportunityActivitySignal,
+} from "@/lib/admin/loadOpportunityActivitySignal";
+import { attachOpportunityInquirySummaryTaskPreview } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
 import { attachOpportunityAttentionSuggestionBundle } from "@/lib/admin/opportunityAttentionSuggestionAttachment";
 import { applyPrimaryPersonMirrorValuesToHostRecord } from "@/lib/admin/drawer/linkedRecordFieldEditing";
 import { loadInquiryChildCustomFieldValuesByOcmId } from "@/lib/admin/drawer/inquiryChildCustomFieldValues";
@@ -592,6 +596,109 @@ export async function attachOpportunityInquiryChildrenShell(
   host._member_person_graph_pending = memList.some((m) => trimOrNull(m.person_id) != null);
 }
 
+type OppPersonShellRow = {
+  id: string;
+  person_id: string;
+  role_type?: string | null;
+};
+
+/** `drawer_visible` / `drawer_primary`: linked adults for inquiry summary (names + channels). */
+export async function attachOpportunityPersonsShell(
+  supabase: AdminSupabase,
+  orgId: string,
+  host: Record<string, unknown>,
+): Promise<void> {
+  const opportunityId = trimOrNull(host.id);
+  if (!opportunityId) {
+    host._opportunity_persons = [];
+    host._additional_contacts_shell_count = 0;
+    return;
+  }
+  const primaryPersonId = trimOrNull(host.primary_person_id);
+  const { data: opRows } = await supabase
+    .from("opportunity_persons")
+    .select("id, person_id, role_type, created_at")
+    .eq("org_id", orgId)
+    .eq("opportunity_id", opportunityId)
+    .order("created_at", { ascending: true });
+  const rows = (opRows ?? []) as OppPersonShellRow[];
+  const personIds = [...new Set(rows.map((z) => trimOrNull(z.person_id)).filter(Boolean))] as string[];
+  const pmap = new Map<string, WarmPersonRow>();
+  if (personIds.length > 0) {
+    const { data: people } = await supabase
+      .from("persons")
+      .select("id, first_name, last_name, full_name, email, phone")
+      .eq("org_id", orgId)
+      .in("id", personIds);
+    for (const row of (people ?? []) as WarmPersonRow[]) {
+      pmap.set(row.id, row);
+    }
+  }
+  const mapped = rows
+    .filter((r) => trimOrNull(r.id) && trimOrNull(r.person_id))
+    .map((r) => {
+      const pid = String(r.person_id).trim();
+      const p = pmap.get(pid) ?? null;
+      return {
+        id: String(r.id).trim(),
+        person_id: pid,
+        role_type: trimOrNull(r.role_type) ?? "—",
+        name: warmPersonDisplayName(p),
+        phone: trimOrNull(p?.phone),
+        email: trimOrNull(p?.email),
+      };
+    });
+  host._opportunity_persons = mapped;
+  host._additional_contacts_shell_count = mapped.filter(
+    (r) => !primaryPersonId || r.person_id !== primaryPersonId,
+  ).length;
+}
+
+/** Header last-activity line — workflow_events + WU/dept rules (no separate client GET when embedded). */
+export async function attachOpportunityActivitySignalShell(
+  supabase: AdminSupabase,
+  orgId: string,
+  host: Record<string, unknown>,
+): Promise<void> {
+  const opportunityId = trimOrNull(host.id);
+  if (!opportunityId) {
+    host._activity_signal = null;
+    return;
+  }
+  const statusKey =
+    trimOrNull(host.status_key) ?? trimOrNull(host.status) ?? null;
+  const workUnitId = trimOrNull(host.work_unit_id);
+  try {
+    let preloadedOrgMetadata: { workUnitMetadata: unknown | null; departmentMetadata: unknown | null } | null =
+      null;
+    if (workUnitId) {
+      const { data: wu } = await supabase
+        .from("work_units")
+        .select("metadata, department_id")
+        .eq("id", workUnitId)
+        .eq("org_id", orgId)
+        .maybeSingle();
+      const workUnitMetadata = (wu as { metadata?: unknown } | null)?.metadata ?? null;
+      const deptId = trimOrNull((wu as { department_id?: string | null } | null)?.department_id);
+      const departmentMetadata = deptId
+        ? await fetchDepartmentMetadataForActivity(supabase, orgId, deptId)
+        : null;
+      preloadedOrgMetadata = { workUnitMetadata, departmentMetadata };
+    }
+    const sig = await loadOpportunityActivitySignal({
+      supabase,
+      orgId,
+      opportunityId,
+      statusKey,
+      workUnitId,
+      preloadedOrgMetadata,
+    });
+    host._activity_signal = sig;
+  } catch {
+    host._activity_signal = null;
+  }
+}
+
 /** Lazy member→person hydrate for `_inquiry_children` enrichment (skipped on main full hydrate Pass 6). */
 async function respondOpportunityRelationshipMemberOverlay(
   supabase: AdminSupabase,
@@ -947,8 +1054,12 @@ export async function buildOpportunityDrawerVisiblePayload(
   );
   vis._field_definitions = [];
   vis._record_surface = "drawer_visible";
-  await attachOpportunityInquiryChildrenShell(supabase, orgId, vis);
-  vis._opportunity_persons = [];
+  await Promise.all([
+    attachOpportunityInquiryChildrenShell(supabase, orgId, vis),
+    attachOpportunityPersonsShell(supabase, orgId, vis),
+    attachOpportunityActivitySignalShell(supabase, orgId, vis),
+    attachOpportunityInquirySummaryTaskPreview(supabase, orgId, vis),
+  ]);
   vis._relationship_displays = {};
   const householdIdV =
     typeof opp.customer_id === "string" && opp.customer_id.trim() ? opp.customer_id.trim() : null;
@@ -989,7 +1100,7 @@ export async function buildOpportunityDrawerVisiblePayload(
  * Data split (drawer UX):
  * - **drawer_visible (fast shell):** native row + minimal FK labels (pipeline stage placeholder, household name,
  *   primary person/contact identity strings), lifecycle + quote shells, cached opportunity status defs, empty
- *   `_relationship_displays`, `_field_definitions`, `_opportunity_persons`, `_inquiry_children` — enough for header + hero.
+ *   `_relationship_displays`, `_field_definitions`, `_opportunity_persons` (shell), `_activity_signal`, `_inquiry_children` (shell).
  * - **surface=full (background hydrate):** field_definitions + sections + field_values merge, FK relationship stubs,
  *   inquiry_children (OCM + option labels), `_opportunity_persons`, richer `_identity` roles + child picker, pipelines
  *   / discount / vertical / location context.
@@ -1318,25 +1429,15 @@ export async function respondOpportunityEntityGet(
   lapSegment("status_resolve_and_lifecycle_shell");
   const drawerInitial =
     surfaceParamEarly === "drawer_initial" || surfaceParamEarly === "drawer_primary";
-  // Card 5/future: pass bootstrap `record_layout` into drawer_primary to skip second layout fetch (see production pass §4).
-  const layoutForFieldPolicy =
-    orgId != null
-      ? await fetchEffectiveRecordDrawerLayout(supabase, orgId, "opportunity")
-      : { ok: false as const, error: "missing org" };
-  const opportunityLayoutConfig =
-    layoutForFieldPolicy.ok && layoutForFieldPolicy.layout
-      ? layoutForFieldPolicy.layout.config_json
-      : null;
-  const fieldRegistryMetaFull = await attachFieldDefinitionsAndValues(supabase, out, "opportunities", id, {
-    mergeValues: !drawerInitial,
-    layoutConfig: opportunityLayoutConfig,
-  });
-  markPhase("after_field_definitions_values");
-  lapSegment("field_definitions_and_values_attach");
   if (drawerInitial) {
-    markPhase("drawer_primary_skip_rel_inquiry_persons");
-    await attachOpportunityInquiryChildrenShell(supabase, orgId, out);
-    out._opportunity_persons = [];
+    markPhase("drawer_primary_fast_path");
+    out._field_definitions = [];
+    await Promise.all([
+      attachOpportunityInquiryChildrenShell(supabase, orgId, out),
+      attachOpportunityPersonsShell(supabase, orgId, out),
+      attachOpportunityActivitySignalShell(supabase, orgId, out),
+      attachOpportunityInquirySummaryTaskPreview(supabase, orgId, out),
+    ]);
     out._record_surface = "drawer_primary";
     const inquiryLinesPrimary = buildOpportunityInquiryLinesLite(out);
     const inquiryTitleEarly =

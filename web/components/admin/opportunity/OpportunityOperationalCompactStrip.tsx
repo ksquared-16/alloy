@@ -152,6 +152,8 @@ export type OpportunityOperationalCompactStripProps = {
     fetchEnabled?: boolean;
     /** Inquiry summary: no fetch until operator expands — avoids late pop-in / resize. */
     tasksLoadMode?: "auto" | "on_demand";
+    /** When true, tasks render from shell preview; strip loads reminders/sends only. */
+    hideTasksSection?: boolean;
 };
 
 const GROUP_LABEL =
@@ -164,6 +166,7 @@ export default function OpportunityOperationalCompactStrip({
     layout = "header_chips",
     fetchEnabled = true,
     tasksLoadMode = "auto",
+    hideTasksSection = false,
 }: OpportunityOperationalCompactStripProps) {
     const v11 = isTaskAssistV1UiEnabled();
     const onDemandTasks = tasksLoadMode === "on_demand";
@@ -186,7 +189,11 @@ export default function OpportunityOperationalCompactStrip({
         setError(null);
         try {
             const [taskRes, sendRes] = await Promise.all([
-                fetchOperationalTasks(opportunityId),
+                hideTasksSection ?
+                    Promise.resolve(
+                        new Response(JSON.stringify({ ok: true, tasks: [] }), { status: 200 })
+                    )
+                :   fetchOperationalTasks(opportunityId),
                 fetchCommunicationScheduledSends(opportunityId),
             ]);
             const taskJson = await readJson<{ ok?: boolean; tasks?: OperationalTaskRow[]; error?: string; message?: string }>(
@@ -213,7 +220,7 @@ export default function OpportunityOperationalCompactStrip({
         } finally {
             setLoading(false);
         }
-    }, [fetchEnabled, onDemandTasks, opportunityId, tasksExpanded, v11]);
+    }, [fetchEnabled, hideTasksSection, onDemandTasks, opportunityId, tasksExpanded, v11]);
 
     const openTasks = useMemo(() => tasks.filter((t) => t.status === "open"), [tasks]);
     const stripSends = useMemo(
@@ -353,7 +360,9 @@ export default function OpportunityOperationalCompactStrip({
 
     const inquirySummary = layout === "inquiry_summary";
 
-    if (inquirySummary && onDemandTasks && !tasksExpanded) {
+    if (inquirySummary && hideTasksSection) {
+        /* Tasks owned by OpportunityInquirySummaryTaskPreview — reminders/sends only below. */
+    } else if (inquirySummary && onDemandTasks && !tasksExpanded) {
         const nextFollowUpIso = parseNextFollowUpAt(overviewData);
         return (
             <div
@@ -530,7 +539,7 @@ export default function OpportunityOperationalCompactStrip({
                     {loading && !hasChips ? (
                         <p className="text-[11px] text-alloy-midnight/50">Loading tasks and reminders…</p>
                     ) : null}
-                    {openTasks.length > 0 ? (
+                    {!hideTasksSection && openTasks.length > 0 ? (
                         <div data-operational-strip-group="tasks">
                             <div className={GROUP_LABEL}>Tasks</div>
                             <div className={`mt-1 ${chipRowClass}`}>{renderTaskChips()}</div>
@@ -542,9 +551,14 @@ export default function OpportunityOperationalCompactStrip({
                             <div className={`mt-1 ${chipRowClass}`}>{renderReminderChips()}</div>
                         </div>
                     ) : null}
-                    {showEmpty ? (
+                    {showEmpty && !hideTasksSection ? (
                         <p className="text-[11px] text-alloy-midnight/50" data-operational-strip-empty="true">
                             No active tasks or reminders.
+                        </p>
+                    ) : null}
+                    {hideTasksSection && !hasReminders && !loading && !error ? (
+                        <p className="text-[11px] text-alloy-midnight/50" data-operational-strip-empty="true">
+                            No scheduled reminders
                         </p>
                     ) : null}
                 </>

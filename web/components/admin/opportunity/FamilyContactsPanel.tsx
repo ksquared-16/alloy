@@ -72,6 +72,20 @@ function SummaryAdditionalPeopleLineSkeleton() {
     );
 }
 
+/** Summary-variant card shell — reserved when server reports additional-contact count before names hydrate. */
+function SummaryAdditionalPersonCardSkeleton({ cardPad }: { cardPad: string }) {
+    return (
+        <div
+            className={`${cardPad} rounded-lg border border-alloy-stone/12 bg-white/80`}
+            aria-busy="true"
+            aria-label="Loading contact"
+        >
+            <div className="skeleton-pulse h-3 w-[min(70%,11rem)] rounded bg-alloy-stone/14" aria-hidden />
+            <div className="mt-2 skeleton-pulse h-3 w-[min(88%,14rem)] rounded bg-alloy-stone/10" aria-hidden />
+        </div>
+    );
+}
+
 export function OppInquiryContactChannelsRow(props: {
     phone: string | null | undefined;
     email: string | null | undefined;
@@ -127,13 +141,16 @@ export function FamilyContactsPanel(props: {
     /** True while `drawer_visible` is on-screen and background `surface=full` has not merged. */
     opportunityFullHydratePending?: boolean;
     opportunityFullHydrateApplied?: boolean;
-    opportunityFullHydrateFailed?: boolean;
+    /** True only after background `surface=full` hydrate failed (not primary pending/skipped). */
+    opportunityRelationshipsFullHydrateFailed?: boolean;
     /** Summary card in inquiry header vs overview body (layout-only body mount is deprecated). */
     variant?: "default" | "summary";
     /** Opportunity field definitions for linked-person policy gates (optional). */
     fieldDefinitions?: FieldDefForLinkedEdit[];
     /** When false, defers `surface=record_section` registry actions until enrichment is allowed. */
     actionsFetchEnabled?: boolean;
+    /** Server shell count for additional contacts — reserves card rows before `_opportunity_persons` names arrive. */
+    shellReservedAdditionalCount?: number;
     /** After primary person PATCH from this card — parent should merge hydration + refetch. */
     onPrimaryPersonUpdated?: (person: Record<string, unknown>) => void;
     /** After linked opportunity_person row person PATCH — parent merges `_opportunity_persons` + refetch. */
@@ -155,20 +172,21 @@ export function FamilyContactsPanel(props: {
         recordHydrationPending = false,
         opportunityFullHydratePending,
         opportunityFullHydrateApplied,
-        opportunityFullHydrateFailed = false,
+        opportunityRelationshipsFullHydrateFailed = false,
         variant = "default",
         fieldDefinitions = [],
         actionsFetchEnabled = true,
+        shellReservedAdditionalCount = 0,
         onPrimaryPersonUpdated,
         onLinkedPersonUpdated,
     } = props;
 
     const relationshipRowsAwaitingFullHydrate =
-        !opportunityFullHydrateFailed &&
+        !opportunityRelationshipsFullHydrateFailed &&
         opportunityFullHydratePending === true &&
         opportunityFullHydrateApplied !== true;
     const primaryContactAwaitingFullHydrate =
-        !opportunityFullHydrateFailed &&
+        !opportunityRelationshipsFullHydrateFailed &&
         opportunityFullHydratePending === true &&
         opportunityFullHydrateApplied !== true;
 
@@ -275,7 +293,7 @@ export function FamilyContactsPanel(props: {
 
             <div className="min-w-0 flex-1">
                 {sorted.length === 0 ? (
-                    opportunityFullHydrateFailed ? (
+                    opportunityRelationshipsFullHydrateFailed ? (
                         <div
                             className={
                                 variant === "summary"
@@ -286,12 +304,20 @@ export function FamilyContactsPanel(props: {
                             Full record did not load. Relationships may be incomplete — try refreshing the drawer or reopening the
                             opportunity.
                         </div>
-                    ) : relationshipRowsAwaitingFullHydrate ? (
+                    ) : relationshipRowsAwaitingFullHydrate && shellReservedAdditionalCount <= 0 ? (
                         variant === "summary" ? (
                             <SummaryAdditionalPeopleLineSkeleton />
                         ) : (
                             <DrawerRelationshipPanelSkeleton density="comfortable" rows={1} />
                         )
+                    ) : shellReservedAdditionalCount > 0 && sorted.length === 0 ? (
+                        <ul className={`${variant === "summary" ? "space-y-2" : "space-y-2.5"} mt-1 list-none`}>
+                            {Array.from({ length: shellReservedAdditionalCount }).map((_, i) => (
+                                <li key={`additional-contact-shell-${i}`}>
+                                    <SummaryAdditionalPersonCardSkeleton cardPad={cardPad} />
+                                </li>
+                            ))}
+                        </ul>
                     ) : (
                         <p className={`${variant === "summary" ? "mt-1.5" : "mt-2"} ${oppInqMutedEmpty}`}>
                             No additional contacts linked yet.

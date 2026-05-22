@@ -31,6 +31,12 @@ import {
     reportPostRevealEnrichStart,
 } from "@/lib/perf/adminV2DrawerPerf";
 import {
+    recordOpportunityDrawerPostOpenFetch,
+    reportDrawerAboveFoldStable,
+    reportDrawerFirstPaintHydrateWave,
+    resetOpportunityDrawerFirstPaintTrace,
+} from "@/lib/perf/opportunityDrawerFirstPaintTrace";
+import {
     ADMINV2_DRAWER_OPPORTUNITY_BOOTSTRAP_BODY_MIN_H,
     ADMINV2_DRAWER_OPPORTUNITY_TIMELINE_MIN_H,
     ADMINV2_DRAWER_OPPORTUNITY_TITLE_RAIL_MIN_H,
@@ -43,6 +49,8 @@ import EntityDocumentsSection from "@/components/admin/EntityDocumentsSection";
 import { normalizeDocumentRows } from "@/lib/admin/normalizeDocumentRow";
 import CommunicationsDrawerSection from "@/components/admin/communications/CommunicationsDrawerSection";
 import OpportunityOperationalCompactStrip from "@/components/admin/opportunity/OpportunityOperationalCompactStrip";
+import { OpportunityInquirySummaryTaskPreview } from "@/components/admin/opportunity/OpportunityInquirySummaryTaskPreview";
+import { parseInquirySummaryTaskPreview } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { buildOpportunityOperationalContext } from "@/lib/adminV2/bos/activeOperationalContext";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
@@ -182,15 +190,21 @@ import {
     opportunityInquiryTourDisplayFromPrimaryMetadata,
 } from "@/lib/admin/drawer/opportunityDrawerFirstPaintContract";
 import {
-    OPPORTUNITY_DRAWER_BELOW_FOLD_SCROLL_PX,
-    OPPORTUNITY_DRAWER_HEADER_ACTIONS_RAIL_MIN_H_CLASS,
     computeFamilySummaryUsesFullPanel,
     computeShowInquirySummaryRightColumn,
+    OPPORTUNITY_DRAWER_BELOW_FOLD_SCROLL_PX,
+    OPPORTUNITY_DRAWER_HEADER_ACTIONS_RAIL_MIN_H_CLASS,
     opportunityDrawerAboveFoldLayoutLocked,
     opportunityDrawerLayoutFirstPaintGatesActive,
     opportunityDrawerSummaryLayoutMode,
     stabilizeOpportunityWorkflowOverviewSections,
 } from "@/lib/admin/drawer/opportunityDrawerLayoutStability";
+import {
+    buildOpportunityDrawerPipelineState,
+    drawerFullBoundValuesReady,
+    opportunityShellToDrawerShellContract,
+    overviewSectionsFromAboveFoldModel,
+} from "@/lib/adminV2/drawerPipeline";
 import {
     opportunityDrawerBelowFoldEnrichmentReady as computeBelowFoldEnrichmentReady,
     opportunityDrawerFullBoundEnrichmentReady as computeFullBoundEnrichmentReady,
@@ -1366,7 +1380,8 @@ export default function AdminEntityDrawer() {
         const s = String((data as { _record_surface?: string })._record_surface ?? "").trim();
         return s === "drawer_visible" || s === "drawer_primary" || s === "drawer_initial";
     }, [data, drawer.id, drawer.type]);
-    const [opportunityFullHydrateFailed, setOpportunityFullHydrateFailed] = useState(false);
+    /** Background `surface=full` only — never set on primary fast-path failure or pending full hydrate. */
+    const [opportunityBackgroundFullHydrateFailed, setOpportunityBackgroundFullHydrateFailed] = useState(false);
     /** Primary coherent overview (`drawer_primary` / legacy `drawer_initial`). */
     const opportunityPrimaryHydrateApplied = useMemo(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return false;
@@ -1388,10 +1403,10 @@ export default function AdminEntityDrawer() {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return false;
         if (!data || typeof data !== "object") return false;
         if (String((data as { id?: unknown }).id ?? "") !== String(drawer.id)) return false;
-        if (opportunityFullHydrateFailed) return false;
+        if (opportunityBackgroundFullHydrateFailed) return false;
         const s = String((data as { _record_surface?: string })._record_surface ?? "").trim();
         return s === "drawer_primary" || s === "drawer_initial";
-    }, [data, drawer.id, drawer.type, opportunityFullHydrateFailed]);
+    }, [data, drawer.id, drawer.type, opportunityBackgroundFullHydrateFailed]);
     const [isEditing, setIsEditing] = useState(false);
     const [initialInlineFormSnapshot, setInitialInlineFormSnapshot] = useState<string | null>(null);
     const [formData, setFormData] = useState<Record<string, unknown>>({});
@@ -2003,7 +2018,7 @@ export default function AdminEntityDrawer() {
                     });
                 }
                 if (drawer.type === "opportunities") {
-                    setOpportunityFullHydrateFailed(false);
+                    setOpportunityBackgroundFullHydrateFailed(false);
                 }
                 setData(json);
                 if (typeof window !== "undefined" && typeof performance !== "undefined") {
@@ -2159,7 +2174,7 @@ export default function AdminEntityDrawer() {
             merged._record_surface = "full";
             markOpportunityDrawerHydrateDone(drawer.id, "full");
             opportunityBackgroundFullDoneRef.current = drawer.id;
-            setOpportunityFullHydrateFailed(false);
+            setOpportunityBackgroundFullHydrateFailed(false);
         } else {
             merged._record_surface = "drawer_primary";
         }
@@ -2240,7 +2255,7 @@ export default function AdminEntityDrawer() {
             setOpportunityWorkflowRuns(null);
             setOpportunityWorkflowRunsLoading(false);
             setOpportunityWorkflowRunsError(null);
-            setOpportunityFullHydrateFailed(false);
+            setOpportunityBackgroundFullHydrateFailed(false);
             opportunityDrawerBootstrapAppliedRef.current = null;
             opportunityDrawerBootstrapEntityKeyRef.current = null;
             opportunityDrawerBootstrapInflightRef.current = null;
@@ -2280,7 +2295,7 @@ export default function AdminEntityDrawer() {
             memberPersonGraphOverlayInFlightRef.current = null;
             memberPersonGraphOverlayDoneRef.current = null;
             resetOpportunityDrawerHydrateGuards(drawer.id);
-            setOpportunityFullHydrateFailed(false);
+            setOpportunityBackgroundFullHydrateFailed(false);
             const entityChanged = opportunityDrawerBootstrapEntityKeyRef.current !== entityOpenKey;
             if (entityChanged) {
                 opportunityDrawerFirstPaintPreloadedRef.current = null;
@@ -2449,7 +2464,7 @@ export default function AdminEntityDrawer() {
                 opportunityPrimaryHydrateInFlightRef.current = null;
                 opportunityPrimaryHydrateDoneRef.current = hydrateId;
                 finishOpportunityDrawerHydrate(hydrateId, "primary", "success");
-                setOpportunityFullHydrateFailed(false);
+                setOpportunityBackgroundFullHydrateFailed(false);
                 setData((prev) => {
                     if (!prev || String((prev as { id?: unknown }).id ?? "") !== hydrateId) {
                         const fresh = { ...(json as Record<string, unknown>) };
@@ -2458,6 +2473,12 @@ export default function AdminEntityDrawer() {
                     }
                     const merged = mergeOpportunityFullHydrate(prev as Record<string, unknown>, json as Record<string, unknown>);
                     merged._record_surface = "drawer_primary";
+                    const changed = Object.keys(merged).filter(
+                        (k) => JSON.stringify((prev as Record<string, unknown>)[k]) !== JSON.stringify(merged[k])
+                    );
+                    if (changed.length > 0) {
+                        reportDrawerFirstPaintHydrateWave(hydrateId, "primary_merge", changed);
+                    }
                     return merged;
                 });
                 if (typeof window !== "undefined" && typeof performance !== "undefined") {
@@ -2477,7 +2498,6 @@ export default function AdminEntityDrawer() {
                 }
                 opportunityPrimaryHydrateDoneRef.current = hydrateId;
                 finishOpportunityDrawerHydrate(hydrateId, "primary", "fail");
-                setOpportunityFullHydrateFailed(true);
             });
     }, [drawer.type, drawer.id, drawer.jobRecordSurface, opportunityRecordHydrationPending]);
 
@@ -2507,7 +2527,7 @@ export default function AdminEntityDrawer() {
                 opportunityBackgroundFullInFlightRef.current = null;
                 opportunityBackgroundFullDoneRef.current = hydrateId;
                 finishOpportunityDrawerHydrate(hydrateId, "full", "success");
-                setOpportunityFullHydrateFailed(false);
+                setOpportunityBackgroundFullHydrateFailed(false);
                 setData((prev) => {
                     if (!prev || String((prev as { id?: unknown }).id ?? "") !== hydrateId) {
                         const fresh = { ...(json as Record<string, unknown>) };
@@ -2516,6 +2536,12 @@ export default function AdminEntityDrawer() {
                     }
                     const merged = mergeOpportunityFullHydrate(prev as Record<string, unknown>, json as Record<string, unknown>);
                     merged._record_surface = "full";
+                    const changed = Object.keys(merged).filter(
+                        (k) => JSON.stringify((prev as Record<string, unknown>)[k]) !== JSON.stringify(merged[k])
+                    );
+                    if (changed.length > 0) {
+                        reportDrawerFirstPaintHydrateWave(hydrateId, "full_merge", changed);
+                    }
                     return merged;
                 });
                 if (typeof window !== "undefined" && typeof performance !== "undefined") {
@@ -2536,7 +2562,7 @@ export default function AdminEntityDrawer() {
                 }
                 opportunityBackgroundFullDoneRef.current = hydrateId;
                 finishOpportunityDrawerHydrate(hydrateId, "full", "fail");
-                setOpportunityFullHydrateFailed(true);
+                setOpportunityBackgroundFullHydrateFailed(true);
             });
     }, [drawer.type, drawer.id, drawer.jobRecordSurface]);
     runOpportunityBackgroundFullHydrateRef.current = runOpportunityBackgroundFullHydrate;
@@ -2707,11 +2733,24 @@ export default function AdminEntityDrawer() {
             setOpportunityActivitySignalLoading(false);
             return;
         }
-        const bootstrapEnrichmentPath =
-            drawerShellVariant === "adminV2" &&
-            adminV2DrawerBootstrapEnabled() &&
-            !opportunityDrawerBootstrapLegacy &&
-            drawer.type === "opportunities";
+        const embedded = (data as Record<string, unknown> | null)?._activity_signal;
+        if (embedded && typeof embedded === "object") {
+            setOpportunityActivitySignal(embedded as ActivitySignalResult);
+            setOpportunityActivitySignalLoading(false);
+            return;
+        }
+    }, [drawer.type, drawer.id, data]);
+
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
+            setOpportunityActivitySignal(null);
+            setOpportunityActivitySignalLoading(false);
+            return;
+        }
+        const embedded = (data as Record<string, unknown> | null)?._activity_signal;
+        if (embedded && typeof embedded === "object") {
+            return;
+        }
         const visKey = `${drawer.type}:${drawer.id}`;
         if (postDrawerVisibleKey !== visKey) {
             setOpportunityActivitySignal(null);
@@ -2722,6 +2761,7 @@ export default function AdminEntityDrawer() {
         setOpportunityActivitySignalLoading(true);
         const run = () => {
             if (cancelled) return;
+            recordOpportunityDrawerPostOpenFetch(String(drawer.id), "activity_signal");
             fetch(`/api/admin/opportunities/${encodeURIComponent(String(drawer.id))}/activity-signal`, {
                 credentials: "include",
             })
@@ -2754,8 +2794,7 @@ export default function AdminEntityDrawer() {
     }, [
         drawer.type,
         drawer.id,
-        drawerShellVariant,
-        opportunityDrawerBootstrapLegacy,
+        data,
         opportunityActivitySignalNonce,
         postDrawerVisibleKey,
     ]);
@@ -6892,7 +6931,7 @@ export default function AdminEntityDrawer() {
         if (!opportunityDrawerRevealCoordActive) return true;
         if (!opportunityRecordHydrationPending) return true;
         if (opportunityPrimaryHydrateApplied) return true;
-        if (opportunityFullHydrateFailed) return true;
+        if (opportunityBackgroundFullHydrateFailed) return true;
         if (opportunityDrawerRevealCoordTimedOut) return true;
         return false;
     }, [
@@ -6903,7 +6942,7 @@ export default function AdminEntityDrawer() {
         opportunityDrawerRevealCoordActive,
         opportunityRecordHydrationPending,
         opportunityPrimaryHydrateApplied,
-        opportunityFullHydrateFailed,
+        opportunityBackgroundFullHydrateFailed,
         opportunityDrawerRevealCoordTimedOut,
     ]);
 
@@ -6989,6 +7028,59 @@ export default function AdminEntityDrawer() {
             (opportunityDrawerEnrichmentHeld || !opportunityFullRecordHydrateApplied),
         [opportunityDrawerBootstrapEnrichmentPath, opportunityFullRecordHydrateApplied, opportunityDrawerEnrichmentHeld]
     );
+
+    /** Generic drawer pipeline — opportunity adapter; renderer consumes above_fold model only. */
+    const opportunityDrawerPipeline = useMemo(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return null;
+        if (!opportunityDrawerShellContract || !overviewData) return null;
+        const shell = opportunityShellToDrawerShellContract(opportunityDrawerShellContract);
+        const layoutCfg = (recordChromeOpportunity.layout?.config_json ?? null) as RecordLayoutConfigJson | null;
+        return buildOpportunityDrawerPipelineState({
+            shell,
+            record: overviewData as Record<string, unknown>,
+            drawer_id: drawer.id,
+            background_full_failed: opportunityBackgroundFullHydrateFailed,
+            enrichment_held_until_interaction: opportunityDrawerEnrichmentHeld,
+            bootstrap_enrichment_path: opportunityDrawerBootstrapEnrichmentPath,
+            workflow_v1: opportunityDrawerShellContract.inquiry_drawer_mode === "workflow_v1",
+            above_fold_locked: opportunityDrawerAboveFoldLocked,
+            first_paint_gates_active: opportunityDrawerLayoutFirstPaintGates,
+            enrichment_layout_ready: opportunityDrawerEnrichmentLayoutReady,
+            below_fold_enrichment_ready: opportunityDrawerBelowFoldEnrichmentReady,
+            task_assist_enabled: isTaskAssistV1UiEnabled(),
+            family_contacts_in_summary_fallback:
+                !!drawer.id &&
+                drawer.id !== "new" &&
+                recordOpportunityDrawerLayoutIncludesSection(layoutCfg, "family_contacts"),
+        });
+    }, [
+        drawer.type,
+        drawer.id,
+        opportunityDrawerShellContract,
+        overviewData,
+        opportunityBackgroundFullHydrateFailed,
+        opportunityDrawerEnrichmentHeld,
+        opportunityDrawerBootstrapEnrichmentPath,
+        recordChromeOpportunity.layout,
+        opportunityDrawerAboveFoldLocked,
+        opportunityDrawerLayoutFirstPaintGates,
+        opportunityDrawerEnrichmentLayoutReady,
+        opportunityDrawerBelowFoldEnrichmentReady,
+    ]);
+
+    const opportunityInquiryFullBoundReady = useMemo(() => {
+        if (opportunityDrawerPipeline) {
+            return drawerFullBoundValuesReady(
+                opportunityDrawerBelowFoldEnrichmentReady,
+                opportunityDrawerPipeline.enrichment
+            );
+        }
+        return opportunityDrawerFullBoundEnrichmentReady;
+    }, [
+        opportunityDrawerPipeline,
+        opportunityDrawerBelowFoldEnrichmentReady,
+        opportunityDrawerFullBoundEnrichmentReady,
+    ]);
 
     /** Below-fold reveal: unlock secondary fetches / right column without reshaping first viewport. */
     useEffect(() => {
@@ -7143,6 +7235,26 @@ export default function AdminEntityDrawer() {
     }, [drawer.type, drawer.id, opportunityDrawerPrimaryCoherent]);
 
     useEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        resetOpportunityDrawerFirstPaintTrace(String(drawer.id));
+    }, [drawer.type, drawer.id]);
+
+    const opportunityDrawerAboveFoldStableReportedRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        if (!opportunityDrawerOverviewRevealReady || !opportunityDrawerPrimaryContractSatisfied) return;
+        const key = String(drawer.id);
+        if (opportunityDrawerAboveFoldStableReportedRef.current === key) return;
+        opportunityDrawerAboveFoldStableReportedRef.current = key;
+        reportDrawerAboveFoldStable(key);
+    }, [
+        drawer.type,
+        drawer.id,
+        opportunityDrawerOverviewRevealReady,
+        opportunityDrawerPrimaryContractSatisfied,
+    ]);
+
+    useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
             setOpportunityDrawerSecondaryReady(false);
             return;
@@ -7181,8 +7293,11 @@ export default function AdminEntityDrawer() {
         opportunityFullRecordHydrateApplied;
 
     useEffect(() => {
+        if (tourBookingsFetchEnabled && drawer.id && drawer.id !== "new") {
+            recordOpportunityDrawerPostOpenFetch(String(drawer.id), "tour_bookings");
+        }
         setInquiryTourFetchArmed(tourBookingsFetchEnabled);
-    }, [tourBookingsFetchEnabled]);
+    }, [tourBookingsFetchEnabled, drawer.id]);
 
     useEffect(() => {
         setInquirySummaryFetchArmed(inquirySummaryFetchEnabled);
@@ -8033,7 +8148,7 @@ export default function AdminEntityDrawer() {
                         recordHydrationPending={false}
                         opportunityFullHydratePending={opportunityFullHydratePending}
                         opportunityFullHydrateApplied={opportunityFullRecordHydrateApplied}
-                        opportunityFullHydrateFailed={opportunityFullHydrateFailed}
+                        opportunityFullHydrateFailed={opportunityBackgroundFullHydrateFailed}
                         openForm={({ form_key, action }) => {
                             setActionFormState({
                                 form_key,
@@ -8142,7 +8257,7 @@ export default function AdminEntityDrawer() {
         opportunityFullHydratePending,
         opportunityFullHydrateApplied,
         opportunityFullRecordHydrateApplied,
-        opportunityFullHydrateFailed,
+        opportunityBackgroundFullHydrateFailed,
         opportunityDrawerEnrichmentLayoutReady,
         opportunityDrawerFirstPaintActive,
         opportunityDrawerOverviewRevealReady,
@@ -8191,10 +8306,11 @@ export default function AdminEntityDrawer() {
 
     const configDrivenOverviewSections = useMemo((): EntityDrawerSectionConfig[] => {
         if (!overviewData || (overviewData as { _create?: boolean })._create) return [];
-        if (drawer.type === "opportunities" && opportunityDrawerShellContract) {
-            const oppInquiryWorkflowV1 =
-                opportunityDrawerShellContract.inquiry_drawer_mode === "workflow_v1";
-            let overviewSections = opportunityDrawerShellContract.overview_sections.map((s) => ({
+        if (drawer.type === "opportunities" && opportunityDrawerShellContract && opportunityDrawerPipeline) {
+            let overviewSections = overviewSectionsFromAboveFoldModel(
+                opportunityDrawerPipeline.shell,
+                opportunityDrawerPipeline.above_fold.sections
+            ).map((s) => ({
                 ...s,
                 fields: (s.fields ?? []).map((f) => ({
                     ...f,
@@ -8205,16 +8321,7 @@ export default function AdminEntityDrawer() {
                 overviewData as Record<string, unknown>,
                 "opportunities"
             );
-            overviewSections = applyPolicyChromeToOverviewSections(overviewSections, chrome);
-            if (oppInquiryWorkflowV1) {
-                overviewSections = stabilizeOpportunityWorkflowOverviewSections(overviewSections, {
-                    aboveFoldLocked: opportunityDrawerAboveFoldLocked,
-                    firstPaintGatesActive: opportunityDrawerLayoutFirstPaintGates,
-                    enrichmentLayoutReady: opportunityDrawerEnrichmentLayoutReady,
-                    enrichmentHeldUntilInteraction: opportunityDrawerEnrichmentHeld,
-                });
-            }
-            return overviewSections;
+            return applyPolicyChromeToOverviewSections(overviewSections, chrome);
         }
         const defs = (overviewData._field_definitions as { field_key: string; field_type: string; label: string | null; section_key: string | null; sort_order: number; is_visible_in_drawer: boolean }[] | undefined) ?? [];
         let visible = defs.filter((d) => d.is_visible_in_drawer !== false);
@@ -8782,6 +8889,7 @@ export default function AdminEntityDrawer() {
         recordChromeSchedule.layout,
         recordChromeOpportunity.layout,
         opportunityDrawerShellContract,
+        opportunityDrawerPipeline,
         opportunityDrawerAboveFoldLocked,
         opportunityDrawerLayoutFirstPaintGates,
         opportunityDrawerEnrichmentLayoutReady,
@@ -9146,14 +9254,12 @@ export default function AdminEntityDrawer() {
     const opportunityActivityHeaderLine = useMemo(() => {
         if (drawer.type !== "opportunities") return null;
         if (!overviewData || (overviewData as { _create?: boolean })._create) return null;
-        if (opportunityActivitySignalLoading) {
-            return (
-                <span className="text-[11px] text-alloy-midnight/40" aria-busy="true">
-                    Last activity: …
-                </span>
-            );
-        }
-        const sig = opportunityActivitySignal;
+        const embeddedSignal = (overviewData as Record<string, unknown>)._activity_signal as
+            | ActivitySignalResult
+            | null
+            | undefined;
+        const sig = opportunityActivitySignal ?? embeddedSignal ?? null;
+        const pending = opportunityActivitySignalLoading && !sig;
         const nowMs = Date.now();
         const stale = sig?.stale_signal ?? null;
         const hasActivity = Boolean(sig?.last_activity_at && String(sig.last_activity_at).trim());
@@ -9163,16 +9269,21 @@ export default function AdminEntityDrawer() {
             summary && rel ? `${summary} · ${rel}` : summary || rel || (hasActivity ? "Activity" : null);
 
         return (
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-snug text-alloy-midnight/55">
+            <div
+                className="flex min-h-[1.375rem] flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-snug text-alloy-midnight/55"
+                data-drawer-last-activity-line="true"
+            >
                 <span className="min-w-0">
                     <span className="font-medium text-alloy-midnight/45">Last activity:</span>{" "}
-                    {detail ? (
+                    {pending ? (
+                        <span className="inline-block h-3 w-[min(12rem,55vw)] skeleton-pulse rounded bg-alloy-stone/10 align-middle" aria-hidden />
+                    ) : detail ? (
                         <span className="text-alloy-midnight/70">{detail}</span>
                     ) : (
                         <span className="text-alloy-midnight/45">No activity yet</span>
                     )}
                 </span>
-                {stale ? (
+                {!pending && stale ? (
                     <span
                         className={`inline-flex max-w-full shrink-0 items-center rounded-md px-1.5 py-0.5 text-[10px] leading-tight ${opportunityActivityStaleBadgeClass(stale.severity)}`}
                     >
@@ -12168,50 +12279,51 @@ export default function AdminEntityDrawer() {
                                                 if (opportunityInquiryWorkflowDrawer) {
                                                     const householdId =
                                                         ident?.household?.id ?? (String(d.customer_id ?? "").trim() || null);
+                                                    const inqModel = opportunityDrawerPipeline?.above_fold.inquiry_summary;
+                                                    const layoutCfg = (recordChromeOpportunity.layout?.config_json ??
+                                                        null) as RecordLayoutConfigJson | null;
                                                     const familyContactsInSummary =
-                                                        opportunityDrawerShellContract?.geometry.family_contacts_in_summary ??
-                                                        (!!drawer.id &&
-                                                            drawer.id !== "new" &&
-                                                            recordOpportunityDrawerLayoutIncludesSection(
-                                                                (recordChromeOpportunity.layout?.config_json ?? null) as RecordLayoutConfigJson | null,
-                                                                "family_contacts"
-                                                            ));
-                                                    const familySummaryUsesFullPanel = computeFamilySummaryUsesFullPanel({
-                                                        aboveFoldLocked: opportunityDrawerAboveFoldLocked,
-                                                        familyContactsInSummary,
-                                                        firstPaintActive: opportunityDrawerFirstPaintActive,
-                                                    });
-                                                    const summaryRightReserved =
-                                                        opportunityDrawerShellContract?.geometry.summary_right_column_reserved ===
-                                                        true;
+                                                        inqModel?.family_contacts.use_full_panel ??
+                                                        (opportunityDrawerShellContract?.geometry
+                                                            .family_contacts_in_summary === true ||
+                                                            (!!drawer.id &&
+                                                                drawer.id !== "new" &&
+                                                                recordOpportunityDrawerLayoutIncludesSection(
+                                                                    layoutCfg,
+                                                                    "family_contacts"
+                                                                )));
+                                                    const familySummaryUsesFullPanel =
+                                                        computeFamilySummaryUsesFullPanel({
+                                                            familyContactsInSummary: familyContactsInSummary === true,
+                                                        });
                                                     const showInquirySummaryRightColumn =
-                                                        summaryRightReserved ||
+                                                        inqModel?.show_right_column ??
                                                         computeShowInquirySummaryRightColumn({
-                                                            aboveFoldLocked: opportunityDrawerAboveFoldLocked,
+                                                            summaryRightColumnReserved:
+                                                                opportunityDrawerShellContract?.geometry
+                                                                    .summary_right_column_reserved === true,
                                                             record: d,
-                                                            belowFoldEnrichmentReady: opportunityDrawerBelowFoldEnrichmentReady,
+                                                            belowFoldEnrichmentReady:
+                                                                opportunityDrawerBelowFoldEnrichmentReady,
                                                             fullHydrateReady: opportunityFullRecordHydrateApplied,
                                                             taskAssistEnabled: isTaskAssistV1UiEnabled(),
                                                         });
                                                     const inquirySummaryColumnMode =
-                                                        summaryRightReserved ? "two" : (
-                                                            opportunityDrawerSummaryLayoutMode({
-                                                                aboveFoldLocked: opportunityDrawerAboveFoldLocked,
-                                                                recordSurface: String(d._record_surface ?? "").trim(),
-                                                                showRightColumn: showInquirySummaryRightColumn,
-                                                            })
-                                                        );
-                                                    const showTourFromPrimaryOnly =
-                                                        opportunityInquiryTourDisplayFromPrimaryMetadata(d) &&
-                                                        (opportunityDrawerAboveFoldLocked ||
-                                                            opportunityDrawerLayoutFirstPaintGates);
-                                                    const showTourFromBookings =
-                                                        !opportunityDrawerAboveFoldLocked &&
-                                                        !!drawer.id &&
-                                                        drawer.id !== "new" &&
-                                                        opportunityInquirySummaryEnrichmentGate;
+                                                        inqModel?.column_mode ??
+                                                        opportunityDrawerSummaryLayoutMode({
+                                                            showRightColumn: showInquirySummaryRightColumn === true,
+                                                        });
+                                                    const fcSlot = inqModel?.family_contacts;
+                                                    const taskPreviewSlot = inqModel?.task_preview;
                                                     const showWhatMattersSection =
+                                                        inqModel?.what_matters.reserved === true;
+                                                    const showTourFromPrimaryOnly =
+                                                        inqModel?.what_matters.tour_from_metadata === true;
+                                                    const showTourFromBookings =
+                                                        inqModel?.what_matters.show_tour_bookings_enrichment === true;
+                                                    const showWhatMattersTourSlot =
                                                         showTourFromPrimaryOnly || showTourFromBookings;
+                                                    const taskPreview = inqModel?.task_preview;
 
                                                     return (
                                                         <div
@@ -12248,7 +12360,7 @@ export default function AdminEntityDrawer() {
                                                             >
                                                                 <div className={`${oppInqInnerCard} min-h-0`}>
                                                                     <div className={tinyLabel}>Family & contacts</div>
-                                                                    {familySummaryUsesFullPanel ? (
+                                                                    {familySummaryUsesFullPanel || familyContactsInSummary ? (
                                                                         <div className="mt-1 flex min-h-0 flex-1 flex-col">
                                                                             <FamilyContactsPanel
                                                                                 variant="summary"
@@ -12263,7 +12375,20 @@ export default function AdminEntityDrawer() {
                                                                                 recordHydrationPending={false}
                                                                                 opportunityFullHydratePending={opportunityInquiryAwaitingFullEnrichment}
                                                                                 opportunityFullHydrateApplied={opportunityFullRecordHydrateApplied}
-                                                                                opportunityFullHydrateFailed={opportunityFullHydrateFailed}
+                                                                                opportunityRelationshipsFullHydrateFailed={
+                                                                                    fcSlot?.relationships_full_hydrate_failed ??
+                                                                                    opportunityBackgroundFullHydrateFailed
+                                                                                }
+                                                                                shellReservedAdditionalCount={
+                                                                                    fcSlot?.shell_reserved_additional_count ??
+                                                                                    Math.max(
+                                                                                        0,
+                                                                                        Number(
+                                                                                            (d as Record<string, unknown>)
+                                                                                                ._additional_contacts_shell_count ?? 0
+                                                                                        ) || 0
+                                                                                    )
+                                                                                }
                                                                                 fieldDefinitions={
                                                                                     (d._field_definitions as FieldDefForLinkedEdit[] | undefined) ??
                                                                                     []
@@ -12325,7 +12450,7 @@ export default function AdminEntityDrawer() {
                                                                                 ) : (
                                                                                     <div className={`mt-1 ${oppInqDisplayName}`}>{household}</div>
                                                                                 )
-                                                                            ) : opportunityFullHydrateFailed ? (
+                                                                            ) : opportunityBackgroundFullHydrateFailed ? (
                                                                                 <div className={`mt-1 ${oppInqMutedEmpty}`}>
                                                                                     Household could not be confirmed — try refreshing the drawer.
                                                                                 </div>
@@ -12341,7 +12466,7 @@ export default function AdminEntityDrawer() {
                                                                             <div className={`${tinyLabel} mt-2.5`}>
                                                                                 {commRoleLabel ? `Primary contact (${commRoleLabel})` : "Primary contact"}
                                                                             </div>
-                                                                            {opportunityFullHydrateFailed && !primaryContactLabelLine ? (
+                                                                            {opportunityBackgroundFullHydrateFailed && !primaryContactLabelLine ? (
                                                                                 <div className={`mt-0.5 ${oppInqMutedEmpty}`}>
                                                                                     Primary contact could not be loaded — try refreshing the drawer.
                                                                                 </div>
@@ -12376,10 +12501,13 @@ export default function AdminEntityDrawer() {
                                                                         </>
                                                                     )}
                                                                     {showWhatMattersSection ? (
-                                                                        <div className="mt-2.5 border-t border-alloy-stone/10 pt-2">
+                                                                        <div
+                                                                            className="mt-2.5 min-h-[3.25rem] border-t border-alloy-stone/10 pt-2"
+                                                                            data-shell-slot="what_matters"
+                                                                        >
                                                                             <div className={tinyLabel}>What matters for this inquiry</div>
                                                                             <div className="mt-1.5 space-y-2">
-                                                                                <div>
+                                                                                <div className="min-h-[1.75rem]">
                                                                                     {showTourFromBookings ? (
                                                                                         <div ref={tourSectionRef}>
                                                                                             <OpportunityInquiryTourDateBlock
@@ -12415,7 +12543,12 @@ export default function AdminEntityDrawer() {
                                                                                                 })()}
                                                                                             </div>
                                                                                         </>
-                                                                                    ) : null}
+                                                                                    ) : (
+                                                                                        <div aria-hidden data-shell-slot-placeholder="tour_date">
+                                                                                            <div className={tinyLabel}>Tour date</div>
+                                                                                            <div className="mt-0.5 h-[1.375rem] max-w-[14rem] skeleton-pulse rounded bg-alloy-stone/10" />
+                                                                                        </div>
+                                                                                    )}
                                                                                 </div>
                                                                             </div>
                                                                         </div>
@@ -12430,42 +12563,61 @@ export default function AdminEntityDrawer() {
                                                                 >
                                                                     {drawer.id &&
                                                                     drawer.id !== "new" &&
-                                                                    opportunityDrawerFullBoundEnrichmentReady ? (
-                                                                        <div className="mt-2 border-t border-alloy-stone/10 pt-2 adminv2-ws-soft-content-reveal">
-                                                                            {isTaskAssistV1UiEnabled() ? (
-                                                                                <OpportunityOperationalCompactStrip
-                                                                                    layout="inquiry_summary"
-                                                                                    opportunityId={drawer.id}
-                                                                                    entityLabel={String(d.name ?? "").trim() || null}
-                                                                                    overviewData={d}
-                                                                                    fetchEnabled={false}
-                                                                                    tasksLoadMode="on_demand"
-                                                                                />
+                                                                    isTaskAssistV1UiEnabled() ? (
+                                                                        <>
+                                                                            <OpportunityInquirySummaryTaskPreview
+                                                                                record={d}
+                                                                                previewConfirmed={
+                                                                                    taskPreviewSlot?.confirmed ??
+                                                                                    parseInquirySummaryTaskPreview(d) != null
+                                                                                }
+                                                                                showRemindersPlaceholder={
+                                                                                    taskPreviewSlot?.show_reminders_placeholder ??
+                                                                                    !opportunityInquiryFullBoundReady
+                                                                                }
+                                                                            />
+                                                                            {(taskPreviewSlot?.show_operational_strip ??
+                                                                            opportunityInquiryFullBoundReady) ? (
+                                                                                <div className="adminv2-ws-soft-content-reveal">
+                                                                                    <OpportunityOperationalCompactStrip
+                                                                                        layout="inquiry_summary"
+                                                                                        opportunityId={drawer.id}
+                                                                                        entityLabel={String(d.name ?? "").trim() || null}
+                                                                                        overviewData={d}
+                                                                                        fetchEnabled
+                                                                                        tasksLoadMode="auto"
+                                                                                        hideTasksSection={
+                                                                                            taskPreviewSlot?.confirmed ??
+                                                                                            parseInquirySummaryTaskPreview(d) !=
+                                                                                                null
+                                                                                        }
+                                                                                    />
+                                                                                </div>
                                                                             ) : null}
-                                                                        </div>
-                                                                    ) : summaryRightReserved ? (
-                                                                        <div
-                                                                            className="mt-2 space-y-2 border-t border-alloy-stone/10 pt-2"
-                                                                            aria-hidden
-                                                                            data-shell-slot-placeholder="tasks_messages"
-                                                                        >
-                                                                            <div className="h-10 w-full skeleton-pulse rounded-md bg-alloy-stone/12" />
-                                                                            <div className="h-14 w-full skeleton-pulse rounded-md bg-alloy-stone/10" />
-                                                                        </div>
+                                                                        </>
                                                                     ) : null}
-                                                                    {drawer.id &&
-                                                                    drawer.id !== "new" &&
-                                                                    opportunityDrawerFullBoundEnrichmentReady ? (
-                                                                        <OpportunityInquirySummaryActivity
-                                                                            opportunityId={drawer.id}
-                                                                            canMutate={!!canMutate}
-                                                                            fetchEnabled={false}
-                                                                            onInvalidate={() => {
-                                                                                setOpportunityRelatedData(null);
-                                                                                setOpportunityActivitySignalNonce((n) => n + 1);
-                                                                            }}
-                                                                            onGoToTab={(tab) => selectDrawerTab(tab)}
-                                                                        />
+                                                                    {drawer.id && drawer.id !== "new" ? (
+                                                                        opportunityInquiryFullBoundReady ? (
+                                                                            <OpportunityInquirySummaryActivity
+                                                                                opportunityId={drawer.id}
+                                                                                canMutate={!!canMutate}
+                                                                                fetchEnabled={false}
+                                                                                onInvalidate={() => {
+                                                                                    setOpportunityRelatedData(null);
+                                                                                    setOpportunityActivitySignalNonce((n) => n + 1);
+                                                                                }}
+                                                                                onGoToTab={(tab) => selectDrawerTab(tab)}
+                                                                            />
+                                                                        ) : (
+                                                                            <div
+                                                                                className="mt-2 space-y-2"
+                                                                                aria-hidden
+                                                                                data-shell-slot-placeholder="inquiry_summary_activity"
+                                                                            >
+                                                                                <div className="h-8 w-full skeleton-pulse rounded-md bg-alloy-stone/10" />
+                                                                                <div className="h-6 max-w-[12rem] w-full skeleton-pulse rounded bg-alloy-stone/8" />
+                                                                            </div>
+                                                                        )
                                                                     ) : null}
                                                                 </div>
                                                                 ) : null}
@@ -12530,7 +12682,7 @@ export default function AdminEntityDrawer() {
                                                             <div className="min-w-0">
                                                                 <div className={tinyLabel}>{commRoleLabel || ""}</div>
                                                                 <div className="rounded-lg border border-alloy-stone/25 bg-white px-2 py-1.5">
-                                                                    {opportunityFullHydrateFailed &&
+                                                                    {opportunityBackgroundFullHydrateFailed &&
                                                                     !(commName || primaryContact || primaryPerson || household).trim() ? (
                                                                         <div className="text-[12px] text-alloy-midnight/55">
                                                                             Contact summary unavailable — try refreshing the drawer.

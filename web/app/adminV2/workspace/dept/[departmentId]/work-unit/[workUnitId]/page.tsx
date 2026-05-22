@@ -706,6 +706,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         setDept(hit.dept);
         setWorkUnit(hit.workUnit as WorkUnitRow);
         setError(null);
+        setLoading(false);
     }, [
         departmentId,
         workUnitId,
@@ -1399,7 +1400,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 alloyPerfSet("work_unit_start", routeStart);
                 console.info("[wu-route-perf]", { event: "work_unit_route_mount", departmentId, workUnitId });
             }
-            setLoading(true);
+            if (!seededWorkUnitShellRef.current) {
+                setLoading(true);
+            }
             setError(null);
             const init = workspaceDataFetchInit();
             workUnitDeferredScheduledRef.current = false;
@@ -3422,6 +3425,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
     ]);
 
     const workUnitKpiStripPlaceholder = workUnitQueueRevealReady && workUnitKpiMetricsPending;
+    const workUnitRenderableModel = effectiveModel ?? queueModel;
+
+    if (workUnitPageBlockingLoad) {
+        return (
+            <WorkUnitWorkspaceColdShell
+                workUnitTitle={wuName}
+                departmentTitle={deptName}
+                departmentId={departmentId}
+                reserveActionsRail={isEnrollmentLikeDepartmentKey(dept?.key)}
+            />
+        );
+    }
 
     return (
         <WorkspaceChrome
@@ -3437,14 +3452,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             title={wuName}
             subtitle=""
         >
-            {workUnitPageBlockingLoad ? (
-                <WorkUnitWorkspaceColdShell
-                    workUnitTitle={wuName}
-                    departmentTitle={deptName}
-                    departmentId={departmentId}
-                    reserveActionsRail={isEnrollmentLikeDepartmentKey(dept?.key)}
-                />
-            ) : workUnitShellReady && effectiveModel ? (
+            {workUnitShellReady && workUnitRenderableModel ? (
                 <>
                     {actionSurfaceError ? (
                         <div
@@ -3467,7 +3475,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         </div>
                     ) : null}
                     <WorkUnitWorkspace
-                        model={effectiveModel}
+                        model={workUnitRenderableModel}
                         onAction={onAction}
                         operLaneLoading={workUnitOperLanePending}
                         opportunityDrawerWorkspaceContext={opportunityWorkspaceContext ?? null}
