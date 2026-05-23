@@ -8,6 +8,12 @@ export type WorkUnitBootstrapPerfPhases = {
     summaries_attention_parallel?: boolean;
     queue_summaries_ms?: number;
     queue_summaries_cache_hit?: boolean;
+    loader_cache_hit?: boolean;
+    loader_cache_key_digest?: string;
+    /** Wall-clock for bootstrap loader only (excludes KPI / right-rail route work). */
+    reveal_blocking_loader_ms?: number;
+    kpi_placements_deferred_on_route?: boolean;
+    right_rail_attached_on_route?: boolean;
     attention_ms?: number;
     /** needs_attention | summaries_only | none */
     primary_lane_wait_on?: string;

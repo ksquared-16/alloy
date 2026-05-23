@@ -297,6 +297,34 @@ Capture: `reportWorkUnitCriticalPathLanes()` after hard refresh.
 
 **Staging checks after deploy:** filter `[admin-context-cache] outcome:hit` on second navigation; `get_admin_context_ms` on departments/work-units/entity-labels should drop; queue rows `auth_ms` should fall when shell cache warm.
 
+## WU warm path cache (this pass)
+
+**Why `cache_hit: false` on staging:** Lane caches were process-only `Map`s (lost on each Vercel serverless invocation). Scope keys used `JSON.stringify(recordScopeConstraints)` (unstable). Prefetch/reveal URLs were already canonical via `workUnitBootstrapClientSession`.
+
+**Fix:** `loadWorkUnitOperationalBootstrapCached` — Next `unstable_cache` (45s) + `globalThis` process layer; stable `buildWorkUnitQueueScopeCacheKey` (access fingerprint + view site); `[wu-bootstrap-cache]` logs with `cache_key_digest`. Right rail uses same pattern.
+
+**Staging:** Repeat WU nav → `loader_cache_hit: true`, `queue_summaries_cache_hit: true`, `primary_lane_rows_cache_hit: true`, `right_rail_actions_cache_hit: true`.
+
+## WU reveal closeout (this pass)
+
+**Goal:** Warm `/work-unit` nav near-instant; cold path logs what still blocks. Reveal doctrine unchanged (single gate, no section waves).
+
+| Change | Effect on TTFB / reveal |
+|--------|-------------------------|
+| Route awaits **loader only** — KPI never in `Promise.all` | Removes ~130–170ms `kpi_placements_ms` from bootstrap JSON wait |
+| Right rail **cache hit only** on route; miss → background warm + client async fetch | Enrollment reveal no longer waits on `right_rail_actions_ms`; `enrollmentActionsSettled` true immediately |
+| Queue summaries **`summaryMode: priority`** + `priorityBudget: 6` | Cuts `queue_summaries_ms` vs counting all lanes; rest via `deferred_queue_keys` |
+| Loader cache key includes `summariesModeKey: priority:6` | Prefetch/reveal share warm loader when scope matches |
+| `[wu-bootstrap-perf]` `reveal_blocking_loader_ms` | Cold logs show loader-only blockers (summaries, primary rows, attention) |
+
+**Staging verification**
+
+1. Hard refresh → open dept → open WU (cold). Filter `[wu-bootstrap-perf]`: note `queue_summaries_ms`, `primary_lane_rows_ms`, `reveal_blocking_loader_ms`, `kpi_placements_deferred: true`.
+2. Navigate away → return to same WU (warm). Filter `[wu-bootstrap-cache]` + perf: expect `loader_cache_hit: true` and lane hits when process/Next cache warm.
+3. Enrollment WU: confirm `[wu-reveal-gate]` reaches `above_fold_ready` without waiting on right-rail network (rail may populate after reveal).
+
+**Warm targets (operator — paste into true-speed table):** `total_ms` &lt;400, `reveal_blocking_loader_ms` &lt;150 when all lane caches hit.
+
 ## Final server hotspots (this pass)
 
 | Hotspot | Fix | Staging signal |

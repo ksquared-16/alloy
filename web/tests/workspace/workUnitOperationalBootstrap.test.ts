@@ -13,9 +13,9 @@ describe("work-unit operational bootstrap runtime", () => {
         expect(fs.existsSync(routePath)).toBe(true);
         const src = fs.readFileSync(routePath, "utf8");
         expect(src).toContain("loadAdminRouteGate");
-        expect(src).toContain("loadWorkUnitOperationalBootstrap");
-        expect(src).toContain("loadWorkUnitKpiPlacementsServer");
-        expect(src).toContain("loadRightRailActionsBundleCached");
+        expect(src).toContain("loadWorkUnitOperationalBootstrapCached");
+        expect(src).toContain("kpi_placements_deferred_on_route");
+        expect(src).toContain("readRightRailActionsBundleCache");
     });
 
     it("bootstrap loader uses shared context and single attention pass", () => {
@@ -59,7 +59,7 @@ describe("work-unit operational bootstrap runtime", () => {
         expect(src).toContain("attention_deferred");
         expect(src).toContain("getWorkUnitQueueSummaries");
         expect(src).toContain("loadWorkUnitBootstrapAttention");
-        const summariesIdx = src.indexOf("const summariesResult = await getWorkUnitQueueSummaries");
+        const summariesIdx = src.indexOf("getWorkUnitQueueSummaries({");
         const attentionIdx = src.indexOf("const attentionNeededForReveal =");
         const primaryIdx = src.indexOf("await getWorkUnitQueuePreviewRows");
         expect(summariesIdx).toBeGreaterThan(-1);

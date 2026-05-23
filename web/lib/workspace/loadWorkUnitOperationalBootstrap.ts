@@ -78,6 +78,8 @@ export type WorkUnitOperBootstrapContext = {
     departmentId: string;
     workUnitId: string;
     accessDim: AdminAccessScopeDimensions;
+    /** Stable scope fingerprint (access + view site) for lane/server caches. */
+    queueScopeKey: string;
     recordScopeImpossible: boolean;
     recordScopeConstraints: RecordScopeConstraints | null;
     viewerDisplayTimeZone: QueueViewerTimezoneMeta;
@@ -294,7 +296,7 @@ export async function loadWorkUnitOperationalBootstrap(params: {
         orgId,
         workUnitId,
         summariesLimit,
-        recordScopeConstraints,
+        queueScopeKey: ctx.queueScopeKey,
     };
     const summariesCached = readWorkUnitQueueSummariesBootstrapCache(summariesCacheParams);
     const summariesResult =
@@ -305,11 +307,15 @@ export async function loadWorkUnitOperationalBootstrap(params: {
             preloadedQueueDefinition,
             limit: summariesLimit,
             includePreviews: false,
-            summaryMode: "all",
+            /** Reveal path: count priority lanes first; defer rest via `deferred_queue_keys`. */
+            summaryMode: "priority",
+            focusQueueKey: focusQueue || null,
+            priorityBudget: 6,
             sharedBootstrap,
             viewerDisplayTimeZone,
             recordScopeImpossible,
             recordScopeConstraints,
+            perfTag: "wu_bootstrap_reveal",
         }));
     if (!summariesCached) {
         writeWorkUnitQueueSummariesBootstrapCache(summariesCacheParams, summariesResult);
@@ -385,7 +391,8 @@ export async function loadWorkUnitOperationalBootstrap(params: {
                 queueKey: primaryQueueKey,
                 limit: primaryRowLimit,
                 attentionBucketKey: primaryIsNeedsAttention ? attentionBucketKey : "",
-                recordScopeConstraints,
+                queueScopeKey: ctx.queueScopeKey,
+                omitTotalCount,
             };
             const primaryCached = readWorkUnitPrimaryLaneRowsBootstrapCache(primaryCacheParams);
             const result = primaryCached

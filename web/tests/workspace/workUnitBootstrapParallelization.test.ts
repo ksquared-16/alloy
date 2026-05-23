@@ -10,36 +10,32 @@ function read(rel: string): string {
 }
 
 describe("Card 2 — WU bootstrap parallelization", () => {
-    it("loader does not await summaries before launching attention", () => {
+    it("loader uses priority summaries then conditional attention before primary rows", () => {
         const src = read("lib/workspace/loadWorkUnitOperationalBootstrap.ts");
-        const parallelSection = src.match(
-            /const tParallel0 = Date\.now\(\);[\s\S]*?phases\.summaries_attention_parallel = true/
-        )?.[0];
-        expect(parallelSection).toBeTruthy();
-        expect(parallelSection).toMatch(/const summariesP = \(async/);
-        expect(parallelSection).toMatch(/const attentionP = \(async/);
-        expect(parallelSection).toContain("Promise.all([summariesP, attentionP])");
-        expect(parallelSection).not.toMatch(
-            /await getWorkUnitQueueSummaries[\s\S]*?await loadOpportunityNeedsAttentionRows/
+        expect(src).toContain('summaryMode: "priority"');
+        expect(src).toContain("priorityBudget: 6");
+        expect(src).toMatch(
+            /getWorkUnitQueueSummaries[\s\S]*?attentionNeededForReveal[\s\S]*?loadWorkUnitBootstrapAttention/
+        );
+        expect(src).toMatch(
+            /resolveWorkUnitBootstrapPrimaryQueueKey[\s\S]*?getWorkUnitQueuePreviewRows/
         );
     });
 
-    it("primary lane runs after parallel block and uses NA preload only when needed", () => {
+    it("primary lane uses NA preload only when primary is needs_attention", () => {
         const src = read("lib/workspace/loadWorkUnitOperationalBootstrap.ts");
-        expect(src).toMatch(
-            /await Promise\.all\(\[summariesP, attentionP\]\)[\s\S]*?resolveWorkUnitBootstrapPrimaryQueueKey/
-        );
         expect(src).toMatch(
             /primaryIsNeedsAttention[\s\S]*?preloadedAttentionPack: primaryIsNeedsAttention \? preloadedAttention/
         );
     });
 
-    it("bootstrap route contract unchanged", () => {
+    it("bootstrap route blocks only on loader; KPI deferred; right rail cache-only attach", () => {
         const route = read("app/api/admin/work-units/[id]/operational-bootstrap/route.ts");
-        expect(route).toContain("loadWorkUnitOperationalBootstrap");
-        expect(route).toContain("kpi_placements");
-        expect(route).toContain("right_rail_actions");
-        expect(route).toContain("Promise.all([bootstrapP, kpiP, actionsP])");
+        expect(route).toContain("loadWorkUnitOperationalBootstrapCached");
+        expect(route).toContain("kpi_placements_deferred_on_route");
+        expect(route).toContain("readRightRailActionsBundleCache");
+        expect(route).not.toContain("Promise.all([bootstrapP, kpiP, actionsP])");
+        expect(route).toMatch(/const bootstrapResult = await bootstrapP/);
     });
 
     it("perf types expose parallel timing fields", () => {
@@ -51,5 +47,6 @@ describe("Card 2 — WU bootstrap parallelization", () => {
         expect(perf).toContain("attention_ms");
         expect(perf).toContain("primary_lane_rows_ms");
         expect(perf).toContain("primary_lane_rows_deferred");
+        expect(perf).toContain("reveal_blocking_loader_ms");
     });
 });

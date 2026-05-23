@@ -45,13 +45,13 @@ describe("workUnitBootstrap ownership", () => {
         expect(a).toBe(b);
     });
 
-    it("canonical URL omits focus_queue and always sets defer_bundle", () => {
+    it("canonical URL omits focus_queue and includes primary rows for reveal", () => {
         const url = buildCanonicalWorkUnitOperationalBootstrapUrl({
             departmentId: "d1",
             workUnitId: "w1",
             selectedSiteId: null,
         });
-        expect(url).toContain("defer_bundle=true");
+        expect(url).toContain("defer_bundle=false");
         expect(url).not.toContain("focus_queue");
         expect(url).not.toContain("attention_bucket");
     });

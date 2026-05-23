@@ -7,13 +7,23 @@ import {
     resolveQueueRecordScopeConstraints,
 } from "@/lib/admin/resolveQueueRecordScopeConstraints";
 import { fetchEffectiveUserDisplayTimezone } from "@/lib/admin/timezoneContract";
-import { loadWorkUnitKpiPlacementsServer } from "@/lib/kpi/loadWorkUnitKpiPlacementsServer";
 import { QueueServiceError } from "@/lib/queues/QueueService";
 import { buildQueueSummariesSharedBootstrap } from "@/lib/queues/QueueService";
 import { loadWorkUnitOperationalBootstrap } from "@/lib/workspace/loadWorkUnitOperationalBootstrap";
 import { logWorkUnitOperationalBootstrapPerf } from "@/lib/workspace/workUnitOperationalBootstrapPerf";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
-import { loadRightRailActionsBundleCached } from "@/lib/workspace/rightRailActionsBundleCache";
+import {
+    loadRightRailActionsBundleCached,
+    readRightRailActionsBundleCache,
+} from "@/lib/workspace/rightRailActionsBundleCache";
+import { buildWorkUnitQueueScopeCacheKey } from "@/lib/workspace/workUnitQueueScopeCacheKey";
+import {
+    applyWorkUnitBootstrapLoaderCacheHitPhases,
+    loadWorkUnitOperationalBootstrapCached,
+} from "@/lib/workspace/workUnitOperationalBootstrapServerCache";
+
+/** Matches loader `summaryMode: priority` + `priorityBudget: 6`. */
+const WU_REVEAL_SUMMARIES_MODE_KEY = "priority:6";
 
 function parsePrimaryRowLimit(searchParams: URLSearchParams): number {
     const raw = (searchParams.get("primary_row_limit") ?? "8").trim();
@@ -30,7 +40,8 @@ function parseSummariesLimit(searchParams: URLSearchParams): number {
 }
 
 /**
- * GET — Single auth pass for work-unit oper critical path + KPI placements + right-rail actions.
+ * GET — Single auth pass for work-unit oper critical path.
+ * KPI placements never block reveal TTFB; right rail attaches only on cache hit.
  */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const routeT0 = Date.now();
@@ -82,87 +93,116 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             shared_bootstrap_ms: sharedBootstrapPrepMs,
         };
 
-        const bootstrapP = loadWorkUnitOperationalBootstrap({
-            ctx: {
-                supabase,
+        const summariesLimit = parseSummariesLimit(request.nextUrl.searchParams);
+        const queueScopeKey = buildWorkUnitQueueScopeCacheKey({
+            accessDim: gate.dim,
+            workspaceSiteId,
+            recordScopeImpossible,
+        });
+        const viewerTimezoneIana = viewerDisplayTimeZone?.iana?.trim() || "UTC";
+
+        const loaderCtx = {
+            supabase,
+            orgId: gate.orgId,
+            departmentId,
+            workUnitId,
+            accessDim: gate.dim,
+            queueScopeKey,
+            recordScopeImpossible,
+            recordScopeConstraints,
+            viewerDisplayTimeZone,
+            sharedBootstrap,
+            focusQueue,
+            attentionBucketKey,
+            primaryRowLimit,
+            omitTotalCount,
+            summariesLimit,
+            attentionResolverPasses,
+            deferPrimaryLaneRows: deferBundle,
+        };
+
+        const bootstrapP = loadWorkUnitOperationalBootstrapCached(
+            {
                 orgId: gate.orgId,
                 departmentId,
                 workUnitId,
-                accessDim: gate.dim,
-                recordScopeImpossible,
-                recordScopeConstraints,
-                viewerDisplayTimeZone,
-                sharedBootstrap,
-                focusQueue,
-                attentionBucketKey,
+                queueScopeKey,
+                summariesLimit,
+                summariesModeKey: WU_REVEAL_SUMMARIES_MODE_KEY,
                 primaryRowLimit,
                 omitTotalCount,
-                summariesLimit: parseSummariesLimit(request.nextUrl.searchParams),
-                attentionResolverPasses,
+                focusQueue,
+                attentionBucketKey,
                 deferPrimaryLaneRows: deferBundle,
+                viewerTimezoneIana,
             },
-            phases,
+            async () => {
+                const innerPhases: typeof phases = { shared_bootstrap_ms: sharedBootstrapPrepMs };
+                const out = await loadWorkUnitOperationalBootstrap({
+                    ctx: loaderCtx,
+                    phases: innerPhases,
+                });
+                return out;
+            }
+        ).then(({ result, cache_hit, cache_key_digest }) => {
+            if (cache_hit && "payload" in result) {
+                phases.loader_cache_hit = true;
+                phases.loader_cache_key_digest = cache_key_digest;
+                Object.assign(phases, applyWorkUnitBootstrapLoaderCacheHitPhases(result.phases));
+                return result;
+            }
+            if ("phases" in result) {
+                phases.loader_cache_key_digest = cache_key_digest;
+                Object.assign(phases, result.phases);
+            }
+            return result;
         });
 
-        const kpiP = deferBundle
-            ? Promise.resolve({
-                  items: [] as Awaited<ReturnType<typeof loadWorkUnitKpiPlacementsServer>>["items"],
-                  scope_has_placements: false,
-                  cache_hit: false,
-                  ms: 0,
-                  deferred: true as const,
-              })
-            : (async () => {
-                  const t0 = Date.now();
-                  try {
-                      const r = await loadWorkUnitKpiPlacementsServer({ orgId: gate.orgId, departmentId, workUnitId });
-                      return { ...r, ms: Date.now() - t0, deferred: false as const };
-                  } catch {
-                      return {
-                          items: [],
-                          scope_has_placements: false,
-                          cache_hit: false,
-                          ms: Date.now() - t0,
-                          deferred: false as const,
-                      };
-                  }
-              })();
-
-        const actionsP = deferBundle
-            ? Promise.resolve({
-                  actions: [] as ResolvedActionForClient[],
-                  ms: 0,
-                  cache_hit: false,
-                  deferred: true as const,
-              })
-            : (async () => {
-                  const t0 = Date.now();
-                  try {
-                      const r = await loadRightRailActionsBundleCached({
-                          orgId: gate.orgId,
-                          departmentId,
-                          workUnitId,
-                      });
-                      return {
-                          actions: r.actions,
-                          ms: r.ms,
-                          cache_hit: r.cache_hit,
-                          deferred: false as const,
-                      };
-                  } catch {
-                      return { actions: [], ms: Date.now() - t0, cache_hit: false, deferred: false as const };
-                  }
-              })();
-
-        const [bootstrapResult, kpiResult, actionsResult] = await Promise.all([bootstrapP, kpiP, actionsP]);
-        const loaderMs = Date.now() - tLoader0;
+        const bootstrapResult = await bootstrapP;
+        const revealBlockingLoaderMs = Date.now() - tLoader0;
 
         if ("error" in bootstrapResult && "status" in bootstrapResult) {
             return NextResponse.json({ error: bootstrapResult.error }, { status: bootstrapResult.status });
         }
 
         const { payload, phases: loaderPhases } = bootstrapResult;
-        const blockingLoaderMs = loaderMs;
+
+        /** KPI is below-fold — never blocks WU reveal gate (client loads via deferred work). */
+        phases.kpi_placements_deferred_on_route = true;
+
+        let actionsResult: {
+            actions: ResolvedActionForClient[];
+            ms: number;
+            cache_hit: boolean;
+            deferred: boolean;
+        } = {
+            actions: [],
+            ms: 0,
+            cache_hit: false,
+            deferred: true,
+        };
+
+        if (!deferBundle) {
+            const cachedRail = readRightRailActionsBundleCache(gate.orgId, departmentId, workUnitId);
+            if (cachedRail) {
+                actionsResult = {
+                    actions: cachedRail,
+                    ms: 0,
+                    cache_hit: true,
+                    deferred: false,
+                };
+                phases.right_rail_attached_on_route = true;
+            } else {
+                void loadRightRailActionsBundleCached({
+                    orgId: gate.orgId,
+                    departmentId,
+                    workUnitId,
+                }).catch(() => {
+                    /* warm cache for next navigation */
+                });
+            }
+        }
+
         const totalMs = Date.now() - routeT0;
 
         const responseBody = {
@@ -170,11 +210,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             ...(deferBundle
                 ? {}
                 : {
-                      kpi_placements: {
-                          items: kpiResult.items,
-                          scope_has_placements: kpiResult.scope_has_placements,
-                      },
-                      right_rail_actions: actionsResult.actions,
+                      ...(actionsResult.deferred ? {} : { right_rail_actions: actionsResult.actions }),
                   }),
             runtime: deferBundle
                 ? {
@@ -190,6 +226,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
                       bootstrap_total_ms: totalMs,
                       defer_bundle: false as const,
                       deferred: [
+                          "kpi_placements",
                           "workflow_kpis",
                           "queue_row_actions",
                           "adjacent_lane_prefetch",
@@ -198,6 +235,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
                           "ai_capabilities",
                           "operational_tasks",
                           "unread_count",
+                          ...(actionsResult.deferred ? (["right_rail_actions"] as const) : []),
                       ],
                   },
         };
@@ -208,19 +246,19 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             totalMs,
             routeGateMs,
             prepMs: routePrepMs,
-            loaderMs,
+            loaderMs: revealBlockingLoaderMs,
             payloadBytes: Buffer.byteLength(JSON.stringify(responseBody), "utf8"),
             deferBundle,
             phases: {
                 ...loaderPhases,
-                blocking_loader_ms: blockingLoaderMs,
-                kpi_placements_ms: kpiResult.ms,
-                kpi_placements_cache_hit: kpiResult.cache_hit,
-                kpi_placements_deferred: deferBundle,
+                reveal_blocking_loader_ms: revealBlockingLoaderMs,
+                blocking_loader_ms: revealBlockingLoaderMs,
+                kpi_placements_ms: 0,
+                kpi_placements_cache_hit: false,
+                kpi_placements_deferred: true,
                 right_rail_actions_ms: actionsResult.ms,
-                right_rail_actions_cache_hit:
-                    "cache_hit" in actionsResult ? actionsResult.cache_hit : undefined,
-                right_rail_actions_deferred: deferBundle,
+                right_rail_actions_cache_hit: actionsResult.cache_hit,
+                right_rail_actions_deferred: actionsResult.deferred || deferBundle,
             },
         });
 

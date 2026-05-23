@@ -1660,8 +1660,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         if (isEnrollmentLikeDepartmentKey(deptRow.key)) {
                             if (Array.isArray(b.right_rail_actions)) {
                                 setEnrollmentRightRailResolved(b.right_rail_actions);
-                                setEnrollmentActionsSettled(true);
-                            } else {
+                            }
+                            setEnrollmentActionsSettled(true);
+                            if (!Array.isArray(b.right_rail_actions)) {
                                 void fetchWorkspaceRightRailResolvedActions({
                                     departmentId,
                                     workUnitId,
@@ -1676,9 +1677,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                     })
                                     .catch(() => {
                                         /* rail optional — empty rail is a deliberate settled state */
-                                    })
-                                    .finally(() => {
-                                        if (!cancelled) setEnrollmentActionsSettled(true);
                                     });
                             }
                         } else {

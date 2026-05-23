@@ -73,6 +73,10 @@ describe("AdminV2 speed sprint Cards 3–4", () => {
         expect(read("lib/workspace/loadWorkUnitOperationalBootstrap.ts")).toContain(
             "readWorkUnitQueueSummariesBootstrapCache"
         );
+        expect(read("app/api/admin/work-units/[id]/operational-bootstrap/route.ts")).toContain(
+            "loadWorkUnitOperationalBootstrapCached"
+        );
+        expect(read("lib/adminV2/workUnitBootstrapClientSession.ts")).toContain('primary_row_limit: "8"');
     });
 
     it("queue rows route uses single admin route gate", () => {
