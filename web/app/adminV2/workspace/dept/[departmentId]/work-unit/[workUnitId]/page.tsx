@@ -109,6 +109,7 @@ import { markWorkUnitNavigationStart } from "@/lib/perf/markWorkUnitNavigationSt
 import { setAdminV2PrimarySurfacePending } from "@/lib/perf/adminV2PrimarySurfaceGate";
 import { dedupeAdminFetch, dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
+import { adjacentWorkUnitQueuePillKeys } from "@/lib/adminV2/workUnitQueuePillPrefetch";
 import {
     clearWorkUnitBootstrapSessionForEntity,
     fetchWorkUnitOperationalBootstrapSession,
@@ -753,8 +754,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
         seededWorkUnitShellRef.current = false;
         clearWorkUnitBootstrapSessionForEntity(departmentId, workUnitId);
         if (!orgId) return;
+        setWorkUnit((prev) => (prev?.id === workUnitId ? prev : null));
         const hit = readWorkUnitPageCache(orgId, departmentId, workUnitId, principalUserId, accessScopeFingerprint);
-        if (!hit || hit.departmentId !== departmentId || hit.workUnit.id !== workUnitId) return;
+        if (!hit || hit.departmentId !== departmentId || hit.workUnit.id !== workUnitId) {
+            seededWorkUnitShellRef.current = false;
+            return;
+        }
         seededWorkUnitShellRef.current = true;
         setDept(hit.dept);
         setWorkUnit(hit.workUnit as WorkUnitRow);
@@ -766,7 +771,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
         orgId,
         principalUserId,
         accessScopeFingerprint,
-        selectedSiteId,
         setSelectedQueueKeyTraced,
     ]);
 
@@ -1623,9 +1627,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
                         const wu = b.work_unit as WorkUnitRow | undefined;
                         const deptRow = b.department as DeptRow | undefined;
-                        if (!wu?.id || wu.department_id !== departmentId) {
+                        if (!wu?.id || wu.id !== workUnitId || wu.department_id !== departmentId) {
                             throw new Error("Bootstrap work unit invalid");
                         }
+                        if (cancelled) return;
                         if (!deptRow?.id) {
                             throw new Error("Bootstrap department invalid");
                         }
@@ -3276,7 +3281,24 @@ export default function AdminV2OpportunityWorkUnitPage() {
     );
 
     const deptName = dept?.name?.trim() || "Department";
-    const wuName = workUnit?.name?.trim() || "Work unit";
+    const routeWorkUnitDisplayName = useMemo(() => {
+        if (workUnit?.id === workUnitId && workUnit.name?.trim()) {
+            return workUnit.name.trim();
+        }
+        if (!orgId || !departmentId || !workUnitId) return "Work unit";
+        const hit = readWorkUnitPageCache(
+            orgId,
+            departmentId,
+            workUnitId,
+            principalUserId,
+            accessScopeFingerprint
+        );
+        if (hit?.workUnit?.id === workUnitId && hit.workUnit.name?.trim()) {
+            return hit.workUnit.name.trim();
+        }
+        return "Work unit";
+    }, [workUnit, workUnitId, orgId, departmentId, principalUserId, accessScopeFingerprint]);
+    const wuName = routeWorkUnitDisplayName;
     const mergedWorkspaceModel = useMemo(() => {
         const base = queueModel ?? model;
         if (!base || !workUnitKpiContext) return base;
@@ -3381,12 +3403,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
         () =>
             buildWorkUnitRouteShellPlaceholder({
                 workUnitId: workUnitId ?? undefined,
-                workUnitTitle: workUnit?.name?.trim() || wuName,
+                workUnitTitle: wuName,
                 departmentTitle: dept?.name?.trim() || deptName,
                 departmentKey: dept?.key ?? undefined,
                 reserveActionsRail: isEnrollmentLikeDepartmentKey(dept?.key),
             }),
-        [workUnitId, workUnit?.name, workUnit?.key, dept?.name, dept?.key, wuName, deptName]
+        [workUnitId, dept?.key, dept?.name, wuName, deptName]
     );
 
     const workUnitRevealGate = useMemo(() => {
@@ -3532,6 +3554,32 @@ export default function AdminV2OpportunityWorkUnitPage() {
         );
         return cancel;
     }, [workUnitAboveFoldPageReady, departmentId, workUnitId, queueItems]);
+
+    const queuePillPrefetchSigRef = useRef("");
+    useEffect(() => {
+        if (!workUnitAboveFoldPageReady || !workUnitId || !queueSummaries?.length) return;
+        const pillKeys = adjacentWorkUnitQueuePillKeys(queueSummaries, selectedQueueKey, 3);
+        if (!pillKeys.length) return;
+        const sig = `${workUnitId}|${viewScopeFingerprint}|${selectedQueueKey ?? ""}|${pillKeys.join(",")}`;
+        if (queuePillPrefetchSigRef.current === sig) return;
+        queuePillPrefetchSigRef.current = sig;
+
+        const cancel = scheduleAdminV2BackgroundWork(
+            () => {
+                for (const queueKey of pillKeys) {
+                    void fetchQueueItemsRef.current(workUnitId, queueKey, null, { prefetchOnly: true });
+                }
+            },
+            { idleTimeoutMs: 1800, fallbackMs: 450 }
+        );
+        return cancel;
+    }, [
+        workUnitAboveFoldPageReady,
+        workUnitId,
+        queueSummaries,
+        selectedQueueKey,
+        viewScopeFingerprint,
+    ]);
 
     useEffect(() => {
         if (!workUnitQueueRevealReady) return;

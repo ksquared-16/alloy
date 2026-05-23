@@ -47,12 +47,13 @@ let inflightPromise: Promise<Response> | null = null;
 let canonicalUrlForOwnership: string | null = null;
 
 export function clearWorkUnitBootstrapSessionForEntity(departmentId: string, workUnitId: string): void {
-    const prefix = `${departmentId}|${workUnitId}|`;
-    if (completedOwnershipKey?.startsWith(prefix)) {
+    const deptPrefix = `${departmentId}|`;
+    const ownPrefix = `${departmentId}|${workUnitId}|`;
+    if (completedOwnershipKey?.startsWith(deptPrefix) && !completedOwnershipKey.startsWith(ownPrefix)) {
         completedOwnershipKey = null;
         canonicalUrlForOwnership = null;
     }
-    if (inflightOwnershipKey?.startsWith(prefix)) {
+    if (inflightOwnershipKey?.startsWith(deptPrefix) && !inflightOwnershipKey.startsWith(ownPrefix)) {
         inflightOwnershipKey = null;
         inflightPromise = null;
     }

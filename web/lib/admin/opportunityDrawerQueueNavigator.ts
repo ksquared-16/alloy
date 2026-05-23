@@ -14,6 +14,8 @@ export type OpportunityDrawerQueueNavigator = {
     total_count?: number | null;
     /** Bumps when the source row list changes — adjacent prefetch ignores stale generations. */
     generation: number;
+    /** Bumps on each in-drawer prev/next — rolls adjacent prefetch forward. */
+    drawer_nav_generation?: number;
 };
 
 export type QueueNavigatorPosition = {

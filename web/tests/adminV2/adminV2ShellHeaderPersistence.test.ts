@@ -83,6 +83,13 @@ describe("AdminV2 app shell header persistence", () => {
         expect(ctx).not.toMatch(/if \(!cached\) setBootstrap\(null\)/);
     });
 
+    it("selected site id hydrates from URL/session before async bootstrap on dept→WU", () => {
+        const ctx = read("contexts/WorkspaceSiteFilterContext.tsx");
+        expect(ctx).toContain("readInitialSelectedSiteId");
+        expect(ctx).toContain("resolveStickyWorkspaceSiteId");
+        expect(ctx).toMatch(/useState<string \| null>\(\(\) => readInitialSelectedSiteId\(\)\)/);
+    });
+
     it("TopNavBar renders location from displayBootstrap not only live bootstrap", () => {
         const nav = read("app/adminV2/components/TopNavBar.tsx");
         expect(nav).toContain("displayBootstrap");

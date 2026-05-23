@@ -11,16 +11,16 @@ import {
     type OpportunityDrawerQueueNavigator,
 } from "@/lib/admin/opportunityDrawerQueueNavigator";
 
-let activeGeneration = -1;
+let adjacentPrefetchToken = 0;
 
-/** Drop in-flight adjacent prefetches when queue order/rows change. */
+/** Drop in-flight adjacent prefetches when queue order/rows change on the WU page. */
 export function bumpOpportunityDrawerAdjacentPrefetchGeneration(): number {
-    activeGeneration += 1;
-    return activeGeneration;
+    adjacentPrefetchToken += 1;
+    return adjacentPrefetchToken;
 }
 
 export function opportunityDrawerAdjacentPrefetchGeneration(): number {
-    return activeGeneration;
+    return adjacentPrefetchToken;
 }
 
 /**
@@ -31,15 +31,16 @@ export function prefetchAdjacentOpportunityDrawers(params: {
     currentRecordId: string;
     workspaceContext: OpportunityDrawerIntentContext;
 }): void {
-    const gen = params.navigator.generation;
-    activeGeneration = gen;
+    const token = ++adjacentPrefetchToken;
+    const current = params.currentRecordId.trim();
 
-    const pos = resolveOpportunityQueueNavigatorPosition(params.currentRecordId, params.navigator);
+    const pos = resolveOpportunityQueueNavigatorPosition(current, params.navigator);
     if (!pos) {
         logPrefetchAdminV2("drawer_primary", "skipped", {
             reason: "queue_adjacent_no_position",
-            record_id: params.currentRecordId,
+            record_id: current,
             queue_key: params.navigator.queue_key,
+            drawer_nav_generation: params.navigator.drawer_nav_generation ?? null,
         });
         return;
     }
@@ -48,24 +49,31 @@ export function prefetchAdjacentOpportunityDrawers(params: {
     if (!adjacent.length) {
         logPrefetchAdminV2("drawer_primary", "skipped", {
             reason: "queue_adjacent_none",
-            record_id: params.currentRecordId,
+            record_id: current,
             queue_key: params.navigator.queue_key,
+            position: pos.position,
+            total: pos.total,
         });
         return;
     }
 
     logPrefetchAdminV2("drawer_primary", "start", {
         reason: "queue_adjacent",
-        record_id: params.currentRecordId,
+        record_id: current,
+        prev_id: pos.prev_id,
+        next_id: pos.next_id,
         adjacent_ids: adjacent,
         queue_key: params.navigator.queue_key,
-        generation: gen,
+        drawer_nav_generation: params.navigator.drawer_nav_generation ?? null,
+        queue_generation: params.navigator.generation,
         loaded_count: opportunityDrawerQueueNavigatorRecordIds(params.navigator).length,
+        prefetch_token: token,
     });
 
     for (const id of adjacent) {
-        if (gen !== params.navigator.generation) return;
-        const seed = previewSeedForQueueNavigatorRecord(params.navigator, id) ?? null;
+        if (token !== adjacentPrefetchToken) return;
+        const seed: OpportunityDrawerQueuePreviewSeed | null =
+            previewSeedForQueueNavigatorRecord(params.navigator, id) ?? null;
         prefetchOpportunityDrawerOnRowIntent(id, params.workspaceContext, seed);
     }
 }

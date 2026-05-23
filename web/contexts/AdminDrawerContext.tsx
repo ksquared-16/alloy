@@ -9,6 +9,7 @@ import {
     shouldDeferOpportunityDrawerOpen,
 } from "@/lib/admin/opportunityDrawerOpenCoordinator";
 import { prefetchAdjacentOpportunityDrawers } from "@/lib/admin/opportunityDrawerAdjacentPrefetch";
+import { prefetchOpportunityDrawerOnRowIntent } from "@/lib/admin/opportunityDrawerIntentPrefetch";
 import {
     previewSeedForQueueNavigatorRecord,
     resolveOpportunityQueueNavigateTargetId,
@@ -267,22 +268,33 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
             workspace: OpportunityWorkspaceContext | null | undefined
         ) => {
             const seed = previewSeedForQueueNavigatorRecord(navigator, targetId) ?? null;
-            prefetchAdjacentOpportunityDrawers({
-                navigator,
-                currentRecordId: targetId,
-                workspaceContext: workspace ?? {
+            const navContext: OpportunityDrawerQueueNavigator = {
+                ...navigator,
+                drawer_nav_generation: (navigator.drawer_nav_generation ?? 0) + 1,
+            };
+            const ws =
+                workspace ??
+                ({
                     work_unit_id: navigator.work_unit_id,
                     department_id: navigator.department_id,
-                },
-            });
+                } satisfies OpportunityWorkspaceContext);
+
+            prefetchOpportunityDrawerOnRowIntent(targetId, ws, seed ?? null);
+
             setDrawer((prev) => ({
                 ...prev,
                 type: "opportunities",
                 id: targetId,
                 opportunityWorkspaceContext: workspace ?? prev.opportunityWorkspaceContext ?? null,
                 opportunityQueuePreviewSeed: seed,
-                opportunityQueueNavigator: navigator,
+                opportunityQueueNavigator: navContext,
             }));
+
+            prefetchAdjacentOpportunityDrawers({
+                navigator: navContext,
+                currentRecordId: targetId,
+                workspaceContext: ws,
+            });
         },
         []
     );
@@ -300,30 +312,29 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                 department_id: navigator.department_id,
             };
 
-            const warm =
-                isOpportunityDrawerPrimaryWarm(targetId) && isOpportunityDrawerBootstrapWarm(targetId);
-            if (warm) {
-                const run = ++queueNavRunRef.current;
+            const run = ++queueNavRunRef.current;
+            const primaryWarm = isOpportunityDrawerPrimaryWarm(targetId);
+            const bootstrapWarm = isOpportunityDrawerBootstrapWarm(targetId);
+
+            applyOpportunityQueueNavigation(targetId, navigator, workspace);
+
+            if (primaryWarm && bootstrapWarm) {
                 void loadOpportunityDrawerComposedOpen(targetId, workspace, workspaceDataFetchInit())
                     .then(({ preload }) => {
                         if (run !== queueNavRunRef.current) return;
                         opportunityDrawerPreloadRef.current = preload;
-                        applyOpportunityQueueNavigation(targetId, navigator, workspace);
                     })
                     .catch(() => {
-                        if (run !== queueNavRunRef.current) return;
-                        applyOpportunityQueueNavigation(targetId, navigator, workspace);
+                        /* drawer shows queue seed until refetch */
                     });
                 return;
             }
 
-            const run = ++queueNavRunRef.current;
             setOpportunityQueueNavTargetId(targetId);
             void loadOpportunityDrawerComposedOpen(targetId, workspace, workspaceDataFetchInit())
                 .then(({ preload }) => {
                     if (run !== queueNavRunRef.current) return;
                     opportunityDrawerPreloadRef.current = preload;
-                    applyOpportunityQueueNavigation(targetId, navigator, workspace);
                     setOpportunityQueueNavTargetId(null);
                 })
                 .catch(() => {

@@ -33,6 +33,22 @@ import {
     type WorkspaceSiteFilterPersistenceScope,
 } from "@/lib/adminV2/workspaceSiteFilterClient";
 
+function readInitialSelectedSiteId(): string | null {
+    if (typeof window === "undefined") return null;
+    const scope = getRegisteredWorkspaceSiteFilterScope();
+    const bootstrap = readWorkspaceSiteFilterBootstrapForShell(scope);
+    const sites = bootstrap?.sites ?? [];
+    const urlSiteId = readWorkspaceSiteFromLocationSearch(window.location.search);
+    const sessionSiteId = scope?.orgId ? readWorkspaceSiteSession(scope) : null;
+    const resolved = resolveStickyWorkspaceSiteId({
+        urlSiteId,
+        sessionSiteId,
+        allowedSites: sites,
+    });
+    if (resolved) setLiveStickyWorkspaceSiteId(resolved);
+    return resolved;
+}
+
 export type WorkspaceSiteFilterBootstrap = {
     site_scope: string;
     sites: Array<{ id: string; label: string }>;
@@ -91,9 +107,12 @@ export function WorkspaceSiteFilterProvider({ children }: { children: ReactNode 
 
     const [loadError, setLoadError] = useState<string | null>(null);
     const [revalidating, setRevalidating] = useState(() => displayBootstrapRef.current == null);
-    const [selectedSiteId, setSelectedSiteIdState] = useState<string | null>(null);
+    const [selectedSiteId, setSelectedSiteIdState] = useState<string | null>(() => readInitialSelectedSiteId());
     const [siteSelectionReady, setSiteSelectionReady] = useState(
-        () => displayBootstrapRef.current != null || getRegisteredWorkspaceSiteFilterScope() != null
+        () =>
+            displayBootstrapRef.current != null ||
+            getRegisteredWorkspaceSiteFilterScope() != null ||
+            readInitialSelectedSiteId() != null
     );
 
     const loadBootstrap = useCallback(async (scope: WorkspaceSiteFilterPersistenceScope | null, reason: string) => {
@@ -119,7 +138,11 @@ export function WorkspaceSiteFilterProvider({ children }: { children: ReactNode 
             if (gen !== fetchGenRef.current) return;
             if (!res.ok) {
                 setLoadError(typeof j.error === "string" ? j.error : "Failed to load site filter");
-                if (!cached && !hadDisplay) setBootstrap(null);
+                if (!cached && !hadDisplay) {
+                    setBootstrap(null);
+                } else if (hadDisplay && displayBootstrapRef.current) {
+                    setBootstrap(displayBootstrapRef.current);
+                }
                 setSiteSelectionReady(true);
                 return;
             }
@@ -131,7 +154,11 @@ export function WorkspaceSiteFilterProvider({ children }: { children: ReactNode 
         } catch {
             if (gen !== fetchGenRef.current) return;
             setLoadError("Failed to load site filter");
-            if (!cached && !hadDisplay) setBootstrap(null);
+            if (!cached && !hadDisplay) {
+                setBootstrap(null);
+            } else if (hadDisplay && displayBootstrapRef.current) {
+                setBootstrap(displayBootstrapRef.current);
+            }
         } finally {
             if (gen === fetchGenRef.current) {
                 setRevalidating(false);

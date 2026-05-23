@@ -9258,6 +9258,17 @@ export default function AdminEntityDrawer() {
         return undefined;
     }, [opportunityQueuePreviewSeed, opportunityOperTrustPreview]);
 
+    const opportunityQueueNavigatorPosition = useMemo(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return null;
+        if (!drawer.opportunityQueueNavigator || !opportunityInquiryWorkflowDrawer) return null;
+        return resolveOpportunityQueueNavigatorPosition(drawer.id, drawer.opportunityQueueNavigator);
+    }, [
+        drawer.type,
+        drawer.id,
+        drawer.opportunityQueueNavigator,
+        opportunityInquiryWorkflowDrawer,
+    ]);
+
     if (!drawer.type || !drawer.id) return null;
 
     const drawerStatusBadge = overviewData &&
@@ -9621,17 +9632,6 @@ export default function AdminEntityDrawer() {
             headerSubtitleBase
         );
 
-    const opportunityQueueNavigatorPosition = useMemo(() => {
-        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return null;
-        if (!drawer.opportunityQueueNavigator || !opportunityInquiryWorkflowDrawer) return null;
-        return resolveOpportunityQueueNavigatorPosition(drawer.id, drawer.opportunityQueueNavigator);
-    }, [
-        drawer.type,
-        drawer.id,
-        drawer.opportunityQueueNavigator,
-        opportunityInquiryWorkflowDrawer,
-    ]);
-
     const opportunityQueueNavControls =
         opportunityQueueNavigatorPosition && opportunityQueueNavigatorPosition.total >= 2 ? (
             <OpportunityDrawerQueueNavigatorControls
@@ -9642,20 +9642,17 @@ export default function AdminEntityDrawer() {
             />
         ) : null;
 
-    const drawerTitleResolved =
-        opportunityQueueNavControls != null ? (
-            <div className="flex min-w-0 items-center gap-2">
-                {opportunityQueueNavControls}
-                <span className="min-w-0 truncate">{drawerTitleTextResolved}</span>
-            </div>
-        ) : (
-            drawerTitleTextResolved
-        );
+    const drawerTitleResolved = drawerTitleTextResolved;
 
     const workflowHeaderTitleRight =
         drawer.type === "opportunities" && opportunityInquiryWorkflowDrawerShell ? (
-            <div className="flex flex-wrap items-start justify-end gap-2">
-                {opportunityHeaderQuickActionsNode}
+            <div className="flex flex-col items-end gap-2">
+                {opportunityQueueNavControls ? (
+                    <div className="flex shrink-0 items-center justify-end">{opportunityQueueNavControls}</div>
+                ) : null}
+                <div className="flex flex-wrap items-start justify-end gap-2">
+                    {opportunityHeaderQuickActionsNode}
+                </div>
             </div>
         ) : undefined;
 
@@ -9701,13 +9698,27 @@ export default function AdminEntityDrawer() {
         isOpportunityExistingView &&
         !!drawer.id;
 
+    const opportunityHeaderTitleRailRight =
+        opportunityQueueNavControls || opportunityHeaderQuickActionsNode ? (
+            <div className="flex flex-col items-end gap-2">
+                {opportunityQueueNavControls ? (
+                    <div className="flex shrink-0 items-center justify-end">{opportunityQueueNavControls}</div>
+                ) : null}
+                <div className="flex flex-wrap items-start justify-end gap-2">
+                    {opportunityHeaderQuickActionsNode ?? <DrawerWorkflowHeaderQuickActionsSkeleton />}
+                </div>
+            </div>
+        ) : (
+            <DrawerWorkflowHeaderQuickActionsSkeleton />
+        );
+
     const headerTitleRightForDrawer = opportunityDrawerHeaderCalmLoading ? null : (
         opportunityTitleRailActive && !opportunityDrawerOverviewRevealReady ? (
             <DrawerWorkflowHeaderQuickActionsSkeleton />
         ) : opportunityWorkflowHeaderChromePending ? (
             <DrawerWorkflowHeaderQuickActionsSkeleton />
         ) : opportunityTitleRailActive ? (
-            opportunityHeaderQuickActionsNode ?? <DrawerWorkflowHeaderQuickActionsSkeleton />
+            opportunityHeaderTitleRailRight
         ) : (
             workflowHeaderTitleRight
         )
