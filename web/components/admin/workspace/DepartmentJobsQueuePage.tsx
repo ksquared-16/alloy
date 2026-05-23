@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import WorkUnitWorkspace from "@/app/adminV2/components/workspace/shells/WorkUnitWorkspace";
+import type { WorkUnitAboveFoldHeaderHandlers } from "@/app/adminV2/components/workspace/WorkUnitAboveFoldHeaderChips";
+import type { WorkUnitAboveFoldRenderModel } from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/aboveFoldTypes";
+import { ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT } from "@/lib/ui-v2/adminV2LoadingGeometry";
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { buildRealWorkUnitWorkspaceModel } from "@/lib/ui-v2/adapters/realWorkUnitFromJobs";
@@ -68,6 +71,39 @@ export function DepartmentJobsQueuePage({
         [departmentId, deptName, departmentKey, mode, exceptionFocus, jobs, schedules]
     );
 
+    /** Jobs bridge lanes are single-queue — no pill strip; rail + queue lane use atomic above-fold slots. */
+    const aboveFold = useMemo((): WorkUnitAboveFoldRenderModel => {
+        return {
+            header: {
+                visible: false,
+                state: "ready",
+                sections: [],
+                error_message: null,
+                active_queue_description: null,
+                show_other_pill: false,
+                other_pill: null,
+            },
+            actions_rail: {
+                visible: true,
+                state: "ready",
+                actions_rail: model.actionsRail,
+            },
+            queue_lane: {
+                visible: true,
+                state: "ready",
+                skeleton_row_count: ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT,
+            },
+        };
+    }, [model.actionsRail]);
+
+    const aboveFoldHandlers = useMemo(
+        (): WorkUnitAboveFoldHeaderHandlers => ({
+            onQueueTabChange: () => {},
+            onAttentionBucketSelect: () => {},
+        }),
+        []
+    );
+
     const onWorkspaceAction = useCallback(
         (action: WorkspaceAction) => {
             if (action.type === "queue.item.action" && action.actionId === "open_record") {
@@ -123,7 +159,13 @@ export function DepartmentJobsQueuePage({
             {loading ? (
                 <p className="text-sm text-alloy-midnight/60 py-4">Loading lane…</p>
             ) : (
-                <WorkUnitWorkspace model={model} onAction={onWorkspaceAction} kpiStripPlaceholder={false} />
+                <WorkUnitWorkspace
+                    model={model}
+                    aboveFold={aboveFold}
+                    aboveFoldHandlers={aboveFoldHandlers}
+                    onAction={onWorkspaceAction}
+                    kpiStripPlaceholder={false}
+                />
             )}
         </WorkspaceChrome>
     );
