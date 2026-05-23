@@ -70,6 +70,11 @@ type Props = {
   workspaceRollupRefined?: boolean;
   /** Cold load: skeleton department tiles before GET /api/admin/departments returns. */
   departmentsPending?: boolean;
+  /**
+   * When set, overrides the default tile stat pending rule (`departmentsPending || !workspaceRollupRefined`).
+   * Workspace reveal passes `false` once above-fold is ready so tiles do not skeleton after reveal.
+   */
+  deptTileStatsPending?: boolean;
   /** After page reveal — KPI pending uses quiet reserve (no premium-loading crossfade wave). */
   kpiQuietReserveOnly?: boolean;
 };
@@ -104,8 +109,11 @@ export function WorkspaceRootShell({
   kpiStripPlaceholder = false,
   workspaceRollupRefined = false,
   departmentsPending = false,
+  deptTileStatsPending,
   kpiQuietReserveOnly = false,
 }: Props) {
+  const deptTileStatsLinePending =
+    deptTileStatsPending ?? (departmentsPending || !workspaceRollupRefined);
   const displayName = (orgName && orgName.trim()) || "Your organization";
 
   const kpis = useMemo(() => {
@@ -213,7 +221,7 @@ export function WorkspaceRootShell({
               workspaceBasePath={WORKSPACE_BASE}
               departments={departments}
               deptTileStats={deptTileStats}
-              deptTileStatsPending={departmentsPending || !workspaceRollupRefined}
+              deptTileStatsPending={deptTileStatsLinePending}
               departmentsPending={departmentsPending}
               tileVariant="workspaceRoot"
               omitOuterChrome
