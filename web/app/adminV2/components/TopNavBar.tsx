@@ -43,11 +43,12 @@ function WorkspaceSiteFilterStrip({ normalizedPath }: { normalizedPath: string }
   const wf = useWorkspaceSiteFilter();
   if (!normalizedPath.startsWith("/adminV2/workspace")) return null;
 
-  if (!wf?.bootstrap) {
+  const bootstrap = wf?.displayBootstrap ?? wf?.bootstrap ?? null;
+  if (!bootstrap || !wf) {
     return <WorkspaceSiteFilterLocationReserve />;
   }
 
-  const { bootstrap, selectedSiteId, setSelectedSiteId } = wf;
+  const { selectedSiteId, setSelectedSiteId } = wf;
 
   if (bootstrap.show_dropdown && bootstrap.sites.length > 1) {
     return (

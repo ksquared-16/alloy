@@ -15,6 +15,34 @@ Do **not** reintroduce late composition, second shell owners, component swaps, o
 
 Server (Vercel / local): `[wu-bootstrap-perf]`, `[dept-bootstrap-perf]`, `[drawer-primary-perf]`, `[queue-summary-perf]` when paths exceed thresholds (>250ms bootstrap, >100ms summaries, >200ms drawer_primary).
 
+## Admin context + shell data cache (this pass)
+
+Filter staging logs: `[admin-context-cache]`, `[admin-context-perf]`, `[entity-labels-perf]`, `[admin-timing]`.
+
+| Path | Before (staging) | After expected (warm) | Cache used | Risk | Invalidation |
+|------|------------------|----------------------|------------|------|--------------|
+| `resolveAdminAccessCore` (shell) | 450–700ms cold | &lt;50ms hit | `adminShellContextCache` 120s per userId | Stale scope within TTL | TTL; `invalidateAdminShellContextCache(userId)` |
+| GET `/api/admin/departments` | ~871ms (ctx ~429) | &lt;250ms warm | shell + request `cache()` | Wrong dept list if scope stale | TTL + scope key in logs |
+| GET `/api/admin/work-units` | ~952ms (ctx ~493) | &lt;250ms warm | shell + request `cache()` | same | same |
+| GET `/api/admin/entity-labels` | 829–894ms | &lt;250ms warm | shell + `entityLabelsOrgCache` 5m | Stale labels after edit | `invalidateEntityLabelsOrgCache` on PUT/DELETE |
+| GET `/api/admin/workspace/site-filter` | context-bound | near-instant warm | shell | site list stale rare | TTL |
+| Queue rows GET | auth ~357ms | ↓ with shell hit | `loadAdminRouteGate` → shell | Must keep WU/dept scope checks | row-level checks unchanged |
+| Entity labels resolve | ~477ms | &lt;20ms hit | org TTL cache | override not visible until invalidation | PUT/DELETE invalidate |
+
+### Route audit (navigation burst)
+
+| Route | Context method (after) | Before ms (staging) | Full context? | Light / gate OK? | Shell cache? | Risk |
+|-------|------------------------|---------------------|---------------|------------------|--------------|------|
+| GET `/api/admin/departments` | `loadAdminRouteGate` | ~871 (ctx 429) | No | Yes | Yes | Low |
+| GET `/api/admin/work-units` | `loadAdminRouteGate` | ~952 (ctx 493) | No | Yes | Yes | Low |
+| GET `/api/admin/entity-labels` | `loadAdminRouteGate` + labels cache | 829–894 | No | Yes | Yes + org labels | Low |
+| GET `/api/admin/workspace/site-filter` | `loadAdminRouteGate` | — | No | Yes | Yes | Low |
+| GET `/api/admin/operational-tasks` | entity-scoped (unchanged) | — | Partial | — | Client nav cache | — |
+| GET `/api/admin/queues/...` | `loadAdminRouteGate` | auth 357 | No | Yes | Yes | Medium — row scope |
+| GET `.../operational-bootstrap` | `loadAdminRouteGate` | improved | Partial | Yes | Yes | Low |
+| Drawer primary/full | `loadAdminRouteGate` | — | Partial | Yes | Yes | Low |
+| PUT/DELETE entity-labels | `getAdminContextCached` | — | **Yes** (admin) | No cache on auth | N/A | None |
+
 ## True-speed table (staging log baselines — May 2026)
 
 Source: Vercel/staging server logs (`[wu-bootstrap-perf]`, `[perf.queue.rows]`, `[dept-bootstrap-perf]`, `[admin-context-perf]`). Re-measure after deploy.
@@ -24,7 +52,7 @@ Source: Vercel/staging server logs (`[wu-bootstrap-perf]`, `[perf.queue.rows]`, 
 | WU `operational-bootstrap` | total 1339–1552; loader 908–1068 | 41.6 | `primary_lane_rows_ms` 524–684; `queue_summaries_ms` ~262 | `getWorkUnitQueuePreviewRows` (`queue_reveal`), cap 10 rows, right-rail TTL cache, dept metadata preload | ↓ primary rows ms + payload KB |
 | Queue rows GET | total 1427; service 565; auth 295 | 54.7 (19 rows) | `enrichment_ms` 249; duplicate auth | `loadAdminRouteGate` only; `row_mode=preview` → `queue_reveal` | ↓ auth + enrichment on preview fetches |
 | Dept `operational-bootstrap` | total 1314–1796 | up to **305.8** | `attention_ms` 691–829; `department_attention_preview` items | `bundle_mode=prefetch` + slim attention (buckets only) | ↓ prefetch payload (target &lt;80 KB) |
-| Admin context | 450–700 per call | — | `resolveAdminAccessCore` cold | `loadAdminRouteGate` / `loadAdminAccessBundleCached` (request memo); queue route deduped | ↓ repeated auth_ms on queue drill-in |
+| Admin context | 450–700 per call | &lt;250 warm | `resolveAdminAccessCore` cold | **Cross-request** `adminShellContextCache` + `loadAdminRouteGate` on shell GETs; entity labels org cache | ↓ repeated auth_ms on navigation burst |
 
 Reveal gates unchanged: `[wu-reveal-gate]`, `[dept-reveal-gate]`, `[workspace-reveal-gate]`.
 
@@ -128,6 +156,8 @@ Reveal gates unchanged: `[wu-reveal-gate]`, `[dept-reveal-gate]`, `[workspace-re
 | `[dept-bootstrap-perf]` | Server dept bootstrap phases + `payload_kb` |
 | `[drawer-primary-perf]` | Server drawer_primary ms + `payload_kb` |
 | `[queue-summary-perf]` | Server summary paths >100ms |
+| `[admin-context-cache]` | Shell access bundle hit/miss + entity labels org cache |
+| `[admin-context-perf]` | Cold `resolveAdminAccessBundle` >400ms |
 
 ---
 
@@ -255,9 +285,22 @@ Capture: `reportWorkUnitCriticalPathLanes()` after hard refresh.
 | Dept idle **WU bootstrap prefetch** (visible throughput rows, cap 3) | Improves dept → WU warm reveal |
 | WU idle **drawer_primary prefetch** (first 3 row ids after reveal) | Improves row open warm path |
 
+## Admin context sprint implementations
+
+| Change | Effect |
+|--------|--------|
+| `adminShellContextCache` (120s, per userId) | Warm navigation reuses `AdminAccessBundle` without `resolveAdminAccessCore` |
+| `loadAdminRouteGate` checks `portalEligible` | Same portal gate as `getAdminContext` for shell GETs |
+| GET departments / work-units / entity-labels / site-filter | Single `loadAdminRouteGate` (no double context) |
+| `entityLabelsOrgCache` + `resolveEntityLabelsForOrgCached` | Warm labels skip industry/override DB fan-out |
+| PUT/DELETE entity-labels | Still `getAdminContextCached`; invalidate org labels cache |
+
+**Staging checks after deploy:** filter `[admin-context-cache] outcome:hit` on second navigation; `get_admin_context_ms` on departments/work-units/entity-labels should drop; queue rows `auth_ms` should fall when shell cache warm.
+
 ## Remaining bottlenecks
 
-1. Opportunity **full hydrate** graph (inquiry children, persons, field registry) — measure `[perf.drawer.full_hydrate]`.
+1. **`auth.session_resolve`** (112–189ms) — still per-request; cross-request session cache deferred (higher risk).
+2. Opportunity **full hydrate** graph (inquiry children, persons, field registry) — measure `[perf.drawer.full_hydrate]`.
 2. **Primary queue row fetch** after WU shell when `rows_deferred` — client `[perf.route.shell] queue_items_fetch_ms`.
 3. **Workspace growth rollup** — background per-dept refinement.
 4. **Dept KPI bundle** in bootstrap — candidate for defer flag (same pattern as WU).

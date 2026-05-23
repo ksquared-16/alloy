@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
 
 export type WorkspaceSiteFilterSite = { id: string; label: string };
 
 /** GET — Allowed site locations for header workspace filter (view-only; does not widen permissions). */
 export async function GET() {
-    const ctx = await getAdminAccessContextCached();
-    if (!ctx.ok) {
-        return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
-    }
+    const t0 = Date.now();
+    const gate = await loadAdminRouteGate();
+    const ctxMs = Date.now() - t0;
+    if (!gate.ok) return adminRouteGateFailureResponse(gate);
+    const ctx = gate.access;
 
     const supabase = createAdminClient();
     const { data: rows, error } = await supabase
@@ -37,6 +38,15 @@ export async function GET() {
 
     const showDropdown = sites.length > 1;
     const singleSiteLabel = sites.length === 1 ? sites[0].label : null;
+
+    const totalMs = Date.now() - t0;
+    if (totalMs > 200) {
+        console.warn("[admin-timing] GET /api/admin/workspace/site-filter", {
+            total_ms: totalMs,
+            get_admin_context_ms: ctxMs,
+            site_count: sites.length,
+        });
+    }
 
     return NextResponse.json({
         site_scope: ctx.siteScope,

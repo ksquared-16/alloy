@@ -2,23 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getOrgConfigLocked } from "@/lib/admin/getOrgConfigLocked";
-import { resolveEntityLabelsForOrg } from "@/lib/admin/entityLabelsResolve";
+import { invalidateEntityLabelsOrgCache } from "@/lib/admin/entityLabelsOrgCache";
+import { resolveEntityLabelsForOrgCached } from "@/lib/admin/entityLabelsResolve";
+import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
 
 /** GET: effective labels for org (industry defaults + overrides). Admin + ops can read. */
 export async function GET() {
     const t0 = Date.now();
-    const ctx = await getAdminContextCached();
+    const gate = await loadAdminRouteGate();
     const ctxMs = Date.now() - t0;
-    if (!ctx.ok) {
-        return NextResponse.json(
-            { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
-            { status: ctx.status }
-        );
-    }
+    if (!gate.ok) return adminRouteGateFailureResponse(gate);
 
     const t1 = Date.now();
     const supabase = createAdminClient();
-    const payload = await resolveEntityLabelsForOrg(supabase, ctx.orgId);
+    const payload = await resolveEntityLabelsForOrgCached(supabase, gate.orgId);
     const resolveMs = Date.now() - t1;
     const totalMs = Date.now() - t0;
     if (totalMs > 200) {
@@ -26,7 +23,7 @@ export async function GET() {
             total_ms: totalMs,
             get_admin_context_ms: ctxMs,
             resolve_entity_labels_ms: resolveMs,
-            org_id: ctx.orgId,
+            org_id: gate.orgId,
             effective_count: payload.effective?.length ?? 0,
         });
     }
@@ -82,6 +79,7 @@ export async function PUT(request: NextRequest) {
         if (delErr) {
             return NextResponse.json({ error: delErr.message }, { status: 500 });
         }
+        invalidateEntityLabelsOrgCache(ctx.orgId);
         return NextResponse.json({ ok: true });
     }
 
@@ -98,6 +96,7 @@ export async function PUT(request: NextRequest) {
     if (upsertErr) {
         return NextResponse.json({ error: upsertErr.message }, { status: 500 });
     }
+    invalidateEntityLabelsOrgCache(ctx.orgId);
     return NextResponse.json({ ok: true });
 }
 
@@ -137,5 +136,6 @@ export async function DELETE(request: NextRequest) {
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
+    invalidateEntityLabelsOrgCache(ctx.orgId);
     return NextResponse.json({ ok: true });
 }

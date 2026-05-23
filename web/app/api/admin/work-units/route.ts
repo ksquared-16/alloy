@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
 import { departmentIdAllowed, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { normalizeQueueDefinitionForCreate } from "@/lib/rrs/queue/queueDefinitionV1";
 
@@ -20,13 +21,10 @@ function normalizeKey(raw: string): string {
 /** GET: list work units for current org. Optional ?department_id= */
 export async function GET(request: NextRequest) {
     const t0 = Date.now();
-    const ctx = await getAdminContextCached();
+    const gate = await loadAdminRouteGate();
     const ctxMs = Date.now() - t0;
-    if (!ctx.ok) return adminContextFailureResponse(ctx);
-
-    const access = await getAdminAccessContextCached();
-    if (!access.ok) return adminContextFailureResponse(access);
-    const dim = scopeDimensionsFromAccess(access);
+    if (!gate.ok) return adminRouteGateFailureResponse(gate);
+    const dim = gate.dim;
 
     const departmentId = new URL(request.url).searchParams.get("department_id")?.trim() || null;
 
@@ -46,12 +44,12 @@ export async function GET(request: NextRequest) {
     let q = supabase
         .from("work_units")
         .select("id, org_id, department_id, key, name, description, sort_order, is_active, queue_definition, metadata, created_at, updated_at")
-        .eq("org_id", ctx.orgId)
+        .eq("org_id", gate.orgId)
         .order("sort_order", { ascending: true })
         .order("name", { ascending: true });
 
     if (departmentId) {
-        const ok = await assertRowOrg(supabase, "departments", departmentId, ctx.orgId);
+        const ok = await assertRowOrg(supabase, "departments", departmentId, gate.orgId);
         if (!ok.ok) {
             return NextResponse.json({ error: "Department not found" }, { status: 404 });
         }

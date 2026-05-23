@@ -4,7 +4,10 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
+    readLastKnownWorkspaceSiteFilterBootstrap,
     readWorkspaceSiteFilterBootstrapCache,
+    readWorkspaceSiteFilterBootstrapForShell,
+    resetWorkspaceSiteFilterBootstrapCacheForTests,
     writeWorkspaceSiteFilterBootstrapCache,
     workspaceSiteFilterBootstrapScopeKey,
 } from "@/lib/adminV2/workspaceSiteFilterBootstrapCache";
@@ -43,6 +46,7 @@ describe("AdminV2 app shell header persistence", () => {
     });
 
     it("session-scoped site filter bootstrap cache round-trip", () => {
+        resetWorkspaceSiteFilterBootstrapCacheForTests();
         const scope = { orgId: "org-1", principalUserId: "user-1", accessScopeFingerprint: "fp-1" };
         const key = workspaceSiteFilterBootstrapScopeKey(scope);
         expect(key).toContain("org-1");
@@ -54,5 +58,39 @@ describe("AdminV2 app shell header persistence", () => {
         };
         writeWorkspaceSiteFilterBootstrapCache(scope, bootstrap);
         expect(readWorkspaceSiteFilterBootstrapCache(scope)?.sites[0]?.label).toBe("Campus A");
+    });
+
+    it("last-known bootstrap survives dept→work-unit hard reload before scope registers", () => {
+        resetWorkspaceSiteFilterBootstrapCacheForTests();
+        const scope = { orgId: "org-1", principalUserId: "user-1", accessScopeFingerprint: "fp-1" };
+        const bootstrap = {
+            site_scope: "all",
+            sites: [{ id: "s1", label: "Campus A" }],
+            show_dropdown: true,
+            single_site_label: null,
+        };
+        writeWorkspaceSiteFilterBootstrapCache(scope, bootstrap);
+        expect(readWorkspaceSiteFilterBootstrapCache(null)).toBeNull();
+        expect(readWorkspaceSiteFilterBootstrapForShell(null)?.sites[0]?.label).toBe("Campus A");
+        expect(readLastKnownWorkspaceSiteFilterBootstrap()?.sites[0]?.label).toBe("Campus A");
+    });
+
+    it("dept→work-unit transition keeps sticky display bootstrap in provider", () => {
+        const ctx = read("contexts/WorkspaceSiteFilterContext.tsx");
+        expect(ctx).toContain("displayBootstrapRef");
+        expect(ctx).toContain("site_filter_bootstrap_sticky");
+        expect(ctx).toContain("readWorkspaceSiteFilterBootstrapForShell");
+        expect(ctx).not.toMatch(/if \(!cached\) setBootstrap\(null\)/);
+    });
+
+    it("TopNavBar renders location from displayBootstrap not only live bootstrap", () => {
+        const nav = read("app/adminV2/components/TopNavBar.tsx");
+        expect(nav).toContain("displayBootstrap");
+        expect(nav).toContain("WorkspaceSiteFilterLocationReserve");
+    });
+
+    it("scope bridge registers synchronously before layout effects", () => {
+        const bridge = read("app/adminV2/workspace/WorkspaceSiteFilterPersistenceScopeBridge.tsx");
+        expect(bridge).toContain("registerWorkspaceSiteFilterPersistenceScope(scope)");
     });
 });

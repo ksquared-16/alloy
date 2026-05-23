@@ -8,6 +8,10 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getCachedAuthUserId } from "@/lib/admin/cachedAuthSession";
 import { resolveAdminAccessCore } from "@/lib/admin/resolveAdminAccessCore";
 import type { DepartmentScopeMode, SiteScopeMode } from "@/lib/admin/resolveAdminAccessCore";
+import {
+    readAdminShellContextCache,
+    writeAdminShellContextCache,
+} from "@/lib/adminV2/adminShellContextCache";
 
 export type { DepartmentScopeMode, SiteScopeMode };
 
@@ -34,10 +38,16 @@ export type AdminAccessContextResult = AdminAccessContextSuccess | AdminAccessCo
 export type AdminAccessBundle = AdminAccessContextFailure | (AdminAccessContextSuccess & { portalEligible: boolean });
 
 const loadAdminAccessBundleOnce = cache(async (): Promise<AdminAccessBundle> => {
+    const t0 = Date.now();
     try {
         const userId = await getCachedAuthUserId();
         if (!userId) {
             return { ok: false, status: 401 };
+        }
+
+        const shellHit = readAdminShellContextCache(userId);
+        if (shellHit) {
+            return shellHit;
         }
 
         const admin = createAdminClient();
@@ -47,7 +57,7 @@ const loadAdminAccessBundleOnce = cache(async (): Promise<AdminAccessBundle> => 
         }
 
         const { portalEligible, ...rest } = core;
-        return {
+        const bundle: AdminAccessBundle = {
             ok: true,
             userId,
             orgId: rest.orgId,
@@ -59,6 +69,19 @@ const loadAdminAccessBundleOnce = cache(async (): Promise<AdminAccessBundle> => 
             allowedSiteLocationIds: rest.allowedSiteLocationIds,
             portalEligible,
         };
+        if (portalEligible) {
+            writeAdminShellContextCache(bundle);
+        }
+        const totalMs = Date.now() - t0;
+        if (totalMs > 400) {
+            console.warn("[admin-context-perf] resolveAdminAccessBundle", {
+                total_ms: totalMs,
+                user_id: userId,
+                org_id: rest.orgId,
+                shell_cache: "miss",
+            });
+        }
+        return bundle;
     } catch (e) {
         console.error("[loadAdminAccessBundleOnce] unexpected:", e);
         return { ok: false, status: 403 };

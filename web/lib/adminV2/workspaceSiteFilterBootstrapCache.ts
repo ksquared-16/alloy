@@ -11,6 +11,9 @@ type CachedBootstrap = {
 };
 
 const memByScopeKey = new Map<string, CachedBootstrap>();
+let lastKnownEntry: CachedBootstrap | null = null;
+
+const SESSION_KEY_PREFIX = `alloy:v${SCHEMA_V}:admV2:shell:site-filter-bootstrap:`;
 
 export function workspaceSiteFilterBootstrapScopeKey(
     scope: WorkspaceSiteFilterPersistenceScope | null
@@ -23,7 +26,47 @@ export function workspaceSiteFilterBootstrapScopeKey(
 }
 
 function sessionStorageKey(scopeKey: string): string {
-    return `alloy:v${SCHEMA_V}:admV2:shell:site-filter-bootstrap:${scopeKey}`;
+    return `${SESSION_KEY_PREFIX}${scopeKey}`;
+}
+
+function rememberLastKnown(entry: CachedBootstrap): void {
+    lastKnownEntry = entry;
+}
+
+/** Warm navigation when scope is not registered yet (hard reload before workspace layout hydrates). */
+export function readLastKnownWorkspaceSiteFilterBootstrap(): WorkspaceSiteFilterBootstrap | null {
+    if (lastKnownEntry && isFresh(lastKnownEntry)) return lastKnownEntry.bootstrap;
+
+    if (typeof window === "undefined") return lastKnownEntry?.bootstrap ?? null;
+
+    let best: CachedBootstrap | null = null;
+    try {
+        for (let i = 0; i < sessionStorage.length; i++) {
+            const k = sessionStorage.key(i);
+            if (!k?.startsWith(SESSION_KEY_PREFIX)) continue;
+            const raw = sessionStorage.getItem(k);
+            if (!raw) continue;
+            const parsed = JSON.parse(raw) as Partial<CachedBootstrap>;
+            if (parsed.v !== SCHEMA_V || !parsed.bootstrap) continue;
+            const entry = parsed as CachedBootstrap;
+            if (!isFresh(entry)) continue;
+            if (!best || entry.savedAtMs > best.savedAtMs) best = entry;
+        }
+    } catch {
+        return lastKnownEntry?.bootstrap ?? null;
+    }
+
+    if (best) {
+        rememberLastKnown(best);
+        return best.bootstrap;
+    }
+    return lastKnownEntry?.bootstrap ?? null;
+}
+
+export function readWorkspaceSiteFilterBootstrapForShell(
+    scope: WorkspaceSiteFilterPersistenceScope | null
+): WorkspaceSiteFilterBootstrap | null {
+    return readWorkspaceSiteFilterBootstrapCache(scope) ?? readLastKnownWorkspaceSiteFilterBootstrap();
 }
 
 function isFresh(entry: CachedBootstrap): boolean {
@@ -59,9 +102,10 @@ export function writeWorkspaceSiteFilterBootstrapCache(
     scope: WorkspaceSiteFilterPersistenceScope | null,
     bootstrap: WorkspaceSiteFilterBootstrap
 ): void {
+    const entry: CachedBootstrap = { v: SCHEMA_V, savedAtMs: Date.now(), bootstrap };
+    rememberLastKnown(entry);
     const scopeKey = workspaceSiteFilterBootstrapScopeKey(scope);
     if (!scopeKey) return;
-    const entry: CachedBootstrap = { v: SCHEMA_V, savedAtMs: Date.now(), bootstrap };
     memByScopeKey.set(scopeKey, entry);
     if (typeof window === "undefined") return;
     try {
@@ -76,6 +120,7 @@ export function clearWorkspaceSiteFilterBootstrapCacheForOrg(orgId: string): voi
     for (const key of [...memByScopeKey.keys()]) {
         if (key.startsWith(prefix)) memByScopeKey.delete(key);
     }
+    lastKnownEntry = null;
     if (typeof window === "undefined") return;
     try {
         for (let i = sessionStorage.length - 1; i >= 0; i--) {
@@ -85,4 +130,9 @@ export function clearWorkspaceSiteFilterBootstrapCacheForOrg(orgId: string): voi
     } catch {
         /* ignore */
     }
+}
+
+export function resetWorkspaceSiteFilterBootstrapCacheForTests(): void {
+    memByScopeKey.clear();
+    lastKnownEntry = null;
 }

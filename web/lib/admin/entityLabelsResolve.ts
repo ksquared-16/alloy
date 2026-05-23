@@ -1,4 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+    readEntityLabelsOrgCache,
+    writeEntityLabelsOrgCache,
+} from "@/lib/admin/entityLabelsOrgCache";
+import { logAdminContextCache } from "@/lib/adminV2/adminContextCacheInstrumentation";
 
 export type EntityLabelRow = { entity_type: string; singular: string | null; plural: string | null };
 
@@ -123,4 +128,17 @@ export async function resolveEntityLabelsForOrg(supabase: SupabaseClient, orgId:
         overrides,
         effective,
     };
+}
+
+/** Org-stable labels for shell/navigation — process cache with TTL + explicit invalidation on writes. */
+export async function resolveEntityLabelsForOrgCached(
+    supabase: SupabaseClient,
+    orgId: string
+): Promise<EntityLabelsPayload> {
+    const hit = readEntityLabelsOrgCache(orgId);
+    if (hit) return hit;
+    const payload = await resolveEntityLabelsForOrg(supabase, orgId);
+    writeEntityLabelsOrgCache(orgId, payload);
+    logAdminContextCache("miss", { cache: "entity_labels", org_id: orgId, reason: "resolved_and_stored" });
+    return payload;
 }

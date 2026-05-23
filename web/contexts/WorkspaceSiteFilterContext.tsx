@@ -12,6 +12,7 @@ import {
 } from "react";
 import {
     readWorkspaceSiteFilterBootstrapCache,
+    readWorkspaceSiteFilterBootstrapForShell,
     writeWorkspaceSiteFilterBootstrapCache,
     workspaceSiteFilterBootstrapScopeKey,
 } from "@/lib/adminV2/workspaceSiteFilterBootstrapCache";
@@ -41,6 +42,8 @@ export type WorkspaceSiteFilterBootstrap = {
 
 type WorkspaceSiteFilterContextValue = {
     bootstrap: WorkspaceSiteFilterBootstrap | null;
+    /** Last valid bootstrap for header chrome — never cleared on route transitions. */
+    displayBootstrap: WorkspaceSiteFilterBootstrap | null;
     loadError: string | null;
     /** True while a background refresh is in flight (bootstrap may still be shown from cache). */
     revalidating: boolean;
@@ -68,28 +71,43 @@ function normalizeBootstrap(j: WorkspaceSiteFilterBootstrap & { error?: string }
  * App-shell-owned site filter — cached per org/principal/scope; stale-while-revalidate.
  * Route reveal gates must not wait on this fetch.
  */
+function readInitialSiteFilterBootstrap(): WorkspaceSiteFilterBootstrap | null {
+    return readWorkspaceSiteFilterBootstrapForShell(getRegisteredWorkspaceSiteFilterScope());
+}
+
 export function WorkspaceSiteFilterProvider({ children }: { children: ReactNode }) {
     const scopeRef = useRef<WorkspaceSiteFilterPersistenceScope | null>(null);
     const hydratedRef = useRef(false);
     const fetchGenRef = useRef(0);
+    const displayBootstrapRef = useRef<WorkspaceSiteFilterBootstrap | null>(readInitialSiteFilterBootstrap());
 
-    const [bootstrap, setBootstrap] = useState<WorkspaceSiteFilterBootstrap | null>(() =>
-        readWorkspaceSiteFilterBootstrapCache(getRegisteredWorkspaceSiteFilterScope())
+    const [bootstrap, setBootstrapState] = useState<WorkspaceSiteFilterBootstrap | null>(
+        () => displayBootstrapRef.current
     );
+    const setBootstrap = useCallback((next: WorkspaceSiteFilterBootstrap | null) => {
+        if (next) displayBootstrapRef.current = next;
+        setBootstrapState(next);
+    }, []);
+
     const [loadError, setLoadError] = useState<string | null>(null);
-    const [revalidating, setRevalidating] = useState(() => bootstrap == null);
+    const [revalidating, setRevalidating] = useState(() => displayBootstrapRef.current == null);
     const [selectedSiteId, setSelectedSiteIdState] = useState<string | null>(null);
     const [siteSelectionReady, setSiteSelectionReady] = useState(
-        () => bootstrap != null || getRegisteredWorkspaceSiteFilterScope() != null
+        () => displayBootstrapRef.current != null || getRegisteredWorkspaceSiteFilterScope() != null
     );
 
     const loadBootstrap = useCallback(async (scope: WorkspaceSiteFilterPersistenceScope | null, reason: string) => {
         const gen = ++fetchGenRef.current;
-        const cached = readWorkspaceSiteFilterBootstrapCache(scope);
+        const cached = readWorkspaceSiteFilterBootstrapForShell(scope);
+        const hadDisplay = displayBootstrapRef.current != null;
         if (cached) {
             setBootstrap(cached);
             setSiteSelectionReady(true);
             logPrefetchAdminV2("workspace", "hit", { cache: "site_filter_bootstrap", reason });
+        } else if (hadDisplay) {
+            setBootstrap(displayBootstrapRef.current);
+            setSiteSelectionReady(true);
+            logPrefetchAdminV2("workspace", "hit", { cache: "site_filter_bootstrap_sticky", reason });
         } else {
             logPrefetchAdminV2("workspace", "miss", { cache: "site_filter_bootstrap", reason });
         }
@@ -101,7 +119,7 @@ export function WorkspaceSiteFilterProvider({ children }: { children: ReactNode 
             if (gen !== fetchGenRef.current) return;
             if (!res.ok) {
                 setLoadError(typeof j.error === "string" ? j.error : "Failed to load site filter");
-                if (!cached) setBootstrap(null);
+                if (!cached && !hadDisplay) setBootstrap(null);
                 setSiteSelectionReady(true);
                 return;
             }
@@ -113,14 +131,14 @@ export function WorkspaceSiteFilterProvider({ children }: { children: ReactNode 
         } catch {
             if (gen !== fetchGenRef.current) return;
             setLoadError("Failed to load site filter");
-            if (!cached) setBootstrap(null);
+            if (!cached && !hadDisplay) setBootstrap(null);
         } finally {
             if (gen === fetchGenRef.current) {
                 setRevalidating(false);
                 setSiteSelectionReady(true);
             }
         }
-    }, []);
+    }, [setBootstrap]);
 
     useEffect(() => {
         void loadBootstrap(scopeRef.current, "shell_mount");
@@ -181,16 +199,19 @@ export function WorkspaceSiteFilterProvider({ children }: { children: ReactNode 
             scopeRef.current = detail;
             registerWorkspaceSiteFilterPersistenceScope(detail);
             const nextKey = workspaceSiteFilterBootstrapScopeKey(scopeRef.current);
-            const cached = readWorkspaceSiteFilterBootstrapCache(detail);
+            const cached = readWorkspaceSiteFilterBootstrapForShell(detail);
             if (cached) {
                 setBootstrap(cached);
+                setSiteSelectionReady(true);
+            } else if (displayBootstrapRef.current) {
+                setBootstrap(displayBootstrapRef.current);
                 setSiteSelectionReady(true);
             }
             if (nextKey && nextKey !== prevKey) {
                 hydratedRef.current = false;
                 void loadBootstrap(detail, "org_scope_change");
             }
-            const sites = cached?.sites ?? bootstrap?.sites;
+            const sites = cached?.sites ?? displayBootstrapRef.current?.sites ?? bootstrap?.sites;
             if (sites?.length) hydrateFromUrlAndSession(sites, false);
         };
         window.addEventListener("alloy-workspace-site-filter-scope", onScope);
@@ -208,16 +229,19 @@ export function WorkspaceSiteFilterProvider({ children }: { children: ReactNode 
         [applyValidatedSite, bootstrap?.sites]
     );
 
+    const displayBootstrap = bootstrap ?? displayBootstrapRef.current;
+
     const value = useMemo(
         () => ({
             bootstrap,
+            displayBootstrap,
             loadError,
             revalidating,
             selectedSiteId,
             siteSelectionReady,
             setSelectedSiteId,
         }),
-        [bootstrap, loadError, revalidating, selectedSiteId, siteSelectionReady, setSelectedSiteId]
+        [bootstrap, displayBootstrap, loadError, revalidating, selectedSiteId, siteSelectionReady, setSelectedSiteId]
     );
 
     return <WorkspaceSiteFilterContext.Provider value={value}>{children}</WorkspaceSiteFilterContext.Provider>;

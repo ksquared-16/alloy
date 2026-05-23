@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
-import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
 
 export const dynamic = "force-dynamic";
 
@@ -20,20 +19,17 @@ function normalizeKey(raw: string): string {
 /** GET: list departments for current org. */
 export async function GET() {
     const t0 = Date.now();
-    const ctx = await getAdminContextCached();
+    const gate = await loadAdminRouteGate();
     const ctxMs = Date.now() - t0;
-    if (!ctx.ok) return adminContextFailureResponse(ctx);
-
-    const access = await getAdminAccessContextCached();
-    if (!access.ok) return adminContextFailureResponse(access);
-    const dim = scopeDimensionsFromAccess(access);
+    if (!gate.ok) return adminRouteGateFailureResponse(gate);
+    const dim = gate.dim;
 
     const t1 = Date.now();
     const supabase = createAdminClient();
     let deptQuery = supabase
         .from("departments")
         .select("id, org_id, key, name, description, sort_order, is_active, metadata, created_at, updated_at")
-        .eq("org_id", ctx.orgId)
+        .eq("org_id", gate.orgId)
         .order("sort_order", { ascending: true })
         .order("name", { ascending: true });
 

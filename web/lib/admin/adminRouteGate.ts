@@ -5,6 +5,7 @@ import {
 } from "@/lib/admin/getAdminContext";
 import {
     getAdminAccessContextCached,
+    loadAdminAccessBundleCached,
     type AdminAccessContextFailure,
     type AdminAccessContextSuccess,
 } from "@/lib/admin/getAdminAccessContext";
@@ -30,8 +31,22 @@ export type AdminRouteGateResult = AdminRouteGateSuccess | AdminRouteGateFailure
  * `getAdminContextCached` + `getAdminAccessContextCached` at route entry.
  */
 export async function loadAdminRouteGate(): Promise<AdminRouteGateResult> {
-    const access = await getAdminAccessContextCached();
-    if (!access.ok) return access;
+    const bundle = await loadAdminAccessBundleCached();
+    if (!bundle.ok) return bundle;
+    if (!bundle.portalEligible) {
+        return { ok: false, status: 403 };
+    }
+    const access: AdminAccessContextSuccess = {
+        ok: true,
+        userId: bundle.userId,
+        orgId: bundle.orgId,
+        roleKeys: bundle.roleKeys,
+        permissionKeys: bundle.permissionKeys,
+        departmentScope: bundle.departmentScope,
+        allowedDepartmentIds: bundle.allowedDepartmentIds,
+        siteScope: bundle.siteScope,
+        allowedSiteLocationIds: bundle.allowedSiteLocationIds,
+    };
     return {
         ok: true,
         orgId: access.orgId,
