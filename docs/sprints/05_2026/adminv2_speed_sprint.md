@@ -15,18 +15,18 @@ Do **not** reintroduce late composition, second shell owners, component swaps, o
 
 Server (Vercel / local): `[wu-bootstrap-perf]`, `[dept-bootstrap-perf]`, `[drawer-primary-perf]`, `[queue-summary-perf]` when paths exceed thresholds (>250ms bootstrap, >100ms summaries, >200ms drawer_primary).
 
-## True-speed table (fill from local captures — do not invent numbers)
+## True-speed table (staging log baselines — May 2026)
 
-After each surface: hard refresh once (cold), then in-app navigate back (warm). Console: `reportAdminV2LatencySnapshot()`. Server: `[wu-bootstrap-perf]`, `[dept-bootstrap-perf]`, `[drawer-primary-perf]`.
+Source: Vercel/staging server logs (`[wu-bootstrap-perf]`, `[perf.queue.rows]`, `[dept-bootstrap-perf]`, `[admin-context-perf]`). Re-measure after deploy.
 
-| Surface | Cold reveal ms | Warm reveal ms | Prefetch hit? | TTFB ms | Payload KB | Slowest internal step | Bottleneck |
-|---------|----------------|----------------|---------------|---------|------------|-----------------------|------------|
-| Work-unit | _capture_ | _capture_ | `[prefetch.adminv2] work_unit` | _capture_ | _capture_ | attention / primary rows / summaries | WU operational-bootstrap |
-| Department | _capture_ | _capture_ | `[prefetch.adminv2] department` | _capture_ | _capture_ | batch summaries / attention | Dept operational-bootstrap |
-| Drawer primary | _capture_ | _capture_ | row intent / idle≤3 | _capture_ | _capture_ | drawer_primary entity | drawer_primary route |
-| Workspace | _capture_ | _capture_ | dept tile / idle≤3 | _capture_ | _capture_ | departments + work-units | workspace critical deps |
+| Path | Current ms | Current KB | Bottleneck | Fix (this sprint) | Expected improvement |
+|------|------------|------------|------------|-------------------|----------------------|
+| WU `operational-bootstrap` | total 1339–1552; loader 908–1068 | 41.6 | `primary_lane_rows_ms` 524–684; `queue_summaries_ms` ~262 | `getWorkUnitQueuePreviewRows` (`queue_reveal`), cap 10 rows, right-rail TTL cache, dept metadata preload | ↓ primary rows ms + payload KB |
+| Queue rows GET | total 1427; service 565; auth 295 | 54.7 (19 rows) | `enrichment_ms` 249; duplicate auth | `loadAdminRouteGate` only; `row_mode=preview` → `queue_reveal` | ↓ auth + enrichment on preview fetches |
+| Dept `operational-bootstrap` | total 1314–1796 | up to **305.8** | `attention_ms` 691–829; `department_attention_preview` items | `bundle_mode=prefetch` + slim attention (buckets only) | ↓ prefetch payload (target &lt;80 KB) |
+| Admin context | 450–700 per call | — | `resolveAdminAccessCore` cold | `loadAdminRouteGate` / `loadAdminAccessBundleCached` (request memo); queue route deduped | ↓ repeated auth_ms on queue drill-in |
 
-Reveal: `[wu-reveal-gate] reveal_wait_ms`, `[dept-reveal-gate]`, `[workspace-reveal-gate]`.
+Reveal gates unchanged: `[wu-reveal-gate]`, `[dept-reveal-gate]`, `[workspace-reveal-gate]`.
 
 ## Audit table (fill from local captures)
 
@@ -246,11 +246,14 @@ Capture: `reportWorkUnitCriticalPathLanes()` after hard refresh.
 | Change | Effect |
 |--------|--------|
 | WU loader: summaries first; **attention deferred** when primary lane is not needs_attention | Cuts blocking `attention_*_ms` off enrollment/pipeline-primary paths |
-| WU `primary_row_limit` default **12** (max 20) | Smaller reveal bundle on canonical bootstrap URL |
+| WU `primary_row_limit` default **10** (max 20) | Smaller reveal bundle on canonical bootstrap URL |
+| **`getWorkUnitQueuePreviewRows` / `queue_reveal`** | Skips placement projection + tour/OCM optional fetches; uses `queue_preview` enrichment |
+| **Right-rail actions TTL cache** (45s, org/dept/wu) | Cuts repeat `right_rail_actions_ms` 111–184 on warm navigations |
+| **`bundle_mode=prefetch`** on dept bootstrap | Slim attention (bucket counts only, no candidate item rows) for idle prefetch |
+| Queue rows route **`loadAdminRouteGate`** + `row_mode=preview` | One auth bundle per request; optional slim rows for client refresh |
 | `dedupeAdminFetchWithTtlMeta` + **15s dept / WU TTL** | Prefetch → navigation `hit` / `inflight_join` via `[prefetch.adminv2]` |
 | Dept idle **WU bootstrap prefetch** (visible throughput rows, cap 3) | Improves dept → WU warm reveal |
 | WU idle **drawer_primary prefetch** (first 3 row ids after reveal) | Improves row open warm path |
-| `reportAdminV2LatencySnapshot()` | Fills reveal/TTFB/payload columns from `__alloyPerf` marks (no invented timings in docs) |
 
 ## Remaining bottlenecks
 

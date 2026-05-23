@@ -34,7 +34,7 @@ export function buildCanonicalWorkUnitOperationalBootstrapUrl(params: WorkUnitBo
         summary_mode: "all",
         limit: "3",
         omit_total_count: "true",
-        primary_row_limit: "12",
+        primary_row_limit: "10",
         defer_bundle: "false",
     });
     const base = `/api/admin/work-units/${encodeURIComponent(params.workUnitId)}/operational-bootstrap?${qs.toString()}`;

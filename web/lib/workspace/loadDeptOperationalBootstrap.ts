@@ -54,6 +54,8 @@ export async function loadDeptOperationalBootstrap(params: {
     attentionWorkUnitIdParam?: string | null;
     /** When route already resolved shared bootstrap, skip duplicate org-level fetch. */
     sharedBootstrap?: QueueSummariesSharedBootstrap;
+    /** Prefetch uses slim attention (bucket counts only, no candidate rows). */
+    bundleMode?: "reveal" | "prefetch";
 }): Promise<
     | { payload: DeptOperationalBootstrapPayload; phases: DeptBootstrapPerfPhases }
     | { error: string; status: number }
@@ -197,9 +199,12 @@ export async function loadDeptOperationalBootstrap(params: {
             recordScopeConstraints: params.recordScopeConstraints,
             opportunityStatusDefs: sharedBootstrap.opportunityStatusDefs,
             attentionPerf,
+            attentionDetailMode: params.bundleMode === "prefetch" ? "slim" : "full",
         });
         phases.attention_ms = Date.now() - t0;
         phases.attention_source = out.source ?? "unknown";
+        phases.attention_detail_mode = params.bundleMode === "prefetch" ? "slim" : "full";
+        phases.bundle_mode = params.bundleMode ?? "reveal";
         if (out.source === "work_unit_needs_attention_lane") {
             phases.attention_rules_ms = attentionPerf.rules_ms;
             phases.attention_query_ms = attentionPerf.query_ms;

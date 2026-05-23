@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
 import {
     accessScopeRestrictsData,
     departmentIdAllowed,
     fetchWorkUnitDepartmentId,
-    scopeDimensionsFromAccess,
 } from "@/lib/admin/accessScope";
 import {
     parseWorkspaceSiteIdFromSearchParams,
@@ -77,26 +75,28 @@ export async function GET(
 ) {
     const handlerT0 = Date.now();
     const tAuth0 = Date.now();
-    const ctx = await getAdminContextCached();
+    const gate = await loadAdminRouteGate();
     const auth_ms = Date.now() - tAuth0;
-    if (!ctx.ok) return adminContextFailureResponse(ctx);
-
-    const access = await getAdminAccessContextCached();
-    if (!access.ok) return adminContextFailureResponse(access);
-    const dim = scopeDimensionsFromAccess(access);
+    if (!gate.ok) return adminRouteGateFailureResponse(gate);
+    const dim = gate.dim;
 
     const { workUnitId, queueKey } = await context.params;
     if (!workUnitId) return NextResponse.json({ error: "Missing workUnitId" }, { status: 400 });
     if (!queueKey) return NextResponse.json({ error: "Missing queueKey" }, { status: 400 });
 
     const supabase = createAdminClient();
-    const { data: wuExists } = await supabase.from("work_units").select("id").eq("id", workUnitId).eq("org_id", ctx.orgId).maybeSingle();
+    const { data: wuExists } = await supabase
+        .from("work_units")
+        .select("id")
+        .eq("id", workUnitId)
+        .eq("org_id", gate.orgId)
+        .maybeSingle();
     if (!wuExists) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
     if (accessScopeRestrictsData(dim) && dim.departmentScope === "restricted") {
-        const deptId = await fetchWorkUnitDepartmentId(supabase, ctx.orgId, workUnitId);
+        const deptId = await fetchWorkUnitDepartmentId(supabase, gate.orgId, workUnitId);
         if (!departmentIdAllowed(dim, deptId)) {
             return NextResponse.json({ error: "Not found" }, { status: 404 });
         }
@@ -105,7 +105,7 @@ export async function GET(
     const workspaceSiteId = parseWorkspaceSiteIdFromSearchParams(request.nextUrl.searchParams);
     const { recordScopeImpossible, recordScopeConstraints } = await resolveQueueRecordScopeConstraints(
         supabase,
-        ctx.orgId,
+        gate.orgId,
         dim,
         workspaceSiteId
     );
@@ -114,12 +114,14 @@ export async function GET(
         const { limit, offset } = parseLimitOffset(request.nextUrl.searchParams);
         const { countAccuracy, omitTotalCount } = parseQueueItemsCountOptions(request.nextUrl.searchParams);
         const viewerDisplayTimeZone = await fetchEffectiveUserDisplayTimezone(supabase, {
-            orgId: ctx.orgId,
-            userId: ctx.userId,
+            orgId: gate.orgId,
+            userId: gate.userId,
         });
         const attentionBucketKey = (request.nextUrl.searchParams.get("attention_bucket") ?? "").trim() || null;
+        const rowMode = (request.nextUrl.searchParams.get("row_mode") ?? "").trim().toLowerCase();
+        const rowEnrichment = rowMode === "preview" || rowMode === "reveal" ? "queue_reveal" : "queue_list";
         const { result, rowsPerf } = await getWorkUnitQueueItems({
-            orgId: ctx.orgId,
+            orgId: gate.orgId,
             workUnitId,
             queueKey,
             limit,
@@ -130,6 +132,7 @@ export async function GET(
             recordScopeConstraints,
             viewerDisplayTimeZone,
             attentionBucketKey,
+            rowEnrichment,
         });
 
         const tSer0 = Date.now();
@@ -141,11 +144,12 @@ export async function GET(
         const { enrichment_subtimings_ms: enrichment_subtimings, ...rowsPerfForLog } = rowsPerf;
 
         perfQueueRowsServer({
-            org_id: ctx.orgId,
+            org_id: gate.orgId,
             work_unit_id: workUnitId,
             queue_key: queueKey,
             total_ms,
             auth_ms,
+            row_enrichment: rowEnrichment,
             ...rowsPerfForLog,
             enrichment_subtimings,
             serialize_ms,

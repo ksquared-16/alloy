@@ -8,6 +8,8 @@ export type DeptBootstrapPerfPhases = {
     attention_ms?: number;
     /** `work_unit_needs_attention_lane` vs `department_attention_preview` — explains missing subtimings. */
     attention_source?: string;
+    attention_detail_mode?: string;
+    bundle_mode?: string;
     /** @deprecated Use attention_query_ms — kept for log continuity. */
     attention_candidate_fetch_ms?: number;
     attention_query_ms?: number;

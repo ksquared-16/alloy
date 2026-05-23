@@ -56,7 +56,24 @@ describe("AdminV2 speed sprint Cards 3–4", () => {
         expect(read("app/adminV2/workspace/dept/[departmentId]/page.tsx")).toContain("logPrefetchAdminV2");
     });
 
-    it("canonical WU bootstrap uses primary_row_limit 12", () => {
-        expect(read("lib/adminV2/workUnitBootstrapClientSession.ts")).toContain('primary_row_limit: "12"');
+    it("canonical WU bootstrap uses primary_row_limit 10", () => {
+        expect(read("lib/adminV2/workUnitBootstrapClientSession.ts")).toContain('primary_row_limit: "10"');
+    });
+
+    it("WU bootstrap uses queue_reveal preview rows", () => {
+        expect(read("lib/workspace/loadWorkUnitOperationalBootstrap.ts")).toContain("getWorkUnitQueuePreviewRows");
+        expect(read("lib/queues/QueueService.ts")).toContain('rowEnrichment: "queue_reveal"');
+    });
+
+    it("dept prefetch uses bundle_mode=prefetch and slim attention", () => {
+        expect(read("lib/adminV2/navigation/prefetchDepartmentOperationalBootstrap.ts")).toContain(
+            'bundle_mode: "prefetch"'
+        );
+        expect(read("lib/workspace/loadDeptAttentionPreviewServer.ts")).toContain("attentionDetailMode");
+    });
+
+    it("queue rows route uses single admin route gate", () => {
+        expect(read("app/api/admin/queues/[workUnitId]/[queueKey]/route.ts")).toContain("loadAdminRouteGate");
+        expect(read("app/api/admin/queues/[workUnitId]/[queueKey]/route.ts")).not.toContain("getAdminContextCached");
     });
 });

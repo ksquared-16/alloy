@@ -63,6 +63,11 @@ export async function loadDeptAttentionPreviewServer(params: {
         bucket_merge_ms?: number;
         candidate_count?: number;
     };
+    /**
+     * `slim` — bucket counts only for prefetch / above-fold (no candidate item rows).
+     * `full` — legacy department_attention_preview with items (page-only when needed).
+     */
+    attentionDetailMode?: "slim" | "full";
 }): Promise<DeptAttentionPreviewPayload> {
     const { supabase, orgId, departmentId, departmentMetadata, accessDim } = params;
 
@@ -117,6 +122,8 @@ export async function loadDeptAttentionPreviewServer(params: {
         };
     }
 
+    const attentionDetailMode = params.attentionDetailMode ?? "full";
+
     const { items, rules, attention_reason_counts, attention_evaluation } =
         await buildOpportunityAttentionQueueItems({
             supabase,
@@ -132,6 +139,19 @@ export async function loadDeptAttentionPreviewServer(params: {
         hydrateNeedsAttentionBucketCounts(bucketDefs, attention_reason_counts),
         attentionCfg
     );
+
+    if (attentionDetailMode === "slim") {
+        const total = needs_attention_buckets.reduce((sum, b) => sum + (b.count ?? 0), 0);
+        return {
+            department_id: departmentId,
+            work_unit_key: "needs_attention",
+            total,
+            needs_attention_buckets,
+            attention_reason_counts,
+            bucket_count_scope: "org_preview_cap_500",
+            source: "department_attention_preview",
+        };
+    }
 
     let itemsOut = items;
     try {

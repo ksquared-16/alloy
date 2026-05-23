@@ -14,6 +14,7 @@ export function buildDepartmentOperationalBootstrapUrl(
         count_mode: "exact",
         summary_mode: "priority",
         priority_budget: "5",
+        bundle_mode: "prefetch",
     });
     const railWu = (opts?.rightRailWorkUnitId ?? "").trim();
     if (railWu) qs.set("right_rail_work_unit_id", railWu);

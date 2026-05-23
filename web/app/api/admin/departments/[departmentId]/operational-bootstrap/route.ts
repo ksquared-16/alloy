@@ -58,6 +58,11 @@ function parseFocusQueue(searchParams: URLSearchParams): string | null {
     return (searchParams.get("focus_queue") ?? "").trim() || null;
 }
 
+function parseBundleMode(searchParams: URLSearchParams): "reveal" | "prefetch" {
+    const raw = (searchParams.get("bundle_mode") ?? "").trim().toLowerCase();
+    return raw === "prefetch" ? "prefetch" : "reveal";
+}
+
 function parsePriorityBudget(searchParams: URLSearchParams): number | undefined {
     const raw = (searchParams.get("priority_budget") ?? "").trim();
     if (!raw) return undefined;
@@ -112,6 +117,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ dep
             viewerDisplayTimeZone,
             sharedBootstrap,
             attentionWorkUnitIdParam,
+            bundleMode: parseBundleMode(request.nextUrl.searchParams),
             summaries: {
                 limit: parseLimit(request.nextUrl.searchParams),
                 workUnitConcurrency: parseWuConcurrency(request.nextUrl.searchParams),

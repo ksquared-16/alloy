@@ -12,12 +12,12 @@ import { QueueServiceError } from "@/lib/queues/QueueService";
 import { buildQueueSummariesSharedBootstrap } from "@/lib/queues/QueueService";
 import { loadWorkUnitOperationalBootstrap } from "@/lib/workspace/loadWorkUnitOperationalBootstrap";
 import { logWorkUnitOperationalBootstrapPerf } from "@/lib/workspace/workUnitOperationalBootstrapPerf";
-import { loadRightRailActionsBundleServer } from "@/lib/workspace/loadRightRailActionsBundleServer";
+import { loadRightRailActionsBundleCached } from "@/lib/workspace/rightRailActionsBundleCache";
 
 function parsePrimaryRowLimit(searchParams: URLSearchParams): number {
-    const raw = (searchParams.get("primary_row_limit") ?? "12").trim();
+    const raw = (searchParams.get("primary_row_limit") ?? "10").trim();
     const n = Number(raw);
-    if (!Number.isFinite(n)) return 12;
+    if (!Number.isFinite(n)) return 10;
     return Math.min(Math.max(1, Math.floor(n)), 20);
 }
 
@@ -132,14 +132,19 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             : (async () => {
                   const t0 = Date.now();
                   try {
-                      const actions = await loadRightRailActionsBundleServer({
+                      const r = await loadRightRailActionsBundleCached({
                           orgId: gate.orgId,
                           departmentId,
                           workUnitId,
                       });
-                      return { actions, ms: Date.now() - t0, deferred: false as const };
+                      return {
+                          actions: r.actions,
+                          ms: r.ms,
+                          cache_hit: r.cache_hit,
+                          deferred: false as const,
+                      };
                   } catch {
-                      return { actions: [], ms: Date.now() - t0, deferred: false as const };
+                      return { actions: [], ms: Date.now() - t0, cache_hit: false, deferred: false as const };
                   }
               })();
 
@@ -207,6 +212,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
                 kpi_placements_cache_hit: kpiResult.cache_hit,
                 kpi_placements_deferred: deferBundle,
                 right_rail_actions_ms: actionsResult.ms,
+                right_rail_actions_cache_hit:
+                    "cache_hit" in actionsResult ? actionsResult.cache_hit : undefined,
                 right_rail_actions_deferred: deferBundle,
             },
         });

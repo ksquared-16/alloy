@@ -19,6 +19,7 @@ export type WorkUnitBootstrapPerfPhases = {
     /** Attention lane omitted from bootstrap when not needed for primary reveal. */
     attention_deferred?: boolean;
     primary_lane_rows_ms?: number;
+    primary_lane_row_enrichment?: string;
     primary_lane_rows_deferred?: boolean;
     /** Loader wall-clock excluding blocking primary row fetch when deferred. */
     blocking_loader_ms?: number;
@@ -28,6 +29,7 @@ export type WorkUnitBootstrapPerfPhases = {
     kpi_placements_cache_hit?: boolean;
     kpi_placements_deferred?: boolean;
     right_rail_actions_ms?: number;
+    right_rail_actions_cache_hit?: boolean;
     right_rail_actions_deferred?: boolean;
 };
 

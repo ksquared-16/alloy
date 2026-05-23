@@ -850,7 +850,9 @@ async function enrichOpportunityRows(params: {
      * CRM compact children always load from `customer_members` (relationship `child`, `is_active`)
      * via `opportunities.customer_id`. `enrichment` still controls other payload shaping / perf logging.
      */
-    enrichment?: "full" | "queue_preview" | "queue_list";
+    enrichment?: "full" | "queue_preview" | "queue_list" | "queue_reveal";
+    /** Bootstrap / reveal: skip tour_bookings + OCM desired-start batch fetches. */
+    skipOptionalEnrichmentFetches?: boolean;
     /**
      * When `queue_list`, narrows relational batch queries from work-unit CRM row preview config (`ui.row_preview`)
      * so basic lanes skip heavy joins. Omit for previews / drawer paths (full hydrate).
@@ -882,9 +884,11 @@ async function enrichOpportunityRows(params: {
         relationFetchPlan,
         viewerDisplayTimeZoneIana: viewerTzRaw,
         opportunityAttentionResolution,
+        skipOptionalEnrichmentFetches = false,
     } = params;
     const displayTz = typeof viewerTzRaw === "string" && viewerTzRaw.trim() ? viewerTzRaw.trim() : UTC_FALLBACK_IANA;
-    const previewLite = enrichment === "queue_preview" || enrichment === "queue_list";
+    const previewLite =
+        enrichment === "queue_preview" || enrichment === "queue_list" || enrichment === "queue_reveal";
     if (!rows.length) {
         return { rows: [] };
     }
@@ -973,7 +977,7 @@ async function enrichOpportunityRows(params: {
         preloadedDefs != null
             ? timedAwait(Promise.resolve(preloadedDefs))
             : timedAwait(fetchEffectiveStatusDefinitions(supabase as any, orgId, "opportunities", { activeOnly: true })),
-        opportunityIds.length > 0
+        !skipOptionalEnrichmentFetches && opportunityIds.length > 0
             ? timedAwait(
                   supabase
                       .from("tour_bookings")
@@ -992,7 +996,7 @@ async function enrichOpportunityRows(params: {
                       .in("id", locationIds as any)
               )
             : timedAwait(emptyRel),
-        opportunityIds.length
+        !skipOptionalEnrichmentFetches && opportunityIds.length
             ? timedAwait(
                   supabase
                       .from("opportunity_customer_members")
@@ -1331,7 +1335,13 @@ async function enrichOpportunityRows(params: {
         console.warn("[queue-perf] enrichOpportunityRows", {
             org_id: orgId,
             row_count: rows.length,
-            enrichment: previewLite ? (enrichment === "queue_list" ? "queue_list" : "queue_preview") : "full",
+            enrichment: previewLite
+                ? enrichment === "queue_list"
+                    ? "queue_list"
+                    : enrichment === "queue_reveal"
+                      ? "queue_reveal"
+                      : "queue_preview"
+                : "full",
             used_preloaded_defs: preloadedDefs != null,
             parallel_main_ms: parallelMainMs,
             child_resolution_ms: childResolutionMs,
@@ -2596,6 +2606,13 @@ export async function getWorkUnitQueueItems(params: {
     sharedBootstrap?: QueueSummariesSharedBootstrap;
     /** WU bootstrap: single attention pass reused for needs_attention lane rows. */
     preloadedAttentionPack?: OpportunityNeedsAttentionLoadResult;
+    /**
+     * `queue_reveal` — slimmer enrichment for bootstrap / first paint (skips placement projection + optional fetches).
+     * `queue_list` — default list API enrichment.
+     */
+    rowEnrichment?: "queue_list" | "queue_reveal";
+    /** When set, skips departments.metadata fetch inside opportunity row loader. */
+    preloadedDepartmentMetadata?: unknown | null;
 }): Promise<WorkUnitQueueItemsWithPerf> {
     const tSvc0 = Date.now();
     const supabase = createAdminClient();
@@ -2720,17 +2737,24 @@ export async function getWorkUnitQueueItems(params: {
 
     let departmentMetadata: unknown | null = null;
     if (def.entity_type === "opportunity" && workUnitDepartmentId) {
-        const { data: dRow, error: dErr } = await supabase
-            .from("departments")
-            .select("metadata")
-            .eq("id", workUnitDepartmentId)
-            .eq("org_id", params.orgId)
-            .maybeSingle();
-        if (dErr) {
-            throw new QueueServiceError(dErr.message, 400, "DB_ERROR");
+        if (params.preloadedDepartmentMetadata !== undefined) {
+            departmentMetadata = params.preloadedDepartmentMetadata;
+        } else {
+            const { data: dRow, error: dErr } = await supabase
+                .from("departments")
+                .select("metadata")
+                .eq("id", workUnitDepartmentId)
+                .eq("org_id", params.orgId)
+                .maybeSingle();
+            if (dErr) {
+                throw new QueueServiceError(dErr.message, 400, "DB_ERROR");
+            }
+            departmentMetadata = (dRow as { metadata?: unknown } | null)?.metadata ?? null;
         }
-        departmentMetadata = (dRow as { metadata?: unknown } | null)?.metadata ?? null;
     }
+    const rowEnrichment = params.rowEnrichment ?? "queue_list";
+    const enrichMode = rowEnrichment === "queue_reveal" ? "queue_reveal" : "queue_list";
+    const skipPlacementProjection = rowEnrichment === "queue_reveal";
 
     if (def.entity_type === "job") {
         const { ops, sort, calendar_meta } = buildJobPlan(q, operationalDay);
@@ -2899,9 +2923,10 @@ export async function getWorkUnitQueueItems(params: {
             orgId: params.orgId,
             rows: slice,
             effectiveStatusDefs,
-            enrichment: "queue_list",
+            enrichment: enrichMode,
             relationFetchPlan: queueListRelationPlan,
             viewerDisplayTimeZoneIana: viewerPreviewIana,
+            skipOptionalEnrichmentFetches: rowEnrichment === "queue_reveal",
             opportunityAttentionResolution: {
                 defs: effectiveStatusDefs,
                 config: attentionConfigResolved,
@@ -2909,15 +2934,17 @@ export async function getWorkUnitQueueItems(params: {
             },
         });
         const enrichment_ms = Date.now() - tEn0;
-        const placementPack = attachPlacementToEnrichedOpportunityItems({
-            enrichedRows: enrichedRows as Array<Record<string, unknown>>,
-            workUnitId: params.workUnitId,
-            queueKey: params.queueKey,
-            queueConfig: q,
-            departmentMetadata,
-            workUnitMetadata,
-            nowMs: refUtc.getTime(),
-        });
+        const placementPack = skipPlacementProjection
+            ? { rows: enrichedRows as Array<Record<string, unknown>>, diagnostics: null }
+            : attachPlacementToEnrichedOpportunityItems({
+                  enrichedRows: enrichedRows as Array<Record<string, unknown>>,
+                  workUnitId: params.workUnitId,
+                  queueKey: params.queueKey,
+                  queueConfig: q,
+                  departmentMetadata,
+                  workUnitMetadata,
+                  nowMs: refUtc.getTime(),
+              });
         return finalize(
             {
                 queue: {
@@ -2984,9 +3011,10 @@ export async function getWorkUnitQueueItems(params: {
             orgId: params.orgId,
             rows: itemRows,
             effectiveStatusDefs,
-            enrichment: "queue_list",
+            enrichment: enrichMode,
             relationFetchPlan: queueListRelationPlan,
             viewerDisplayTimeZoneIana: viewerPreviewIana,
+            skipOptionalEnrichmentFetches: rowEnrichment === "queue_reveal",
             opportunityAttentionResolution: opportunityAttentionConfigResolved
                 ? {
                       defs: effectiveStatusDefs,
@@ -2996,15 +3024,17 @@ export async function getWorkUnitQueueItems(params: {
                 : undefined,
         });
         const enrichment_ms = Date.now() - tEn0;
-        const placementPackOmit = attachPlacementToEnrichedOpportunityItems({
-            enrichedRows: enrichedRows as Array<Record<string, unknown>>,
-            workUnitId: params.workUnitId,
-            queueKey: params.queueKey,
-            queueConfig: q,
-            departmentMetadata,
-            workUnitMetadata,
-            nowMs: refUtc.getTime(),
-        });
+        const placementPackOmit = skipPlacementProjection
+            ? { rows: enrichedRows as Array<Record<string, unknown>>, diagnostics: null }
+            : attachPlacementToEnrichedOpportunityItems({
+                  enrichedRows: enrichedRows as Array<Record<string, unknown>>,
+                  workUnitId: params.workUnitId,
+                  queueKey: params.queueKey,
+                  queueConfig: q,
+                  departmentMetadata,
+                  workUnitMetadata,
+                  nowMs: refUtc.getTime(),
+              });
         return finalize(
             {
                 queue: {
@@ -3070,9 +3100,10 @@ export async function getWorkUnitQueueItems(params: {
         orgId: params.orgId,
         rows: itemRows,
         effectiveStatusDefs,
-        enrichment: "queue_list",
+        enrichment: enrichMode,
         relationFetchPlan: queueListRelationPlan,
         viewerDisplayTimeZoneIana: viewerPreviewIana,
+        skipOptionalEnrichmentFetches: rowEnrichment === "queue_reveal",
         opportunityAttentionResolution: opportunityAttentionConfigResolved
             ? {
                   defs: effectiveStatusDefs,
@@ -3083,15 +3114,17 @@ export async function getWorkUnitQueueItems(params: {
     });
     const enrichment_ms = Date.now() - tEn0;
 
-    const placementPackFull = attachPlacementToEnrichedOpportunityItems({
-        enrichedRows: enrichedRows as Array<Record<string, unknown>>,
-        workUnitId: params.workUnitId,
-        queueKey: params.queueKey,
-        queueConfig: q,
-        departmentMetadata,
-        workUnitMetadata,
-        nowMs: refUtc.getTime(),
-    });
+    const placementPackFull = skipPlacementProjection
+        ? { rows: enrichedRows as Array<Record<string, unknown>>, diagnostics: null }
+        : attachPlacementToEnrichedOpportunityItems({
+              enrichedRows: enrichedRows as Array<Record<string, unknown>>,
+              workUnitId: params.workUnitId,
+              queueKey: params.queueKey,
+              queueConfig: q,
+              departmentMetadata,
+              workUnitMetadata,
+              nowMs: refUtc.getTime(),
+          });
 
     return finalize(
         {
@@ -3124,6 +3157,13 @@ export async function getWorkUnitQueueItems(params: {
             enrichment_subtimings_ms: queueListSubtimings ?? null,
         }
     );
+}
+
+/** Reveal/bootstrap primary lane rows — slimmer enrichment than list API. */
+export async function getWorkUnitQueuePreviewRows(
+    params: Parameters<typeof getWorkUnitQueueItems>[0]
+): Promise<WorkUnitQueueItemsWithPerf> {
+    return getWorkUnitQueueItems({ ...params, rowEnrichment: "queue_reveal" });
 }
 
 /** Test-only — seed shared bootstrap cache without hitting Supabase. */

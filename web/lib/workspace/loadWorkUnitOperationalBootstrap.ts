@@ -3,7 +3,7 @@ import type { AdminAccessScopeDimensions, RecordScopeConstraints } from "@/lib/a
 import { departmentIdAllowed } from "@/lib/admin/accessScope";
 import { resolveOpportunityAttentionConfigFromMetadata } from "@/lib/opportunities/opportunityAttentionConfig";
 import {
-    getWorkUnitQueueItems,
+    getWorkUnitQueuePreviewRows,
     getWorkUnitQueueSummaries,
     loadOpportunityNeedsAttentionRows,
     type OpportunityNeedsAttentionLoadResult,
@@ -360,7 +360,7 @@ export async function loadWorkUnitOperationalBootstrap(params: {
             };
         } else {
             const tRows0 = Date.now();
-            const { result } = await getWorkUnitQueueItems({
+            const { result } = await getWorkUnitQueuePreviewRows({
                 orgId,
                 workUnitId,
                 queueKey: primaryQueueKey,
@@ -372,10 +372,12 @@ export async function loadWorkUnitOperationalBootstrap(params: {
                 viewerDisplayTimeZone,
                 attentionBucketKey: primaryIsNeedsAttention ? attentionBucketKey : null,
                 preloadedQueueDefinition,
+                preloadedDepartmentMetadata: departmentMetadata,
                 sharedBootstrap,
                 preloadedAttentionPack: primaryIsNeedsAttention ? preloadedAttention : undefined,
             });
             phases.primary_lane_rows_ms = Date.now() - tRows0;
+            phases.primary_lane_row_enrichment = "queue_reveal";
             phases.primary_lane_rows_deferred = false;
             primary_lane = {
                 queue_key: primaryQueueKey,

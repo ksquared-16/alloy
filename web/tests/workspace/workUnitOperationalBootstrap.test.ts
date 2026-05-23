@@ -60,8 +60,8 @@ describe("work-unit operational bootstrap runtime", () => {
         expect(src).toContain("getWorkUnitQueueSummaries");
         expect(src).toContain("loadWorkUnitBootstrapAttention");
         const summariesIdx = src.indexOf("const summariesResult = await getWorkUnitQueueSummaries");
-        const attentionIdx = src.indexOf("const attentionNeededForReveal");
-        const primaryIdx = src.indexOf("const { result } = await getWorkUnitQueueItems");
+        const attentionIdx = src.indexOf("const attentionNeededForReveal =");
+        const primaryIdx = src.indexOf("await getWorkUnitQueuePreviewRows");
         expect(summariesIdx).toBeGreaterThan(-1);
         expect(attentionIdx).toBeGreaterThan(summariesIdx);
         expect(primaryIdx).toBeGreaterThan(attentionIdx);
