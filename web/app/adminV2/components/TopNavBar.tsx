@@ -27,10 +27,25 @@ function normalizeAdminPath(pathname: string): string {
 const HEADER_UTILITY_BTN =
   "inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-[15px] font-medium leading-none";
 
+/** Fixed-width reserve so location chrome does not jump when bootstrap revalidates. */
+function WorkspaceSiteFilterLocationReserve() {
+  return (
+    <div
+      className="flex shrink-0 items-center min-w-[min(280px,34vw)] max-w-[min(280px,34vw)] h-[2.375rem]"
+      aria-hidden
+    >
+      <div className="h-[2.375rem] w-full rounded-md opacity-40" style={{ backgroundColor: derived.searchBgOnPrimary }} />
+    </div>
+  );
+}
+
 function WorkspaceSiteFilterStrip({ normalizedPath }: { normalizedPath: string }) {
   const wf = useWorkspaceSiteFilter();
   if (!normalizedPath.startsWith("/adminV2/workspace")) return null;
-  if (!wf?.bootstrap) return null;
+
+  if (!wf?.bootstrap) {
+    return <WorkspaceSiteFilterLocationReserve />;
+  }
 
   const { bootstrap, selectedSiteId, setSelectedSiteId } = wf;
 

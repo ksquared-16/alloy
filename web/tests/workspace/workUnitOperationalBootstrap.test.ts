@@ -37,14 +37,7 @@ describe("work-unit operational bootstrap runtime", () => {
         expect(src).toContain('source: "work_unit_needs_attention_lane"');
         expect(src).toContain("attentionEligible");
         expect(src).toContain("workUnitDefinesNeedsAttentionQueue");
-        const parallelBlock = src.match(
-            /const \[summariesResult, attentionOutcome\][\s\S]*?phases\.summaries_attention_parallel = true/
-        )?.[0];
-        expect(parallelBlock).toBeTruthy();
-        const primaryLaneIdx = src.indexOf("let primary_lane:");
-        const parallelAwaitIdx = src.indexOf("await Promise.all([summariesP, attentionP])");
-        expect(parallelAwaitIdx).toBeGreaterThan(-1);
-        expect(primaryLaneIdx).toBeGreaterThan(parallelAwaitIdx);
+        expect(src).toContain("attentionNeededForReveal");
     });
 
     it("defers primary lane rows when deferPrimaryLaneRows (Card 3)", () => {
@@ -57,16 +50,21 @@ describe("work-unit operational bootstrap runtime", () => {
         expect(src).toContain("primary_lane_rows_deferred");
     });
 
-    it("runs queue summaries and attention in parallel (Card 2)", () => {
+    it("loads summaries first and defers attention when not needed for primary reveal", () => {
         const src = fs.readFileSync(
             path.join(repoRoot, "web/lib/workspace/loadWorkUnitOperationalBootstrap.ts"),
             "utf8"
         );
-        expect(src).toMatch(/const summariesP = \(async \(\) =>/);
-        expect(src).toMatch(/const attentionP = \(async \(\)/);
-        expect(src).toContain("await Promise.all([summariesP, attentionP])");
-        expect(src).toContain("summaries_attention_parallel_ms");
-        expect(src).toContain("phases.summaries_attention_parallel = true");
+        expect(src).toContain("attentionNeededForReveal");
+        expect(src).toContain("attention_deferred");
+        expect(src).toContain("getWorkUnitQueueSummaries");
+        expect(src).toContain("loadWorkUnitBootstrapAttention");
+        const summariesIdx = src.indexOf("const summariesResult = await getWorkUnitQueueSummaries");
+        const attentionIdx = src.indexOf("const attentionNeededForReveal");
+        const primaryIdx = src.indexOf("const { result } = await getWorkUnitQueueItems");
+        expect(summariesIdx).toBeGreaterThan(-1);
+        expect(attentionIdx).toBeGreaterThan(summariesIdx);
+        expect(primaryIdx).toBeGreaterThan(attentionIdx);
         expect(src).toContain("primary_lane_wait_on");
         expect(src).toMatch(/preloadedAttentionPack: primaryIsNeedsAttention \? preloadedAttention/);
     });

@@ -6,6 +6,8 @@
 export const ADMINV2_ABOVE_FOLD_CACHE_TTL_MS = {
     /** Workspace root shell + quick rollup (sessionStorage). */
     workspace_above_fold: 15 * 60 * 1000,
+    /** App shell location dropdown bootstrap. */
+    site_filter_bootstrap: 15 * 60 * 1000,
     /** Department page shell + oper bootstrap dedupe. */
     dept_above_fold: 15 * 1000,
     /** Work-unit operational-bootstrap session dedupe. */
@@ -23,6 +25,7 @@ export const ADMINV2_ABOVE_FOLD_CACHE_LIMITS = {
 
 export type AdminV2AboveFoldCacheKind =
     | "workspace_above_fold"
+    | "site_filter_bootstrap"
     | "dept_above_fold"
     | "work_unit_above_fold"
     | "drawer_primary";

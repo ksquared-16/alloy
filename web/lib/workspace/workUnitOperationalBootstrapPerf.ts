@@ -16,6 +16,8 @@ export type WorkUnitBootstrapPerfPhases = {
     attention_resolver_passes?: number;
     attention_rules_ms?: number;
     attention_bucket_merge_ms?: number;
+    /** Attention lane omitted from bootstrap when not needed for primary reveal. */
+    attention_deferred?: boolean;
     primary_lane_rows_ms?: number;
     primary_lane_rows_deferred?: boolean;
     /** Loader wall-clock excluding blocking primary row fetch when deferred. */

@@ -1,6 +1,7 @@
 import { appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClient";
 import { logPrefetchAdminV2 } from "@/lib/adminV2/adminV2PrefetchInstrumentation";
-import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import { ADMINV2_ABOVE_FOLD_CACHE_TTL_MS } from "@/lib/adminV2/adminV2AboveFoldCacheContracts";
+import { dedupeAdminFetchWithTtlMeta } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
 /** Query params aligned with `dept/[departmentId]/page.tsx` operational-bootstrap request. */
@@ -30,11 +31,21 @@ export async function prefetchDepartmentOperationalBootstrap(
 ): Promise<void> {
     const url = buildDepartmentOperationalBootstrapUrl(departmentId, opts);
     logPrefetchAdminV2("department", "start", { department_id: departmentId, url });
-    const res = await dedupeAdminFetch(url, workspaceDataFetchInit() ?? {});
+    const { response: res, cache_hit, inflight_join } = await dedupeAdminFetchWithTtlMeta(
+        url,
+        workspaceDataFetchInit() ?? {},
+        ADMINV2_ABOVE_FOLD_CACHE_TTL_MS.dept_above_fold
+    );
     if (!res.ok) {
         logPrefetchAdminV2("department", "error", { department_id: departmentId, status: res.status });
         throw new Error(`department operational-bootstrap prefetch failed (${res.status})`);
     }
-    await res.json().catch(() => ({}));
-    logPrefetchAdminV2("department", "complete", { department_id: departmentId });
+    const bodyText = await res.text();
+    const payload_kb = bodyText.length > 0 ? Math.round((bodyText.length / 1024) * 10) / 10 : undefined;
+    logPrefetchAdminV2("department", "complete", {
+        department_id: departmentId,
+        cache_hit,
+        inflight_join,
+        payload_kb,
+    });
 }

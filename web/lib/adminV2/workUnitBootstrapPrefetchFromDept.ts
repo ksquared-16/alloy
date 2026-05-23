@@ -54,3 +54,27 @@ export function prefetchWorkUnitOperationalBootstrapFromDeptHref(
             });
         });
 }
+
+/** Idle prefetch visible/likely work-unit bootstraps from dept oper console (capped). */
+export function prefetchVisibleWorkUnitBootstrapsFromDept(params: {
+    departmentId: string;
+    hrefs: string[];
+    selectedSiteId: string | null;
+    reason?: "dept_idle_visible" | "dept_hover";
+}): void {
+    const cap = 3;
+    const unique = [...new Set(params.hrefs.map((h) => h.trim()).filter(Boolean))].slice(0, cap);
+    if (!unique.length) {
+        logPrefetchAdminV2("work_unit", "skipped", { reason: "no_visible_wu_hrefs" });
+        return;
+    }
+    logPrefetchAdminV2("work_unit", "start", {
+        reason: params.reason ?? "dept_idle_visible",
+        department_id: params.departmentId,
+        href_count: unique.length,
+        cap,
+    });
+    for (const href of unique) {
+        prefetchWorkUnitOperationalBootstrapFromDeptHref(href, params.departmentId, params.selectedSiteId);
+    }
+}

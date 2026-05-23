@@ -37,7 +37,10 @@ import {
 } from "@/lib/workspace/viewModels/enrollmentRightRailMerge";
 import { fetchWorkspaceRightRailResolvedActions } from "@/lib/workspace/fetchWorkspaceRightRailResolvedActions";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
-import { dedupeAdminFetch, dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import { ADMINV2_ABOVE_FOLD_CACHE_TTL_MS } from "@/lib/adminV2/adminV2AboveFoldCacheContracts";
+import { logPrefetchAdminV2 } from "@/lib/adminV2/adminV2PrefetchInstrumentation";
+import { prefetchVisibleWorkUnitBootstrapsFromDept } from "@/lib/adminV2/workUnitBootstrapPrefetchFromDept";
+import { dedupeAdminFetch, dedupeAdminFetchWithTtl, dedupeAdminFetchWithTtlMeta } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { prefetchWorkUnitOperationalBootstrapFromDeptHref } from "@/lib/adminV2/workUnitBootstrapPrefetchFromDept";
 import {
     perfDeptLoad,
@@ -819,7 +822,12 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 }
 
                 try {
-                    const bootstrapRes = await dedupeAdminFetch(bootstrapRoute, init);
+                    const bootstrapMeta = await dedupeAdminFetchWithTtlMeta(
+                        bootstrapRoute,
+                        init,
+                        ADMINV2_ABOVE_FOLD_CACHE_TTL_MS.dept_above_fold
+                    );
+                    const bootstrapRes = bootstrapMeta.response;
                     if (!bootstrapRes.ok && !cancelled) {
                         logAdminV2LegacyFanOut({
                             surface: "department",
@@ -843,9 +851,20 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             right_rail_actions?: ResolvedActionForClient[];
                         };
                         try {
-                            recordBootstrapPayloadBytes(
+                            const payloadBytes = new TextEncoder().encode(JSON.stringify(b)).length;
+                            recordBootstrapPayloadBytes("department", payloadBytes);
+                            logPrefetchAdminV2(
                                 "department",
-                                new TextEncoder().encode(JSON.stringify(b)).length
+                                bootstrapMeta.cache_hit
+                                    ? "hit"
+                                    : bootstrapMeta.inflight_join
+                                      ? "inflight_join"
+                                      : "miss",
+                                {
+                                    department_id: departmentId,
+                                    url: bootstrapRoute,
+                                    payload_kb: Math.round((payloadBytes / 1024) * 10) / 10,
+                                }
                             );
                         } catch {
                             /* non-fatal */
@@ -1311,6 +1330,28 @@ export default function AdminV2WorkspaceDepartmentPage() {
         if (!deptAboveFoldPageReady) return;
         markRouteFirstAboveFoldStable("department", { departmentId, source: "reveal_gate" });
     }, [deptAboveFoldPageReady, departmentId]);
+
+    useEffect(() => {
+        if (!deptAboveFoldPageReady || !departmentId) return;
+        const cancel = scheduleAdminV2BackgroundWork(
+            () => {
+                const hrefs = deptThroughputWuRows.slice(0, 3).map((wu) =>
+                    appendWorkspaceSiteToPath(
+                        workspaceDeptQueueNavHref(WORKSPACE_BASE, departmentId, wu.id, null),
+                        selectedSiteId
+                    )
+                );
+                prefetchVisibleWorkUnitBootstrapsFromDept({
+                    departmentId,
+                    hrefs,
+                    selectedSiteId,
+                    reason: "dept_idle_visible",
+                });
+            },
+            { idleTimeoutMs: 2000, fallbackMs: 450 }
+        );
+        return cancel;
+    }, [deptAboveFoldPageReady, departmentId, deptThroughputWuRows, selectedSiteId]);
 
     /** Enrollment rail — parallel with oper region; gate waits for settled rail, not oper reveal order. */
     useEffect(() => {

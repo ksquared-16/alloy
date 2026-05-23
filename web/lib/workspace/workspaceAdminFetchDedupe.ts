@@ -33,15 +33,36 @@ const shortCache = new Map<string, CachedResponse>();
  * Like `dedupeAdminFetch`, plus a short TTL response cache keyed by full URL.
  * Intended for config-like GETs (actions/rules/options) during UI mount to avoid repeated roundtrips.
  */
-export async function dedupeAdminFetchWithTtl(input: string, init: RequestInit | undefined, ttlMs: number): Promise<Response> {
+export type AdminFetchDedupeMeta = {
+    response: Response;
+    /** Response served from short TTL cache (prefetch warmed navigation). */
+    cache_hit: boolean;
+    /** Joined an in-flight GET started by another caller (same URL). */
+    inflight_join: boolean;
+};
+
+export async function dedupeAdminFetchWithTtlMeta(
+    input: string,
+    init: RequestInit | undefined,
+    ttlMs: number
+): Promise<AdminFetchDedupeMeta> {
     const method = (init?.method ?? "GET").toUpperCase();
     const key = input;
     if (method === "GET" && ttlMs > 0) {
         const hit = shortCache.get(key);
         if (hit && Date.now() - hit.atMs < ttlMs) {
-            return new Response(hit.bodyText, { status: hit.status, statusText: hit.statusText, headers: hit.headers });
+            return {
+                response: new Response(hit.bodyText, {
+                    status: hit.status,
+                    statusText: hit.statusText,
+                    headers: hit.headers,
+                }),
+                cache_hit: true,
+                inflight_join: false,
+            };
         }
     }
+    const inflight_join = inflight.has(key);
     const res = await dedupeAdminFetch(input, init);
     if (method === "GET" && ttlMs > 0) {
         try {
@@ -54,14 +75,22 @@ export async function dedupeAdminFetchWithTtl(input: string, init: RequestInit |
                 headers: Array.from(res.headers.entries()),
                 bodyText,
             });
-            // bounded growth: clear oldest-ish by size.
             if (shortCache.size > 50) {
                 const first = shortCache.keys().next().value;
                 if (first) shortCache.delete(first);
             }
         } catch {
-            // ignore cache failures (e.g. non-cloneable)
+            /* ignore cache write failures */
         }
     }
-    return res;
+    return { response: res, cache_hit: false, inflight_join };
+}
+
+export async function dedupeAdminFetchWithTtl(
+    input: string,
+    init: RequestInit | undefined,
+    ttlMs: number
+): Promise<Response> {
+    const { response } = await dedupeAdminFetchWithTtlMeta(input, init, ttlMs);
+    return response;
 }

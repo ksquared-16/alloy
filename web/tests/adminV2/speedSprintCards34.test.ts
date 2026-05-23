@@ -41,4 +41,22 @@ describe("AdminV2 speed sprint Cards 3–4", () => {
         expect(loader).toContain("params.sharedBootstrap");
         expect(loader).toContain("shared_bootstrap_reused");
     });
+
+    it("WU bootstrap defers attention lane when not needed for primary reveal", () => {
+        const loader = read("lib/workspace/loadWorkUnitOperationalBootstrap.ts");
+        expect(loader).toContain("attentionNeededForReveal");
+        expect(loader).toContain("attention_deferred");
+    });
+
+    it("dept and WU prefetch use TTL meta for cache hit logging", () => {
+        expect(read("lib/adminV2/navigation/prefetchDepartmentOperationalBootstrap.ts")).toContain(
+            "dedupeAdminFetchWithTtlMeta"
+        );
+        expect(read("lib/adminV2/workUnitBootstrapClientSession.ts")).toContain("dedupeAdminFetchWithTtlMeta");
+        expect(read("app/adminV2/workspace/dept/[departmentId]/page.tsx")).toContain("logPrefetchAdminV2");
+    });
+
+    it("canonical WU bootstrap uses primary_row_limit 12", () => {
+        expect(read("lib/adminV2/workUnitBootstrapClientSession.ts")).toContain('primary_row_limit: "12"');
+    });
 });

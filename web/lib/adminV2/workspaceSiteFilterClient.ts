@@ -17,6 +17,10 @@ let registeredPersistenceScope: WorkspaceSiteFilterPersistenceScope | null = nul
 let liveStickyWorkspaceSiteId: string | null = null;
 
 /** Called from workspace layout (under `WorkspaceOrgProvider`) so session keys are principal-scoped. */
+export function getRegisteredWorkspaceSiteFilterScope(): WorkspaceSiteFilterPersistenceScope | null {
+    return registeredPersistenceScope;
+}
+
 export function registerWorkspaceSiteFilterPersistenceScope(scope: WorkspaceSiteFilterPersistenceScope): void {
     registeredPersistenceScope = {
         orgId: scope.orgId?.trim() || null,

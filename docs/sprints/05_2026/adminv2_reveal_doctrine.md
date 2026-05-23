@@ -168,6 +168,26 @@ Measure with gates green; then optimize:
 
 ---
 
+## App shell header (persistent chrome)
+
+The workspace-v2 **header is route-independent**:
+
+| Concern | Owner | Cache |
+|---------|--------|-------|
+| Location dropdown | `WorkspaceSiteFilterProvider` in `AdminV2Shell` | `workspaceSiteFilterBootstrapCache` (mem + session, 15m TTL) |
+| Tasks badge counts | `OperationalTasksNavBadge` | `operationalTasksNavCountsCache` (90s TTL) |
+| Search placeholder | `TopNavBar` (static chrome) | — |
+| Profile menu | `AdminV2ProfileMenu` | — |
+
+Rules:
+
+- `WorkspaceSiteFilterProvider` wraps the workspace-v2 shell branch once — **does not remount** on workspace → dept → work-unit navigation.
+- Site filter uses **stale-while-revalidate** — never clears bootstrap during refresh; fixed-width reserve prevents layout jump.
+- Route reveal gates **do not** wait on site-filter or tasks summary fetches.
+- Refetch site filter only on shell mount, org/scope change, or TTL — not on each route segment.
+
+Console: `[prefetch.adminv2]` with `cache: "site_filter_bootstrap"` for hit/miss/complete.
+
 ## Preload hierarchy
 
 | From | Preload | Cap / rule |
@@ -219,6 +239,25 @@ Do **not** preload: full hydrate, workflow telemetry, every WU in org, every dra
 2. Expect: “Opening record…” → drawer without in-drawer route loading card on warm preload.
 3. Right column: tasks/handoff stable; reminders `empty` or `ready` at reveal (not skeleton → pop-in).
 4. Activity / full-bound sections may still hydrate below fold — acceptable if below-fold gated.
+
+### Latency measurement
+
+In browser devtools after a navigation pass:
+
+```js
+reportAdminV2LatencySnapshot() // from adminV2LatencyMeasurement.ts (expose via window in dev if needed)
+```
+
+Filter consoles: `[workspace-reveal-gate]`, `[dept-reveal-gate]`, `[wu-reveal-gate]`, `[drawer-primary-perf]`, `[prefetch.adminv2]`.
+
+| Surface | Cold reveal ms | Warm reveal ms | Prefetch hit? | Slowest server path | Payload KB | Fix priority |
+|---------|----------------|----------------|---------------|---------------------|------------|--------------|
+| Work unit | _capture_ | _capture_ | dept pointer / session | `operational-bootstrap` | `[wu-bootstrap-perf]` | **1** |
+| Department | _capture_ | _capture_ | workspace idle (≤3) | `departments/.../operational-bootstrap` | server log | **2** |
+| Drawer primary | _capture_ | _capture_ | row intent | `surface=drawer_primary` | `[drawer-primary-perf]` | **3** |
+| Workspace | _capture_ | _capture_ | dept tile pointer | `departments` + `work-units` | rollup background | **4** |
+
+Warm = session cache / prefetch inflight reuse. Cold = hard refresh or new org scope.
 
 ### Latency owners after UX stabilization (optimize next)
 

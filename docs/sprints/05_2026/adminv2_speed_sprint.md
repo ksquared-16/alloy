@@ -15,6 +15,19 @@ Do **not** reintroduce late composition, second shell owners, component swaps, o
 
 Server (Vercel / local): `[wu-bootstrap-perf]`, `[dept-bootstrap-perf]`, `[drawer-primary-perf]`, `[queue-summary-perf]` when paths exceed thresholds (>250ms bootstrap, >100ms summaries, >200ms drawer_primary).
 
+## True-speed table (fill from local captures — do not invent numbers)
+
+After each surface: hard refresh once (cold), then in-app navigate back (warm). Console: `reportAdminV2LatencySnapshot()`. Server: `[wu-bootstrap-perf]`, `[dept-bootstrap-perf]`, `[drawer-primary-perf]`.
+
+| Surface | Cold reveal ms | Warm reveal ms | Prefetch hit? | TTFB ms | Payload KB | Slowest internal step | Bottleneck |
+|---------|----------------|----------------|---------------|---------|------------|-----------------------|------------|
+| Work-unit | _capture_ | _capture_ | `[prefetch.adminv2] work_unit` | _capture_ | _capture_ | attention / primary rows / summaries | WU operational-bootstrap |
+| Department | _capture_ | _capture_ | `[prefetch.adminv2] department` | _capture_ | _capture_ | batch summaries / attention | Dept operational-bootstrap |
+| Drawer primary | _capture_ | _capture_ | row intent / idle≤3 | _capture_ | _capture_ | drawer_primary entity | drawer_primary route |
+| Workspace | _capture_ | _capture_ | dept tile / idle≤3 | _capture_ | _capture_ | departments + work-units | workspace critical deps |
+
+Reveal: `[wu-reveal-gate] reveal_wait_ms`, `[dept-reveal-gate]`, `[workspace-reveal-gate]`.
+
 ## Audit table (fill from local captures)
 
 | Surface | Shell visible ms | Above-fold stable ms | Hydration complete ms | Bootstrap/primary ms | Payload bytes | Post-shell fetches | Slowest query | Main bottleneck | Optimization |
@@ -228,6 +241,17 @@ Capture: `reportWorkUnitCriticalPathLanes()` after hard refresh.
 
 ---
 
+## True-speed sprint (this pass)
+
+| Change | Effect |
+|--------|--------|
+| WU loader: summaries first; **attention deferred** when primary lane is not needs_attention | Cuts blocking `attention_*_ms` off enrollment/pipeline-primary paths |
+| WU `primary_row_limit` default **12** (max 20) | Smaller reveal bundle on canonical bootstrap URL |
+| `dedupeAdminFetchWithTtlMeta` + **15s dept / WU TTL** | Prefetch → navigation `hit` / `inflight_join` via `[prefetch.adminv2]` |
+| Dept idle **WU bootstrap prefetch** (visible throughput rows, cap 3) | Improves dept → WU warm reveal |
+| WU idle **drawer_primary prefetch** (first 3 row ids after reveal) | Improves row open warm path |
+| `reportAdminV2LatencySnapshot()` | Fills reveal/TTFB/payload columns from `__alloyPerf` marks (no invented timings in docs) |
+
 ## Remaining bottlenecks
 
 1. Opportunity **full hydrate** graph (inquiry children, persons, field registry) — measure `[perf.drawer.full_hydrate]`.
@@ -236,6 +260,7 @@ Capture: `reportWorkUnitCriticalPathLanes()` after hard refresh.
 4. **Dept KPI bundle** in bootstrap — candidate for defer flag (same pattern as WU).
 5. DB indexes on needs-attention — after local `[wu-bootstrap-perf]` attention_query_ms capture.
 6. **Local verify** — hard refresh → Chen drawer: confirm zero post-paint movement (operator).
+7. **Operator timing table** — run cold/warm passes and paste measured ms into true-speed table above.
 
 ## Acceptance checklist
 

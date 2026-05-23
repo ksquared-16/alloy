@@ -1,12 +1,14 @@
 import { appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClient";
 import { recordAdminV2JankBudgetRequest } from "@/lib/perf/adminV2JankBudget";
+import { logPrefetchAdminV2 } from "@/lib/adminV2/adminV2PrefetchInstrumentation";
+import { ADMINV2_ABOVE_FOLD_CACHE_TTL_MS } from "@/lib/adminV2/adminV2AboveFoldCacheContracts";
 import {
-    dedupeAdminFetchWithTtl,
+    dedupeAdminFetchWithTtlMeta,
     resetWorkspaceAdminFetchDedupeForTests,
 } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
-const BOOTSTRAP_TTL_MS = 15_000;
+const BOOTSTRAP_TTL_MS = ADMINV2_ABOVE_FOLD_CACHE_TTL_MS.work_unit_above_fold;
 
 export type WorkUnitBootstrapOwner = "page" | "prefetch" | "reuse" | "suppressed";
 
@@ -32,7 +34,7 @@ export function buildCanonicalWorkUnitOperationalBootstrapUrl(params: WorkUnitBo
         summary_mode: "all",
         limit: "3",
         omit_total_count: "true",
-        primary_row_limit: "20",
+        primary_row_limit: "12",
         defer_bundle: "false",
     });
     const base = `/api/admin/work-units/${encodeURIComponent(params.workUnitId)}/operational-bootstrap?${qs.toString()}`;
@@ -93,10 +95,12 @@ function startWorkUnitBootstrapInflight(
     recordAdminV2JankBudgetRequest({ phase: "wu_bootstrap", url });
     const t0 = typeof performance !== "undefined" ? performance.now() : 0;
 
-    inflightPromise = dedupeAdminFetchWithTtl(url, init, BOOTSTRAP_TTL_MS).finally(() => {
-        inflightOwnershipKey = null;
-        inflightPromise = null;
-    });
+    inflightPromise = dedupeAdminFetchWithTtlMeta(url, init, BOOTSTRAP_TTL_MS)
+        .then((m) => m.response)
+        .finally(() => {
+            inflightOwnershipKey = null;
+            inflightPromise = null;
+        });
 
     void inflightPromise
         .then((response) => {
@@ -130,8 +134,19 @@ export async function fetchWorkUnitOperationalBootstrapSession(
 
     if (completedOwnershipKey === ownershipKey) {
         logWuBootstrapOwner("reuse", { ownershipKey, url: canonicalUrlForOwnership ?? url, caller });
-        const response = await dedupeAdminFetchWithTtl(canonicalUrlForOwnership ?? url, init, BOOTSTRAP_TTL_MS);
-        return { response, ownershipKey, bootstrapOwner: caller === "prefetch" ? "prefetch" : "reuse" };
+        const meta = await dedupeAdminFetchWithTtlMeta(canonicalUrlForOwnership ?? url, init, BOOTSTRAP_TTL_MS);
+        logPrefetchAdminV2("work_unit", meta.cache_hit ? "hit" : meta.inflight_join ? "inflight_join" : "miss", {
+            cache_key: ownershipKey,
+            department_id: params.departmentId,
+            work_unit_id: params.workUnitId,
+            url: canonicalUrlForOwnership ?? url,
+            caller,
+        });
+        return {
+            response: meta.response,
+            ownershipKey,
+            bootstrapOwner: caller === "prefetch" ? "prefetch" : "reuse",
+        };
     }
 
     if (inflightOwnershipKey === ownershipKey && inflightPromise) {
@@ -139,6 +154,12 @@ export async function fetchWorkUnitOperationalBootstrapSession(
             ownershipKey,
             url: canonicalUrlForOwnership ?? url,
             inflight: true,
+            caller,
+        });
+        logPrefetchAdminV2("work_unit", "inflight_join", {
+            cache_key: ownershipKey,
+            department_id: params.departmentId,
+            work_unit_id: params.workUnitId,
             caller,
         });
         const response = await inflightPromise;

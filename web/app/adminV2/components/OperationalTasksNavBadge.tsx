@@ -7,6 +7,10 @@ import {
     ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH,
 } from "@/lib/adminV2/opportunityDrawerTaskEvents";
 import { ADMIN_V2_OPEN_TASKS_MODAL, fetchOperationalTasksSummary, readJson } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
+import {
+    readOperationalTasksNavCountsCache,
+    writeOperationalTasksNavCountsCache,
+} from "@/lib/adminV2/operationalTasksNavCountsCache";
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
 import { neutral } from "@/styles/tokens/colors";
@@ -25,7 +29,7 @@ export default function OperationalTasksNavBadge({
     onOpenModal: () => void;
 }) {
     const enabled = isTaskAssistV1UiEnabled();
-    const [counts, setCounts] = useState<TaskCounts | null>(null);
+    const [counts, setCounts] = useState<TaskCounts | null>(() => readOperationalTasksNavCountsCache("open"));
 
     const load = useCallback(async () => {
         if (!enabled) return;
@@ -35,6 +39,7 @@ export default function OperationalTasksNavBadge({
             const json = await readJson<{ ok?: boolean; counts?: TaskCounts }>(res);
             if (res.ok && json.ok && json.counts) {
                 setCounts(json.counts);
+                writeOperationalTasksNavCountsCache("open", json.counts);
             }
         } catch {
             /* non-fatal */

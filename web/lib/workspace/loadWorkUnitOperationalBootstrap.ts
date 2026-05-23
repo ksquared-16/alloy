@@ -281,32 +281,41 @@ export async function loadWorkUnitOperationalBootstrap(params: {
         departmentId
     );
     const attentionEligible = Boolean(naExecution && workUnitDefinesNeedsAttentionQueue(queueDefinition));
+    const wuKey = (wuRow as { key?: string | null }).key ?? null;
 
-    const tParallel0 = Date.now();
-    const summariesP = (async () => {
-        const t0 = Date.now();
-        const result = await getWorkUnitQueueSummaries({
-            orgId,
-            workUnitId,
-            preloadedQueueDefinition,
-            limit: summariesLimit,
-            includePreviews: false,
-            summaryMode: "all",
-            sharedBootstrap,
-            viewerDisplayTimeZone,
-            recordScopeImpossible,
-            recordScopeConstraints,
-        });
-        phases.queue_summaries_ms = Date.now() - t0;
-        return result;
-    })();
+    const tSummaries0 = Date.now();
+    const summariesResult = await getWorkUnitQueueSummaries({
+        orgId,
+        workUnitId,
+        preloadedQueueDefinition,
+        limit: summariesLimit,
+        includePreviews: false,
+        summaryMode: "all",
+        sharedBootstrap,
+        viewerDisplayTimeZone,
+        recordScopeImpossible,
+        recordScopeConstraints,
+    });
+    phases.queue_summaries_ms = Date.now() - tSummaries0;
+    phases.summaries_attention_parallel_ms = phases.queue_summaries_ms;
 
-    const attentionP = (async (): Promise<AttentionBootstrapOutcome> => {
-        if (!attentionEligible || !naExecution) {
-            phases.attention_ms = 0;
-            return {};
-        }
-        return loadWorkUnitBootstrapAttention({
+    const primaryQueueKey = resolveWorkUnitBootstrapPrimaryQueueKey(
+        { queue_definition: queueDefinition },
+        summariesResult.queues,
+        focusQueue
+    );
+    const primaryIsNeedsAttention =
+        primaryQueueKey != null && primaryQueueKey.trim().toLowerCase() === "needs_attention";
+    const attentionNeededForReveal =
+        attentionEligible &&
+        naExecution != null &&
+        (primaryIsNeedsAttention ||
+            focusQueue.trim().toLowerCase() === "needs_attention" ||
+            (wuKey ?? "").trim().toLowerCase() === "needs_attention");
+
+    let attentionOutcome: AttentionBootstrapOutcome = {};
+    if (attentionNeededForReveal) {
+        attentionOutcome = await loadWorkUnitBootstrapAttention({
             supabase,
             orgId,
             departmentId,
@@ -316,27 +325,23 @@ export async function loadWorkUnitOperationalBootstrap(params: {
             recordScopeImpossible,
             recordScopeConstraints,
             sharedBootstrap,
-            naExecution,
+            naExecution: naExecution!,
             attentionResolverPasses,
             phases,
         });
-    })();
-
-    const [summariesResult, attentionOutcome] = await Promise.all([summariesP, attentionP]);
-    phases.summaries_attention_parallel_ms = Date.now() - tParallel0;
-    phases.summaries_attention_parallel = true;
+        phases.summaries_attention_parallel = true;
+    } else if (attentionEligible) {
+        phases.attention_ms = 0;
+        phases.attention_deferred = true;
+        phases.summaries_attention_parallel = false;
+    } else {
+        phases.attention_ms = 0;
+        phases.summaries_attention_parallel = false;
+    }
 
     const preloadedAttention = attentionOutcome.preloadedAttention;
     const attentionBlock = attentionOutcome.attentionBlock;
 
-    const primaryQueueKey = resolveWorkUnitBootstrapPrimaryQueueKey(
-        { queue_definition: queueDefinition },
-        summariesResult.queues,
-        focusQueue
-    );
-
-    const primaryIsNeedsAttention =
-        primaryQueueKey != null && primaryQueueKey.trim().toLowerCase() === "needs_attention";
     phases.primary_lane_wait_on =
         primaryQueueKey == null ? "none" : primaryIsNeedsAttention ? "needs_attention" : "summaries_only";
 

@@ -49,3 +49,28 @@ export function prefetchOpportunityDrawerOnRowIntent(
     prefetchOpportunityDrawerPrimary(id, init);
     prefetchOpportunityDrawerFull(id, init);
 }
+
+const VISIBLE_DRAWER_PREFETCH_CAP = 3;
+
+/** After WU reveal — warm drawer_primary for first visible opportunity rows only. */
+export function prefetchVisibleWorkUnitDrawerPrimary(
+    opportunityIds: string[],
+    workspaceContext?: OpportunityDrawerIntentContext | null
+): void {
+    const unique = [...new Set(opportunityIds.map((id) => id.trim()).filter(Boolean))].slice(
+        0,
+        VISIBLE_DRAWER_PREFETCH_CAP
+    );
+    if (!unique.length) {
+        logPrefetchAdminV2("drawer_primary", "skipped", { reason: "no_visible_row_ids" });
+        return;
+    }
+    logPrefetchAdminV2("drawer_primary", "start", {
+        reason: "wu_idle_visible_rows",
+        record_ids: unique,
+        cap: VISIBLE_DRAWER_PREFETCH_CAP,
+    });
+    for (const id of unique) {
+        prefetchOpportunityDrawerOnRowIntent(id, workspaceContext ?? undefined);
+    }
+}

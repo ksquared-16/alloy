@@ -97,7 +97,11 @@ import {
     findQueuePreviewItemById,
     opportunityDrawerSeedFromQueueItem,
 } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
-import { prefetchOpportunityDrawerOnRowIntent } from "@/lib/admin/opportunityDrawerIntentPrefetch";
+import {
+    prefetchOpportunityDrawerOnRowIntent,
+    prefetchVisibleWorkUnitDrawerPrimary,
+} from "@/lib/admin/opportunityDrawerIntentPrefetch";
+import { logPrefetchAdminV2 } from "@/lib/adminV2/adminV2PrefetchInstrumentation";
 import { markDrawerRowClickStart } from "@/lib/perf/adminV2DrawerPerf";
 import { markWorkUnitNavigationStart } from "@/lib/perf/markWorkUnitNavigationStart";
 import { setAdminV2PrimarySurfacePending } from "@/lib/perf/adminV2PrimarySurfaceGate";
@@ -1565,6 +1569,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             bootstrap_owner: bootstrapOwner,
                             departmentId,
                             workUnitId,
+                        });
+                        logPrefetchAdminV2("work_unit", bootstrapOwner === "reuse" ? "hit" : "inflight_join", {
+                            department_id: departmentId,
+                            work_unit_id: workUnitId,
+                            bootstrap_owner: bootstrapOwner,
                         });
                     }
                     if (!bootstrapRes.ok && !cancelled) {
@@ -3465,6 +3474,28 @@ export default function AdminV2OpportunityWorkUnitPage() {
         markWorkUnitAboveFoldCoordinated({ departmentId, workUnitId });
         markRouteFirstAboveFoldStable("work_unit", { departmentId, workUnitId });
     }, [workUnitAboveFoldPageReady, departmentId, workUnitId]);
+
+    useEffect(() => {
+        if (!workUnitAboveFoldPageReady || !departmentId || !workUnitId) return;
+        const cancel = scheduleAdminV2BackgroundWork(
+            () => {
+                const raw = (queueItems?.items ?? []) as Array<{ id?: string; opportunity_id?: string }>;
+                const ids: string[] = [];
+                for (const row of raw) {
+                    const id = String(row.opportunity_id ?? row.id ?? "").trim();
+                    if (!id) continue;
+                    ids.push(id);
+                    if (ids.length >= 3) break;
+                }
+                prefetchVisibleWorkUnitDrawerPrimary(ids, {
+                    work_unit_id: workUnitId,
+                    department_id: departmentId,
+                });
+            },
+            { idleTimeoutMs: 2500, fallbackMs: 500 }
+        );
+        return cancel;
+    }, [workUnitAboveFoldPageReady, departmentId, workUnitId, queueItems]);
 
     useEffect(() => {
         if (!workUnitQueueRevealReady) return;

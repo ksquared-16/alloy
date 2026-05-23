@@ -11,7 +11,7 @@ import { neutral, derived, palette } from "@/styles/tokens/colors";
 
 const CHAMBER_FRAME = `inset 0 0 0 1px ${derived.adminV2BoundaryAmberInset}`;
 import TopNavBar from "./TopNavBar";
-import WorkspaceSiteFilterGate from "./WorkspaceSiteFilterGate";
+import { WorkspaceSiteFilterProvider } from "@/contexts/WorkspaceSiteFilterContext";
 import Sidebar from "./Sidebar";
 import InspectorPanel from "./InspectorPanel";
 import AICommandBar from "./AICommandBar";
@@ -101,12 +101,6 @@ export default function AdminV2Shell({
   const isFormsRoute =
     pathname === "/adminV2/forms" || pathname.startsWith("/adminV2/forms/");
 
-  const workspaceSiteFilterSubtree =
-    pathname === "/adminV2/workspace" ||
-    pathname.startsWith("/adminV2/workspace/") ||
-    pathname === "/admin/v2/workspace" ||
-    pathname.startsWith("/admin/v2/workspace/");
-
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => readAdminV2SidebarCollapsed() ?? true);
   const toggleSidebarCollapsed = useCallback(() => {
     setSidebarCollapsed((c) => {
@@ -145,73 +139,16 @@ export default function AdminV2Shell({
   if (isWorkspaceV2Route || isAiActivityRoute || isSettingsRoute || isWorkflowsRoute || isFormsRoute) {
     return (
       <GlobalAssistantProvider>
-      <div
-        className="flex h-screen w-full overflow-hidden"
-        style={{ backgroundColor: neutral.background }}
-      >
-        <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebarCollapsed} />
-        <div className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">
-          {workspaceSiteFilterSubtree ? (
-            <WorkspaceSiteFilterGate>
-              <div className="relative z-[100] shrink-0">
-                <Suspense
-                  fallback={
-                    <div
-                      className="adminv2-shell-header flex h-14 flex-shrink-0 items-center px-4 text-sm text-white/70"
-                      style={{ backgroundColor: palette.midnightForge }}
-                      aria-hidden
-                    >
-                      Loading…
-                    </div>
-                  }
-                >
-                  <TopNavBar />
-                </Suspense>
-              </div>
-              <div
-                data-adminv2-workspace-ambient-root
-                className="relative flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden"
-                style={workspaceContentAmbientStyle}
-              >
-                {isWorkspaceV2Route || isSettingsRoute || isWorkflowsRoute || isFormsRoute ? (
-                  <WorkspaceAmbientLayer />
-                ) : null}
-                {/* Reserve room for the bottom AI bar so content isn't hidden behind it. */}
-                <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate pb-[96px]">
-                  <AdminV2NavigationTransitionRibbon />
-                  {isAiActivityRoute || isSettingsRoute || isWorkflowsRoute || isFormsRoute ? (
-                    <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</main>
-                  ) : (
-                    children
-                  )}
-                </div>
-                {/* Raise AI bar slightly so it doesn't feel glued to the viewport bottom. */}
-                <div className="absolute bottom-2 left-0 right-0 z-20 flex flex-col">
-                  <div className="flex w-full justify-center px-4">
-                    <div className="w-full" style={{ maxWidth: COMMAND_SURFACE_MAX_W_PX }}>
-                      <RecentAiActionsStrip />
-                    </div>
-                  </div>
-                  {adminV2AiCommandSurfaceEnabled() ? <AICommandSurfaceShell /> : <AICommandBar />}
-                </div>
-              </div>
-            </WorkspaceSiteFilterGate>
-          ) : (
-            <>
-              <div className="relative z-[100] shrink-0">
-                <Suspense
-                  fallback={
-                    <div
-                      className="adminv2-shell-header flex h-14 flex-shrink-0 items-center px-4 text-sm text-white/70"
-                      style={{ backgroundColor: palette.midnightForge }}
-                      aria-hidden
-                    >
-                      Loading…
-                    </div>
-                  }
-                >
-                  <TopNavBar />
-                </Suspense>
+        <WorkspaceSiteFilterProvider>
+          <div
+            className="flex h-screen w-full overflow-hidden"
+            style={{ backgroundColor: neutral.background }}
+            data-adminv2-app-shell="workspace-v2"
+          >
+            <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebarCollapsed} />
+            <div className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">
+              <div className="relative z-[100] shrink-0" data-adminv2-shell-header-mount="persistent">
+                <TopNavBar />
               </div>
               <div
                 data-adminv2-workspace-ambient-root
@@ -238,10 +175,9 @@ export default function AdminV2Shell({
                   {adminV2AiCommandSurfaceEnabled() ? <AICommandSurfaceShell /> : <AICommandBar />}
                 </div>
               </div>
-            </>
-          )}
-        </div>
-      </div>
+            </div>
+          </div>
+        </WorkspaceSiteFilterProvider>
       </GlobalAssistantProvider>
     );
   }

@@ -15,9 +15,9 @@ import { logWorkUnitOperationalBootstrapPerf } from "@/lib/workspace/workUnitOpe
 import { loadRightRailActionsBundleServer } from "@/lib/workspace/loadRightRailActionsBundleServer";
 
 function parsePrimaryRowLimit(searchParams: URLSearchParams): number {
-    const raw = (searchParams.get("primary_row_limit") ?? "20").trim();
+    const raw = (searchParams.get("primary_row_limit") ?? "12").trim();
     const n = Number(raw);
-    if (!Number.isFinite(n)) return 20;
+    if (!Number.isFinite(n)) return 12;
     return Math.min(Math.max(1, Math.floor(n)), 20);
 }
 
