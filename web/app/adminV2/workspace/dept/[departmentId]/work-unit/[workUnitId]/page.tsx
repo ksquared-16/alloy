@@ -101,6 +101,8 @@ import {
     prefetchOpportunityDrawerOnRowIntent,
     prefetchVisibleWorkUnitDrawerPrimary,
 } from "@/lib/admin/opportunityDrawerIntentPrefetch";
+import { bumpOpportunityDrawerAdjacentPrefetchGeneration } from "@/lib/admin/opportunityDrawerAdjacentPrefetch";
+import { buildOpportunityDrawerQueueNavigatorFromDisplayItems } from "@/lib/admin/opportunityDrawerQueueNavigator";
 import { logPrefetchAdminV2 } from "@/lib/adminV2/adminV2PrefetchInstrumentation";
 import { markDrawerRowClickStart } from "@/lib/perf/adminV2DrawerPerf";
 import { markWorkUnitNavigationStart } from "@/lib/perf/markWorkUnitNavigationStart";
@@ -496,6 +498,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const queueDisplayItemsRef = useRef<QueuePreviewItemVm[]>([]);
     const queueRowClientCacheRef = useRef(new Map<string, QueueRowClientCacheBucket<QueueItemsResult>>());
     const selectedQueueKeyRef = useRef<string | null>(null);
+    const queueNavGenerationRef = useRef(0);
     const laneUnmappedOnlyRef = useRef(false);
     /** Deferred queue keys from bootstrap — background lane preview bundle targets these lanes. */
     const wuDeferredQueueKeysRef = useRef<string[]>([]);
@@ -2898,6 +2901,47 @@ export default function AdminV2OpportunityWorkUnitPage() {
     );
     const oppDrawerExtra = opportunityWorkspaceContext ? { opportunityWorkspaceContext } : {};
 
+    const buildWuOpportunityQueueNavigator = useCallback(() => {
+        if (!workUnit?.id || !departmentId) return null;
+        const queueKey = selectedQueueKeyRef.current?.trim();
+        if (!queueKey) return null;
+        const entityType = (queueItems?.queue.entity_type ?? "opportunity").trim().toLowerCase();
+        if (entityType !== "opportunity") return null;
+        const summary = queueSummaries?.find((q) => q.key === queueKey);
+        return buildOpportunityDrawerQueueNavigatorFromDisplayItems({
+            work_unit_id: workUnit.id,
+            department_id: departmentId,
+            queue_key: queueKey,
+            displayItems: queueDisplayItemsRef.current,
+            total_count: summary?.count ?? queueDisplayItemsRef.current.length,
+            generation: queueNavGenerationRef.current,
+        });
+    }, [departmentId, queueItems?.queue.entity_type, queueSummaries, workUnit?.id]);
+
+    const buildOpportunityDrawerOpenParams = useCallback(
+        (opportunityId: string, extra?: { defaultOpportunitySurface?: "quote_intake" }) => {
+            const id = opportunityId.trim();
+            const previewRow =
+                findQueuePreviewItemById(queueDisplayItemsRef.current, id) ??
+                findQueuePreviewItemById(queueRowsBufferRef.current, id);
+            return {
+                type: "opportunities" as const,
+                id,
+                ...oppDrawerExtra,
+                ...extra,
+                opportunityQueuePreviewSeed: previewRow
+                    ? opportunityDrawerSeedFromQueueItem(previewRow)
+                    : undefined,
+                opportunityQueueNavigator: buildWuOpportunityQueueNavigator() ?? undefined,
+            };
+        },
+        [buildWuOpportunityQueueNavigator, oppDrawerExtra]
+    );
+
+    useEffect(() => {
+        queueNavGenerationRef.current = bumpOpportunityDrawerAdjacentPrefetchGeneration();
+    }, [selectedQueueKey, workUnitId, queueItems?.items, queueItems?.queue.key]);
+
     const openWorkUnitQueueRecord = useCallback(
         (itemId: string, entityType: "opportunity" | "job" | "schedule", source: string) => {
             const id = itemId.trim();
@@ -2937,14 +2981,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 : undefined;
             markDrawerRowClickStart();
             prefetchOpportunityDrawerOnRowIntent(id, opportunityWorkspaceContext ?? undefined, opportunityQueuePreviewSeed);
-            openDrawer({
-                type: "opportunities",
-                id,
-                ...oppDrawerExtra,
-                opportunityQueuePreviewSeed,
-            });
+            openDrawer(buildOpportunityDrawerOpenParams(id));
         },
-        [openDrawer, oppDrawerExtra, opportunityWorkspaceContext]
+        [buildOpportunityDrawerOpenParams, openDrawer, opportunityWorkspaceContext]
     );
 
     const onAction = useCallback(
@@ -3134,14 +3173,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 }
                 if (er?.kind === "open_drawer") {
                     if (er.drawer?.defaultSurface === "quote_intake") {
-                        openDrawer({
-                            type: "opportunities",
-                            id: action.itemId,
-                            defaultOpportunitySurface: "quote_intake",
-                            ...oppDrawerExtra,
-                        });
+                        openDrawer(
+                            buildOpportunityDrawerOpenParams(action.itemId, {
+                                defaultOpportunitySurface: "quote_intake",
+                            })
+                        );
                     } else {
-                        openDrawer({ type: "opportunities", id: action.itemId, ...oppDrawerExtra });
+                        openDrawer(buildOpportunityDrawerOpenParams(action.itemId));
                     }
                     invalidate({ entity_type: "opportunity", entity_id: action.itemId, action_key: action.actionId });
                     return;
@@ -3163,12 +3201,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 // Map queue quick actions → opportunity record actions (event keys).
                 const eventKey = action.actionId;
                 if (eventKey === "start_quote" || eventKey === "open_quote") {
-                    openDrawer({
-                        type: "opportunities",
-                        id: action.itemId,
-                        defaultOpportunitySurface: "quote_intake",
-                        ...oppDrawerExtra,
-                    });
+                    openDrawer(
+                        buildOpportunityDrawerOpenParams(action.itemId, {
+                            defaultOpportunitySurface: "quote_intake",
+                        })
+                    );
                     return;
                 }
                 const r = await executeOpportunityRecordAction({ opportunityId: action.itemId, eventKey });
@@ -3226,6 +3263,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             needsAttentionWorkUnitId,
             openDrawer,
             openWorkUnitQueueRecord,
+            buildOpportunityDrawerOpenParams,
             oppDrawerExtra,
             opportunityWorkspaceContext,
             queueItems?.queue.entity_type,

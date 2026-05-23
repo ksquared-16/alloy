@@ -248,6 +248,8 @@ import {
 } from "@/lib/recordChrome/types";
 import { executeOpportunityRecordAction } from "@/lib/recordChrome/executeOpportunityRecordAction";
 import { OPPORTUNITY_WORKFLOW_V1_LEGACY_OVERVIEW_SECTION_KEYS } from "@/lib/admin/opportunityDrawerLayoutPolicy";
+import { resolveOpportunityQueueNavigatorPosition } from "@/lib/admin/opportunityDrawerQueueNavigator";
+import OpportunityDrawerQueueNavigatorControls from "@/components/admin/OpportunityDrawerQueueNavigatorControls";
 import {
     OPPORTUNITY_DRAWER_HIDE_PRICING_FIELD_KEYS,
     OPPORTUNITY_INQUIRY_HEADER_BODY_FIELD_KEYS,
@@ -1234,6 +1236,8 @@ export default function AdminEntityDrawer() {
         stack,
         consumeOpportunityDrawerPreload,
         isOpportunityDrawerOpening,
+        navigateOpportunityInQueue,
+        isOpportunityQueueNavPending,
     } = useAdminDrawer();
     const { canMutate, role: adminRole } = useAdminAuth();
     const { orgId: workspaceOrgId } = useWorkspaceOrg();
@@ -9504,7 +9508,7 @@ export default function AdminEntityDrawer() {
                   .filter(Boolean)
                   .join(" · ") || undefined
             : undefined;
-    const drawerTitleResolved =
+    const drawerTitleTextResolved =
         isOpportunityRecordModalTarget &&
         drawer.type === "opportunities" &&
         drawer.id !== "new" &&
@@ -9615,6 +9619,37 @@ export default function AdminEntityDrawer() {
             </div>
         ) : (
             headerSubtitleBase
+        );
+
+    const opportunityQueueNavigatorPosition = useMemo(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return null;
+        if (!drawer.opportunityQueueNavigator || !opportunityInquiryWorkflowDrawer) return null;
+        return resolveOpportunityQueueNavigatorPosition(drawer.id, drawer.opportunityQueueNavigator);
+    }, [
+        drawer.type,
+        drawer.id,
+        drawer.opportunityQueueNavigator,
+        opportunityInquiryWorkflowDrawer,
+    ]);
+
+    const opportunityQueueNavControls =
+        opportunityQueueNavigatorPosition && opportunityQueueNavigatorPosition.total >= 2 ? (
+            <OpportunityDrawerQueueNavigatorControls
+                position={opportunityQueueNavigatorPosition}
+                pending={isOpportunityQueueNavPending}
+                onPrev={() => navigateOpportunityInQueue("prev")}
+                onNext={() => navigateOpportunityInQueue("next")}
+            />
+        ) : null;
+
+    const drawerTitleResolved =
+        opportunityQueueNavControls != null ? (
+            <div className="flex min-w-0 items-center gap-2">
+                {opportunityQueueNavControls}
+                <span className="min-w-0 truncate">{drawerTitleTextResolved}</span>
+            </div>
+        ) : (
+            drawerTitleTextResolved
         );
 
     const workflowHeaderTitleRight =
@@ -9756,9 +9791,19 @@ export default function AdminEntityDrawer() {
             }
         >
             <div
-                className=""
+                className="relative"
                 {...(opportunityDrawerShellInstant ? { [ADMINV2_DRAWER_SHELL_INSTANT_ATTR]: "true" } : {})}
             >
+            {isOpportunityQueueNavPending ? (
+                <div
+                    className="absolute inset-0 z-20 flex items-center justify-center bg-white/75 backdrop-blur-[1px]"
+                    role="status"
+                    aria-live="polite"
+                    data-opportunity-drawer-queue-nav-pending="true"
+                >
+                    <p className="text-sm font-medium text-alloy-midnight/85">Opening record…</p>
+                </div>
+            ) : null}
             {error && <p className="text-alloy-ember">Error: {error}</p>}
             {opportunityDrawerUsesBootstrapBodyShell ? (
                 <div
