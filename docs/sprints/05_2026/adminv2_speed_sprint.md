@@ -1,6 +1,6 @@
 # AdminV2 speed sprint — measure first, optimize second
 
-Prerequisites: [drawer shell pipeline](./adminv2_drawer_pipeline.md), [route shell pipeline](./adminv2_route_shell_pipeline.md).
+Prerequisites: [drawer shell pipeline](./adminv2_drawer_pipeline.md), [route shell pipeline](./adminv2_route_shell_pipeline.md), [reveal doctrine](./adminv2_reveal_doctrine.md).
 
 ## Critical rule
 
@@ -207,7 +207,16 @@ Capture: `reportWorkUnitCriticalPathLanes()` after hard refresh.
 | Dept → WU intent | `prefetchWorkUnitOperationalBootstrapFromDeptHref` on dept oper console pointer/click |
 | KPI / automation footer | Still below-fold after reveal (`workUnitQueueRevealReady`) |
 
-**Next:** Apply the same reveal-gate pattern to `/dept` (department above-fold ready before oper console reveal).
+**Dept:** `deptRevealGate.ts` + `DeptPageLoadingGate` — gate includes KPI strip + oper region + enrollment rail. Filter `[dept-reveal-gate]`.
+
+**Canonical doctrine:** [adminv2_reveal_doctrine.md](./adminv2_reveal_doctrine.md).
+
+### Workspace reveal gate + preload (this pass)
+
+- `workspaceRevealGate.ts` + `WorkspacePageLoadingGate` on `/adminV2/workspace`.
+- KPI after reveal: quiet reserve only (`kpiQuietReserveOnly`); growth rollup refines tile copy in place (no stats skeleton at reveal).
+- Prefetch: `prefetchAdminV2AboveFold.ts` — dept pointer/click + idle visible cap (3); `[prefetch.adminv2]` logs.
+- Cache contracts: `adminV2AboveFoldCacheContracts.ts`.
 
 ---
 

@@ -1,3 +1,4 @@
+import { logPrefetchAdminV2 } from "@/lib/adminV2/adminV2PrefetchInstrumentation";
 import {
     fetchWorkUnitOperationalBootstrapSession,
     type WorkUnitBootstrapOwnership,
@@ -34,7 +35,22 @@ export function prefetchWorkUnitOperationalBootstrapFromDeptHref(
 ): void {
     const ownership = parseWorkUnitBootstrapOwnershipFromHref(href, departmentId, selectedSiteId);
     if (!ownership) return;
-    void fetchWorkUnitOperationalBootstrapSession(ownership, "prefetch").catch(() => {
-        /* prefetch is best-effort */
+    logPrefetchAdminV2("work_unit", "start", {
+        department_id: ownership.departmentId,
+        work_unit_id: ownership.workUnitId,
+        reason: "dept_pointer",
     });
+    void fetchWorkUnitOperationalBootstrapSession(ownership, "prefetch")
+        .then(() => {
+            logPrefetchAdminV2("work_unit", "complete", {
+                department_id: ownership.departmentId,
+                work_unit_id: ownership.workUnitId,
+            });
+        })
+        .catch(() => {
+            logPrefetchAdminV2("work_unit", "error", {
+                department_id: ownership.departmentId,
+                work_unit_id: ownership.workUnitId,
+            });
+        });
 }

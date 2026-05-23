@@ -6,6 +6,7 @@ import Link from "next/link";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
 import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
 import { WorkspaceKpiOrientationCrossfade } from "@/components/admin/workspace/WorkspaceKpiOrientationCrossfade";
+import { WorkspaceQuietKpiReserve } from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import {
   WorkspaceRootDepartmentGrid,
@@ -69,6 +70,8 @@ type Props = {
   workspaceRollupRefined?: boolean;
   /** Cold load: skeleton department tiles before GET /api/admin/departments returns. */
   departmentsPending?: boolean;
+  /** After page reveal — KPI pending uses quiet reserve (no premium-loading crossfade wave). */
+  kpiQuietReserveOnly?: boolean;
 };
 
 function formatInt(n: number | null | undefined): string {
@@ -101,6 +104,7 @@ export function WorkspaceRootShell({
   kpiStripPlaceholder = false,
   workspaceRollupRefined = false,
   departmentsPending = false,
+  kpiQuietReserveOnly = false,
 }: Props) {
   const displayName = (orgName && orgName.trim()) || "Your organization";
 
@@ -180,7 +184,15 @@ export function WorkspaceRootShell({
                 </p>
               </div>
             </div>
-            <WorkspaceKpiOrientationCrossfade kpis={kpis} placeholderPending={kpiStripPlaceholder} maxVisible={5} />
+            {kpiStripPlaceholder && kpiQuietReserveOnly ? (
+              <WorkspaceQuietKpiReserve id="workspace-kpi-quiet-reserve" />
+            ) : (
+              <WorkspaceKpiOrientationCrossfade
+                kpis={kpis}
+                placeholderPending={kpiStripPlaceholder}
+                maxVisible={5}
+              />
+            )}
           </div>
 
           <section

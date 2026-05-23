@@ -86,7 +86,7 @@ describe("inquiry summary right_column atomic structure", () => {
         ]);
     });
 
-    it("primary-owned slots: tasks ready, reminders skeleton shell, handoff ready", () => {
+    it("primary-owned slots: tasks ready, reminders empty at primary (no skeleton wave), handoff ready", () => {
         const model = buildInquirySummaryRightColumnModel({
             record: taskPreviewRecord,
             enrichment: {
@@ -103,16 +103,34 @@ describe("inquiry summary right_column atomic structure", () => {
         expect(model.tasks.state).toBe("ready");
         expect(model.tasks.open_count).toBe(1);
         expect(model.reminders.visible).toBe(true);
-        expect(model.reminders.state).toBe("skeleton");
+        expect(model.reminders.state).toBe("empty");
         expect(model.orchestrator_handoff.visible).toBe(true);
         expect(model.orchestrator_handoff.state).toBe("ready");
+    });
+
+    it("reminders ready when primary carries next_follow_up_at", () => {
+        const model = buildInquirySummaryRightColumnModel({
+            record: { ...taskPreviewRecord, next_follow_up_at: "2026-05-23T15:00:00.000Z" },
+            enrichment: {
+                record_surface: "drawer_primary",
+                primary_loaded: true,
+                full_pending: true,
+                full_complete: false,
+                background_full_failed: false,
+                enrichment_held_until_interaction: false,
+            },
+            below_fold_enrichment_ready: false,
+            task_assist_enabled: true,
+        });
+        expect(model.reminders.state).toBe("ready");
+        expect(model.reminders.next_follow_up_iso).toBe("2026-05-23T15:00:00.000Z");
     });
 
     it("AdminEntityDrawer uses single OpportunityInquirySummaryRightColumn without late-mount gate", () => {
         const drawer = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
         expect(drawer).toContain("OpportunityInquirySummaryRightColumn");
         expect(drawer).toContain("rightColumnModel");
-        expect(drawer).not.toContain("adminv2-ws-soft-content-reveal");
+        expect(drawer).toContain("fetchEnabled={inquirySummaryFetchEnabled}");
         expect(drawer).not.toContain("OpportunityInquirySummaryTaskPreview");
     });
 

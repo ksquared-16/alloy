@@ -3418,7 +3418,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         queueItemsError,
     ]);
 
-    const workUnitKpiStripPlaceholder = workUnitQueueRevealReady && workUnitKpiMetricsPending;
+    const workUnitKpiStripPlaceholder = workUnitAboveFoldPageReady && workUnitKpiMetricsPending;
 
     const workUnitRoutePipeline = useMemo(
         () =>

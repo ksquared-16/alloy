@@ -16,7 +16,6 @@ import {
 import { WorkUnitAboveFoldActionsRail } from "@/app/adminV2/components/workspace/WorkUnitAboveFoldActionsRail";
 import { SignalBlock, KPIBlock, QueueBlock, WorkBlock } from "../blocks";
 import { WorkspaceShellLayout } from "@/components/admin/workspace/WorkspaceShellLayout";
-import { KpiStripSkeleton } from "@/components/admin/workspace/KpiStripSkeleton";
 import { WorkspaceQuietKpiReserve } from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
 
 type Props = {
@@ -44,7 +43,7 @@ export default function WorkUnitWorkspace({
   lifecyclePanel = null,
   otherPillSectionKey = null,
   kpiStripPlaceholder,
-  kpiStripSkeletonCellCount,
+  kpiStripSkeletonCellCount: _kpiStripSkeletonCellCount,
   primaryFooterSlot,
   opportunityDrawerWorkspaceContext = null,
 }: Props) {
@@ -73,8 +72,6 @@ export default function WorkUnitWorkspace({
   const hasTopStack = hasBrief || hasSignals || hasAwareness || hasHeaderSlot;
   const hasKpiZone = hasKpis || kpiStripPlaceholder;
   const hasControlDeck = hasTopStack || hasKpiZone;
-  const kpiUseQuietReserve =
-    kpiStripPlaceholder && workUnitAboveFoldQueueRowsLoading(aboveFold);
   const focusKicker = model.focusLabel?.trim() || "Work unit";
 
   const li = model.laneInterpretation;
@@ -167,14 +164,10 @@ export default function WorkUnitWorkspace({
               ) : null}
               {kpiStripPlaceholder ? (
                 <div data-workspace-zone="kpi-banner">
-                  {kpiUseQuietReserve ? (
-                    <WorkspaceQuietKpiReserve id="wu-kpi-quiet-reserve" />
-                  ) : (
-                    <KpiStripSkeleton id="wu-kpi-skeleton" cellCount={kpiStripSkeletonCellCount} />
-                  )}
+                  <WorkspaceQuietKpiReserve id="wu-kpi-quiet-reserve" />
                 </div>
               ) : hasKpis ? (
-                <div className="adminv2-ws-soft-content-reveal" data-workspace-zone="kpi-banner">
+                <div data-workspace-zone="kpi-banner">
                   <KPIBlock kpis={model.kpis} maxVisible={5} />
                 </div>
               ) : null}

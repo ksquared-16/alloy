@@ -12517,7 +12517,7 @@ export default function AdminEntityDrawer() {
                                                                             opportunityId={drawer.id}
                                                                             entityLabel={String(d.name ?? "").trim() || null}
                                                                             overviewData={d}
-                                                                            fetchEnabled
+                                                                            fetchEnabled={inquirySummaryFetchEnabled}
                                                                         />
                                                                     ) : null}
                                                                     {drawer.id && drawer.id !== "new" ? (

@@ -28,6 +28,15 @@ function tasksSlotState(
     return "pending";
 }
 
+function remindersSlotState(
+    nextFollowUpIso: string | null,
+    enrichment: DrawerEnrichmentState
+): DrawerRightColumnSlotState {
+    if (nextFollowUpIso) return "ready";
+    if (enrichment.primary_loaded || enrichment.full_complete) return "empty";
+    return "pending";
+}
+
 /**
  * Atomic right-column structure for inquiry summary — stable across drawer_primary and full.
  */
@@ -46,6 +55,7 @@ export function buildInquirySummaryRightColumnModel(input: {
     }
 
     const taskPreview = parseInquirySummaryTaskPreview(input.record);
+    const nextFollowUpIso = nextFollowUpFromRecord(input.record);
     const handoffVisible = drawerOperationalStripReady(
         true,
         input.below_fold_enrichment_ready,
@@ -61,8 +71,8 @@ export function buildInquirySummaryRightColumnModel(input: {
         },
         reminders: {
             visible: true,
-            state: "skeleton",
-            next_follow_up_iso: nextFollowUpFromRecord(input.record),
+            state: remindersSlotState(nextFollowUpIso, input.enrichment),
+            next_follow_up_iso: nextFollowUpIso,
         },
         orchestrator_handoff: {
             visible: handoffVisible,

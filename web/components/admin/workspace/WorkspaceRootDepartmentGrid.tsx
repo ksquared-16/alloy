@@ -5,10 +5,13 @@ import { useRouter } from "next/navigation";
 import { neutral, derived } from "@/styles/tokens/colors";
 import {
     adminV2NavigationClickedItemProps,
-    prefetchDepartmentOperationalBootstrap,
     runAdminV2NavigationTransition,
     useAdminV2NavigationTransition,
 } from "@/lib/adminV2/navigation";
+import {
+    prefetchDeptAboveFoldBundle,
+    prefetchDeptAboveFoldOnIntent,
+} from "@/lib/adminV2/prefetchAdminV2AboveFold";
 import { appendWorkspaceSiteToPath } from "@/lib/adminV2/workspaceSiteFilterClient";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import {
@@ -90,8 +93,10 @@ export function WorkspaceRootDepartmentGrid({
             clickedKey: workspaceDeptClickedKey(departmentId),
             variant: "department",
             prepare: () =>
-                prefetchDepartmentOperationalBootstrap(departmentId, {
+                prefetchDeptAboveFoldBundle({
+                    departmentId,
                     selectedSiteId,
+                    reason: "click_prepare",
                 }),
             commit: () => {
                 router.push(href);
@@ -163,6 +168,14 @@ export function WorkspaceRootDepartmentGrid({
                     <a
                         key={d.id}
                         href={href}
+                        onPointerDown={(e) => {
+                            if (isModifiedNavClick(e)) return;
+                            prefetchDeptAboveFoldOnIntent({
+                                departmentId: d.id,
+                                selectedSiteId,
+                                reason: "pointer",
+                            });
+                        }}
                         onClick={(e) => handleDepartmentTileClick(e, d.id, href)}
                         className={[
                             "adminv2-ws-company-dept-tile adminv2-interactive-surface group block h-full text-left no-underline text-inherit rounded-[inherit] focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-blue/35",

@@ -1,4 +1,5 @@
 import { appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClient";
+import { logPrefetchAdminV2 } from "@/lib/adminV2/adminV2PrefetchInstrumentation";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
@@ -28,9 +29,12 @@ export async function prefetchDepartmentOperationalBootstrap(
     opts?: { selectedSiteId?: string | null; rightRailWorkUnitId?: string | null }
 ): Promise<void> {
     const url = buildDepartmentOperationalBootstrapUrl(departmentId, opts);
-    const res = await dedupeAdminFetch(url, workspaceDataFetchInit());
+    logPrefetchAdminV2("department", "start", { department_id: departmentId, url });
+    const res = await dedupeAdminFetch(url, workspaceDataFetchInit() ?? {});
     if (!res.ok) {
+        logPrefetchAdminV2("department", "error", { department_id: departmentId, status: res.status });
         throw new Error(`department operational-bootstrap prefetch failed (${res.status})`);
     }
     await res.json().catch(() => ({}));
+    logPrefetchAdminV2("department", "complete", { department_id: departmentId });
 }
