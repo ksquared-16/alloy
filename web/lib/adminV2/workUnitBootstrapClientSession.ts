@@ -33,7 +33,7 @@ export function buildCanonicalWorkUnitOperationalBootstrapUrl(params: WorkUnitBo
         limit: "3",
         omit_total_count: "true",
         primary_row_limit: "20",
-        defer_bundle: "true",
+        defer_bundle: "false",
     });
     const base = `/api/admin/work-units/${encodeURIComponent(params.workUnitId)}/operational-bootstrap?${qs.toString()}`;
     return appendWorkspaceSiteToUrl(base, params.selectedSiteId);
@@ -78,46 +78,18 @@ function logWuBootstrapOwner(
     console.info("[wu-route-perf]", { bootstrap_owner: bootstrapOwner, ...detail });
 }
 
-/**
- * Page mount is the only caller that may start a new network bootstrap.
- * Prefetch is disabled at call sites; if invoked, joins or suppresses without starting a second GET.
- */
-export async function fetchWorkUnitOperationalBootstrapSession(
-    params: WorkUnitBootstrapOwnership,
-    caller: "page" | "prefetch" = "page"
-): Promise<FetchWorkUnitBootstrapResult> {
-    const ownershipKey = workUnitBootstrapOwnershipKey(params);
-    const url = buildCanonicalWorkUnitOperationalBootstrapUrl(params);
-    const init = workspaceDataFetchInit();
-
-    if (caller === "prefetch") {
-        if (completedOwnershipKey === ownershipKey || inflightOwnershipKey === ownershipKey) {
-            logWuBootstrapOwner("suppressed", { ownershipKey, url, caller });
-            const response = inflightPromise
-                ? await inflightPromise
-                : await dedupeAdminFetchWithTtl(canonicalUrlForOwnership ?? url, init, BOOTSTRAP_TTL_MS);
-            return { response, ownershipKey, bootstrapOwner: "suppressed" };
-        }
-        logWuBootstrapOwner("suppressed", { ownershipKey, url, caller, note: "prefetch_disabled" });
-        const response = await dedupeAdminFetchWithTtl(url, init, BOOTSTRAP_TTL_MS);
-        return { response, ownershipKey, bootstrapOwner: "suppressed" };
-    }
-
-    if (completedOwnershipKey === ownershipKey) {
-        logWuBootstrapOwner("reuse", { ownershipKey, url: canonicalUrlForOwnership ?? url });
-        const response = await dedupeAdminFetchWithTtl(canonicalUrlForOwnership ?? url, init, BOOTSTRAP_TTL_MS);
-        return { response, ownershipKey, bootstrapOwner: "reuse" };
-    }
-
-    if (inflightOwnershipKey === ownershipKey && inflightPromise) {
-        logWuBootstrapOwner("reuse", { ownershipKey, url: canonicalUrlForOwnership ?? url, inflight: true });
-        const response = await inflightPromise;
-        return { response, ownershipKey, bootstrapOwner: "reuse" };
-    }
+function startWorkUnitBootstrapInflight(
+    ownershipKey: string,
+    url: string,
+    init: RequestInit,
+    caller: "page" | "prefetch"
+): void {
+    if (completedOwnershipKey === ownershipKey) return;
+    if (inflightOwnershipKey === ownershipKey && inflightPromise) return;
 
     inflightOwnershipKey = ownershipKey;
     canonicalUrlForOwnership = url;
-    logWuBootstrapOwner("page", { ownershipKey, url });
+    logWuBootstrapOwner(caller, { ownershipKey, url });
     recordAdminV2JankBudgetRequest({ phase: "wu_bootstrap", url });
     const t0 = typeof performance !== "undefined" ? performance.now() : 0;
 
@@ -126,22 +98,65 @@ export async function fetchWorkUnitOperationalBootstrapSession(
         inflightPromise = null;
     });
 
-    try {
-        const response = await inflightPromise;
-        completedOwnershipKey = ownershipKey;
-        logWuBootstrapOwner("page", {
-            ownershipKey,
-            url,
-            status: response.status,
-            ms: typeof performance !== "undefined" ? Math.round(performance.now() - t0) : null,
-            event: "bootstrap_request_end",
+    void inflightPromise
+        .then((response) => {
+            completedOwnershipKey = ownershipKey;
+            logWuBootstrapOwner(caller, {
+                ownershipKey,
+                url,
+                status: response.status,
+                ms: typeof performance !== "undefined" ? Math.round(performance.now() - t0) : null,
+                event: "bootstrap_request_end",
+            });
+        })
+        .catch(() => {
+            if (completedOwnershipKey !== ownershipKey) {
+                completedOwnershipKey = null;
+                canonicalUrlForOwnership = null;
+            }
         });
-        return { response, ownershipKey, bootstrapOwner: "page" };
-    } catch (e) {
-        completedOwnershipKey = null;
-        canonicalUrlForOwnership = null;
-        throw e;
+}
+
+/**
+ * Page mount and dept intent prefetch share one canonical inflight GET per ownership key.
+ */
+export async function fetchWorkUnitOperationalBootstrapSession(
+    params: WorkUnitBootstrapOwnership,
+    caller: "page" | "prefetch" = "page"
+): Promise<FetchWorkUnitBootstrapResult> {
+    const ownershipKey = workUnitBootstrapOwnershipKey(params);
+    const url = buildCanonicalWorkUnitOperationalBootstrapUrl(params);
+    const init = workspaceDataFetchInit() ?? {};
+
+    if (completedOwnershipKey === ownershipKey) {
+        logWuBootstrapOwner("reuse", { ownershipKey, url: canonicalUrlForOwnership ?? url, caller });
+        const response = await dedupeAdminFetchWithTtl(canonicalUrlForOwnership ?? url, init, BOOTSTRAP_TTL_MS);
+        return { response, ownershipKey, bootstrapOwner: caller === "prefetch" ? "prefetch" : "reuse" };
     }
+
+    if (inflightOwnershipKey === ownershipKey && inflightPromise) {
+        logWuBootstrapOwner("reuse", {
+            ownershipKey,
+            url: canonicalUrlForOwnership ?? url,
+            inflight: true,
+            caller,
+        });
+        const response = await inflightPromise;
+        return { response, ownershipKey, bootstrapOwner: caller === "prefetch" ? "prefetch" : "reuse" };
+    }
+
+    startWorkUnitBootstrapInflight(ownershipKey, url, init, caller);
+
+    if (!inflightPromise) {
+        throw new Error("work_unit_bootstrap_inflight_missing");
+    }
+
+    const response = await inflightPromise;
+    return {
+        response,
+        ownershipKey,
+        bootstrapOwner: caller === "prefetch" ? "prefetch" : "page",
+    };
 }
 
 /** @deprecated Use {@link buildCanonicalWorkUnitOperationalBootstrapUrl} — query variance must not fork bootstrap. */

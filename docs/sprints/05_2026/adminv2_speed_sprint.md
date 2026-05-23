@@ -118,13 +118,106 @@ Server (Vercel / local): `[wu-bootstrap-perf]`, `[dept-bootstrap-perf]`, `[drawe
 
 ---
 
-## Changes made (Cards 1–4 cumulative)
+## Changes made (Cards 1–6 cumulative)
 
 | Card | Change |
 |------|--------|
 | 1–2 | Speed sprint trace, route fetch timing, queue summary skip, shared bootstrap cache |
 | 3 | WU defer_bundle payload omit empty bundles; drawer_primary early payload path |
 | 4 | Shared bootstrap parallel prep (WU/dept); queue-summary + drawer-primary perf logs |
+| 5 | Opportunity drawer shell compile cache (layout + field keys) |
+| 6 | Memoized `OpportunityInquirySummaryRightColumn`; fixed right-column geometry |
+| — | Micro-jank: single task skeleton, handoff slot on first paint, stable scroll gutter |
+
+## Card 5 — Prefetch / cache (this pass)
+
+| Target | Status | Invalidation |
+|--------|--------|--------------|
+| `prefetchOpportunityDrawerOnRowIntent` (bootstrap + `drawer_primary` + full) | Existing — queue row hover / WU page | TTL on primary cache (8s); coordinator dedupes open |
+| `drawer_primary` in-flight map | Existing | Per-opportunity promise; evicted after TTL |
+| Shared queue bootstrap (45s org TTL) | Card 2 | Org-scoped TTL in `QueueService` |
+| **Opportunity drawer shell compile cache** | **Added** | Key = `layout_version` + sorted visible field keys; `clearOpportunityDrawerShellCompileCache()` for layout saves / tests |
+
+No new child-owned prefetch owners. Intent prefetch unchanged; shell compile avoids repeat section derivation on reopen with same layout + registry.
+
+## Card 6 — Hydration / render cost (this pass)
+
+| Area | Change |
+|------|--------|
+| `OpportunityInquirySummaryRightColumn` | `React.memo` with slot-state equality (tasks/reminders/handoff only) |
+| Right column geometry | Single-row task skeleton; shared `opportunityInquiryRightColumnGeometry` constants |
+| `OpportunityOperationalCompactStrip` | Atomic path: fixed handoff slot on first paint; attention banner suppressed above-fold to avoid vertical push |
+| Admin drawer scroll | `[scrollbar-gutter:stable]` on `data-adminv2-record-modal-scroll` (V2) |
+
+## Micro-jank fix — inquiry summary right column (Part A)
+
+**Root cause (Chen drawer):**
+
+1. **Tasks** — two `TaskRowSkeleton` rows (~3.5rem) collapsed to one chip row (`1.75rem`) on settle.
+2. **Reminders** — empty state used a shorter `<p>` than skeleton chip row; outer `min-h` did not lock body row.
+3. **BOS handoff** — card mounted only when `globalAssistant` context was ready (late mount / height jump).
+4. **Shell min-heights** — parent `min-h-[8rem]` vs column `min-h-[10rem]` mismatch.
+5. **Scheduled-send attention banner** — appeared after fetch in atomic column and pushed reminders/children down.
+6. **Scrollbar** — optional horizontal shift when scroll gutter appeared (V2 drawer body).
+
+**Fix:**
+
+- `web/lib/admin/drawer/opportunityInquiryRightColumnGeometry.ts` — fixed `h-[1.75rem]` task/reminder bodies, `h-[7.25rem]` handoff slot, `min-h-[16rem]` column root; parent shell `min-h-[16rem]`.
+- One task skeleton row; empty tasks/reminders use `INQUIRY_RIGHT_COLUMN_EMPTY_ROW_CLASS` (chip-row height).
+- Handoff renders in fixed slot on `drawer_primary` with disabled button until assistant context binds.
+- Attention banner skipped in atomic right column (chips still show urgency).
+- V2 drawer scroll: `scrollbar-gutter: stable`.
+
+## Work-unit critical path isolation
+
+Capture locally: hard refresh `/work-unit` → DevTools `reportWorkUnitCriticalPathLanes()` or filter `[perf.wu.critical_path]`. Aggregate via `reportAdminV2SpeedSprint()` (`work_unit_lanes`).
+
+| Lane | Placeholder visible ms | Real data ms | Data source | Blocking dependency | Can join bootstrap? | Can prefetch? | Fix |
+|------|------------------------|--------------|-------------|---------------------|---------------------|---------------|-----|
+| shell_chrome | _measure_ | _measure_ | `operational-bootstrap` dept+wu or page cache | URL ids | yes | partial (page cache) | Placeholder until bootstrap; identity on return |
+| header_chips | _measure_ | _measure_ | `bootstrap.queue.summaries` | shell_chrome | yes | partial | Reveal with summaries; removed oper-lane gate on picker |
+| queue_rows | _measure_ | _measure_ | `bootstrap.primary_lane` inline or queue items GET | summaries + selectedQueueKey | partial | yes | Row skeleton in-lane; authority on summary apply |
+| actions_rail | _measure_ | _measure_ | `bootstrap.right_rail_actions` (enrollment) | shell_chrome | yes | no | **Sync apply** on bootstrap (was idle-deferred) |
+| kpi_or_summary | _measure_ | _measure_ | `kpi_placements` / `loadWuKpiPlacements` | queue reveal (deferred) | partial | no | Class C — quiet KPI reserve until placements |
+
+**Bottleneck (typical):** `queue_rows` when `rows_deferred` — measure `since_origin` on `wu_lane_queue_rows_real`.
+
+**Before:** shell → oper-region spinner → header hidden → chips from def placeholders → actions idle-defer → row skeletons with Total → rows.
+
+**After:** shell placeholder → coordinated above-fold (chips + actions + row skeletons) → rows hydrate in place; KPI/footer deferred.
+
+### Atomic above-fold render model (WU)
+
+`WorkUnitAboveFoldRenderModel` — `header`, `actions_rail`, `queue_lane` slots always visible (`skeleton` | `ready`). Page + `WorkUnitWorkspace` render from one model (drawer-style); removed independent `headerQueuePicker`, `operLaneLoading` region swap, and empty Actions card → buttons reveal.
+
+Capture: `reportWorkUnitCriticalPathLanes()` after hard refresh.
+
+### Work-unit above-fold reveal gate (page-ready, then speed)
+
+**Product:** No progressive section reveal on `/work-unit`. One controlled loading surface (`WorkUnitPageLoadingGate`) until `work_unit_above_fold_ready`, then the full above-fold page (chips, actions rail, first queue rows or deliberate empty).
+
+**Gate:** `WorkUnitRevealGate` — `shell_ready`, `summaries_ready`, `actions_ready`, `rows_ready`, `above_fold_ready`, `reason_if_blocked`. Console: filter `[wu-reveal-gate]` for `gate_start`, phase marks, `reveal_wait_ms`.
+
+**Data ownership (typical path):**
+
+| Contract | Owner |
+|----------|--------|
+| Summaries + shell + primary rows + right rail | `operational-bootstrap` with `defer_bundle=false` (canonical client URL) |
+| Primary rows (legacy / defer) | Gate holds loading until client row GET settles |
+| Dept → WU intent | `prefetchWorkUnitOperationalBootstrapFromDeptHref` on dept oper console pointer/click |
+| KPI / automation footer | Still below-fold after reveal (`workUnitQueueRevealReady`) |
+
+**Next:** Apply the same reveal-gate pattern to `/dept` (department above-fold ready before oper console reveal).
+
+---
+
+## Work-unit queue lane placeholder cleanup
+
+**Root cause:** `WorkUnitQueueCompactRowSkeleton` reused dept paired-oper bucket tile markup (`adminv2-ws-paired-oper-queue-meta`) with hardcoded **Total** label — shown in the work-unit queue lane while `primaryQueue.rowsLoading` was true. In parallel, `KpiStripSkeleton` could pulse during the same phase (metric-card appearance above the lane).
+
+**Fix:** `WorkUnitQueueLaneRowSkeleton` — CRM split-row geometry matching final `QueueBlock` cards; no Total copy; 5 rows max. `WorkUnitOperationalLaneLoader` and `QueueBlock` both use lane row skeletons. KPI zone uses quiet reserve while oper lane or queue rows are loading (`kpiUseQuietReserve`).
+
+---
 
 ## Remaining bottlenecks
 
@@ -133,6 +226,7 @@ Server (Vercel / local): `[wu-bootstrap-perf]`, `[dept-bootstrap-perf]`, `[drawe
 3. **Workspace growth rollup** — background per-dept refinement.
 4. **Dept KPI bundle** in bootstrap — candidate for defer flag (same pattern as WU).
 5. DB indexes on needs-attention — after local `[wu-bootstrap-perf]` attention_query_ms capture.
+6. **Local verify** — hard refresh → Chen drawer: confirm zero post-paint movement (operator).
 
 ## Acceptance checklist
 
@@ -142,7 +236,11 @@ Server (Vercel / local): `[wu-bootstrap-perf]`, `[dept-bootstrap-perf]`, `[drawe
 - [x] Duplicate fetch map updated
 - [x] Shell doctrine unchanged
 - [x] Tests for Cards 3–4 wiring
+- [x] Micro-jank geometry + structure tests
+- [x] Card 5 shell compile cache + documented invalidation
+- [x] Card 6 memo + render blast-radius reduction (right column)
 - [ ] Local before/after payload bytes in audit table (operator)
+- [ ] Local Chen drawer movement check (operator)
 
 ## Suggested commit message
 

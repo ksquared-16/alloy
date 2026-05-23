@@ -356,7 +356,7 @@ export default function Drawer({
             </div>
             <div
                 data-adminv2-record-modal-scroll
-                className={`flex-1 overflow-y-auto min-h-0 ${isModal ? (cleaningRecordModalTone ? "px-4 py-2.5 sm:px-5 sm:py-3.5" : "px-4 py-3 sm:px-5 sm:py-4") : "p-6"} ${isV2 ? "" : "bg-admin-surface-card"}`}
+                className={`flex-1 overflow-y-auto min-h-0 ${isModal ? (cleaningRecordModalTone ? "px-4 py-2.5 sm:px-5 sm:py-3.5" : "px-4 py-3 sm:px-5 sm:py-4") : "p-6"} ${isV2 ? "[scrollbar-gutter:stable]" : "bg-admin-surface-card"}`}
                 style={modalBodyBg}
             >
                 {children}

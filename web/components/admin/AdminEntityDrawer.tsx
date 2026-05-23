@@ -12505,7 +12505,7 @@ export default function AdminEntityDrawer() {
                                                                 {showInquirySummaryRightColumn ? (
                                                                 <div
                                                                     ref={inquirySummaryRightRef}
-                                                                    className={`${oppInqInnerCard} flex min-w-0 flex-col min-h-[8rem]`}
+                                                                    className={`${oppInqInnerCard} flex min-w-0 flex-col min-h-[16rem]`}
                                                                     data-shell-slot="inquiry_summary_right"
                                                                 >
                                                                     {drawer.id &&

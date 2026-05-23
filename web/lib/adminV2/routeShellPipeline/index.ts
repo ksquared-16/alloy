@@ -23,6 +23,12 @@ export {
 } from "@/lib/adminV2/routeShellPipeline/routeShellTrace";
 
 export {
+    buildWorkUnitAboveFoldPlaceholder,
+    buildWorkUnitAboveFoldRenderModel,
     buildWorkUnitRoutePipelineState,
     buildWorkUnitRouteShellPlaceholder,
+    workUnitAboveFoldAtomicPaintReady,
+    workUnitAboveFoldQueueRowsLoading,
+    workUnitAboveFoldStructureKeys,
 } from "@/lib/adminV2/routeShellPipeline/adapters/workUnit";
+export type { WorkUnitAboveFoldRenderModel } from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/aboveFoldTypes";

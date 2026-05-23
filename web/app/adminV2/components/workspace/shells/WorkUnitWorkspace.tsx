@@ -5,52 +5,46 @@ import type { WorkUnitWorkspaceModel } from "@/lib/ui-v2/workspace-types";
 import { operationalWorkspaceShellStyle } from "@/lib/visualContext";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
 import type { OpportunityDrawerIntentContext } from "@/lib/admin/opportunityDrawerIntentPrefetch";
-import { SignalBlock, KPIBlock, QueueBlock, WorkBlock, ActionsBlock } from "../blocks";
-import { WorkspaceShellLayout } from "@/components/admin/workspace/WorkspaceShellLayout";
-import { WorkspaceActionsRailPlaceholder } from "@/components/admin/workspace/WorkspaceActionsRailPlaceholder";
-import { KpiStripSkeleton } from "@/components/admin/workspace/KpiStripSkeleton";
+import type {
+    WorkUnitAboveFoldRenderModel,
+} from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/aboveFoldTypes";
+import { workUnitAboveFoldQueueRowsLoading } from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/aboveFoldTypes";
 import {
-    WorkUnitOperationalLaneLoader,
-    WorkspaceQuietKpiReserve,
-} from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
+    WorkUnitAboveFoldHeaderChips,
+    type WorkUnitAboveFoldHeaderHandlers,
+} from "@/app/adminV2/components/workspace/WorkUnitAboveFoldHeaderChips";
+import { WorkUnitAboveFoldActionsRail } from "@/app/adminV2/components/workspace/WorkUnitAboveFoldActionsRail";
+import { SignalBlock, KPIBlock, QueueBlock, WorkBlock } from "../blocks";
+import { WorkspaceShellLayout } from "@/components/admin/workspace/WorkspaceShellLayout";
+import { KpiStripSkeleton } from "@/components/admin/workspace/KpiStripSkeleton";
+import { WorkspaceQuietKpiReserve } from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
 
 type Props = {
   model: WorkUnitWorkspaceModel;
+  aboveFold: WorkUnitAboveFoldRenderModel;
+  aboveFoldHandlers: WorkUnitAboveFoldHeaderHandlers;
   onAction: WorkspaceActionHandler;
-  /** Compact queue pills in the control-deck header (below lane headline). Body starts with queue rows only. */
-  headerQueuePicker?: ReactNode;
-  /**
-   * When true, show the KPI strip skeleton while placement rows are still loading (work unit page).
-   * Pass false when KPIs are not loaded asynchronously.
-   */
+  /** Shown under chips when header slot is ready (lifecycle coverage). */
+  lifecyclePanel?: ReactNode;
+  otherPillSectionKey?: string | null;
   kpiStripPlaceholder: boolean;
-  /** When placements are known, match skeleton cell count to final strip width. */
   kpiStripSkeletonCellCount?: number;
-  /**
-   * Keep the command column at its final desktop width while registry right-rail actions resolve
-   * (enrollment work units — avoids primary column reflow when actions arrive).
-   */
-  reserveActionsRail?: boolean;
-  /** Oper lane authority not ready — quiet reserve + spinner instead of queue row skeleton churn. */
-  operLaneLoading?: boolean;
-  /** Optional footer content constrained to the primary column width. */
   primaryFooterSlot?: ReactNode;
-  /** Lane scope for opportunity drawer intent prefetch (bootstrap URL must match open). */
   opportunityDrawerWorkspaceContext?: OpportunityDrawerIntentContext | null;
 };
 
 /**
- * Work unit — same shell grammar as Department (control deck, KPI strip, split grid, workflows strip, command rail).
- * Main surface is a structured queue of drillable records (not department rollups). No inline AI form — shell bar only.
+ * Work unit — atomic above-fold render model (header chips, actions rail, queue lane).
  */
 export default function WorkUnitWorkspace({
   model,
+  aboveFold,
+  aboveFoldHandlers,
   onAction,
-  headerQueuePicker,
+  lifecyclePanel = null,
+  otherPillSectionKey = null,
   kpiStripPlaceholder,
   kpiStripSkeletonCellCount,
-  reserveActionsRail = false,
-  operLaneLoading = false,
   primaryFooterSlot,
   opportunityDrawerWorkspaceContext = null,
 }: Props) {
@@ -75,22 +69,26 @@ export default function WorkUnitWorkspace({
   const hasAwareness = Boolean(awarenessLine);
   const hasSignals = model.signals.length > 0;
   const hasKpis = model.kpis.length > 0;
-  const hasTopStack = hasBrief || hasSignals || hasAwareness || Boolean(headerQueuePicker);
+  const hasHeaderSlot = aboveFold.header.visible;
+  const hasTopStack = hasBrief || hasSignals || hasAwareness || hasHeaderSlot;
   const hasKpiZone = hasKpis || kpiStripPlaceholder;
   const hasControlDeck = hasTopStack || hasKpiZone;
+  const kpiUseQuietReserve =
+    kpiStripPlaceholder && workUnitAboveFoldQueueRowsLoading(aboveFold);
   const focusKicker = model.focusLabel?.trim() || "Work unit";
 
   const li = model.laneInterpretation;
   const statusLine = li?.laneStatusLine?.trim() ?? "";
   const recLine = li?.recommendedActionLine?.trim() ?? "";
   const hasLaneStrip = Boolean(statusLine || recLine);
-  const hasConfiguredActions =
-    (model.actionsRail.primaries?.length ?? 0) > 0 ||
-    (model.actionsRail.systemActions?.length ?? 0) > 0 ||
-    (model.actionsRail.quickOperations?.length ?? 0) > 0 ||
-    (model.actionsRail.overflow?.length ?? 0) > 0;
 
-  const showRailColumn = reserveActionsRail || hasConfiguredActions;
+  const primaryQueue = useMemo(
+    () => ({
+      ...model.primaryQueue,
+      rowsLoading: workUnitAboveFoldQueueRowsLoading(aboveFold),
+    }),
+    [model.primaryQueue, aboveFold]
+  );
 
   return (
     <WorkspaceShellLayout
@@ -98,15 +96,9 @@ export default function WorkUnitWorkspace({
       rootClassName="adminv2-ws-work-unit adminv2-ws-wu-v2"
       style={wuShellStyle}
       railAriaLabel="Decisions and actions"
-      showRail={showRailColumn}
+      showRail={aboveFold.actions_rail.visible}
       railContent={
-        hasConfiguredActions ? (
-          <div className="adminv2-ws-soft-content-reveal">
-            <ActionsBlock model={model.actionsRail} onAction={onAction} title="Actions" surface="work_unit" />
-          </div>
-        ) : reserveActionsRail ? (
-          <WorkspaceActionsRailPlaceholder />
-        ) : null
+        <WorkUnitAboveFoldActionsRail slot={aboveFold.actions_rail} onAction={onAction} />
       }
       primaryColumn={
         <>
@@ -139,13 +131,27 @@ export default function WorkUnitWorkspace({
                           </button>
                         ) : null}
                       </div>
-                      {headerQueuePicker ? (
-                        <div className="adminv2-ws-wu-header-queue-picker mt-2 min-w-0">{headerQueuePicker}</div>
+                      {hasHeaderSlot ? (
+                        <div className="adminv2-ws-wu-header-queue-picker mt-2 min-w-0">
+                          <WorkUnitAboveFoldHeaderChips
+                            slot={aboveFold.header}
+                            handlers={aboveFoldHandlers}
+                            otherPillSectionKey={otherPillSectionKey}
+                            lifecyclePanel={lifecyclePanel}
+                          />
+                        </div>
                       ) : null}
                     </div>
                   ) : null}
-                  {!hasBrief && headerQueuePicker ? (
-                    <div className="adminv2-ws-wu-header-queue-picker mt-1 min-w-0 px-1">{headerQueuePicker}</div>
+                  {!hasBrief && hasHeaderSlot ? (
+                    <div className="adminv2-ws-wu-header-queue-picker mt-1 min-w-0 px-1">
+                      <WorkUnitAboveFoldHeaderChips
+                        slot={aboveFold.header}
+                        handlers={aboveFoldHandlers}
+                        otherPillSectionKey={otherPillSectionKey}
+                        lifecyclePanel={lifecyclePanel}
+                      />
+                    </div>
                   ) : null}
                   {hasAwareness ? (
                     <p className="adminv2-ws-dept-v2-ai-awareness" aria-live="polite">
@@ -161,7 +167,7 @@ export default function WorkUnitWorkspace({
               ) : null}
               {kpiStripPlaceholder ? (
                 <div data-workspace-zone="kpi-banner">
-                  {operLaneLoading ? (
+                  {kpiUseQuietReserve ? (
                     <WorkspaceQuietKpiReserve id="wu-kpi-quiet-reserve" />
                   ) : (
                     <KpiStripSkeleton id="wu-kpi-skeleton" cellCount={kpiStripSkeletonCellCount} />
@@ -174,10 +180,13 @@ export default function WorkUnitWorkspace({
               ) : null}
             </div>
           ) : null}
-          {operLaneLoading ? (
-            <WorkUnitOperationalLaneLoader laneLabel={model.primaryQueue.laneQueueLabel?.trim() || "Queue"} />
-          ) : (
-            <div className="adminv2-ws-dept-v2-operational-row adminv2-ws-dept-v2-operational-row--double" aria-label="Lane queue">
+          {aboveFold.queue_lane.visible ? (
+            <div
+              className="adminv2-ws-dept-v2-operational-row adminv2-ws-dept-v2-operational-row--double"
+              aria-label="Lane queue"
+              data-wu-above-fold-slot="queue_lane"
+              data-wu-above-fold-state={aboveFold.queue_lane.state}
+            >
               <div
                 className="adminv2-ws-dept-v2-lane adminv2-ws-dept-v2-lane--throughput"
                 data-ws-lane-kind="lane_queue"
@@ -201,7 +210,7 @@ export default function WorkUnitWorkspace({
                     </div>
                   ) : null}
                   <QueueBlock
-                    queue={model.primaryQueue}
+                    queue={primaryQueue}
                     onAction={onAction}
                     variant="primary"
                     surface="work_unit"
@@ -214,7 +223,7 @@ export default function WorkUnitWorkspace({
                 aria-hidden
               />
             </div>
-          )}
+          ) : null}
           {model.workSummary ? (
             <div className="adminv2-ws-dept-v2-workflows-strip">
               <WorkBlock work={model.workSummary} onAction={onAction} mode="summary" surface="work_unit" />

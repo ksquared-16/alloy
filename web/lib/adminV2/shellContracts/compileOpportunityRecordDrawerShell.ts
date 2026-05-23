@@ -12,6 +12,10 @@ import {
     type RecordLayoutConfigJson,
 } from "@/lib/recordChrome/types";
 import { OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP } from "@/lib/adminV2/shellContracts/opportunityInquiryWorkflowTabs";
+import {
+    getCachedOpportunityDrawerShell,
+    setCachedOpportunityDrawerShell,
+} from "@/lib/adminV2/shellContracts/opportunityDrawerShellCompileCache";
 import type { RecordDrawerShellContract, ShellSectionLifecycle, ShellSectionSlot } from "@/lib/adminV2/shellContracts/types";
 
 export function opportunityDrawerLayoutVersion(cfg: RecordLayoutConfigJson | null | undefined): string {
@@ -88,6 +92,9 @@ export function compileOpportunityRecordDrawerShell(
     const cfg = input.config_json;
     if (!cfg) return null;
 
+    const cached = getCachedOpportunityDrawerShell(input);
+    if (cached) return cached;
+
     const workflowV1 = cfg.inquiry_drawer_mode === "workflow_v1";
     let overview_sections = postFilterOpportunityDrawerSections(
         computeOpportunityOverviewSectionsLikeDrawer(cfg, input.field_definitions, input.field_section_labels, {
@@ -118,7 +125,7 @@ export function compileOpportunityRecordDrawerShell(
 
     const inquiry_drawer_mode = workflowV1 ? "workflow_v1" : "classic";
 
-    return {
+    const shell: RecordDrawerShellContract = {
         entity_type: "opportunity",
         inquiry_drawer_mode,
         layout_version: opportunityDrawerLayoutVersion(cfg),
@@ -139,6 +146,8 @@ export function compileOpportunityRecordDrawerShell(
             overview_hidden_sections: cfg.overview_hidden_sections,
         },
     };
+    setCachedOpportunityDrawerShell(input, shell);
+    return shell;
 }
 
 export function fieldSectionLabelsFromEntity(entity: Record<string, unknown>): Record<string, string> {

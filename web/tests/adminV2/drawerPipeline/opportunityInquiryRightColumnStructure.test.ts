@@ -123,7 +123,28 @@ describe("inquiry summary right_column atomic structure", () => {
         );
         expect(strip).toContain("data-right-column-slot=\"reminders\"");
         expect(strip).toContain("ReminderRowSkeleton");
-        expect(strip).toContain("showHandoffCard");
         expect(strip).toContain("rightColumnModel");
+        expect(strip).toContain("INQUIRY_RIGHT_COLUMN_HANDOFF_SLOT_CLASS");
+        expect(strip).toContain("data-right-column-slot=\"orchestrator_handoff\"");
+    });
+
+    it("geometry module reserves fixed slot heights shared by skeleton and settled UI", () => {
+        const geometry = readFileSync(
+            join(webRoot, "lib/admin/drawer/opportunityInquiryRightColumnGeometry.ts"),
+            "utf8"
+        );
+        expect(geometry).toContain("INQUIRY_RIGHT_COLUMN_TASKS_BODY_CLASS");
+        expect(geometry).toContain("h-[1.75rem]");
+        expect(geometry).toContain("INQUIRY_RIGHT_COLUMN_HANDOFF_SLOT_CLASS");
+        expect(geometry).toContain("h-[7.25rem]");
+        expect(geometry).toContain("INQUIRY_SUMMARY_RIGHT_COLUMN_ROOT_CLASS");
+        expect(geometry).toContain("min-h-[16rem]");
+
+        const rightCol = readFileSync(
+            join(webRoot, "components/admin/opportunity/OpportunityInquirySummaryRightColumn.tsx"),
+            "utf8"
+        );
+        expect(rightCol).toContain("INQUIRY_SUMMARY_RIGHT_COLUMN_ROOT_CLASS");
+        expect((rightCol.match(/<TaskRowSkeleton \/>/g) ?? []).length).toBe(1);
     });
 });

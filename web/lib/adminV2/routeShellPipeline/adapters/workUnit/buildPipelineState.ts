@@ -1,4 +1,6 @@
 import type { RoutePipelineState } from "@/lib/adminV2/routeShellPipeline/types";
+import type { WorkUnitAboveFoldRenderModel } from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/aboveFoldTypes";
+import { workUnitAboveFoldAtomicPaintReady } from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/aboveFoldTypes";
 
 export type BuildWorkUnitRoutePipelineInput = {
     department_id: string;
@@ -8,12 +10,13 @@ export type BuildWorkUnitRoutePipelineInput = {
     department_key?: string;
     /** Page `loading` blocks shell identity. */
     shell_identity_ready: boolean;
-    /** Lane authority + rows not yet settled. */
+    /** Route shell identity not ready (WU+dept). Queue rows hydrate in-lane after shell. */
     oper_lane_loading: boolean;
     kpi_placeholder: boolean;
     primary_loaded: boolean;
     full_complete: boolean;
     workspace_base_path?: string;
+    work_unit_above_fold: WorkUnitAboveFoldRenderModel;
 };
 
 const WORKSPACE_BASE = "/adminV2/workspace";
@@ -24,6 +27,7 @@ export function buildWorkUnitRoutePipelineState(input: BuildWorkUnitRoutePipelin
 
     const shell_identity_ready = input.shell_identity_ready;
     const oper_lane_loading = input.oper_lane_loading || !shell_identity_ready;
+    const above_fold_coordinated = workUnitAboveFoldAtomicPaintReady(input.work_unit_above_fold);
 
     return {
         shell: {
@@ -64,10 +68,10 @@ export function buildWorkUnitRoutePipelineState(input: BuildWorkUnitRoutePipelin
             },
         },
         above_fold: {
-            header_ready: shell_identity_ready,
+            header_ready: above_fold_coordinated || shell_identity_ready,
             queue_lane: {
                 reserved: true,
-                value_phase: oper_lane_loading ? "skeleton" : "value",
+                value_phase: input.work_unit_above_fold.queue_lane.state === "ready" ? "value" : "skeleton",
                 oper_lane_loading,
             },
             kpi_strip: {
@@ -88,5 +92,6 @@ export function buildWorkUnitRoutePipelineState(input: BuildWorkUnitRoutePipelin
                 },
             ],
         },
+        work_unit_above_fold: input.work_unit_above_fold,
     };
 }

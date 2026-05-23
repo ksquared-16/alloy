@@ -28,6 +28,8 @@ import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import {
+    buildWorkUnitAboveFoldPlaceholder,
+    buildWorkUnitAboveFoldRenderModel,
     buildWorkUnitRoutePipelineState,
     buildWorkUnitRouteShellPlaceholder,
     incrementRoutePostShellFetch,
@@ -41,6 +43,20 @@ import {
     unregisterRouteLoadingOwner,
 } from "@/lib/adminV2/routeShellPipeline";
 import { recordBootstrapPayloadBytes } from "@/lib/perf/adminV2SpeedSprintTrace";
+import {
+    markWorkUnitAboveFoldCoordinated,
+    markWorkUnitLaneActionsRailPlaceholder,
+    markWorkUnitLaneActionsRailReal,
+    markWorkUnitLaneHeaderChipsPlaceholder,
+    markWorkUnitLaneHeaderChipsReal,
+    markWorkUnitLaneKpiPlaceholder,
+    markWorkUnitLaneKpiReal,
+    markWorkUnitLaneQueueRowsPlaceholder,
+    markWorkUnitLaneQueueRowsReal,
+    markWorkUnitLaneShellChromePlaceholder,
+    markWorkUnitLaneShellChromeReal,
+    resetWorkUnitCriticalPathTrace,
+} from "@/lib/perf/workUnitCriticalPathTrace";
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import {
@@ -91,6 +107,17 @@ import {
     clearWorkUnitBootstrapSessionForEntity,
     fetchWorkUnitOperationalBootstrapSession,
 } from "@/lib/adminV2/workUnitBootstrapClientSession";
+import {
+    computeWorkUnitRevealGate,
+    markWorkUnitRevealGatePhases,
+    markWorkUnitRevealGateStart,
+    resetWorkUnitRevealGatePerf,
+    workUnitRevealActionsReady,
+    workUnitRevealRowsReady,
+    workUnitRevealShellReady,
+    workUnitRevealSummariesReady,
+} from "@/lib/adminV2/workUnitRevealGate";
+import { WorkUnitPageLoadingGate } from "@/app/adminV2/components/workspace/WorkUnitPageLoadingGate";
 import { logAdminV2LegacyFanOut } from "@/lib/adminV2/runtime/adminV2LegacyFanOutDiagnostics";
 import { alloyPerfGet, alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import type { NeedsAttentionBucketWithCount } from "@/lib/opportunities/needsAttentionBuckets";
@@ -399,6 +426,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [opportunityQueueRowActions, setOpportunityQueueRowActions] = useState<QueueItemQuickActionVm[] | null>(null);
     const [opportunityQueueRowResolved, setOpportunityQueueRowResolved] = useState<ResolvedActionForClient[] | null>(null);
     const [enrollmentRightRailResolved, setEnrollmentRightRailResolved] = useState<ResolvedActionForClient[] | null>(null);
+    const [enrollmentActionsSettled, setEnrollmentActionsSettled] = useState(false);
     const [actionFeedback, setActionFeedback] = useState<string | null>(null);
     const [actionSurfaceError, setActionSurfaceError] = useState<string | null>(null);
 
@@ -451,6 +479,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const suppressQueueFetchEffectOnceRef = useRef(false);
     const bootstrapPrimaryRowKeyRef = useRef<string | null>(null);
     const bootstrapPrimaryRowFetchScheduledRef = useRef(false);
+    const parallelPrimaryRowStartedRef = useRef(false);
     /** False until bootstrap has scheduled the single primary row fetch for this navigation. */
     const [wuQueueLaneAuthorityReady, setWuQueueLaneAuthorityReady] = useState(false);
     /** Work unit id that owns `queueRowsBufferRef` — prevents stale buffer reveal (PERF-C-01). */
@@ -671,6 +700,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
     useLayoutEffect(() => {
         if (!departmentId || !workUnitId) return;
 
+        resetWorkUnitCriticalPathTrace();
+        resetWorkUnitRevealGatePerf();
+        setEnrollmentActionsSettled(false);
+        parallelPrimaryRowStartedRef.current = false;
         setWuQueueLaneAuthorityReady(false);
         bootstrapPrimaryRowKeyRef.current = null;
         bootstrapPrimaryRowFetchScheduledRef.current = false;
@@ -735,6 +768,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         resetRouteShellTrace("work_unit");
         registerRouteLoadingOwner("work_unit", "page");
         markRouteShellVisible("work_unit", { departmentId, workUnitId });
+        markWorkUnitLaneShellChromePlaceholder();
         return () => unregisterRouteLoadingOwner("work_unit", "page");
     }, [departmentId, workUnitId]);
 
@@ -1462,11 +1496,38 @@ export default function AdminV2OpportunityWorkUnitPage() {
             setOpportunityQueueRowActions(null);
             setOpportunityQueueRowResolved(null);
             setEnrollmentRightRailResolved(null);
+            setEnrollmentActionsSettled(false);
             setWuPlacementRows(undefined);
             setWuScopeHasPlacements(false);
             setWuBootstrapAttentionBuckets(null);
+            parallelPrimaryRowStartedRef.current = false;
+            markWorkUnitRevealGateStart({ departmentId, workUnitId });
 
         const qFromUrlEffective = initialLocationRef.current.queue.trim();
+
+            const startParallelPrimaryRowFetchFromCache = () => {
+                if (cancelled || parallelPrimaryRowStartedRef.current || userLaneTouchedRef.current) return;
+                if (!orgId || !departmentId || !workUnitId) return;
+                const hit = readWorkUnitPageCache(
+                    orgId,
+                    departmentId,
+                    workUnitId,
+                    principalUserId,
+                    accessScopeFingerprint
+                );
+                const cachedWu = hit?.workUnit;
+                if (!cachedWu || cachedWu.id !== workUnitId) return;
+                const primaryKey = resolveBootstrapPrimaryQueueKey(
+                    cachedWu as WorkUnitRow,
+                    null,
+                    qFromUrlEffective
+                );
+                if (!primaryKey) return;
+                parallelPrimaryRowStartedRef.current = true;
+                setQueueItemsLoading(true);
+                void fetchQueueItemsRef.current(workUnitId, primaryKey, null);
+            };
+            startParallelPrimaryRowFetchFromCache();
 
             const runBootstrapPrimaryRowFetch = (wu: WorkUnitRow, summaries: QueueSummary[] | null) => {
                 if (cancelled || bootstrapPrimaryRowFetchScheduledRef.current) return;
@@ -1585,6 +1646,35 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         setQueueSummaries(qs);
                         setQueueSummariesError(null);
                         setQueueSummariesRoute(buildWorkUnitQueuesListRoute(workUnitId, selectedSiteId));
+                        setWuQueueLaneAuthorityReady(true);
+
+                        if (isEnrollmentLikeDepartmentKey(deptRow.key)) {
+                            if (Array.isArray(b.right_rail_actions)) {
+                                setEnrollmentRightRailResolved(b.right_rail_actions);
+                                setEnrollmentActionsSettled(true);
+                            } else {
+                                void fetchWorkspaceRightRailResolvedActions({
+                                    departmentId,
+                                    workUnitId,
+                                    fetchInit: init,
+                                })
+                                    .then((list) => {
+                                        if (!cancelled) {
+                                            setEnrollmentRightRailResolved(
+                                                Array.isArray(list) ? list : []
+                                            );
+                                        }
+                                    })
+                                    .catch(() => {
+                                        /* rail optional — empty rail is a deliberate settled state */
+                                    })
+                                    .finally(() => {
+                                        if (!cancelled) setEnrollmentActionsSettled(true);
+                                    });
+                            }
+                        } else {
+                            setEnrollmentActionsSettled(true);
+                        }
 
                         if (b.queue?.attention?.execution_work_unit_id) {
                             const buckets = b.queue.attention.needs_attention_buckets ?? [];
@@ -1667,14 +1757,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                         });
                                     });
                                 }
-                                setWuQueueLaneAuthorityReady(true);
                             } else if (primaryRowsDeferred) {
                                 setQueueItemsRoute(pl.route);
                                 setQueueItemsLoading(true);
                                 suppressQueueFetchEffectOnceRef.current = true;
                             }
-                        } else {
-                            setWuQueueLaneAuthorityReady(true);
                         }
 
                         if (!cancelled) {
@@ -1698,21 +1785,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             !userLaneTouchedRef.current
                         ) {
                             runBootstrapPrimaryRowFetch(wu, qs);
-                        } else if (
-                            !cancelled &&
-                            !primaryLaneHydratedInline &&
-                            !primaryRowsDeferred &&
-                            pl?.queue_key &&
-                            !userLaneTouchedRef.current
-                        ) {
-                            setWuQueueLaneAuthorityReady(true);
                         }
 
                         if (!cancelled) {
                             scheduleAdminV2BackgroundWork(() => {
-                                if (Array.isArray(b.right_rail_actions) && b.right_rail_actions.length) {
-                                    setEnrollmentRightRailResolved(b.right_rail_actions);
-                                }
                                 if (b.kpi_placements) {
                                     setWuPlacementRows(b.kpi_placements.items ?? []);
                                     setWuScopeHasPlacements(b.kpi_placements.scope_has_placements === true);
@@ -1811,6 +1887,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     setWorkUnit(wu);
                     setDept(deptRow);
                     setEnrollmentRightRailResolved(Array.isArray(rightRailList) ? rightRailList : []);
+                    setEnrollmentActionsSettled(true);
                     if (orgId) {
                         writeWorkUnitPageCache(orgId, principalUserId, accessScopeFingerprint, {
                             departmentId,
@@ -1893,6 +1970,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             setQueueSummaries(qs);
                             setQueueSummariesError(null);
                             setQueueSummariesRoute(route);
+                            setWuQueueLaneAuthorityReady(true);
                             if (typeof window !== "undefined") {
                                 console.warn("[pipeline-count-unify]", {
                                     source: "work-unit",
@@ -2085,115 +2163,20 @@ export default function AdminV2OpportunityWorkUnitPage() {
         queueSummaries,
     ]);
 
-    const queuePicker = useMemo(() => {
-        if (!workUnitId) return null;
-
-        const summariesPending = queueSummaries === null && !queueSummariesError;
-        const placeholdersForPicker = queueTabPlaceholdersExpanded ?? queueTabPlaceholders;
-        if (summariesPending && placeholdersForPicker?.length) {
-            const pillBase =
-                "inline-flex shrink-0 items-start gap-1.5 rounded-full border px-2 py-0.5 text-left text-[11px] font-semibold leading-snug transition-colors";
-            const countBadgePending = (
-                <span
-                    className="inline-block h-3 w-5 shrink-0 rounded skeleton-pulse bg-alloy-stone/14"
-                    aria-hidden
-                />
-            );
-            const multiSectionPh = placeholdersForPicker.length > 1;
-            return (
-                <div className="flex flex-col gap-1.5 min-w-0">
-                    <div className="flex flex-col gap-1">
-                        {placeholdersForPicker.map((section) => (
-                            <div key={section.key} className="flex min-w-0 flex-col gap-1">
-                                {multiSectionPh ? (
-                                    <span className="w-full text-[10px] font-semibold tracking-wide text-alloy-forge/50 sm:w-auto sm:mr-1">
-                                        {section.label}
-                                    </span>
-                                ) : null}
-                                <div className="adminv2-ws-queue-pill-scroll" role="group" aria-label={section.label}>
-                                    {section.queues.map((q) => {
-                                        const synth = q.key.startsWith(ATTENTION_BUCKET_PILL_PREFIX);
-                                        const selected = synth
-                                            ? selectedQueueKey === "needs_attention" &&
-                                              (() => {
-                                                  const raw = q.key.slice(ATTENTION_BUCKET_PILL_PREFIX.length);
-                                                  if (raw === "__all__") return !attentionBucketKey;
-                                                  return attentionBucketKey === raw;
-                                              })()
-                                            : q.key === selectedQueueKey &&
-                                              (!laneUnmappedOnly || allRecordsQueueKey == null || q.key !== allRecordsQueueKey);
-                                        const tier =
-                                            q.priority === "critical"
-                                                ? "critical"
-                                                : q.priority === "attention"
-                                                  ? "attention"
-                                                  : "standard";
-                                        const ring =
-                                            tier === "critical"
-                                                ? selected
-                                                    ? "border-alloy-ember bg-alloy-ember/12 text-alloy-forge"
-                                                    : "border-alloy-ember/35 bg-white/60 text-alloy-forge/85"
-                                                : tier === "attention"
-                                                  ? selected
-                                                      ? "border-alloy-honey bg-alloy-honey/12 text-alloy-forge"
-                                                      : "border-alloy-honey/40 bg-white/60 text-alloy-forge/85"
-                                                  : selected
-                                                    ? "border-alloy-blue bg-alloy-blue/[0.07] text-alloy-forge shadow-[inset_0_0_0_1px_rgba(0,69,140,0.12)]"
-                                                    : "border-admin-border bg-white/70 text-alloy-forge/80";
-                                        return (
-                                            <button
-                                                key={q.key}
-                                                type="button"
-                                                onClick={() => {
-                                                    if (synth) {
-                                                        const raw = q.key.slice(ATTENTION_BUCKET_PILL_PREFIX.length);
-                                                        handleAttentionBucketSelect(raw === "__all__" ? null : raw);
-                                                        return;
-                                                    }
-                                                    handleQueueTabChange(q.key);
-                                                }}
-                                                className={`${pillBase} ${ring}`}
-                                                aria-pressed={selected}
-                                            >
-                                                <span className="text-left">{q.label}</span>
-                                                {countBadgePending}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            );
-        }
-
-        if (!queueSummaries) {
-            if (!queueSummariesError) return null;
-            return (
-                <div className="rounded-md border border-admin-border bg-admin-surface-card px-3 py-2 text-sm text-alloy-ember">
-                    {queueSummariesError}
-                    {queueSummariesRoute ? (
-                        <div className="mt-1 text-xs text-alloy-ember/80">Route: {queueSummariesRoute}</div>
-                    ) : null}
-                </div>
-            );
-        }
-        if (queueSummaries.length === 0) {
-            return (
-                <div className="rounded-md border border-admin-border bg-admin-surface-card px-3 py-2 text-sm text-alloy-forge/70">
-                    No queues configured for this work unit.
-                    {queueSummariesRoute ? (
-                        <div className="mt-1 text-xs text-alloy-forge/50">Route: {queueSummariesRoute}</div>
-                    ) : null}
-                </div>
-            );
+    /** Chip count context for atomic above-fold model (was inline queuePicker). */
+    const workUnitChipBadgeContext = useMemo(() => {
+        if (!queueSummaries?.length) {
+            return { authoritative_badge_for_selected_tab: undefined as number | undefined, reconcile_picker_count_zero: false };
         }
         const activeSummary = selectedQueueKey
             ? queueSummaries.find((q) => q.key === selectedQueueKey) ?? queueSummaries[0]
             : queueSummaries[0];
         const tabNForSelected =
-            activeSummary?.counts_deferred === true ? undefined : typeof activeSummary?.count === "number" ? activeSummary.count : undefined;
+            activeSummary?.counts_deferred === true
+                ? undefined
+                : typeof activeSummary?.count === "number"
+                  ? activeSummary.count
+                  : undefined;
         const reconcilePickerCountZero =
             queueItems != null &&
             !queueItemsError &&
@@ -2205,9 +2188,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             queueItems.total_omitted === true &&
             typeof tabNForSelected === "number" &&
             tabNForSelected > 0;
-
-        /** Drill-in totals / empty page — aligns selected-tab pill with list without inventing estimates. */
-        let authoritativeBadgeForSelectedTab: number | undefined = undefined;
+        let authoritativeBadgeForSelectedTab: number | undefined;
         if (
             selectedQueueKey &&
             queueItems != null &&
@@ -2225,164 +2206,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 authoritativeBadgeForSelectedTab = 0;
             }
         }
-
-        const pillBase =
-            "inline-flex shrink-0 items-start gap-1.5 rounded-full border px-2 py-0.5 text-left text-[11px] font-semibold leading-snug transition-colors";
-        function queuePillBadgeCount(q: QueueSummary): number | "—" {
-            const synth = q.key.startsWith(ATTENTION_BUCKET_PILL_PREFIX);
-            const pillSelected = synth
-                ? selectedQueueKey === "needs_attention" &&
-                  (() => {
-                      const raw = q.key.slice(ATTENTION_BUCKET_PILL_PREFIX.length);
-                      if (raw === "__all__") return !attentionBucketKey;
-                      return attentionBucketKey === raw;
-                  })()
-                : q.key === selectedQueueKey &&
-                  (!laneUnmappedOnly || allRecordsQueueKey == null || q.key !== allRecordsQueueKey);
-            if (
-                pillSelected &&
-                typeof authoritativeBadgeForSelectedTab === "number" &&
-                !(laneUnmappedOnly && allRecordsQueueKey != null && selectedQueueKey === allRecordsQueueKey)
-            ) {
-                return authoritativeBadgeForSelectedTab;
-            }
-            if (pillSelected && reconcilePickerCountZero) return 0;
-            const raw = q.count as unknown;
-            const sc = typeof raw === "number" && Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : undefined;
-            return sc === undefined ? "—" : sc;
-        }
-        const sections =
-            queuePillSections ??
-            sectionedQueueSummariesOrdered ?? [{ key: "all", label: "Queues", tone: "standard" as const, queues: queueSummaries }];
-        const multiSection = sections.length > 1;
-        const showOtherPill =
-            typeof unmappedPillCount === "number" &&
-            unmappedPillCount > 0 &&
-            Boolean(allRecordsQueueKey) &&
-            Boolean(otherPillSectionKey);
-        return (
-            <div className="flex flex-col gap-1.5 min-w-0">
-                <div className="flex flex-col gap-1">
-                    {sections.map((section) => (
-                        <div key={section.key} className="flex min-w-0 flex-col gap-1">
-                            {multiSection ? (
-                                <span className="w-full text-[10px] font-semibold tracking-wide text-alloy-forge/50 sm:w-auto sm:mr-1">
-                                    {section.label}
-                                </span>
-                            ) : null}
-                            <div className="adminv2-ws-queue-pill-scroll" role="group" aria-label={section.label}>
-                                {section.queues.map((q) => {
-                                    const synth = q.key.startsWith(ATTENTION_BUCKET_PILL_PREFIX);
-                                    const selected = synth
-                                        ? selectedQueueKey === "needs_attention" &&
-                                          (() => {
-                                              const raw = q.key.slice(ATTENTION_BUCKET_PILL_PREFIX.length);
-                                              if (raw === "__all__") return !attentionBucketKey;
-                                              return attentionBucketKey === raw;
-                                          })()
-                                        : q.key === selectedQueueKey &&
-                                          (!laneUnmappedOnly || allRecordsQueueKey == null || q.key !== allRecordsQueueKey);
-                                    const tier =
-                                        q.priority === "critical"
-                                            ? "critical"
-                                            : q.priority === "attention"
-                                              ? "attention"
-                                              : "standard";
-                                    const ring =
-                                        tier === "critical"
-                                            ? selected
-                                                ? "border-alloy-ember bg-alloy-ember/12 text-alloy-forge"
-                                                : "border-alloy-ember/35 bg-white/60 text-alloy-forge/85"
-                                            : tier === "attention"
-                                              ? selected
-                                                  ? "border-alloy-honey bg-alloy-honey/12 text-alloy-forge"
-                                                  : "border-alloy-honey/40 bg-white/60 text-alloy-forge/85"
-                                              : selected
-                                                ? "border-alloy-blue bg-alloy-blue/[0.07] text-alloy-forge shadow-[inset_0_0_0_1px_rgba(0,69,140,0.12)]"
-                                                : "border-admin-border bg-white/70 text-alloy-forge/80";
-                                    return (
-                                        <button
-                                            key={q.key}
-                                            type="button"
-                                            onClick={() => {
-                                                if (synth) {
-                                                    const raw = q.key.slice(ATTENTION_BUCKET_PILL_PREFIX.length);
-                                                    handleAttentionBucketSelect(raw === "__all__" ? null : raw);
-                                                    return;
-                                                }
-                                                handleQueueTabChange(q.key);
-                                            }}
-                                            className={`${pillBase} ${ring}`}
-                                            aria-pressed={selected}
-                                            title={q.description?.trim() || undefined}
-                                        >
-                                            <span className="text-left">{q.label}</span>
-                                            <span
-                                                className={`tabular-nums rounded-full px-1 py-px text-[10px] font-bold ${
-                                                    selected
-                                                        ? "bg-alloy-forge/10 text-alloy-forge"
-                                                        : "bg-alloy-stone/15 text-alloy-forge/70"
-                                                }`}
-                                                aria-label={q.counts_deferred ? "Count unavailable" : undefined}
-                                            >
-                                                {q.counts_deferred ? "—" : queuePillBadgeCount(q)}
-                                            </span>
-                                        </button>
-                                    );
-                                })}
-                                {showOtherPill && section.key === otherPillSectionKey && allRecordsQueueKey ? (
-                                    <button
-                                        type="button"
-                                        key="__derived_other__"
-                                        onClick={() => handleQueueTabChange(allRecordsQueueKey, { unmappedActive: true })}
-                                        className={`${pillBase} ${
-                                            laneUnmappedOnly && selectedQueueKey === allRecordsQueueKey
-                                                ? "border-alloy-blue bg-alloy-blue/[0.07] text-alloy-forge shadow-[inset_0_0_0_1px_rgba(0,69,140,0.12)]"
-                                                : "border-admin-border bg-white/70 text-alloy-forge/80"
-                                        }`}
-                                        aria-pressed={laneUnmappedOnly && selectedQueueKey === allRecordsQueueKey}
-                                    >
-                                        <span className="text-left">Other</span>
-                                        <span
-                                            className={`tabular-nums rounded-full px-1 py-px text-[10px] font-bold ${
-                                                laneUnmappedOnly && selectedQueueKey === allRecordsQueueKey
-                                                    ? "bg-alloy-forge/10 text-alloy-forge"
-                                                    : "bg-alloy-stone/15 text-alloy-forge/70"
-                                            }`}
-                                        >
-                                            {unmappedPillCount ?? "—"}
-                                        </span>
-                                    </button>
-                                ) : null}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-                {activeSummary?.description?.trim() && isOperatorFacingQueueSummaryDescription(activeSummary.description) ? (
-                    <p className="m-0 text-[11px] leading-snug text-alloy-forge/60 line-clamp-2">{activeSummary.description.trim()}</p>
-                ) : null}
-            </div>
-        );
+        return {
+            authoritative_badge_for_selected_tab: authoritativeBadgeForSelectedTab,
+            reconcile_picker_count_zero: reconcilePickerCountZero,
+        };
     }, [
-        handleQueueTabChange,
-        handleAttentionBucketSelect,
         queueSummaries,
-        queueSummariesError,
-        queueSummariesRoute,
-        sectionedQueueSummariesOrdered,
-        queuePillSections,
         selectedQueueKey,
-        attentionBucketKey,
         queueItems,
         queueItemsError,
         queueItemsLoading,
-        workUnitId,
-        laneUnmappedOnly,
-        allRecordsQueueKey,
-        unmappedPillCount,
-        otherPillSectionKey,
-        queueTabPlaceholders,
-        queueTabPlaceholdersExpanded,
     ]);
 
     const queueModel = useMemo<WorkUnitWorkspaceModel | null>(() => {
@@ -2754,18 +2587,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 : tabCount;
         const rowTotalDisplay = effectiveRowTotal == null ? "—" : String(effectiveRowTotal);
 
-        const awaitingFirstRows =
-            !queueItemsError &&
-            Boolean(selectedQueueKey) &&
-            Boolean(workUnit) &&
-            !loading &&
-            queueItems === null &&
-            queueRowsBufferRef.current.length === 0;
-        const showEmptyPrimaryRowSlot =
-            !queueItemsError && queueItemsLoading && displayItems.length === 0;
-        /** Skeleton / defer “No records” only when nothing is shown yet — buffered preview stays mounted. */
-        const rowsLoading = awaitingFirstRows || showEmptyPrimaryRowSlot;
-
         const placementDiagnostics: WorkUnitPlacementQueueDiagnostics | undefined =
             entity === "opportunity" &&
             queueItems &&
@@ -2816,7 +2637,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 placementDisplay: placementDiagnostics?.display,
                 rollupSummary: undefined,
                 queueEntityType: entity,
-                rowsLoading,
+                rowsLoading: false,
                 rowsRefreshing,
             },
             workSummary: null,
@@ -2851,26 +2672,22 @@ export default function AdminV2OpportunityWorkUnitPage() {
         Boolean(allRecordsQueueKey) &&
         Boolean(otherPillSectionKey);
 
-    const headerQueuePickerSlot = useMemo(() => {
+    const workUnitLifecyclePanel = useMemo(() => {
         if (!queueModel) return null;
         return (
-            <div className="min-w-0">
-                {queuePicker}
-                <WorkUnitLifecycleCoveragePanel
-                    hasLifecycleThroughput={hasLifecycleThroughput}
-                    showOtherPill={showOtherBucketPill}
-                    coverage={lifecycleCoverage}
-                    allRecordsQueueKey={allRecordsQueueKey}
-                    selectedQueueKey={selectedQueueKey}
-                    queueItems={queueItems?.items}
-                    queueItemsLoading={queueItemsLoading}
-                    coveredStatusKeys={coveredThroughputStatusKeys}
-                />
-            </div>
+            <WorkUnitLifecycleCoveragePanel
+                hasLifecycleThroughput={hasLifecycleThroughput}
+                showOtherPill={showOtherBucketPill}
+                coverage={lifecycleCoverage}
+                allRecordsQueueKey={allRecordsQueueKey}
+                selectedQueueKey={selectedQueueKey}
+                queueItems={queueItems?.items}
+                queueItemsLoading={queueItemsLoading}
+                coveredStatusKeys={coveredThroughputStatusKeys}
+            />
         );
     }, [
         queueModel,
-        queuePicker,
         hasLifecycleThroughput,
         showOtherBucketPill,
         lifecycleCoverage,
@@ -3443,7 +3260,77 @@ export default function AdminV2OpportunityWorkUnitPage() {
             (wuPlacementRows !== undefined && queueSummaries === null && !queueSummariesError));
     /** Shell + header render after WU + dept; queue summaries and rows stay in-lane (Phase 3.1). */
     const workUnitShellReady = Boolean(workUnit) && Boolean(dept) && !error;
-    const workUnitOperLanePending = workUnitShellReady && !wuQueueLaneAuthorityReady;
+    /** UI: only block full-page shell — above-fold slots mount from atomic model. */
+    const workUnitOperLaneLoading = !workUnitShellReady;
+    const reserveWorkUnitActionsRail = isEnrollmentLikeDepartmentKey(dept?.key);
+
+    const workUnitAboveFold = useMemo(() => {
+        const queueLaneItemsReady =
+            Boolean(oq?.items?.length) ||
+            (queueItems !== null && !queueItemsLoading) ||
+            Boolean(queueItemsError);
+
+        if (!workUnitShellReady) {
+            return buildWorkUnitAboveFoldPlaceholder({ reserve_actions_rail: reserveWorkUnitActionsRail });
+        }
+
+        const pillSectionsForModel =
+            queuePillSections?.map((sec) => ({
+                key: sec.key,
+                label: sec.label,
+                queues: sec.queues.map((q) => ({
+                    key: q.key,
+                    label: q.label,
+                    description: (q as QueueSummary).description,
+                    priority: q.priority,
+                    count: typeof (q as QueueSummary).count === "number" ? (q as QueueSummary).count : 0,
+                    counts_deferred: (q as QueueSummary).counts_deferred,
+                })),
+            })) ?? null;
+
+        return buildWorkUnitAboveFoldRenderModel({
+            work_unit_shell_ready: true,
+            department_key: dept?.key,
+            reserve_actions_rail: reserveWorkUnitActionsRail,
+            queue_summaries: queueSummaries,
+            queue_summaries_error: queueSummariesError,
+            queue_pill_sections: pillSectionsForModel,
+            queue_tab_placeholders: queueTabPlaceholdersExpanded ?? queueTabPlaceholders,
+            selected_queue_key: selectedQueueKey,
+            attention_bucket_key: attentionBucketKey,
+            lane_unmapped_only: laneUnmappedOnly,
+            all_records_queue_key: allRecordsQueueKey,
+            other_pill_section_key: otherPillSectionKey,
+            unmapped_pill_count: unmappedPillCount,
+            enrollment_right_rail_resolved: enrollmentRightRailResolved,
+            queue_items_loading: queueItemsLoading,
+            queue_items_ready: queueLaneItemsReady,
+            queue_items_error: queueItemsError,
+            authoritative_badge_for_selected_tab: workUnitChipBadgeContext.authoritative_badge_for_selected_tab,
+            reconcile_picker_count_zero: workUnitChipBadgeContext.reconcile_picker_count_zero === true,
+        });
+    }, [
+        workUnitShellReady,
+        dept?.key,
+        reserveWorkUnitActionsRail,
+        queueSummaries,
+        queueSummariesError,
+        queuePillSections,
+        queueTabPlaceholders,
+        queueTabPlaceholdersExpanded,
+        selectedQueueKey,
+        attentionBucketKey,
+        laneUnmappedOnly,
+        allRecordsQueueKey,
+        otherPillSectionKey,
+        unmappedPillCount,
+        enrollmentRightRailResolved,
+        queueItemsLoading,
+        queueItems,
+        queueItemsError,
+        oq,
+        workUnitChipBadgeContext,
+    ]);
 
     const workUnitRouteShellPlaceholder = useMemo(
         () =>
@@ -3456,6 +3343,56 @@ export default function AdminV2OpportunityWorkUnitPage() {
             }),
         [workUnitId, workUnit?.name, workUnit?.key, dept?.name, dept?.key, wuName, deptName]
     );
+
+    const workUnitRevealGate = useMemo(() => {
+        const shell_ready = workUnitRevealShellReady({
+            work_unit_loaded: Boolean(workUnit),
+            department_loaded: Boolean(dept),
+            bootstrap_loading: loading,
+            error,
+        });
+        const summaries_ready = workUnitRevealSummariesReady({
+            queue_summaries: queueSummaries,
+            queue_summaries_error: queueSummariesError,
+        });
+        const actions_ready = workUnitRevealActionsReady({
+            reserve_actions_rail: reserveWorkUnitActionsRail,
+            enrollment_actions_settled: enrollmentActionsSettled,
+        });
+        const queue_rows_buffer_valid =
+            queueRowsBufferWorkUnitIdRef.current === workUnitId && queueRowsBufferRef.current.length > 0;
+        const rows_ready = workUnitRevealRowsReady({
+            lane_authority_ready: wuQueueLaneAuthorityReady,
+            queue_summaries: queueSummaries,
+            queue_summaries_error: queueSummariesError,
+            queue_items: queueItems,
+            queue_items_loading: queueItemsLoading,
+            queue_items_error: queueItemsError,
+            queue_rows_buffer_valid,
+        });
+        return computeWorkUnitRevealGate({
+            shell_ready,
+            summaries_ready,
+            actions_ready,
+            rows_ready,
+        });
+    }, [
+        workUnit,
+        dept,
+        loading,
+        error,
+        queueSummaries,
+        queueSummariesError,
+        reserveWorkUnitActionsRail,
+        enrollmentActionsSettled,
+        wuQueueLaneAuthorityReady,
+        queueItems,
+        queueItemsLoading,
+        queueItemsError,
+        workUnitId,
+    ]);
+
+    const workUnitAboveFoldPageReady = workUnitRevealGate.above_fold_ready;
 
     /** Queue-first reveal — KPI strip and automation footer defer until the lane is useful. */
     const workUnitQueueRevealReady = useMemo(() => {
@@ -3492,10 +3429,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 work_unit_title: wuName,
                 department_key: dept?.key ?? undefined,
                 shell_identity_ready: workUnitShellReady,
-                oper_lane_loading: !workUnitShellReady || workUnitOperLanePending,
+                oper_lane_loading: workUnitOperLaneLoading,
                 kpi_placeholder: workUnitKpiMetricsPending,
                 primary_loaded: workUnitShellReady,
-                full_complete: workUnitQueueRevealReady,
+                full_complete: workUnitAboveFoldPageReady,
+                work_unit_above_fold: workUnitAboveFold,
             }),
         [
             departmentId,
@@ -3504,30 +3442,81 @@ export default function AdminV2OpportunityWorkUnitPage() {
             wuName,
             dept?.key,
             workUnitShellReady,
-            workUnitOperLanePending,
+            workUnitOperLaneLoading,
             workUnitKpiMetricsPending,
-            workUnitQueueRevealReady,
+            workUnitAboveFoldPageReady,
+            workUnitAboveFold,
         ]
     );
 
     useEffect(() => {
+        markWorkUnitRevealGatePhases(workUnitRevealGate, { departmentId, workUnitId });
+    }, [workUnitRevealGate, departmentId, workUnitId]);
+
+    useEffect(() => {
         if (!workUnitShellReady) return;
+        markWorkUnitLaneShellChromeReal({ departmentId, workUnitId });
         markRouteBootstrapReturned("work_unit", { departmentId, workUnitId });
     }, [workUnitShellReady, departmentId, workUnitId]);
 
     useEffect(() => {
-        if (!workUnitQueueRevealReady) return;
+        if (!workUnitAboveFoldPageReady) return;
+        markWorkUnitLaneHeaderChipsReal({ departmentId, workUnitId });
+        markWorkUnitAboveFoldCoordinated({ departmentId, workUnitId });
         markRouteFirstAboveFoldStable("work_unit", { departmentId, workUnitId });
+    }, [workUnitAboveFoldPageReady, departmentId, workUnitId]);
+
+    useEffect(() => {
+        if (!workUnitQueueRevealReady) return;
+        markWorkUnitLaneQueueRowsReal({ departmentId, workUnitId });
         markRouteHydrationComplete("work_unit", { departmentId, workUnitId });
     }, [workUnitQueueRevealReady, departmentId, workUnitId]);
+
+    useEffect(() => {
+        if (!workUnitShellReady) return;
+        if (isEnrollmentLikeDepartmentKey(dept?.key)) {
+            if ((enrollmentRightRailResolved?.length ?? 0) > 0) {
+                markWorkUnitLaneActionsRailReal({ departmentId, workUnitId });
+            } else {
+                markWorkUnitLaneActionsRailPlaceholder();
+            }
+        }
+    }, [workUnitShellReady, dept?.key, enrollmentRightRailResolved, departmentId, workUnitId]);
+
+    useEffect(() => {
+        if (wuPlacementRows === undefined && workUnitKpiMetricsPending) {
+            markWorkUnitLaneKpiPlaceholder();
+        } else if (wuPlacementRows !== undefined) {
+            markWorkUnitLaneKpiReal({ departmentId, workUnitId });
+        }
+    }, [wuPlacementRows, workUnitKpiMetricsPending, departmentId, workUnitId]);
+
+    useEffect(() => {
+        if (workUnitAboveFold.queue_lane.state === "skeleton") {
+            markWorkUnitLaneQueueRowsPlaceholder();
+        }
+    }, [workUnitAboveFold.queue_lane.state]);
+
+    useEffect(() => {
+        if (queueSummaries === null && !queueSummariesError && queueTabPlaceholders?.length) {
+            markWorkUnitLaneHeaderChipsPlaceholder();
+        }
+    }, [queueSummaries, queueSummariesError, queueTabPlaceholders]);
 
     const workUnitRenderableModel =
         workUnitShellReady && (effectiveModel ?? queueModel)
             ? (effectiveModel ?? queueModel)!
             : workUnitRouteShellPlaceholder;
 
-    const workUnitOperLaneLoading =
-        workUnitRoutePipeline.above_fold.queue_lane.oper_lane_loading;
+    const workUnitAboveFoldRenderable = workUnitAboveFold;
+
+    const workUnitAboveFoldHandlers = useMemo(
+        () => ({
+            onQueueTabChange: handleQueueTabChange,
+            onAttentionBucketSelect: handleAttentionBucketSelect,
+        }),
+        [handleQueueTabChange, handleAttentionBucketSelect]
+    );
 
     return (
         <WorkspaceChrome
@@ -3538,10 +3527,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
             }))}
             title={workUnitRoutePipeline.shell.title}
             subtitle={workUnitRoutePipeline.shell.subtitle ?? ""}
-            data-route-shell-ready={workUnitShellReady ? "true" : "false"}
+            data-route-shell-ready={workUnitAboveFoldPageReady ? "true" : "false"}
+            {...(!workUnitAboveFoldPageReady
+                ? { "data-wu-reveal-blocked": workUnitRevealGate.reason_if_blocked.join(",") }
+                : {})}
         >
             {error && !workUnitShellReady ? (
                 <p className="text-sm text-alloy-ember px-1 py-4">{error}</p>
+            ) : !workUnitAboveFoldPageReady ? (
+                <WorkUnitPageLoadingGate workUnitTitle={wuName} departmentTitle={deptName} />
             ) : (
                 <>
                     {actionSurfaceError ? (
@@ -3566,15 +3560,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     ) : null}
                     <WorkUnitWorkspace
                         model={workUnitRenderableModel}
+                        aboveFold={workUnitAboveFoldRenderable}
+                        aboveFoldHandlers={workUnitAboveFoldHandlers}
                         onAction={onAction}
-                        operLaneLoading={workUnitOperLaneLoading}
                         opportunityDrawerWorkspaceContext={opportunityWorkspaceContext ?? null}
-                        headerQueuePicker={workUnitOperLanePending ? null : headerQueuePickerSlot}
-                        kpiStripPlaceholder={workUnitKpiStripPlaceholder || workUnitOperLanePending}
+                        lifecyclePanel={workUnitLifecyclePanel}
+                        otherPillSectionKey={otherPillSectionKey}
+                        kpiStripPlaceholder={workUnitKpiStripPlaceholder}
                         kpiStripSkeletonCellCount={
                             wuPlacementRows && wuPlacementRows.length > 0 ? wuPlacementRows.length : undefined
                         }
-                        reserveActionsRail={isEnrollmentLikeDepartmentKey(dept?.key)}
                         primaryFooterSlot={
                             workUnitQueueRevealReady ? (
                                 <AutomationWorkflowsBlock

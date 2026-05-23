@@ -43,6 +43,7 @@ import {
 import { fetchWorkspaceRightRailResolvedActions } from "@/lib/workspace/fetchWorkspaceRightRailResolvedActions";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { dedupeAdminFetch, dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import { prefetchWorkUnitOperationalBootstrapFromDeptHref } from "@/lib/adminV2/workUnitBootstrapPrefetchFromDept";
 import {
     perfDeptLoad,
     readDepartmentPageCache,
@@ -164,13 +165,17 @@ function isModifiedDeptOperNavClick(e: MouseEvent<HTMLAnchorElement>): boolean {
     return e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.defaultPrevented;
 }
 
-/** WU bootstrap prefetch disabled — page mount is canonical owner (jank-stop Card A). */
-function warmWorkUnitBootstrapFromDeptOperHref(_href: string, _selectedSiteId: string | null | undefined): void {
-    /* no-op */
+function warmWorkUnitBootstrapFromDeptOperHref(
+    href: string,
+    departmentId: string,
+    selectedSiteId: string | null | undefined
+): void {
+    prefetchWorkUnitOperationalBootstrapFromDeptHref(href, departmentId, selectedSiteId ?? null);
 }
 
 function DeptOperConsoleQueueRow(props: {
     href: string;
+    departmentId: string;
     title: string;
     label: string;
     iconKey?: string | null;
@@ -180,7 +185,18 @@ function DeptOperConsoleQueueRow(props: {
     variant: "throughput" | "attention";
     attentionBucketKey?: string;
 }) {
-    const { href, title, label, iconKey, total, countsDeferred, totalPending, variant, attentionBucketKey } = props;
+    const {
+        href,
+        departmentId,
+        title,
+        label,
+        iconKey,
+        total,
+        countsDeferred,
+        totalPending,
+        variant,
+        attentionBucketKey,
+    } = props;
     const adminDrawer = useAdminDrawerOptional();
     const selectedSiteId = useWorkspaceSiteFilter()?.selectedSiteId ?? null;
     useSyncExternalStore(subscribeDeptOperNavClickAck, getDeptOperNavClickAckSnapshot, () => null);
@@ -220,12 +236,12 @@ function DeptOperConsoleQueueRow(props: {
             href={href}
             onPointerDown={(e) => {
                 if (isModifiedDeptOperNavClick(e)) return;
-                warmWorkUnitBootstrapFromDeptOperHref(href, selectedSiteId);
+                warmWorkUnitBootstrapFromDeptOperHref(href, departmentId, selectedSiteId);
             }}
             onClick={(e) => {
                 if (isModifiedDeptOperNavClick(e)) return;
                 e.preventDefault();
-                warmWorkUnitBootstrapFromDeptOperHref(href, selectedSiteId);
+                warmWorkUnitBootstrapFromDeptOperHref(href, departmentId, selectedSiteId);
                 markDeptOperNavClickAck(clickedKey);
                 commitHardNav();
             }}
@@ -1427,6 +1443,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                     <li key={`pipe:${lane.key}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                                         <DeptOperConsoleQueueRow
                                             href={href}
+                                            departmentId={departmentId}
                                             title={`${lane.label}. Total ${lane.countsDeferred ? "deferred" : lane.count ?? "—"}.`}
                                             label={lane.label}
                                             iconKey={lane.icon}
@@ -1451,6 +1468,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                     <li key={`wu:${wu.id}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                                         <DeptOperConsoleQueueRow
                                             href={href}
+                                            departmentId={departmentId}
                                             title={`${wu.name?.trim() || "Work unit"}. Total ${total ?? "—"}.`}
                                             label={wu.name?.trim() || "Work unit"}
                                             iconKey={null}
@@ -1506,6 +1524,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             <li key={`attn:${b.key}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                                 <DeptOperConsoleQueueRow
                                     href={href}
+                                    departmentId={departmentId}
                                     title={`${b.label}. Total ${b.count}.`}
                                     label={b.label}
                                     iconKey={b.icon}

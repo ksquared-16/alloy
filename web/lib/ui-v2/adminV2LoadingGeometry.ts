@@ -8,7 +8,7 @@
  */
 
 /** Default in-lane queue row placeholders (matches typical first viewport). */
-export const ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT = 6;
+export const ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT = 5;
 
 /** Orientation KPI strip cells (`KpiStripSkeleton` when pulse skeleton is intentional). */
 export const ADMINV2_KPI_STRIP_CELL_COUNT = 5;

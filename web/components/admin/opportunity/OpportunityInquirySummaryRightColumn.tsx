@@ -1,12 +1,15 @@
 "use client";
 
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import type { DrawerInquirySummaryRightColumnRenderModel } from "@/lib/adminV2/drawerPipeline/types";
 import { operationalTaskUrgencyBadge } from "@/lib/agent/taskAssist/taskAssistOperationalUrgency";
+import {
+    INQUIRY_RIGHT_COLUMN_EMPTY_ROW_CLASS,
+    INQUIRY_RIGHT_COLUMN_GROUP_LABEL_CLASS,
+    INQUIRY_RIGHT_COLUMN_TASKS_BODY_CLASS,
+    INQUIRY_SUMMARY_RIGHT_COLUMN_ROOT_CLASS,
+} from "@/lib/admin/drawer/opportunityInquiryRightColumnGeometry";
 import OpportunityOperationalCompactStrip from "@/components/admin/opportunity/OpportunityOperationalCompactStrip";
-
-const GROUP_LABEL =
-    "text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45";
 
 const CHIP =
     "inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium leading-snug";
@@ -25,12 +28,10 @@ function shortWhen(iso: string): string {
 function TaskRowSkeleton() {
     return (
         <div
-            className="flex min-h-[1.75rem] items-center"
+            className="h-[1.75rem] w-full max-w-[16rem] skeleton-pulse rounded-full bg-alloy-stone/11"
             aria-hidden
             data-inquiry-summary-task-preview-skeleton="true"
-        >
-            <div className="h-6 w-full max-w-[16rem] skeleton-pulse rounded-full bg-alloy-stone/11" />
-        </div>
+        />
     );
 }
 
@@ -40,43 +41,38 @@ function TasksSection({ model }: { model: DrawerInquirySummaryRightColumnRenderM
 
     return (
         <div data-operational-strip-group="tasks" data-right-column-slot="tasks">
-            <div className={GROUP_LABEL}>Tasks</div>
-            <div className="mt-1 flex w-full flex-col gap-1.5">
+            <div className={INQUIRY_RIGHT_COLUMN_GROUP_LABEL_CLASS}>Tasks</div>
+            <div className={`mt-1 ${INQUIRY_RIGHT_COLUMN_TASKS_BODY_CLASS}`}>
                 {model.state === "skeleton" || model.state === "pending" ? (
-                    <>
-                        <TaskRowSkeleton />
-                        <TaskRowSkeleton />
-                    </>
+                    <TaskRowSkeleton />
                 ) : openTasks.length > 0 ? (
-                    <div className="flex w-full flex-wrap gap-1">
-                        {openTasks.map((t) => {
-                            const badge = operationalTaskUrgencyBadge(t);
-                            return (
+                    openTasks.map((t) => {
+                        const badge = operationalTaskUrgencyBadge(t);
+                        return (
+                            <span
+                                key={t.id}
+                                className={`${CHIP} border ${badge.className}`}
+                                data-inquiry-summary-task-preview-row={t.id}
+                            >
+                                <span className="truncate font-semibold">{t.title}</span>
                                 <span
-                                    key={t.id}
-                                    className={`${CHIP} border ${badge.className}`}
-                                    data-inquiry-summary-task-preview-row={t.id}
+                                    className={`shrink-0 rounded-full border px-1 py-0 text-[8px] font-semibold ${badge.className}`}
                                 >
-                                    <span className="truncate font-semibold">{t.title}</span>
-                                    <span
-                                        className={`shrink-0 rounded-full border px-1 py-0 text-[8px] font-semibold ${badge.className}`}
-                                    >
-                                        {badge.label}
-                                    </span>
-                                    {t.due_at ? (
-                                        <span className="shrink-0 opacity-75">· {shortWhen(t.due_at)}</span>
-                                    ) : null}
+                                    {badge.label}
                                 </span>
-                            );
-                        })}
-                    </div>
+                                {t.due_at ? (
+                                    <span className="shrink-0 opacity-75">· {shortWhen(t.due_at)}</span>
+                                ) : null}
+                            </span>
+                        );
+                    })
                 ) : (
-                    <p
-                        className="text-[11px] text-alloy-midnight/50"
+                    <span
+                        className={INQUIRY_RIGHT_COLUMN_EMPTY_ROW_CLASS}
                         data-inquiry-summary-task-preview-empty="true"
                     >
                         No open tasks
-                    </p>
+                    </span>
                 )}
             </div>
         </div>
@@ -91,10 +87,35 @@ export type OpportunityInquirySummaryRightColumnProps = {
     fetchEnabled?: boolean;
 };
 
+function rightColumnModelEqual(
+    a: DrawerInquirySummaryRightColumnRenderModel,
+    b: DrawerInquirySummaryRightColumnRenderModel
+): boolean {
+    if (a === b) return true;
+    if (
+        a.tasks.visible !== b.tasks.visible ||
+        a.tasks.state !== b.tasks.state ||
+        a.tasks.open_count !== b.tasks.open_count ||
+        a.reminders.visible !== b.reminders.visible ||
+        a.reminders.state !== b.reminders.state ||
+        a.orchestrator_handoff.visible !== b.orchestrator_handoff.visible ||
+        a.orchestrator_handoff.state !== b.orchestrator_handoff.state
+    ) {
+        return false;
+    }
+    const aTasks = a.tasks.open_tasks;
+    const bTasks = b.tasks.open_tasks;
+    if (aTasks.length !== bTasks.length) return false;
+    for (let i = 0; i < aTasks.length; i++) {
+        if (aTasks[i]!.id !== bTasks[i]!.id) return false;
+    }
+    return true;
+}
+
 /**
  * Single atomic right column: tasks + reminders + BOS handoff structure from drawer_primary.
  */
-export function OpportunityInquirySummaryRightColumn({
+function OpportunityInquirySummaryRightColumnInner({
     model,
     opportunityId,
     overviewData,
@@ -105,7 +126,7 @@ export function OpportunityInquirySummaryRightColumn({
 
     return (
         <div
-            className="mt-2 min-h-[10rem] border-t border-alloy-stone/10 pt-2"
+            className={INQUIRY_SUMMARY_RIGHT_COLUMN_ROOT_CLASS}
             data-inquiry-summary-right-column="true"
             data-right-column-structure={[
                 model.tasks.visible ? "tasks" : null,
@@ -129,3 +150,12 @@ export function OpportunityInquirySummaryRightColumn({
         </div>
     );
 }
+
+export const OpportunityInquirySummaryRightColumn = memo(
+    OpportunityInquirySummaryRightColumnInner,
+    (prev, next) =>
+        prev.opportunityId === next.opportunityId &&
+        prev.fetchEnabled === next.fetchEnabled &&
+        prev.entityLabel === next.entityLabel &&
+        rightColumnModelEqual(prev.model, next.model)
+);

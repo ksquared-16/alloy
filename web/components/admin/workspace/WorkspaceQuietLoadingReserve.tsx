@@ -2,10 +2,12 @@
 
 import {
     ADMINV2_QUIET_RESERVE_PANEL_CLASS,
+    ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT,
     adminV2DeptKpiQuietReserveStyle,
     adminV2DeptPairedOperPanelReserveStyle,
     adminV2WorkUnitQueueLaneReserveStyle,
 } from "@/lib/ui-v2/adminV2LoadingGeometry";
+import { WorkUnitQueueLaneRowSkeletonList } from "@/components/admin/workspace/WorkUnitQueueCompactRowSkeleton";
 import {
     WorkspacePairedOperPanel,
     WorkspacePairedOperPanelsGrid,
@@ -148,14 +150,14 @@ export function WorkUnitOperationalLaneLoader({ laneLabel = "Queue" }: { laneLab
                                 <h3 className="adminv2-ws-queue-title text-alloy-forge/90">{laneLabel}</h3>
                             </div>
                         </header>
-                        <div className="relative px-2 py-2" style={adminV2WorkUnitQueueLaneReserveStyle()}>
-                            <WorkspaceQuietQueueLaneReserve />
-                            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                                <div className="flex flex-col items-center gap-2">
-                                    <WorkUnitOperLaneSpinner />
-                                    <span className="text-[11px] font-medium text-alloy-forge/75">Loading work unit…</span>
-                                </div>
-                            </div>
+                        <div className="px-2 py-2" data-adminv2-wu-oper-lane-row-skeletons="true">
+                            <p className="mb-2 text-[11px] font-medium text-alloy-forge/75" role="status">
+                                Loading work unit…
+                            </p>
+                            <WorkUnitQueueLaneRowSkeletonList
+                                count={ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT}
+                                ariaLabel="Loading queue rows"
+                            />
                         </div>
                     </section>
                 </div>

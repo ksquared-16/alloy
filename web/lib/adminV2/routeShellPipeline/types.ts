@@ -1,4 +1,5 @@
 import type { DrawerTabKey } from "@/lib/entityPresentation";
+import type { WorkUnitAboveFoldRenderModel } from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/aboveFoldTypes";
 
 /** Frozen route chrome — structure only; lists/metrics hydrate in regions. */
 export type RouteShellContract = {
@@ -69,6 +70,8 @@ export type RoutePipelineState = {
     enrichment: RouteEnrichmentState;
     hydration_plan: RouteHydrationPlan;
     above_fold: RouteAboveFoldRenderModel;
+    /** Work-unit only — atomic header / actions / queue lane contract. */
+    work_unit_above_fold?: WorkUnitAboveFoldRenderModel;
 };
 
 /** @deprecated Use route_id-specific contracts; kept for cross-route docs. */

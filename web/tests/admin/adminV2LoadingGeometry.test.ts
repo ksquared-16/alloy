@@ -26,7 +26,7 @@ function read(rel: string): string {
 
 describe("adminV2LoadingGeometry", () => {
     it("exports stable queue and KPI placeholder counts", () => {
-        expect(ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT).toBe(6);
+        expect(ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT).toBe(5);
         expect(ADMINV2_KPI_STRIP_CELL_COUNT).toBe(5);
         expect(ADMINV2_DEPT_ATTENTION_LOADING_ROW_COUNT).toBe(3);
     });
@@ -70,7 +70,8 @@ describe("Work-unit loader alignment (PERF-A-03 / Card 3A shell-first)", () => {
         expect(reserve).toContain("WorkUnitOperationalLaneLoader");
         const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
         expect(page).toContain("WorkUnitWorkspaceColdShell");
-        expect(page).toContain("operLaneLoading={workUnitOperLanePending}");
+        expect(page).toContain("operLaneLoading={workUnitOperLaneLoadingFromPipeline}");
+        expect(page).toContain("workUnitAboveFoldCoordinated");
     });
 });
 

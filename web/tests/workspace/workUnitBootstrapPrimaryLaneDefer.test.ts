@@ -59,9 +59,15 @@ describe("Card 3 — deferred primary lane rows", () => {
         );
     });
 
-    it("client bootstrap session defaults to defer_bundle", () => {
+    it("client bootstrap session defaults to defer_bundle=false for above-fold reveal", () => {
         const session = read("lib/adminV2/workUnitBootstrapClientSession.ts");
-        expect(session).toContain('defer_bundle: "true"');
+        expect(session).toContain('defer_bundle: "false"');
         expect(session).toContain("buildCanonicalWorkUnitOperationalBootstrapUrl");
+    });
+
+    it("defer_bundle=true path still defers primary_lane_rows server-side", () => {
+        const route = read("app/api/admin/work-units/[id]/operational-bootstrap/route.ts");
+        expect(route).toContain('defer_bundle") === "true"');
+        expect(route).toContain("deferPrimaryLaneRows: deferBundle");
     });
 });

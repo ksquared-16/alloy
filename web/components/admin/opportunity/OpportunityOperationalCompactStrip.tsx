@@ -39,28 +39,40 @@ import {
     type OpportunityOperationalStripLayout,
 } from "@/lib/admin/drawer/opportunityOperationalStripPresentation";
 import type { DrawerInquirySummaryRightColumnRenderModel } from "@/lib/adminV2/drawerPipeline/types";
+import {
+    INQUIRY_RIGHT_COLUMN_EMPTY_ROW_CLASS,
+    INQUIRY_RIGHT_COLUMN_GROUP_LABEL_CLASS,
+    INQUIRY_RIGHT_COLUMN_HANDOFF_CARD_INNER_CLASS,
+    INQUIRY_RIGHT_COLUMN_HANDOFF_SLOT_CLASS,
+    INQUIRY_RIGHT_COLUMN_REMINDERS_BODY_CLASS,
+    INQUIRY_RIGHT_COLUMN_REMINDERS_SECTION_CLASS,
+} from "@/lib/admin/drawer/opportunityInquiryRightColumnGeometry";
 
 function OrchestratorHandoffCard(props: {
     entityLabel?: string | null;
     layout: OpportunityOperationalStripLayout;
     onContinue: () => void;
+    /** Inquiry summary atomic column: outer slot owns fixed height + separator. */
+    embeddedInRightColumnSlot?: boolean;
+    continueDisabled?: boolean;
 }) {
-    const { entityLabel, layout, onContinue } = props;
+    const { entityLabel, layout, onContinue, embeddedInRightColumnSlot = false, continueDisabled = false } = props;
     const recordHint = entityLabel?.trim() ? entityLabel.trim() : "this inquiry";
+
+    const outerClass =
+        embeddedInRightColumnSlot ?
+            "flex h-full min-h-0 flex-col"
+        : layout === "inquiry_summary" ?
+            "mt-2 border-t border-alloy-stone/10 pt-2"
+        :   "mt-2 w-full max-w-[min(100%,28rem)] border-t border-alloy-stone/10 pt-2";
 
     return (
         <div
-            className={
-                layout === "inquiry_summary" ?
-                    "mt-2 border-t border-alloy-stone/10 pt-2"
-                    : "mt-2 w-full max-w-[min(100%,28rem)] border-t border-alloy-stone/10 pt-2"
-            }
+            className={outerClass}
             data-drawer-slot="operational_orchestrator_handoff"
             data-operational-orchestrator-handoff-card="true"
         >
-            <div
-                className="rounded-lg border border-alloy-blue/22 bg-gradient-to-br from-alloy-blue/[0.06] via-white to-alloy-stone/[0.03] px-2.5 py-2 shadow-[0_1px_0_rgba(39,63,82,0.04)]"
-            >
+            <div className={embeddedInRightColumnSlot ? INQUIRY_RIGHT_COLUMN_HANDOFF_CARD_INNER_CLASS : "rounded-lg border border-alloy-blue/22 bg-gradient-to-br from-alloy-blue/[0.06] via-white to-alloy-stone/[0.03] px-2.5 py-2 shadow-[0_1px_0_rgba(39,63,82,0.04)]"}>
                 <p
                     className="text-[9px] font-semibold uppercase tracking-[0.14em] text-alloy-midnight/45"
                     data-operational-orchestrator-handoff-eyebrow="true"
@@ -78,9 +90,12 @@ function OrchestratorHandoffCard(props: {
                     <button
                         type="button"
                         data-operational-orchestrator-handoff="true"
-                        className="inline-flex items-center gap-1.5 rounded-md border border-alloy-blue/35 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-alloy-blue shadow-sm transition-colors hover:border-alloy-blue/50 hover:bg-alloy-blue/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-blue/30"
+                        disabled={continueDisabled}
+                        aria-disabled={continueDisabled || undefined}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-alloy-blue/35 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-alloy-blue shadow-sm transition-colors hover:border-alloy-blue/50 hover:bg-alloy-blue/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-blue/30 disabled:cursor-default disabled:opacity-70"
                         onClick={(e) => {
                             e.stopPropagation();
+                            if (continueDisabled) return;
                             onContinue();
                         }}
                     >
@@ -159,13 +174,10 @@ export type OpportunityOperationalCompactStripProps = {
     rightColumnModel?: DrawerInquirySummaryRightColumnRenderModel;
 };
 
-const GROUP_LABEL =
-    "text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45";
-
 function ReminderRowSkeleton() {
     return (
         <span
-            className="inline-flex min-h-[1.75rem] min-w-[8rem] max-w-[16rem] flex-1 items-center rounded-full skeleton-pulse bg-alloy-stone/10 px-2 py-1"
+            className="inline-flex h-[1.75rem] min-w-[8rem] max-w-[16rem] flex-1 items-center rounded-full skeleton-pulse bg-alloy-stone/10 px-2 py-1"
             aria-hidden
             data-reminders-row-skeleton="true"
         />
@@ -544,7 +556,8 @@ export default function OpportunityOperationalCompactStrip({
                     {error}
                 </p>
             ) : null}
-            {sendAttention.failed > 0 || sendAttention.needs_attention > 0 ? (
+            {!atomicRightColumn &&
+            (sendAttention.failed > 0 || sendAttention.needs_attention > 0) ? (
                 <p
                     className="pointer-events-none w-full rounded border border-amber-200/70 bg-amber-50/90 px-2 py-1 text-[10px] leading-snug text-amber-950/90"
                     data-scheduled-send-attention-banner="true"
@@ -566,29 +579,39 @@ export default function OpportunityOperationalCompactStrip({
                     ) : null}
                     {!hideTasksSection && openTasks.length > 0 ? (
                         <div data-operational-strip-group="tasks">
-                            <div className={GROUP_LABEL}>Tasks</div>
+                            <div className={INQUIRY_RIGHT_COLUMN_GROUP_LABEL_CLASS}>Tasks</div>
                             <div className={`mt-1 ${chipRowClass}`}>{renderTaskChips()}</div>
                         </div>
                     ) : null}
                     {showRemindersSection ? (
                         <div
-                            className="min-h-[3.25rem]"
+                            className={
+                                atomicRightColumn ?
+                                    INQUIRY_RIGHT_COLUMN_REMINDERS_SECTION_CLASS
+                                :   "min-h-[3.25rem]"
+                            }
                             data-operational-strip-group="reminders"
                             data-right-column-slot="reminders"
                         >
-                            <div className={GROUP_LABEL}>Reminders</div>
-                            <div className={`mt-1 min-h-[1.75rem] ${chipRowClass}`}>
+                            <div className={INQUIRY_RIGHT_COLUMN_GROUP_LABEL_CLASS}>Reminders</div>
+                            <div
+                                className={
+                                    atomicRightColumn ?
+                                        `mt-1 ${INQUIRY_RIGHT_COLUMN_REMINDERS_BODY_CLASS}`
+                                    :   `mt-1 min-h-[1.75rem] ${chipRowClass}`
+                                }
+                            >
                                 {atomicRightColumn && !remindersFetchSettled ? (
                                     <ReminderRowSkeleton />
                                 ) : hasReminderValues ? (
                                     renderReminderChips()
                                 ) : atomicRightColumn || hideTasksSection ? (
-                                    <p
-                                        className="text-[11px] text-alloy-midnight/50"
+                                    <span
+                                        className={INQUIRY_RIGHT_COLUMN_EMPTY_ROW_CLASS}
                                         data-reminders-empty="true"
                                     >
                                         No scheduled reminders
-                                    </p>
+                                    </span>
                                 ) : null}
                             </div>
                         </div>
@@ -608,7 +631,20 @@ export default function OpportunityOperationalCompactStrip({
                     {renderTaskChips()}
                 </div>
             )}
-            {globalAssistant && showHandoffCard ? (
+            {atomicRightColumn && rightColumnModel.orchestrator_handoff.visible ? (
+                <div
+                    className={INQUIRY_RIGHT_COLUMN_HANDOFF_SLOT_CLASS}
+                    data-right-column-slot="orchestrator_handoff"
+                >
+                    <OrchestratorHandoffCard
+                        entityLabel={entityLabel}
+                        layout={layout}
+                        embeddedInRightColumnSlot
+                        continueDisabled={!globalAssistant}
+                        onContinue={onContinueInOrchestrator}
+                    />
+                </div>
+            ) : globalAssistant && showHandoffCard ? (
                 <OrchestratorHandoffCard
                     entityLabel={entityLabel}
                     layout={layout}

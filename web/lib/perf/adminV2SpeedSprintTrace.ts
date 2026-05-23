@@ -5,6 +5,7 @@
 
 import { alloyPerfGet, alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import { emitAdminV2Perf } from "@/lib/perf/adminV2PerfLog";
+import { buildWorkUnitLaneTimingTable } from "@/lib/perf/workUnitCriticalPathTrace";
 
 const TAG = "[perf.speed.sprint]";
 
@@ -119,6 +120,7 @@ export function buildDepartmentSpeedSprintRow(): SpeedSprintTimingRow {
 export type SpeedSprintReport = {
     captured_at: string;
     rows: SpeedSprintTimingRow[];
+    work_unit_lanes?: ReturnType<typeof buildWorkUnitLaneTimingTable>;
     alloy_marks: Record<string, number>;
 };
 
@@ -140,6 +142,7 @@ export function reportAdminV2SpeedSprint(extra?: Partial<SpeedSprintTimingRow>):
     const report: SpeedSprintReport = {
         captured_at: new Date().toISOString(),
         rows,
+        work_unit_lanes: buildWorkUnitLaneTimingTable(),
         alloy_marks: marks,
     };
     if (typeof window !== "undefined") {
