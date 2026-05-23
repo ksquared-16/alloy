@@ -297,6 +297,15 @@ Capture: `reportWorkUnitCriticalPathLanes()` after hard refresh.
 
 **Staging checks after deploy:** filter `[admin-context-cache] outcome:hit` on second navigation; `get_admin_context_ms` on departments/work-units/entity-labels should drop; queue rows `auth_ms` should fall when shell cache warm.
 
+## Final server hotspots (this pass)
+
+| Hotspot | Fix | Staging signal |
+|---------|-----|----------------|
+| Entity labels ~450ms | `unstable_cache` (300s) + process TTL; `[entity-labels-cache]` hit/miss; `revalidateTag` on PUT/DELETE | `resolve_entity_labels_ms` &lt;50 warm |
+| Dept prefetch attention ~525ms | `attentionDetailMode: deferred` — metadata buckets only, no candidate query | `attention_ms` near 0; `source: deferred_prefetch` |
+| WU `queue_summaries_ms` / `primary_lane_rows_ms` | 30s lane cache (org/wu/scope); primary cap **8** | `queue_summaries_cache_hit`, `primary_lane_rows_cache_hit` |
+| Drawer primary variance | `_drawer_primary_phase_ms` on payload + enrich log phases | `wu_dept_lookup_ms`, `primary_person_hydrate_ms`, etc. |
+
 ## Remaining bottlenecks
 
 1. **`auth.session_resolve`** (112–189ms) — still per-request; cross-request session cache deferred (higher risk).

@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { resolveAdminAccessCore } from "@/lib/admin/resolveAdminAccessCore";
-import { resolveEntityLabelsForOrg } from "@/lib/admin/entityLabelsResolve";
+import { resolveEntityLabelsForOrgCached } from "@/lib/admin/entityLabelsResolve";
 
 /** Same shape as EntityLabelsContext labels map (kept here so server code never imports the client context file). */
 export type EntityLabelsBootstrapMap = Record<string, { singular: string | null; plural: string | null }>;
@@ -37,7 +37,7 @@ export async function loadEntityLabelsMapForOrgId(orgId: string): Promise<Entity
         return hit.map;
     }
     const supabase = createAdminClient();
-    const { effective } = await resolveEntityLabelsForOrg(supabase, key);
+    const { effective } = await resolveEntityLabelsForOrgCached(supabase, key);
     const map = entityLabelsMapFromEffective(effective);
     ORG_ENTITY_LABELS_SERVER_CACHE.set(key, { at: now, map });
     return map;

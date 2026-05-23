@@ -199,11 +199,11 @@ export async function loadDeptOperationalBootstrap(params: {
             recordScopeConstraints: params.recordScopeConstraints,
             opportunityStatusDefs: sharedBootstrap.opportunityStatusDefs,
             attentionPerf,
-            attentionDetailMode: params.bundleMode === "prefetch" ? "slim" : "full",
+            attentionDetailMode: params.bundleMode === "prefetch" ? "deferred" : "full",
         });
         phases.attention_ms = Date.now() - t0;
         phases.attention_source = out.source ?? "unknown";
-        phases.attention_detail_mode = params.bundleMode === "prefetch" ? "slim" : "full";
+        phases.attention_detail_mode = params.bundleMode === "prefetch" ? "deferred" : "full";
         phases.bundle_mode = params.bundleMode ?? "reveal";
         if (out.source === "work_unit_needs_attention_lane") {
             phases.attention_rules_ms = attentionPerf.rules_ms;

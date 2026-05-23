@@ -7,6 +7,7 @@ export type WorkUnitBootstrapPerfPhases = {
     summaries_attention_parallel_ms?: number;
     summaries_attention_parallel?: boolean;
     queue_summaries_ms?: number;
+    queue_summaries_cache_hit?: boolean;
     attention_ms?: number;
     /** needs_attention | summaries_only | none */
     primary_lane_wait_on?: string;
@@ -19,6 +20,7 @@ export type WorkUnitBootstrapPerfPhases = {
     /** Attention lane omitted from bootstrap when not needed for primary reveal. */
     attention_deferred?: boolean;
     primary_lane_rows_ms?: number;
+    primary_lane_rows_cache_hit?: boolean;
     primary_lane_row_enrichment?: string;
     primary_lane_rows_deferred?: boolean;
     /** Loader wall-clock excluding blocking primary row fetch when deferred. */

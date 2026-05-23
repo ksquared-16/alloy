@@ -18,6 +18,12 @@ import type { WorkUnitBootstrapPerfPhases } from "@/lib/workspace/workUnitOperat
 import type { NeedsAttentionBucketWithCount } from "@/lib/opportunities/needsAttentionBuckets";
 import type { AttentionReasonCountSummary } from "@/lib/workspace/attentionReasonCountsSummary";
 import type { QueueServiceOpportunityNeedsAttentionSemantics } from "@/lib/workspace/opportunityAttentionCountSemantics";
+import {
+    readWorkUnitPrimaryLaneRowsBootstrapCache,
+    readWorkUnitQueueSummariesBootstrapCache,
+    writeWorkUnitPrimaryLaneRowsBootstrapCache,
+    writeWorkUnitQueueSummariesBootstrapCache,
+} from "@/lib/workspace/workUnitOperBootstrapLaneCache";
 
 export type WorkUnitOperationalBootstrapQueue = {
     summaries: Awaited<ReturnType<typeof getWorkUnitQueueSummaries>>["queues"];
@@ -284,19 +290,32 @@ export async function loadWorkUnitOperationalBootstrap(params: {
     const wuKey = (wuRow as { key?: string | null }).key ?? null;
 
     const tSummaries0 = Date.now();
-    const summariesResult = await getWorkUnitQueueSummaries({
+    const summariesCacheParams = {
         orgId,
         workUnitId,
-        preloadedQueueDefinition,
-        limit: summariesLimit,
-        includePreviews: false,
-        summaryMode: "all",
-        sharedBootstrap,
-        viewerDisplayTimeZone,
-        recordScopeImpossible,
+        summariesLimit,
         recordScopeConstraints,
-    });
+    };
+    const summariesCached = readWorkUnitQueueSummariesBootstrapCache(summariesCacheParams);
+    const summariesResult =
+        summariesCached ??
+        (await getWorkUnitQueueSummaries({
+            orgId,
+            workUnitId,
+            preloadedQueueDefinition,
+            limit: summariesLimit,
+            includePreviews: false,
+            summaryMode: "all",
+            sharedBootstrap,
+            viewerDisplayTimeZone,
+            recordScopeImpossible,
+            recordScopeConstraints,
+        }));
+    if (!summariesCached) {
+        writeWorkUnitQueueSummariesBootstrapCache(summariesCacheParams, summariesResult);
+    }
     phases.queue_summaries_ms = Date.now() - tSummaries0;
+    phases.queue_summaries_cache_hit = Boolean(summariesCached);
     phases.summaries_attention_parallel_ms = phases.queue_summaries_ms;
 
     const primaryQueueKey = resolveWorkUnitBootstrapPrimaryQueueKey(
@@ -360,23 +379,43 @@ export async function loadWorkUnitOperationalBootstrap(params: {
             };
         } else {
             const tRows0 = Date.now();
-            const { result } = await getWorkUnitQueuePreviewRows({
+            const primaryCacheParams = {
                 orgId,
                 workUnitId,
                 queueKey: primaryQueueKey,
                 limit: primaryRowLimit,
-                offset: 0,
-                omitTotalCount,
-                recordScopeImpossible,
+                attentionBucketKey: primaryIsNeedsAttention ? attentionBucketKey : "",
                 recordScopeConstraints,
-                viewerDisplayTimeZone,
-                attentionBucketKey: primaryIsNeedsAttention ? attentionBucketKey : null,
-                preloadedQueueDefinition,
-                preloadedDepartmentMetadata: departmentMetadata,
-                sharedBootstrap,
-                preloadedAttentionPack: primaryIsNeedsAttention ? preloadedAttention : undefined,
-            });
+            };
+            const primaryCached = readWorkUnitPrimaryLaneRowsBootstrapCache(primaryCacheParams);
+            const result = primaryCached
+                ? { items: primaryCached.items, total_omitted: primaryCached.total_omitted }
+                : (
+                      await getWorkUnitQueuePreviewRows({
+                          orgId,
+                          workUnitId,
+                          queueKey: primaryQueueKey,
+                          limit: primaryRowLimit,
+                          offset: 0,
+                          omitTotalCount,
+                          recordScopeImpossible,
+                          recordScopeConstraints,
+                          viewerDisplayTimeZone,
+                          attentionBucketKey: primaryIsNeedsAttention ? attentionBucketKey : null,
+                          preloadedQueueDefinition,
+                          preloadedDepartmentMetadata: departmentMetadata,
+                          sharedBootstrap,
+                          preloadedAttentionPack: primaryIsNeedsAttention ? preloadedAttention : undefined,
+                      })
+                  ).result;
+            if (!primaryCached) {
+                writeWorkUnitPrimaryLaneRowsBootstrapCache(primaryCacheParams, {
+                    items: result.items as unknown[],
+                    total_omitted: result.total_omitted,
+                });
+            }
             phases.primary_lane_rows_ms = Date.now() - tRows0;
+            phases.primary_lane_rows_cache_hit = Boolean(primaryCached);
             phases.primary_lane_row_enrichment = "queue_reveal";
             phases.primary_lane_rows_deferred = false;
             primary_lane = {

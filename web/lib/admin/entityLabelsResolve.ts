@@ -1,9 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { unstable_cache } from "next/cache";
+import { createAdminClient } from "@/lib/supabaseAdmin";
 import {
     readEntityLabelsOrgCache,
     writeEntityLabelsOrgCache,
 } from "@/lib/admin/entityLabelsOrgCache";
-import { logAdminContextCache } from "@/lib/adminV2/adminContextCacheInstrumentation";
+import { logEntityLabelsCache } from "@/lib/admin/entityLabelsCacheInstrumentation";
 
 export type EntityLabelRow = { entity_type: string; singular: string | null; plural: string | null };
 
@@ -130,15 +132,59 @@ export async function resolveEntityLabelsForOrg(supabase: SupabaseClient, orgId:
     };
 }
 
-/** Org-stable labels for shell/navigation — process cache with TTL + explicit invalidation on writes. */
+const ENTITY_LABELS_NEXT_REVALIDATE_S = 300;
+
+function entityLabelsUnstableTag(orgId: string): string {
+    return `entity-labels-org:${orgId.trim()}`;
+}
+
+async function resolveEntityLabelsForOrgDataCached(orgId: string): Promise<EntityLabelsPayload> {
+    const key = orgId.trim();
+    if (!key) {
+        return {
+            org_industry_id: null,
+            industry: null,
+            defaults: [],
+            overrides: [],
+            effective: [],
+        };
+    }
+    const fetcher = async () => {
+        logEntityLabelsCache("miss", { layer: "next_data", org_id: key, reason: "fetch" });
+        const supabase = createAdminClient();
+        return resolveEntityLabelsForOrg(supabase, key);
+    };
+    if (typeof unstable_cache === "function" && process.env.NODE_ENV !== "test") {
+        return unstable_cache(fetcher, [`entity-labels-v1-${key}`], {
+            revalidate: ENTITY_LABELS_NEXT_REVALIDATE_S,
+            tags: [entityLabelsUnstableTag(key)],
+        })();
+    }
+    return fetcher();
+}
+
+/** Org-stable labels for shell/navigation — process + Next data cache; invalidate on label writes. */
 export async function resolveEntityLabelsForOrgCached(
     supabase: SupabaseClient,
     orgId: string
 ): Promise<EntityLabelsPayload> {
-    const hit = readEntityLabelsOrgCache(orgId);
-    if (hit) return hit;
-    const payload = await resolveEntityLabelsForOrg(supabase, orgId);
-    writeEntityLabelsOrgCache(orgId, payload);
-    logAdminContextCache("miss", { cache: "entity_labels", org_id: orgId, reason: "resolved_and_stored" });
+    void supabase;
+    const key = orgId.trim();
+    const processHit = readEntityLabelsOrgCache(key);
+    if (processHit) return processHit;
+
+    const t0 = Date.now();
+    const payload = await resolveEntityLabelsForOrgDataCached(key);
+    const resolveMs = Date.now() - t0;
+    writeEntityLabelsOrgCache(key, payload);
+    if (resolveMs < 15) {
+        logEntityLabelsCache("hit", { layer: "next_data", org_id: key, resolve_ms: resolveMs });
+    } else {
+        logEntityLabelsCache("miss", { layer: "next_data", org_id: key, resolve_ms: resolveMs, reason: "stored" });
+    }
     return payload;
+}
+
+export function entityLabelsOrgCacheTag(orgId: string): string {
+    return entityLabelsUnstableTag(orgId);
 }

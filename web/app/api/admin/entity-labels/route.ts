@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getOrgConfigLocked } from "@/lib/admin/getOrgConfigLocked";
 import { invalidateEntityLabelsOrgCache } from "@/lib/admin/entityLabelsOrgCache";
-import { resolveEntityLabelsForOrgCached } from "@/lib/admin/entityLabelsResolve";
+import { entityLabelsOrgCacheTag, resolveEntityLabelsForOrgCached } from "@/lib/admin/entityLabelsResolve";
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
 
 /** GET: effective labels for org (industry defaults + overrides). Admin + ops can read. */
@@ -80,6 +81,7 @@ export async function PUT(request: NextRequest) {
             return NextResponse.json({ error: delErr.message }, { status: 500 });
         }
         invalidateEntityLabelsOrgCache(ctx.orgId);
+        revalidateTag(entityLabelsOrgCacheTag(ctx.orgId));
         return NextResponse.json({ ok: true });
     }
 
@@ -97,6 +99,7 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ error: upsertErr.message }, { status: 500 });
     }
     invalidateEntityLabelsOrgCache(ctx.orgId);
+    revalidateTag(entityLabelsOrgCacheTag(ctx.orgId));
     return NextResponse.json({ ok: true });
 }
 
@@ -137,5 +140,6 @@ export async function DELETE(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
     invalidateEntityLabelsOrgCache(ctx.orgId);
+    revalidateTag(entityLabelsOrgCacheTag(ctx.orgId));
     return NextResponse.json({ ok: true });
 }

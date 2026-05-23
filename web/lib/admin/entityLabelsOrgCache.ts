@@ -1,5 +1,5 @@
 import type { EntityLabelsPayload } from "@/lib/admin/entityLabelsResolve";
-import { logAdminContextCache } from "@/lib/adminV2/adminContextCacheInstrumentation";
+import { logEntityLabelsCache } from "@/lib/admin/entityLabelsCacheInstrumentation";
 
 const TTL_MS = 5 * 60_000;
 const MAX_ENTRIES = 64;
@@ -19,7 +19,7 @@ export function readEntityLabelsOrgCache(orgId: string): EntityLabelsPayload | n
         cache.delete(cacheKey(orgId));
         return null;
     }
-    logAdminContextCache("hit", { cache: "entity_labels", org_id: orgId, age_ms: Date.now() - hit.atMs });
+    logEntityLabelsCache("hit", { layer: "process", org_id: orgId, age_ms: Date.now() - hit.atMs });
     return hit.payload;
 }
 
@@ -34,7 +34,7 @@ export function writeEntityLabelsOrgCache(orgId: string, payload: EntityLabelsPa
 
 export function invalidateEntityLabelsOrgCache(orgId: string): void {
     cache.delete(cacheKey(orgId));
-    logAdminContextCache("skipped", { cache: "entity_labels", reason: "invalidate", org_id: orgId });
+    logEntityLabelsCache("miss", { layer: "process", reason: "invalidate", org_id: orgId });
 }
 
 export function resetEntityLabelsOrgCacheForTests(): void {

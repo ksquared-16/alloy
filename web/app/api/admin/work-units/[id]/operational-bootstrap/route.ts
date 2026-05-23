@@ -16,9 +16,9 @@ import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { loadRightRailActionsBundleCached } from "@/lib/workspace/rightRailActionsBundleCache";
 
 function parsePrimaryRowLimit(searchParams: URLSearchParams): number {
-    const raw = (searchParams.get("primary_row_limit") ?? "10").trim();
+    const raw = (searchParams.get("primary_row_limit") ?? "8").trim();
     const n = Number(raw);
-    if (!Number.isFinite(n)) return 10;
+    if (!Number.isFinite(n)) return 8;
     return Math.min(Math.max(1, Math.floor(n)), 20);
 }
 

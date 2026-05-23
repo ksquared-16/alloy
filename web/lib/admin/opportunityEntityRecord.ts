@@ -958,39 +958,74 @@ export async function buildOpportunityDrawerVisiblePayload(
   const oppPipelineStageId = opp.pipeline_stage_id ?? null;
   const oppOrgIdForDefs = opp.org_id;
   const primaryPersonContactP = fetchPrimaryPersonContactHydrate(supabase, orgId, opp);
-  const [wuDeptRowV, customerRowV, stRowV, primaryHydrV, opportunityDefsVisible] = await Promise.all([
-    hintDepartmentId
-      ? Promise.resolve({ data: { department_id: hintDepartmentId, metadata: null } })
+  const phaseMs: Record<string, number> = {};
+  const tParallel0 = Date.now();
+  const wuDeptP = (async () => {
+    const t0 = Date.now();
+    const row = hintDepartmentId
+      ? { data: { department_id: hintDepartmentId, metadata: null } }
       : wuidForDept
-        ? supabase
-            .from("work_units")
-            .select("department_id, metadata")
-            .eq("id", wuidForDept)
+        ? await supabase
+              .from("work_units")
+              .select("department_id, metadata")
+              .eq("id", wuidForDept)
+              .eq("org_id", orgId)
+              .maybeSingle()
+        : { data: null };
+    phaseMs.wu_dept_lookup_ms = Date.now() - t0;
+    return row;
+  })();
+  const customerP = (async () => {
+    const t0 = Date.now();
+    const row = opp.customer_id
+      ? await supabase
+            .from("customers")
+            .select("name")
+            .eq("id", opp.customer_id)
             .eq("org_id", orgId)
+            .single()
+      : { data: null };
+    phaseMs.customer_lookup_ms = Date.now() - t0;
+    return row;
+  })();
+  const stageP = (async () => {
+    const t0 = Date.now();
+    const row = oppPipelineStageId
+      ? await supabase
+            .from("pipeline_stages")
+            .select("name")
+            .eq("id", oppPipelineStageId)
             .maybeSingle()
-        : Promise.resolve({ data: null }),
-    opp.customer_id
-      ? supabase
-          .from("customers")
-          .select("name")
-          .eq("id", opp.customer_id)
-          .eq("org_id", orgId)
-          .single()
-      : Promise.resolve({ data: null }),
-    oppPipelineStageId
-      ? supabase
-          .from("pipeline_stages")
-          .select("name")
-          .eq("id", oppPipelineStageId)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
-    primaryPersonContactP,
-    oppOrgIdForDefs
-      ? fetchEffectiveStatusDefinitionsTagged(supabase, oppOrgIdForDefs, "opportunities", {
-          activeOnly: true,
-        }).then((p) => p.rows)
-      : Promise.resolve([]),
+      : { data: null };
+    phaseMs.pipeline_stage_lookup_ms = Date.now() - t0;
+    return row;
+  })();
+  const primaryHydrP = (async () => {
+    const t0 = Date.now();
+    const patch = await primaryPersonContactP;
+    phaseMs.primary_person_hydrate_ms = Date.now() - t0;
+    return patch;
+  })();
+  const statusDefsP = (async () => {
+    const t0 = Date.now();
+    const rows = oppOrgIdForDefs
+      ? (
+            await fetchEffectiveStatusDefinitionsTagged(supabase, oppOrgIdForDefs, "opportunities", {
+                activeOnly: true,
+            })
+        ).rows
+      : [];
+    phaseMs.status_defs_ms = Date.now() - t0;
+    return rows;
+  })();
+  const [wuDeptRowV, customerRowV, stRowV, primaryHydrV, opportunityDefsVisible] = await Promise.all([
+    wuDeptP,
+    customerP,
+    stageP,
+    primaryHydrP,
+    statusDefsP,
   ]);
+  phaseMs.drawer_primary_parallel_ms = Date.now() - tParallel0;
   const vis: Record<string, unknown> = { ...data };
   vis._work_unit_department_id = hintDepartmentId
     ? hintDepartmentId
@@ -1019,6 +1054,7 @@ export async function buildOpportunityDrawerVisiblePayload(
     vis._location_label = null;
   }
   Object.assign(vis, primaryHydrV.patch);
+  vis._drawer_primary_phase_ms = phaseMs;
   const oppLegacyStatusV = opp.status;
   const oppSkRawV =
     opp.status_key != null && String(opp.status_key).trim() !== ""
@@ -1225,6 +1261,8 @@ export async function respondOpportunityEntityGet(
     const tPrimary0 = Date.now();
     const out = await buildOpportunityDrawerVisiblePayload(supabase, orgId, data);
     enrichPhaseMs.drawer_primary_build_ms = Date.now() - tPrimary0;
+    const primaryPhases = (out._drawer_primary_phase_ms ?? {}) as Record<string, number>;
+    Object.assign(enrichPhaseMs, primaryPhases);
     out._record_surface =
       surfaceParamEarly === "drawer_initial" ? "drawer_initial" : "drawer_primary";
     const inquiryLinesPrimary = buildOpportunityInquiryLinesLite(out);

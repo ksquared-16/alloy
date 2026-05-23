@@ -64,12 +64,23 @@ export async function loadDeptAttentionPreviewServer(params: {
         candidate_count?: number;
     };
     /**
-     * `slim` — bucket counts only for prefetch / above-fold (no candidate item rows).
+     * `deferred` — metadata bucket shells only (prefetch); no candidate queries.
+     * `slim` — bucket counts via org preview cap (no item rows).
      * `full` — legacy department_attention_preview with items (page-only when needed).
      */
-    attentionDetailMode?: "slim" | "full";
+    attentionDetailMode?: "deferred" | "slim" | "full";
 }): Promise<DeptAttentionPreviewPayload> {
     const { supabase, orgId, departmentId, departmentMetadata, accessDim } = params;
+    const attentionDetailMode = params.attentionDetailMode ?? "full";
+
+    const metadataOnlyBuckets = (metadata: unknown) => {
+        const attentionCfg = resolveOpportunityAttentionConfigFromMetadata(metadata);
+        const bucketDefs = resolveNeedsAttentionBucketsFromMetadata(metadata);
+        return applyAttentionConfigLabelsToBuckets(
+            hydrateNeedsAttentionBucketCounts(bucketDefs, []),
+            attentionCfg
+        );
+    };
 
     let rows: WorkUnitRowLite[] = params.workUnitRows ?? [];
     if (!rows.length) {
@@ -82,6 +93,21 @@ export async function loadDeptAttentionPreviewServer(params: {
     }
 
     const resolved = resolveDeptNeedsAttentionWorkUnit(rows, departmentId, params.workUnitIdParam);
+
+    if (resolved && attentionDetailMode === "deferred") {
+        const wuMeta = resolved.metadata;
+        const needs_attention_buckets = metadataOnlyBuckets(wuMeta ?? departmentMetadata);
+        return {
+            department_id: departmentId,
+            work_unit_id: resolved.id,
+            work_unit_key: "needs_attention",
+            total: 0,
+            needs_attention_buckets,
+            bucket_count_scope: "deferred_prefetch",
+            source: "deferred_prefetch",
+            items: [],
+        };
+    }
 
     if (resolved) {
         const wuMeta = resolved.metadata;
@@ -122,7 +148,17 @@ export async function loadDeptAttentionPreviewServer(params: {
         };
     }
 
-    const attentionDetailMode = params.attentionDetailMode ?? "full";
+    if (attentionDetailMode === "deferred") {
+        const needs_attention_buckets = metadataOnlyBuckets(departmentMetadata);
+        return {
+            department_id: departmentId,
+            work_unit_key: "needs_attention",
+            total: 0,
+            needs_attention_buckets,
+            bucket_count_scope: "deferred_prefetch",
+            source: "deferred_prefetch",
+        };
+    }
 
     const { items, rules, attention_reason_counts, attention_evaluation } =
         await buildOpportunityAttentionQueueItems({
