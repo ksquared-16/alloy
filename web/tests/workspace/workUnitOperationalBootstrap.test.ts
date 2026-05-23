@@ -15,7 +15,7 @@ describe("work-unit operational bootstrap runtime", () => {
         expect(src).toContain("loadAdminRouteGate");
         expect(src).toContain("loadWorkUnitOperationalBootstrap");
         expect(src).toContain("loadWorkUnitKpiPlacementsServer");
-        expect(src).toContain("loadRightRailActionsBundleServer");
+        expect(src).toContain("loadRightRailActionsBundleCached");
     });
 
     it("bootstrap loader uses shared context and single attention pass", () => {

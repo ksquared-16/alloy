@@ -12,6 +12,7 @@ import { QueueServiceError } from "@/lib/queues/QueueService";
 import { buildQueueSummariesSharedBootstrap } from "@/lib/queues/QueueService";
 import { loadWorkUnitOperationalBootstrap } from "@/lib/workspace/loadWorkUnitOperationalBootstrap";
 import { logWorkUnitOperationalBootstrapPerf } from "@/lib/workspace/workUnitOperationalBootstrapPerf";
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { loadRightRailActionsBundleCached } from "@/lib/workspace/rightRailActionsBundleCache";
 
 function parsePrimaryRowLimit(searchParams: URLSearchParams): number {
@@ -128,7 +129,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
               })();
 
         const actionsP = deferBundle
-            ? Promise.resolve({ actions: [] as Awaited<ReturnType<typeof loadRightRailActionsBundleServer>>, ms: 0, deferred: true as const })
+            ? Promise.resolve({
+                  actions: [] as ResolvedActionForClient[],
+                  ms: 0,
+                  cache_hit: false,
+                  deferred: true as const,
+              })
             : (async () => {
                   const t0 = Date.now();
                   try {
