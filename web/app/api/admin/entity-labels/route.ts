@@ -81,7 +81,7 @@ export async function PUT(request: NextRequest) {
             return NextResponse.json({ error: delErr.message }, { status: 500 });
         }
         invalidateEntityLabelsOrgCache(ctx.orgId);
-        revalidateTag(entityLabelsOrgCacheTag(ctx.orgId));
+        revalidateTag(entityLabelsOrgCacheTag(ctx.orgId), "max");
         return NextResponse.json({ ok: true });
     }
 
@@ -99,7 +99,7 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ error: upsertErr.message }, { status: 500 });
     }
     invalidateEntityLabelsOrgCache(ctx.orgId);
-    revalidateTag(entityLabelsOrgCacheTag(ctx.orgId));
+    revalidateTag(entityLabelsOrgCacheTag(ctx.orgId), "max");
     return NextResponse.json({ ok: true });
 }
 
@@ -140,6 +140,6 @@ export async function DELETE(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
     invalidateEntityLabelsOrgCache(ctx.orgId);
-    revalidateTag(entityLabelsOrgCacheTag(ctx.orgId));
+    revalidateTag(entityLabelsOrgCacheTag(ctx.orgId), "max");
     return NextResponse.json({ ok: true });
 }
