@@ -30,7 +30,7 @@ describe("workUnitBootstrap ownership", () => {
         resetWorkUnitBootstrapClientSession();
     });
 
-    it("uses ownership key without focus or defer variance", () => {
+    it("uses stable ownership key for same dept/wu/site/lane", () => {
         const a = workUnitBootstrapOwnershipKey({
             departmentId: "d1",
             workUnitId: "w1",
@@ -41,19 +41,26 @@ describe("workUnitBootstrap ownership", () => {
             workUnitId: "w1",
             selectedSiteId: "s1",
         });
-        expect(a).toBe("d1|w1|s1");
+        expect(a).toBe("d1|w1|s1||");
         expect(a).toBe(b);
     });
 
-    it("canonical URL omits focus_queue and includes primary rows for reveal", () => {
+    it("canonical URL includes focus_queue when dept selection is explicit", () => {
         const url = buildCanonicalWorkUnitOperationalBootstrapUrl({
             departmentId: "d1",
             workUnitId: "w1",
             selectedSiteId: null,
+            focusQueue: "enrolled",
         });
         expect(url).toContain("defer_bundle=false");
-        expect(url).not.toContain("focus_queue");
-        expect(url).not.toContain("attention_bucket");
+        expect(url).toContain("focus_queue=enrolled");
+    });
+
+    it("ownership key separates default lane from explicit queue prefetch", () => {
+        const base = { departmentId: "d1", workUnitId: "w1", selectedSiteId: "s1" as string | null };
+        expect(workUnitBootstrapOwnershipKey(base)).not.toBe(
+            workUnitBootstrapOwnershipKey({ ...base, focusQueue: "enrolled" })
+        );
     });
 
     it("page owner fetches once; second page call is reuse", async () => {
@@ -79,16 +86,16 @@ describe("workUnitBootstrap ownership", () => {
         const params = { departmentId: "d1", workUnitId: "w1", selectedSiteId: null as string | null };
         await fetchWorkUnitOperationalBootstrapSession(params, "page");
         const prefetch = await fetchWorkUnitOperationalBootstrapSession(params, "prefetch");
-        expect(prefetch.bootstrapOwner).toBe("suppressed");
+        expect(prefetch.bootstrapOwner).toBe("prefetch");
         expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 });
 
 describe("jank-stop wiring", () => {
-    it("dept page disables WU bootstrap prefetch", () => {
+    it("dept oper cards prefetch bootstrap with queue from href", () => {
         const dept = readFileSync(join(root, "../../app/adminV2/workspace/dept/[departmentId]/page.tsx"), "utf8");
-        expect(dept).toContain("WU bootstrap prefetch disabled");
-        expect(dept).not.toContain("void prefetchWorkUnitOperationalBootstrap");
+        expect(dept).toContain("prefetchWorkUnitOperationalBootstrapFromDeptHref");
+        expect(dept).toContain("workspaceDeptQueueNavHref");
     });
 
     it("sidecars use hard primary gate without idle fallback", () => {

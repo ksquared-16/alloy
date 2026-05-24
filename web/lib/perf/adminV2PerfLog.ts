@@ -94,6 +94,8 @@ export function perfQueueRowsClientSide(args: {
     event: string;
     work_unit_id?: string;
     queue_key?: string;
+    pill_key?: string;
+    attention_bucket_key?: string | null;
     age_ms?: number | null;
     client_cache_hit?: boolean;
     org_id?: string | null;
@@ -105,6 +107,8 @@ export function perfQueueRowsClientSide(args: {
         source: args.client_cache_hit ? "cache" : "network",
         work_unit_id: args.work_unit_id,
         queue_key: args.queue_key,
+        pill_key: args.pill_key,
+        attention_bucket_key: args.attention_bucket_key ?? undefined,
         client_cache_hit: args.client_cache_hit,
         age_ms: args.age_ms ?? undefined,
         org_id: args.org_id ?? undefined,

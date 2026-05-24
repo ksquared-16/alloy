@@ -588,12 +588,15 @@ function LegacyCrmCompactQueueMiddle({ slots }: { slots: CrmCompactRowSemanticSl
 export function CrmCompactQueuePreview({
   slots,
   urgencyTier = "standard",
+  operationalAttentionBadge = false,
   scanMode = false,
   waitlistPlacementPreview,
   waitlistStatusLabel,
 }: {
   slots: CrmCompactRowSemanticSlots;
   urgencyTier?: QueueItemVm["urgencyTier"];
+  /** Warm status pill when row has operational needs-attention (no full-card urgency wash). */
+  operationalAttentionBadge?: boolean;
   /** Work-unit lane: minimal left column — status, operational attention, next hint; detail belongs in drawer. */
   scanMode?: boolean;
   waitlistPlacementPreview?: QueueRowPlacementPriorityVm;
@@ -651,7 +654,11 @@ export function CrmCompactQueuePreview({
             {stageStatus ? (
               <div className="adminv2-ws-crm-queue-preview__scan-status-row">
                 <span
-                  className={`adminv2-ws-crm-queue-preview__status-pill adminv2-ws-crm-queue-preview__status-pill--wrap adminv2-ws-crm-queue-preview__status-pill--urgency-${urgencyTier}`}
+                  className={`adminv2-ws-crm-queue-preview__status-pill adminv2-ws-crm-queue-preview__status-pill--wrap adminv2-ws-crm-queue-preview__status-pill--urgency-${urgencyTier}${
+                    operationalAttentionBadge
+                      ? " adminv2-ws-crm-queue-preview__status-pill--operational-attention"
+                      : ""
+                  }`}
                 >
                   {formatWorkUnitQueueStatusPill(stageStatus)}
                 </span>
@@ -1076,6 +1083,7 @@ function WorkUnitQueueLane({
                       <CrmCompactQueuePreview
                         slots={crm}
                         urgencyTier={tier}
+                        operationalAttentionBadge={attentionAccent}
                         scanMode
                         waitlistPlacementPreview={
                           item.placementPriority && placementShowBucketChip ? item.placementPriority : undefined

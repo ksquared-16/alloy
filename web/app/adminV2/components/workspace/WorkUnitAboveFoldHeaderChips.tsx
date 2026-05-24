@@ -40,13 +40,13 @@ function CountBadge({ count, selected, countsDeferred }: { count: WorkUnitAboveF
             />
         );
     }
-    const display = count === "emdash" || countsDeferred ? "—" : count;
+    const display = count === "emdash" ? "—" : count;
     return (
         <span
             className={`tabular-nums rounded-full px-1 py-px text-[10px] font-bold ${
                 selected ? "bg-alloy-forge/10 text-alloy-forge" : "bg-alloy-stone/15 text-alloy-forge/70"
             }`}
-            aria-label={countsDeferred ? "Count unavailable" : undefined}
+            aria-label={countsDeferred && count === "emdash" ? "Count unavailable" : undefined}
         >
             {display}
         </span>

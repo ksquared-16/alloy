@@ -1,3 +1,8 @@
+import type { WorkUnitQueueSelection } from "@/lib/adminV2/workUnitQueueSelection";
+import {
+    workUnitActivePillKeyFromSelection,
+    workUnitQueueSelectionFetchQueueKey,
+} from "@/lib/adminV2/workUnitQueueSelection";
 import {
     opportunityDrawerSeedFromQueueItem,
     type OpportunityDrawerQueuePreviewSeed,
@@ -8,11 +13,16 @@ import type { QueuePreviewItemVm } from "@/lib/ui-v2/workspace-types";
 export type OpportunityDrawerQueueNavigator = {
     work_unit_id: string;
     department_id: string;
+    /** API queue key for the filtered lane (not synthetic pill keys). */
     queue_key: string;
+    /** Canonical filter context for this navigator instance. */
+    selection: WorkUnitQueueSelection;
     records: Array<{ id: string; preview_seed?: OpportunityDrawerQueuePreviewSeed | null }>;
+    /** Ordered ids from the loaded filtered page — same order as `records`. */
+    loaded_record_ids_in_order: string[];
     /** Queue summary total when known (may exceed `records.length`). */
     total_count?: number | null;
-    /** Bumps when the source row list changes — adjacent prefetch ignores stale generations. */
+    /** Bumps when the source row list / filter changes — adjacent prefetch ignores stale generations. */
     generation: number;
     /** Bumps on each in-drawer prev/next — rolls adjacent prefetch forward. */
     drawer_nav_generation?: number;
@@ -82,16 +92,19 @@ export function buildOpportunityDrawerQueueNavigatorFromDisplayItems(params: {
     work_unit_id: string;
     department_id: string;
     queue_key: string;
+    selection: WorkUnitQueueSelection;
     displayItems: QueuePreviewItemVm[];
     total_count?: number | null;
     generation: number;
 }): OpportunityDrawerQueueNavigator | null {
     const records: OpportunityDrawerQueueNavigator["records"] = [];
+    const loaded_record_ids_in_order: string[] = [];
     const seen = new Set<string>();
     for (const item of params.displayItems) {
         const id = String(item.id ?? "").trim();
         if (!id || seen.has(id)) continue;
         seen.add(id);
+        loaded_record_ids_in_order.push(id);
         records.push({ id, preview_seed: opportunityDrawerSeedFromQueueItem(item) });
     }
     if (!records.length) return null;
@@ -99,10 +112,29 @@ export function buildOpportunityDrawerQueueNavigatorFromDisplayItems(params: {
         work_unit_id: params.work_unit_id,
         department_id: params.department_id,
         queue_key: params.queue_key,
+        selection: params.selection,
         records,
+        loaded_record_ids_in_order,
         total_count: params.total_count ?? records.length,
         generation: params.generation,
     };
+}
+
+/** True when loaded queue rows match the navigator's canonical filter selection. */
+export function opportunityDrawerNavigatorMatchesWorkUnitSelection(params: {
+    selection: WorkUnitQueueSelection;
+    selected_pill_key: string | null;
+    loaded_queue_key: string | null;
+    attention_bucket_key: string;
+}): boolean {
+    const pill = workUnitActivePillKeyFromSelection(params.selection);
+    if (params.selected_pill_key?.trim() !== pill) return false;
+    const fetchKey = workUnitQueueSelectionFetchQueueKey(params.selection);
+    if (params.loaded_queue_key?.trim() !== fetchKey) return false;
+    if (fetchKey.toLowerCase() === "needs_attention") {
+        return (params.attention_bucket_key ?? "").trim() === (params.selection.attentionBucketKey ?? "").trim();
+    }
+    return true;
 }
 
 export function previewSeedForQueueNavigatorRecord(

@@ -31,3 +31,38 @@ export function adjacentWorkUnitQueuePillKeys(
 
     return out.slice(0, cap);
 }
+
+/** Flatten visible header pill keys (pipeline + expanded needs-attention bucket pills). */
+export function flattenWorkUnitVisibleQueuePillKeys(
+    sections: ReadonlyArray<{ queues: ReadonlyArray<{ key: string }> }> | null | undefined
+): string[] {
+    if (!sections?.length) return [];
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const sec of sections) {
+        for (const q of sec.queues) {
+            const k = String(q.key ?? "").trim();
+            if (!k || seen.has(k)) continue;
+            seen.add(k);
+            out.push(k);
+        }
+    }
+    return out;
+}
+
+/** Neighbor/visible pill keys to warm after above-fold reveal (not including the active pill). */
+export function workUnitQueuePillPrefetchTargets(
+    visiblePillKeys: readonly string[],
+    selectedPillKey: string | null,
+    cap = 6
+): string[] {
+    if (!visiblePillKeys.length || cap <= 0) return [];
+    return adjacentWorkUnitQueuePillKeys(
+        visiblePillKeys.map((key) => ({ key })),
+        selectedPillKey,
+        cap
+    );
+}
+
+/** Max concurrent background row prefetches per scheduling tick. */
+export const WORK_UNIT_QUEUE_PILL_PREFETCH_CONCURRENCY = 2;

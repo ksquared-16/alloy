@@ -4,6 +4,7 @@ import {
     bumpOpportunityDrawerAdjacentPrefetchGeneration,
     prefetchAdjacentOpportunityDrawers,
 } from "@/lib/admin/opportunityDrawerAdjacentPrefetch";
+import { workUnitQueueSelectionFromPillKey } from "@/lib/adminV2/workUnitQueueSelection";
 import { buildOpportunityDrawerQueueNavigatorFromDisplayItems } from "@/lib/admin/opportunityDrawerQueueNavigator";
 import * as intentPrefetch from "@/lib/admin/opportunityDrawerIntentPrefetch";
 
@@ -22,6 +23,7 @@ describe("prefetchAdjacentOpportunityDrawers", () => {
             work_unit_id: "wu",
             department_id: "dept",
             queue_key: "pipeline",
+            selection: workUnitQueueSelectionFromPillKey("wu", "pipeline"),
             displayItems: [
                 { id: "r1", title: "1", quickActions: [] },
                 { id: "r2", title: "2", quickActions: [] },
@@ -70,6 +72,7 @@ describe("prefetchAdjacentOpportunityDrawers", () => {
             work_unit_id: "wu",
             department_id: "dept",
             queue_key: "pipeline",
+            selection: workUnitQueueSelectionFromPillKey("wu", "pipeline"),
             displayItems: [
                 { id: "r1", title: "1", quickActions: [] },
                 { id: "r2", title: "2", quickActions: [] },

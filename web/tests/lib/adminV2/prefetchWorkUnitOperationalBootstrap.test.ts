@@ -13,21 +13,19 @@ describe("prefetchWorkUnitOperationalBootstrap", () => {
         resetWorkUnitBootstrapClientSession();
     });
 
-    it("builds operational-bootstrap URL aligned with work-unit page", () => {
+    it("builds operational-bootstrap URL with route focus queue when set", () => {
         const url = buildWorkUnitOperationalBootstrapUrl("wu-1", {
             departmentId: "dept-1",
             selectedSiteId: "site-9",
-            focusQueue: "pipeline_total",
+            focusQueue: "enrolled",
             attentionBucket: "stale_quote",
         });
         expect(url).toContain("/api/admin/work-units/wu-1/operational-bootstrap");
         expect(url).toContain("department_id=dept-1");
-        expect(url).toContain("summary_mode=all");
-        expect(url).toContain("primary_row_limit=20");
-        expect(url).not.toContain("focus_queue");
-        expect(url).not.toContain("attention_bucket");
+        expect(url).toContain("focus_queue=enrolled");
+        expect(url).toContain("attention_bucket=stale_quote");
         expect(url).toContain("workspace_site_id=site-9");
-        expect(url).toContain("defer_bundle=true");
+        expect(url).toContain("defer_bundle=false");
     });
 
     it("parses dept oper href for prefetch opts", () => {

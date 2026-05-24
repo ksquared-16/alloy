@@ -12,7 +12,7 @@ export type WorkUnitOperationalBootstrapPrefetchOpts = {
     attentionBucket?: string | null;
 };
 
-/** Query params aligned with canonical work-unit bootstrap (no focus/bucket in URL). */
+/** Query params aligned with canonical work-unit bootstrap (includes route queue when set). */
 export function buildWorkUnitOperationalBootstrapUrl(
     workUnitId: string,
     opts: WorkUnitOperationalBootstrapPrefetchOpts
@@ -21,6 +21,8 @@ export function buildWorkUnitOperationalBootstrapUrl(
         departmentId: opts.departmentId,
         workUnitId,
         selectedSiteId: opts.selectedSiteId ?? null,
+        focusQueue: opts.focusQueue ?? null,
+        attentionBucket: opts.attentionBucket ?? null,
     });
 }
 
@@ -51,6 +53,8 @@ export async function prefetchWorkUnitOperationalBootstrap(
         departmentId: opts.departmentId,
         workUnitId: opts.workUnitId,
         selectedSiteId: opts.selectedSiteId ?? null,
+        focusQueue: opts.focusQueue ?? null,
+        attentionBucket: opts.attentionBucket ?? null,
     };
     const { response } = await fetchWorkUnitOperationalBootstrapSession(ownership, "prefetch");
     if (!response.ok) {

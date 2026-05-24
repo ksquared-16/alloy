@@ -22,14 +22,15 @@ describe("workUnitBootstrapClientSession", () => {
         resetWorkUnitBootstrapClientSession();
     });
 
-    it("builds canonical defer_bundle URL without focus params", () => {
+    it("builds canonical bootstrap URL with focus_queue when route queue set", () => {
         const url = buildCanonicalWorkUnitOperationalBootstrapUrl({
             departmentId: "dept-1",
             workUnitId: "wu-1",
             selectedSiteId: "site-9",
+            focusQueue: "tour_scheduled",
         });
-        expect(url).toContain("defer_bundle=true");
-        expect(url).not.toContain("focus_queue");
+        expect(url).toContain("defer_bundle=false");
+        expect(url).toContain("focus_queue=tour_scheduled");
         expect(url).toContain("workspace_site_id=site-9");
     });
 
@@ -44,7 +45,7 @@ describe("workUnitBootstrapClientSession", () => {
         const second = await fetchWorkUnitOperationalBootstrapSession(params, "page");
         expect(second.bootstrapOwner).toBe("reuse");
         expect(fetchMock).toHaveBeenCalledTimes(1);
-        expect(workUnitBootstrapOwnershipKey(params)).toBe("dept-1|wu-1|");
+        expect(workUnitBootstrapOwnershipKey(params)).toBe("dept-1|wu-1|||");
     });
 });
 

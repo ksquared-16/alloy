@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { workUnitQueueSelectionFromPillKey } from "@/lib/adminV2/workUnitQueueSelection";
 import {
     buildOpportunityDrawerQueueNavigatorFromDisplayItems,
     opportunityDrawerQueueNavigatorRecordIds,
@@ -12,6 +13,7 @@ describe("opportunityDrawerQueueNavigator", () => {
         work_unit_id: "wu-1",
         department_id: "dept-1",
         queue_key: "pipeline",
+        selection: workUnitQueueSelectionFromPillKey("wu-1", "pipeline"),
         displayItems: [
             { id: "a", title: "A", quickActions: [] },
             { id: "b", title: "B", quickActions: [] },

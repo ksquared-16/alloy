@@ -3,6 +3,7 @@ import { mergeEnrollmentRightRailActions } from "@/lib/workspace/viewModels/enro
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { ActionsVm } from "@/lib/ui-v2/workspace-types";
 import { ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT } from "@/lib/ui-v2/adminV2LoadingGeometry";
+import { workUnitQueuePillKeySelected } from "@/lib/adminV2/workUnitQueueSelection";
 import {
     WORK_UNIT_ATTENTION_BUCKET_PILL_PREFIX,
     type WorkUnitAboveFoldChip,
@@ -61,16 +62,17 @@ const EMPTY_ACTIONS: ActionsVm = {
     overflow: [],
 };
 
-function chipSelected(
-    qKey: string,
-    input: BuildWorkUnitAboveFoldRenderModelInput
-): boolean {
-    const synth = qKey.startsWith(WORK_UNIT_ATTENTION_BUCKET_PILL_PREFIX);
-    if (synth) {
-        if (input.selected_queue_key !== "needs_attention") return false;
-        const raw = qKey.slice(WORK_UNIT_ATTENTION_BUCKET_PILL_PREFIX.length);
-        if (raw === "__all__") return !input.attention_bucket_key;
-        return input.attention_bucket_key === raw;
+function chipSelected(qKey: string, input: BuildWorkUnitAboveFoldRenderModelInput): boolean {
+    if (
+        qKey.startsWith(WORK_UNIT_ATTENTION_BUCKET_PILL_PREFIX) ||
+        input.selected_queue_key?.startsWith(WORK_UNIT_ATTENTION_BUCKET_PILL_PREFIX) ||
+        input.selected_queue_key?.toLowerCase() === "needs_attention"
+    ) {
+        return workUnitQueuePillKeySelected(
+            input.selected_queue_key,
+            qKey,
+            input.attention_bucket_key
+        );
     }
     return (
         qKey === input.selected_queue_key &&
@@ -93,7 +95,7 @@ function chipCount(
         return input.authoritative_badge_for_selected_tab;
     }
     if (selected && input.reconcile_picker_count_zero) return 0;
-    if (q.counts_deferred) return "emdash";
+    if (q.counts_deferred) return "skeleton";
     const raw = q.count;
     return typeof raw === "number" && Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : "emdash";
 }

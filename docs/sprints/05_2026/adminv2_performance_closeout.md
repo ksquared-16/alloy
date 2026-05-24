@@ -56,8 +56,19 @@
 
 ## 3. Closeout fixes (May 2026)
 
+### Critical: dept queue selection → work-unit lane (correctness)
+
+**Symptom:** From `/dept`, clicking Enrolled / Tour Scheduled / other pipeline lanes opened `/work-unit` on Contact Attempted (first default queue).
+
+**Root cause:** Canonical `operational-bootstrap` omitted `focus_queue`; client session deduped one bootstrap per work unit; bootstrap `primary_lane` overwrote URL `?queue=` via `setSelectedQueueKeyTraced("bootstrapPrimaryLane", pl.queue_key)`.
+
+**Contract:** `WorkUnitQueueSelection` in `web/lib/adminV2/workUnitQueueSelection.ts` — route `?queue=` (+ `attention_bucket` or `bucket` alias) → API `focus_queue` → bootstrap ownership key + primary lane + active pill + drawer navigator `selection`. Explicit queue beats priority-summary defaults (`resolveAuthoritativeWorkUnitQueueKey`). Drawer prev/next uses `opportunityDrawerNavigatorMatchesWorkUnitSelection` so only the loaded filtered row page is navigable.
+
+**Pill polish (same phase):** `workUnitQueuePillKeySelected` aligns dept URL synthetic NA pills with WU click styling; deferred pipeline counts hydrate via `summary_mode=partial` after reveal (`mergeWorkUnitQueueSummaryCounts`) without resetting selection or reloading rows; `counts_deferred` shows skeleton until counts land.
+
 | # | Bug | Fix |
 |---|-----|-----|
+| 0 | Wrong queue from dept | `focus_queue` on bootstrap URL; ownership key includes queue; dept prefetch parses href; WU applies `authoritativePrimary` only. |
 | 1 | Header location reload dept→WU | Sticky bootstrap + `readInitialSelectedSiteId`; removed `selectedSiteId` from WU cache layout effect deps. |
 | 2 | Drawer nav placement | `OpportunityDrawerQueueNavigatorControls` in `headerTitleRight` column above quick actions (not title row). |
 | 3 | Second next slow | `adjacentPrefetchToken` (not per-navigator generation abort); warm nav applies target id immediately then loads composed open; `prefetchOpportunityDrawerOnRowIntent` + adjacent prefetch on apply. |

@@ -16,15 +16,24 @@ export type WorkUnitBootstrapOwnership = {
     departmentId: string;
     workUnitId: string;
     selectedSiteId: string | null;
+    /** Route `?queue=` — maps to API `focus_queue` for primary lane + summary priority. */
+    focusQueue?: string | null;
+    attentionBucket?: string | null;
 };
 
-/** One bootstrap per work unit scope — ignores focus_queue, attention_bucket, defer_bundle URL variance. */
+/** One bootstrap per work unit + explicit lane (dept oper card selection must not share default-lane cache). */
 export function workUnitBootstrapOwnershipKey(params: WorkUnitBootstrapOwnership): string {
-    return [params.departmentId, params.workUnitId, params.selectedSiteId ?? ""].join("|");
+    return [
+        params.departmentId,
+        params.workUnitId,
+        params.selectedSiteId ?? "",
+        params.focusQueue?.trim() || "",
+        params.attentionBucket?.trim() || "",
+    ].join("|");
 }
 
 /**
- * Canonical GET URL for a work-unit route load. Lane selection stays client-side from URL/session refs.
+ * Canonical GET URL for a work-unit route load. When `focusQueue` is set, primary lane matches dept selection.
  */
 export function buildCanonicalWorkUnitOperationalBootstrapUrl(params: WorkUnitBootstrapOwnership): string {
     const qs = new URLSearchParams({
@@ -37,6 +46,10 @@ export function buildCanonicalWorkUnitOperationalBootstrapUrl(params: WorkUnitBo
         primary_row_limit: "8",
         defer_bundle: "false",
     });
+    const focus = params.focusQueue?.trim();
+    const bucket = params.attentionBucket?.trim();
+    if (focus) qs.set("focus_queue", focus);
+    if (bucket) qs.set("attention_bucket", bucket);
     const base = `/api/admin/work-units/${encodeURIComponent(params.workUnitId)}/operational-bootstrap?${qs.toString()}`;
     return appendWorkspaceSiteToUrl(base, params.selectedSiteId);
 }

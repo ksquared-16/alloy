@@ -143,6 +143,9 @@ export function logQueueRowClientCache(
             event: QueueRowClientCacheEvent;
             work_unit_id?: string;
             queue_key?: string;
+            /** Header pill key when distinct from API queue key (synthetic NA buckets). */
+            pill_key?: string;
+            attention_bucket_key?: string;
             age_ms?: number | null;
         },
         never
@@ -154,6 +157,8 @@ export function logQueueRowClientCache(
         event: ev.event,
         work_unit_id: ev.work_unit_id,
         queue_key: ev.queue_key,
+        pill_key: ev.pill_key ?? ev.queue_key,
+        attention_bucket_key: ev.attention_bucket_key ?? null,
         age_ms: ev.age_ms ?? null,
         client_cache_hit: client_hit,
     });

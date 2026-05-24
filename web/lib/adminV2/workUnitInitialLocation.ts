@@ -1,49 +1,33 @@
+import type { WorkUnitBootstrapOwnership } from "@/lib/adminV2/workUnitBootstrapClientSession";
+import {
+    readWorkUnitQueueLocationParams,
+    workUnitBootstrapOwnershipFromSelection,
+    workUnitQueueSelectionFromLocation,
+    type WorkUnitQueueLocationParams,
+} from "@/lib/adminV2/workUnitQueueSelection";
+
 /**
  * One-shot read of work-unit URL query on mount. Lane queue state must not re-read the URL after mount.
  */
-
-export type WorkUnitInitialLocationParams = {
-    queue: string;
-    unmapped: boolean;
-    attentionBucket: string;
-    statusKeys: string;
-    attentionReason: string;
-    attentionReasonCode: string;
-    activitySignalKey: string;
-};
+export type WorkUnitInitialLocationParams = WorkUnitQueueLocationParams;
 
 export function readWorkUnitInitialLocationParams(): WorkUnitInitialLocationParams {
-    if (typeof window === "undefined") {
-        return {
-            queue: "",
-            unmapped: false,
-            attentionBucket: "",
-            statusKeys: "",
-            attentionReason: "",
-            attentionReasonCode: "",
-            activitySignalKey: "",
-        };
-    }
-    try {
-        const sp = new URLSearchParams(window.location.search);
-        return {
-            queue: sp.get("queue")?.trim() ?? "",
-            unmapped: sp.get("unmapped")?.trim() === "1",
-            attentionBucket: (sp.get("attention_bucket") ?? "").trim(),
-            statusKeys: (sp.get("status_keys") ?? "").trim(),
-            attentionReason: (sp.get("attention_reason") ?? "").trim(),
-            attentionReasonCode: (sp.get("attention_reason_code") ?? "").trim(),
-            activitySignalKey: (sp.get("activity_signal_key") ?? "").trim(),
-        };
-    } catch {
-        return {
-            queue: "",
-            unmapped: false,
-            attentionBucket: "",
-            statusKeys: "",
-            attentionReason: "",
-            attentionReasonCode: "",
-            activitySignalKey: "",
-        };
-    }
+    return readWorkUnitQueueLocationParams();
 }
+
+/** @deprecated Prefer {@link workUnitBootstrapOwnershipFromSelection} */
+export function workUnitBootstrapOwnershipFromLocation(
+    departmentId: string,
+    workUnitId: string,
+    selectedSiteId: string | null,
+    loc: WorkUnitInitialLocationParams
+): WorkUnitBootstrapOwnership {
+    const selection = workUnitQueueSelectionFromLocation(workUnitId, loc);
+    return workUnitBootstrapOwnershipFromSelection(departmentId, selectedSiteId, selection);
+}
+
+export {
+    readWorkUnitQueueLocationParams,
+    workUnitQueueSelectionFromLocation,
+    workUnitBootstrapOwnershipFromSelection,
+} from "@/lib/adminV2/workUnitQueueSelection";

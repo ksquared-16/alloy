@@ -75,6 +75,18 @@ describe("work-unit queue stability (PERF-C-01 / C-02)", () => {
     });
 
     it("clears wrong-lane queue items when starting a foreground row fetch", () => {
-        expect(pageSource).toMatch(/pk != null && pk !== queueKey\) return null/);
+        expect(pageSource).toMatch(/pk != null && pk !== apiQueueKey\) return null/);
+    });
+
+    it("background-preloads visible queue pills including NA buckets after reveal", () => {
+        expect(pageSource).toContain("flattenWorkUnitVisibleQueuePillKeys");
+        expect(pageSource).toContain("workUnitQueuePillPrefetchTargets");
+        expect(pageSource).toContain("WORK_UNIT_QUEUE_PILL_PREFETCH_CONCURRENCY");
+        expect(pageSource).toContain('pill_key: queueKey');
+    });
+
+    it("drawer navigator tracks pill selection generation", () => {
+        expect(pageSource).toContain("opportunityDrawerNavigatorMatchesWorkUnitSelection");
+        expect(pageSource).toContain("queueNavGenerationRef");
     });
 });

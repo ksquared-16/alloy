@@ -14,13 +14,17 @@ export function parseWorkUnitBootstrapOwnershipFromHref(
     try {
         const base =
             typeof window !== "undefined" ? window.location.origin : "https://alloy.local";
-        const pathname = new URL(href, base).pathname;
-        const match = pathname.match(/\/work-unit\/([^/]+)/);
+        const url = new URL(href, base);
+        const match = url.pathname.match(/\/work-unit\/([^/]+)/);
         if (!match?.[1]) return null;
+        const queue = url.searchParams.get("queue")?.trim() ?? "";
+        const attentionBucket = url.searchParams.get("attention_bucket")?.trim() ?? "";
         return {
             departmentId,
             workUnitId: decodeURIComponent(match[1]),
             selectedSiteId,
+            focusQueue: queue || null,
+            attentionBucket: attentionBucket || null,
         };
     } catch {
         return null;
