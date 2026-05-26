@@ -21,7 +21,7 @@ import { normalizePhone } from "@/lib/contactNormalize";
 import { formatWorkspaceUsdGrouped } from "@/lib/ui-v2/formatWorkspaceCurrency";
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
 import { buildQueueOperationalAttentionPresentation } from "@/lib/opportunities/operationalAttentionExplain";
-import { getRecommendationQueuePreview } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceSelectors";
+import { resolveQueueOperationalReadPreview } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceSelectors";
 import { buildQueueRowPriorityExplanationLine } from "@/lib/opportunities/queueRowPriorityExplanation";
 
 type OppRow = WorkspaceOpportunityQueueRuntime["items"][number];
@@ -200,26 +200,15 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
     const locationContext = (row as { _location_label?: string | null })._location_label?.trim() || null;
 
     const attnPres = buildQueueOperationalAttentionPresentation(row as Record<string, unknown>, { queueScan: true });
-    const attentionReason =
-        attnPres.summaryLine ??
-        ((row as { _attention_reason_label?: string | null })._attention_reason_label?.trim() || null);
-    const queueRecommendationPreview = getRecommendationQueuePreview(rowRec);
-    const attentionSuggestionPreview =
-        queueRecommendationPreview?.nextLabel
-            ? {
-                  nextLabel: queueRecommendationPreview.nextLabel,
-                  whyLine: queueRecommendationPreview.whyLine,
-              }
-            : queueRecommendationPreview?.whyLine
-              ? {
-                    nextLabel: "",
-                    whyLine: queueRecommendationPreview.whyLine,
-                }
-              : null;
-    const attentionSuggestionPreviewResolved =
-        attentionSuggestionPreview?.nextLabel ? attentionSuggestionPreview : null;
-    const operationalNextHint =
-        attentionSuggestionPreviewResolved?.nextLabel ? null : attnPres.nextHintLine;
+    const operationalReadResolved = resolveQueueOperationalReadPreview(rowRec);
+    const hasOperationalRead = Boolean(operationalReadResolved?.line);
+
+    const attentionReason = hasOperationalRead
+        ? null
+        : attnPres.summaryLine ??
+          ((row as { _attention_reason_label?: string | null })._attention_reason_label?.trim() || null);
+
+    const operationalNextHint = hasOperationalRead ? null : attnPres.nextHintLine;
 
     const operationalSummaryPreview = (() => {
         const raw = rowRec._operational_summary_preview as
@@ -234,6 +223,7 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
             r === "low" || r === "medium" || r === "high" ? (r as "low" | "medium" | "high") : "medium";
         return { headline: headline.slice(0, 160), risk_urgency_hint };
     })();
+    const operationalSummaryPreviewResolved = hasOperationalRead ? null : operationalSummaryPreview;
 
     const notesRaw = (row as { _notes_preview?: string | null })._notes_preview;
     const familyNotePreview = formatOpportunityQueueNotesPreviewParts(notesRaw, options?.viewerTimezone ?? undefined);
@@ -248,10 +238,20 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
     const programRaw = (row as { _requested_program?: string | null })._requested_program?.trim() || null;
     const programContextDeduped = programRaw ? dedupeRedundantProgramAgeInPreview(programRaw) : null;
 
-    const queuePriorityExplanation =
-        options?.workUnitKey?.trim().toLowerCase() === "needs_attention" && rowRec._needs_attention === true
-            ? buildQueueRowPriorityExplanationLine(rowRec)
-            : null;
+    const queuePriorityExplanation = hasOperationalRead
+        ? null
+        : options?.workUnitKey?.trim().toLowerCase() === "needs_attention" && rowRec._needs_attention === true
+          ? buildQueueRowPriorityExplanationLine(rowRec)
+          : null;
+
+    const operationalReadPreview = operationalReadResolved
+        ? {
+              line: operationalReadResolved.line,
+              urgencyChipLabel: operationalReadResolved.urgencyChipLabel,
+              urgencyBand: operationalReadResolved.urgencyBand,
+              source: operationalReadResolved.source,
+          }
+        : null;
 
     const want = options?.previewWant ?? ((_f: QueueUiRowPreviewField) => true);
     const childrenLinesRefined = deriveCrmCompactChildrenLinesForWorkUnitRow({
@@ -297,8 +297,9 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
         locationContext,
         attentionReason,
         queuePriorityExplanation,
-        attentionSuggestionPreview: attentionSuggestionPreviewResolved,
-        operationalSummaryPreview,
+        attentionSuggestionPreview: null,
+        operationalReadPreview,
+        operationalSummaryPreview: operationalSummaryPreviewResolved,
         operationalNextHint,
         familyNote,
         familyNotePreview,

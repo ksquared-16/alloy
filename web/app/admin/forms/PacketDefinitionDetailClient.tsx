@@ -5,7 +5,9 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import PrimaryButton from "@/components/PrimaryButton";
 import SectionCard from "@/components/admin/SectionCard";
+import { FormsOperationalLink, FormsWorkspaceShell } from "@/components/forms/workspace";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
+import { formsWorkspaceBreadcrumbs, FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
 import { mergeFormListWithPacketItems, type PacketStepFormOption } from "@/lib/admin/forms/packetDefinitionStepForms";
 import { applyRecentFormToSteps, trimLeadingEmptyStepRows } from "@/lib/admin/forms/packetStepRecentFormPlacement";
 import {
@@ -287,21 +289,23 @@ export default function PacketDefinitionDetailClient() {
     if (!packetDefId) return <p className="p-6 text-sm text-red-700">Missing packet id.</p>;
 
     return (
-        <div className="mx-auto max-w-5xl space-y-6 p-6 text-[#31394d]">
-            <p className="text-sm">
-                <Link href={`${ADMIN_FORMS_UI_BASE}/packet-definitions`} className="font-medium text-[#00458C] hover:underline">
-                    ← All packets
-                </Link>
-                {" · "}
-                <Link href={`${ADMIN_FORMS_UI_BASE}/packets`} className="font-medium text-[#00458C] hover:underline">
-                    Packet sessions
-                </Link>
-                {" · "}
-                <Link href={ADMIN_FORMS_UI_BASE} className="font-medium text-[#00458C] hover:underline">
-                    All forms
-                </Link>
-            </p>
-            {loading ? <p className="text-sm text-[#59678b]">Loading…</p> : null}
+        <FormsWorkspaceShell
+            title={defName || "Packet builder"}
+            subtitle="Configure steps, distribute packet links, and monitor session intake."
+            breadcrumbs={formsWorkspaceBreadcrumbs([
+                { label: "Packets", href: FORMS_MODULE_ROUTES.packetDefinitions },
+                { label: defName || "Packet" },
+            ])}
+            actions={
+                <div className="flex flex-wrap gap-3">
+                    <FormsOperationalLink href={FORMS_MODULE_ROUTES.packetSessions}>
+                        Sessions
+                    </FormsOperationalLink>
+                    <FormsOperationalLink href={ADMIN_FORMS_UI_BASE}>Workspace</FormsOperationalLink>
+                </div>
+            }
+        >
+            {loading ? <p className="text-sm text-alloy-midnight/60">Loading…</p> : null}
             {refreshing ? (
                 <p className="text-xs text-[#59678b]" aria-live="polite">
                     Updating…
@@ -536,6 +540,6 @@ export default function PacketDefinitionDetailClient() {
                     </SectionCard>
                 </>
             ) : null}
-        </div>
+        </FormsWorkspaceShell>
     );
 }

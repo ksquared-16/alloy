@@ -10,9 +10,10 @@ import type {
 } from "@/contexts/GlobalAssistantContext";
 import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
 import {
-    getRecommendationDrawerStrip,
-    getRecommendationHandoff,
-} from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceSelectors";
+    buildOperationalRecommendationHandoffCopy,
+    formatOrchestratorHandoffSeedFromCopy,
+    hasStructuredOperationalHandoff,
+} from "@/lib/adminV2/bos/operationalRecommendationHandoff";
 
 export type OpportunityQueuePreviewSeed = {
     title?: string | null;
@@ -125,10 +126,6 @@ export function isStaleOperationalProposalEntity(
 
 export { STALE_OPERATIONAL_PROPOSAL_MESSAGE } from "@/lib/adminV2/bos/bosGovernanceCopy";
 
-type AttentionSuggestionHandoff = {
-    next_action?: { label?: string | null } | null;
-} | null;
-
 /**
  * Optional Orchestrator seed from drawer operational context (awareness → recommendation surface).
  * Does not trigger mutations — prefill only.
@@ -189,18 +186,12 @@ export function orchestratorHandoffSeedCommand(args: {
     overviewData: Record<string, unknown> | null | undefined;
 }): string | undefined {
     const label = args.entityLabel?.trim() || "this inquiry";
-    const canonicalHandoff = getRecommendationHandoff(args.overviewData);
-    if (canonicalHandoff?.primaryRecommendation) {
-        return `Follow up with ${label} — ${canonicalHandoff.primaryRecommendation}`;
+    if (!hasStructuredOperationalHandoff(args.overviewData)) {
+        return `Draft message for ${label}`;
     }
-    const drawerDisplay = getRecommendationDrawerStrip(args.overviewData);
-    if (drawerDisplay?.nextActionLabel) {
-        return `Follow up with ${label} — ${drawerDisplay.nextActionLabel}`;
-    }
-    const suggestion = args.overviewData?._attention_suggestion as AttentionSuggestionHandoff | undefined;
-    const nextLabel = suggestion?.next_action?.label?.trim();
-    if (nextLabel) {
-        return `Follow up with ${label} — ${nextLabel}`;
-    }
-    return `Draft message for ${label}`;
+    const copy = buildOperationalRecommendationHandoffCopy({
+        entityLabel: args.entityLabel,
+        overviewData: args.overviewData,
+    });
+    return formatOrchestratorHandoffSeedFromCopy(label, copy);
 }

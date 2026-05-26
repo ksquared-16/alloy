@@ -94,7 +94,7 @@ const baseSlots = (partial: Partial<CrmCompactRowSemanticSlots>): CrmCompactRowS
 });
 
 describe("OperationalAttentionHeaderStrip", () => {
-    it("surfaces suggestion as primary chrome (headline, suggested next step, why, draft affordance)", () => {
+    it("surfaces legacy suggestion via review assist band (draft affordance preserved)", () => {
         const html = renderToStaticMarkup(
             <OperationalAttentionHeaderStrip
                 variant="chrome"
@@ -105,17 +105,21 @@ describe("OperationalAttentionHeaderStrip", () => {
                 }}
             />,
         );
-        expect(html).toContain("What BOS has to say");
+        expect(html).toContain("Review assist");
+        expect(html).toContain("Operational read");
         expect(html).not.toContain("Future:");
         expect(html).not.toContain('data-drawer-slot="alloy_linked_actions_placeholder"');
         expect(html).toContain('data-operational-attention-canonical="chrome"');
-        expect(html).not.toContain("Operational read");
         expect(html).not.toContain("data-drawer-slot=\"operational_summary_narrative\"");
-        expect(html).toContain("Needs attention:");
-        expect(html).toContain("Next ·");
+        expect(html).not.toContain("Needs attention:");
+        expect(html).not.toContain("Next ·");
+        expect(html).not.toContain("Why ·");
+        expect(html).not.toContain("What BOS has to say");
+        expect(html).not.toContain("Alloy suggestion");
+        expect(html).toContain("Do next");
         expect(html).toContain("Respond to new request");
-        expect(html).toContain("Why ·");
-        expect(html).toContain("Operational attention: New inquiry is stale.");
+        expect(html).toContain("Why now");
+        expect(html).toContain("New inquiry is stale.");
         expect(html).toContain("Draft · not sent");
         expect(html).toContain('data-drawer-slot="deterministic_draft_trigger"');
         expect(html).toContain('aria-expanded="false"');
@@ -123,7 +127,6 @@ describe("OperationalAttentionHeaderStrip", () => {
         expect(html).not.toContain("Copy draft");
         expect(html).not.toContain('data-drawer-slot="attention_draft_popover"');
         expect(html).not.toMatch(/\bApply draft\b/);
-        expect(html).toContain("Activity");
         expect(html).toContain("Idle signal");
         expect(html).toContain("Enhance draft");
         expect(html).not.toContain("Test AI enrichment");
@@ -159,12 +162,14 @@ describe("OperationalAttentionHeaderStrip", () => {
                 }}
             />,
         );
+        expect(html).toContain("New inquiry needs timely response");
         expect(html).toContain("Send a warm first response");
         expect(html).toContain("lose momentum");
         expect(html).not.toContain("Operational attention: New inquiry is stale.");
+        expect(html).toContain('data-drawer-slot="operational_review_assist"');
     });
 
-    it("uses deterministic copy when suggestion is absent", () => {
+    it("uses calm fallback when suggestion and recommendation are absent", () => {
         const html = renderToStaticMarkup(
             <OperationalAttentionHeaderStrip
                 variant="chrome"
@@ -175,7 +180,9 @@ describe("OperationalAttentionHeaderStrip", () => {
                 }}
             />,
         );
-        expect(html).toContain("Suggested next step");
+        expect(html).toContain("Operational read");
+        expect(html).toContain("Do next");
+        expect(html).not.toContain("Suggested next step");
         expect(html).not.toContain("What BOS has to say");
         expect(html).not.toContain("Draft · not sent");
     });
@@ -218,24 +225,31 @@ describe("OperationalAttentionDrawerPanel (panel variant retained)", () => {
     });
 });
 
-describe("CrmCompactQueuePreview suggestion preview", () => {
-    it("renders compact Alloy suggestion strip (preview-only)", () => {
+describe("CrmCompactQueuePreview operational read L0", () => {
+    it("renders one operational read line (preview-only)", () => {
         const html = renderToStaticMarkup(
             <CrmCompactQueuePreview
                 scanMode
                 slots={baseSlots({
-                    attentionSuggestionPreview: {
-                        nextLabel: "Respond to new request",
-                        whyLine: "Operational attention: New inquiry is stale.",
+                    attentionReason: null,
+                    operationalReadPreview: {
+                        line: "Respond to new request — New inquiry is stale.",
+                        urgencyChipLabel: "Today",
+                        urgencyBand: "p1_today",
+                        source: "canonical_queue_preview",
                     },
                     operationalNextHint: null,
                 })}
             />,
         );
-        expect(html).toContain('data-queue-preview-slot="attention_suggestion"');
-        expect(html).toContain("Alloy suggestion");
+        expect(html).toContain('data-queue-preview-slot="operational_read"');
+        expect(html).toContain("Operational read:");
         expect(html).toContain("Respond to new request");
-        expect(html).toContain("Operational attention: New inquiry is stale.");
+        expect(html).toContain("New inquiry is stale.");
+        expect(html).toContain("Preview");
+        expect(html).not.toContain("Alloy suggestion");
+        expect(html).not.toContain("Suggested next step");
+        expect(html).not.toContain('data-queue-preview-slot="attention_suggestion"');
     });
 });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ArrowRight } from "lucide-react";
 
 import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
@@ -9,6 +9,13 @@ import {
     buildOpportunityOperationalContext,
     orchestratorHandoffSeedCommand,
 } from "@/lib/adminV2/bos/activeOperationalContext";
+import {
+    buildOperationalRecommendationHandoffCopy,
+    hasStructuredOperationalHandoff,
+    type OperationalRecommendationHandoffCopy,
+} from "@/lib/adminV2/bos/operationalRecommendationHandoff";
+import { opLabelCaps, opMetadata } from "@/lib/operational/ui/operationalVisualTokens";
+import clsx from "clsx";
 import OperationalTaskDetailPopover, {
     type OperationalTaskDetail,
 } from "@/components/admin/opportunity/OperationalTaskDetailPopover";
@@ -48,15 +55,29 @@ import {
     INQUIRY_RIGHT_COLUMN_REMINDERS_SECTION_CLASS,
 } from "@/lib/admin/drawer/opportunityInquiryRightColumnGeometry";
 
+function HandoffRowLabel({ children }: { children: ReactNode }) {
+    return <span className={clsx(opLabelCaps, "text-[9px]")}>{children}</span>;
+}
+
 function OrchestratorHandoffCard(props: {
     entityLabel?: string | null;
     layout: OpportunityOperationalStripLayout;
+    handoffCopy: OperationalRecommendationHandoffCopy | null;
+    showStructuredCopy: boolean;
     onContinue: () => void;
     /** Inquiry summary atomic column: outer slot owns fixed height + separator. */
     embeddedInRightColumnSlot?: boolean;
     continueDisabled?: boolean;
 }) {
-    const { entityLabel, layout, onContinue, embeddedInRightColumnSlot = false, continueDisabled = false } = props;
+    const {
+        entityLabel,
+        layout,
+        handoffCopy,
+        showStructuredCopy,
+        onContinue,
+        embeddedInRightColumnSlot = false,
+        continueDisabled = false,
+    } = props;
     const recordHint = entityLabel?.trim() ? entityLabel.trim() : "this inquiry";
 
     const outerClass =
@@ -77,15 +98,46 @@ function OrchestratorHandoffCard(props: {
                     className="text-[9px] font-semibold uppercase tracking-[0.14em] text-alloy-midnight/45"
                     data-operational-orchestrator-handoff-eyebrow="true"
                 >
-                    BOS handoff
+                    {handoffCopy?.eyebrow ?? "Review assist"}
                 </p>
-                <p className="mt-1 text-[10px] leading-snug text-alloy-midnight/70">
-                    <span className="font-medium text-alloy-midnight/85">Active record · </span>
-                    {recordHint}
-                </p>
-                <p className="mt-1 text-[9px] leading-snug text-alloy-midnight/55">
-                    Uses this active record in the Orchestrator. Review before anything sends.
-                </p>
+                {showStructuredCopy && handoffCopy ? (
+                    <div className="mt-1 space-y-1" data-operational-orchestrator-handoff-body="structured">
+                        <div data-handoff-row="operational_read">
+                            <HandoffRowLabel>Operational read</HandoffRowLabel>
+                            <p className="mt-0.5 text-[10px] font-medium leading-snug text-alloy-midnight/88">
+                                {handoffCopy.operationalRead}
+                            </p>
+                        </div>
+                        <div data-handoff-row="why_now">
+                            <HandoffRowLabel>Why now</HandoffRowLabel>
+                            <p className="mt-0.5 text-[10px] leading-snug text-alloy-midnight/75">{handoffCopy.whyNow}</p>
+                        </div>
+                        <div data-handoff-row="do_next">
+                            <HandoffRowLabel>Do next</HandoffRowLabel>
+                            <p className="mt-0.5 text-[10px] leading-snug text-alloy-midnight/80">{handoffCopy.doNext}</p>
+                        </div>
+                        {handoffCopy.likelyOutcome?.trim() ? (
+                            <div data-handoff-row="likely_outcome" className="text-alloy-midnight/55">
+                                <HandoffRowLabel>Likely</HandoffRowLabel>
+                                <p className={clsx("mt-0.5", opMetadata)}>{handoffCopy.likelyOutcome.trim()}</p>
+                            </div>
+                        ) : null}
+                        <p className={opMetadata}>
+                            <span className="font-medium text-alloy-midnight/70">Supporting context · </span>
+                            {handoffCopy.supportingContext ?? handoffCopy.contextLine}
+                        </p>
+                    </div>
+                ) : (
+                    <>
+                        <p className="mt-1 text-[10px] leading-snug text-alloy-midnight/70">
+                            <span className="font-medium text-alloy-midnight/85">Active record · </span>
+                            {recordHint}
+                        </p>
+                        <p className="mt-1 text-[9px] leading-snug text-alloy-midnight/55">
+                            Uses this active record in the Orchestrator. Review before anything sends.
+                        </p>
+                    </>
+                )}
                 <div className="mt-2 flex justify-end">
                     <button
                         type="button"
@@ -361,6 +413,20 @@ export default function OpportunityOperationalCompactStrip({
     const handoffSeedCommand = useMemo(
         () => orchestratorHandoffSeedCommand({ entityLabel, overviewData }),
         [entityLabel, overviewData]
+    );
+
+    const handoffCopy = useMemo(
+        () =>
+            buildOperationalRecommendationHandoffCopy({
+                entityLabel,
+                overviewData,
+            }),
+        [entityLabel, overviewData]
+    );
+
+    const showStructuredHandoffCopy = useMemo(
+        () => hasStructuredOperationalHandoff(overviewData),
+        [overviewData]
     );
 
     const onContinueInOrchestrator = useCallback(() => {
@@ -639,6 +705,8 @@ export default function OpportunityOperationalCompactStrip({
                     <OrchestratorHandoffCard
                         entityLabel={entityLabel}
                         layout={layout}
+                        handoffCopy={handoffCopy}
+                        showStructuredCopy={showStructuredHandoffCopy}
                         embeddedInRightColumnSlot
                         continueDisabled={!globalAssistant}
                         onContinue={onContinueInOrchestrator}
@@ -648,6 +716,8 @@ export default function OpportunityOperationalCompactStrip({
                 <OrchestratorHandoffCard
                     entityLabel={entityLabel}
                     layout={layout}
+                    handoffCopy={handoffCopy}
+                    showStructuredCopy={showStructuredHandoffCopy}
                     onContinue={onContinueInOrchestrator}
                 />
             ) : null}

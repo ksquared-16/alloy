@@ -1,58 +1,68 @@
 import clsx from "clsx";
 import type { ReactNode } from "react";
 import {
-    formsCaseFileRegionDescription,
-    formsCaseFileRegionTitle,
-} from "@/lib/forms/review/formsReviewClassTokens";
+    opCaseFileSectionShell,
+    opCaseFileSectionSurface,
+    opCaseFileSectionTint,
+    opRegionBand,
+    opSectionContentAfterLead,
+    opSectionContentAfterTitle,
+    opSectionSupport,
+    opSectionTitle,
+} from "@/lib/operational/ui/operationalVisualTokens";
 
 export type CaseFileSectionVariant = "default" | "attention" | "context" | "subtle";
 
-const VARIANT_SURFACE: Record<CaseFileSectionVariant, string> = {
-    default: "border-admin-border bg-white",
-    attention: "border-alloy-ember/30 bg-alloy-ember/8",
-    context: "border-alloy-blue/25 bg-alloy-blue/5",
-    subtle: "border-admin-border bg-alloy-stone/15",
-};
+export type CaseFileSectionLayout = "band" | "card";
 
 type Props = {
     id?: string;
     title: string;
     description?: string;
     variant?: CaseFileSectionVariant;
-    /** When true, omit outer border (for nested groups) */
+    /** PX-2: `band` = tonal region (default); `card` = legacy bordered shell */
+    layout?: CaseFileSectionLayout;
+    /** When true, omit outer chrome (for nested groups) */
     unstyled?: boolean;
     className?: string;
     children?: ReactNode;
 };
 
 /**
- * Case-file region shell — consistent title, spacing, and surface tone.
- * Use for Needs attention, Submitted forms, Documents, etc. (UX-D will reorder).
+ * Case-file region — band layout by default (PX-2); card layout for legacy paths.
  */
 export function CaseFileSection({
     id,
     title,
     description,
     variant = "default",
+    layout = "band",
     unstyled = false,
     className,
     children,
 }: Props) {
+    const useCard = layout === "card" && !unstyled;
+
     return (
         <section
             id={id}
             className={clsx(
-                !unstyled && "rounded-lg border px-4 py-3",
-                !unstyled && VARIANT_SURFACE[variant],
+                !unstyled && layout === "band" && opRegionBand,
+                !unstyled && layout === "band" && opCaseFileSectionTint[variant],
+                useCard && opCaseFileSectionShell,
+                useCard && opCaseFileSectionSurface[variant],
                 className
             )}
+            data-case-file-layout={layout}
         >
-            <h2 className={formsCaseFileRegionTitle}>{title}</h2>
+            <h2 className={opSectionTitle}>{title}</h2>
             {description ?
-                <p className={formsCaseFileRegionDescription}>{description}</p>
+                <p className={opSectionSupport}>{description}</p>
             : null}
             {children ?
-                <div className={description ? "mt-3" : "mt-2"}>{children}</div>
+                <div className={description ? opSectionContentAfterLead : opSectionContentAfterTitle}>
+                    {children}
+                </div>
             : null}
         </section>
     );

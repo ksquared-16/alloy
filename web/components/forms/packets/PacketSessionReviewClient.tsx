@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import {
     PacketReviewRollupView,
     type PacketReviewTechnicalDetails,
@@ -9,7 +8,9 @@ import {
 import type { PacketReviewRollupV1 } from "@/lib/forms/packets/packetReviewRollupTypes";
 import type { PacketReviewInsightV1 } from "@/lib/forms/packets/packetReviewInsightTypes";
 import { FormsReviewStatePanel, PacketReviewActionsForm } from "@/components/forms/review";
+import { FormsWorkspaceShell } from "@/components/forms/workspace";
 import { FORMS_REVIEW_ERROR, FORMS_REVIEW_LOADING } from "@/lib/forms/review/formsReviewPresentation";
+import { formsWorkspaceBreadcrumbs, FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
 
 type Props = {
     packetSessionId: string;
@@ -129,13 +130,14 @@ export function PacketSessionReviewClient({
         : null;
 
     return (
-        <div className="mx-auto max-w-4xl space-y-4 p-6 text-alloy-midnight">
-            <div className="flex flex-wrap items-center gap-3">
-                <Link href="/adminV2/forms/packets" className="text-sm font-medium text-alloy-midnight/60 hover:text-alloy-midnight">
-                    ← Packet sessions
-                </Link>
-            </div>
-
+        <FormsWorkspaceShell
+            title="Packet review"
+            subtitle="Case-file review for this intake session — approve, reject, or request correction."
+            breadcrumbs={formsWorkspaceBreadcrumbs([
+                { label: "Sessions", href: FORMS_MODULE_ROUTES.packetSessions },
+                { label: "Review" },
+            ])}
+        >
             {phase === "loading" ?
                 <FormsReviewStatePanel variant="loading" message={FORMS_REVIEW_LOADING.packetReview} />
             : phase === "error" ?
@@ -154,6 +156,6 @@ export function PacketSessionReviewClient({
                     reviewActionsSlot={reviewActions}
                 />
             : null}
-        </div>
+        </FormsWorkspaceShell>
     );
 }

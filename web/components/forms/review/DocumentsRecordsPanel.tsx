@@ -2,11 +2,8 @@
 
 import type { PacketReviewDocumentIndexEntryV1 } from "@/lib/forms/packets/packetReviewRollupTypes";
 import { ArtifactsPanel } from "@/components/forms/review/ArtifactsPanel";
+import { OperationalRegionBand } from "@/components/forms/review/OperationalRegionBand";
 import { FORMS_CASE_FILE_SECTION } from "@/lib/forms/review/formsReviewPresentation";
-import {
-    formsCaseFileRegionDescription,
-    formsCaseFileRegionTitle,
-} from "@/lib/forms/review/formsReviewClassTokens";
 
 type Props = {
     documentsIndex: PacketReviewDocumentIndexEntryV1[];
@@ -23,19 +20,18 @@ export function DocumentsRecordsPanel({
     pendingPdfGeneration = false,
 }: Props) {
     return (
-        <section id={FORMS_CASE_FILE_SECTION.documents}>
-            <h2 className={formsCaseFileRegionTitle}>Documents & records</h2>
-            <p className={formsCaseFileRegionDescription}>
-                Outputs from this intake flow — generated PDFs and submitted form records.
-            </p>
-            <div className="mt-3">
-                <ArtifactsPanel
-                    documentsIndex={documentsIndex}
-                    openingDocId={openingDocId}
-                    onOpenPdf={onOpenPdf}
-                    pendingPdfGeneration={pendingPdfGeneration}
-                />
-            </div>
-        </section>
+        <OperationalRegionBand
+            id={FORMS_CASE_FILE_SECTION.documents}
+            title="Documents & records"
+            description="Outputs from this intake flow — generated PDFs and submitted form records."
+            data-testid="documents-records-region"
+        >
+            <ArtifactsPanel
+                documentsIndex={documentsIndex}
+                openingDocId={openingDocId}
+                onOpenPdf={onOpenPdf}
+                pendingPdfGeneration={pendingPdfGeneration}
+            />
+        </OperationalRegionBand>
     );
 }

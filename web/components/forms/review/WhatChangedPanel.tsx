@@ -7,6 +7,7 @@ import {
     warningKindPresentationLabel,
     warningPresentationTone,
 } from "@/lib/forms/review/formsReviewPresentation";
+import { opBody, opGroupedSurface, opReviewHintRow } from "@/lib/operational/ui/operationalVisualTokens";
 
 type Props = {
     warnings: OperatorReviewWarningV1[];
@@ -21,7 +22,7 @@ export function WhatChangedPanel({ warnings }: Props) {
                 variant="subtle"
                 description="Submitted answers compared with known CRM context at launch."
             >
-                <p className="text-sm text-alloy-midnight/65">{FORMS_REVIEW_EMPTY.noWarnings}</p>
+                <p className={opBody}>{FORMS_REVIEW_EMPTY.noWarnings}</p>
             </CaseFileSection>
         );
     }
@@ -33,18 +34,15 @@ export function WhatChangedPanel({ warnings }: Props) {
             variant="subtle"
             description="Submitted answers differ from what was already on file — review before approving."
         >
-            <ul className="space-y-2">
+            <ul className={opGroupedSurface} data-testid="what-changed-list">
                 {warnings.map((w, i) => (
-                    <li
-                        key={`${w.kind}-${i}`}
-                        className="flex flex-wrap items-start gap-2 rounded-md border border-admin-border/60 bg-white px-2.5 py-2 text-sm text-alloy-midnight/85"
-                    >
+                    <li key={`${w.kind}-${i}`} className={opReviewHintRow}>
                         <FormsReviewBadge
                             label={warningKindPresentationLabel(w.kind)}
                             tone={warningPresentationTone(w.kind)}
                             className="mt-0.5 shrink-0"
                         />
-                        <span className="min-w-0 flex-1 leading-snug">{w.message}</span>
+                        <span className="min-w-0 flex-1">{w.message}</span>
                     </li>
                 ))}
             </ul>

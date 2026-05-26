@@ -12,10 +12,7 @@ import {
     generationLabelOperatorText,
     generationLabelTone,
 } from "@/lib/forms/review/formsReviewPresentation";
-import {
-    formsIntakeProvenanceMeta,
-    formsIntakeProvenanceOrigin,
-} from "@/lib/forms/review/formsReviewClassTokens";
+import { opProvenanceMeta, opProvenanceOrigin } from "@/lib/operational/ui/operationalVisualTokens";
 
 type Props = {
     provenance?: DocumentProvenanceV1 | null;
@@ -35,7 +32,7 @@ export function FormsProvenanceDetail({
     if (!provenance) {
         if (!fallbackLine?.trim()) return null;
         return (
-            <p className={clsx(formsIntakeProvenanceMeta, className)} data-testid="forms-provenance-fallback">
+            <p className={clsx(opProvenanceMeta, className)} data-testid="forms-provenance-fallback">
                 {fallbackLine.trim()}
             </p>
         );
@@ -49,9 +46,9 @@ export function FormsProvenanceDetail({
     return (
         <div className={clsx("space-y-0.5", className)} data-testid="forms-provenance-detail">
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <span className={formsIntakeProvenanceOrigin}>{origin}</span>
+                <span className={opProvenanceOrigin}>{origin}</span>
                 {version ?
-                    <span className={formsIntakeProvenanceMeta}>{version}</span>
+                    <span className={opProvenanceMeta}>{version}</span>
                 : null}
                 {showGenerationLabel && gen ?
                     <FormsReviewBadge
@@ -61,7 +58,7 @@ export function FormsProvenanceDetail({
                 : null}
             </div>
             {timing.length > 0 ?
-                <p className={formsIntakeProvenanceMeta}>{timing.join(" · ")}</p>
+                <p className={opProvenanceMeta}>{timing.join(" · ")}</p>
             : null}
         </div>
     );

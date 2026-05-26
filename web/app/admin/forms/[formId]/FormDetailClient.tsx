@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
+import { FormsOperationalLink, FormsWorkspaceShell } from "@/components/forms/workspace";
+import { formsWorkspaceBreadcrumbs, FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
 import PrimaryButton from "@/components/PrimaryButton";
 import { StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
 import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
@@ -276,31 +277,37 @@ export default function FormDetailClient() {
     }
 
     return (
-        <div className="space-y-6">
-            <AdminPageHeader
-                title={detail?.name ?? "Form"}
-                subtitle={detail ? "Configure fields, publish a version, then share a link." : "Loading…"}
-                actions={
-                    <div className="flex flex-wrap items-center gap-3">
-                        {openPublicEmbedUrl ? (
-                            <a
-                                href={openPublicEmbedUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-sm font-semibold text-[#00458C] hover:underline"
-                            >
-                                Open public form
-                            </a>
-                        ) : null}
-                        <Link href={submissionsHref} className="text-sm font-medium text-[#00458C] hover:underline">
-                            Submissions
-                        </Link>
-                        <Link href={ADMIN_FORMS_UI_BASE} className="text-sm font-medium text-[#00458C] hover:underline">
-                            All forms
-                        </Link>
-                    </div>
-                }
-            />
+        <FormsWorkspaceShell
+            title={detail?.name ?? "Form workspace"}
+            subtitle={
+                detail ?
+                    "Design, publish, distribute, and review intake for this definition."
+                :   "Loading form workspace…"
+            }
+            breadcrumbs={
+                detail ?
+                    formsWorkspaceBreadcrumbs([{ label: detail.name }])
+                :   formsWorkspaceBreadcrumbs([{ label: "Form" }])
+            }
+            actions={
+                <div className="flex flex-wrap items-center gap-3">
+                    {openPublicEmbedUrl ?
+                        <a
+                            href={openPublicEmbedUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs font-semibold text-alloy-blue hover:underline"
+                        >
+                            Open public form
+                        </a>
+                    :   null}
+                    <FormsOperationalLink href={submissionsHref}>Intake inbox</FormsOperationalLink>
+                    <FormsOperationalLink href={FORMS_MODULE_ROUTES.packetDefinitions}>
+                        Packets
+                    </FormsOperationalLink>
+                </div>
+            }
+        >
 
             {detail && !loading ? (
                 <div className="rounded-lg border border-[#e6e8ec] bg-[#fafbfd] px-4 py-4 sm:px-5">
@@ -654,6 +661,6 @@ export default function FormDetailClient() {
                     </div>
                 </>
             ) : null}
-        </div>
+        </FormsWorkspaceShell>
     );
 }

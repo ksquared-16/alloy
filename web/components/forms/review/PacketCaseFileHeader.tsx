@@ -11,11 +11,12 @@ import {
     packetSessionStatusTone,
 } from "@/lib/forms/review/formsReviewPresentation";
 import {
-    formsCaseFileHeaderSubtitle,
-    formsCaseFileHeaderSurface,
-    formsCaseFileHeaderTitle,
-    formsCaseFileMetaText,
-} from "@/lib/forms/review/formsReviewClassTokens";
+    opCaseFileSubtitle,
+    opCaseFileTitle,
+    opMetadata,
+    opOrientationSurface,
+    opStackMeta,
+} from "@/lib/operational/ui/operationalVisualTokens";
 
 type Props = {
     rollup: PacketReviewRollupV1;
@@ -47,14 +48,14 @@ export function PacketCaseFileHeader({ rollup, className }: Props) {
     return (
         <header
             id={FORMS_CASE_FILE_SECTION.header}
-            className={clsx(formsCaseFileHeaderSurface, className)}
+            className={clsx(opOrientationSurface, className)}
             data-testid="packet-case-file-header"
         >
-            <p className={formsCaseFileMetaText}>Packet review</p>
-            <h1 className={clsx("mt-1", formsCaseFileHeaderTitle)}>{rollup.packet_definition.name}</h1>
+            <p className={opMetadata}>Packet review</p>
+            <h1 className={clsx("mt-1", opCaseFileTitle)}>{rollup.packet_definition.name}</h1>
             {subject ?
-                <p className={formsCaseFileHeaderSubtitle}>{subject}</p>
-            :   <p className={formsCaseFileHeaderSubtitle}>Multi-step intake session</p>}
+                <p className={opCaseFileSubtitle}>{subject}</p>
+            :   <p className={opCaseFileSubtitle}>Multi-step intake session</p>}
             <div className="mt-3 flex flex-wrap items-center gap-2">
                 <FormsReviewBadge
                     label={packetSessionStatusLabel(rollup.status)}
@@ -65,10 +66,10 @@ export function PacketCaseFileHeader({ rollup, className }: Props) {
                     tone={operatorReviewStatusTone(rollup.operator_review.status)}
                 />
                 {awaiting ?
-                    <span className={formsCaseFileMetaText}>Awaiting your decision</span>
+                    <span className={opMetadata}>Awaiting your decision</span>
                 : null}
             </div>
-            <ul className={clsx("mt-3 space-y-1", formsCaseFileMetaText)}>
+            <ul className={clsx("mt-3", opStackMeta, opMetadata)}>
                 <li>
                     {prog.submitted_steps} of {prog.total_steps} steps submitted
                     {lastSubmit ? ` · Last submitted ${formatShortDate(lastSubmit)}` : ""}

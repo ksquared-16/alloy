@@ -2,8 +2,9 @@
 
 **Path:** `docs/sprints/05_2026/forms_documents_operational_experience_hardening.md`  
 **Date:** May 2026  
-**Status:** STEP 0–2 complete — audit, design, implementation cards (**no code in this step**)  
-**Position in program:** Inserted **after** Forms/Documents Phase 2 cards **P2-1 → P2-4** and **before** **P2-5** (BOS packet review insight).
+**Status:** UX implementation cards **UX-G through UX-H + P2-5** shipped — operational architecture ahead of visual layer.  
+**Position in program:** Inserted **after** Forms/Documents Phase 2 **P2-1 → P2-4**; established the **canonical BOS operational interaction reference** for AdminV2.  
+**Successor (visual layer):** [`forms_documents_product_experience_refresh.md`](./forms_documents_product_experience_refresh.md) — **PX-0 complete** (operational visual audit, visual doctrine, PX-1–PX-7 plan); implementation not started.
 
 **Binding inputs (do not diverge):**
 
@@ -14,6 +15,7 @@
 | Phase 2 design | [`forms_documents_phase_2_step1_design.md`](./forms_documents_phase_2_step1_design.md) |
 | Product | [`docs/product/documents-and-forms.md`](../../product/documents-and-forms.md) |
 | BOS placement (read-only) | [`docs/product/bos-foundation.md`](../../product/bos-foundation.md), [`bos_ux_coherence_sprint.md`](./bos_ux_coherence_sprint.md) |
+| BOS recommendation program | [`bos_operational_recommendation_intelligence_sprint.md`](./bos_operational_recommendation_intelligence_sprint.md), [`bos_operational_recommendation_phase1_execution.md`](./bos_operational_recommendation_phase1_execution.md) |
 
 **Product docs to update when cards ship:** `docs/product/documents-and-forms.md` (operator UX sections only).
 
@@ -35,7 +37,7 @@ An operator can open any intake/review path (standalone submission, public intak
 
 | Forbidden | Notes |
 |-----------|-------|
-| **P2-5 BOS insight implementation** | UX-H is **placeholder region + copy contract** only |
+| **P2-5 BOS insight** | Shipped — see Phase 2 MVP doc; visual polish in product refresh sprint |
 | DCP / field-level CRM apply | Deferred program |
 | New rollup contract version | Extend presentation only unless product amends frozen contract |
 | Review PATCH semantic changes | Status values and server behavior unchanged |
@@ -110,6 +112,121 @@ Every intake/review surface separates three layers:
 - Do not remove auditability — contain it.
 - Primary actions above the fold when `needs_review` / linkage blocked.
 - One visual “case file” vocabulary across packet page, opportunity modal, and submission detail.
+
+---
+
+## Unified BOS Operational Interaction Doctrine
+
+**Canonical status:** This section is the **shared interaction contract** for Forms/Documents and BOS Operational Recommendation programs. The Forms/Documents case-file + Review assist pattern (`IntakeCaseFileLayout`, `BosReviewSummaryPlaceholder`, `PacketReviewInsightV1`) is the **reference interaction model** for AdminV2 operational intelligence surfaces.
+
+**Mirrored in:** [`bos_operational_recommendation_intelligence_sprint.md`](./bos_operational_recommendation_intelligence_sprint.md) § Unified BOS Operational Interaction Doctrine; binding for Phase 2+ presentation work in [`bos_operational_recommendation_phase2_operational_ux.md`](./bos_operational_recommendation_phase2_operational_ux.md) (includes **§0.4 doctrine alignment audit** — AdminV2 drawer/queue/handoff convergence checklist).
+
+### BOS role
+
+BOS **is:**
+
+| Role | Operator meaning |
+|------|------------------|
+| **Operational narrator** | States what the record/session is and where it stands |
+| **Reviewer assistant** | Orients review without replacing judgment |
+| **Anomaly detector** | Surfaces diffs, linkage gaps, and attention flags |
+| **Workflow explainer** | Connects signals to existing workflow/action paths |
+| **Operational prioritization layer** | Ranks what deserves attention first |
+
+BOS **is not:**
+
+| Anti-pattern | Why forbidden |
+|--------------|---------------|
+| Chatbot | No transcript UI, no conversational turn-taking |
+| Autonomous agent | No silent execution or implied authority |
+| Giant AI paragraph generator | No walls of prose; structured bullets only |
+| Hidden workflow engine | Workflows remain visible and governed |
+| Silent mutation system | All writes via known admin routes after human action |
+
+### Operational cognition hierarchy
+
+All BOS and intake/review surfaces must prioritize information in this order:
+
+1. **Current operator action** — what can I do here, now?  
+2. **Trust / confidence state** — ready, needs attention, incomplete, blocked  
+3. **Changes / anomalies** — what differs from known records  
+4. **Operational context** — who, what flow, linked records  
+5. **Suggested focus** — where to look next (orientation, not command)  
+6. **Technical detail** — IDs, JSON, debug — collapsed by default  
+
+The UI must answer, in order:
+
+1. What is this?  
+2. Is anything wrong?  
+3. What changed?  
+4. What should I review?  
+5. What should I do next?  
+
+…before exposing implementation detail.
+
+**Forms reference mapping:**
+
+| Layer | Forms implementation |
+|-------|----------------------|
+| Orientation | `PacketCaseFileHeader`, intake context panel |
+| Trust / confidence | `BosReviewSummaryPlaceholder` readiness + checklist (`PacketReviewInsightV1`) |
+| Changes | `WhatChangedPanel` + insight `key_changes` |
+| Context | Intake context, submitted forms, documents |
+| Suggested focus | Insight `suggested_focus` + review paths |
+| Technical | `PacketReviewTechnicalPanel`, collapsed disclosures |
+
+**AdminV2 drawer/queue mapping (Phase 2+):** Queue strip, drawer L1, and handoff must converge on the same six-layer grammar — not a separate “suggestion feed” personality.
+
+### Human authority doctrine
+
+BOS **may:** summarize, explain, prioritize, suggest, draft (governed).
+
+BOS **may not:** silently mutate records, bypass review, bypass workflows, bypass permissions, or imply autonomous authority.
+
+All operational decisions remain **human-owned**. Copy must preserve explicit approval paths (approve / reject / request correction; governed Task Assist; workflow actions).
+
+### Intelligence style doctrine
+
+BOS should feel: **calm, concise, contextual, operational, trustworthy.**
+
+Avoid: assistant-chat UX, giant summaries, flashy AI marketing, excessive color/emphasis, recommendation overload, multiple competing “AI” cards on one surface.
+
+**Surface budget:** One primary intelligence region per page (e.g. region 3 Review assist on case file; one drawer strip band). Secondary surfaces defer or collapse.
+
+### Deterministic-first doctrine
+
+Preference order:
+
+1. **Deterministic operational reasoning** — rollup, resolver, linkage, warnings, progress  
+2. **Structured heuristics** — catalogs, checklists, readiness rules  
+3. **Explainable guidance** — template copy tied to signal keys  
+
+Only then:
+
+4. **LLM enrich** (optional) — copy polish, preview-only, non-authoritative  
+5. **Speculative recommendations** — never without grounding signals  
+
+LLM enrich remains: secondary, explainable, optional, non-authoritative. Shipped: `PacketReviewInsightV1` (P2-5); deferred: packet review enrich (P2-6), attention enrich (existing, preview-only).
+
+### Anti-patterns (program-wide)
+
+| Do not ship | Ship instead |
+|-------------|--------------|
+| Multiple BOS personalities per product area | One vocabulary: readiness, summary bullets, attention, focus, paths |
+| “Alloy suggestion” as primary framing | “Review assist” / operational judgment support |
+| Resolver labels as the only headline | Catalog or case-file title + supporting resolver context |
+| AI card spam in drawer + queue + panel | One canonical story per entity; projections differ by density only |
+| Chatbot drift in Orchestrator | Handoff seeds; no open-ended agent persona on operational records |
+
+---
+
+## Program handoff — visual layer
+
+Operational **logic and hierarchy** from this sprint are largely complete. The remaining gap is **unified operational product experience** (spacing, typography, surface treatment, emotional quality).
+
+Do **not** reopen review PATCH semantics, rollup contracts, or BOS insight builder logic in the visual refresh sprint unless a presentation-only extension is required.
+
+See: [`forms_documents_product_experience_refresh.md`](./forms_documents_product_experience_refresh.md).
 
 ---
 
@@ -702,10 +819,10 @@ cd web && npm run test -- tests/forms/bosReviewAssistPresentation.test.ts tests/
 
 | Phase 2 card | Relationship |
 |--------------|--------------|
-| P2-1 – P2-4 | **Prerequisites** — complete |
-| **This sprint** | UX hardening on P2 surfaces |
-| P2-5 BOS insight | **Blocked until UX-D + UX-H** — insight lands in designed region |
-| P2-6+ | Unaffected |
+| P2-1 – P2-5 | **Complete** — operational architecture + deterministic insight |
+| **This sprint (UX-G–H, D, F, E)** | Shipped — hierarchy, assist, documents, disclosure |
+| **Product refresh** | [`forms_documents_product_experience_refresh.md`](./forms_documents_product_experience_refresh.md) — visual layer next |
+| P2-6+ enrich | Optional; non-authoritative |
 
 Update [`forms_documents_phase_2_packet_review_mvp.md`](./forms_documents_phase_2_packet_review_mvp.md) implementation table when starting UX work: insert row “UX hardening sprint” before P2-5.
 

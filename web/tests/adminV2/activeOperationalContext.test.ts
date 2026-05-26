@@ -64,7 +64,7 @@ describe("activeOperationalContext", () => {
         expect(isStaleOperationalProposalEntity(null, "a")).toBe(false);
     });
 
-    it("orchestratorHandoffSeedCommand prefers canonical handoff when present", () => {
+    it("orchestratorHandoffSeedCommand prefers canonical operational read when present", () => {
         const rec = buildOperationalRecommendationV1(buildTestOperationalRecommendationInput());
         const seed = orchestratorHandoffSeedCommand({
             entityLabel: "Mitchell Family",
@@ -75,18 +75,37 @@ describe("activeOperationalContext", () => {
         });
         expect(seed).toContain("Mitchell Family");
         expect(seed).toContain(rec.render.handoff.primary_recommendation);
+        expect(seed).toContain("Do next:");
+        expect(seed).toContain("Why now:");
         expect(seed).not.toContain("Send tour confirmation");
+        expect(seed).not.toContain("Follow up with");
     });
 
-    it("orchestratorHandoffSeedCommand uses suggestion next_action when present", () => {
+    it("orchestratorHandoffSeedCommand uses legacy suggestion with do-next vocabulary", () => {
         const seed = orchestratorHandoffSeedCommand({
             entityLabel: "Mitchell Family",
             overviewData: {
-                _attention_suggestion: { next_action: { label: "Send tour confirmation" } },
+                _attention_suggestion: {
+                    version: 1,
+                    agent_key: "needs_attention_suggestion",
+                    suggestion_id: "x",
+                    target: { entity_type: "opportunities", entity_id: "opp-1" },
+                    source: {
+                        resolver: "opportunity_attention",
+                        resolver_version: 2,
+                        primary_reason_code: "stale_new_inquiry",
+                        reason_codes: ["stale_new_inquiry"],
+                    },
+                    next_action: { label: "Send tour confirmation", key: "x", action_family: "follow_up", confidence: "deterministic" },
+                    reasoning: { summary: "Tour pending follow-up.", factors: [] },
+                    generated_at_iso: "2026-05-20T12:00:00.000Z",
+                },
             },
         });
         expect(seed).toContain("Mitchell Family");
         expect(seed).toContain("Send tour confirmation");
+        expect(seed).toContain("Do next:");
+        expect(seed).toContain("Why now:");
     });
 
     it("orchestratorHandoffSeedCommand falls back to draft message label", () => {

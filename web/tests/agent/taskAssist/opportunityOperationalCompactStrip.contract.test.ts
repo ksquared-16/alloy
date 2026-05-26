@@ -52,7 +52,8 @@ describe("OpportunityOperationalCompactStrip", () => {
         expect(src).toContain("anchorEl={sendPopoverAnchorEl}");
         expect(src).toContain("pointer-events-none");
         expect(src).toContain("data-scheduled-send-attention-banner");
-        expect(src).not.toContain("disabled={");
+        const sendChipBlock = src.match(/stripSends\.map\([\s\S]*?\}\)\}/);
+        expect(sendChipBlock?.[0] ?? "", "scheduled-send chips stay actionable").not.toContain("disabled={");
     });
 
     it("task chips still use OperationalTaskDetailPopover", () => {
@@ -65,7 +66,8 @@ describe("OpportunityOperationalCompactStrip", () => {
     it("operational strip handoff focuses Orchestrator with active drawer context", () => {
         const src = readFileSync(stripPath, "utf8");
         expect(src).toContain("OrchestratorHandoffCard");
-        expect(src).toContain("BOS handoff");
+        expect(src).toContain("Review assist");
+        expect(src).toContain("Operational read");
         expect(src).toContain("Continue in Orchestrator");
         expect(src).toContain("data-operational-orchestrator-handoff-card");
         expect(src).toContain("data-operational-orchestrator-handoff-eyebrow");

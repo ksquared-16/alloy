@@ -580,6 +580,41 @@ function LegacyCrmCompactQueueMiddle({ slots }: { slots: CrmCompactRowSemanticSl
   return <>{nodes}</>;
 }
 
+function queueUrgencyChipClass(band: string | null | undefined): string {
+  if (band === "p0_urgent") return "border-alloy-ember/30 bg-alloy-ember/10 text-alloy-ember";
+  if (band === "p1_today") return "border-alloy-blue/30 bg-alloy-blue/10 text-alloy-blue";
+  return "border-admin-border bg-alloy-stone/30 text-alloy-midnight/70";
+}
+
+/** L0 queue operational read — one line, optional sequencing chip (BOS Phase 2 / Card 2.3). */
+function CrmCompactOperationalReadPreview({
+  preview,
+  layout = "scan",
+}: {
+  preview: NonNullable<CrmCompactRowSemanticSlots["operationalReadPreview"]>;
+  layout?: "scan" | "full";
+}) {
+  return (
+    <div
+      className={`adminv2-ws-crm-queue-preview__operational-read adminv2-ws-crm-queue-preview__operational-read--${layout}`}
+      data-queue-preview-slot="operational_read"
+      title="Preview — open the record for full operational read."
+    >
+      <span className="adminv2-ws-crm-queue-preview__operational-read-boundary">Preview</span>
+      {preview.urgencyChipLabel ? (
+        <span
+          className={`adminv2-ws-crm-queue-preview__urgency-chip inline-flex shrink-0 items-center rounded-md border px-1 py-0.5 text-[9px] font-medium leading-tight ${queueUrgencyChipClass(preview.urgencyBand)}`}
+          data-testid="queue-operational-read-urgency-chip"
+        >
+          {preview.urgencyChipLabel}
+        </span>
+      ) : null}
+      <span className="adminv2-ws-crm-queue-preview__operational-read-label">Operational read:</span>
+      <span className="adminv2-ws-crm-queue-preview__operational-read-text">{preview.line}</span>
+    </div>
+  );
+}
+
 /**
  * CRM-compact queue preview — 3 zones: identity (left), fact groups (middle), actions (host).
  * Middle follows work-unit queue row doctrine when `crmFactGroups` is set.
@@ -607,9 +642,9 @@ export function CrmCompactQueuePreview({
       ? `${slots.stageLabel} · ${slots.statusLabel}`
       : slots.stageLabel || slots.statusLabel || null;
   const noteStress = Boolean(slots.attentionReason?.trim());
-  const operationalStrong = Boolean(slots.attentionReason?.trim());
+  const operationalStrong = Boolean(slots.attentionReason?.trim() || slots.operationalReadPreview?.line);
   const nextHint = slots.operationalNextHint?.trim() ?? "";
-  const sugPrev = slots.attentionSuggestionPreview;
+  const operationalRead = slots.operationalReadPreview;
 
   const staleTone =
     slots.activityStale?.severity === "high"
@@ -708,20 +743,8 @@ export function CrmCompactQueuePreview({
                 </span>
               </div>
             ) : null}
-            {sugPrev?.nextLabel ? (
-              <div
-                className="adminv2-ws-crm-queue-preview__suggestion"
-                data-queue-preview-slot="attention_suggestion"
-                title="Preview only — open the record for the full recommendation."
-              >
-                <div className="adminv2-ws-crm-queue-preview__suggestion-head">
-                  <span className="adminv2-ws-crm-queue-preview__suggestion-chip">Alloy suggestion</span>
-                </div>
-                <div className="adminv2-ws-crm-queue-preview__suggestion-next">{sugPrev.nextLabel}</div>
-                {sugPrev.whyLine ? (
-                  <div className="adminv2-ws-crm-queue-preview__suggestion-why">{sugPrev.whyLine}</div>
-                ) : null}
-              </div>
+            {operationalRead?.line ? (
+              <CrmCompactOperationalReadPreview preview={operationalRead} layout="scan" />
             ) : null}
             {nextHint ? (
               <div className="adminv2-ws-crm-queue-preview__operational-next-scan">Next: {nextHint}</div>
@@ -800,20 +823,8 @@ export function CrmCompactQueuePreview({
               </span>
             </div>
           ) : null}
-          {sugPrev?.nextLabel ? (
-            <div
-              className="adminv2-ws-crm-queue-preview__suggestion"
-              data-queue-preview-slot="attention_suggestion"
-              title="Preview only — open the record for the full recommendation."
-            >
-              <div className="adminv2-ws-crm-queue-preview__suggestion-head">
-                <span className="adminv2-ws-crm-queue-preview__suggestion-chip">Alloy suggestion</span>
-              </div>
-              <div className="adminv2-ws-crm-queue-preview__suggestion-next">{sugPrev.nextLabel}</div>
-              {sugPrev.whyLine ? (
-                <div className="adminv2-ws-crm-queue-preview__suggestion-why">{sugPrev.whyLine}</div>
-              ) : null}
-            </div>
+          {operationalRead?.line ? (
+            <CrmCompactOperationalReadPreview preview={operationalRead} layout="full" />
           ) : null}
           {nextHint ? (
             <div className="adminv2-ws-crm-queue-preview__operational-next text-[11px] leading-snug text-alloy-midnight/58">

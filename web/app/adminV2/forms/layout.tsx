@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { buildAccessScopeCacheFingerprint, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import AdminV2WorkspaceClientProviders from "@/app/adminV2/workspace/AdminV2WorkspaceClientProviders";
+import { FormsWorkspaceChrome } from "@/components/forms/workspace";
 import type { AdminViewerTimezoneValue } from "@/contexts/AdminViewerTimezoneContext";
 import { loadAdminViewerTimezoneBootstrap } from "@/lib/admin/viewerTimezoneBootstrap";
 import { loadOperationalOrgTimezoneIana } from "@/lib/admin/loadOperationalOrgTimezoneServer";
@@ -72,7 +73,7 @@ export default async function AdminV2FormsLayout({
       initialViewerTimezone={viewerTimezone}
       initialOperationalTimezoneIana={operationalTimezoneIana}
     >
-      {children}
+      <FormsWorkspaceChrome>{children}</FormsWorkspaceChrome>
     </AdminV2WorkspaceClientProviders>
   );
 }

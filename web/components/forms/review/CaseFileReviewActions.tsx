@@ -4,10 +4,11 @@ import clsx from "clsx";
 import type { ReactNode } from "react";
 import { FORMS_CASE_FILE_SECTION } from "@/lib/forms/review/formsReviewPresentation";
 import {
-    formsCaseFileMetaText,
-    formsCaseFileRegionTitle,
-    formsCaseFileReviewActionsSurface,
-} from "@/lib/forms/review/formsReviewClassTokens";
+    opMetadata,
+    opReviewActionsSurface,
+    opSectionSupport,
+    opSectionTitle,
+} from "@/lib/operational/ui/operationalVisualTokens";
 
 type Props = {
     children: ReactNode;
@@ -21,14 +22,15 @@ export function CaseFileReviewActions({ children, className, variant = "page" }:
     return (
         <section
             id={FORMS_CASE_FILE_SECTION.reviewActions}
-            className={clsx(formsCaseFileReviewActionsSurface, variant === "modal" && "px-3 py-3", className)}
+            className={clsx(opReviewActionsSurface, variant === "modal" && "px-4 py-3", className)}
             data-testid="case-file-review-actions"
         >
-            <h2 className={formsCaseFileRegionTitle}>Review decision</h2>
-            <p className={formsCaseFileMetaText}>
-                Your decision is recorded on this packet session. Approving may generate PDFs for mapped steps.
+            <h2 className={opSectionTitle}>Review decision</h2>
+            <p className={opSectionSupport}>Your decision is recorded on this packet session.</p>
+            <p className={clsx("mt-1", opMetadata)}>
+                Approving may generate PDFs for mapped steps. Nothing applies automatically.
             </p>
-            <div className="mt-3">{children}</div>
+            <div className="mt-4">{children}</div>
         </section>
     );
 }

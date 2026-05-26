@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
+import { FormsOperationalLink, FormsWorkspaceShell } from "@/components/forms/workspace";
+import { formsWorkspaceBreadcrumbs } from "@/lib/forms/formsModuleNav";
 import { StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
 import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
@@ -69,25 +70,19 @@ export default function FormSubmissionsClient() {
     }
 
     return (
-        <div className="space-y-6">
-            <AdminPageHeader
-                title={formName ? `Submissions — ${formName}` : "Submissions"}
-                subtitle="Draft and submitted responses for this form."
-                actions={
-                    <div className="flex flex-wrap gap-3">
-                        <Link
-                            href={`${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(formId)}`}
-                            className="text-sm font-medium text-[#00458C] hover:underline"
-                        >
-                            Form detail
-                        </Link>
-                        <Link href={ADMIN_FORMS_UI_BASE} className="text-sm font-medium text-[#00458C] hover:underline">
-                            All forms
-                        </Link>
-                    </div>
-                }
-            />
-
+        <FormsWorkspaceShell
+            title={formName ? `Intake inbox — ${formName}` : "Intake inbox"}
+            subtitle="Draft and submitted responses for this form — open a row for case-file review."
+            breadcrumbs={formsWorkspaceBreadcrumbs([
+                { label: formName ?? "Form", href: `${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(formId)}` },
+                { label: "Submissions" },
+            ])}
+            actions={
+                <FormsOperationalLink href={`${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(formId)}`}>
+                    Form workspace
+                </FormsOperationalLink>
+            }
+        >
             <SectionCard title="Recent submissions">
                 {loading ? (
                     <p className="text-sm text-[#59678b]">Loading…</p>
@@ -156,6 +151,6 @@ export default function FormSubmissionsClient() {
                     </div>
                 )}
             </SectionCard>
-        </div>
+        </FormsWorkspaceShell>
     );
 }

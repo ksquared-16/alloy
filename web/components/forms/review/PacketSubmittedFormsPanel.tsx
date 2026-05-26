@@ -7,18 +7,18 @@ import { validateFormSchema } from "@/lib/forms/schema";
 import type { PacketReviewRollupV1 } from "@/lib/forms/packets/packetReviewRollupTypes";
 import { formatShortDate } from "@/lib/forms/packets/documentProvenanceDisplay";
 import { FormsArtifactBadge } from "@/components/forms/review/FormsArtifactBadge";
+import { OperationalRegionBand } from "@/components/forms/review/OperationalRegionBand";
 import {
     FORMS_CASE_FILE_SECTION,
     FORMS_REVIEW_EMPTY,
 } from "@/lib/forms/review/formsReviewPresentation";
 import {
-    formsCaseFileActionLink,
-    formsCaseFileAnswerSurface,
-    formsCaseFileMetaText,
-    formsCaseFileRegionDescription,
-    formsCaseFileRegionTitle,
-    formsCaseFileStepCard,
-} from "@/lib/forms/review/formsReviewClassTokens";
+    opActionLink,
+    opAnswerSurface,
+    opGroupedRowInner,
+    opGroupedSurface,
+    opMetadata,
+} from "@/lib/operational/ui/operationalVisualTokens";
 
 type Props = {
     rollup: PacketReviewRollupV1;
@@ -26,14 +26,15 @@ type Props = {
 
 export function PacketSubmittedFormsPanel({ rollup }: Props) {
     return (
-        <section id={FORMS_CASE_FILE_SECTION.submittedForms}>
-            <h2 className={formsCaseFileRegionTitle}>Submitted forms</h2>
-            <p className={formsCaseFileRegionDescription}>
-                Read-only answers from each packet step — artifacts are listed below.
-            </p>
+        <OperationalRegionBand
+            id={FORMS_CASE_FILE_SECTION.submittedForms}
+            title="Submitted forms"
+            description="Read-only answers from each packet step — artifacts are listed below."
+            data-testid="submitted-forms-region"
+        >
             {rollup.steps.length === 0 ?
-                <p className={clsx("mt-2", formsCaseFileMetaText)}>{FORMS_REVIEW_EMPTY.noSteps}</p>
-            :   <ul className="mt-3 space-y-3">
+                <p className={opMetadata}>{FORMS_REVIEW_EMPTY.noSteps}</p>
+            :   <ul className={opGroupedSurface} data-testid="submitted-forms-list">
                     {rollup.steps.map((step) => {
                         let schema = null;
                         let payload: FormPayload = { values: {}, groups: {}, signatures: {} };
@@ -53,7 +54,7 @@ export function PacketSubmittedFormsPanel({ rollup }: Props) {
                             step.artifact.kind === "generated_pdf" || step.artifact.kind === "submitted_record";
 
                         return (
-                            <li key={step.session_item_id} className={formsCaseFileStepCard}>
+                            <li key={step.session_item_id} className={opGroupedRowInner}>
                                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                                     <h3 className="text-sm font-medium text-alloy-midnight">
                                         Step {step.sequence_index + 1}: {step.form_name}
@@ -62,44 +63,41 @@ export function PacketSubmittedFormsPanel({ rollup }: Props) {
                                         <FormsArtifactBadge kind={step.artifact.kind} />
                                     :   null}
                                 </div>
-                                <p className={clsx("mt-0.5", formsCaseFileMetaText)}>
+                                <p className={clsx("mt-0.5", opMetadata)}>
                                     {step.submitted_at ?
                                         `Submitted ${formatShortDate(step.submitted_at)}`
                                     :   "Not submitted"}
                                     {step.version_number != null ? ` · Form version ${step.version_number}` : ""}
                                 </p>
 
-                                <div className="mt-2">
-                                    {schema ?
-                                        <div className={formsCaseFileAnswerSurface}>
-                                            <FormEngineRenderer
-                                                schema={schema}
-                                                payload={payload}
-                                                onChange={() => {}}
-                                                mode="readonly"
-                                                optionValuesByFieldId={step.answer_view?.option_values_by_field_id}
-                                            />
-                                        </div>
-                                    : step.submission_status === "submitted" && step.artifact.admin_submission_path ?
-                                        <p className={formsCaseFileMetaText}>
-                                            Answers could not be rendered.{" "}
-                                            <a
-                                                href={step.artifact.admin_submission_path}
-                                                className={formsCaseFileActionLink}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                            >
-                                                Open submission
-                                            </a>
-                                        </p>
-                                    :   <p className={formsCaseFileMetaText}>Not submitted yet.</p>
-                                    }
-                                </div>
+                                {schema ?
+                                    <div className={opAnswerSurface}>
+                                        <FormEngineRenderer
+                                            schema={schema}
+                                            payload={payload}
+                                            onChange={() => {}}
+                                            mode="readonly"
+                                            optionValuesByFieldId={step.answer_view?.option_values_by_field_id}
+                                        />
+                                    </div>
+                                : step.submission_status === "submitted" && step.artifact.admin_submission_path ?
+                                    <p className={clsx("mt-2", opMetadata)}>
+                                        Answers could not be rendered.{" "}
+                                        <a
+                                            href={step.artifact.admin_submission_path}
+                                            className={opActionLink}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                        >
+                                            Open submission
+                                        </a>
+                                    </p>
+                                :   <p className={clsx("mt-2", opMetadata)}>Not submitted yet.</p>}
                             </li>
                         );
                     })}
                 </ul>
             }
-        </section>
+        </OperationalRegionBand>
     );
 }

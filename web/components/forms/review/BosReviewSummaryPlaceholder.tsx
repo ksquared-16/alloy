@@ -15,14 +15,22 @@ import {
 } from "@/lib/forms/review/bosReviewAssistPresentation";
 import { bosReviewAssistFromPacketInsight } from "@/lib/forms/review/packetReviewInsightPresentation";
 import {
-    formsBosAssistAuthorityNote,
-    formsBosAssistBulletList,
-    formsBosAssistSubheading,
-    formsBosAssistSurface,
-    formsCaseFileMetaText,
-    formsCaseFileRegionDescription,
-    formsCaseFileRegionTitle,
-} from "@/lib/forms/review/formsReviewClassTokens";
+    opAssistBodyOffset,
+    opAttentionText,
+    opAttentionTextCompact,
+    opInsightAuthorityNote,
+    opInsightBulletList,
+    opInsightChecklistStatus,
+    opInsightSummary,
+    opInsightSummaryCompact,
+    opInsightSupport,
+    opIntelligenceSurface,
+    opLabelCaps,
+    opMetadata,
+    opSectionTitle,
+    opStackSection,
+    opStackSectionCompact,
+} from "@/lib/operational/ui/operationalVisualTokens";
 
 type Props = {
     className?: string;
@@ -52,9 +60,9 @@ function AssistSubsection({
 }) {
     return (
         <section data-testid={testId}>
-            <h3 className={formsBosAssistSubheading}>{title}</h3>
+            <h3 className={opLabelCaps}>{title}</h3>
             {items.length > 0 ?
-                <ul className={formsBosAssistBulletList}>
+                <ul className={opInsightBulletList}>
                     {items.map((item, i) => (
                         <li key={`${testId}-${i}`} className="flex gap-2">
                             <span className="text-alloy-midnight/35" aria-hidden>
@@ -65,7 +73,7 @@ function AssistSubsection({
                     ))}
                 </ul>
             : emptyCopy ?
-                <p className={clsx("mt-1", formsCaseFileMetaText)}>{emptyCopy}</p>
+                <p className={clsx("mt-1", opMetadata)}>{emptyCopy}</p>
             :   null}
         </section>
     );
@@ -75,11 +83,11 @@ function AssistBody({ model, compact }: { model: BosReviewAssistModel; compact?:
     const summaryBullets = model.summaryBullets?.filter(Boolean) ?? [];
 
     return (
-        <div className={clsx("space-y-3", compact && "space-y-2.5")}>
+        <div className={clsx(compact ? opStackSectionCompact : opStackSection)}>
             {summaryBullets.length > 1 ?
                 <section data-testid="bos-review-summary">
-                    <h3 className={formsBosAssistSubheading}>Summary</h3>
-                    <ul className={formsBosAssistBulletList}>
+                    <h3 className={opLabelCaps}>Summary</h3>
+                    <ul className={opInsightBulletList}>
                         {summaryBullets.map((item, i) => (
                             <li key={`summary-${i}`} className="flex gap-2">
                                 <span className="text-alloy-midnight/35" aria-hidden>
@@ -91,7 +99,7 @@ function AssistBody({ model, compact }: { model: BosReviewAssistModel; compact?:
                     </ul>
                 </section>
             :   <p
-                    className={clsx("text-sm leading-snug text-alloy-midnight/85", compact && "text-[13px]")}
+                    className={clsx(compact ? opInsightSummaryCompact : opInsightSummary)}
                     data-testid="bos-review-summary"
                 >
                     {model.summary}
@@ -100,12 +108,12 @@ function AssistBody({ model, compact }: { model: BosReviewAssistModel; compact?:
 
             {model.checklist && model.checklist.length > 0 ?
                 <section data-testid="bos-review-checklist">
-                    <h3 className={formsBosAssistSubheading}>Review confidence</h3>
-                    <ul className={formsBosAssistBulletList}>
+                    <h3 className={opLabelCaps}>Review confidence</h3>
+                    <ul className={opInsightBulletList}>
                         {model.checklist.map((item) => (
                             <li key={item.key} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                                 <span>{item.label}</span>
-                                <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
+                                <span className={opInsightChecklistStatus}>
                                     {checklistStatusLabel(item.status)}
                                 </span>
                             </li>
@@ -137,15 +145,13 @@ function AssistBody({ model, compact }: { model: BosReviewAssistModel; compact?:
             : null}
 
             <section data-testid="bos-suggested-focus">
-                <h3 className={formsBosAssistSubheading}>Suggested focus</h3>
-                <p className={clsx("mt-1 text-xs leading-snug text-alloy-midnight/80", compact && "text-[11px]")}>
-                    {model.suggestedFocus}
-                </p>
+                <h3 className={opLabelCaps}>Suggested focus</h3>
+                <p className={compact ? opAttentionTextCompact : opAttentionText}>{model.suggestedFocus}</p>
             </section>
 
             <section data-testid="bos-action-guidance">
-                <h3 className={formsBosAssistSubheading}>Review paths</h3>
-                <ul className={formsBosAssistBulletList}>
+                <h3 className={opLabelCaps}>Review paths</h3>
+                <ul className={opInsightBulletList}>
                     {model.reviewPaths.map((path, i) => (
                         <li key={`path-${i}`} className="flex gap-2">
                             <span className="text-alloy-midnight/35" aria-hidden>
@@ -157,7 +163,7 @@ function AssistBody({ model, compact }: { model: BosReviewAssistModel; compact?:
                 </ul>
             </section>
 
-            <p className={formsBosAssistAuthorityNote} data-testid="bos-human-authority-note">
+            <p className={opInsightAuthorityNote} data-testid="bos-human-authority-note">
                 {model.humanAuthorityNote ??
                     "Read-only guidance from submitted data. You approve, reject, or request correction — nothing applies automatically."}
             </p>
@@ -167,12 +173,6 @@ function AssistBody({ model, compact }: { model: BosReviewAssistModel; compact?:
 
 /**
  * BOS review assist region (UX-H) — operational framing slot for P2-5 deterministic insight.
- *
- * P2-5 implementer contract:
- * - Keep `id={FORMS_CASE_FILE_SECTION.bosSummary}` and `data-testid="bos-review-summary-placeholder"`.
- * - Replace bullet content via `deriveBosPacketReviewAssist` or pass enriched model props — do not add LLM calls here.
- * - Preserve human-authority footer; max ~3 bullets per subsection; no chat transcript layout.
- * - Parent owns any future network fetch; this component stays presentational.
  */
 export function BosReviewSummaryPlaceholder({
     className,
@@ -194,13 +194,13 @@ export function BosReviewSummaryPlaceholder({
             data-testid="bos-review-summary-placeholder"
             data-bos-readiness={model.readinessKey}
             data-bos-source={insight ? "insight" : rollup ? "rollup" : submissionContext ? "submission" : "empty"}
-            className={clsx(formsBosAssistSurface, className)}
+            className={clsx(opIntelligenceSurface, className)}
             aria-label={BOS_REVIEW_SUMMARY_PLACEHOLDER_TITLE}
         >
             <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                    <p className={formsCaseFileRegionTitle}>{BOS_REVIEW_SUMMARY_PLACEHOLDER_TITLE}</p>
-                    <p className={formsCaseFileRegionDescription}>Operational guidance · read-only</p>
+                    <p className={opSectionTitle}>{BOS_REVIEW_SUMMARY_PLACEHOLDER_TITLE}</p>
+                    <p className={opInsightSupport}>Operational guidance · read-only</p>
                 </div>
                 <span data-testid="bos-readiness-badge">
                     <FormsReviewBadge label={model.readinessLabel} tone={model.readinessTone} />
@@ -208,10 +208,10 @@ export function BosReviewSummaryPlaceholder({
             </div>
 
             {loading ?
-                <p className={clsx("mt-3", formsCaseFileMetaText)} data-testid="bos-review-loading">
+                <p className={clsx(opAssistBodyOffset, opMetadata)} data-testid="bos-review-loading">
                     Preparing review summary…
                 </p>
-            :   <div className="mt-3">
+            :   <div className={opAssistBodyOffset}>
                     <AssistBody model={model} compact={compact} />
                 </div>
             }

@@ -1,4 +1,5 @@
-/* UI V2 workspace zones — operating surface, not generic card soup */
+/* UI V2 workspace zones — operating surface, not generic card soup.
+ * Operational surface rhythm (Forms/BOS case-file): web/lib/operational/ui/operationalVisualTokens.ts */
 
 .adminv2-ws-root {
   --ws-rail: 345px;
@@ -7055,6 +7056,43 @@
   line-height: 1.38;
   font-weight: 500;
   color: color-mix(in srgb, var(--d-muted) 42%, var(--d-text-primary, #273f52));
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__operational-read {
+  margin-top: 5px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 6px;
+  max-width: 100%;
+  font-size: 10px;
+  line-height: 1.38;
+  color: color-mix(in srgb, var(--d-text-primary, #273f52) 88%, var(--d-muted));
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__operational-read-boundary {
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--d-muted) 55%, var(--d-text-primary, #273f52));
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__operational-read-label {
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--d-muted) 50%, var(--d-text-primary, #273f52));
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__operational-read-text {
+  font-weight: 550;
+  line-height: 1.38;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-preview-stale {

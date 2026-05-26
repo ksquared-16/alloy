@@ -5,10 +5,12 @@ import type { IntakeArtifactDisplayItem } from "@/lib/forms/review/intakeArtifac
 import { artifactKindDisplayLabel } from "@/lib/forms/packets/documentProvenanceDisplay";
 import { FormsProvenanceDetail } from "@/components/forms/review/FormsProvenanceDetail";
 import {
-    formsCaseFileActionLink,
-    formsIntakeArtifactCard,
-    formsIntakeArtifactKindLabel,
-} from "@/lib/forms/review/formsReviewClassTokens";
+    opActionLink,
+    opActionRow,
+    opContextValue,
+    opIntakeArtifactRow,
+    opLabelCapsSoft,
+} from "@/lib/operational/ui/operationalVisualTokens";
 
 type Props = {
     item: IntakeArtifactDisplayItem;
@@ -21,11 +23,11 @@ export function IntakeArtifactCard({ item, openingDocId = null, onOpenPdf }: Pro
     const showOpenPdf = item.openTarget === "signed_url" && item.documentId && onOpenPdf;
 
     return (
-        <li className={formsIntakeArtifactCard} data-testid={`intake-artifact-${item.kind}`}>
+        <li className={opIntakeArtifactRow} data-testid={`intake-artifact-${item.kind}`}>
             <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0 flex-1 space-y-1">
-                    <p className="font-medium text-alloy-midnight leading-snug">{item.title}</p>
-                    <p className={formsIntakeArtifactKindLabel}>{kindLabel}</p>
+                    <p className={clsx(opContextValue, "font-medium leading-snug")}>{item.title}</p>
+                    <p className={opLabelCapsSoft}>{kindLabel}</p>
                     <FormsProvenanceDetail
                         provenance={item.provenance}
                         fallbackLine={item.provenanceFallbackLine}
@@ -33,11 +35,11 @@ export function IntakeArtifactCard({ item, openingDocId = null, onOpenPdf }: Pro
                     />
                 </div>
             </div>
-            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+            <div className={opActionRow}>
                 {item.submissionPath ?
                     <a
                         href={item.submissionPath}
-                        className={formsCaseFileActionLink}
+                        className={opActionLink}
                         target="_blank"
                         rel="noreferrer"
                     >
@@ -47,7 +49,7 @@ export function IntakeArtifactCard({ item, openingDocId = null, onOpenPdf }: Pro
                 {item.packetSessionPath ?
                     <a
                         href={item.packetSessionPath}
-                        className={formsCaseFileActionLink}
+                        className={opActionLink}
                         target="_blank"
                         rel="noreferrer"
                     >
@@ -57,7 +59,7 @@ export function IntakeArtifactCard({ item, openingDocId = null, onOpenPdf }: Pro
                 {showOpenPdf ?
                     <button
                         type="button"
-                        className={clsx(formsCaseFileActionLink, "disabled:opacity-50")}
+                        className={clsx(opActionLink, "disabled:opacity-50")}
                         disabled={openingDocId === item.documentId}
                         onClick={() => onOpenPdf!(item.documentId!)}
                     >
@@ -66,7 +68,7 @@ export function IntakeArtifactCard({ item, openingDocId = null, onOpenPdf }: Pro
                 : item.openTarget === "submission_link" && item.submissionPath ?
                     <a
                         href={item.submissionPath}
-                        className={formsCaseFileActionLink}
+                        className={opActionLink}
                         target="_blank"
                         rel="noreferrer"
                     >

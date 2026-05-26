@@ -3,9 +3,17 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { buildOperationalRecommendationHandoffCopy } from "@/lib/adminV2/bos/operationalRecommendationHandoff";
+import {
+    buildOperationalRecommendationHandoffCopy,
+    formatOrchestratorHandoffSeedFromCopy,
+    HANDOFF_EYEBROW,
+    hasStructuredOperationalHandoff,
+} from "@/lib/adminV2/bos/operationalRecommendationHandoff";
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
 import { buildOperationalRecommendationV1 } from "@/lib/adminV2/bos/recommendations";
+import { getRecommendationHandoff } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceSelectors";
+import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
+import { orchestratorHandoffSeedCommand } from "@/lib/adminV2/bos/activeOperationalContext";
 import { buildTestOperationalRecommendationInput } from "@/tests/adminV2/bos/recommendations/buildOperationalRecommendationV1.test";
 
 const stripPath = join(
@@ -66,7 +74,7 @@ const minimalSuggestion = (): AttentionSuggestionV1 => ({
 });
 
 describe("buildOperationalRecommendationHandoffCopy", () => {
-    it("prefers canonical handoff projection when _operational_recommendation is present", () => {
+    it("prefers canonical handoff with review-assist vocabulary", () => {
         const rec = buildOperationalRecommendationV1(buildTestOperationalRecommendationInput());
         const copy = buildOperationalRecommendationHandoffCopy({
             entityLabel: "Chen household",
@@ -76,12 +84,15 @@ describe("buildOperationalRecommendationHandoffCopy", () => {
                 _attention_suggestion: minimalSuggestion(),
             },
         });
-        expect(copy.primaryRecommendation).toBe(rec.render.handoff.primary_recommendation);
-        expect(copy.operationalReason).toBe(rec.render.handoff.operational_reason);
-        expect(copy.primaryRecommendation).not.toBe("Respond to new request");
+        expect(copy.eyebrow).toBe(HANDOFF_EYEBROW);
+        expect(copy.operationalRead).toBe(rec.render.handoff.primary_recommendation);
+        expect(copy.whyNow).toBe(rec.render.handoff.operational_reason);
+        expect(copy.doNext).toBe(rec.recommended_action.label);
+        expect(copy.operationalRead).not.toBe("Respond to new request");
+        expect(copy.likelyOutcome).toBeTruthy();
     });
 
-    it("uses attention suggestion next_action and reasoning when present", () => {
+    it("uses legacy suggestion with cognition field mapping", () => {
         const copy = buildOperationalRecommendationHandoffCopy({
             entityLabel: "Chen household",
             overviewData: {
@@ -89,11 +100,12 @@ describe("buildOperationalRecommendationHandoffCopy", () => {
                 _attention_suggestion: minimalSuggestion(),
             },
         });
-        expect(copy.eyebrow).toBe("Recommended next step");
-        expect(copy.primaryRecommendation).toBe("Respond to new request");
-        expect(copy.operationalReason).toContain("New inquiry is stale");
+        expect(copy.eyebrow).toBe(HANDOFF_EYEBROW);
+        expect(copy.doNext).toBe("Respond to new request");
+        expect(copy.whyNow).toContain("New inquiry is stale");
+        expect(copy.operationalRead).toBe("New inquiry is stale.");
         expect(copy.contextLine).toBe("Active record · Chen household");
-        expect(copy.ctaLabel).toBe("Review next step");
+        expect(copy.ctaLabel).toBe("Continue in Orchestrator");
     });
 
     it("falls back to attention primary when suggestion missing", () => {
@@ -101,11 +113,12 @@ describe("buildOperationalRecommendationHandoffCopy", () => {
             entityLabel: "Patel household",
             overviewData: { _operational_attention: minimalAttention() },
         });
-        expect(copy.primaryRecommendation).toBe("Respond to new request");
-        expect(copy.operationalReason).toContain("New inquiry is stale");
+        expect(copy.doNext).toBe("Respond to new request");
+        expect(copy.operationalRead).toBe("New inquiry is stale");
+        expect(copy.whyNow).toContain("New inquiry is stale");
     });
 
-    it("avoids chatbot and AI marketing wording", () => {
+    it("avoids chatbot, AI marketing, and legacy handoff labels", () => {
         const copy = buildOperationalRecommendationHandoffCopy({
             entityLabel: "Lee household",
             overviewData: {
@@ -117,18 +130,66 @@ describe("buildOperationalRecommendationHandoffCopy", () => {
         expect(blob).not.toMatch(/\bAI\b/i);
         expect(blob).not.toContain("Assistant");
         expect(blob).not.toContain("BOS thinks");
-        expect(blob).not.toContain("chat");
+        expect(blob).not.toContain("Alloy suggestion");
+        expect(blob).not.toContain("Suggested next step");
+        expect(blob).not.toContain("Recommended next step");
+        expect(blob).not.toContain("I recommend");
+    });
+});
+
+describe("formatOrchestratorHandoffSeedFromCopy", () => {
+    it("sequences operational read, why now, and do next", () => {
+        const rec = buildOperationalRecommendationV1(buildTestOperationalRecommendationInput());
+        const handoff = getRecommendationHandoff({ _operational_recommendation: rec });
+        expect(handoff).not.toBeNull();
+        const seed = formatOrchestratorHandoffSeedFromCopy("Chen household", handoff!);
+        expect(seed).toContain("New inquiry needs timely response");
+        expect(seed).toContain("Why now:");
+        expect(seed).toContain("Do next:");
+        expect(seed).toContain("Send a warm first response");
+        expect(seed).not.toContain("Follow up with");
+        expect(seed).not.toContain("Alloy suggestion");
+    });
+});
+
+describe("orchestratorHandoffSeedCommand parity", () => {
+    it("prefers canonical operational read in seed", () => {
+        const rec = buildOperationalRecommendationV1(buildTestOperationalRecommendationInput());
+        const seed = orchestratorHandoffSeedCommand({
+            entityLabel: "Mitchell Family",
+            overviewData: {
+                _operational_recommendation: rec,
+                _attention_suggestion: { next_action: { label: "Send tour confirmation" } },
+            },
+        });
+        expect(seed).toContain("Mitchell Family");
+        expect(seed).toContain(rec.render.handoff.primary_recommendation);
+        expect(seed).toContain("Do next:");
+        expect(seed).not.toContain("Send tour confirmation");
+        expect(seed).not.toContain("Follow up with");
+    });
+
+    it("falls back to draft message when no structured handoff", () => {
+        expect(hasStructuredOperationalHandoff({})).toBe(false);
+        const seed = orchestratorHandoffSeedCommand({
+            entityLabel: null,
+            overviewData: {},
+        });
+        expect(seed).toBe("Draft message for this inquiry");
     });
 });
 
 describe("OpportunityOperationalCompactStrip BOS handoff (shipped V1)", () => {
-    it("renders compact handoff card and preserves auto-submit handoff", () => {
+    it("renders compact handoff card with structured copy hooks", () => {
         const src = readFileSync(stripPath, "utf8");
         expect(src).toContain("OrchestratorHandoffCard");
-        expect(src).toContain("BOS handoff");
+        expect(src).toContain("buildOperationalRecommendationHandoffCopy");
+        expect(src).toContain("data-handoff-row=\"operational_read\"");
+        expect(src).toContain("Operational read");
         expect(src).toContain("Continue in Orchestrator");
         expect(src).toContain("autoSubmitSeedCommand: true");
-        expect(src).not.toContain("buildOperationalRecommendationHandoffCopy");
+        expect(src).not.toContain("BOS handoff");
+        expect(src).not.toContain("Alloy suggestion");
         expect(src).not.toContain("Ask AI");
     });
 });

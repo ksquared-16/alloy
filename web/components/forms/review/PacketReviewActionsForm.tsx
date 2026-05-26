@@ -7,6 +7,7 @@ import {
     operatorReviewStatusLabel,
 } from "@/lib/forms/review/formsReviewPresentation";
 import { CaseFileReviewActions } from "@/components/forms/review/CaseFileReviewActions";
+import { opReviewActionButtonRow } from "@/lib/operational/ui/operationalVisualTokens";
 
 type Props = {
     rollup: PacketReviewRollupV1;
@@ -20,11 +21,11 @@ type Props = {
 };
 
 const btnSecondaryPage =
-    "rounded-md border border-admin-border px-3 py-2 text-xs font-medium text-alloy-midnight/80 hover:bg-alloy-stone/30 disabled:opacity-40";
+    "rounded-lg border border-alloy-midnight/10 bg-white px-3.5 py-2 text-xs font-medium text-alloy-midnight/80 shadow-sm hover:bg-alloy-stone/20 disabled:opacity-40";
 const btnRejectPage =
-    "rounded-md border border-alloy-ember/40 bg-white px-3 py-2 text-xs font-semibold text-alloy-ember hover:bg-alloy-ember/5 disabled:opacity-40";
+    "rounded-lg border border-alloy-ember/35 bg-white px-3.5 py-2 text-xs font-semibold text-alloy-ember shadow-sm hover:bg-alloy-ember/5 disabled:opacity-40";
 const btnApprovePage =
-    "rounded-md bg-alloy-blue px-3 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-40";
+    "rounded-lg bg-alloy-blue px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-40";
 
 const btnSecondaryModal =
     "rounded border border-alloy-stone/40 px-3 py-1.5 text-xs font-medium text-alloy-midnight/85 hover:bg-alloy-stone/10 disabled:opacity-40";
@@ -70,7 +71,7 @@ export function PacketReviewActionsForm({
                             {saveErr}
                         </p>
                     : null}
-                    <div className="mt-3 flex flex-wrap justify-end gap-2">
+                    <div className={clsx(opReviewActionButtonRow, "justify-end")}>
                         <button
                             type="button"
                             className={btnSecondary}

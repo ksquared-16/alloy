@@ -21,7 +21,7 @@ Cover **`documents`** (file + metadata records) attached to entities and the **f
 - **Schema:** **`form_definitions`**, **`form_definition_versions`** (draft / published / archived), **`form_public_links`**, **`form_submissions`** (canonical **`payload`** JSONB per migration **`20260506100000_forms_engine_v1_foundation.sql`**), plus linkage/signatures tables as migrated.
 - **Admin APIs:** **`/api/admin/forms`** (list/create definitions), **`/api/admin/forms/[formId]`**, versions CRUD/publish/archive, public links, submissions listing and mutation helpers, packet sessions and packet links (`web/app/api/admin/forms/**`).
 - **Public capture:** **`/api/public/forms/[token]/submissions`** (and related) for tokenized submit flows.
-- **Admin UI:** Forms hub **`/adminV2/forms`** (`FormsHubClient.tsx`) — workspace per definition, links to packet sessions.
+- **Admin UI:** Forms hub **`/adminV2/forms`** (`FormsHubClient.tsx`) — workspace per definition, links to packet sessions. **Workspace redesign planned:** **`docs/sprints/05_2026/forms_operational_workspace_redesign.md`** (hub, lifecycle, packet builder — align with packet review UX).
 - **Tests:** Broad route coverage in **`web/tests/admin/formsAdminRoutes.test.ts`**.
 
 **Enrollment Packet — Phase 1 (E2E operating loop, shipped May 2026):**

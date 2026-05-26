@@ -5,7 +5,13 @@ import {
     buildPacketNeedsAttentionItems,
     type NeedsAttentionItem,
 } from "@/lib/forms/review/packetNeedsAttentionItems";
-import { formsCaseFileActionLink, formsCaseFileMetaText } from "@/lib/forms/review/formsReviewClassTokens";
+import {
+    opActionLink,
+    opAttentionRow,
+    opGroupedSurface,
+    opMetadata,
+    opStackGroup,
+} from "@/lib/operational/ui/operationalVisualTokens";
 
 type Props = {
     rollup: PacketReviewRollupV1;
@@ -25,27 +31,26 @@ export function NeedsAttentionPanel({ rollup }: Props) {
             variant="attention"
             description="Resolve these before approving — each item links to the right fix surface."
         >
-            <ul className="space-y-2">
-                {items.map((item) => (
-                    <li
-                        key={item.key}
-                        className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-alloy-ember/25 bg-white px-3 py-2 text-sm text-alloy-midnight"
-                    >
-                        <span className="min-w-0 flex-1 leading-snug">{item.message}</span>
-                        {item.actionHref && item.actionLabel ?
-                            <a
-                                href={item.actionHref}
-                                className={formsCaseFileActionLink}
-                                target="_blank"
-                                rel="noreferrer"
-                            >
-                                {item.actionLabel}
-                            </a>
-                        : null}
-                    </li>
-                ))}
-            </ul>
-            <p className={formsCaseFileMetaText}>Document generation may stay blocked until linkage is resolved.</p>
+            <div className={opStackGroup}>
+                <ul className={opGroupedSurface} data-testid="needs-attention-list">
+                    {items.map((item) => (
+                        <li key={item.key} className={opAttentionRow}>
+                            <span className="min-w-0 flex-1 leading-snug">{item.message}</span>
+                            {item.actionHref && item.actionLabel ?
+                                <a
+                                    href={item.actionHref}
+                                    className={opActionLink}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                >
+                                    {item.actionLabel}
+                                </a>
+                            : null}
+                        </li>
+                    ))}
+                </ul>
+                <p className={opMetadata}>Document generation may stay blocked until linkage is resolved.</p>
+            </div>
         </CaseFileSection>
     );
 }

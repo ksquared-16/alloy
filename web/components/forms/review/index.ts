@@ -7,6 +7,7 @@ export { DocumentsRecordsPanel } from "@/components/forms/review/DocumentsRecord
 export { FormsProvenanceDetail } from "@/components/forms/review/FormsProvenanceDetail";
 export { IntakeArtifactCard } from "@/components/forms/review/IntakeArtifactCard";
 export { IntakeCaseFileLayout } from "@/components/forms/review/IntakeCaseFileLayout";
+export { OperationalRegionBand } from "@/components/forms/review/OperationalRegionBand";
 export { NeedsAttentionPanel, buildPacketNeedsAttentionItems } from "@/components/forms/review/NeedsAttentionPanel";
 export { PacketCaseFileHeader } from "@/components/forms/review/PacketCaseFileHeader";
 export { PacketIntakeContextPanel } from "@/components/forms/review/PacketIntakeContextPanel";

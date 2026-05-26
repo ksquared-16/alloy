@@ -13,10 +13,14 @@ import {
 } from "@/lib/forms/review/intakeArtifactPresentation";
 import { IntakeArtifactCard } from "@/components/forms/review/IntakeArtifactCard";
 import {
-    formsCaseFileGroupedSurface,
-    formsCaseFileMetaText,
-    formsIntakeArtifactLegend,
-} from "@/lib/forms/review/formsReviewClassTokens";
+    opGroupedSurface,
+    opLabelCaps,
+    opMetadata,
+    opMutedMeta,
+    opProvenanceLegend,
+    opStackGroup,
+    opStackRegion,
+} from "@/lib/operational/ui/operationalVisualTokens";
 import type { PacketArtifactKind } from "@/lib/forms/packets/documentProvenanceDisplay";
 
 type Props = {
@@ -57,19 +61,17 @@ function ArtifactKindGroup({
         showLegend && kind === "generated_pdf" && items.some((i) => i.generationLabel != null);
 
     return (
-        <div className="space-y-2" data-testid={`artifact-group-${kind}`}>
+        <div className={opStackGroup} data-testid={`artifact-group-${kind}`}>
             <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/55">
-                    {intakeArtifactGroupTitle(kind)}
-                </h3>
-                <p className="mt-0.5 text-[11px] text-alloy-midnight/55">{intakeArtifactGroupDescription(kind)}</p>
+                <h3 className={opLabelCaps}>{intakeArtifactGroupTitle(kind)}</h3>
+                <p className={clsx("mt-0.5", opMutedMeta)}>{intakeArtifactGroupDescription(kind)}</p>
             </div>
             {showPdfLegend ?
-                <p className={formsIntakeArtifactLegend} data-testid="artifact-currentness-legend">
+                <p className={opProvenanceLegend} data-testid="artifact-currentness-legend">
                     {INTAKE_ARTIFACT_CURRENTNESS_LEGEND}
                 </p>
             : null}
-            <ul className={formsCaseFileGroupedSurface}>
+            <ul className={opGroupedSurface}>
                 {items.map((item) => (
                     <IntakeArtifactCard
                         key={item.key}
@@ -106,7 +108,7 @@ export function ArtifactsPanel({
     if (items.length === 0) {
         return (
             <p
-                className={clsx(formsCaseFileMetaText, className)}
+                className={clsx(opMetadata, className)}
                 data-testid={testId}
                 data-empty-state={empty.key}
             >
@@ -116,7 +118,7 @@ export function ArtifactsPanel({
     }
 
     return (
-        <div className={clsx("space-y-4", className)} data-testid={testId}>
+        <div className={clsx(opStackRegion, className)} data-testid={testId}>
             <ArtifactKindGroup
                 kind="generated_pdf"
                 items={pdfs}

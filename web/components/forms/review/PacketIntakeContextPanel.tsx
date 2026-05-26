@@ -1,7 +1,7 @@
 import type { PacketReviewRollupV1 } from "@/lib/forms/packets/packetReviewRollupTypes";
 import { CaseFileSection } from "@/components/forms/review/CaseFileSection";
 import { FORMS_CASE_FILE_SECTION } from "@/lib/forms/review/formsReviewPresentation";
-import { formsCaseFileBodyText } from "@/lib/forms/review/formsReviewClassTokens";
+import { opContextLabel, opContextValue } from "@/lib/operational/ui/operationalVisualTokens";
 
 type Props = {
     rollup: PacketReviewRollupV1;
@@ -24,16 +24,15 @@ export function PacketIntakeContextPanel({ rollup }: Props) {
             variant="context"
             description="Who this submission is for and how the packet was sent."
         >
-            <ul className={formsCaseFileBodyText}>
+            <ul className={opContextValue}>
                 {ctx.opportunity_label ?
                     <li>
-                        <span className="font-medium text-alloy-midnight">Household / opportunity:</span>{" "}
-                        {ctx.opportunity_label}
+                        <span className={opContextLabel}>Household / opportunity:</span> {ctx.opportunity_label}
                     </li>
                 : null}
                 {ctx.customer_label ?
                     <li>
-                        <span className="font-medium text-alloy-midnight">Customer:</span> {ctx.customer_label}
+                        <span className={opContextLabel}>Customer:</span> {ctx.customer_label}
                     </li>
                 : null}
                 {launch ?

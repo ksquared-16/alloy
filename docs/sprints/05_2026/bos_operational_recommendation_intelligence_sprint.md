@@ -14,10 +14,13 @@
 - Active operational context + stale proposal protection (`activeOperationalContext.ts`, `isStaleOperationalProposalEntity`)
 - OperationalProposalCardFrame + routing/denial copy (`operationalProposalPresentation.ts`, `commandSurfaceRoutingCopy.ts`)
 
+**Canonical interaction reference (binding):** Forms/Documents operational UX — [`forms_documents_operational_experience_hardening.md`](./forms_documents_operational_experience_hardening.md) § Unified BOS Operational Interaction Doctrine. Phase 2+ BOS presentation **must align** to that model (case-file hierarchy, Review assist region, deterministic-first, human authority). Do not invent a parallel “suggestion feed” personality.
+
 **Binding doctrine (read before build):**
 
 | Doc | Use |
 |-----|-----|
+| [`forms_documents_operational_experience_hardening.md`](./forms_documents_operational_experience_hardening.md) | **Reference interaction model** — Review assist, cognition hierarchy, anti-patterns |
 | `docs/execution/operating-doctrine.md` | Doc/code parity; no parallel AI authority |
 | `docs/product/bos-foundation.md` | Capability classes, lifecycle, hard prohibitions |
 | `docs/product/ai-system.md` | Stub → `bos-foundation.md` |
@@ -56,6 +59,71 @@ BOS may **not**:
 - Become a separate source of truth for attention membership, SLA, or lifecycle
 
 Recommendation intelligence **enhances** workflows; it does not replace operators or workflows.
+
+---
+
+## Unified BOS Operational Interaction Doctrine
+
+**Authority:** Shared with Forms/Documents program. Full canonical copy and Forms reference mapping: [`forms_documents_operational_experience_hardening.md`](./forms_documents_operational_experience_hardening.md) § Unified BOS Operational Interaction Doctrine.
+
+This program **adopts** the Forms/Documents review UX as the **reference interaction model** for all BOS operational intelligence surfaces (drawer, queue, handoff, case file). Phase 2 presentation work must not introduce a second BOS personality.
+
+### BOS role
+
+BOS **is:** operational narrator, reviewer assistant, anomaly detector, workflow explainer, operational prioritization layer.
+
+BOS **is not:** chatbot, autonomous agent, giant AI paragraph generator, hidden workflow engine, silent mutation system.
+
+### Operational cognition hierarchy
+
+All surfaces prioritize, in order:
+
+1. Current operator action  
+2. Trust / confidence state  
+3. Changes / anomalies  
+4. Operational context  
+5. Suggested focus  
+6. Technical detail (collapsed)  
+
+**AdminV2 projection mapping (target state — Phase 2 execution pack):**
+
+| Cognition layer | Phase 2 consumer | Forms reference |
+|-----------------|------------------|-----------------|
+| Current operator action | Drawer/workflow CTAs (outside assist band) | Review action band, approve/reject |
+| Trust / confidence | Readiness chip, stale banner, timing caveat | `PacketReviewInsightV1.readiness_state`, checklist |
+| Changes / anomalies | `urgency_reason`, activity footnote | `key_changes`, warnings |
+| Operational context | Entity header, queue subject | Intake context panel |
+| Suggested focus | Catalog `title` + compressed why | `suggested_focus` |
+| Do next (sequencing) | `recommended_action.label` | `review_paths` |
+| Technical | L2 collapsed factors/signals; L3 handoff only | Technical disclosure stack |
+
+### Human authority doctrine
+
+BOS may summarize, explain, prioritize, suggest, draft (governed). BOS may not silently mutate, bypass review/workflows/permissions, or imply autonomous authority.
+
+### Intelligence style doctrine
+
+Calm, concise, contextual, operational, trustworthy. Avoid assistant-chat UX, giant summaries, flashy AI marketing, recommendation overload.
+
+### Deterministic-first doctrine
+
+1. Deterministic operational reasoning (`OperationalRecommendationV1`, resolver, activity signals)  
+2. Structured heuristics (catalog templates, urgency bands)  
+3. Explainable guidance  
+
+Then optionally: LLM enrich (preview-only, non-authoritative). **Phase 1–2 remain deterministic.**
+
+### Alignment requirement (Phase 2+)
+
+| Forms reference | BOS must converge |
+|-----------------|-------------------|
+| `BosReviewSummaryPlaceholder` region anatomy | Drawer **Review assist band**: readiness → suggested focus → do next (workflow CTAs stay primary) |
+| `PacketReviewInsightV1` checklist | Sequencing chip at L0; readiness at L1 — urgency as guidance, not alarm |
+| Case-file region order | One operational story: queue read → drawer assist → collapsed detail → handoff seed |
+| Human authority footer | No implied auto-apply; governed paths only; enhance draft subordinate |
+| Anti-feed doctrine | No stacked recommendation cards; one intelligence region per entity view |
+
+**Visual sophistication** for both programs: [`forms_documents_product_experience_refresh.md`](./forms_documents_product_experience_refresh.md).
 
 ---
 
@@ -523,23 +591,30 @@ flowchart LR
 
 ### 5.4 Phase 2 — Operational UX (drawer, queue, Orchestrator)
 
-**Execution pack (audit + UX hierarchy + cards):** [`bos_operational_recommendation_phase2_operational_ux.md`](./bos_operational_recommendation_phase2_operational_ux.md)
+**Execution pack (audit + doctrine alignment + cards):** [`bos_operational_recommendation_phase2_operational_ux.md`](./bos_operational_recommendation_phase2_operational_ux.md) — **doctrine-aligned** to Forms operational cognition (2026-05-21).
 
-**Goal:** Operators see recommendation anatomy without hunting.
+**Goal:** Operators get **operational cognition support** (readiness, focus, sequencing) — not a recommendation feed.
 
 | Card | Work |
 |------|------|
-| 2.1 | Upgrade `OperationalAttentionHeaderStrip` — title, why, urgency, outcome, confidence |
-| 2.2 | Upgrade `buildOperationalRecommendationHandoffCopy` to use contract fields |
-| 2.3 | Queue preview: `why_line` from `why_it_matters`; optional urgency band chip |
-| 2.4 | `OperationalProposalCardFrame` — optional “Recommendation” region for insight-only cards |
-| 2.5 | Progressive disclosure L2/L3 per P1-B design (factors, signals) |
+| 2.1 | `OperationalAttentionHeaderStrip` → **Review assist band** (cognition order; Forms anatomy) |
+| 2.2 | Handoff seed parity with drawer focus line |
+| 2.3 | Queue **one operational read line** + sequencing chip + collapse duplicates |
+| 2.4 | L2 collapsed **Supporting detail** (factors, signals) |
+| 2.5 | Escalation/type chips — restrained, policy-cited |
+| 2.6 | Trust chrome (stale, timing caveat, preview boundary) |
+| 2.7 | Selector VM field pass-through |
+| 2.8 | Regression + GATE 2 demo |
+| 2.9 | (Optional) `OperationalProposalCardFrame` insight region — insight-only |
 
 **GATE 2 checklist:**
 
-- [ ] Demo path: Needs Attention → drawer → Orchestrator shows consistent story
-- [ ] No “Operational attention:” boilerplate as primary copy
-- [ ] Queue tooltip + boundary copy preserved
+- [ ] Demo path: Needs Attention → queue read → drawer assist → Orchestrator — **one story**
+- [ ] Cognition order preserved; workflow actions remain primary
+- [ ] No “Operational attention:” / “Alloy suggestion” primary framing
+- [ ] Urgency = sequencing, not alarm (no red wash)
+- [ ] Queue preview boundary copy preserved
+- [ ] Forms doctrine parity (vocabulary + assist band)
 
 ### 5.5 Phase 3 — Workflow + communications integration
 
@@ -644,6 +719,6 @@ autonomous AI scope.
 
 - [x] **GATE 0 APPROVED** — [`bos_operational_recommendation_intelligence_gate0.md`](./bos_operational_recommendation_intelligence_gate0.md) §10
 - [x] **Phase 1 COMPLETE** — Cards 1.1–1.9; GATE 1 passed — see [`bos_operational_recommendation_phase1_execution.md`](./bos_operational_recommendation_phase1_execution.md) §12
-- [ ] **Phase 2** — Operational UX polish (may begin after Phase 1 closeout)
+- [ ] **Phase 2** — Operational UX polish (**doctrine-aligned** — begin after Phase 2 pack review)
 
-When starting Phase 2, begin with sprint §5.4 cards (strip hierarchy, handoff polish, queue urgency chip).
+When starting Phase 2 implementation, begin with §5.4 Card **2.1** (Review assist band) then **2.3** (queue operational read). See Phase 2 pack §0.4 doctrine alignment audit.

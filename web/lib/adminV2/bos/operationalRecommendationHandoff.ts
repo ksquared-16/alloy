@@ -1,11 +1,14 @@
 /**
- * Deterministic copy for drawer → Orchestrator recommendation handoff (BOS UX Gate A).
- * Read-order: `_operational_recommendation.render.handoff` → legacy `_attention_suggestion` / attention explain.
+ * Deterministic copy for drawer → Orchestrator recommendation handoff (BOS Phase 2 / Card 2.2).
+ * Read-order: `_operational_recommendation.render.handoff` + drawer strip → legacy attention/suggestion.
  */
 
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
-import { getRecommendationHandoff } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceSelectors";
 import { suggestionActionForReasonCode } from "@/lib/agent/needsAttentionSuggestion/suggestionActionMap";
+import {
+    getRecommendationDrawerStrip,
+    getRecommendationHandoff,
+} from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceSelectors";
 import { isEnrollmentWaitBucket } from "@/lib/opportunities/attentionPlatformCatalog";
 import {
     nextStepGuidance,
@@ -14,15 +17,20 @@ import {
 } from "@/lib/opportunities/operationalAttentionExplain";
 import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
 
+/** Review-assist vocabulary (aligned with drawer band). */
+export const HANDOFF_EYEBROW = "Review assist";
+export const HANDOFF_CTA_CONTINUE = "Continue in Orchestrator";
+
 export type OperationalRecommendationHandoffCopy = {
     eyebrow: string;
-    primaryRecommendation: string;
-    operationalReason: string;
+    operationalRead: string;
+    whyNow: string;
+    doNext: string;
+    likelyOutcome?: string | null;
+    supportingContext?: string | null;
     contextLine: string;
     ctaLabel: string;
 };
-
-const EYEBROW = "Recommended next step";
 
 function parseSuggestion(overviewData: Record<string, unknown> | null | undefined): AttentionSuggestionV1 | null {
     const raw = overviewData?._attention_suggestion;
@@ -38,18 +46,22 @@ function parseAttention(overviewData: Record<string, unknown> | null | undefined
     return raw as OpportunityAttentionResult;
 }
 
+function stripLegacyOperationalAttentionPrefix(text: string): string {
+    return text.replace(/^Operational attention:\s*/i, "").trim();
+}
+
 function handoffCtaLabel(actionFamily: string | null | undefined): string {
     switch (actionFamily) {
         case "follow_up":
         case "send_message":
         case "schedule":
-            return "Review next step";
+            return HANDOFF_CTA_CONTINUE;
         case "review":
         case "update_record":
         case "workflow":
-            return "Open recommendation";
+            return HANDOFF_CTA_CONTINUE;
         default:
-            return "Review in Orchestrator";
+            return HANDOFF_CTA_CONTINUE;
     }
 }
 
@@ -82,6 +94,85 @@ function primaryFromOpenTask(overviewData: Record<string, unknown> | null | unde
     return typeof title === "string" && title.trim() ? title.trim() : null;
 }
 
+function buildLegacyHandoffCopy(args: {
+    entityLabel: string | null | undefined;
+    overviewData: Record<string, unknown> | null | undefined;
+    openTaskTitle?: string | null;
+}): OperationalRecommendationHandoffCopy {
+    const recordName = args.entityLabel?.trim() || "this inquiry";
+    const contextLine = `Active record · ${recordName}`;
+
+    const drawer = getRecommendationDrawerStrip(args.overviewData);
+    if (drawer) {
+        return {
+            eyebrow: HANDOFF_EYEBROW,
+            operationalRead: drawer.operationalRead,
+            whyNow: drawer.whyNow,
+            doNext: drawer.nextActionLabel,
+            likelyOutcome: drawer.outcomeLine ?? null,
+            supportingContext: contextLine,
+            contextLine,
+            ctaLabel: HANDOFF_CTA_CONTINUE,
+        };
+    }
+
+    const suggestion = parseSuggestion(args.overviewData);
+    const attention = parseAttention(args.overviewData);
+
+    let operationalRead: string | null = null;
+    let doNext = suggestion?.next_action.label.trim() ?? null;
+    let actionFamily = suggestion?.next_action.action_family ?? null;
+    let whyNow = suggestion?.reasoning?.summary?.trim() ?? null;
+
+    if (whyNow) {
+        operationalRead = stripLegacyOperationalAttentionPrefix(whyNow) || doNext;
+    }
+
+    if (!doNext && attention?.needs_attention && attention.primary_reason) {
+        const mapped = suggestionActionForReasonCode(attention.primary_reason.code);
+        doNext = mapped.label;
+        actionFamily = mapped.action_family;
+        whyNow = whyNow ?? operationalReasonFromAttention(attention);
+        operationalRead = operationalRead ?? attention.primary_reason.label.trim();
+    }
+
+    if (!doNext) {
+        doNext =
+            args.openTaskTitle?.trim() ||
+            primaryFromOpenTask(args.overviewData) ||
+            "Review operational follow-up";
+    }
+
+    if (!operationalRead) {
+        operationalRead = doNext;
+    }
+
+    if (!whyNow) {
+        if (attention?.needs_attention) {
+            whyNow = operationalReasonFromAttention(attention);
+        }
+        const stale = attention?.auxiliary?.activity_stale?.label?.trim();
+        if (!whyNow && stale) {
+            whyNow = stale;
+        }
+    }
+
+    if (!whyNow) {
+        whyNow = "Operational follow-up is ready for review in the Orchestrator.";
+    }
+
+    return {
+        eyebrow: HANDOFF_EYEBROW,
+        operationalRead,
+        whyNow,
+        doNext,
+        likelyOutcome: null,
+        supportingContext: contextLine,
+        contextLine,
+        ctaLabel: handoffCtaLabel(actionFamily),
+    };
+}
+
 /**
  * Build operator-facing recommendation handoff copy from deterministic drawer payload.
  */
@@ -99,52 +190,36 @@ export function buildOperationalRecommendationHandoffCopy(args: {
             contextLine: canonicalHandoff.contextLine.includes("Active record")
                 ? `Active record · ${recordName}`
                 : canonicalHandoff.contextLine,
+            supportingContext:
+                canonicalHandoff.supportingContext ??
+                (canonicalHandoff.contextLine.includes("Active record")
+                    ? `Active record · ${recordName}`
+                    : canonicalHandoff.contextLine),
         };
     }
 
-    const recordName = args.entityLabel?.trim() || "this inquiry";
-    const contextLine = `Active record · ${recordName}`;
+    return buildLegacyHandoffCopy(args);
+}
 
-    const suggestion = parseSuggestion(args.overviewData);
-    const attention = parseAttention(args.overviewData);
-
-    let primaryRecommendation = suggestion?.next_action.label.trim() ?? null;
-    let actionFamily = suggestion?.next_action.action_family ?? null;
-    let operationalReason = suggestion?.reasoning?.summary?.trim() ?? null;
-
-    if (!primaryRecommendation && attention?.needs_attention && attention.primary_reason) {
-        const mapped = suggestionActionForReasonCode(attention.primary_reason.code);
-        primaryRecommendation = mapped.label;
-        actionFamily = mapped.action_family;
-        operationalReason = operationalReason ?? operationalReasonFromAttention(attention);
+/** Compressed Orchestrator seed — same story as drawer Review assist (not chatbot tone). */
+export function formatOrchestratorHandoffSeedFromCopy(
+    recordLabel: string,
+    copy: OperationalRecommendationHandoffCopy
+): string {
+    const label = recordLabel.trim() || "this inquiry";
+    const segments = [`${copy.operationalRead} (${label})`, `Why now: ${copy.whyNow}`, `Do next: ${copy.doNext}`];
+    if (copy.likelyOutcome?.trim()) {
+        segments.push(`Likely: ${copy.likelyOutcome.trim()}`);
     }
+    return segments.join(" · ");
+}
 
-    if (!primaryRecommendation) {
-        primaryRecommendation =
-            args.openTaskTitle?.trim() ||
-            primaryFromOpenTask(args.overviewData) ||
-            "Review operational follow-up";
-    }
-
-    if (!operationalReason) {
-        if (attention?.needs_attention) {
-            operationalReason = operationalReasonFromAttention(attention);
-        }
-        const stale = attention?.auxiliary?.activity_stale?.label?.trim();
-        if (!operationalReason && stale) {
-            operationalReason = stale;
-        }
-    }
-
-    if (!operationalReason) {
-        operationalReason = "Operational follow-up is ready for review in the Orchestrator.";
-    }
-
-    return {
-        eyebrow: EYEBROW,
-        primaryRecommendation,
-        operationalReason,
-        contextLine,
-        ctaLabel: handoffCtaLabel(actionFamily),
-    };
+export function hasStructuredOperationalHandoff(
+    overviewData: Record<string, unknown> | null | undefined
+): boolean {
+    if (getRecommendationHandoff(overviewData)) return true;
+    if (getRecommendationDrawerStrip(overviewData)) return true;
+    if (parseSuggestion(overviewData)) return true;
+    const attention = parseAttention(overviewData);
+    return Boolean(attention?.needs_attention && attention.primary_reason);
 }

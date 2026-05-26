@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import AdminPageHeader from "@/components/admin/AdminPageHeader";
+import { FormsOperationalLink, FormsWorkspaceShell } from "@/components/forms/workspace";
+import { formsWorkspaceBreadcrumbs } from "@/lib/forms/formsModuleNav";
 import SectionCard from "@/components/admin/SectionCard";
 import PrimaryButton from "@/components/PrimaryButton";
 import SecondaryButton from "@/components/SecondaryButton";
@@ -386,28 +387,33 @@ export default function FormSubmissionDetailClient() {
     const mismatch = row && row.form_definition_id !== formId;
 
     return (
-        <div className="space-y-6">
-            <AdminPageHeader
-                title="Submission"
-                subtitle="Outcome, linked records, documents, and answers."
-                actions={
-                    <div className="flex flex-wrap gap-3">
-                        <Link
-                            href={`${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(formId)}/submissions`}
-                            className="text-sm font-medium text-[#00458C] hover:underline"
-                        >
-                            Submissions
-                        </Link>
-                        <Link
-                            href={`${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(formId)}`}
-                            className="text-sm font-medium text-[#00458C] hover:underline"
-                        >
-                            Form
-                        </Link>
-                    </div>
-                }
-            />
-
+        <FormsWorkspaceShell
+            title="Submission review"
+            subtitle="Outcome, linked records, documents, and answers for this intake."
+            breadcrumbs={formsWorkspaceBreadcrumbs([
+                {
+                    label: schema?.title ?? "Form",
+                    href: `${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(formId)}`,
+                },
+                {
+                    label: "Submissions",
+                    href: `${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(formId)}/submissions`,
+                },
+                { label: "Review" },
+            ])}
+            actions={
+                <div className="flex flex-wrap gap-3">
+                    <FormsOperationalLink
+                        href={`${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(formId)}/submissions`}
+                    >
+                        Intake inbox
+                    </FormsOperationalLink>
+                    <FormsOperationalLink href={`${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(formId)}`}>
+                        Form workspace
+                    </FormsOperationalLink>
+                </div>
+            }
+        >
             {loading ? (
                 <p className="text-sm text-[#59678b]">Loading…</p>
             ) : error ? (
@@ -888,6 +894,6 @@ export default function FormSubmissionDetailClient() {
                     />
                 </>
             ) : null}
-        </div>
+        </FormsWorkspaceShell>
     );
 }

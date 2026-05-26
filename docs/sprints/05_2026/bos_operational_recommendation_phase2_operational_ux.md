@@ -1,8 +1,8 @@
 # BOS Operational Recommendation Intelligence — Phase 2 Operational UX Sprint
 
 **Path:** `docs/sprints/05_2026/bos_operational_recommendation_phase2_operational_ux.md`  
-**Status:** Planning — **audit + design only** (no implementation in this doc)  
-**Date:** 2026-05-21
+**Status:** Planning — **doctrine-aligned**; audit + UX framework complete; **implementation not started**  
+**Date:** 2026-05-21 (doctrine alignment pass: 2026-05-21)
 
 **Binding inputs:**
 
@@ -11,21 +11,43 @@
 | [`bos_operational_recommendation_intelligence_sprint.md`](./bos_operational_recommendation_intelligence_sprint.md) | Program audit, recommendation framework, phase map |
 | [`bos_operational_recommendation_intelligence_gate0.md`](./bos_operational_recommendation_intelligence_gate0.md) | Doctrine — assistive only, no autonomy |
 | [`bos_operational_recommendation_phase1_execution.md`](./bos_operational_recommendation_phase1_execution.md) | Phase 1 closeout (§12) — **COMPLETE** |
+| [`forms_documents_operational_experience_hardening.md`](./forms_documents_operational_experience_hardening.md) | **Canonical** BOS operational interaction doctrine |
+| [`forms_documents_product_experience_refresh.md`](./forms_documents_product_experience_refresh.md) | Shared visual restraint + AdminV2 kinship (sibling sprint) |
 
-**Phase:** 2 — Operational recommendation UX + hierarchy  
+**Phase:** 2 — Operational cognition presentation (deterministic)  
 **Blocks:** Phase 3 workflow/comms wire, Phase 4 AI enrich (unchanged)
 
-**Phase 2 is still deterministic operational intelligence.** No AI enrich, no LLM reasoning, no autonomous behavior, no recommendation generation in UI, no workflow mutation, no persistence.
+**Phase 2 is still deterministic operational intelligence.** No AI enrich, no LLM reasoning, no autonomous behavior, no recommendation generation in UI, no workflow mutation, no persistence, **no runtime or component changes in this alignment pass**.
+
+### Canonical interaction doctrine (binding)
+
+**Authority:** [`forms_documents_operational_experience_hardening.md`](./forms_documents_operational_experience_hardening.md) § Unified BOS Operational Interaction Doctrine.
+
+**Reference interaction model:** `IntakeCaseFileLayout` + `BosReviewSummaryPlaceholder` + `PacketReviewInsightV1` (Forms/Documents). AdminV2 drawer, queue, and handoff must **inherit** that model — not invent a parallel “recommendation product.”
+
+**BOS role (operator-facing):** operational narrator, reviewer assistant, anomaly detector, workflow explainer, operational prioritization layer, operational cognition support.
+
+**BOS anti-role:** chatbot, assistant feed, recommendation spam, giant AI card system, autonomous operator, intelligence dashboard, hidden workflow engine.
+
+**Visual system (sibling):** [`forms_documents_product_experience_refresh.md`](./forms_documents_product_experience_refresh.md) — one intelligence band per surface; muted assist styling; shared readiness/urgency grammar with Forms.
 
 ---
 
 ## Program goal (Phase 2)
 
-Transform recommendations from **structurally correct and technically grounded** (Phase 1) into **operationally prioritized, visually compressed, explainable, urgency-aware, action-oriented, and trustworthy** judgment support.
+Transform Phase 1 wire + projections from **structurally correct** into **operationally legible cognition support**: compressed narration, prioritization cues, restrained urgency, and progressive reasoning — without changing builder logic.
 
-Operators should feel: *“I know what matters, what to do next, and why — without reading a wall of text.”*
+Operators should answer, in order:
 
-Not: a suggestion feed, a chatbot, or a label dump.
+1. What is this? (context — mostly **outside** the BOS band)  
+2. Is anything wrong? (trust / readiness)  
+3. What changed? (anomaly overlay when present)  
+4. What should I review? (**suggested focus**)  
+5. What should I do next? (**do next** — sequencing, not execution)
+
+…before optional reasoning detail (L2) or handoff/orchestration context (L3).
+
+**Not:** a suggestion feed, stacked recommendation cards, chatbot transcript, or alarm-heavy “AI intelligence” panel.
 
 ---
 
@@ -65,7 +87,7 @@ Audit based on shipped Phase 1 code paths (selectors, render projections, primar
 | Handoff uses title OR action inconsistently | `render.handoff.primary_recommendation` prefers catalog title | Good copy, but operator may not see same phrase in drawer |
 | Fallback strip uses `nextStepGuidance` templates | When no recommendation/suggestion | Generic enrollment templates — not catalog-backed |
 
-**Phase 2 fix direction:** Lead with **catalog title + urgency + one action line** at L1; demote resolver label to supporting context or L2.
+**Phase 2 fix direction:** Reframe strip as **Review assist band** (Forms anatomy): readiness → suggested focus → do next; demote resolver label to L2/support — **do not** let judgment title compete with drawer workflow actions.
 
 ---
 
@@ -79,7 +101,7 @@ Audit based on shipped Phase 1 code paths (selectors, render projections, primar
 | Escalation type invisible at L0 | `recommendation_type: escalation` only in full DTO / preview metadata | No type chip at queue or drawer L1 |
 | SLA breach not distinguished from “needs attention” | `attentionReason` and recommendation why both stress urgency without band hierarchy | No single **urgency chip** grammar |
 
-**Phase 2 fix direction:** One **recommendation urgency chip** per surface level; align color grammar with GATE 0 §6.2 (P0 strongest, P3 collapsed).
+**Phase 2 fix direction:** One **sequencing chip** per surface (P0–P3) — prioritization cue, not alarm; align with Forms readiness grammar + GATE 0 §6.2 (restrained accent, P3 collapsed).
 
 ---
 
@@ -91,7 +113,7 @@ Audit based on shipped Phase 1 code paths (selectors, render projections, primar
 | Policy basis not shown | `escalation_reference.policy_basis` in contract | Not in any projection consumer |
 | Drawer treats escalation like operational follow-up | Same strip layout for all types | No visual or copy distinction for **leadership visibility** |
 
-**Phase 2 fix direction:** When `recommendation_type === escalation`, show **policy basis line** at L1 (truncated) + distinct chip (not red entire card).
+**Phase 2 fix direction:** When `recommendation_type === escalation`, show **policy basis** as subline under focus (truncated) + discrete **Needs leadership review** chip — not red card wash or alarm semantics.
 
 ---
 
@@ -157,7 +179,7 @@ Audit based on shipped Phase 1 code paths (selectors, render projections, primar
 | “Alloy suggestion” branding | Queue chip text | Implies product feature, not **operational assessment** |
 | Primary drawer headline is attention code label | `Needs attention: Follow-up overdue` | Reads like queue taxonomy, not coaching |
 
-**Phase 2 fix direction:** Promote **`title`** (catalog judgment headline) to primary visible line; demote reason code labels to L2/support.
+**Phase 2 fix direction:** Use catalog **`title`** as **suggested focus** line; demote resolver reason labels to L2/support — never as the only headline.
 
 ---
 
@@ -170,7 +192,7 @@ Audit based on shipped Phase 1 code paths (selectors, render projections, primar
 | `current_state_summary` unused in strip | On DTO, not in selector VM | State vs judgment collapsed |
 | Confidence only as “Approximate timing” | When `confidence_level === low` | No positive high-confidence affordance |
 
-**Phase 2 fix direction:** L1 three-line anatomy: **Headline (title)** → **Why now (urgency_reason + why_it_matters clause)** → **Do next (action)** → optional **Likely (outcome)**.
+**Phase 2 fix direction:** L1 assist band order: **Readiness** → **What changed (if any)** → **Suggested focus (title + why now)** → **Do next** → optional **Likely** — reasoning stays in collapsed L2.
 
 ---
 
@@ -184,7 +206,7 @@ Audit based on shipped Phase 1 code paths (selectors, render projections, primar
 | Preview disclaimer only in `title` attr | Tooltip on queue suggestion | Easy to miss — needs **visible preview boundary** copy |
 | Enhance draft adjacent to deterministic copy | Same strip | **Trust blur** between deterministic judgment and AI enhance |
 
-**Phase 2 fix direction:** Visible **“Deterministic assessment”** footnote at L1; L2 “Signals” expand; stale banner when `is_stale`; keep enhance visually subordinate.
+**Phase 2 fix direction:** Trust via **readiness + grounded provenance** (stale banner, low-confidence timing caveat, L2 “Based on” signals) — not a permanent “Deterministic” marketing badge; keep enhance draft subordinate and visually separated.
 
 ---
 
@@ -197,172 +219,294 @@ Audit based on shipped Phase 1 code paths (selectors, render projections, primar
 | **Queue truth drift** | No new queue fields for execution; preview tooltips unchanged |
 | **UI copy generation** | All strings from server projections + selectors — **no new template logic in React** |
 | **AI scope creep** | Explicit card gate: no enrich route changes in Phase 2 |
-| **Density overload on scan lane** | Max 2 recommendation lines at L0; collapse operational summary when preview present |
+| **Density overload on scan lane** | Max **one** operational-read line at L0; collapse operational summary when preview present |
+| **Cognition inversion** | BOS band must not appear **above** primary drawer workflow actions or read as layer-1 operator action |
+| **Surface budget violation** | Strip + panel + queue chip + enhance = multiple personalities — merge to **one story** per entity |
 
 ---
 
-# STEP 1 — Phase 2 UX framework
+# STEP 0.4 — Doctrine alignment audit (Forms/Documents convergence)
 
-## 1.1 Recommendation levels (L0–L3)
+**Purpose:** Correct Phase 2 planning drift **before** implementation. No code changes in this pass.
 
-Aligned with GATE 0 §6.3 and Phase 1 render bundle. Phase 2 **implements** what Phase 1 already projects.
+### Drift identified (pre-correction)
 
-| Level | Surface | Operator job | Max visual weight | Fields shown (deterministic) | Hidden by default |
-|-------|---------|--------------|-------------------|---------------------------|-------------------|
-| **L0 — Queue preview** | `CrmCompactQueuePreview` scan lane | Choose whether to open record | Low–medium (band-aware) | `title` or `next_label` (one line), `why_line` (one clause, ≤140c), optional **urgency band chip** | Outcome, factors, signals, draft, rationale, escalation policy, score |
-| **L1 — Drawer strip** | `OperationalAttentionHeaderStrip` chrome | Understand judgment + next action on open | Medium–high (P0/P1 accent) | `title`, `urgency_label` + `urgency_reason` (one line), `next_action_label`, optional `outcome_line`, optional type chip | Full `why_it_matters`, factors, signals, risk |
-| **L2 — Drawer expand** | New or extended panel region (no new route) | Validate reasoning before acting | Medium | `action_rationale`, `secondary_factors[]`, `signal_labels` (capped), `likely_risk`, `communication_reference.timing_hint` (text only), `escalation_reference.policy_basis` when escalation | Raw reason codes, resolver version, priority_score |
-| **L3 — Orchestrator / handoff** | Command seed + handoff copy | Continue work in Orchestrator | Low–medium | `handoff.primary_recommendation`, `handoff.operational_reason` (compressed), `cta_label` | Full DTO, chain-of-thought, AI markers |
+| Drift | Where it appeared | Conflict with Forms/BOS doctrine |
+|-------|-------------------|--------------------------------|
+| **Recommendation-first hierarchy** | §1.1 “title-led” L1, audit §8 | Cognition order requires **trust → focus → action** inside assist band; record context + workflow actions stay primary |
+| **L1 visual weight “medium–high”** | §1.1 L1 table | Intelligence band must stay **subordinate** — calm assist tint, not dominant card |
+| **Urgency as emergency signaling** | P0 “strongest border accent”, “Act today or escalate now” | Urgency = **operational sequencing guidance**, not alarm UX |
+| **“Deterministic assessment” as L1 badge** | §1.6, audit §10 | Trust from **readiness + provenance**, not product marketing labels |
+| **“BOS assessment” vocabulary** | §1.3 banned list alternate | Prefer **Operational read** / **Review assist** (Forms-aligned) |
+| **L2 as “new sub-panel”** | Card 2.4 | Risks second intelligence region — must be **collapsed disclosure** inside existing drawer anatomy |
+| **Queue as mini recommendation card** | L0 block structure | Queue = **prioritization cue** (one merged line), not feed item |
+| **Outcome at L1 default** | §1.1 outcome visibility | Outcome is **secondary** — optional one line after do next, not primary narrative |
+| **Parallel lines = feed tendency** | Audit §5, §7 | Violates surface budget — collapse to one operational read |
+| **Enhance adjacent to assist** | Audit §10 | Blurs deterministic narration vs optional AI draft — separate region/footer |
+
+### Conflicting interaction patterns (resolved in §1)
+
+| Pattern | Reject | Adopt |
+|---------|--------|-------|
+| Resolver headline `Needs attention: {label}` | Primary judgment line | **Suggested focus** line from catalog `title` |
+| “Alloy suggestion” queue chip | Feed framing | **Operational read** (preview) |
+| Multiple “next” lines on queue row | Competing sequencing | Single **do next** clause in one read line |
+| Drawer strip competes with workflow CTAs | Hidden layer-1 actions | Assist band **below** record orientation; actions unchanged |
+| L2 reasoning default-open | Cognitive overload | **Collapsed** “Supporting detail” disclosure |
+| Handoff as conversation turn | Chatbot drift | **Awareness seed** — same focus phrase family as drawer |
+
+### Recommendation-feed tendencies (explicitly rejected)
+
+- Stacked recommendation cards on drawer or queue  
+- Oversized intelligence panels or gradient “AI” cards  
+- Multiple competing BOS regions (strip + full panel duplicate story)  
+- Verbose `why_it_matters` as primary wall of text  
+- Urgency chips on every row regardless of band (P3 noise)  
+- Treating `_operational_recommendation` as a **product surface** instead of **assistive narration**
+
+### Over-emphasis risks (guardrails)
+
+| Risk | Guardrail |
+|------|-----------|
+| Red saturation on P0 | One accent element per row; no full-card danger styling |
+| Always-on “Deterministic” badge | Show only when trust state needs qualification (stale, low timing confidence) |
+| Outcome line pushes feed tone | Max one conditional line; omit on L0 |
+| Escalation chip screams emergency | Policy-cited subline; muted chip grammar |
+| L2 factor list dominates drawer | Max height + collapsed; never pushes review actions below fold |
+
+### AI-feeling language (ban list — Phase 2)
+
+| Avoid | Prefer |
+|-------|--------|
+| AI suggestion / assistant recommendation | Operational read / Review assist |
+| Alloy thinks / BOS recommends you should | Focus: … / Do next: … |
+| Recommended by AI | Grounded operational read |
+| Intelligence dashboard / insights hub | Review assist band |
+| Confidence % / model scores | Readiness state + timing caveat |
+| I'm / we suggest (anthropomorphic) | Catalog-backed operational copy |
+
+### Cognition vs presentation levels
+
+**Two orthogonal axes** (do not conflate):
+
+1. **Operational cognition hierarchy** (what matters first) — binding order from Forms doctrine  
+2. **Presentation levels L0–L3** (how much detail per surface) — density only  
+
+Presentation levels must **never** reorder cognition layers (e.g. L1 must not show L2 reasoning before suggested focus).
+
+---
+
+# STEP 1 — Phase 2 UX framework (doctrine-aligned)
+
+## 1.1 Operational cognition hierarchy (binding)
+
+Inherited from Forms doctrine. **Applies to every BOS surface** before presentation level rules.
+
+| Order | Layer | Operator question | Phase 2 BOS mapping (contract fields) |
+|-------|-------|-------------------|--------------------------------------|
+| 1 | **Current operator action** | What can I do here, now? | **Outside** assist band — existing drawer/workflow CTAs, review actions, approve/reject |
+| 2 | **Trust / confidence state** | Is this assessment current and reliable? | Readiness chip (`urgency_label` band), `stale_banner`, low-timing caveat |
+| 3 | **Changes / anomalies** | What changed vs known state? | `urgency_reason` clause, activity/stale footnotes, escalation policy basis |
+| 4 | **Operational context** | Who / what record / what flow? | Entity header, queue subject, status pills — **minimal repeat** in BOS band |
+| 5 | **Suggested focus** | What should I review? | Catalog `title` + compressed **Why now** (`why_it_matters` clause) |
+| 6 | **Technical detail** | Why does the system think this? | L2 disclosure: factors, `signal_labels`, `action_rationale`, codes (support mode) |
+
+**Within the Review assist band (drawer L1), render order is always:**  
+`trust/readiness` → `what changed (if any)` → `suggested focus` → `do next` → optional `likely` → collapsed `supporting detail`.
+
+---
+
+## 1.2 Presentation levels (L0–L3) — density only
+
+Aligned with GATE 0 §6.3 and Phase 1 `render.*` bundle. Phase 2 **implements** existing projections; does not add builder logic.
+
+| Level | Surface | Operator job | Visual restraint | Shown (deterministic) | Hidden by default |
+|-------|---------|--------------|------------------|----------------------|-------------------|
+| **L0 — Queue preview** | `CrmCompactQueuePreview` | Prioritize scan — open record? | **Low** — one merged operational read line + optional sequencing chip | `{chip?} {do next clause} · {why now clause}` (≤2 visible lines total) | Outcome, factors, signals, rationale, policy detail |
+| **L1 — Drawer assist band** | `OperationalAttentionHeaderStrip` | Orient review on open | **Low–medium** — single assist band (Forms `BosReviewSummaryPlaceholder` analog) | Readiness chip, focus line, do next, optional one outcome | Full why essay, factors, signals, enrich draft body |
+| **L2 — Supporting detail** | Collapsed `<details>` in drawer | Validate before acting | **Secondary** — never default open | Factors, signals, rationale, risk, timing hint (text) | Reason codes, scores, resolver version |
+| **L3 — Handoff seed** | Orchestrator awareness | Continue with same story | **Low** — seed string only | `handoff.primary_recommendation`, compressed `operational_reason`, `cta_label` | Full DTO, reasoning dumps |
+
+**Forms reference mapping:**
+
+| Layer | Forms | AdminV2 Phase 2 |
+|-------|-------|-----------------|
+| Assist band | `BosReviewSummaryPlaceholder` | `OperationalAttentionHeaderStrip` (reframed) |
+| Readiness | `PacketReviewInsightV1.readiness_state` | `urgency` band + stale banner |
+| Changes | `WhatChangedPanel` / `key_changes` | `urgency_reason` + activity footnote |
+| Focus | `suggested_focus` | Catalog `title` + short why |
+| Paths | `review_paths` | **Do next** (`recommended_action.label`) |
+| Technical | `PacketReviewTechnicalPanel` | L2 disclosure |
+
+**Surface budget (mandatory):** **One** primary intelligence region per entity view. Queue preview is a **density-reduced projection** of the same story — not a second product surface.
 
 **Density rules:**
 
-- **One primary narrative** per level — do not show recommendation + operational summary + priority explanation saying the same thing.
-- **Truncate with intent** — prefer clause drops over mid-sentence ellipsis where catalog allows shorter template tier for L0.
-- **Progressive disclosure** — L2 is collapsed `<details>` or existing drawer section; never default open on every record.
+- **One operational read** per level — collapse `attentionReason`, priority explanation, summary preview, and recommendation when they repeat.
+- **Truncate with intent** — L0 uses shortest catalog tier; drawer may show one extra clause.
+- **Progressive disclosure** — L2 collapsed by default; never visually dominant over review actions.
 
-**Action visibility:**
+**Do next visibility:**
 
-- L0: action as **verb line** (`next_label`), not button.
-- L1: action as labeled **“Do next”** row (not “Next ·”).
-- L2: `available_actions[]` as **links/intents list** (read catalog labels only — no placement resolution in Phase 2).
+- L0: embedded in merged read line (`next_label`), not a button.
+- L1: labeled **Do next** (verb line), not “Next ·” / “Suggested next step”.
+- L2: `available_actions[]` as optional intent labels only — no placement resolution in Phase 2.
 
-**Escalation visibility:**
+**Escalation visibility (restrained):**
 
-- L0: chip `Escalation` + shortened why clause when `recommendation_type === escalation`.
-- L1: `urgency_label` = Urgent + policy basis subline (from `escalation_reference` or `urgency_reason`).
+- L0: discrete chip + shortened why — not red row.
+- L1: policy basis subline under focus; chip **Needs leadership review** when `recommendation_type === escalation`.
 
-**Outcome visibility:**
+**Outcome visibility (secondary):**
 
-- L0: omit (tooltip: open record for outcome).
-- L1: one line `outcome_line` when present (conversion/communication types prioritized).
+- L0: omit — “Open record for full read” boundary copy.
+- L1: optional one `outcome_line` **after** do next when catalog provides it.
 
 ---
 
-## 1.2 Urgency hierarchy (P0–P3)
+## 1.3 Urgency hierarchy (P0–P3) — sequencing, not alarm
 
-**Source of truth:** `OperationalRecommendationV1.urgency` (`p0_urgent` | `p1_today` | `p2_soon` | `p3_fyi`) — already set by builder from severity + SLA + catalog defaults. Phase 2 does **not** change resolver rules.
+**Doctrine:** Urgency supports **operational sequencing guidance**. It is **not** emergency signaling, alarm UX, or portfolio panic language.
 
-| Band | Operator meaning | When to emphasize | L0 treatment | L1 treatment |
-|------|------------------|-------------------|--------------|--------------|
-| **P0 — Urgent** | Act today or escalate now | SLA breached + critical severity; `sla_breach` catalog | Compact chip + left accent (existing attention badge — **align**, do not duplicate) | Strongest border accent; show `urgency_reason` |
-| **P1 — Today** | Default coaching window | Most operational attention rows | Standard chip “Today” | Default strip accent |
-| **P2 — Soon** | Wait or family clock | Waiting buckets, approaching SLA | Muted chip or icon only | Softer typography |
-| **P3 — FYI** | Informational | Activity-only / low severity | Omit chip or footnote icon | Collapsed footnote |
+**Source of truth:** `OperationalRecommendationV1.urgency` — builder-owned; Phase 2 does **not** change resolver rules.
+
+| Band | Sequencing meaning | Emphasis rule | L0 | L1 assist band |
+|------|-------------------|---------------|-----|----------------|
+| **P0 — Urgent** | Address before other scan work today | Single accent; never full-card red | Compact chip; align with existing attention badge — **do not duplicate** | Readiness chip + `urgency_reason` line |
+| **P1 — Today** | Default coaching window | Standard | Chip “Today” | Default assist styling |
+| **P2 — Soon** | Family/clock wait | Muted | Icon or omit chip | Softer meta typography |
+| **P3 — FYI** | Informational | **Quiet** — collapse | Omit chip | Footnote only |
 
 **Anti-patterns (reject):**
 
-- Coloring entire queue card red for every needs-attention row.
-- Showing numeric `priority_score` at L1.
-- Mapping P0 to generic CRM `urgencyTier` on all opportunities — **recommendation band wins** when preview present.
+- Red saturation / danger styling on every needs-attention row  
+- Alarm copy (“Emergency”, “Critical alert”)  
+- Numeric `priority_score` at L1  
+- Competing `urgencyTier` (queue sort) + recommendation chip without merge rules  
 
-**Attention compression (scan lane):**
+**Scan-lane compression** (when `_operational_recommendation_preview` present):
 
-When `_operational_recommendation_preview` exists:
-
-1. Show recommendation block (L0).
-2. Hide or collapse `operationalNextHint` if redundant with `next_label`.
-3. Keep `attentionReason` as **short headline** OR demote below recommendation — pick one per design pass (Card 2.3).
-
----
-
-## 1.3 Recommendation anatomy refinement (compressed clarity)
-
-Map canonical fields → operator phrases (server-side labels already exist; Phase 2 is **presentation**).
-
-| Anatomy slot | Canonical source | L0 max | L1 max | Voice |
-|--------------|------------------|--------|--------|-------|
-| **Headline** | `title` | — (use shortened title or `next_label`) | 80c | Judgment, not taxonomy |
-| **Why now** | `urgency_reason` + first clause of `why_it_matters` | 140c combined in `why_line` | `urgency_reason` line + optional short why | Operational, not “Operational attention:” |
-| **Do next** | `recommended_action.label` | 60c `next_label` | 120c `next_action_label` | Verb-first |
-| **Likely** | `likely_outcome` | — | 160c `outcome_line` | Conditional, not promise |
-| **Risk** | `likely_risk` | — | L2 only | Honest downside |
-| **Because** | `action_rationale` | — | L2 only | Links action to signals |
-| **Timing** | `communication_reference.timing_hint` | tooltip | L2 text | No send button |
-| **Escalate** | `escalation_reference.policy_basis` | chip + clause | subline | Policy-cited |
-
-**Banned primary copy patterns (Phase 2 GATE):**
-
-- “Operational attention: …” as the main why line.
-- “Respond to new request” as generic action without catalog context.
-- “Alloy suggestion” as the only product label (rename to **“Operational read”** or **“BOS assessment”**).
+1. Emit **one** operational read line (Card 2.3).  
+2. Suppress redundant `operationalNextHint` / duplicate next lines.  
+3. Demote or merge `attentionReason` — never two headlines.  
+4. Collapse `_operational_summary_preview` when it repeats the same story.
 
 ---
 
-## 1.4 Multi-factor reasoning
+## 1.4 Review assist anatomy (compressed operational narration)
+
+Map canonical fields → operator phrases (server-side labels only; Phase 2 is **presentation**).
+
+| Slot | Cognition layer | Canonical source | L0 | L1 | Voice |
+|------|-----------------|------------------|----|----|-------|
+| **Readiness** | Trust | `urgency` + `stale_banner` + `confidence_level` | chip only | chip + stale banner | Calm state, not alarm |
+| **What changed** | Anomaly | `urgency_reason`, activity footnote | in `why_line` | one line before focus | Factual delta |
+| **Suggested focus** | Focus | `title` + `why_it_matters` (clause) | merged in read | focus line ≤80c | Review target, not taxonomy label |
+| **Do next** | Sequencing | `recommended_action.label` | in read | labeled row ≤120c | Verb-first |
+| **Likely** | Outcome (secondary) | `likely_outcome` | — | optional ≤160c | Conditional |
+| **Risk** | L2 | `likely_risk` | — | collapsed | Honest downside |
+| **Because** | L2 | `action_rationale` | — | collapsed | Links action to signals |
+| **Timing** | L2 | `communication_reference.timing_hint` | — | collapsed text | No send |
+| **Escalate** | Anomaly overlay | `escalation_reference.policy_basis` | chip + clause | subline | Policy-cited |
+
+**Vocabulary lock (binding):**
+
+| Use | Do not use |
+|-----|------------|
+| Operational read (queue preview label) | Alloy suggestion, AI suggestion |
+| Review assist (drawer band region) | Recommendation card, intelligence panel |
+| Why now | Why · (bare), Operational attention: … |
+| Do next | Next ·, Suggested next step |
+| Suggested focus | Needs attention: {resolver label} as primary |
+| What changed | (implicit in urgency_reason when delta known) |
+
+**Banned primary copy (GATE 2):** “Operational attention: …”; generic CTAs without catalog context; anthropomorphic or AI-marketed framing.
+
+---
+
+## 1.5 Multi-factor reasoning (progressive, secondary)
+
+Reasoning supports focus — it does not replace it.
 
 | Layer | Content | Visibility |
 |-------|---------|------------|
-| **Primary** | `primary_reason` via catalog title/why | L0–L1 |
-| **Secondary** | `secondary_factors[]` | L2 list (label + optional severity dot) |
-| **Signals** | `grounding_signals[]` / `drawer_strip.signal_labels` | L2 capped list (≤6 labels); codes optional in support mode |
-| **Escalation overlay** | `recommendation_type === escalation` | L0 chip + L1 policy line |
-| **Timing overlay** | `urgency_reason`, wait bucket context from resolver | Woven into “Why now” — not separate essay |
-| **SLA overlay** | `sla_tier` on factors / primary | Severity dot or “Past goal” inline — not paragraph |
+| **Primary** | Catalog title + one why clause | L0–L1 focus lines only |
+| **Secondary** | `secondary_factors[]` | L2 collapsed list |
+| **Signals** | `signal_labels` / `grounding_signals` | L2 “Based on” (≤6 labels) |
+| **Escalation overlay** | policy basis | L0 chip + L1 subline |
+| **Timing overlay** | `urgency_reason`, wait context | Woven into **Why now** — not second essay |
+| **SLA overlay** | factor severity | Inline dot in L2 — not L1 paragraph |
 
-**Expand contract:**
-
-- Default collapsed: **“Supporting factors (N)”**.
-- Never show parallel recommendation cards for multiple reasons (GATE 0 §6.6).
+**Expand contract:** Default collapsed **Supporting detail (N)** — optional, contextual, never visually dominant. No parallel recommendation cards (GATE 0 §6.6).
 
 ---
 
-## 1.5 Operational sequencing
+## 1.6 Operational sequencing
 
-BOS should answer: **what should happen next operationally.**
+BOS narrates **what should happen next operationally** — it does not execute.
 
-| Concept | Implementation (Phase 2) | Not in Phase 2 |
-|---------|--------------------------|----------------|
-| **Next best action** | Single `recommended_action` at L1 | Auto-execute |
-| **After delay** | Copy-only in catalog (`timing_hint`) | Scheduled jobs |
-| **Escalation path** | Escalation type + policy basis | Auto-notify manager |
-| **Communication timing** | Show `timing_hint` text at L2 | Draft body / send |
-| **Alternate actions** | `available_actions[]` labels at L2 | Resolved placements |
+| Concept | Phase 2 | Not in Phase 2 |
+|---------|---------|----------------|
+| **Do next** | Single `recommended_action` at L1 | Auto-execute / apply |
+| **After delay** | Catalog `timing_hint` at L2 | Scheduled jobs |
+| **Escalation path** | Policy basis copy | Auto-notify |
+| **Communication timing** | Text at L2 | Draft / send |
+| **Alternates** | `available_actions[]` labels at L2 | Placement resolution |
 
-**Vocabulary lock (cross-surface):**
-
-| Old | Phase 2 preferred |
-|-----|-------------------|
-| Next · | **Do next** |
-| Why · | **Why now** |
-| Alloy suggestion | **Operational read** (preview) |
-| Suggested next step | **Do next** (drawer fallback) |
-
-**Queue sequencing:** One block — `{urgency chip?} {action line} {why clause}` — then stop.
+**Queue:** One merged operational read — `{sequencing chip?} Do next: … · Why now: …` — then stop.
 
 ---
 
-## 1.6 Trust + confidence UX (deterministic Phase 2)
+## 1.7 Trust + confidence UX (deterministic)
+
+Trust derives from **deterministic reasoning, visible grounding, concise provenance, stable hierarchy** — not confidence theater.
 
 | Element | Rule |
 |---------|------|
-| **Grounding** | L2 list from `signal_labels` / factors — human labels only |
-| **Confidence** | Show footnote only when `confidence_level === low` (“Timing approximate”) OR always show subtle “Deterministic” badge at L1 — product choice in Card 2.1 |
-| **Stale** | When `drawer_strip.is_stale`, show `stale_banner` prominently |
-| **Preview boundary** | Visible text: “Preview — open record for full assessment” (not tooltip-only) |
-| **Invalidation** | Defer live `validateRecommendationFreshness` to Phase 2 Card 2.6 or Phase 3 — UI slot reserved |
-| **No fake confidence** | No percentages, no “BOS is 87% sure” |
-| **No anthropomorphism** | No “I think”, “BOS recommends you should” |
+| **Readiness** | Primary trust surface — band chip + stale banner |
+| **Grounding** | L2 human `signal_labels` / factors — “Based on …” |
+| **Timing confidence** | Footnote only when `confidence_level === low` (“Timing approximate”) |
+| **Preview boundary** | Visible: “Preview — open record for full operational read” |
+| **Stale** | Prominent `stale_banner` when `is_stale` |
+| **Invalidation** | Live freshness → Card 2.6 stub or Phase 3 |
+| **Reject** | Percent scores, anthropomorphic copy, always-on “AI/Deterministic” marketing badges |
+| **Enhance draft** | Separate optional region below assist band — never mixed into operational read trust |
 
-**Enhance draft:** Keep visually **below** L1 anatomy, labeled as optional draft tooling — not part of recommendation trust.
+---
+
+## 1.8 Anti-chatbot + visual restraint doctrine
+
+Inherited from Forms § Intelligence style + § Anti-patterns.
+
+| Reject | Ship |
+|--------|------|
+| Chatbot / transcript UX | Review assist band |
+| Giant AI cards / gradients | Muted assist tint (PX-0 kinship) |
+| Recommendation overload | One story per entity |
+| Hidden workflow engine | Visible governed actions elsewhere |
+| Autonomous tone | Human-owned decisions |
+
+**Orchestrator:** Handoff = awareness seed with same focus family — not an open-ended agent turn.
 
 ---
 
 # STEP 2 — Phase 2 sprint structure (cards + gates)
 
-## 2.1 Card map
+## 2.1 Card map (doctrine-aligned)
 
 | Card | Scope | Primary files (expected) | Out of scope |
 |------|-------|--------------------------|--------------|
-| **2.1** | Drawer L1 anatomy — title, urgency chip, why now, do next, outcome | `OperationalAttentionHeaderStrip.tsx`, selector VM extensions | New routes, enrich |
-| **2.2** | Handoff parity — full render.handoff + drawer vocabulary | `operationalRecommendationHandoff.ts`, Orchestrator seed | Task Assist auto-run |
-| **2.3** | Queue L0 — urgency chip, compression, collapse rules, preview boundary copy | `QueueBlock.tsx`, `enrollmentWorkUnitViewModel.ts`, `CrmCompactRowSemanticSlots` types | Queue ordering, new fields |
-| **2.4** | L2 expand — factors, signals, rationale, risk, timing (read `getRecommendationDetailSummary`) | New small drawer sub-panel or extend existing panel | `available_actions` placement |
-| **2.5** | Escalation + type chips — visual grammar for escalation/communication/operational | Shared chip component + CSS tokens | Resolver changes |
-| **2.6** | Stale + trust chrome — banner, deterministic badge, optional freshness hook stub | Strip + tests | DB persistence |
-| **2.7** | Selector/view-model enrichment — pass through fields UI needs without React copy | `recommendationSurfaceSelectors.ts` | Builder/catalog changes |
-| **2.8** | Regression + GATE 2 demo script + docs update | Tests, sprint §5.4 checklist | AI enrich |
+| **2.1** | Drawer **Review assist band** — cognition order: readiness → focus → do next → optional likely; Forms anatomy parity | `OperationalAttentionHeaderStrip.tsx`, selectors | New routes, enrich, competing intelligence regions |
+| **2.2** | Handoff parity — same focus phrase family as drawer; awareness seed only | `operationalRecommendationHandoff.ts`, `activeOperationalContext.ts` | Task Assist auto-run, chatbot persona |
+| **2.3** | Queue L0 — **one operational read line**, sequencing chip, collapse duplicates, preview boundary | `QueueBlock.tsx`, `enrollmentWorkUnitViewModel.ts` | Queue ordering, new wire fields, feed layout |
+| **2.4** | L2 **collapsed Supporting detail** — factors, signals, rationale (`getRecommendationDetailSummary`) | Extend existing drawer disclosure — **no new dominant panel** | `available_actions` placement |
+| **2.5** | Escalation/type chips — restrained grammar (policy-cited, not alarm) | Shared chip tokens (PX-0 kinship) | Resolver changes |
+| **2.6** | Trust chrome — stale banner, low-confidence timing caveat, preview boundary; freshness stub optional | Strip + tests | DB persistence, marketing badges |
+| **2.7** | Selector VM — pass fields for cognition-ordered render; **no React copy** | `recommendationSurfaceSelectors.ts` | Builder/catalog changes |
+| **2.8** | Regression + GATE 2 demo + docs | Tests, parent §5.4 | AI enrich |
+| **2.9** | (Optional) `OperationalProposalCardFrame` insight region — **insight-only**, same vocabulary | Proposal frame consumers | Second BOS personality on drawer |
 
-**Optional split:** 2.4 + 2.5 can merge if scope tight.
+**Optional split:** 2.4 + 2.5 can merge. Card 2.9 optional — do not block GATE 2.
 
 ---
 
@@ -370,14 +514,16 @@ BOS should answer: **what should happen next operationally.**
 
 | # | Criterion |
 |---|-----------|
-| G2-1 | Needs Attention → queue row shows **urgency-aware** preview (band or chip) + catalog action/why — not legacy boilerplate when canonical present |
-| G2-2 | Drawer open shows **title-led** L1 anatomy with **Do next / Why now / Likely** — not only resolver headline |
-| G2-3 | Orchestrator handoff seed matches drawer judgment (same primary phrase family) |
-| G2-4 | L2 expand shows factors + signals without exposing reason codes by default |
-| G2-5 | No “Operational attention:” as primary why in default path |
+| G2-1 | Queue row shows **one operational read** + optional sequencing chip — not legacy feed framing when canonical present |
+| G2-2 | Drawer **Review assist band** follows cognition order (readiness → focus → do next) — resolver label not primary |
+| G2-3 | Handoff seed matches drawer **suggested focus** phrase family — no chatbot persona |
+| G2-4 | L2 **Supporting detail** collapsed by default; factors/signals without reason codes in default path |
+| G2-5 | No “Operational attention:” / “Alloy suggestion” as primary framing |
 | G2-6 | Queue preview boundary copy visible — preview-only truth preserved |
-| G2-7 | No new apply/send/workflow execution from recommendation UI |
-| G2-8 | Phase 2 tests pass; no AI routes added under `recommendations/*` |
+| G2-7 | No new apply/send/workflow execution from assist UI; workflow CTAs remain primary actions |
+| G2-8 | Urgency reads as **sequencing**, not alarm (no red wash) |
+| G2-9 | Phase 2 tests pass; no AI routes under `recommendations/*` |
+| G2-10 | **Doctrine parity** with Forms assist band — same vocabulary (operational read, review assist, suggested focus, do next) |
 
 **Demo script (minimum):** Reuse parent sprint §5.7 GATE C — update expected copy to reference catalog titles and urgency chips.
 
@@ -450,12 +596,54 @@ When Phase 2 cards land:
 
 | Step | Status |
 |------|--------|
-| Step 0 — UX audit | ✅ Complete (this doc §0) |
-| Step 1 — UX framework | ✅ Complete (this doc §1) |
-| Step 2 — Sprint structure | ✅ Complete (this doc §2) |
-| **Implementation** | ⏸ **Not started** — begin with Card 2.1 after review |
+| Step 0 — Phase 1 UX audit | ✅ Complete (§0) |
+| Step 0.4 — Doctrine alignment audit | ✅ Complete (§0.4) |
+| Step 1 — UX framework (cognition + L0–L3) | ✅ Complete (§1) |
+| Step 2 — Sprint structure | ✅ Complete (§2) |
+| **Implementation** | ⏸ **Not started** — begin Card 2.1 after doctrine review |
 
-**Next action after review:** Implement **Card 2.1** (drawer L1 anatomy) in a focused PR, then 2.3 (queue L0) for visible scan-lane wins.
+**Next action:** Implement **Card 2.1** (Review assist band) then **Card 2.3** (queue operational read) — preserve surface budget and cognition order.
+
+---
+
+# STEP 4 — Doctrine alignment changelog (this pass)
+
+### What changed
+
+- Subordinated **L0–L3** to **operational cognition hierarchy** (Forms binding).  
+- Reframed drawer work as **Review assist band** (`BosReviewSummaryPlaceholder` analog), not “title-led recommendation strip.”  
+- Reframed queue work as **one operational read line**, not a mini recommendation card.  
+- Reframed urgency as **sequencing guidance** with visual restraint — removed alarm/emergency framing.  
+- Reframed trust as **readiness + provenance** — removed default “Deterministic assessment” marketing badge.  
+- Locked vocabulary to **Operational read / Review assist / Suggested focus / Do next / Why now / What changed**.  
+- Mandated L2 as **collapsed Supporting detail** — not a new dominant sub-panel.  
+- Added GATE 2 criteria G2-8 (sequencing not alarm) and G2-10 (Forms doctrine parity).  
+- Added explicit anti-chatbot, surface-budget, and recommendation-feed rejection lists.
+
+### What was corrected (drift removed)
+
+| Removed / refined | Replaced with |
+|-------------------|---------------|
+| L1 “medium–high” visual weight | Low–medium assist band; subordinate to workflow actions |
+| P0 “strongest border accent” / emergency tone | Single accent; policy-cited escalation |
+| Title as drawer **primary headline** competing with actions | **Suggested focus** inside assist band after readiness |
+| “BOS assessment” as preferred label | **Operational read** / **Review assist** |
+| Always-on deterministic badge | Trust footnotes only when state requires |
+| L2 “new sub-panel” wording | Collapsed disclosure in existing drawer |
+| Queue multi-line recommendation block | One merged operational read |
+
+### What was intentionally preserved
+
+- Phase 1 contract, builder, projections, selectors — **no contract changes** required for alignment.  
+- Deterministic-only Phase 2 scope — no AI enrich.  
+- Queue preview authority boundary and legacy wire fields.  
+- Operational intelligence goals: prioritization, compression, explainability, sequencing.  
+- Card numbering 2.1–2.8 core path; 2.9 optional proposal frame.
+
+### References added
+
+- [`forms_documents_operational_experience_hardening.md`](./forms_documents_operational_experience_hardening.md) § Unified BOS Operational Interaction Doctrine  
+- [`forms_documents_product_experience_refresh.md`](./forms_documents_product_experience_refresh.md) § BOS surfaces + PX-0 kinship  
 
 ---
 
@@ -463,7 +651,7 @@ When Phase 2 cards land:
 
 | Contract field | Projected (Phase 1) | Consumed in UI (Phase 1) | Phase 2 target |
 |----------------|---------------------|--------------------------|--------------|
-| `title` | drawer_strip, handoff | Handoff only | **L1 headline** |
+| `title` | drawer_strip, handoff | Handoff only | **L1 suggested focus** |
 | `why_it_matters` | queue, drawer_strip, handoff | why lines | **Compressed “Why now”** |
 | `urgency` + `urgency_reason` | drawer_strip | **Unused** | **L0 chip + L1 line** |
 | `recommended_action.label` | queue, drawer_strip | yes | **“Do next”** |
@@ -485,7 +673,7 @@ This matrix is the **backlog for Phase 2 UI work** — no contract changes requi
 **Suggested commit message (docs only):**
 
 ```
-docs(sprint): Phase 2 operational recommendation UX audit and sprint plan.
+docs(sprint): align BOS Phase 2 UX to Forms operational cognition doctrine.
 
-Document Phase 1 UX gaps, L0–L3 hierarchy, urgency/trust framework, and gated implementation cards before Phase 2 coding.
+Audit drift, subordinate L0–L3 to cognition hierarchy, reframe assist band and queue read, and tighten vocabulary before implementation.
 ```

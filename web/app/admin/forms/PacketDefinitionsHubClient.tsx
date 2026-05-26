@@ -5,7 +5,9 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import PrimaryButton from "@/components/PrimaryButton";
 import SectionCard from "@/components/admin/SectionCard";
+import { FormsOperationalLink, FormsWorkspaceShell } from "@/components/forms/workspace";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
+import { formsWorkspaceBreadcrumbs, FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
 
 type PacketDef = {
     id: string;
@@ -77,24 +79,16 @@ export default function PacketDefinitionsHubClient() {
     };
 
     return (
-        <div className="mx-auto max-w-5xl space-y-6 p-6 text-[#31394d]">
-            <div>
-                <h1 className="text-xl font-semibold text-[#0f172a]">Packet definitions</h1>
-                <p className="mt-2 text-sm leading-relaxed text-[#59678b]">
-                    Build linear multi-form packets, then mint a{" "}
-                    <strong className="font-medium text-[#31394d]">packet public link</strong> from a definition&apos;s detail page.
-                </p>
-                <p className="mt-2 text-sm">
-                    <Link href={`${ADMIN_FORMS_UI_BASE}/packets`} className="font-medium text-[#00458C] hover:underline">
-                        Packet sessions (review)
-                    </Link>
-                    {" · "}
-                    <Link href={ADMIN_FORMS_UI_BASE} className="font-medium text-[#00458C] hover:underline">
-                        Forms list
-                    </Link>
-                </p>
-            </div>
-
+        <FormsWorkspaceShell
+            title="Packet orchestration"
+            subtitle="Compose multi-step intake pipelines, distribute packet links, and review sessions when families complete a run."
+            breadcrumbs={formsWorkspaceBreadcrumbs([{ label: "Packets" }])}
+            actions={
+                <FormsOperationalLink href={FORMS_MODULE_ROUTES.packetSessions}>
+                    Session inbox
+                </FormsOperationalLink>
+            }
+        >
             <SectionCard title="Create packet">
                 {addFormId ? (
                     <p className="mb-3 rounded-md border border-[#c7d2fe] bg-[#eef2ff] px-3 py-2 text-sm text-[#1e3a8a]">
@@ -151,6 +145,6 @@ export default function PacketDefinitionsHubClient() {
                     </ul>
                 ) : null}
             </SectionCard>
-        </div>
+        </FormsWorkspaceShell>
     );
 }

@@ -14,6 +14,15 @@
 **Phase:** 1 — Deterministic recommendation foundation  
 **GATE 1 blocks:** Phase 2 UX polish, Phase 4 AI enrich
 
+**Unified interaction doctrine (binding for Phase 2+):** [`forms_documents_operational_experience_hardening.md`](./forms_documents_operational_experience_hardening.md) § Unified BOS Operational Interaction Doctrine. Phase 1 delivered **infrastructure**; Phase 2 must present it using the **Forms/Documents case-file + Review assist** interaction model — not a separate suggestion-feed UX.
+
+| Doctrine pillar | Phase 1 delivery | Phase 2 presentation obligation |
+|-----------------|------------------|--------------------------------|
+| Deterministic-first | `OperationalRecommendationV1` builder | No LLM in Phase 2 PRs |
+| Cognition hierarchy | Fields: urgency, why, outcome, action | Render L1 in hierarchy order |
+| Human authority | Ephemeral insight; apply_policy none | No auto-apply UI; governed paths only |
+| Reference model | Legacy adapters | Align strip/queue/handoff to Forms Review assist anatomy |
+
 ---
 
 ## SECTION 1 — Phase 1 objective
