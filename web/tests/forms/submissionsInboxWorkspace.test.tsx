@@ -52,7 +52,7 @@ describe("SubmissionsInboxView OW-6", () => {
         expect(html).toContain('data-testid="submission-inbox-lane-needs-review"');
         expect(html).toContain('data-testid="submission-inbox-lane-drafts"');
         expect(html).toContain('data-testid="submission-inbox-lane-needs-linking"');
-        expect(html).toContain("Review intake");
+        expect(html).toContain("Review intake now");
         expect(html).toContain("Continue draft");
         expect(html).toContain("Enrollment form");
         expect(html).toContain("Auto-created child member");

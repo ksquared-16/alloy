@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import PrimaryButton from "@/components/PrimaryButton";
 import StructuredFormSchemaEditor from "@/components/admin/forms/StructuredFormSchemaEditor";
+import { FormDocumentAuthoringShell } from "@/components/forms/workspace/FormDocumentAuthoringShell";
 import { emptyFormSchema } from "@/lib/forms/adminFormSchemaBuilder";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
@@ -232,7 +233,9 @@ export default function FormSchemaWorkspace({
 
             {schema && draftVersionId ? (
                 <div className="mt-4 space-y-3">
-                    <StructuredFormSchemaEditor schema={schema} onChange={setSchema} disabled={!canMutate || busy} />
+                    <FormDocumentAuthoringShell schema={schema} formName={formName}>
+                        <StructuredFormSchemaEditor schema={schema} onChange={setSchema} disabled={!canMutate || busy} />
+                    </FormDocumentAuthoringShell>
                     <div className="flex flex-wrap gap-2">
                         <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={!canMutate || busy} onClick={() => void saveDraft()}>
                             Save draft

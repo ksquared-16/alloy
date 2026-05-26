@@ -83,7 +83,7 @@ export default function FormsHubClient() {
                 fetch("/api/admin/forms", { credentials: "include" }),
                 fetch("/api/admin/forms/packet-sessions", { credentials: "include" }),
                 fetch("/api/admin/forms/packet-definitions", { credentials: "include" }),
-                fetch("/api/admin/forms/submissions?limit=10", { credentials: "include" }),
+                fetch("/api/admin/forms/submissions?limit=100", { credentials: "include" }),
             ]);
 
             const formsJson = await formsRes.json().catch(() => ({}));
