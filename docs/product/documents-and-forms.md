@@ -36,7 +36,13 @@ Cover **`documents`** (file + metadata records) attached to entities and the **f
 
 **Still open / Phase 2+ (not claiming “product complete” for all enrollment):**
 
-- **Field-level data change proposals**, richer review UX, non-PDF “submission visibility,” template/reminder productization — see **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**.
+- **Field-level data change proposals (DCP)**, richer review UX hardening (UX cards), template/reminder productization — see **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**, **`forms_documents_operational_experience_hardening.md`**.
+- **Phase 2 review MVP (P2-1–P2-4, shipped ~2026-05-21):**
+  - **Read API:** `GET /api/admin/forms/packet-sessions/[packetSessionId]/review-rollup` → **`buildPacketReviewRollupV1`** (`web/lib/forms/packets/buildPacketReviewRollupV1.ts`) — labeled answers, warnings, **`documents_index`**, intake context; **read-only** (no writes).
+  - **Packet session review console:** `/adminV2/forms/packets/[packetSessionId]` — **`PacketReviewRollupView`** + **`PacketSessionReviewClient`**; approve / reject / needs correction via existing review PATCH.
+  - **Opportunity drawer modal:** **`OpportunityPacketReviewModal`** loads rollup for pending sessions; shared case-file layout with session detail page.
+  - **Document provenance + non-PDF steps:** Rollup and opportunity Documents merge expose **`generated_pdf`** rows and synthetic **`submitted_record`** rows for steps without PDF mapping (`documentProvenanceDisplay.ts`, `mergeOpportunityPacketDocuments.ts`).
+  - **Not shipped in this slice:** P2-5 deterministic BOS packet insight, DCP apply paths, UX hardening cards (UX-A–H).
 - **Required vs optional field semantics** — JSON-schema / version payloads evolve; **needs verification** per form kind and publish path.
 - **Automatic sync from submission payload → entity field_values** — **not** assumed (migration comments: payload is canonical; no automatic sync).
 
@@ -67,6 +73,9 @@ Unified intake, documents, and compliance-oriented capture: web/API/email channe
 | Schema baseline | `supabase/migrations/20260506100000_forms_engine_v1_foundation.sql` (and follow-on forms migrations) |
 | Entity route (documents branches) | `web/app/api/admin/entity/[type]/[id]/route.ts` |
 | Document PATCH / entity options | `web/app/api/admin/documents/[id]/route.ts`, `web/app/api/admin/documents/entity-options/route.ts` |
+| Packet review rollup API | `web/app/api/admin/forms/packet-sessions/[packetSessionId]/review-rollup/route.ts`, `web/lib/forms/packets/buildPacketReviewRollupV1.ts` |
+| Packet review UI | `web/components/forms/packets/PacketReviewRollupView.tsx`, `PacketSessionReviewClient.tsx`, `OpportunityPacketReviewModal.tsx` |
+| Document provenance | `web/lib/forms/packets/documentProvenanceDisplay.ts`, `web/lib/admin/related/mergeOpportunityPacketDocuments.ts` |
 
 ## Platform model (three intake modes)
 
@@ -76,7 +85,7 @@ Alloy forms are one engine with three operator-facing modes — **enrollment is 
 |------|---------------|----------------------------|
 | Standalone operational form | `form_submissions` | Submission detail + optional PDF; provenance from form version |
 | Public lead / intake | `form_submissions` + public link metadata | Intake/linkage review; same labeled-answer patterns |
-| Multi-step packet | `form_packet_sessions` + items | Packet review rollup, opportunity Documents merge, operator review PATCH |
+| Multi-step packet | `form_packet_sessions` + items | Packet review rollup (`PacketReviewRollupV1`), `/adminV2/forms/packets/[id]` review console, opportunity Documents merge, operator review PATCH |
 
 Shared building blocks: versioned definitions, public links, prefill (`web/lib/forms/prefill/**`), `launch_context` / `crm_snapshot` on packets, `form_submission_documents`, Communications for delivery.
 
@@ -97,7 +106,7 @@ Shared building blocks: versioned definitions, public links, prefill (`web/lib/f
 ## Known gaps / risks
 
 - **Needs verification:** Org-wide compliance hooks (virus scan, retention jobs) for documents — not evidenced beyond Storage + DB.
-- **Enrollment packets:** **Phase 1 E2E** is **shipped**; **Phase 2** (proposals, field-level review, reminders, queues) is **partially implemented / next execution priority** — **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**. **Document AI extraction** is **not implemented** and **not** in the current sprint lane (AI agent expansion **paused**).
+- **Enrollment packets:** **Phase 1 E2E** is **shipped**; **Phase 2 review MVP (P2-1–P2-4) shipped ~2026-05-21**; DCP, P2-5 BOS insight, and UX hardening cards remain **partially implemented / next execution** — **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**, **`forms_documents_phase_2_packet_review_mvp.md`**. **Document AI extraction** is **not implemented** and **not** in the current sprint lane (AI agent expansion **paused**).
 - **Required vs optional:** **`field_definitions.requirement_policy`** exists in DB; cross-surface behavior **needs verification** (`roadmap-and-gaps.md` item 5).
 
 ## Related

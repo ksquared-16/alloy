@@ -23,11 +23,11 @@ Cover **opportunities**, pipeline status, CRM-adjacent admin behavior, and **sch
 
 - Drawer launches a **packet** (definition, recipient, **multi-child / household** launch metadata).
 - **Activity** tab shows packet projection events (opened, step completed, completed, submitted-for-review, review decision, etc.).
-- **Overview** shows a **compact** packet review indicator; full packet drill-down remains **Forms / packet session** admin surfaces — not a duplicate mega-card on the opportunity.
+- **Overview** shows a **compact** packet review indicator; full packet drill-down uses **Forms packet session review** (`/adminV2/forms/packets/[packetSessionId]`) and **opportunity drawer review modal** (`OpportunityPacketReviewModal` + `PacketReviewRollupView`) — not a duplicate mega-card on the opportunity.
 - **Documents** tab lists packet-linked artifacts via **`/api/admin/related/opportunity/:id`** merge (opportunity-owned **`documents`** + submission junction graph), with optional inline links to **form submission** and **packet session** admin URLs when enriched.
 - **Operator review** (`approve` / `reject` / `needs_correction`) is a gate on **`form_packet_sessions`**; **approval** triggers **idempotent** generated PDFs for mapped published versions (see **`docs/product/documents-and-forms.md`**). **Public packet values remain untrusted proposals** until explicit intake / linkage / future **data change proposal** flows promote them — Phase 1 does **not** auto-mutate canonical CRM person/customer/member fields from arbitrary public answers beyond existing **intake** rules.
 
-**Phase 2** backlog: **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**.
+**Phase 2** backlog (DCP, P2-5 BOS insight, UX hardening): **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**. **Review MVP (P2-1–P2-4) shipped ~2026-05-21:** rollup API, packet session review console, drawer review modal with labeled answers + provenance — **`docs/product/documents-and-forms.md`**, **`forms_documents_phase_2_packet_review_mvp.md`**.
 
 ## How it works
 

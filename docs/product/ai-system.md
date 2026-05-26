@@ -8,4 +8,4 @@ This stub preserves links that still point at `ai-system.md`. **BOS Standardizat
 
 Do not duplicate content here; update **`bos-foundation.md`** for behavior or route changes.
 
-**Recent topics (canonical in active docs, not here):** Orchestrator thread **`sessionStorage`** + SSR hydration — **`agent_interaction_layer_v1.md`**; inquiry children drawer row layout — **`linked_record_field_editing_v1.md`** § V1b; workspace **`setWorkspaceScope`** — **`workflow_assist_v1.md`**.
+**Recent topics (canonical in active docs, not here):** Orchestrator thread **`sessionStorage`** + SSR hydration — **`agent_interaction_layer_v1.md`**; inquiry children drawer row layout — **`linked_record_field_editing_v1.md`** § V1b; workspace **`setWorkspaceScope`** — **`workflow_assist_v1.md`**; BOS **`OperationalProposalCardFrame`** + execution receipts — **`bos_ux_coherence_sprint.md`** (partial).

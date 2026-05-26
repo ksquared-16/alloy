@@ -45,6 +45,8 @@ Use these meanings in code review and prompts.
 | **Workflow Assist** | BOS capability `workflow_assist` — workflow read/explain and gated propose/apply — default path **deterministic**. |
 | **Config / Layout Assist** | BOS capability `config_layout_assist` — `ConfigurationProposalV1` on **`config_layout_assist_proposals`**. |
 | **Placement priority** | Opt-in waitlist ordering layer (`placement_priority_v1` metadata) producing queue **`_placement_priority`** previews — not global waitlist truth. |
+| **Packet review rollup** | Read-only operator review payload (`PacketReviewRollupV1`) built from packet session + submissions + documents index — **`GET /api/admin/forms/packet-sessions/[id]/review-rollup`**. |
+| **Work unit queue selection** | Route-owned pipeline lane authority: URL `?queue=` (+ attention bucket aliases) → bootstrap `focus_queue` → drawer navigator scope — **`workUnitQueueSelection.ts`**. |
 | **AI policy** | Org setting in **`org_settings.metadata.ai_policy`** — feature allow list, provider (`stub` / `openai`), logging mode; complements RBAC permission keys. |
 
 ## Source of truth / key files

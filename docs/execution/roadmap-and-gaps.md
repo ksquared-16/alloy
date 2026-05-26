@@ -16,12 +16,13 @@ Phases are **planning buckets**. Dates are narrative, not contractual.
 
 **Theme:** **Operational completion + product hardening; AI groundwork present, deeper agents paused.**
 
-- **Primary execution focus:** Close enrollment/forms loops, waitlist mutators, tour depth, settings parity, field semantics, editable records, action buttons, messaging reliability, reporting — **not** new autonomous agent personas.
-- **Shipped / stable foundations (carry-forward):** Communications V1; roles + department/site scope; resolver vs queue boundaries; enrollment **Needs Attention** + pipeline UX; **Tour Scheduling V1**; **Enrollment Packet E2E Phase 1**.
-- **BOS groundwork shipped (maintain, do not expand as default sprint work):** needs-attention + enrich draft; Orchestrator + Task Assist V1.1; Workflow Assist V1 (narrow); Config/Layout Assist **foundation** (proposals + partial apply) — **`docs/product/bos-foundation.md`**.
+- **Primary execution focus:** Close enrollment/forms loops (Phase 2 review MVP **in progress**), waitlist mutators, tour depth, settings **follow-ons** (Record Experience Builder, forms field parity), messaging reliability, reporting — **not** new autonomous agent personas or broad AdminV2 speed sprints.
+- **Shipped / stable foundations (carry-forward):** Communications V1; roles + department/site scope; resolver vs queue boundaries; enrollment **Needs Attention** + pipeline UX; **Tour Scheduling V1**; **Enrollment Packet E2E Phase 1**; **Settings + Record UX Parity V1** (May 18); **AdminV2 performance closeout** (May 20–24 — reveal gates, WU bootstrap, drawer pipeline, route-owned queue selection).
+- **BOS groundwork shipped (maintain, do not expand as default sprint work):** needs-attention + enrich draft; Orchestrator + Task Assist V1.1; Workflow Assist V1 (narrow); Config/Layout Assist **foundation** (proposals + partial apply); **BOS UX coherence partial** (`OperationalProposalCardFrame`, execution receipts) — **`docs/product/bos-foundation.md`**, **`docs/sprints/05_2026/bos_ux_coherence_sprint.md`**.
 - **Waitlist placement priority V1** — **opt-in** engine shipped; promotion mutator still open.
-- **Partially implemented (near-term product):** Enrollment Packet Phase 2; waitlist **`add_to_waitlist_placeholder`**; Reporting V1.
-- **Settings + Record UX Parity (May 2026 — complete):** Four-plane Settings control plane V1 — field policy UI + PATCH enforcement (opportunity/job enforceable subset), opportunity workflow v1 layout sections, org action placement editor, layout integrity panel, UX contract pass — **`docs/sprints/05_2026/settings_record_ux_parity_sprint.md`** §12–§13, **`docs/system/configuration-system.md`**. **Deferred:** Record Experience Builder, full `record_actions` migration, ops drawer mutate, `condition_config` editors, linked-record inline PATCH, person/location field modal parity.
+- **Partially implemented (near-term product):** Enrollment Packet Phase 2 (**P2-1–P2-4 review MVP shipped ~2026-05-21**; DCP, P2-5 BOS insight, UX hardening cards open); waitlist **`add_to_waitlist_placeholder`**; Reporting V1.
+- **Settings + Record UX Parity (May 2026 — complete):** Four-plane Settings control plane V1 — field policy UI + PATCH enforcement (opportunity/job enforceable subset), opportunity workflow v1 layout sections, org action placement editor, layout integrity panel, UX contract pass — **`docs/sprints/05_2026/settings_record_ux_parity_sprint.md`** §12–§13, **`docs/system/configuration-system.md`**. **Deferred:** Record Experience Builder, full `record_actions` migration, ops drawer mutate, `condition_config` editors, person/location field modal parity (linked-record inline PATCH **shipped** — **`linked_record_field_editing_v1.md`**).
+- **Engineering audit (May 23 — no implementation):** Work Unit Runtime Consolidation V1 audit documents legacy multi-WU vs canonical `enrollment_pipeline` model — **`docs/sprints/05_2026/work_unit_runtime_consolidation_audit.md`**. Follow-on design/implementation **not started**.
 
 ### Paused / deprioritized (explicit)
 
@@ -39,9 +40,9 @@ Phases are **planning buckets**. Dates are narrative, not contractual.
 1. **Enrollment Packet Phase 2** / enrollment-forms completion — **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**.
 2. **Waitlist** — real mutator replacing **`add_to_waitlist_placeholder`**; ops validation with placement priority pilots.
 3. **Tour scheduling Phase 2** — **`docs/sprints/05_2026/tour_scheduling_phase_2.md`**.
-4. **Settings / configuration control plane** — **V1 shipped** (May 2026): four-plane Fields / Field grouping / Layouts (opportunity workflow v1) / Actions (org placements); remaining: Record Experience Builder, job/schedule layout editors, structured condition builders.
+4. **Settings / configuration control plane** — **V1 shipped** (May 18): four-plane Fields / Field grouping / Layouts (opportunity workflow v1) / Actions (org placements); remaining: Record Experience Builder, job/schedule layout editors, structured condition builders, forms field-policy parity.
 5. **Required vs optional field behavior** — **shipped** for opportunity/job enforceable fields (Settings + server + drawer); expand enforceable subset + **forms** parity still open.
-6. **Editable record UX** + **action button cleanup** — drawer policy UX + placement editor **shipped**; full `record_actions` retirement and ops mutate **deferred**.
+6. **Editable record UX** + **action button cleanup** — drawer policy UX, placement editor, linked-record inline PATCH **shipped**; full `record_actions` retirement and ops mutate **deferred**.
 7. **Messaging hardening** — bindings, worker/cron, scheduled-send ops, deliverability.
 8. **Reporting V1** — scoped reports beyond KPI strips.
 
@@ -77,6 +78,10 @@ Capabilities below exist in **`web/` / `supabase/`**; “complete” means **fou
 - **AI — Workflow Assist V1** — propose/apply/explain, read cards, draft enrichment review — **`workflow_assist_draft`** staging policy **`20260523170000`**; **~2026-05-20 → 2026-05-23**.
 - **Config / Layout Assist foundation** — **`config_layout_assist_proposals`**, field/section policy columns **`20260523120000`**, propose + lifecycle APIs — migration **`20260523140000`**; full apply catalog **partial**.
 - **Record + Orchestrator hardening (May 2026)** — Inquiry children drawer **horizontal row grid**; `EntityDrawerSection` **`contentLayout: "block"`** for custom bodies; command-surface **SSR/hydration** fix (session restore after mount); **`setWorkspaceScope`** loop guard; drawer hooks ordered before early return (`opportunityDrawerPreviewSubtitle`). See **`settings_control_plane_closeout.md`** (follow-on shipped), **`linked_record_field_editing_v1.md`**, **`agent_interaction_layer_v1.md`**.
+- **Settings + Record UX Parity V1** — **2026-05-18** — four-plane control plane, field policy UI + PATCH enforcement (opportunity/job), layout integrity, action placement editor — sprint **`settings_record_ux_parity_sprint.md`** §12–§13.
+- **AdminV2 performance closeout** — **~2026-05-20 → 2026-05-24** — reveal doctrine + route gates (`routeShellPipeline`, `adminV2PrimarySurfaceGate`); generic drawer pipeline; WU operational bootstrap + session cache; sticky workspace site filter; drawer queue prev/next + adjacent prefetch; **route-owned WU queue selection** (`workUnitQueueSelection.ts`, `focus_queue` on bootstrap); WU queue pill prefetch + partial count hydration. Sprint **`adminv2_performance_closeout.md`** — broad speed sprint **paused**; follow-ons scoped only.
+- **Enrollment Packet Phase 2 — review MVP slice (P2-1–P2-4)** — **~2026-05-21** — `GET …/packet-sessions/[id]/review-rollup` (`buildPacketReviewRollupV1`); packet session review console (`PacketReviewRollupView`, `/adminV2/forms/packets/[packetSessionId]`); opportunity drawer review modal hardening; document provenance + **`submitted_record`** synthetic rows for non-PDF steps. **Not shipped:** DCP, P2-5 deterministic BOS insight, UX hardening cards — **`forms_documents_phase_2_packet_review_mvp.md`**, **`enrollment_packet_phase_2.md`**.
+- **BOS UX coherence (partial)** — **~2026-05-20 → 2026-05-22** — shared **`OperationalProposalCardFrame`** on Task/Workflow/Config Assist cards; execution receipts + routing/governance copy; full sprint cards (active operational context, attention hierarchy) **partially implemented** — **`bos_ux_coherence_sprint.md`**.
 
 ---
 
@@ -84,7 +89,7 @@ Capabilities below exist in **`web/` / `supabase/`**; “complete” means **fou
 
 | Area | State | Notes |
 |------|--------|--------|
-| **Enrollment / forms** | **Partially implemented** | **Phase 1 shipped**; **Phase 2** (proposals, field review, comms presets) open |
+| **Enrollment / forms** | **Partially implemented** | **Phase 1 shipped**; **Phase 2 review MVP (P2-1–P2-4) shipped ~2026-05-21**; DCP, P2-5 BOS insight, UX hardening, comms presets still open |
 | **Waitlist** | **Partially implemented** | Lanes + **placement priority V1** shipped (**opt-in**); **`add_to_waitlist_placeholder`** still stub |
 | **AI (assistive groundwork)** | **Partially implemented** | Narrow surfaces **shipped**; **execution paused** for expansion — see **Paused / deprioritized** |
 | **Config / Layout Assist** | **Partially implemented** | Foundation only; **deprioritized** until operational items 1–8 advance |
@@ -114,7 +119,7 @@ Before treating Alloy as **broadly customer-ready**, expect progress on:
 1. **Enrollment Packet Phase 2** / enrollment-forms completion — **`enrollment_packet_phase_2.md`**.
 2. **Waitlist completion** — replace **`add_to_waitlist_placeholder`**; validate placement + promotion with ops.
 3. **Tour Scheduling Phase 2** — **`tour_scheduling_phase_2.md`**.
-4. **Settings / configuration UI parity** — record layouts, queue defs, forms metadata, comms bindings.
+4. **Settings / configuration UI parity** — **V1 shipped** (May 18); remaining: Record Experience Builder, job/schedule layout editors, forms field-policy parity, comms bindings self-serve.
 5. **Required vs optional field behavior** — forms, drawers, layouts; **`requirement_policy`** (**needs verification** per surface).
 6. **Editable record UX** — drawer editability vs layouts and permissions.
 7. **Action button cleanup** — `executeAdminAction` registry, duplicates, permission gates.
@@ -139,6 +144,10 @@ Use this block for **velocity / stakeholder summaries**. Dates are **repo anchor
 | **Needs Attention** | 2026-04-30 | Apr–May 2026 | TBD | **Partially implemented** |
 | **Forms engine V1** | 2026-05-06 | 2026-05-10 | TBD | **Partially implemented** |
 | **Enrollment Packet E2E Phase 1** | 2026-05-07 | 2026-05-13 | — | **Implemented** |
+| **Settings + Record UX Parity V1** | 2026-05-18 | 2026-05-18 | builder/deferred TBD | **Implemented** (V1) |
+| **Enrollment Packet Phase 2 — review MVP** | ~2026-05-21 | ~2026-05-21 | DCP + P2-5+ TBD | **Partially implemented** |
+| **AdminV2 performance closeout** | ~2026-05-19 | ~2026-05-24 | follow-ons scoped | **Implemented** (engineering) |
+| **BOS UX coherence (partial)** | ~2026-05-20 | ~2026-05-22 | full sprint TBD | **Partially implemented** |
 | **Waitlist placement priority V1** | 2026-05-08 | ~2026-05-16 | TBD (mutator + V1.1) | **Partially implemented** |
 | **Tour Scheduling V1** | 2026-05-11 | 2026-05-12 | Phase 2 TBD | **Implemented** (V1) |
 | **AI — needs attention + enrich draft** | ~2026-05-15 | ~2026-05-16 (`20260520100000`) | — | **Implemented** (narrow) |
@@ -168,7 +177,8 @@ Use this block for **velocity / stakeholder summaries**. Dates are **repo anchor
 | Operational summary / queue previews | **Implemented** (derived payloads; deterministic queue order) | Cross-entity insights; director dashboards |
 | Communication drafting (Task Assist) | **Implemented** (propose → approve → **`executeCommunicationsSend`**) | Bulk, multi-recipient, vertical tone packs |
 | Waitlist / placement recommendations | **Partially implemented** (deterministic placement priority; **no** LLM ranking) | AI-suggested promotion rationale (**needs product design**) |
-| Document / intake extraction | **Not implemented** | Extraction assist on uploads (forms Phase 2+ / strategy) |
+| Document / intake extraction | **Not implemented** | Extraction assist on uploads (forms **P2-5+** / strategy) |
+| Packet review assist (deterministic) | **Not implemented** (P2-5 planned; rollup read model **shipped**) | Read-only BOS summary on rollup input |
 | Config command hints | **Partially implemented** (Orchestrator → Config/Layout Assist propose) | Broader natural-language config with audited apply |
 
 ### 2. Workflow AI
@@ -185,7 +195,7 @@ Use this block for **velocity / stakeholder summaries**. Dates are **repo anchor
 
 | Agent persona | Today | Future (planned) |
 |---------------|--------|------------------|
-| **Orchestrator** (command bar) | **Implemented** — routes only; **no** side effects | **Paused** — richer planning until operational core advances |
+| **Orchestrator** (command bar) | **Implemented** — routes only; **no** side effects; **partial** UX coherence (proposal frame, receipts) | **Paused** — richer planning until operational core advances |
 | **Task Assist** (comms, schedule, tasks) | **Implemented** (V1.1) | **Paused** — entity expansion; maintain + harden only |
 | **Workflow Assist** | **Partially implemented** (V1) | **Paused** — new templates; maintenance only |
 | **Config / Layout Assist** | **Partially implemented** (proposals + partial apply) | **Paused** — full apply catalog after settings/field parity |
@@ -217,6 +227,10 @@ Use this block for **velocity / stakeholder summaries**. Dates are **repo anchor
 | **Waitlist placement priority V1** | **2026-05-08 → ~2026-05-16** — sprint closed; opt-in metadata + settings + queue projection. |
 | **AI agents (attention + Orchestrator + Task Assist + Workflow Assist)** | **~2026-05-15 → 2026-05-23** — dense commit window; align per-route with migrations above. |
 | **Config / Layout Assist foundation** | **~2026-05-23** — proposals table + field policy migration same week. |
+| **Settings + Record UX Parity V1** | **2026-05-18** — single-day closeout sprint (Cards 0–9 + post-closeout). |
+| **AdminV2 performance closeout** | **~2026-05-19 → 2026-05-24** — dense commit window; reveal gates, WU bootstrap, drawer pipeline, queue selection fix on **2026-05-24**. |
+| **Enrollment Packet Phase 2 review MVP (P2-1–P2-4)** | **~2026-05-21** — rollup API + review console + drawer modal + provenance in one slice. |
+| **BOS UX coherence (partial)** | **~2026-05-20 → 2026-05-22** — shared proposal frame + execution receipts; full sprint still open. |
 
 **Guardrail:** If a row above disagrees with **git history**, **git wins** — update this table in the same pass as release notes.
 
@@ -297,7 +311,7 @@ Shipped features list **capabilities that exist in repo** at a high level. **Not
 
 #### Notes
 
-- **Enrollment Packet Phase 2** — **planned** (not shipped): field-level data change proposals, richer templates/reminders, non-PDF submission surfacing, AI assist — **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**
+- **Enrollment Packet Phase 2** — **partially implemented**: **P2-1–P2-4 review MVP shipped ~2026-05-21** (rollup API, review console, drawer modal, provenance + non-PDF **`submitted_record`** rows). **Still open:** field-level data change proposals (DCP), P2-5 BOS insight, UX hardening cards, richer templates/reminders — **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**, **`forms_documents_phase_2_packet_review_mvp.md`**
 - **Required vs optional fields** — **needs verification** per published schema
 
 ### Feature: Waitlist (enrollment CRM) — partially implemented
@@ -409,7 +423,7 @@ When verified in code or DB, fold conclusions into **`docs/system/entity-model.m
 - **Opportunity vs contact vs person:** `docs/audits/person-vs-contact-audit.md`.
 - **Event coverage:** `docs/audits/event-integrity-audit.md`.
 - **CRM scoped access:** Not every route uses **`getAdminAccessContextCached`** — grep when adding surfaces.
-- **Forms product completion:** Engine exists; **Enrollment Packet E2E Phase 1** **shipped** **2026-05-07 → 2026-05-13**; **required-field semantics + Phase 2** — still open (`documents-and-forms.md`, **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**).
+- **Forms product completion:** Engine exists; **Enrollment Packet E2E Phase 1** **shipped** **2026-05-07 → 2026-05-13**; **Phase 2 review MVP (P2-1–P2-4) shipped ~2026-05-21**; DCP + P2-5+ still open (`documents-and-forms.md`, **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**).
 - **Waitlist actions:** Placeholder mutator — **not implemented**; placement priority V1 — **shipped opt-in** (`crm-system.md`, placement sprint).
 - **Tour Scheduling V1:** **shipped**; **Phase 2** open.
 - **Reporting V1:** KPI strips exist; **full reporting** — **not implemented**.
@@ -425,7 +439,9 @@ When verified in code or DB, fold conclusions into **`docs/system/entity-model.m
 |-------|-----|
 | Share of `opportunities` using `primary_person_id` vs `primary_contact_id` | DB-dependent |
 | RRS coverage beyond jobs | Flat selects may remain |
-| Forms enrollment **Phase 1 E2E** shipped **2026-05-07 → 2026-05-13**; **required/optional field** behavior still needs verification per surface | Phase 2 + field semantics |
+| Forms enrollment **Phase 1 E2E** shipped **2026-05-07 → 2026-05-13**; **Phase 2 review MVP (P2-1–P2-4) shipped ~2026-05-21**; **required/optional field** behavior still needs verification per surface | DCP + forms field-policy parity |
+| AdminV2 performance closeout production monitoring | Dev perf marks exist; dashboards **needs verification** |
+| WU queue selection from dept lanes | Route-owned `?queue=` + `focus_queue` shipped **2026-05-24**; pilot QA on all enrollment lanes |
 | Waitlist transitions beyond status + previews | Placeholder action |
 | Attendance / staffing | Later / thin signal |
 | OpenAPI / public SDK | Route handlers only |

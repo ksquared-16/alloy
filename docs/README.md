@@ -37,7 +37,7 @@ For any merge that changes behavior, include `docs/execution/operating-doctrine.
 
 - `product/crm-system.md` — Opportunities, CRM, scheduling, **CRM go-live** definition and gap themes.
 - `product/communications.md` — Threads, canonical enqueue, worker delivery, webhooks, provider bindings (lead loop + workflows).
-- `product/documents-and-forms.md` — Document upload + **forms engine** (definitions, submissions, packets); long-term forms vision; **Enrollment Packet Phase 1 shipped**; Phase 2 **partially implemented**.
+- `product/documents-and-forms.md` — Document upload + **forms engine** (definitions, submissions, packets); long-term forms vision; **Enrollment Packet Phase 1 shipped**; **Phase 2 review MVP (P2-1–P2-4) partially shipped ~2026-05-21**.
 - `product/billing-and-financials.md`
 - `product/bos-foundation.md` — **BOS** (orchestration intelligence layer): capabilities, lifecycle, safety doctrine, implementation inventory; **expansion paused** — human-in-the-loop only.
 - `product/ai-system.md` — Stub redirect to `bos-foundation.md` (preserves legacy links).
@@ -63,6 +63,10 @@ For any merge that changes behavior, include `docs/execution/operating-doctrine.
 - **Archived docs (2026-05-02 reset):** `docs/archive/2026-05-02-docs-reset/` (prior `architecture/`, `audits/`, `implementation/`, `specs/`, root `README`, and former `archive/` shard).
 - **Sprints:** `docs/sprints/` — intentionally **not** moved; not counted in the 16-topic cap.
 - **Settings control plane closeout (May 2026):** **`docs/sprints/05_2026/settings_control_plane_closeout.md`** — completed Layouts composition UX, Action buttons (create/edit placements), and Status vs workflow ownership. Canonical supplement to **`docs/system/configuration-system.md`** § four-plane model.
+- **Settings + Record UX Parity (May 2026):** **`docs/sprints/05_2026/settings_record_ux_parity_sprint.md`** §12–§13 — four-plane V1 shipped **2026-05-18**.
+- **AdminV2 performance closeout (May 2026):** **`docs/sprints/05_2026/adminv2_performance_closeout.md`** — reveal gates, WU bootstrap, drawer pipeline, route-owned queue selection; broad speed sprint **paused**.
+- **Work unit runtime consolidation audit (May 2026):** **`docs/sprints/05_2026/work_unit_runtime_consolidation_audit.md`** — audit only; design/implementation not started.
+- **Forms Phase 2 review MVP:** **`docs/sprints/05_2026/forms_documents_phase_2_packet_review_mvp.md`** — P2-1–P2-4 shipped ~2026-05-21; UX hardening cards in **`forms_documents_operational_experience_hardening.md`**.
 - **Layout + field behavior semantics v1 (May 2026):** **`docs/sprints/05_2026/layout_field_behavior_semantics_v1.md`** — Phase 1 **complete/paused**; `field_placements_v1`, effective policy resolution, opportunity drawer GET/PATCH, layout integrity, Settings split (Layouts = behavior, Fields = structure).
 - **Layout + field behavior semantics Phase 2 (backlog):** **`docs/sprints/05_2026/layout_field_behavior_semantics_phase_2.md`** — deferred enhancements only (header grid, built-in sections, placement table, multi-surface, forms/workflows reuse).
 - **Supplementary audits** (not counted in the active markdown cap unless you explicitly load them): `docs/audits/` — e.g. **`supabase-schema-alignment-audit.md`**, **`workflow-rbac-alignment-audit.md`**, **`legacy-messages-retirement-plan.md`**, person vs contact, event integrity, workflow consistency, Admin V2 hardening.

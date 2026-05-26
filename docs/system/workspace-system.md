@@ -56,6 +56,10 @@ All authoritative reads must come from:
 
 **AdminV2 dept runtime reference (2026-05-20):** `/adminV2/workspace/dept/[departmentId]` is the locked premium runtime pattern — single `operational-bootstrap`, shell-first nav, paired oper reveal, bundled KPI/actions. Replication target for work-unit; details in **`docs/sprints/05_2026/adminv2_performance_scope_lock.md`** Appendix.
 
+**AdminV2 performance closeout (May 2026 — shipped):** Reveal doctrine (`adminv2_reveal_doctrine.md`), route shell pipeline gates, WU operational bootstrap + session cache, sticky workspace site filter, generic drawer pipeline, drawer queue prev/next with adjacent prefetch, **route-owned WU queue selection** (`workUnitQueueSelection.ts` — URL `?queue=` beats bootstrap default lane; bootstrap accepts `focus_queue`). Closeout UX fixes and regression tests: **`docs/sprints/05_2026/adminv2_performance_closeout.md`**. Broad speed sprint **paused**; remaining bottlenecks (late drawer hydrates, dept attention weight) are scoped follow-ons only.
+
+**Work unit runtime consolidation (May 2026 — audit only):** **`docs/sprints/05_2026/work_unit_runtime_consolidation_audit.md`** documents legacy multi-WU status cohorts vs canonical **`enrollment_pipeline`** single-WU multi-queue model. **No implementation** in this pass.
+
 ## Operational attention (Needs attention) — filtered lens
 
 **Operational attention** is not a separate workspace subsystem: it is a **resolver-backed filter and explainability overlay** on the same opportunity queues and entity payloads.
@@ -111,6 +115,7 @@ Work-unit **CRM compact** queue rows show **Child** and **Program** columns usin
 - **`QueueService`** (`web/lib/queues/QueueService.ts`) interprets queue definitions, applies org timezone bounds, status definitions, filters/sorts allowlists, and returns summaries + item lists for opportunities/jobs/etc. For **opportunities**, preview enrichment may **read** active **`tour_bookings`** (alongside mirrored **`metadata.tour_date`**) to improve tour labels — still **preview-only**; authoritative scheduling state is on the opportunity entity GET + **`tour_bookings`** tables, not the queue row JSON.
 - **Waitlist placement priority (opt-in):** When **`placement_priority_v1`** is enabled on a work unit, opportunity queue rows may include **`_placement_priority`** and optional reorder within cap — **preview/triage only**; do not use for promotion decisions without entity GET. Settings: **`/adminV2/settings/placement-priority`**. See **`docs/product/crm-system.md`** (waitlist) and sprint **`docs/sprints/05_2026/priority_placement_orchestration_may_2026.md`**.
 - **`AdminV2PerfOverlay`** (`web/components/admin/AdminV2PerfOverlay.tsx`) exposes client perf markers (`window.__alloyPerf` per `web/lib/perf/alloyPerfGlobal.ts`).
+- **WU queue selection authority:** `web/lib/adminV2/workUnitQueueSelection.ts` resolves authoritative lane from route query → bootstrap `focus_queue` → primary lane; drawer prev/next scoped via `opportunityDrawerQueueNavigator.ts` + `opportunityDrawerNavigatorMatchesWorkUnitSelection`. Dept → WU navigation must preserve intended pipeline lane (not default first queue).
 - **Orchestrator workspace scope:** Department and work-unit pages publish **`GlobalAssistantContext.workspaceScope`** (`department_id`, optional `work_unit_id`, display names) so Workflow Assist **create** proposals inherit route context; cleared on page unmount. **`setWorkspaceScope`** is idempotent (shallow compare) — route effects must not depend on the full context object reference. See **`docs/sprints/05_2026/workflow_assist_v1.md`** and **`docs/product/bos-foundation.md`** (session state).
 - Hooks such as **`useDepartmentQueueData`** fetch schedules and related lists for department views.
 
@@ -131,6 +136,8 @@ Work-unit **CRM compact** queue rows show **Child** and **Program** columns usin
 | Queue definition schema | `web/lib/config/queueDefinitionSchema.ts` |
 | Workspace types | `web/lib/workspace/types.ts` |
 | Department page example | `web/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx` |
+| WU queue selection | `web/lib/adminV2/workUnitQueueSelection.ts`, `web/lib/adminV2/workUnitQueuePillPrefetch.ts` |
+| Drawer queue navigator | `web/lib/admin/opportunityDrawerQueueNavigator.ts`, `web/lib/admin/opportunityDrawerAdjacentPrefetch.ts` |
 
 ## Guardrails
 

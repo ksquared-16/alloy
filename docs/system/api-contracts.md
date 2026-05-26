@@ -39,7 +39,7 @@ High-level map of **server boundaries** for admin, public booking, and action li
 | User remove from org | `POST /api/admin/users/[userId]/remove` | Same gate; deletes `user_roles` for org |
 | RBAC catalog | `GET /api/admin/rbac/roles`, `GET /api/admin/rbac/permissions`, `GET /api/admin/rbac/grants?role_key=` | Portal (**admin/ops**) **or** org admin / **`settings.users_roles`** |
 | RBAC mutations | `POST /api/admin/rbac/roles`, `PATCH /api/admin/rbac/roles/[role_key]`, `PUT /api/admin/rbac/grants?role_key=` | Org **`admin`** or **`settings.users_roles`** |
-| Forms (admin) | `/api/admin/forms`, `/api/admin/forms/[formId]/**`, submissions, packet sessions | Definitions, versions, publish/archive, public links, submissions — **partially implemented** product-wide |
+| Forms (admin) | `/api/admin/forms`, `/api/admin/forms/[formId]/**`, submissions, packet sessions, **`GET …/packet-sessions/[id]/review-rollup`** | Definitions, versions, publish/archive, public links, submissions, **packet review rollup (P2-1)** — **partially implemented** product-wide |
 | Forms (public) | `/api/public/forms/[token]/**` | Token-scoped submit / capture |
 | Workspace / dept KPIs | e.g. **`GET /api/admin/departments/[departmentId]/opportunity-lifecycle-kpis`**, **`/api/admin/workspace-kpi-placements`** | **Partially implemented** — KPI strips and placements exist; full **reporting V1** **not implemented** |
 
