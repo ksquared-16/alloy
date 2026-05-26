@@ -11,7 +11,7 @@
 |-----|------|
 | [`adminv2_performance_phase1_navigation_and_interaction_contracts.md`](./adminv2_performance_phase1_navigation_and_interaction_contracts.md) | Hard / soft / local nav matrix — **binding** |
 | [`adminv2_performance_phase2_load_path_architecture.md`](./adminv2_performance_phase2_load_path_architecture.md) | Load-path map, blocking vs deferred |
-| [`adminv2_dept_runtime_closeout_handoff.md`](./adminv2_dept_runtime_closeout_handoff.md) | Locked `/dept` runtime reference |
+| [`adminv2_dept_runtime_closeout_handoff.md`](./completed/adminv2_dept_runtime_closeout_handoff.md) | Locked `/dept` runtime reference |
 | [`adminv2_work_unit_runtime_cards_1_3_plan.md`](./adminv2_work_unit_runtime_cards_1_3_plan.md) | WU bootstrap parity plan |
 | [`adminv2_performance_scope_lock.md`](./adminv2_performance_scope_lock.md) | Premium UX north star |
 | [`docs/system/workspace-system.md`](../system/workspace-system.md) | Queue truth boundary |
@@ -371,7 +371,7 @@ Drawer continues to use `AdminV2DrawerLoadingState` — **do not merge** drawer 
 
 ## 8. References inspected
 
-**Docs:** `README.md`, `docs/README.md`, `docs/core/system-overview.md`, `docs/execution/operating-doctrine.md`, `adminv2_performance_phase1_navigation_and_interaction_contracts.md`, `adminv2_performance_phase2_load_path_architecture.md`, `adminv2_performance_phase5_visual_loading.md`, `adminv2_dept_runtime_closeout_handoff.md`, `adminv2_work_unit_runtime_cards_1_3_plan.md`, `adminv2_performance_scope_lock.md`, `docs/system/workspace-system.md`
+**Docs:** `README.md`, `docs/README.md`, `docs/core/system-overview.md`, `docs/execution/operating-doctrine.md`, `adminv2_performance_phase1_navigation_and_interaction_contracts.md`, `adminv2_performance_phase2_load_path_architecture.md`, `adminv2_performance_phase5_visual_loading.md`, `completed/adminv2_dept_runtime_closeout_handoff.md`, `adminv2_work_unit_runtime_cards_1_3_plan.md`, `adminv2_performance_scope_lock.md`, `docs/system/workspace-system.md`
 
 **Code:** `web/app/adminV2/workspace/**`, `web/components/admin/workspace/**`, `web/lib/adminV2/shellNavigation.ts`, `web/lib/workspace/loadDeptOperationalBootstrap.ts`, `web/lib/workspace/loadWorkUnitOperationalBootstrap.ts`, `web/lib/workspace/adminV2WorkspaceSessionCache.ts`, route `loading.tsx` files, `AdminV2RouteLoadingState.tsx` (unused on routes by design today)
 

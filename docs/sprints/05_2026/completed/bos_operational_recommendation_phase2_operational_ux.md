@@ -1,6 +1,6 @@
 # BOS Operational Recommendation Intelligence — Phase 2 Operational UX Sprint
 
-**Path:** `docs/sprints/05_2026/bos_operational_recommendation_phase2_operational_ux.md`  
+**Path:** `docs/sprints/05_2026/completed/bos_operational_recommendation_phase2_operational_ux.md`  
 **Status:** Phase 2 **COMPLETE** (GATE 2 passed) — Cards 2.1–2.8 shipped; Card 2.9 optional deferred  
 **Date:** 2026-05-21 (Card 2.8 closeout: 2026-05-21)
 
@@ -8,10 +8,10 @@
 
 | Doc | Role |
 |-----|------|
-| [`bos_operational_recommendation_intelligence_sprint.md`](./bos_operational_recommendation_intelligence_sprint.md) | Program audit, recommendation framework, phase map |
+| [`bos_operational_recommendation_intelligence_sprint.md`](../bos_operational_recommendation_intelligence_sprint.md) | Program audit, recommendation framework, phase map |
 | [`bos_operational_recommendation_intelligence_gate0.md`](./bos_operational_recommendation_intelligence_gate0.md) | Doctrine — assistive only, no autonomy |
 | [`bos_operational_recommendation_phase1_execution.md`](./bos_operational_recommendation_phase1_execution.md) | Phase 1 closeout (§12) — **COMPLETE** |
-| [`forms_documents_operational_experience_hardening.md`](./forms_documents_operational_experience_hardening.md) | **Canonical** BOS operational interaction doctrine |
+| [`forms_documents_operational_experience_hardening.md`](../forms_documents_operational_experience_hardening.md) | **Canonical** BOS operational interaction doctrine |
 | [`forms_documents_product_experience_refresh.md`](./forms_documents_product_experience_refresh.md) | Shared visual restraint + AdminV2 kinship (sibling sprint) |
 
 **Phase:** 2 — Operational cognition presentation (deterministic)  
@@ -773,7 +773,7 @@ From GATE 0 + Phase 1 closeout — unchanged:
 
 When Phase 2 cards land:
 
-- Update [`bos_operational_recommendation_intelligence_sprint.md`](./bos_operational_recommendation_intelligence_sprint.md) §5.4 — mark cards done.
+- Update [`bos_operational_recommendation_intelligence_sprint.md`](../bos_operational_recommendation_intelligence_sprint.md) §5.4 — mark cards done.
 - Add §13 Phase 2 closeout to [`bos_operational_recommendation_phase1_execution.md`](./bos_operational_recommendation_phase1_execution.md) or append Phase 2 closeout here.
 - Optional: `docs/product/crm-system.md` — one paragraph on recommendation surfaces (queue preview vs drawer authority).
 

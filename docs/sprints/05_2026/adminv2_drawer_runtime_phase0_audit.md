@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-20  
 **Status:** Audit/design only (implementation gate)  
-**Canonical references:** [`adminv2_dept_runtime_closeout_handoff.md`](./adminv2_dept_runtime_closeout_handoff.md), [`adminv2_work_unit_runtime_cards_1_3_plan.md`](./adminv2_work_unit_runtime_cards_1_3_plan.md) (AdminV2 Runtime Contract V1)
+**Canonical references:** [`adminv2_dept_runtime_closeout_handoff.md`](./completed/adminv2_dept_runtime_closeout_handoff.md), [`adminv2_work_unit_runtime_cards_1_3_plan.md`](./adminv2_work_unit_runtime_cards_1_3_plan.md) (AdminV2 Runtime Contract V1)
 
 **Scope:** Replicate proven `/dept` + `/work-unit` orchestration into drawer surfaces. **No implementation in this document.**
 

@@ -4,8 +4,11 @@
 **Status:** Phase 1 **COMPLETE** (GATE 1 passed) — Phase 2 **COMPLETE** (GATE 2 passed); Phase 3 may begin  
 **Date:** 2026-05-21
 
-**GATE 0 implementation doctrine (binding before code):** [`bos_operational_recommendation_intelligence_gate0.md`](./bos_operational_recommendation_intelligence_gate0.md)  
-**Phase 1 execution pack:** [`bos_operational_recommendation_phase1_execution.md`](./bos_operational_recommendation_phase1_execution.md)
+**GATE 0 implementation doctrine (binding before code):** [`completed/bos_operational_recommendation_intelligence_gate0.md`](./completed/bos_operational_recommendation_intelligence_gate0.md)  
+**Phase 1 execution pack:** [`completed/bos_operational_recommendation_phase1_execution.md`](./completed/bos_operational_recommendation_phase1_execution.md)  
+**Phase 2 closeout:** [`completed/bos_operational_recommendation_phase2_operational_ux.md`](./completed/bos_operational_recommendation_phase2_operational_ux.md)  
+**Phase 3 planning:** [`../06_2026/bos_operational_intelligence_phase3_workflow_comms.md`](../06_2026/bos_operational_intelligence_phase3_workflow_comms.md)  
+**Phase 4 planning:** [`../06_2026/bos_operational_intelligence_phase4_bounded_ai_enrich.md`](../06_2026/bos_operational_intelligence_phase4_bounded_ai_enrich.md)
 
 **Prerequisite sprints (must be landed or in closeout):**
 
@@ -532,7 +535,7 @@ flowchart LR
 
 | Gate | Blocks | Pass when |
 |------|--------|-----------|
-| **GATE 0** | Implementation | [`gate0.md`](./bos_operational_recommendation_intelligence_gate0.md) approved (§10 checklist); trust boundaries locked |
+| **GATE 0** | Implementation | [`gate0.md`](./completed/bos_operational_recommendation_intelligence_gate0.md) approved (§10 checklist); trust boundaries locked |
 | **GATE 1** | UX phase | Contract types + deterministic builder + tests; legacy adapter parity |
 | **GATE 2** | AI enrich phase | Drawer/queue/handoff show new anatomy; no prototype placeholders |
 | **GATE C** | Sprint close | Demo script + contract tests + doc updates |
@@ -553,9 +556,9 @@ flowchart LR
 
 **Goal:** Ship `OperationalRecommendationV1` with deep deterministic copy — no new AI routes required.
 
-**Status:** **COMPLETE** (2026-05-21). Closeout: [`bos_operational_recommendation_phase1_execution.md`](./bos_operational_recommendation_phase1_execution.md) §12.
+**Status:** **COMPLETE** (2026-05-21). Closeout: [`completed/bos_operational_recommendation_phase1_execution.md`](./completed/bos_operational_recommendation_phase1_execution.md) §12.
 
-**Implementation spec:** [`bos_operational_recommendation_phase1_execution.md`](./bos_operational_recommendation_phase1_execution.md) (module layout, contract, pipeline, replacement map, GATE 1 checklist).
+**Implementation spec:** [`completed/bos_operational_recommendation_phase1_execution.md`](./completed/bos_operational_recommendation_phase1_execution.md) (module layout, contract, pipeline, replacement map, GATE 1 checklist).
 
 | Card | Work | Status |
 |------|------|--------|
@@ -591,7 +594,7 @@ flowchart LR
 
 ### 5.4 Phase 2 — Operational UX (drawer, queue, Orchestrator)
 
-**Execution pack (audit + doctrine alignment + cards):** [`bos_operational_recommendation_phase2_operational_ux.md`](./bos_operational_recommendation_phase2_operational_ux.md) — **doctrine-aligned** to Forms operational cognition (2026-05-21).
+**Execution pack (audit + doctrine alignment + cards):** [`completed/bos_operational_recommendation_phase2_operational_ux.md`](./completed/bos_operational_recommendation_phase2_operational_ux.md) — **doctrine-aligned** to Forms operational cognition (2026-05-21).
 
 **Goal:** Operators get **operational cognition support** (readiness, focus, sequencing) — not a recommendation feed.
 
@@ -616,9 +619,11 @@ flowchart LR
 - [x] Queue preview boundary copy preserved
 - [x] Forms doctrine parity (vocabulary + assist band)
 
-**Phase 2 closeout:** [`bos_operational_recommendation_phase2_operational_ux.md`](./bos_operational_recommendation_phase2_operational_ux.md) §2.1.2 — Cards 2.1–2.8 complete; demo script in same section.
+**Phase 2 closeout:** [`completed/bos_operational_recommendation_phase2_operational_ux.md`](./completed/bos_operational_recommendation_phase2_operational_ux.md) §2.1.2 — Cards 2.1–2.8 complete; demo script in same section.
 
 ### 5.5 Phase 3 — Workflow + communications integration
+
+**Execution pack:** [`../06_2026/bos_operational_intelligence_phase3_workflow_comms.md`](../06_2026/bos_operational_intelligence_phase3_workflow_comms.md) — workflow-native operational intelligence; **deterministic-first**.
 
 | Card | Work |
 |------|------|
@@ -628,6 +633,8 @@ flowchart LR
 | 3.4 | Workflow class recommendations cross-link to Workflow Assist explain (read-only) |
 
 ### 5.6 Phase 4 — Trust, governance, AI-assisted (V1.5 behind gate)
+
+**Execution pack:** [`../06_2026/bos_operational_intelligence_phase4_bounded_ai_enrich.md`](../06_2026/bos_operational_intelligence_phase4_bounded_ai_enrich.md) — bounded AI enrich; grounded inputs/outputs only.
 
 | Card | Work |
 |------|------|
@@ -656,6 +663,33 @@ flowchart LR
 2. Open drawer → verify why/urgency/outcome visible → hand off to Orchestrator → thread seed matches drawer.
 3. Launch Task Assist from recommendation → draft references situational copy; apply still requires recipient + approval.
 4. Confirm stale behavior: change status in second tab → recommendation invalidates on refresh.
+
+### 5.8 AI plug-in model (binding)
+
+AI plugs into BOS **through** existing operational cognition and governance layers — never around them.
+
+**AI plugs in through:**
+
+| Layer | Role |
+|-------|------|
+| 1. **Deterministic operational recommendation DTOs** | `OperationalRecommendationV1` — authoritative structure; AI refines subsets only |
+| 2. **Grounded signal bundles** | `grounding_signals[]` — facts AI may cite; validator enforcement |
+| 3. **Review-assist view models** | `resolveDrawerReviewAssistViewModel`, queue/handoff VMs — presentation merge target |
+| 4. **Governed proposal envelopes** | `OperationalProposalCardFrame` + BOS registry — human-reviewed apply |
+| 5. **Human-reviewed workflow/action surfaces** | Task Assist, Workflow Assist, admin actions — execution after operator approval |
+
+**AI does not plug directly into:**
+
+| Forbidden surface | Why |
+|-------------------|-----|
+| DB mutation | Records change through APIs, workflows, admin actions |
+| Queue truth | Queue rows are preview/selection only |
+| Workflow execution | Registered event/action paths only |
+| Send actions | Canonical communications apply path |
+| Permissions | Auth guards unchanged |
+| Lifecycle transitions | State machines + workflows own transitions |
+
+Phase 3 wires **deterministic** action sequencing into layers 4–5. Phase 4 adds **bounded enrich** on layers 1–3 with fallback to deterministic copy. See Phase 3/4 execution packs in `docs/sprints/06_2026/`.
 
 ---
 
@@ -719,9 +753,10 @@ autonomous AI scope.
 
 ## 10. Implementation status
 
-- [x] **GATE 0 APPROVED** — [`bos_operational_recommendation_intelligence_gate0.md`](./bos_operational_recommendation_intelligence_gate0.md) §10
-- [x] **Phase 1 COMPLETE** — Cards 1.1–1.9; GATE 1 passed — see [`bos_operational_recommendation_phase1_execution.md`](./bos_operational_recommendation_phase1_execution.md) §12
-- [x] **Phase 2 COMPLETE** — Cards 2.1–2.8; GATE 2 passed — see [`bos_operational_recommendation_phase2_operational_ux.md`](./bos_operational_recommendation_phase2_operational_ux.md) §2.1.2
-- [ ] **Phase 3** — Workflow + comms integration
+- [x] **GATE 0 APPROVED** — [`completed/bos_operational_recommendation_intelligence_gate0.md`](./completed/bos_operational_recommendation_intelligence_gate0.md) §10
+- [x] **Phase 1 COMPLETE** — Cards 1.1–1.9; GATE 1 passed — see [`completed/bos_operational_recommendation_phase1_execution.md`](./completed/bos_operational_recommendation_phase1_execution.md) §12
+- [x] **Phase 2 COMPLETE** — Cards 2.1–2.8; GATE 2 passed — see [`completed/bos_operational_recommendation_phase2_operational_ux.md`](./completed/bos_operational_recommendation_phase2_operational_ux.md) §2.1.2
+- [ ] **Phase 3** — Workflow + comms — planning: [`../06_2026/bos_operational_intelligence_phase3_workflow_comms.md`](../06_2026/bos_operational_intelligence_phase3_workflow_comms.md)
+- [ ] **Phase 4** — Bounded AI enrich — planning: [`../06_2026/bos_operational_intelligence_phase4_bounded_ai_enrich.md`](../06_2026/bos_operational_intelligence_phase4_bounded_ai_enrich.md)
 
 Phase 3 may begin with §5.5 Card **3.1** (`available_actions` placement mapping).

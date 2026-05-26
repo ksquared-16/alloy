@@ -11,7 +11,7 @@
 - [`adminv2_performance_phase1_navigation_and_interaction_contracts.md`](./adminv2_performance_phase1_navigation_and_interaction_contracts.md) — nav classes (frozen)
 - [`adminv2_performance_phase2_load_path_architecture.md`](./adminv2_performance_phase2_load_path_architecture.md) — load-path map
 - [`adminv2_persistent_shell_header_nav_audit.md`](./adminv2_persistent_shell_header_nav_audit.md) — shell remount vs persistence
-- [`adminv2_dept_runtime_closeout_handoff.md`](./adminv2_dept_runtime_closeout_handoff.md) — dept/WU runtime contract V1
+- [`adminv2_dept_runtime_closeout_handoff.md`](./completed/adminv2_dept_runtime_closeout_handoff.md) — dept/WU runtime contract V1
 - [`docs/system/configuration-system.md`](../../system/configuration-system.md) — config may select, not invent semantics
 - [`docs/execution/operating-doctrine.md`](../../execution/operating-doctrine.md) — doc updates with behavior changes
 

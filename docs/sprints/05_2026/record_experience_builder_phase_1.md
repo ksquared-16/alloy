@@ -662,7 +662,7 @@ Perform a **read-only audit** that locks the sprint baseline. Update **§4 Curre
 
 ## 23. Control plane closeout (May 2026)
 
-**Doc:** `docs/sprints/05_2026/settings_control_plane_closeout.md` (also reflected in **`docs/system/configuration-system.md`** and **`docs/system/actions-and-workflows.md`**).
+**Doc:** `docs/sprints/05_2026/completed/settings_control_plane_closeout.md` (also reflected in **`docs/system/configuration-system.md`** and **`docs/system/actions-and-workflows.md`**).
 
 - **Layouts UX correction:** drawer composition list = effective layout only (not all catalog rows); section copy uses **section name**; field picker uses `layoutFieldPickerEligibility.ts`.
 - **Actions:** Settings tile under **Workflows & automation**; create org placement from catalog; edit org placements (surfaces include workspace side panel / queue row); built-in **Add org placement**; operator help in `actionPlacementPresentation.ts`.

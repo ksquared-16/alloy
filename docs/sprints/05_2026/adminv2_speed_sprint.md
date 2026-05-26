@@ -1,7 +1,7 @@
 # AdminV2 speed sprint — measure first, optimize second
 
 Prerequisites: [drawer shell pipeline](./adminv2_drawer_pipeline.md), [route shell pipeline](./adminv2_route_shell_pipeline.md), [reveal doctrine](./adminv2_reveal_doctrine.md).  
-**Phase closeout (May 2026):** [adminv2_performance_closeout.md](./adminv2_performance_closeout.md) — UX fixes, production-grade summary, next-phase roadmap (broad sprint paused).
+**Phase closeout (May 2026):** [completed/adminv2_performance_closeout.md](./completed/adminv2_performance_closeout.md) — UX fixes, production-grade summary, next-phase roadmap (broad sprint paused).
 
 ## Critical rule
 

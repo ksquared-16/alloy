@@ -15,7 +15,7 @@
 | Phase 2 design | [`forms_documents_phase_2_step1_design.md`](./forms_documents_phase_2_step1_design.md) |
 | Product | [`docs/product/documents-and-forms.md`](../../product/documents-and-forms.md) |
 | BOS placement (read-only) | [`docs/product/bos-foundation.md`](../../product/bos-foundation.md), [`bos_ux_coherence_sprint.md`](./bos_ux_coherence_sprint.md) |
-| BOS recommendation program | [`bos_operational_recommendation_intelligence_sprint.md`](./bos_operational_recommendation_intelligence_sprint.md), [`bos_operational_recommendation_phase1_execution.md`](./bos_operational_recommendation_phase1_execution.md) |
+| BOS recommendation program | [`bos_operational_recommendation_intelligence_sprint.md`](./bos_operational_recommendation_intelligence_sprint.md), [`completed/bos_operational_recommendation_phase1_execution.md`](./completed/bos_operational_recommendation_phase1_execution.md) |
 
 **Product docs to update when cards ship:** `docs/product/documents-and-forms.md` (operator UX sections only).
 
@@ -119,7 +119,7 @@ Every intake/review surface separates three layers:
 
 **Canonical status:** This section is the **shared interaction contract** for Forms/Documents and BOS Operational Recommendation programs. The Forms/Documents case-file + Review assist pattern (`IntakeCaseFileLayout`, `BosReviewSummaryPlaceholder`, `PacketReviewInsightV1`) is the **reference interaction model** for AdminV2 operational intelligence surfaces.
 
-**Mirrored in:** [`bos_operational_recommendation_intelligence_sprint.md`](./bos_operational_recommendation_intelligence_sprint.md) § Unified BOS Operational Interaction Doctrine; binding for Phase 2+ presentation work in [`bos_operational_recommendation_phase2_operational_ux.md`](./bos_operational_recommendation_phase2_operational_ux.md) (includes **§0.4 doctrine alignment audit** — AdminV2 drawer/queue/handoff convergence checklist).
+**Mirrored in:** [`bos_operational_recommendation_intelligence_sprint.md`](./bos_operational_recommendation_intelligence_sprint.md) § Unified BOS Operational Interaction Doctrine; binding for Phase 2+ presentation work in [`completed/bos_operational_recommendation_phase2_operational_ux.md`](./completed/bos_operational_recommendation_phase2_operational_ux.md) (includes **§0.4 doctrine alignment audit** — AdminV2 drawer/queue/handoff convergence checklist).
 
 ### BOS role
 

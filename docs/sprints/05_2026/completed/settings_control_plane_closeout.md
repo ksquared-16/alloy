@@ -1,6 +1,6 @@
 # Sprint: Settings Control Plane Closeout (May 2026)
 
-**Path:** `docs/sprints/05_2026/settings_control_plane_closeout.md`  
+**Path:** `docs/sprints/05_2026/completed/settings_control_plane_closeout.md`  
 **Status:** **Closed (foundation checkpoint)**  
 **Scope:** Fast pass on **Layouts**, **Actions**, and **Workflow/Status ownership** — no new builder architecture.
 

@@ -644,7 +644,7 @@ cd web && npm run test -- tests/sprints/settingsRecordUxParityRegression.test.ts
 | Field list | Operator labels only; workflow/relationship/computed keys hidden by default |
 | Not in pass | Person/Location modal unification; Layouts/Actions builder expansion |
 
-**Post-closeout follow-on (May 2026, after sprint close):** Linked-record person card + inquiry children row grid + Orchestrator session hydration + workspace scope stability — not counted as Cards 0–9 scope; tracked in **`settings_control_plane_closeout.md`** (follow-on shipped) and **`linked_record_field_editing_v1.md`**.
+**Post-closeout follow-on (May 2026, after sprint close):** Linked-record person card + inquiry children row grid + Orchestrator session hydration + workspace scope stability — not counted as Cards 0–9 scope; tracked in **`completed/settings_control_plane_closeout.md`** (follow-on shipped) and **`linked_record_field_editing_v1.md`**.
 
 ---
 

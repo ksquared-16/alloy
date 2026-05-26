@@ -1,6 +1,6 @@
 # BOS Operational Recommendation Intelligence — Phase 1 Execution Pack
 
-**Path:** `docs/sprints/05_2026/bos_operational_recommendation_phase1_execution.md`  
+**Path:** `docs/sprints/05_2026/completed/bos_operational_recommendation_phase1_execution.md`  
 **Status:** Phase 1 **COMPLETE** — GATE 1 passed (closeout §12)  
 **Date:** 2026-05-21
 
@@ -8,7 +8,7 @@
 
 | Doc | Role |
 |-----|------|
-| [`bos_operational_recommendation_intelligence_sprint.md`](./bos_operational_recommendation_intelligence_sprint.md) | Audit, framework, phase map |
+| [`bos_operational_recommendation_intelligence_sprint.md`](../bos_operational_recommendation_intelligence_sprint.md) | Audit, framework, phase map |
 | [`bos_operational_recommendation_intelligence_gate0.md`](./bos_operational_recommendation_intelligence_gate0.md) | GATE 0 doctrine (**approved**) |
 
 **Phase:** 1 — Deterministic recommendation foundation  

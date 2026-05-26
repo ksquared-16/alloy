@@ -5,7 +5,7 @@
 **Next phases:** DESIGN → IMPLEMENT (separate docs)  
 **Sprint objective (target state):** Move from **status-driven work units** (one WU per status cohort) to **operational-domain work units** (e.g. All, Pipeline, Touring, Enrolling, Needs Attention) where **statuses become filters**, not top-level navigation surfaces.
 
-**Canonical references loaded for this audit:** `docs/system/workspace-system.md`, `docs/product/crm-system.md`, `docs/sprints/05_2026/adminv2_dept_runtime_closeout_handoff.md`, `docs/sprints/05_2026/adminv2_work_unit_runtime_cards_1_3_plan.md`, `docs/sprints/05_2026/canonical_enrollment_operating_model_seed.md`, `docs/sprints/05_2026/adminv2_performance_closeout.md`.
+**Canonical references loaded for this audit:** `docs/system/workspace-system.md`, `docs/product/crm-system.md`, `docs/sprints/05_2026/completed/adminv2_dept_runtime_closeout_handoff.md`, `docs/sprints/05_2026/adminv2_work_unit_runtime_cards_1_3_plan.md`, `docs/sprints/05_2026/canonical_enrollment_operating_model_seed.md`, `docs/sprints/05_2026/completed/adminv2_performance_closeout.md`.
 
 ---
 

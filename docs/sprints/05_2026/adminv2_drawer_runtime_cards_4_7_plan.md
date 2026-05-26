@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-20  
 **Status:** In implementation (Cards 4–7)  
-**Authority:** [`adminv2_drawer_runtime_phase0_audit.md`](./adminv2_drawer_runtime_phase0_audit.md), [`adminv2_dept_runtime_closeout_handoff.md`](./adminv2_dept_runtime_closeout_handoff.md), [`adminv2_work_unit_runtime_cards_1_3_plan.md`](./adminv2_work_unit_runtime_cards_1_3_plan.md) (Runtime Contract V1)
+**Authority:** [`adminv2_drawer_runtime_phase0_audit.md`](./adminv2_drawer_runtime_phase0_audit.md), [`adminv2_dept_runtime_closeout_handoff.md`](./completed/adminv2_dept_runtime_closeout_handoff.md), [`adminv2_work_unit_runtime_cards_1_3_plan.md`](./adminv2_work_unit_runtime_cards_1_3_plan.md) (Runtime Contract V1)
 
 **Scope:** Opportunity drawer in `AdminEntityDrawer` on AdminV2 workspace routes. **No `/dept` or `/work-unit` page/route changes.**
 

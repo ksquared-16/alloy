@@ -16,7 +16,7 @@
 | `docs/system/actions-and-workflows.md` | Action placements vs execution; Workflow Assist spine |
 | `docs/execution/roadmap-and-gaps.md` | BOS expansion paused; demo vs production framing |
 
-**Prior BOS engineering audits (context, not duplicated):** `bos_standardization_audit.md`, `bos_standardization_migration.md`, `bos_foundation_closeout_phase_3.md`, `agent_interaction_layer_v1.md`, `task_assist_v1_step0_audit.md`.
+**Prior BOS engineering audits (context, not duplicated):** `bos_standardization_audit.md`, `bos_standardization_migration.md`, `completed/bos_foundation_closeout_phase_3.md`, `agent_interaction_layer_v1.md`, `task_assist_v1_step0_audit.md`.
 
 ---
 

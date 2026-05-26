@@ -42,9 +42,9 @@ Sprint detail: **`docs/sprints/05_2026/bos_registry_proposal_envelope_phase_2.md
 | Legacy commit adapters | **Done** | agent v0 / v1 / v2 |
 | Auth barrel | **Done** | Re-exports + access hints |
 | Readiness tests | **Done** | `bosFoundationReadiness.test.ts` |
-| Closeout doc | **Done** | `bos_foundation_closeout_phase_3.md` |
+| Closeout doc | **Done** | `completed/bos_foundation_closeout_phase_3.md` |
 
-Sprint detail: **`docs/sprints/05_2026/bos_foundation_closeout_phase_3.md`**.
+Sprint detail: **`docs/sprints/05_2026/completed/bos_foundation_closeout_phase_3.md`**.
 
 ### Phase 2 checklist (acceptance)
 
@@ -181,7 +181,7 @@ Use before starting **new** BOS capabilities or resuming paused expansion.
 
 ## Active docs refresh (post–Phase 3)
 
-Active topic files now reference **`docs/product/bos-foundation.md`** and BOS route/registry language (`api-contracts.md`, `roadmap-and-gaps.md`, glossary, CRM/communications/configuration/record/workspace/roles). **`bos-foundation.md`** remains a redirect stub. See **`bos_foundation_closeout_phase_3.md`** § Documentation refresh.
+Active topic files now reference **`docs/product/bos-foundation.md`** and BOS route/registry language (`api-contracts.md`, `roadmap-and-gaps.md`, glossary, CRM/communications/configuration/record/workspace/roles). **`bos-foundation.md`** remains a redirect stub. See **`completed/bos_foundation_closeout_phase_3.md`** § Documentation refresh.
 
 ---
 

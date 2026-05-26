@@ -16,7 +16,7 @@ Define what **configuration** is allowed to control vs what must remain **platfo
 
 ## Four-plane operator model (Records settings)
 
-Settings hub: `/adminV2/settings` — tiles use **Editable ·**, **Partial ·**, **Read-only ·**, or **Related hub ·** (`web/lib/adminV2/settingsSurfaceModes.ts`). Sprint baselines: **`docs/sprints/05_2026/settings_record_ux_parity_sprint.md`** §12–§13; **May 2026 control plane closeout:** **`docs/sprints/05_2026/settings_control_plane_closeout.md`** (Layouts composition, Action buttons, Status vs Automations).
+Settings hub: `/adminV2/settings` — tiles use **Editable ·**, **Partial ·**, **Read-only ·**, or **Related hub ·** (`web/lib/adminV2/settingsSurfaceModes.ts`). Sprint baselines: **`docs/sprints/05_2026/settings_record_ux_parity_sprint.md`** §12–§13; **May 2026 control plane closeout:** **`docs/sprints/05_2026/completed/settings_control_plane_closeout.md`** (Layouts composition, Action buttons, Status vs Automations).
 
 | Plane | Route | Owns | Does **not** own |
 |-------|-------|------|------------------|
@@ -129,7 +129,7 @@ Config surfaces include (non-exhaustive):
 - **Settings + Record UX Parity (May 2026)** — Field policy UI + PATCH enforcement for opportunity/job **enforceable** subset; layout integrity panel; Settings index parity.
 - **Settings Config Completion V1 (May 2026)** — Opportunity workflow drawer sections (reorder, show/hide, rename workflow virtual titles, **Show hidden section**); org-scoped **action placement** editor. Structured admin PATCH only — no raw JSON primary UX.
 - **Settings UX Contract pass (May 2026)** — Four-plane Settings copy; operator-first field modal; workflow/relationship fields hidden by default.
-- **Settings control plane closeout (May 2026)** — Layouts drawer-composition UX; Action buttons under **Workflows & automation** (create from catalog, org placement edit, surface/slot help); Status vs workflow automation ownership; see **`docs/sprints/05_2026/settings_control_plane_closeout.md`**. **Deferred:** items under [Next strategic layers](#next-strategic-layers-deferred) above.
+- **Settings control plane closeout (May 2026)** — Layouts drawer-composition UX; Action buttons under **Workflows & automation** (create from catalog, org placement edit, surface/slot help); Status vs workflow automation ownership; see **`docs/sprints/05_2026/completed/settings_control_plane_closeout.md`**. **Deferred:** items under [Next strategic layers](#next-strategic-layers-deferred) above.
 - **Config/Layout Assist proposals** — **`config_layout_assist_proposals`** durable lifecycle (`draft` → … → `applied`); propose via Orchestrator + admin APIs; apply **partially implemented** — see **`docs/product/bos-foundation.md`**, sprint **`configuration_layout_assist_v1.md`**. **Roadmap:** foundation shipped; **catalog expansion paused** until settings/field parity advances (`roadmap-and-gaps.md`).
 
 ## How it works

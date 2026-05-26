@@ -4,7 +4,7 @@
 
 This stub preserves links that still point at `ai-system.md`. **BOS Standardization (Phases 1–3) is complete** — registry, proposal envelopes, command-surface metadata, and auth barrel live under **`web/lib/bos/`**.
 
-**Sprint trail:** `docs/sprints/05_2026/bos_standardization_audit.md`, `bos_standardization_migration.md`, `bos_registry_proposal_envelope_phase_2.md`, `bos_foundation_closeout_phase_3.md`.
+**Sprint trail:** `docs/sprints/05_2026/bos_standardization_audit.md`, `bos_standardization_migration.md`, `bos_registry_proposal_envelope_phase_2.md`, `completed/bos_foundation_closeout_phase_3.md`. **BOS operational intelligence:** Phase 3/4 planning in `docs/sprints/06_2026/`.
 
 Do not duplicate content here; update **`bos-foundation.md`** for behavior or route changes.
 

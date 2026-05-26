@@ -9,6 +9,7 @@ import type { SubmissionIntakeCaseFileRow } from "@/components/forms/review/Subm
 import { safeParseFormSchema, type FormSchemaV1 } from "@/lib/forms/schema";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 import { parseFormLaunchContextFromPayloadMeta } from "@/lib/forms/formContextMode";
@@ -40,6 +41,13 @@ export default function FormSubmissionDetailClient() {
     const viewerTz = useAdminViewerTimezone();
     const { canMutate } = useAdminAuth();
     const { openDrawer } = useAdminDrawer();
+
+    const handleOpenDrawer = useCallback(
+        (params: { type: AdminDrawerEntityType; id: string }) => {
+            openDrawer({ type: params.type, id: params.id });
+        },
+        [openDrawer]
+    );
 
     const [row, setRow] = useState<SubmissionDetail | null>(null);
     const [loading, setLoading] = useState(true);
@@ -399,7 +407,7 @@ export default function FormSubmissionDetailClient() {
                     genErr={genErr}
                     genMsg={genMsg}
                     onGenerateDocument={() => void generateDocument()}
-                    onOpenDrawer={openDrawer}
+                    onOpenDrawer={handleOpenDrawer}
                 />
             : null}
         </FormsWorkspaceShell>

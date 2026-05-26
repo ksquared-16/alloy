@@ -11,7 +11,7 @@
 |---------|----------|
 | Interaction doctrine (canonical) | [`forms_documents_operational_experience_hardening.md`](./forms_documents_operational_experience_hardening.md) § Unified BOS Operational Interaction Doctrine |
 | Phase 2 MVP (architecture) | [`forms_documents_phase_2_packet_review_mvp.md`](./forms_documents_phase_2_packet_review_mvp.md) |
-| BOS presentation Phase 2 | [`bos_operational_recommendation_phase2_operational_ux.md`](./bos_operational_recommendation_phase2_operational_ux.md) |
+| BOS presentation Phase 2 | [`completed/bos_operational_recommendation_phase2_operational_ux.md`](./completed/bos_operational_recommendation_phase2_operational_ux.md) |
 | AdminV2 workspace | `web/app/adminV2/components/workspace/workspace.css`, workspace blocks |
 | Forms review primitives (seed) | `web/lib/forms/review/formsReviewClassTokens.ts`, `formsReviewBadgeStyles.ts` |
 | Product | [`docs/product/documents-and-forms.md`](../../product/documents-and-forms.md) |
@@ -413,7 +413,7 @@ Operational intelligence is **integrated, contextual, concise, trustworthy, seco
 3. Render canonical recommendation fields at L1.  
 4. Work-unit chips: max 2 readiness-related chips visible.
 
-**Risks:** BOS Phase 2 scope overlap — coordinate in one PR train with [`bos_operational_recommendation_phase2_operational_ux.md`](./bos_operational_recommendation_phase2_operational_ux.md).
+**Risks:** BOS Phase 2 scope overlap — coordinate in one PR train with [`completed/bos_operational_recommendation_phase2_operational_ux.md`](./completed/bos_operational_recommendation_phase2_operational_ux.md).
 
 **Acceptance criteria:**
 

@@ -535,5 +535,5 @@ cd web && npm run test -- \
 - [`adminv2_platform_navigation_performance_sprint.md`](./adminv2_platform_navigation_performance_sprint.md)
 - [`adminv2_performance_phase1_navigation_and_interaction_contracts.md`](./adminv2_performance_phase1_navigation_and_interaction_contracts.md)
 - [`adminv2_performance_phase2_load_path_architecture.md`](./adminv2_performance_phase2_load_path_architecture.md)
-- [`adminv2_dept_runtime_closeout_handoff.md`](./adminv2_dept_runtime_closeout_handoff.md)
+- [`adminv2_dept_runtime_closeout_handoff.md`](./completed/adminv2_dept_runtime_closeout_handoff.md)
 - [`docs/system/workspace-system.md`](../system/workspace-system.md) — queue preview boundary
