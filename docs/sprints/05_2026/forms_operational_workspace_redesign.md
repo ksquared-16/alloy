@@ -2,7 +2,7 @@
 
 **Path:** `docs/sprints/05_2026/forms_operational_workspace_redesign.md`  
 **Date:** May 2026  
-**Status:** **OW-0 complete** · **OW-1 shipped** · **OW-2 shipped** · **OW-3 shipped** · **OW-4 shipped** · **OW-5 shipped**  
+**Status:** **OW-0 complete** · **OW-1 shipped** · **OW-2 shipped** · **OW-3 shipped** · **OW-4 shipped** · **OW-5 shipped** · **OW-6 shipped**  
 **Scope:** Forms/Documents **operational workspace layer** — hub, form lifecycle, packet orchestration, distribution, session/submission navigation. **Not** review rollup contracts, BOS logic, or forms engine rewrite.
 
 **Related (already shipped):**
@@ -474,15 +474,28 @@ Intake workspace | Forms | Packet definitions | Packet sessions
 
 ---
 
-### OW-6 — Submissions inbox + submission detail alignment
+### OW-6 — Submissions inbox + submission detail alignment ☑
 
 **Goal:** Clear intake pathways; case-file parity.
 
-**Surfaces:** `FormSubmissionsClient.tsx`, `FormSubmissionDetailClient.tsx`.
+**Shipped (May 2026):**
 
-**Tasks:** Grouped inbox; case-file layout for standalone submission review; shared header with form lifecycle back-link.
+| Area | Detail |
+|------|--------|
+| Inbox UI | `SubmissionsInboxView.tsx` — grouped lanes: needs review, needs linking, drafts, recently submitted |
+| Row design | `SubmissionInboxRowView.tsx` — form name, subject/context, status + linkage badges, primary action |
+| Grouping | `submissionInboxPresentation.ts` — client-side lane resolution from status + linkage signals |
+| Hub surfaces | `FormsSubmissionsHubClient.tsx`, `FormSubmissionsClient.tsx` — table removed; operational inbox |
+| Detail | `SubmissionIntakeCaseFileContent.tsx` + `FormSubmissionDetailClient.tsx` — `IntakeCaseFileLayout` slots |
+| Tests | `submissionInboxPresentation.test.ts`, `submissionsInboxWorkspace.test.tsx`, `submissionIntakeCaseFile.test.tsx` |
 
-**Acceptance:** Submission detail uses same case-file canvas as packet review; no triple nested SectionCards on primary path.
+**Acceptance:**
+
+- [x] Submissions inbox uses operational tokens; not table-first.  
+- [x] Review/linking lanes visually prioritized (amber emphasis + review CTA).  
+- [x] Standalone submission detail aligns with packet case-file model.  
+- [x] Technical details remain collapsed; linkage/PDF actions preserved.  
+- [x] No backend contract or payload semantic changes.
 
 ---
 

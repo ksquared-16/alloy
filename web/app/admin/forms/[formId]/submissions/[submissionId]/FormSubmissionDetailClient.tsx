@@ -7,7 +7,6 @@ import { formsWorkspaceBreadcrumbs } from "@/lib/forms/formsModuleNav";
 import { SubmissionIntakeCaseFileContent } from "@/components/forms/review/SubmissionIntakeCaseFileContent";
 import type { SubmissionIntakeCaseFileRow } from "@/components/forms/review/SubmissionIntakeCaseFileContent";
 import { safeParseFormSchema, type FormSchemaV1 } from "@/lib/forms/schema";
-import type { FormPayload } from "@/lib/forms/validateSubmission";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";

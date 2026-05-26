@@ -14,6 +14,7 @@ import {
     SubmissionReviewTechnicalPanel,
 } from "@/components/forms/review";
 import type { BosSubmissionReviewContext } from "@/components/forms/review/BosReviewSummaryPlaceholder";
+import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 import type { FormLaunchContextFields } from "@/lib/forms/formContextMode";
 import { FORMS_CASE_FILE_SECTION } from "@/lib/forms/review/formsReviewPresentation";
@@ -31,6 +32,7 @@ import {
     opContextLabel,
     opContextValue,
     opDivider,
+    opGroupedRowInner,
     opGroupedSurface,
     opMetadata,
     opMutedMeta,
@@ -115,7 +117,7 @@ export type SubmissionIntakeCaseFileContentProps = {
     genErr: string | null;
     genMsg: string | null;
     onGenerateDocument: () => void;
-    onOpenDrawer: (params: { type: string; id: string }) => void;
+    onOpenDrawer: (params: { type: AdminDrawerEntityType; id: string }) => void;
 };
 
 function ConnectionRow({
@@ -129,8 +131,8 @@ function ConnectionRow({
     return (
         <div
             className={clsx(
-                "flex flex-col gap-1 py-2.5 text-sm last:border-b-0 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between",
-                opDivider
+                "flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between",
+                opGroupedRowInner
             )}
         >
             <div className="min-w-0 flex-1">
@@ -300,7 +302,7 @@ export function SubmissionIntakeCaseFileContent({
                             CRM links appear when intake or other flows attach them. “Not linked” is normal for early
                             drafts.
                         </p>
-                        <div className={clsx("px-3 sm:px-4", opGroupedSurface)}>
+                        <div className={opGroupedSurface}>
                             {entityRows.map((er) => (
                                 <ConnectionRow
                                     key={er.key}
