@@ -128,6 +128,8 @@ This document. Sequencing OI-1 → OI-6.
 
 **Tests:** `formFieldAuthoringPresentation.test.ts`, `structuredFormSchemaEditor.test.tsx`
 
+**Deploy note (May 2026):** Missing `import type { SystemFieldRegistryEntry }` in `FormFieldAuthoringCard.tsx` broke Vercel `tsc` — see **TypeScript: `import type` for props** in `.cursor/rules/alloy-development-guardrails.mdc` and `docs/execution/operating-doctrine.md`.
+
 ---
 
 ### OI-5 — Contextual intake / prefill doctrine ☑

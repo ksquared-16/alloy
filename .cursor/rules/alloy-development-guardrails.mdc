@@ -50,12 +50,22 @@ Use audit -> design -> build for substantial work.
 
 Prefer focused checks first:
 
-- `cd web && npx tsc --noEmit`
+- `cd web && npx tsc --noEmit` — **required before merge** on any `web/` TypeScript change (catches errors Vitest may miss).
 - `cd web && npm run lint`
 - `cd web && npm run test -- <relevant test path>` when changing covered behavior
 - Add or update tests when touching shared behavior, API contracts, migrations, workflow effects, permissions, forms, communications, or queues.
 
 Use full `cd web && npm run test` before larger merges when practical.
+
+### TypeScript: `import type` for props and interfaces
+
+When a symbol appears **only as a type** (component props, function parameters, return types), import it with **`import type`** from the defining module — do not rely on value imports from the same line unless the symbol is also used at runtime.
+
+**Failure mode (Vercel `next build` / `tsc`):** `Cannot find name 'SomeType'` when a type was used in `type Props = { … }` but only a runtime import exists (or the type import was dropped during a refactor).
+
+**Example (forms field authoring, May 2026):** `FormFieldAuthoringCard.tsx` referenced `SystemFieldRegistryEntry` in props after `import { linesToStaticOptions }` — fix: `import { linesToStaticOptions, type SystemFieldRegistryEntry } from "@/lib/forms/systemFieldRegistry"`.
+
+**Rule:** After splitting or editing imports, run `cd web && npx tsc --noEmit` before pushing.
 
 ## Final Response Contract
 

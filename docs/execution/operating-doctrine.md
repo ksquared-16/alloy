@@ -92,6 +92,15 @@ If implementation must change doctrine, **update docs with the code** and record
 - Treat archived DEPLOYMENT/OPERATIONS as **non-authoritative** until reconciled with production.
 - **Do not** expose service-role Supabase to the browser (see `system/api-contracts.md`).
 
+### Frontend TypeScript before deploy
+
+Vercel runs **`next build` → TypeScript** (`tsc`), which is stricter than Vitest-only checks. Before pushing `web/` changes:
+
+1. Run **`cd web && npx tsc --noEmit`**.
+2. Ensure every type used in props/interfaces is **imported** — prefer `import type { Foo } from "…"` when `Foo` is type-only.
+
+**Recurring failure:** `Cannot find name 'X'` when a refactor drops a type import but leaves `X` in a props interface (e.g. `SystemFieldRegistryEntry` in `FormFieldAuthoringCard.tsx`, OI-4B May 2026). Cursor rule: `.cursor/rules/alloy-development-guardrails.mdc` § TypeScript.
+
 ## Known gaps / risks
 
 - **Needs verification:** Current hosting topology (Vercel vs other), CDN, and edge configuration.

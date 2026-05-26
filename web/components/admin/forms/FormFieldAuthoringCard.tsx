@@ -11,7 +11,7 @@ import {
     entityTypeLabel,
     type UiScalarKind,
 } from "@/lib/forms/formFieldAuthoringPresentation";
-import { linesToStaticOptions } from "@/lib/forms/systemFieldRegistry";
+import { linesToStaticOptions, type SystemFieldRegistryEntry } from "@/lib/forms/systemFieldRegistry";
 import { formFieldFromRegistryEntry } from "@/lib/forms/systemFieldToFormField";
 import {
     opActionLink,
