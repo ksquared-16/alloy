@@ -2,7 +2,7 @@
 
 **Path:** `docs/sprints/05_2026/forms_operational_workspace_redesign.md`  
 **Date:** May 2026  
-**Status:** **OW-0 complete** · **OW-1 shipped** · **OW-2 shipped** (intake workspace hub)  
+**Status:** **OW-0 complete** · **OW-1 shipped** · **OW-2 shipped** · **OW-5 shipped** (packet sessions inbox)  
 **Scope:** Forms/Documents **operational workspace layer** — hub, form lifecycle, packet orchestration, distribution, session/submission navigation. **Not** review rollup contracts, BOS logic, or forms engine rewrite.
 
 **Related (already shipped):**
@@ -426,17 +426,27 @@ Intake workspace | Forms | Packet definitions | Packet sessions
 
 ---
 
-### OW-5 — Packet sessions inbox
+### OW-5 — Packet sessions inbox ☑
 
 **Goal:** Session list matches review sophistication.
 
-**Surfaces:** `adminV2/forms/packets/page.tsx` → client component.
+**Shipped (May 2026):**
 
-**Tasks:** Inbox UI; filters (client-side v1); readiness chips; opportunity/household when present in query.
+| Area | Detail |
+|------|--------|
+| Inbox UI | `PacketSessionsHubClient.tsx` — grouped lanes: needs review, needs correction, in progress, recently completed |
+| Row design | `PacketSessionInboxRow.tsx` — packet name, subject/context, readiness badges, progress, primary action |
+| Grouping | `packetSessionsInboxPresentation.ts` — client-side lane resolution from existing session fields |
+| Data | Server page expanded select: `operator_review_status`, `launch_context`, `crm_snapshot`, warnings, step counts via `form_packet_session_items` |
+| Secondary | Collapsed “All sessions” disclosure |
+| Tests | `packetSessionsInbox.test.tsx`, `packetSessionsInboxPresentation.test.ts` |
 
-**Risks:** May need select expansion on sessions query — presentation fields only.
+**Acceptance:**
 
-**Acceptance:** List uses operational tokens; row shows review status + link to case-file.
+- [x] List uses operational tokens; not table-first.  
+- [x] Review-ready sessions visually prioritized (amber emphasis + review CTA).  
+- [x] Operator-friendly status labels via `FormsReviewBadge`.  
+- [x] No backend contract or review PATCH changes.
 
 ---
 
