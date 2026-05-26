@@ -375,17 +375,28 @@ Intake workspace | Forms | Packet definitions | Packet sessions
 
 ---
 
-### OW-2 — Intake workspace hub
+### OW-2 — Intake workspace hub ☑
 
 **Goal:** Replace table-first hub with operational command surface.
 
-**Surfaces:** `FormsHubClient.tsx` (or successor `FormsIntakeWorkspaceClient.tsx`).
+**Shipped (May 2026):**
 
-**Tasks:** Orientation band; Review now lane; grouped forms list; packets strip; recent intake; collapse onboarding copy.
+| Area | Detail |
+|------|--------|
+| Hub UI | `IntakeWorkspaceHubView.tsx` + refactored `FormsHubClient.tsx` |
+| Lanes | Review sessions, recent submissions, packet definitions, active forms summary |
+| Form library | Grouped list rows (`opGroupedSurface`) — no 8-column table |
+| Actions | Primary quick-action band: Review sessions, View submissions, Manage packets, Create form |
+| Data | Parallel fetch: existing `GET /api/admin/forms`, `packet-sessions`, `packet-definitions`, `submissions?limit=10` |
+| Copy | Instructional `SectionCard` removed; “Getting started” collapsed disclosure only |
+| Tests | `web/tests/forms/formsIntakeWorkspaceHub.test.tsx` |
 
-**Risks:** Review counts — start with client-side from parallel fetches; optional small aggregate API follow-up.
+**Acceptance:**
 
-**Acceptance:** Hub has no primary 8-column table; at least one “review now” path visible above fold.
+- [x] First screen is operational lanes + canvas, not spreadsheet table.  
+- [x] Review path visible above fold (quick actions + sessions lane).  
+- [x] No fake counts; empty states operational.  
+- [x] Uses `operationalVisualTokens` / PX-2 surfaces.
 
 ---
 

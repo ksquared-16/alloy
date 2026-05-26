@@ -52,6 +52,11 @@ export type IntakeWorkspaceSubmissionRow = {
     created_at: string;
     submitted_at: string | null;
     form_definition_id: string;
+    person_id?: string | null;
+    customer_id?: string | null;
+    customer_member_id?: string | null;
+    opportunity_id?: string | null;
+    payload?: { meta?: Record<string, unknown> };
 };
 
 export const intakeWorkspaceBtnPrimary =
@@ -175,7 +180,21 @@ export function IntakeWorkspaceHubView({
                                 <p className={opMetadata}>No submissions waiting right now.</p>
                             :   <ul className={opGroupedSurface}>
                                     {submissions.slice(0, 6).map((row) => {
-                                        const linkage = submissionListLinkageBadge(row);
+                                        const linkage = submissionListLinkageBadge({
+                                            status: row.status,
+                                            payloadMeta: row.payload?.meta,
+                                            attachRow: {
+                                                person_id: row.person_id ?? null,
+                                                customer_id: row.customer_id ?? null,
+                                                customer_member_id: row.customer_member_id ?? null,
+                                                opportunity_id: row.opportunity_id ?? null,
+                                            },
+                                        });
+                                        const linkageBadge =
+                                            linkage.kind === "none" ? null
+                                            : linkage.kind === "needs_review" ?
+                                                { label: "Needs review", variant: "warning" as const }
+                                            :   { label: "Link CRM", variant: "neutral" as const };
                                         return (
                                             <li key={row.id} className={opGroupedRowInner}>
                                                 <div className="flex flex-wrap items-start justify-between gap-2">
@@ -197,10 +216,10 @@ export function IntakeWorkspaceHubView({
                                                             label={row.status}
                                                             variant={getStatusVariant(row.status)}
                                                         />
-                                                        {linkage ?
+                                                        {linkageBadge ?
                                                             <StatusBadge
-                                                                label={linkage.label}
-                                                                variant={linkage.variant}
+                                                                label={linkageBadge.label}
+                                                                variant={linkageBadge.variant}
                                                             />
                                                         :   null}
                                                     </div>

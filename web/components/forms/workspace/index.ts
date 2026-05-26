@@ -1,3 +1,4 @@
+export { IntakeWorkspaceHubView } from "@/components/forms/workspace/IntakeWorkspaceHubView";
 export { IntakeWorkspaceRegion } from "@/components/forms/workspace/IntakeWorkspaceRegion";
 export { FormsBreadcrumbs } from "@/components/forms/workspace/FormsBreadcrumbs";
 export { FormsModuleNav } from "@/components/forms/workspace/FormsModuleNav";

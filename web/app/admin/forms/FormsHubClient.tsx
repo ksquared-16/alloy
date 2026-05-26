@@ -4,7 +4,6 @@ import clsx from "clsx";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import PrimaryButton from "@/components/PrimaryButton";
-import { TechnicalDetailDisclosure } from "@/components/forms/review";
 import {
     IntakeWorkspaceHubView,
     intakeWorkspaceBtnPrimary,
@@ -16,7 +15,6 @@ import {
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
-import { FORMS_TECHNICAL_DISCLOSURE } from "@/lib/forms/review/formsReviewTechnicalDisclosure";
 import { opMetadata, opOrientationSurface } from "@/lib/operational/ui/operationalVisualTokens";
 
 type FormRow = IntakeWorkspaceFormRow & {
@@ -55,25 +53,6 @@ function sortSessionsForReview(rows: PacketSessionRow[]): IntakeWorkspaceSession
             created_at: s.created_at,
             packet_name: packetSessionName(s),
         }));
-}
-
-function FormsSeedEnvironmentHint() {
-    const showExactCommand =
-        process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_VERCEL_ENV === "preview";
-
-    return (
-        <TechnicalDetailDisclosure
-            title={FORMS_TECHNICAL_DISCLOSURE.setupHelp.title}
-            helperText={FORMS_TECHNICAL_DISCLOSURE.setupHelp.helper}
-        >
-            <p className={opMetadata}>Optional demo seed — structured field editor only.</p>
-            {showExactCommand ?
-                <pre className="mt-2 max-h-32 overflow-auto rounded-lg bg-alloy-stone/30 p-3 font-mono text-[11px]">
-                    {`cd web\nDEMO_RESET_ORG_ID="<org-uuid>" npm run demo:seed:medication-form`}
-                </pre>
-            :   null}
-        </TechnicalDetailDisclosure>
-    );
 }
 
 export default function FormsHubClient() {
@@ -123,12 +102,29 @@ export default function FormsHubClient() {
             );
             setPackets(
                 packetsRes.ok ?
-                    ((packetsJson as { data?: IntakeWorkspacePacketRow[] }).data ?? [])
+                    (
+                        (packetsJson as { data?: (IntakeWorkspacePacketRow & { is_active?: boolean })[] }).data ?? []
+                    )
                         .filter((p) => p.is_active !== false)
                         .map((p) => ({ id: p.id, name: p.name }))
                 :   []
             );
-            setSubmissions(subRes.ok ? ((subJson as { data?: IntakeWorkspaceSubmissionRow[] }).data ?? []) : []);
+            setSubmissions(
+                subRes.ok ?
+                    ((subJson as { data?: IntakeWorkspaceSubmissionRow[] }).data ?? []).map((r) => ({
+                        id: r.id,
+                        status: r.status,
+                        created_at: r.created_at,
+                        submitted_at: r.submitted_at,
+                        form_definition_id: r.form_definition_id,
+                        person_id: r.person_id,
+                        customer_id: r.customer_id,
+                        customer_member_id: r.customer_member_id,
+                        opportunity_id: r.opportunity_id,
+                        payload: r.payload,
+                    }))
+                :   []
+            );
         } catch (e) {
             setError((e as Error).message);
             setForms([]);
