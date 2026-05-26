@@ -68,7 +68,7 @@ describe("getRecommendationDrawerStrip", () => {
             },
         });
         expect(display?.source).toBe("canonical_drawer_strip");
-        expect(display?.nextActionLabel).toBe(rec.recommended_action.label);
+        expect(display?.doNext).toBe(rec.recommended_action.label);
         expect(display?.whyNow).toBe(rec.render.drawer_strip.why_line);
         expect(display?.whyNow).not.toContain("Operational attention:");
         expect(display?.operationalRead).toBe(rec.render.drawer_strip.title);
@@ -105,7 +105,7 @@ describe("getRecommendationDrawerStrip", () => {
             },
         });
         expect(display?.source).toBe("legacy_attention_suggestion");
-        expect(display?.nextActionLabel).toBe("Respond to new request");
+        expect(display?.doNext).toBe("Respond to new request");
     });
 
     it("returns null when canonical and legacy data are missing", () => {
@@ -119,9 +119,9 @@ describe("resolveQueueOperationalReadPreview", () => {
         const line = resolveQueueOperationalReadPreview({
             _operational_recommendation_preview: rec.render.queue,
         });
-        expect(line?.line).toContain("Send a warm first response");
-        expect(line?.line).toContain("—");
-        expect(line?.line).toMatch(/lose momentum/i);
+        expect(line?.operationalRead).toContain("Send a warm first response");
+        expect(line?.operationalRead).toContain("—");
+        expect(line?.operationalRead).toMatch(/lose momentum/i);
     });
 });
 

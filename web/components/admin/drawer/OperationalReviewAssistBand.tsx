@@ -6,6 +6,7 @@ import { FormsReviewBadge } from "@/components/forms/review/FormsReviewBadge";
 import type { FormsReviewBadgeTone } from "@/lib/forms/review/formsReviewPresentation";
 import type {
     ResolvedDrawerRecommendationDisplay,
+    ResolvedDrawerReadinessChrome,
     ResolvedDrawerSupportingDetail,
 } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceSelectors";
 import type { UrgencyBandV1 } from "@/lib/adminV2/bos/recommendations/types";
@@ -25,7 +26,7 @@ type Props = {
     display: ResolvedDrawerRecommendationDisplay;
     variant: "chrome" | "panel";
     suppressSectionBrandLabel?: boolean;
-    activityStaleLabel?: string | null;
+    readinessChrome?: ResolvedDrawerReadinessChrome;
     supportingDetail?: ResolvedDrawerSupportingDetail | null;
     draftSlot?: ReactNode;
     enhanceSlot?: ReactNode;
@@ -106,17 +107,15 @@ export default function OperationalReviewAssistBand({
     display,
     variant,
     suppressSectionBrandLabel = false,
-    activityStaleLabel,
+    readinessChrome,
     supportingDetail,
     draftSlot,
     enhanceSlot,
 }: Props) {
     const chrome = variant === "chrome";
     const showChip = showUrgencyChip(display.urgencyBand, display.urgencyLabel);
-    const trustNotes: string[] = [];
-    if (display.staleBanner?.trim()) trustNotes.push(display.staleBanner.trim());
-    if (display.confidenceLabel?.trim()) trustNotes.push(display.confidenceLabel.trim());
-    if (activityStaleLabel?.trim()) trustNotes.push(activityStaleLabel.trim());
+    const showEscalationChip = Boolean(display.escalationChipLabel?.trim());
+    const trustLines = readinessChrome?.trustLines ?? [];
 
     return (
         <div
@@ -134,6 +133,29 @@ export default function OperationalReviewAssistBand({
                         <p className="text-[11px] font-semibold text-alloy-midnight">{REVIEW_ASSIST_TITLE}</p>
                         <p className={opMetadata}>{REVIEW_ASSIST_LEAD}</p>
                     </div>
+                    {showChip || showEscalationChip ? (
+                        <div className="flex flex-wrap items-center justify-end gap-1">
+                            {showChip ? (
+                                <span data-testid="review-assist-urgency-chip">
+                                    <FormsReviewBadge
+                                        label={display.urgencyLabel!.trim()}
+                                        tone={urgencyChipTone(display.urgencyBand)}
+                                    />
+                                </span>
+                            ) : null}
+                            {showEscalationChip ? (
+                                <span data-testid="review-assist-escalation-chip">
+                                    <FormsReviewBadge
+                                        label={display.escalationChipLabel!.trim()}
+                                        tone="neutral"
+                                    />
+                                </span>
+                            ) : null}
+                        </div>
+                    ) : null}
+                </div>
+            ) : showChip || showEscalationChip ? (
+                <div className="flex flex-wrap justify-end gap-1">
                     {showChip ? (
                         <span data-testid="review-assist-urgency-chip">
                             <FormsReviewBadge
@@ -142,15 +164,14 @@ export default function OperationalReviewAssistBand({
                             />
                         </span>
                     ) : null}
-                </div>
-            ) : showChip ? (
-                <div className="flex justify-end">
-                    <span data-testid="review-assist-urgency-chip">
-                        <FormsReviewBadge
-                            label={display.urgencyLabel!.trim()}
-                            tone={urgencyChipTone(display.urgencyBand)}
-                        />
-                    </span>
+                    {showEscalationChip ? (
+                        <span data-testid="review-assist-escalation-chip">
+                            <FormsReviewBadge
+                                label={display.escalationChipLabel!.trim()}
+                                tone="neutral"
+                            />
+                        </span>
+                    ) : null}
                 </div>
             ) : null}
 
@@ -169,9 +190,19 @@ export default function OperationalReviewAssistBand({
                     >
                         {display.operationalRead}
                     </p>
-                    {trustNotes.length > 0 ? (
+                    {display.typeCue?.trim() ? (
+                        <p className={clsx("mt-0.5", opMetadata)} data-testid="review-assist-type-line">
+                            Type · {display.typeCue.trim()}
+                        </p>
+                    ) : null}
+                    {display.classificationContextLine?.trim() ? (
+                        <p className={clsx("mt-0.5", opMetadata)} data-testid="review-assist-classification-context">
+                            {display.classificationContextLine.trim()}
+                        </p>
+                    ) : null}
+                    {trustLines.length > 0 ? (
                         <p className={clsx("mt-0.5", opMetadata)} data-testid="review-assist-trust-notes">
-                            {trustNotes.join(" · ")}
+                            {trustLines.join(" · ")}
                         </p>
                     ) : null}
                 </div>
@@ -200,16 +231,16 @@ export default function OperationalReviewAssistBand({
                         <RowLabel>Do next</RowLabel>
                     </div>
                     <p className={clsx(chrome ? opInsightSummaryCompact : "text-sm leading-snug", "text-alloy-midnight/88")}>
-                        {display.nextActionLabel}
+                        {display.doNext}
                     </p>
                 </div>
 
-                {display.outcomeLine?.trim() ? (
+                {display.likelyOutcome?.trim() ? (
                     <div data-review-assist-row="likely_outcome" className="text-alloy-midnight/55">
                         <div className="mb-0.5">
                             <RowLabel>Likely</RowLabel>
                         </div>
-                        <p className={opMetadata}>{display.outcomeLine.trim()}</p>
+                        <p className={opMetadata}>{display.likelyOutcome.trim()}</p>
                     </div>
                 ) : null}
 

@@ -13,4 +13,5 @@ export { PacketStepCompositionEditor } from "@/components/forms/workspace/Packet
 export { FormLifecycleRail } from "@/components/forms/workspace/FormLifecycleRail";
 export { FormLifecycleWorkspaceLayout } from "@/components/forms/workspace/FormLifecycleWorkspaceLayout";
 export { FormsWorkspaceShell } from "@/components/forms/workspace/FormsWorkspaceShell";
-export { PacketSessionInboxRow } from "@/components/forms/workspace/PacketSessionInboxRow";
+export { SubmissionsInboxView } from "@/components/forms/workspace/SubmissionsInboxView";
+export { SubmissionInboxRowView } from "@/components/forms/workspace/SubmissionInboxRowView";

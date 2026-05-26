@@ -15,6 +15,14 @@ export { PacketReviewActionsForm } from "@/components/forms/review/PacketReviewA
 export { PacketReviewTechnicalPanel } from "@/components/forms/review/PacketReviewTechnicalPanel";
 export { PacketSubmittedFormsPanel } from "@/components/forms/review/PacketSubmittedFormsPanel";
 export { SubmissionCaseFileHeader } from "@/components/forms/review/SubmissionCaseFileHeader";
+export {
+    SubmissionIntakeCaseFileContent,
+} from "@/components/forms/review/SubmissionIntakeCaseFileContent";
+export type {
+    SubmissionIntakeCaseFileContentProps,
+    SubmissionIntakeCaseFileRow,
+    SubmissionIntakeLinkedDoc,
+} from "@/components/forms/review/SubmissionIntakeCaseFileContent";
 export { WhatChangedPanel } from "@/components/forms/review/WhatChangedPanel";
 export { FormsArtifactBadge } from "@/components/forms/review/FormsArtifactBadge";
 export { FormsProvenanceLine } from "@/components/forms/review/FormsProvenanceLine";

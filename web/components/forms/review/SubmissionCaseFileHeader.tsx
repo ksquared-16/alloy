@@ -35,7 +35,7 @@ export function SubmissionCaseFileHeader({
             className={clsx(formsCaseFileHeaderSurface, className)}
             data-testid="submission-case-file-header"
         >
-            <p className={formsCaseFileMetaText}>Form submission review</p>
+            <p className={formsCaseFileMetaText}>Intake review</p>
             <h1 className={clsx("mt-1", formsCaseFileHeaderTitle)}>{formName}</h1>
             <p className={formsCaseFileHeaderSubtitle}>{lifecycleHeadline}</p>
             <div className="mt-3 flex flex-wrap items-center gap-2">

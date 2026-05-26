@@ -9,6 +9,7 @@ import {
     getRecommendationDrawerStrip,
     getRecommendationHandoff,
 } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceSelectors";
+import { resolveHandoffTrustNote } from "@/lib/adminV2/bos/recommendations/selectors/recommendationTrustChrome";
 import { isEnrollmentWaitBucket } from "@/lib/opportunities/attentionPlatformCatalog";
 import {
     nextStepGuidance,
@@ -30,6 +31,8 @@ export type OperationalRecommendationHandoffCopy = {
     supportingContext?: string | null;
     contextLine: string;
     ctaLabel: string;
+    /** Compact readiness note when stale or approximate timing (Card 2.6). */
+    readinessNote?: string | null;
 };
 
 function parseSuggestion(overviewData: Record<string, unknown> | null | undefined): AttentionSuggestionV1 | null {
@@ -108,11 +111,15 @@ function buildLegacyHandoffCopy(args: {
             eyebrow: HANDOFF_EYEBROW,
             operationalRead: drawer.operationalRead,
             whyNow: drawer.whyNow,
-            doNext: drawer.nextActionLabel,
-            likelyOutcome: drawer.outcomeLine ?? null,
+            doNext: drawer.doNext,
+            likelyOutcome: drawer.likelyOutcome ?? null,
             supportingContext: contextLine,
             contextLine,
             ctaLabel: HANDOFF_CTA_CONTINUE,
+            readinessNote: resolveHandoffTrustNote({
+                isStale: drawer.isStale,
+                confidenceLabel: drawer.confidenceLabel,
+            }),
         };
     }
 
@@ -210,6 +217,9 @@ export function formatOrchestratorHandoffSeedFromCopy(
     const segments = [`${copy.operationalRead} (${label})`, `Why now: ${copy.whyNow}`, `Do next: ${copy.doNext}`];
     if (copy.likelyOutcome?.trim()) {
         segments.push(`Likely: ${copy.likelyOutcome.trim()}`);
+    }
+    if (copy.readinessNote?.trim()) {
+        segments.push(copy.readinessNote.trim());
     }
     return segments.join(" · ");
 }

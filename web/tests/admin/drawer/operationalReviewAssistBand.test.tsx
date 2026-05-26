@@ -8,6 +8,7 @@ import { buildOperationalRecommendationV1 } from "@/lib/adminV2/bos/recommendati
 import {
     getRecommendationDetailSummary,
     getRecommendationDrawerStrip,
+    resolveDrawerReadinessChromeForOverview,
 } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceSelectors";
 import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
 import { suggestedContentForReason } from "@/lib/agent/needsAttentionSuggestion/suggestedContentTemplates";
@@ -126,7 +127,7 @@ describe("OperationalReviewAssistBand / Card 2.1", () => {
         }
     });
 
-    it("shows stale and confidence trust notes when present", () => {
+    it("shows calm readiness trust lines when stale or approximate", () => {
         const rec = buildOperationalRecommendationV1(buildTestOperationalRecommendationInput());
         rec.render.drawer_strip.is_stale = true;
         rec.render.drawer_strip.stale_banner = "Record changed — refresh for updated guidance.";
@@ -134,18 +135,39 @@ describe("OperationalReviewAssistBand / Card 2.1", () => {
 
         const display = getRecommendationDrawerStrip({ _operational_recommendation: rec });
         const supportingDetail = getRecommendationDetailSummary({ _operational_recommendation: rec });
+        const readinessChrome = resolveDrawerReadinessChromeForOverview(
+            { _operational_recommendation: rec },
+            { hasSupportingDetail: Boolean(supportingDetail), hasActivitySignal: true }
+        );
         const html = renderToStaticMarkup(
             <OperationalReviewAssistBand
                 display={display!}
                 supportingDetail={supportingDetail}
+                readinessChrome={readinessChrome}
                 variant="chrome"
-                activityStaleLabel="Idle signal"
             />,
         );
         expect(html).toContain('data-testid="review-assist-trust-notes"');
-        expect(html).toContain("Record changed");
+        expect(html).toContain("Needs refresh");
         expect(html).toContain("Approximate timing");
-        expect(html).toContain("Idle signal");
+        expect(html).toContain("Based on available activity");
+        expect(html).toContain("Supporting detail available");
+        expect(html).not.toContain("Record changed");
+        expect(html).not.toMatch(/AI confidence|model believes|critical warning/i);
+    });
+
+    it("keeps trust chrome quiet when guidance is current", () => {
+        const rec = buildOperationalRecommendationV1(buildTestOperationalRecommendationInput());
+        const display = getRecommendationDrawerStrip({ _operational_recommendation: rec });
+        const readinessChrome = resolveDrawerReadinessChromeForOverview({ _operational_recommendation: rec });
+        const html = renderToStaticMarkup(
+            <OperationalReviewAssistBand
+                display={display!}
+                readinessChrome={readinessChrome}
+                variant="chrome"
+            />,
+        );
+        expect(html).not.toContain('data-testid="review-assist-trust-notes"');
     });
 
     it("offers collapsed supporting detail affordance for signals", () => {
@@ -184,7 +206,7 @@ describe("OperationalReviewAssistBand / Card 2.4 supporting detail", () => {
                 display={{
                     operationalRead: "Read",
                     whyNow: "Why",
-                    nextActionLabel: "Next",
+                    doNext: "Next",
                     source: "legacy_attention_suggestion",
                 }}
                 supportingDetail={null}
@@ -274,6 +296,69 @@ describe("OperationalReviewAssistBand / Card 2.4 supporting detail", () => {
         expect(html).toContain('data-review-assist-supporting-detail');
         expect(html).not.toContain("border-t border-alloy-stone/12 pt-1.5");
         expect(html).not.toContain("uppercase tracking-[0.08em]");
+    });
+});
+
+describe("OperationalReviewAssistBand / Card 2.5 classification", () => {
+    it("shows restrained type and escalation semantics for sla breach", () => {
+        const rec = buildOperationalRecommendationV1(
+            buildTestOperationalRecommendationInput({
+                catalog_key: "sla_breach",
+                primary_label: "Lee Household",
+                template_values: {
+                    primary_label: "Lee Household",
+                    sla_tier: "breached",
+                },
+                raw_signals: [
+                    {
+                        code: "primary_attention_reason",
+                        label: "Waiting on staff",
+                        source_type: "attention_resolver",
+                        provenance: "opportunity_attention_resolver.v2",
+                        priority: 0,
+                    },
+                    {
+                        code: "sla_breached",
+                        label: "SLA breached",
+                        source_type: "attention_resolver",
+                        provenance: "attention_sla",
+                        sla_tier: "breached",
+                        priority: 1,
+                    },
+                ],
+                stale_inputs: {
+                    status_key: "tour_scheduled",
+                    primary_reason_code: "waiting_on_staff",
+                    reason_codes_sorted: ["waiting_on_staff"],
+                    waiting_bucket: "waiting_on_staff",
+                    waiting_since_iso: "2026-05-21T10:00:00.000Z",
+                    resolver_version: 2,
+                    attention_computed_at_iso: "2026-05-21T10:00:00.000Z",
+                    activity_signal_key: null,
+                },
+            })
+        );
+        const display = getRecommendationDrawerStrip({ _operational_recommendation: rec });
+        const html = renderToStaticMarkup(
+            <OperationalReviewAssistBand display={display!} variant="chrome" />,
+        );
+        expect(html).toContain('data-testid="review-assist-type-line"');
+        expect(html).toContain("Type · Escalation");
+        expect(html).toContain('data-testid="review-assist-escalation-chip"');
+        expect(html).toContain("Needs leadership review");
+        expect(html).toContain('data-testid="review-assist-classification-context"');
+        expect(html).not.toMatch(/critical issue|immediate action|AI warning|chatbot/i);
+    });
+
+    it("shows communication type without alarm phrasing", () => {
+        const rec = buildOperationalRecommendationV1(buildTestOperationalRecommendationInput());
+        const display = getRecommendationDrawerStrip({ _operational_recommendation: rec });
+        const html = renderToStaticMarkup(
+            <OperationalReviewAssistBand display={display!} variant="chrome" />,
+        );
+        expect(html).toContain("Type · Communication");
+        expect(html).not.toContain("Needs leadership review");
+        expect(html).not.toMatch(/AI recommendation|alert|danger/i);
     });
 });
 

@@ -1,7 +1,7 @@
 # BOS Operational Recommendation Intelligence Sprint
 
 **Path:** `docs/sprints/05_2026/bos_operational_recommendation_intelligence_sprint.md`  
-**Status:** Phase 1 **COMPLETE** (GATE 1 passed) — Phase 2 UX polish may begin  
+**Status:** Phase 1 **COMPLETE** (GATE 1 passed) — Phase 2 **COMPLETE** (GATE 2 passed); Phase 3 may begin  
 **Date:** 2026-05-21
 
 **GATE 0 implementation doctrine (binding before code):** [`bos_operational_recommendation_intelligence_gate0.md`](./bos_operational_recommendation_intelligence_gate0.md)  
@@ -609,12 +609,14 @@ flowchart LR
 
 **GATE 2 checklist:**
 
-- [ ] Demo path: Needs Attention → queue read → drawer assist → Orchestrator — **one story**
-- [ ] Cognition order preserved; workflow actions remain primary
-- [ ] No “Operational attention:” / “Alloy suggestion” primary framing
-- [ ] Urgency = sequencing, not alarm (no red wash)
-- [ ] Queue preview boundary copy preserved
-- [ ] Forms doctrine parity (vocabulary + assist band)
+- [x] Demo path: Needs Attention → queue read → drawer assist → Orchestrator — **one story**
+- [x] Cognition order preserved; workflow actions remain primary
+- [x] No “Operational attention:” / “Alloy suggestion” primary framing
+- [x] Urgency = sequencing, not alarm (no red wash)
+- [x] Queue preview boundary copy preserved
+- [x] Forms doctrine parity (vocabulary + assist band)
+
+**Phase 2 closeout:** [`bos_operational_recommendation_phase2_operational_ux.md`](./bos_operational_recommendation_phase2_operational_ux.md) §2.1.2 — Cards 2.1–2.8 complete; demo script in same section.
 
 ### 5.5 Phase 3 — Workflow + communications integration
 
@@ -719,6 +721,7 @@ autonomous AI scope.
 
 - [x] **GATE 0 APPROVED** — [`bos_operational_recommendation_intelligence_gate0.md`](./bos_operational_recommendation_intelligence_gate0.md) §10
 - [x] **Phase 1 COMPLETE** — Cards 1.1–1.9; GATE 1 passed — see [`bos_operational_recommendation_phase1_execution.md`](./bos_operational_recommendation_phase1_execution.md) §12
-- [ ] **Phase 2** — Operational UX polish (**doctrine-aligned** — begin after Phase 2 pack review)
+- [x] **Phase 2 COMPLETE** — Cards 2.1–2.8; GATE 2 passed — see [`bos_operational_recommendation_phase2_operational_ux.md`](./bos_operational_recommendation_phase2_operational_ux.md) §2.1.2
+- [ ] **Phase 3** — Workflow + comms integration
 
-When starting Phase 2 implementation, begin with §5.4 Card **2.1** (Review assist band) then **2.3** (queue operational read). See Phase 2 pack §0.4 doctrine alignment audit.
+Phase 3 may begin with §5.5 Card **3.1** (`available_actions` placement mapping).

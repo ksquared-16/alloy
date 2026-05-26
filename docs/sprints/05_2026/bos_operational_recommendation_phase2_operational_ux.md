@@ -1,8 +1,8 @@
 # BOS Operational Recommendation Intelligence — Phase 2 Operational UX Sprint
 
 **Path:** `docs/sprints/05_2026/bos_operational_recommendation_phase2_operational_ux.md`  
-**Status:** Planning — **doctrine-aligned**; audit + UX framework complete; **implementation not started**  
-**Date:** 2026-05-21 (doctrine alignment pass: 2026-05-21)
+**Status:** Phase 2 **COMPLETE** (GATE 2 passed) — Cards 2.1–2.8 shipped; Card 2.9 optional deferred  
+**Date:** 2026-05-21 (Card 2.8 closeout: 2026-05-21)
 
 **Binding inputs:**
 
@@ -502,30 +502,217 @@ Inherited from Forms § Intelligence style + § Anti-patterns.
 | **2.4** | L2 **collapsed Supporting detail** — factors, signals, rationale (`getRecommendationDetailSummary`) | Extend existing drawer disclosure — **no new dominant panel** | `available_actions` placement |
 | **2.5** | Escalation/type chips — restrained grammar (policy-cited, not alarm) | Shared chip tokens (PX-0 kinship) | Resolver changes |
 | **2.6** | Trust chrome — stale banner, low-confidence timing caveat, preview boundary; freshness stub optional | Strip + tests | DB persistence, marketing badges |
-| **2.7** | Selector VM — pass fields for cognition-ordered render; **no React copy** | `recommendationSurfaceSelectors.ts` | Builder/catalog changes |
+| **2.7** | Selector VM — pass fields for cognition-ordered render; **no React copy** | `recommendationSurfaceSelectors.ts`, `recommendationSurfaceViewModels.ts` | Builder/catalog changes |
 | **2.8** | Regression + GATE 2 demo + docs | Tests, parent §5.4 | AI enrich |
 | **2.9** | (Optional) `OperationalProposalCardFrame` insight region — **insight-only**, same vocabulary | Proposal frame consumers | Second BOS personality on drawer |
 
 **Optional split:** 2.4 + 2.5 can merge. Card 2.9 optional — do not block GATE 2.
 
+### 2.1.1 Card 2.7 closeout (selector pass-through)
+
+**Status:** Complete — composite view-models own field flow; components render normalized VMs only.
+
+| Surface | Canonical owner | Normalized fields |
+|---------|-----------------|-------------------|
+| Queue L0 | `resolveQueueOperationalReadSlot` | `operationalRead`, `typeCue`, `staleCue`, `previewBoundary` |
+| Drawer Review Assist | `resolveDrawerReviewAssistViewModel` | `display`, `supportingDetail`, `readinessChrome` |
+| Handoff | `getRecommendationHandoff` / `buildOperationalRecommendationHandoffCopy` | `operationalRead`, `whyNow`, `doNext`, `readinessNote` |
+
+Legacy wire fields (`_attention_suggestion*`, `why_line`, `attentionReason`, `operationalNextHint`) remain **compatibility-only** fallbacks when canonical preview is absent.
+
+### 2.1.2 Card 2.8 closeout (regression + GATE 2 + demo)
+
+**Status:** Complete — Phase 2 regression pass, doctrine audit, GATE 2 verification, demo script.
+
+#### Implementation summary (Cards 2.1–2.8)
+
+| Card | Delivered |
+|------|-----------|
+| 2.1 | `OperationalReviewAssistBand` — Review Assist band in drawer chrome (`OperationalAttentionHeaderStrip`) |
+| 2.2 | Handoff copy parity — `operationalRecommendationHandoff.ts`, `activeOperationalContext.ts` |
+| 2.3 | Queue L0 — one operational read via `resolveQueueOperationalReadSlot`; duplicate-line suppression in VM |
+| 2.4 | Collapsed **Supporting detail** (`<details>` disclosure; signal count in summary) |
+| 2.5 | Restrained classification — `recommendationClassificationSemantics.ts` (type cue, escalation chip) |
+| 2.6 | Trust/readiness chrome — `recommendationTrustChrome.ts` (Needs refresh, Approximate timing, etc.) |
+| 2.7 | Composite VMs — `recommendationSurfaceViewModels.ts`; normalized field names (`operationalRead`, `doNext`, `likelyOutcome`) |
+| 2.8 | Regression suite, GATE 2 audit, demo script, doc closeout |
+
+**No new product capability in 2.8.** One regression fix: `QueueBlock` full-layout path still referenced renamed `line` → corrected to `operationalRead`.
+
+#### Surface behavior summary
+
+| Surface | Primary module | Operator sees | Authority |
+|---------|----------------|---------------|-----------|
+| **Queue L0** | `QueueBlock` → `CrmCompactOperationalReadPreview` | One operational read line; optional type/stale chips; **Preview** boundary | Preview only — entity GET authoritative |
+| **Drawer Review Assist** | `OperationalReviewAssistBand` via `OperationalAttentionHeaderStrip` | Operational read → Why now → Do next → Likely outcome; collapsed supporting detail; trust lines | Full recommendation on entity GET |
+| **Handoff / Orchestrator** | `buildOperationalRecommendationHandoffCopy`, `OpportunityOperationalCompactStrip` | Same vocabulary family; optional readiness note; no chatbot framing | Seed / awareness only |
+| **Legacy fallback** | Strip without canonical recommendation | Resolver-driven guidance; `nextStepGuidance` templates | Compatibility path until wire deprecation |
+
+#### GATE 2 checklist status
+
+| # | Criterion | Status | Notes |
+|---|-----------|--------|-------|
+| G2-1 | Drawer uses **Review Assist band**, not recommendation-feed UX | ✅ Pass | `OperationalReviewAssistBand`; tests ban feed framing |
+| G2-2 | Queue shows **one L0 operational read**, not stacked suggestion cards | ✅ Pass | `resolveQueueOperationalReadSlot`; duplicate suppression in VM |
+| G2-3 | Handoff uses Review Assist vocabulary and cognition order | ✅ Pass | `operationalRecommendationHandoff.test.ts`, compact strip contract |
+| G2-4 | Supporting detail **collapsed by default** | ✅ Pass | Native `<details>`; factors/signals in disclosure |
+| G2-5 | Urgency is **sequencing guidance**, not alarm UX | ✅ Pass | Muted chips; no red wash; P-band as prioritization |
+| G2-6 | Classification cues **restrained and secondary** | ✅ Pass | Max one type cue; escalation = “Needs leadership review” |
+| G2-7 | Trust/readiness chrome avoids **confidence theater** | ✅ Pass | Provenance/readiness labels only; no confidence score |
+| G2-8 | BOS **subordinate to workflow CTAs** | ✅ Pass | Assist band in chrome; no new apply/send from assist |
+| G2-9 | No AI enrich, LLM calls, or autonomous behavior | ✅ Pass | No routes under `recommendations/*`; deterministic only |
+| G2-10 | Forms/Documents operational cognition doctrine followed | ✅ Pass | Vocabulary locked: operational read, review assist, do next, why now |
+
+#### Audit findings (Card 2.8)
+
+**Drawer**
+
+- `OperationalReviewAssistBand` — cognition order correct; banned primary copy absent in canonical path.
+- `OperationalAttentionHeaderStrip` — single `resolveDrawerReviewAssistViewModel()` call; no React-composed sentences.
+- Supporting detail, urgency/type/trust chrome — selector-owned; restrained density.
+- Legacy fallback — resolver label may still appear when no canonical recommendation; not primary in canonical path.
+
+**Queue**
+
+- `QueueBlock` / `CrmCompactOperationalReadPreview` — one read line; preview boundary label **Preview**.
+- `enrollmentWorkUnitViewModel` — direct slot pass-through from `resolveQueueOperationalReadSlot`.
+- Duplicate-line suppression — `operationalNextHint` / parallel why lines suppressed when canonical preview present (VM rules + tests).
+- **Fixed in 2.8:** full-layout queue path referenced stale `operationalRead.line` property.
+
+**Handoff / Orchestrator**
+
+- `operationalRecommendationHandoff` — strips “Operational attention:” prefix; mirrors drawer phrase family.
+- `activeOperationalContext` — awareness seed only; optional readiness note.
+- `OpportunityOperationalCompactStrip` — contract tests enforce no chatbot / AI authority copy.
+
+**Selectors / VMs**
+
+- `recommendationSurfaceViewModels.ts` — composite drawer + queue slot owners.
+- `recommendationClassificationSemantics.ts`, `recommendationTrustChrome.ts` — copy centralized; components render only.
+
+**Remaining exposure (known, non-blocking)**
+
+| Item | Risk | Disposition |
+|------|------|-------------|
+| `OperationalAttentionDrawerPanel.tsx` — “Suggested next step” | Legacy embed path; not primary Review Assist chrome | Document; remove in Phase 3 wire cleanup |
+| Legacy `_attention_suggestion.reasoning.summary` may retain “Operational attention:” prefix | Legacy-only path; canonical selectors strip prefix | Phase 3 `_attention_suggestion` deprecation |
+| `opportunityLifecyclePresentation.ts` — “Suggested next step” titles | Enrollment lifecycle guidance, not BOS band | Out of Phase 2 scope |
+| Queue row may still show `operationalSummaryPreview` alongside operational read when both attached | Layout density | Monitor; merge rules in VM if noisy in pilot |
+
+**BOS dominance / preview risks**
+
+- Assist band is subordinate (muted styling, below workflow header actions).
+- Queue **Preview** label preserves preview-only truth.
+- No confidence scores or AI marketing badges in Phase 2 surfaces.
+
+#### Test results (Card 2.8)
+
+Focused Phase 2 suite (10 files, 221 tests): **all passed**.
+
+```
+tests/admin/drawer/operationalReviewAssistBand.test.tsx
+tests/admin/drawer/operationalAttentionSuggestionUi.test.tsx
+tests/adminV2/bos/recommendations/recommendationSurfaceViewModels.test.ts
+tests/adminV2/bos/recommendations/recommendationSurfaceSelectors.test.ts
+tests/adminV2/bos/recommendations/recommendationClassificationSemantics.test.ts
+tests/adminV2/bos/recommendations/recommendationTrustChrome.test.ts
+tests/adminV2/bos/recommendations/queueOperationalReadPreview.test.tsx
+tests/adminV2/operationalRecommendationHandoff.test.ts
+tests/adminV2/activeOperationalContext.test.ts
+tests/agent/taskAssist/opportunityOperationalCompactStrip.contract.test.ts
+```
+
+**TypeScript:** `npx tsc --noEmit` — Phase 2 production paths clean after `QueueBlock` fix. Repo-wide failures remain in unrelated areas (`attachOperationalRecommendation*.test.ts` fixture types, `prefetchWorkUnitOperationalBootstrap.test.ts`, Forms hub types) — not introduced by Phase 2 cards.
+
+#### Known limitations
+
+- Full reason-code catalog sweep still partial (Phase 1 carryover).
+- `validateRecommendationFreshness` not live — stale chrome is display-only from builder flags.
+- Telemetry deferred to Phase 4.
+- Card **2.9** (proposal frame insight region) not implemented — optional, does not block GATE 2.
+
+#### Deferred items (Phase 3+)
+
+| Item | Phase |
+|------|-------|
+| `_attention_suggestion` wire removal | Phase 3+ |
+| `available_actions` → placement resolution | Phase 3 |
+| Task Assist prefill from `communication_reference` | Phase 3 |
+| AI enrich / LLM polish | Phase 4 |
+| Telemetry (shown / handoff / stale) | Phase 4 |
+| `OperationalProposalCardFrame` insight region | 2.9 optional |
+
+#### Demo script (GATE 2)
+
+**Prerequisites:** Org with Needs Attention enrollment queue; at least one row with canonical `_operational_recommendation_preview` (e.g. stale new inquiry bucket).
+
+---
+
+**Scenario 1 — Queue scan**
+
+1. Open AdminV2 workspace → Needs Attention (or enrollment focus queue).
+2. Scan a row with operational recommendation preview.
+
+**Operator sees:** One operational read line; optional muted type or “Needs refresh” cue; **Preview** boundary label.
+
+**Narrative:** “Queue stays scan-first; full operational read lives in drawer.”
+
+---
+
+**Scenario 2 — Drawer review**
+
+1. Open the same record from the queue.
+2. Observe drawer header chrome (Review Assist band).
+
+**Operator sees:** Review Assist band with operational read, Why now, Do next, Likely outcome; supporting detail collapsed (“Supporting detail · Based on N signals”); workflow actions remain primary above/beside assist.
+
+**Narrative:** “BOS supports review, but workflow actions remain primary.”
+
+---
+
+**Scenario 3 — Handoff**
+
+1. From drawer, open Orchestrator / Task Assist handoff (or compact operational strip on opportunity).
+
+**Operator sees:** Handoff mirrors Review Assist vocabulary; no chatbot language; no AI authority claim.
+
+**Narrative:** “BOS carries context forward without acting autonomously.”
+
+---
+
+**Scenario 4 — Trust / readiness**
+
+1. Use a row or record flagged stale or low-confidence timing (builder `is_stale` / timing caveat).
+2. Expand supporting detail optionally.
+
+**Operator sees:** “Needs refresh” or “Approximate timing” only when meaningful; supporting detail available on demand; no confidence score.
+
+**Narrative:** “Trust is provenance/readiness, not model certainty.”
+
+---
+
+**Phase 2 completion:** Cards 2.1–2.8 **COMPLETE**. GATE 2 **passed**. Phase 3 may begin.
+
 ---
 
 ## 2.2 GATE 2 — exit criteria
 
-| # | Criterion |
-|---|-----------|
-| G2-1 | Queue row shows **one operational read** + optional sequencing chip — not legacy feed framing when canonical present |
-| G2-2 | Drawer **Review assist band** follows cognition order (readiness → focus → do next) — resolver label not primary |
-| G2-3 | Handoff seed matches drawer **suggested focus** phrase family — no chatbot persona |
-| G2-4 | L2 **Supporting detail** collapsed by default; factors/signals without reason codes in default path |
-| G2-5 | No “Operational attention:” / “Alloy suggestion” as primary framing |
-| G2-6 | Queue preview boundary copy visible — preview-only truth preserved |
-| G2-7 | No new apply/send/workflow execution from assist UI; workflow CTAs remain primary actions |
-| G2-8 | Urgency reads as **sequencing**, not alarm (no red wash) |
-| G2-9 | Phase 2 tests pass; no AI routes under `recommendations/*` |
-| G2-10 | **Doctrine parity** with Forms assist band — same vocabulary (operational read, review assist, suggested focus, do next) |
+**Status:** ✅ **PASSED** (Card 2.8 closeout — see §2.1.2)
 
-**Demo script (minimum):** Reuse parent sprint §5.7 GATE C — update expected copy to reference catalog titles and urgency chips.
+| # | Criterion | Status |
+|---|-----------|--------|
+| G2-1 | Queue row shows **one operational read** + optional sequencing chip — not legacy feed framing when canonical present | ✅ |
+| G2-2 | Drawer **Review assist band** follows cognition order (readiness → focus → do next) — resolver label not primary | ✅ |
+| G2-3 | Handoff seed matches drawer **suggested focus** phrase family — no chatbot persona | ✅ |
+| G2-4 | L2 **Supporting detail** collapsed by default; factors/signals without reason codes in default path | ✅ |
+| G2-5 | No “Operational attention:” / “Alloy suggestion” as primary framing | ✅ |
+| G2-6 | Queue preview boundary copy visible — preview-only truth preserved | ✅ |
+| G2-7 | No new apply/send/workflow execution from assist UI; workflow CTAs remain primary actions | ✅ |
+| G2-8 | Urgency reads as **sequencing**, not alarm (no red wash) | ✅ |
+| G2-9 | Phase 2 tests pass; no AI routes under `recommendations/*` | ✅ |
+| G2-10 | **Doctrine parity** with Forms assist band — same vocabulary (operational read, review assist, suggested focus, do next) | ✅ |
+
+**Demo script:** §2.1.2 (four scenarios: queue scan, drawer review, handoff, trust/readiness). Parent sprint §5.7 GATE C remains valid for end-to-end enrollment persona; update expected copy to catalog titles and Phase 2 vocabulary.
 
 ---
 
@@ -600,9 +787,10 @@ When Phase 2 cards land:
 | Step 0.4 — Doctrine alignment audit | ✅ Complete (§0.4) |
 | Step 1 — UX framework (cognition + L0–L3) | ✅ Complete (§1) |
 | Step 2 — Sprint structure | ✅ Complete (§2) |
-| **Implementation** | ⏸ **Not started** — begin Card 2.1 after doctrine review |
+| **Implementation (Cards 2.1–2.8)** | ✅ **Complete** — GATE 2 passed (§2.1.2) |
+| Card 2.9 (optional proposal frame) | ⏸ Deferred |
 
-**Next action:** Implement **Card 2.1** (Review assist band) then **Card 2.3** (queue operational read) — preserve surface budget and cognition order.
+**Next action:** Phase 3 — workflow + comms integration (Card 3.1+). See parent sprint §5.5.
 
 ---
 

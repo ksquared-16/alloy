@@ -6,10 +6,7 @@ import OperationalAttentionAnchoredDraftPopover from "@/components/admin/drawer/
 import OperationalAttentionEnhanceDraft from "@/components/admin/drawer/OperationalAttentionEnhanceDraft";
 import OperationalReviewAssistBand from "@/components/admin/drawer/OperationalReviewAssistBand";
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
-import {
-    getRecommendationDetailSummary,
-    getRecommendationDrawerStrip,
-} from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceSelectors";
+import { resolveDrawerReviewAssistViewModel } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceViewModels";
 import type { OperationalAttentionAttachmentError } from "@/lib/admin/operationalAttentionEntityAttachment";
 import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
 import {
@@ -50,8 +47,7 @@ export default function OperationalAttentionHeaderStrip({
     const [draftPopoverOpen, setDraftPopoverOpen] = useState(false);
     const payload = overviewData._operational_attention as OpportunityAttentionResult | null | undefined;
     const err = overviewData._operational_attention_error as OperationalAttentionAttachmentError | null | undefined;
-    const recommendationDisplay = getRecommendationDrawerStrip(overviewData);
-    const supportingDetail = getRecommendationDetailSummary(overviewData);
+    const reviewAssist = resolveDrawerReviewAssistViewModel(overviewData);
     const suggestion = overviewData._attention_suggestion as AttentionSuggestionV1 | null | undefined;
 
     const chrome = variant === "chrome";
@@ -108,8 +104,7 @@ export default function OperationalAttentionHeaderStrip({
     const otherReasons = payload.reasons.filter((r) => r.code !== primary.code);
     const factorsJoined = otherReasons.map((r) => r.label).join(", ");
 
-    if (recommendationDisplay) {
-        const stale = payload.auxiliary?.activity_stale;
+    if (reviewAssist) {
         const draftBody = suggestion?.suggested_content?.body?.trim();
 
         const draftSlot = draftBody ? (
@@ -143,11 +138,11 @@ export default function OperationalAttentionHeaderStrip({
                 data-attention-surface="suggestion_primary"
             >
                 <OperationalReviewAssistBand
-                    display={recommendationDisplay}
+                    display={reviewAssist.display}
                     variant={variant}
                     suppressSectionBrandLabel={suppressSectionBrandLabel}
-                    activityStaleLabel={stale?.label ?? null}
-                    supportingDetail={supportingDetail}
+                    readinessChrome={reviewAssist.readinessChrome}
+                    supportingDetail={reviewAssist.supportingDetail}
                     draftSlot={draftSlot}
                     enhanceSlot={suggestion ? <OperationalAttentionEnhanceDraft suggestion={suggestion} /> : null}
                 />

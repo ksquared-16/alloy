@@ -2,6 +2,12 @@
  * Read-order selectors for operational recommendation surfaces (Phase 1 / Card 1.8).
  * Prefer canonical `_operational_recommendation*` fields; fallback to legacy compat shapes.
  * Selectors do not generate copy — they only resolve already-attached server data.
+ *
+ * Field ownership (Phase 2 / Card 2.7):
+ * - Queue L0: `resolveQueueOperationalReadSlot` → operationalRead, typeCue, staleCue, previewBoundary
+ * - Drawer: `resolveDrawerReviewAssistViewModel` → display, supportingDetail, readinessChrome
+ * - Handoff: `getRecommendationHandoff` → operationalRead, whyNow, doNext, readinessNote
+ * - Legacy wire: `_attention_suggestion*`, `why_line` — compatibility only via read-order fallbacks
  */
 
 import type { AttentionSuggestionQueuePreviewV1, AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
@@ -10,8 +16,23 @@ import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunity
 import type {
     OperationalRecommendationQueuePreviewV1,
     OperationalRecommendationV1,
+    RecommendationTypeV1,
     UrgencyBandV1,
 } from "@/lib/adminV2/bos/recommendations/types";
+import {
+    queueTypeCueLabel,
+    recommendationTypeLabel,
+    resolveClassificationContextLine,
+    resolveEscalationChipLabel,
+    shouldShowDrawerTypeLine,
+} from "@/lib/adminV2/bos/recommendations/selectors/recommendationClassificationSemantics";
+import {
+    resolveDrawerReadinessChrome,
+    resolveHandoffTrustNote,
+    resolveQueuePreviewTrustChrome,
+    type ResolvedDrawerReadinessChrome,
+    type ResolvedQueuePreviewTrustChrome,
+} from "@/lib/adminV2/bos/recommendations/selectors/recommendationTrustChrome";
 
 export type RecommendationReadSource =
     | "canonical_queue_preview"
@@ -25,16 +46,25 @@ export type ResolvedQueueRecommendationPreview = {
     nextLabel: string;
     whyLine: string;
     urgencyBand?: UrgencyBandV1 | null;
+    recommendationType?: RecommendationTypeV1 | null;
+    isStale?: boolean;
     source: RecommendationReadSource;
 };
 
 /** L0 queue scan line — structural join of server preview fields only (Phase 2 / Card 2.3). */
 export type ResolvedQueueOperationalReadPreview = {
-    line: string;
-    urgencyBand: UrgencyBandV1 | null;
+    /** Merged next + why scan line for queue L0. */
+    operationalRead: string;
     urgencyChipLabel: string | null;
+    urgencyBand: UrgencyBandV1 | null;
+    /** Quiet type cue when recommendation_type adds scan meaning (Card 2.5). */
+    typeCue: string | null;
+    /** Compact stale cue when preview is_stale (Card 2.6). */
+    staleCue: string | null;
     source: RecommendationReadSource;
 };
+
+export type { ResolvedDrawerReadinessChrome, ResolvedQueuePreviewTrustChrome };
 
 const QUEUE_URGENCY_CHIP_LABELS: Record<UrgencyBandV1, string> = {
     p0_urgent: "Urgent",
@@ -68,10 +98,14 @@ export function resolveQueueOperationalReadPreview(
     const line = formatQueueOperationalReadLine(preview);
     if (!line) return null;
     const urgencyBand = preview.urgencyBand ?? null;
+    const recommendationType = preview.recommendationType ?? null;
+    const staleCue = resolveQueuePreviewTrustChrome(preview.isStale).staleCueLabel;
     return {
-        line,
+        operationalRead: line,
         urgencyBand,
         urgencyChipLabel: queueUrgencyChipLabel(urgencyBand),
+        typeCue: queueTypeCueLabel(recommendationType),
+        staleCue,
         source: preview.source,
     };
 }
@@ -82,15 +116,24 @@ export type ResolvedDrawerRecommendationDisplay = {
     /** Row 2 — why_it_matters / legacy reasoning summary. */
     whyNow: string;
     /** Row 3 — recommended_action.label */
-    nextActionLabel: string;
-    outcomeLine?: string | null;
+    doNext: string;
+    likelyOutcome?: string | null;
     urgencyLabel?: string | null;
     urgencyBand?: UrgencyBandV1 | null;
     urgencyReason?: string | null;
+    /** @deprecated Selector-internal; use readinessChrome trust lines in UI. */
     staleBanner?: string | null;
+    /** @deprecated Selector-internal; use readinessChrome trust lines in UI. */
     confidenceLabel?: string | null;
     signalLabels?: string[];
     isStale?: boolean;
+    /** Restrained operational type cue (Card 2.5). */
+    typeCue?: string | null;
+    /** Policy basis, timing, or workflow context — secondary to operational read. */
+    classificationContextLine?: string | null;
+    /** Discrete escalation chip when recommendation_type is escalation. */
+    escalationChipLabel?: string | null;
+    recommendationType?: RecommendationTypeV1 | null;
     source: RecommendationReadSource;
 };
 
@@ -163,14 +206,24 @@ function parseQueuePreview(
     raw: unknown
 ): OperationalRecommendationQueuePreviewV1 | AttentionSuggestionQueuePreviewV1 | null {
     if (!raw || typeof raw !== "object") return null;
-    const preview = raw as { next_label?: unknown; why_line?: unknown };
+    const preview = raw as {
+        next_label?: unknown;
+        why_line?: unknown;
+        urgency_band?: unknown;
+        recommendation_type?: unknown;
+        is_stale?: unknown;
+    };
     if (typeof preview.next_label !== "string" || typeof preview.why_line !== "string") return null;
     return {
         next_label: preview.next_label,
         why_line: preview.why_line,
-        ...(typeof (preview as OperationalRecommendationQueuePreviewV1).urgency_band === "string"
-            ? { urgency_band: (preview as OperationalRecommendationQueuePreviewV1).urgency_band }
+        ...(typeof preview.urgency_band === "string"
+            ? { urgency_band: preview.urgency_band as UrgencyBandV1 }
             : {}),
+        ...(typeof preview.recommendation_type === "string"
+            ? { recommendation_type: preview.recommendation_type as RecommendationTypeV1 }
+            : {}),
+        ...(preview.is_stale === true ? { is_stale: true } : {}),
     } as OperationalRecommendationQueuePreviewV1 | AttentionSuggestionQueuePreviewV1;
 }
 
@@ -191,13 +244,14 @@ export function getRecommendationQueuePreview(
         const nextLabel = canonical.next_label.trim();
         const whyLine = canonical.why_line.trim();
         if (nextLabel && whyLine) {
+            const canonicalPreview = canonical as OperationalRecommendationQueuePreviewV1;
             return {
                 nextLabel,
                 whyLine,
-                urgencyBand:
-                    "urgency_band" in canonical
-                        ? ((canonical as OperationalRecommendationQueuePreviewV1).urgency_band ?? null)
-                        : null,
+                urgencyBand: "urgency_band" in canonical ? (canonicalPreview.urgency_band ?? null) : null,
+                recommendationType:
+                    "recommendation_type" in canonical ? (canonicalPreview.recommendation_type ?? null) : null,
+                isStale: "is_stale" in canonical ? canonicalPreview.is_stale === true : false,
                 source: "canonical_queue_preview",
             };
         }
@@ -253,11 +307,15 @@ export function getRecommendationDrawerStrip(
             rec.render?.queue?.why_line?.trim();
         const operationalRead = strip?.title?.trim() || rec.title?.trim() || "";
         if (nextActionLabel && whyLine && operationalRead) {
+            const recommendationType = rec.recommendation_type ?? null;
+            const typeCue = shouldShowDrawerTypeLine(recommendationType)
+                ? recommendationTypeLabel(recommendationType)
+                : null;
             return {
                 operationalRead,
                 whyNow: whyLine,
-                nextActionLabel,
-                outcomeLine: strip?.outcome_line?.trim() || rec.likely_outcome?.trim() || null,
+                doNext: nextActionLabel,
+                likelyOutcome: strip?.outcome_line?.trim() || rec.likely_outcome?.trim() || null,
                 urgencyLabel: strip?.urgency_label?.trim() || null,
                 urgencyBand: rec.urgency ?? null,
                 urgencyReason: strip?.urgency_reason?.trim() || rec.urgency_reason?.trim() || null,
@@ -265,6 +323,14 @@ export function getRecommendationDrawerStrip(
                 confidenceLabel: strip?.confidence_label?.trim() || null,
                 signalLabels: strip?.signal_labels?.length ? [...strip.signal_labels] : [],
                 isStale: strip?.is_stale === true,
+                typeCue,
+                classificationContextLine: resolveClassificationContextLine({
+                    recommendationType,
+                    escalationPolicyBasis: rec.escalation_reference?.policy_basis,
+                    communicationTimingHint: rec.communication_reference?.timing_hint,
+                }),
+                escalationChipLabel: resolveEscalationChipLabel(recommendationType),
+                recommendationType,
                 source: "canonical_drawer_strip",
             };
         }
@@ -279,7 +345,7 @@ export function getRecommendationDrawerStrip(
             return {
                 operationalRead,
                 whyNow,
-                nextActionLabel: suggestion.next_action.label.trim(),
+                doNext: suggestion.next_action.label.trim(),
                 source: "legacy_attention_suggestion",
             };
         }
@@ -326,7 +392,41 @@ export function getRecommendationHandoff(
         supportingContext,
         contextLine,
         ctaLabel: "Continue in Orchestrator",
+        readinessNote: resolveHandoffTrustNote({
+            isStale: strip?.is_stale === true,
+            confidenceLabel: strip?.confidence_label,
+        }),
     };
+}
+
+/**
+ * Drawer readiness/trust lines — canonical display + activity/supporting detail from overview.
+ */
+export function resolveDrawerReadinessChromeForOverview(
+    overviewData: Record<string, unknown> | null | undefined,
+    options?: { hasSupportingDetail?: boolean; hasActivitySignal?: boolean }
+): ResolvedDrawerReadinessChrome {
+    const data = asRecord(overviewData);
+    const attention = data?._operational_attention;
+    const activityFromOverview =
+        attention && typeof attention === "object"
+            ? Boolean((attention as OpportunityAttentionResult).auxiliary?.activity_stale?.label?.trim())
+            : false;
+    const hasActivitySignal = options?.hasActivitySignal ?? activityFromOverview;
+
+    const display = getRecommendationDrawerStrip(overviewData);
+    if (display) {
+        return resolveDrawerReadinessChrome({
+            isStale: display.isStale,
+            confidenceLabel: display.confidenceLabel,
+            hasActivitySignal,
+            hasSupportingDetail: options?.hasSupportingDetail,
+        });
+    }
+    if (hasActivitySignal) {
+        return resolveDrawerReadinessChrome({ hasActivitySignal: true });
+    }
+    return { trustLines: [] };
 }
 
 /**

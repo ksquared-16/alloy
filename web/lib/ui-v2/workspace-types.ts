@@ -204,14 +204,10 @@ export type CrmCompactRowSemanticSlots = {
    */
   attentionSuggestionPreview?: { nextLabel: string; whyLine: string } | null;
   /**
-   * L0 operational read — one compressed preview line + optional sequencing chip (queue scan only).
+   * L0 operational read — normalized queue preview slot (Card 2.7).
+   * @see QueueOperationalReadPreviewSlot
    */
-  operationalReadPreview?: {
-    line: string;
-    urgencyChipLabel: string | null;
-    urgencyBand?: string | null;
-    source?: string;
-  } | null;
+  operationalReadPreview?: import("@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceViewModels").QueueOperationalReadPreviewSlot | null;
   /**
    * One-line derived operational narrative (`_operational_summary_preview` on enriched rows when attention resolution runs).
    * Preview-only — full bullets live on entity GET (`_operational_summary`).

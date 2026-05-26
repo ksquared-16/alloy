@@ -8,6 +8,7 @@ import {
     queueUrgencyChipLabel,
     resolveQueueOperationalReadPreview,
 } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceSelectors";
+import { resolveQueueOperationalReadSlot } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceViewModels";
 import { buildEnrollmentCrmRowSemanticSlots } from "@/lib/workspace/viewModels/enrollmentWorkUnitViewModel";
 import { buildTestOperationalRecommendationInput } from "@/tests/adminV2/bos/recommendations/buildOperationalRecommendationV1.test";
 import { projectOperationalRecommendationQueuePreview } from "@/lib/adminV2/bos/recommendations/adapters/projectOperationalRecommendationQueuePreview";
@@ -28,8 +29,8 @@ describe("resolveQueueOperationalReadPreview", () => {
             _operational_recommendation_preview: preview,
         });
         expect(resolved?.source).toBe("canonical_queue_preview");
-        expect(resolved?.line).toContain("Send a warm first response");
-        expect(resolved?.line).toContain("lose momentum");
+        expect(resolved?.operationalRead).toContain("Send a warm first response");
+        expect(resolved?.operationalRead).toContain("lose momentum");
         expect(resolved?.urgencyChipLabel).toBe("Today");
     });
 
@@ -41,7 +42,7 @@ describe("resolveQueueOperationalReadPreview", () => {
             },
         });
         expect(resolved?.source).toBe("legacy_queue_preview");
-        expect(resolved?.line).toContain("Respond to new request");
+        expect(resolved?.operationalRead).toContain("Respond to new request");
     });
 
     it("falls back to why_line only", () => {
@@ -49,7 +50,7 @@ describe("resolveQueueOperationalReadPreview", () => {
             why_line: "Follow up today on tour scheduling.",
         });
         expect(resolved?.source).toBe("legacy_why_line");
-        expect(resolved?.line).toBe("Follow up today on tour scheduling.");
+        expect(resolved?.operationalRead).toBe("Follow up today on tour scheduling.");
         expect(resolved?.urgencyChipLabel).toBeNull();
     });
 
@@ -88,7 +89,7 @@ describe("buildEnrollmentCrmRowSemanticSlots queue compression", () => {
             workUnitKey: "needs_attention",
         });
 
-        expect(slots.operationalReadPreview?.line).toBeTruthy();
+        expect(slots.operationalReadPreview?.operationalRead).toBeTruthy();
         expect(slots.attentionReason).toBeNull();
         expect(slots.operationalSummaryPreview).toBeNull();
         expect(slots.queuePriorityExplanation).toBeNull();
@@ -99,7 +100,7 @@ describe("buildEnrollmentCrmRowSemanticSlots queue compression", () => {
 
 describe("CrmCompactQueuePreview operational read L0", () => {
     it("renders one operational read line without Alloy suggestion", () => {
-        const preview = getRecommendationQueuePreview({
+        const slot = resolveQueueOperationalReadSlot({
             _operational_recommendation_preview: {
                 next_label: "Send a warm first response",
                 why_line: "New inquiries lose momentum when delayed.",
@@ -123,14 +124,7 @@ describe("CrmCompactQueuePreview operational read L0", () => {
                     roomContext: null,
                     ageContext: "",
                     attentionReason: null,
-                    operationalReadPreview: preview
-                        ? {
-                              line: `${preview.nextLabel} — ${preview.whyLine}`,
-                              urgencyChipLabel: "Today",
-                              urgencyBand: "p1_today",
-                              source: preview.source,
-                          }
-                        : null,
+                    operationalReadPreview: slot,
                     operationalNextHint: null,
                 }}
             />,
@@ -145,5 +139,78 @@ describe("CrmCompactQueuePreview operational read L0", () => {
         expect(html).not.toContain("Alloy suggestion");
         expect(html).not.toContain("Suggested next step");
         expect(html).not.toContain('data-queue-preview-slot="attention_suggestion"');
+    });
+
+    it("shows one quiet type cue for communication recommendations", () => {
+        const rec = buildOperationalRecommendationV1(buildTestOperationalRecommendationInput());
+        const preview = projectOperationalRecommendationQueuePreview(rec);
+        const resolved = resolveQueueOperationalReadSlot({
+            _operational_recommendation_preview: preview,
+        });
+        const html = renderToStaticMarkup(
+            <CrmCompactQueuePreview
+                scanMode
+                slots={{
+                    primaryIdentity: "Patel family",
+                    childName: null,
+                    childrenLines: null,
+                    stageLabel: "New",
+                    statusLabel: "Inquiry",
+                    nextStep: null,
+                    lastActivity: null,
+                    commercialValue: null,
+                    contactSnippet: null,
+                    programContext: null,
+                    roomContext: null,
+                    ageContext: "",
+                    attentionReason: null,
+                    operationalReadPreview: resolved,
+                    operationalNextHint: null,
+                }}
+            />,
+        );
+        expect(html).toContain('data-testid="queue-operational-read-type-cue"');
+        expect(html).toContain("Communication");
+        expect(html).not.toMatch(/critical|emergency|AI warning/i);
+        const typeCueCount = (html.match(/data-testid="queue-operational-read-type-cue"/g) ?? []).length;
+        expect(typeCueCount).toBe(1);
+    });
+
+    it("shows compact stale cue while keeping Preview boundary visible", () => {
+        const resolved = resolveQueueOperationalReadSlot({
+            _operational_recommendation_preview: {
+                next_label: "Send a warm first response",
+                why_line: "New inquiries lose momentum when delayed.",
+                urgency_band: "p1_today",
+                recommendation_type: "communication",
+                is_stale: true,
+            },
+        });
+        const html = renderToStaticMarkup(
+            <CrmCompactQueuePreview
+                scanMode
+                slots={{
+                    primaryIdentity: "Patel family",
+                    childName: null,
+                    childrenLines: null,
+                    stageLabel: "New",
+                    statusLabel: "Inquiry",
+                    nextStep: null,
+                    lastActivity: null,
+                    commercialValue: null,
+                    contactSnippet: null,
+                    programContext: null,
+                    roomContext: null,
+                    ageContext: "",
+                    attentionReason: null,
+                    operationalReadPreview: resolved,
+                    operationalNextHint: null,
+                }}
+            />,
+        );
+        expect(html).toContain("Preview");
+        expect(html).toContain('data-testid="queue-operational-read-stale-cue"');
+        expect(html).toContain("Needs refresh");
+        expect(html).not.toMatch(/AI confidence|critical warning|model believes/i);
     });
 });

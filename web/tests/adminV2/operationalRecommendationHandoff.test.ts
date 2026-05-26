@@ -149,6 +149,16 @@ describe("formatOrchestratorHandoffSeedFromCopy", () => {
         expect(seed).toContain("Send a warm first response");
         expect(seed).not.toContain("Follow up with");
         expect(seed).not.toContain("Alloy suggestion");
+        expect(seed).not.toMatch(/AI confidence|model believes|99% sure/i);
+    });
+
+    it("appends compact readiness note when stale without certainty language", () => {
+        const rec = buildOperationalRecommendationV1(buildTestOperationalRecommendationInput());
+        rec.render.drawer_strip.is_stale = true;
+        const handoff = getRecommendationHandoff({ _operational_recommendation: rec });
+        const seed = formatOrchestratorHandoffSeedFromCopy("Chen household", handoff!);
+        expect(seed).toContain("Needs refresh");
+        expect(seed).not.toMatch(/critical|emergency|high confidence/i);
     });
 });
 

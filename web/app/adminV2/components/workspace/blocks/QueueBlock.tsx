@@ -23,6 +23,7 @@ import {
 import { DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS } from "@/lib/ui-v2/queueUiConfig";
 import { normalizePreviewLooseDateTokens } from "@/lib/adminFormatters";
 import { CRM_COMPACT_VALUE_DOT_SEP } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
+import { QUEUE_PREVIEW_BOUNDARY_LABEL } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceViewModels";
 import { QueueRowPlacementPriorityStrip } from "@/app/adminV2/components/workspace/blocks/QueueRowPlacementPriorityStrip";
 import { WorkUnitQueueLaneRowSkeleton } from "@/components/admin/workspace/WorkUnitQueueCompactRowSkeleton";
 import { ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT } from "@/lib/ui-v2/adminV2LoadingGeometry";
@@ -586,6 +587,14 @@ function queueUrgencyChipClass(band: string | null | undefined): string {
   return "border-admin-border bg-alloy-stone/30 text-alloy-midnight/70";
 }
 
+function queueTypeCueChipClass(): string {
+  return "border-alloy-stone/22 bg-alloy-stone/12 text-alloy-midnight/62";
+}
+
+function queueStaleCueChipClass(): string {
+  return "border-alloy-stone/28 bg-alloy-stone/10 text-alloy-midnight/58";
+}
+
 /** L0 queue operational read — one line, optional sequencing chip (BOS Phase 2 / Card 2.3). */
 function CrmCompactOperationalReadPreview({
   preview,
@@ -600,7 +609,9 @@ function CrmCompactOperationalReadPreview({
       data-queue-preview-slot="operational_read"
       title="Preview — open the record for full operational read."
     >
-      <span className="adminv2-ws-crm-queue-preview__operational-read-boundary">Preview</span>
+      <span className="adminv2-ws-crm-queue-preview__operational-read-boundary">
+        {preview.previewBoundary ?? QUEUE_PREVIEW_BOUNDARY_LABEL}
+      </span>
       {preview.urgencyChipLabel ? (
         <span
           className={`adminv2-ws-crm-queue-preview__urgency-chip inline-flex shrink-0 items-center rounded-md border px-1 py-0.5 text-[9px] font-medium leading-tight ${queueUrgencyChipClass(preview.urgencyBand)}`}
@@ -609,8 +620,24 @@ function CrmCompactOperationalReadPreview({
           {preview.urgencyChipLabel}
         </span>
       ) : null}
+      {preview.typeCue ? (
+        <span
+          className={`adminv2-ws-crm-queue-preview__type-cue inline-flex shrink-0 items-center rounded-md border px-1 py-0.5 text-[9px] font-medium leading-tight ${queueTypeCueChipClass()}`}
+          data-testid="queue-operational-read-type-cue"
+        >
+          {preview.typeCue}
+        </span>
+      ) : null}
+      {preview.staleCue ? (
+        <span
+          className={`adminv2-ws-crm-queue-preview__stale-cue inline-flex shrink-0 items-center rounded-md border px-1 py-0.5 text-[9px] font-medium leading-tight ${queueStaleCueChipClass()}`}
+          data-testid="queue-operational-read-stale-cue"
+        >
+          {preview.staleCue}
+        </span>
+      ) : null}
       <span className="adminv2-ws-crm-queue-preview__operational-read-label">Operational read:</span>
-      <span className="adminv2-ws-crm-queue-preview__operational-read-text">{preview.line}</span>
+      <span className="adminv2-ws-crm-queue-preview__operational-read-text">{preview.operationalRead}</span>
     </div>
   );
 }
@@ -642,7 +669,7 @@ export function CrmCompactQueuePreview({
       ? `${slots.stageLabel} · ${slots.statusLabel}`
       : slots.stageLabel || slots.statusLabel || null;
   const noteStress = Boolean(slots.attentionReason?.trim());
-  const operationalStrong = Boolean(slots.attentionReason?.trim() || slots.operationalReadPreview?.line);
+  const operationalStrong = Boolean(slots.attentionReason?.trim() || slots.operationalReadPreview?.operationalRead);
   const nextHint = slots.operationalNextHint?.trim() ?? "";
   const operationalRead = slots.operationalReadPreview;
 
@@ -743,7 +770,7 @@ export function CrmCompactQueuePreview({
                 </span>
               </div>
             ) : null}
-            {operationalRead?.line ? (
+            {operationalRead?.operationalRead ? (
               <CrmCompactOperationalReadPreview preview={operationalRead} layout="scan" />
             ) : null}
             {nextHint ? (
@@ -823,7 +850,7 @@ export function CrmCompactQueuePreview({
               </span>
             </div>
           ) : null}
-          {operationalRead?.line ? (
+          {operationalRead?.operationalRead ? (
             <CrmCompactOperationalReadPreview preview={operationalRead} layout="full" />
           ) : null}
           {nextHint ? (

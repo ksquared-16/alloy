@@ -21,7 +21,7 @@ import { normalizePhone } from "@/lib/contactNormalize";
 import { formatWorkspaceUsdGrouped } from "@/lib/ui-v2/formatWorkspaceCurrency";
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
 import { buildQueueOperationalAttentionPresentation } from "@/lib/opportunities/operationalAttentionExplain";
-import { resolveQueueOperationalReadPreview } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceSelectors";
+import { resolveQueueOperationalReadSlot } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceViewModels";
 import { buildQueueRowPriorityExplanationLine } from "@/lib/opportunities/queueRowPriorityExplanation";
 
 type OppRow = WorkspaceOpportunityQueueRuntime["items"][number];
@@ -200,8 +200,8 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
     const locationContext = (row as { _location_label?: string | null })._location_label?.trim() || null;
 
     const attnPres = buildQueueOperationalAttentionPresentation(row as Record<string, unknown>, { queueScan: true });
-    const operationalReadResolved = resolveQueueOperationalReadPreview(rowRec);
-    const hasOperationalRead = Boolean(operationalReadResolved?.line);
+    const operationalReadResolved = resolveQueueOperationalReadSlot(rowRec);
+    const hasOperationalRead = Boolean(operationalReadResolved?.operationalRead);
 
     const attentionReason = hasOperationalRead
         ? null
@@ -244,14 +244,7 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
           ? buildQueueRowPriorityExplanationLine(rowRec)
           : null;
 
-    const operationalReadPreview = operationalReadResolved
-        ? {
-              line: operationalReadResolved.line,
-              urgencyChipLabel: operationalReadResolved.urgencyChipLabel,
-              urgencyBand: operationalReadResolved.urgencyBand,
-              source: operationalReadResolved.source,
-          }
-        : null;
+    const operationalReadPreview = operationalReadResolved ?? null;
 
     const want = options?.previewWant ?? ((_f: QueueUiRowPreviewField) => true);
     const childrenLinesRefined = deriveCrmCompactChildrenLinesForWorkUnitRow({

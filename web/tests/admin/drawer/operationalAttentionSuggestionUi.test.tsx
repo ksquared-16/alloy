@@ -127,7 +127,7 @@ describe("OperationalAttentionHeaderStrip", () => {
         expect(html).not.toContain("Copy draft");
         expect(html).not.toContain('data-drawer-slot="attention_draft_popover"');
         expect(html).not.toMatch(/\bApply draft\b/);
-        expect(html).toContain("Idle signal");
+        expect(html).toContain("Based on available activity");
         expect(html).toContain("Enhance draft");
         expect(html).not.toContain("Test AI enrichment");
         expect(html).toContain('data-drawer-slot="enhance_draft_action"');
@@ -233,9 +233,12 @@ describe("CrmCompactQueuePreview operational read L0", () => {
                 slots={baseSlots({
                     attentionReason: null,
                     operationalReadPreview: {
-                        line: "Respond to new request — New inquiry is stale.",
+                        operationalRead: "Respond to new request — New inquiry is stale.",
                         urgencyChipLabel: "Today",
                         urgencyBand: "p1_today",
+                        typeCue: null,
+                        staleCue: null,
+                        previewBoundary: "Preview",
                         source: "canonical_queue_preview",
                     },
                     operationalNextHint: null,
