@@ -4,10 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import { PacketReviewRollupView } from "@/components/forms/packets/PacketReviewRollupView";
 import type { PacketReviewRollupV1 } from "@/lib/forms/packets/packetReviewRollupTypes";
 import {
+    fetchPacketReviewInsight,
     fetchPacketReviewRollup,
     patchPacketReview,
     type PacketReviewPatchStatus,
 } from "@/lib/forms/packets/packetReviewApi";
+import type { PacketReviewInsightV1 } from "@/lib/forms/packets/packetReviewInsightTypes";
 import { FormsReviewStatePanel, PacketReviewActionsForm } from "@/components/forms/review";
 import { FORMS_REVIEW_ERROR, FORMS_REVIEW_LOADING } from "@/lib/forms/review/formsReviewPresentation";
 import { enrollmentPacketSubjectLine } from "@/lib/admin/opportunity/enrollmentPacketSummaryPresentation";
@@ -19,6 +21,8 @@ type ModalBodyProps = {
     session: OpportunityPacketPendingSession;
     rollupPhase: RollupLoadPhase;
     rollup: PacketReviewRollupV1 | null;
+    insight: PacketReviewInsightV1 | null;
+    insightLoading: boolean;
     rollupError: string | null;
     notes: string;
     saving: boolean;
@@ -35,6 +39,8 @@ export function OpportunityPacketReviewModalBody({
     session,
     rollupPhase,
     rollup,
+    insight,
+    insightLoading,
     rollupError,
     notes,
     saving,
@@ -91,6 +97,8 @@ export function OpportunityPacketReviewModalBody({
                 <div className="mt-3">
                     <PacketReviewRollupView
                         rollup={rollup}
+                        insight={insight}
+                        insightLoading={insightLoading}
                         placement="modal"
                         reviewActionsSlot={reviewActions}
                     />
@@ -122,6 +130,8 @@ type ModalProps = {
 export function OpportunityPacketReviewModal({ open, session, canMutate, onClose, onReviewApplied }: ModalProps) {
     const [rollupPhase, setRollupPhase] = useState<RollupLoadPhase>("idle");
     const [rollup, setRollup] = useState<PacketReviewRollupV1 | null>(null);
+    const [insight, setInsight] = useState<PacketReviewInsightV1 | null>(null);
+    const [insightLoading, setInsightLoading] = useState(false);
     const [rollupError, setRollupError] = useState<string | null>(null);
     const [notes, setNotes] = useState("");
     const [saving, setSaving] = useState(false);
@@ -134,14 +144,24 @@ export function OpportunityPacketReviewModal({ open, session, canMutate, onClose
         setRollupPhase("loading");
         setRollupError(null);
         setRollup(null);
+        setInsight(null);
+        setInsightLoading(true);
         try {
             const data = await fetchPacketReviewRollup(sessionId);
             setRollup(data);
             setNotes(data.operator_review.notes ?? "");
             setRollupPhase("ready");
+
+            void fetchPacketReviewInsight(sessionId)
+                .then(setInsight)
+                .catch(() => {
+                    /* rollup-derived assist fallback */
+                })
+                .finally(() => setInsightLoading(false));
         } catch (e) {
             setRollupError(e instanceof Error ? e.message : "Load failed");
             setRollupPhase("error");
+            setInsightLoading(false);
         }
     }, [sessionId]);
 
@@ -151,6 +171,8 @@ export function OpportunityPacketReviewModal({ open, session, canMutate, onClose
         } else {
             setRollupPhase("idle");
             setRollup(null);
+            setInsight(null);
+            setInsightLoading(false);
             setRollupError(null);
             setNotes("");
             setSaveErr(null);
@@ -186,6 +208,8 @@ export function OpportunityPacketReviewModal({ open, session, canMutate, onClose
                 session={session}
                 rollupPhase={rollupPhase}
                 rollup={rollup}
+                insight={insight}
+                insightLoading={insightLoading}
                 rollupError={rollupError}
                 notes={notes}
                 saving={saving}

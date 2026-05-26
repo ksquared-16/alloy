@@ -1,6 +1,7 @@
 import React from "react";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { buildPacketReviewInsightV1 } from "@/lib/forms/packets/buildPacketReviewInsightV1";
 import { BosReviewSummaryPlaceholder } from "@/components/forms/review/BosReviewSummaryPlaceholder";
 import { PacketReviewRollupView } from "@/components/forms/packets/PacketReviewRollupView";
 import { CASE_FILE_SECTION_ORDER } from "@/lib/forms/review/formsReviewPresentation";
@@ -40,6 +41,22 @@ describe("BosReviewSummaryPlaceholder UX-H", () => {
         );
         expect(html).toContain('data-testid="bos-review-loading"');
         expect(html).not.toContain('data-testid="bos-review-summary"');
+    });
+
+    it("renders P2-5 insight content when insight prop provided", () => {
+        const insight = buildPacketReviewInsightV1(fixtureRollup());
+        const html = renderToStaticMarkup(<BosReviewSummaryPlaceholder insight={insight} />);
+        expect(html).toContain('data-bos-source="insight"');
+        expect(html).toContain('data-testid="bos-review-checklist"');
+        expect(html).toContain("Review confidence");
+        expect(html).toContain('data-testid="bos-confidence-notes"');
+        expect(html).toContain("submitted form record on file");
+    });
+
+    it("falls back to rollup assist when insight not provided", () => {
+        const html = renderToStaticMarkup(<BosReviewSummaryPlaceholder rollup={fixtureRollup()} />);
+        expect(html).toContain('data-bos-source="rollup"');
+        expect(html).toContain('data-testid="bos-human-authority-note"');
     });
 
     it("renders empty subsection copy when no warnings", () => {

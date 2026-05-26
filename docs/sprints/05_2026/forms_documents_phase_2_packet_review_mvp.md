@@ -799,7 +799,43 @@ cd web && npm run test -- \
 
 ---
 
-## P2-5 — Deterministic BOS packet review insight
+## P2-5 — Deterministic BOS packet review insight ☑ (2026-05-21)
+
+**Prerequisite:** UX-D + UX-H complete — insight renders in `BosReviewSummaryPlaceholder` region 3.
+
+### Shipped
+
+| Piece | Path |
+|-------|------|
+| Contract | `web/lib/forms/packets/packetReviewInsightTypes.ts` — `PacketReviewInsightV1` |
+| Builder | `web/lib/forms/packets/buildPacketReviewInsightV1.ts` — rollup in, insight out |
+| Presentation map | `web/lib/forms/review/packetReviewInsightPresentation.ts` |
+| GET route | `web/app/api/admin/forms/packet-sessions/[packetSessionId]/review-insight/route.ts` |
+| BOS registry | `packet_review_insight` — insight domain, ephemeral, apply_policy none |
+| UI | `PacketReviewRollupView` + session page + opportunity modal fetch insight; fallback to rollup-derived assist |
+
+**Contract fields:** `readiness_state`, `summary_bullets`, `key_changes`, `attention_items`, `suggested_focus`, `review_paths`, `confidence_notes`, `human_authority_note`, `checklist`.
+
+**Tests run**
+
+```bash
+cd web && npm run test -- tests/forms/packetReviewInsight.test.ts tests/admin/packetSessionReviewInsightRoute.test.ts tests/forms/bosReviewAssistPanel.test.tsx tests/bos/bosCapabilityRegistry.test.ts tests/forms/bosReviewAssistPresentation.test.ts tests/admin/opportunity/OpportunityPacketReviewModalBody.test.tsx
+```
+
+**Limitations**
+
+- No LLM enrich (P2-6)
+- Insight route rebuilds rollup server-side (no separate cache)
+- Standalone submission review still uses submission context assist, not `PacketReviewInsightV1`
+- Staleness label deferred (no `completed_at` on rollup contract)
+
+**Next optional cards:** P2-6 AI enrich, P2-7 correction email draft, P2-8 public branding metadata
+
+**Suggested commit message:** `forms-p2-5: deterministic packet review insight and GET route`
+
+---
+
+## P2-5 — Deterministic BOS packet review insight (archived spec)
 
 **Prerequisite:** **UX-D** and **UX-H** are complete — `BosReviewSummaryPlaceholder` provides region 3 structure (`data-testid="bos-review-summary-placeholder"`). P2-5 replaces inner bullets via `deriveBosPacketReviewAssist` / insight model — do not add a parallel assist card elsewhere.
 

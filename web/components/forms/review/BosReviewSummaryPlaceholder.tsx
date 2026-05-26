@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import type { PacketReviewRollupV1 } from "@/lib/forms/packets/packetReviewRollupTypes";
+import type { PacketReviewInsightV1 } from "@/lib/forms/packets/packetReviewInsightTypes";
 import { FormsReviewBadge } from "@/components/forms/review/FormsReviewBadge";
 import {
     BOS_REVIEW_SUMMARY_PLACEHOLDER_TITLE,
@@ -12,6 +13,7 @@ import {
     deriveBosPacketReviewAssist,
     deriveBosSubmissionReviewAssist,
 } from "@/lib/forms/review/bosReviewAssistPresentation";
+import { bosReviewAssistFromPacketInsight } from "@/lib/forms/review/packetReviewInsightPresentation";
 import {
     formsBosAssistAuthorityNote,
     formsBosAssistBulletList,
@@ -27,8 +29,15 @@ type Props = {
     compact?: boolean;
     loading?: boolean;
     rollup?: PacketReviewRollupV1 | null;
+    insight?: PacketReviewInsightV1 | null;
     submissionContext?: BosSubmissionReviewContext | null;
 };
+
+function checklistStatusLabel(status: "ok" | "attention" | "blocked"): string {
+    if (status === "ok") return "OK";
+    if (status === "blocked") return "Blocked";
+    return "Review";
+}
 
 function AssistSubsection({
     testId,
@@ -63,11 +72,47 @@ function AssistSubsection({
 }
 
 function AssistBody({ model, compact }: { model: BosReviewAssistModel; compact?: boolean }) {
+    const summaryBullets = model.summaryBullets?.filter(Boolean) ?? [];
+
     return (
         <div className={clsx("space-y-3", compact && "space-y-2.5")}>
-            <p className={clsx("text-sm leading-snug text-alloy-midnight/85", compact && "text-[13px]")} data-testid="bos-review-summary">
-                {model.summary}
-            </p>
+            {summaryBullets.length > 1 ?
+                <section data-testid="bos-review-summary">
+                    <h3 className={formsBosAssistSubheading}>Summary</h3>
+                    <ul className={formsBosAssistBulletList}>
+                        {summaryBullets.map((item, i) => (
+                            <li key={`summary-${i}`} className="flex gap-2">
+                                <span className="text-alloy-midnight/35" aria-hidden>
+                                    ·
+                                </span>
+                                <span>{item}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            :   <p
+                    className={clsx("text-sm leading-snug text-alloy-midnight/85", compact && "text-[13px]")}
+                    data-testid="bos-review-summary"
+                >
+                    {model.summary}
+                </p>
+            }
+
+            {model.checklist && model.checklist.length > 0 ?
+                <section data-testid="bos-review-checklist">
+                    <h3 className={formsBosAssistSubheading}>Review confidence</h3>
+                    <ul className={formsBosAssistBulletList}>
+                        {model.checklist.map((item) => (
+                            <li key={item.key} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                                <span>{item.label}</span>
+                                <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
+                                    {checklistStatusLabel(item.status)}
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            : null}
 
             <AssistSubsection
                 testId="bos-key-changes"
@@ -82,6 +127,14 @@ function AssistBody({ model, compact }: { model: BosReviewAssistModel; compact?:
                 items={model.attentionItems}
                 emptyCopy="No linkage or intake flags need action."
             />
+
+            {model.confidenceNotes && model.confidenceNotes.length > 0 ?
+                <AssistSubsection
+                    testId="bos-confidence-notes"
+                    title="Confidence notes"
+                    items={model.confidenceNotes}
+                />
+            : null}
 
             <section data-testid="bos-suggested-focus">
                 <h3 className={formsBosAssistSubheading}>Suggested focus</h3>
@@ -105,8 +158,8 @@ function AssistBody({ model, compact }: { model: BosReviewAssistModel; compact?:
             </section>
 
             <p className={formsBosAssistAuthorityNote} data-testid="bos-human-authority-note">
-                Read-only guidance from submitted data. You approve, reject, or request correction — nothing applies
-                automatically.
+                {model.humanAuthorityNote ??
+                    "Read-only guidance from submitted data. You approve, reject, or request correction — nothing applies automatically."}
             </p>
         </div>
     );
@@ -126,10 +179,12 @@ export function BosReviewSummaryPlaceholder({
     compact = false,
     loading = false,
     rollup = null,
+    insight = null,
     submissionContext = null,
 }: Props) {
     const model =
-        rollup ? deriveBosPacketReviewAssist(rollup)
+        insight ? bosReviewAssistFromPacketInsight(insight)
+        : rollup ? deriveBosPacketReviewAssist(rollup)
         : submissionContext ? deriveBosSubmissionReviewAssist(submissionContext)
         : deriveBosEmptyReviewAssist();
 
@@ -138,6 +193,7 @@ export function BosReviewSummaryPlaceholder({
             id={FORMS_CASE_FILE_SECTION.bosSummary}
             data-testid="bos-review-summary-placeholder"
             data-bos-readiness={model.readinessKey}
+            data-bos-source={insight ? "insight" : rollup ? "rollup" : submissionContext ? "submission" : "empty"}
             className={clsx(formsBosAssistSurface, className)}
             aria-label={BOS_REVIEW_SUMMARY_PLACEHOLDER_TITLE}
         >

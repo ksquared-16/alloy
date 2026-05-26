@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import type { PacketReviewRollupV1 } from "@/lib/forms/packets/packetReviewRollupTypes";
+import type { PacketReviewInsightV1 } from "@/lib/forms/packets/packetReviewInsightTypes";
 import {
     BosReviewSummaryPlaceholder,
     DocumentsRecordsPanel,
@@ -29,6 +30,8 @@ export type PacketReviewTechnicalDetails = {
 
 type Props = {
     rollup: PacketReviewRollupV1;
+    insight?: PacketReviewInsightV1 | null;
+    insightLoading?: boolean;
     technicalDetails?: PacketReviewTechnicalDetails | null;
     placement?: "page" | "modal";
     reviewActionsSlot?: React.ReactNode;
@@ -48,6 +51,8 @@ async function openDocumentSignedUrl(docId: string): Promise<string | null> {
 
 export function PacketReviewRollupView({
     rollup,
+    insight = null,
+    insightLoading = false,
     technicalDetails,
     placement = "page",
     reviewActionsSlot,
@@ -76,7 +81,14 @@ export function PacketReviewRollupView({
             compact={compact}
             header={<PacketCaseFileHeader rollup={rollup} />}
             intakeContext={<PacketIntakeContextPanel rollup={rollup} />}
-            bosSummary={<BosReviewSummaryPlaceholder rollup={rollup} compact={compact} />}
+            bosSummary={
+                <BosReviewSummaryPlaceholder
+                    rollup={rollup}
+                    insight={insight}
+                    compact={compact}
+                    loading={insightLoading && !insight}
+                />
+            }
             whatChanged={<WhatChangedPanel warnings={rollup.operator_review.warnings} />}
             needsAttention={needsAttention}
             submittedForms={<PacketSubmittedFormsPanel rollup={rollup} />}

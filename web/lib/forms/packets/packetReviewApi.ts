@@ -1,9 +1,14 @@
 import type { PacketReviewRollupV1 } from "@/lib/forms/packets/packetReviewRollupTypes";
+import type { PacketReviewInsightV1 } from "@/lib/forms/packets/packetReviewInsightTypes";
 
 export type PacketReviewPatchStatus = "approved" | "rejected" | "needs_correction";
 
 export function packetReviewRollupUrl(packetSessionId: string): string {
     return `/api/admin/forms/packet-sessions/${encodeURIComponent(packetSessionId)}/review-rollup`;
+}
+
+export function packetReviewInsightUrl(packetSessionId: string): string {
+    return `/api/admin/forms/packet-sessions/${encodeURIComponent(packetSessionId)}/review-insight`;
 }
 
 export function packetReviewPatchUrl(packetSessionId: string): string {
@@ -32,6 +37,18 @@ export async function fetchPacketReviewRollup(packetSessionId: string): Promise<
     if (!res.ok) throw new Error(j.error ?? `Could not load review (${res.status})`);
     if (!j.ok || !j.rollup) throw new Error("Invalid review rollup response");
     return j.rollup;
+}
+
+export async function fetchPacketReviewInsight(packetSessionId: string): Promise<PacketReviewInsightV1> {
+    const res = await fetch(packetReviewInsightUrl(packetSessionId), { credentials: "include" });
+    const j = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        insight?: PacketReviewInsightV1;
+        error?: string;
+    };
+    if (!res.ok) throw new Error(j.error ?? `Could not load review insight (${res.status})`);
+    if (!j.ok || !j.insight) throw new Error("Invalid review insight response");
+    return j.insight;
 }
 
 export async function patchPacketReview(

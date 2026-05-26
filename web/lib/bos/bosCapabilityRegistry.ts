@@ -182,6 +182,25 @@ export const BOS_CAPABILITY_REGISTRY: readonly BosCapabilityDefinition[] = [
         apply_route_family: "/api/admin/agent/v2",
         source_modules: ["web/lib/agent/v2/"],
     },
+    {
+        capability_key: "packet_review_insight",
+        label: "Packet review insight",
+        domain: "insight",
+        proposal_mode: "ephemeral",
+        apply_policy: "none",
+        default_risk_level: "none",
+        requires_human_approval: false,
+        legacy_agent_keys: [],
+        read_classes: ["workflow_read"],
+        write_class: "none",
+        org_policy_features: [],
+        propose_permission_keys: [],
+        apply_permission_keys: [],
+        source_modules: [
+            "web/lib/forms/packets/buildPacketReviewInsightV1.ts",
+            "web/app/api/admin/forms/packet-sessions/[packetSessionId]/review-insight/route.ts",
+        ],
+    },
 ] as const;
 
 const REGISTRY_BY_KEY: ReadonlyMap<BosCapabilityKey, BosCapabilityDefinition> = new Map(

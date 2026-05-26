@@ -13,7 +13,8 @@ export type BosCapabilityKey =
     | "job_overview_layout"
     | "agent_v0_queue_definition"
     | "agent_v1_record_overview_layout"
-    | "agent_v2_field_visibility";
+    | "agent_v2_field_visibility"
+    | "packet_review_insight";
 
 /** Product domain for routing, policy, and UI grouping. */
 export type BosCapabilityDomain = "orchestration" | "config" | "operational" | "insight";

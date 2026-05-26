@@ -19,6 +19,7 @@ const EXPECTED_AUDITED_KEYS: BosCapabilityKey[] = [
     "agent_v0_queue_definition",
     "agent_v1_record_overview_layout",
     "agent_v2_field_visibility",
+    "packet_review_insight",
 ];
 
 describe("bosCapabilityRegistry", () => {
@@ -32,6 +33,7 @@ describe("bosCapabilityRegistry", () => {
             "orchestrator",
             "needs_attention_suggestion",
             "attention_enrich",
+            "packet_review_insight",
         ];
         for (const key of noApproval) {
             expect(getBosCapabilityDefinition(key).requires_human_approval).toBe(false);
@@ -51,5 +53,13 @@ describe("bosCapabilityRegistry", () => {
         const o = getBosCapabilityDefinition("orchestrator");
         expect(o.proposal_mode).toBe("none");
         expect(o.apply_policy).toBe("none");
+    });
+
+    it("packet_review_insight is read-only insight", () => {
+        const def = getBosCapabilityDefinition("packet_review_insight");
+        expect(def.domain).toBe("insight");
+        expect(def.proposal_mode).toBe("ephemeral");
+        expect(def.apply_policy).toBe("none");
+        expect(def.write_class).toBe("none");
     });
 });

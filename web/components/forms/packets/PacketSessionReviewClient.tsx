@@ -7,6 +7,7 @@ import {
     type PacketReviewTechnicalDetails,
 } from "@/components/forms/packets/PacketReviewRollupView";
 import type { PacketReviewRollupV1 } from "@/lib/forms/packets/packetReviewRollupTypes";
+import type { PacketReviewInsightV1 } from "@/lib/forms/packets/packetReviewInsightTypes";
 import { FormsReviewStatePanel, PacketReviewActionsForm } from "@/components/forms/review";
 import { FORMS_REVIEW_ERROR, FORMS_REVIEW_LOADING } from "@/lib/forms/review/formsReviewPresentation";
 
@@ -24,6 +25,8 @@ export function PacketSessionReviewClient({
     const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
     const [err, setErr] = useState<string | null>(null);
     const [rollup, setRollup] = useState<PacketReviewRollupV1 | null>(null);
+    const [insight, setInsight] = useState<PacketReviewInsightV1 | null>(null);
+    const [insightLoading, setInsightLoading] = useState(false);
     const [notes, setNotes] = useState("");
     const [saving, setSaving] = useState(false);
     const [saveErr, setSaveErr] = useState<string | null>(null);
@@ -31,6 +34,8 @@ export function PacketSessionReviewClient({
     const load = useCallback(async () => {
         setPhase("loading");
         setErr(null);
+        setInsight(null);
+        setInsightLoading(true);
         try {
             const res = await fetch(
                 `/api/admin/forms/packet-sessions/${encodeURIComponent(packetSessionId)}/review-rollup`,
@@ -46,9 +51,29 @@ export function PacketSessionReviewClient({
             setRollup(j.rollup);
             setNotes(j.rollup.operator_review.notes ?? "");
             setPhase("ready");
+
+            void fetch(
+                `/api/admin/forms/packet-sessions/${encodeURIComponent(packetSessionId)}/review-insight`,
+                { credentials: "include" }
+            )
+                .then(async (insightRes) => {
+                    const insightJson = (await insightRes.json().catch(() => ({}))) as {
+                        ok?: boolean;
+                        insight?: PacketReviewInsightV1;
+                    };
+                    if (insightRes.ok && insightJson.ok && insightJson.insight) {
+                        setInsight(insightJson.insight);
+                    }
+                })
+                .catch(() => {
+                    /* fallback to rollup-derived assist */
+                })
+                .finally(() => setInsightLoading(false));
         } catch (e) {
             setErr(e instanceof Error ? e.message : "Load failed");
             setRollup(null);
+            setInsight(null);
+            setInsightLoading(false);
             setPhase("error");
         }
     }, [packetSessionId]);
@@ -122,6 +147,8 @@ export function PacketSessionReviewClient({
             : rollup ?
                 <PacketReviewRollupView
                     rollup={rollup}
+                    insight={insight}
+                    insightLoading={insightLoading}
                     technicalDetails={technicalDetails}
                     placement="page"
                     reviewActionsSlot={reviewActions}
