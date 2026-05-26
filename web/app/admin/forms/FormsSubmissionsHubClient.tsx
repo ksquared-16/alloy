@@ -18,6 +18,11 @@ type SubmissionRow = {
     created_at: string;
     submitted_at: string | null;
     form_definition_id: string;
+    person_id?: string | null;
+    customer_id?: string | null;
+    customer_member_id?: string | null;
+    opportunity_id?: string | null;
+    payload?: { meta?: Record<string, unknown> };
 };
 
 type FormRow = {
@@ -82,7 +87,21 @@ export default function FormsSubmissionsHubClient() {
             :   <ul className={opGroupedSurface} data-testid="submissions-hub-list">
                     {submissions.map((row) => {
                         const formName = formsById[row.form_definition_id] ?? "Form";
-                        const linkage = submissionListLinkageBadge(row);
+                        const linkage = submissionListLinkageBadge({
+                            status: row.status,
+                            payloadMeta: row.payload?.meta,
+                            attachRow: {
+                                person_id: row.person_id ?? null,
+                                customer_id: row.customer_id ?? null,
+                                customer_member_id: row.customer_member_id ?? null,
+                                opportunity_id: row.opportunity_id ?? null,
+                            },
+                        });
+                        const linkageBadge =
+                            linkage.kind === "none" ? null
+                            : linkage.kind === "needs_review" ?
+                                { label: "Needs review", variant: "warning" as const }
+                            :   { label: "Link CRM", variant: "neutral" as const };
                         return (
                             <li key={row.id} className="px-4 py-3">
                                 <div className="flex flex-wrap items-start justify-between gap-2">
@@ -101,8 +120,11 @@ export default function FormsSubmissionsHubClient() {
                                     </div>
                                     <div className="flex flex-wrap items-center gap-2">
                                         <StatusBadge label={row.status} variant={getStatusVariant(row.status)} />
-                                        {linkage ?
-                                            <StatusBadge label={linkage.label} variant={linkage.variant} />
+                                        {linkageBadge ?
+                                            <StatusBadge
+                                                label={linkageBadge.label}
+                                                variant={linkageBadge.variant}
+                                            />
                                         :   null}
                                     </div>
                                 </div>
