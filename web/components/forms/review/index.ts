@@ -1,4 +1,5 @@
 export { BosReviewSummaryPlaceholder } from "@/components/forms/review/BosReviewSummaryPlaceholder";
+export type { BosSubmissionReviewContext } from "@/components/forms/review/BosReviewSummaryPlaceholder";
 export { CaseFileReviewActions } from "@/components/forms/review/CaseFileReviewActions";
 export { CaseFileSection } from "@/components/forms/review/CaseFileSection";
 export { ArtifactsPanel, intakeArtifactsFromNormalizedRows } from "@/components/forms/review/ArtifactsPanel";

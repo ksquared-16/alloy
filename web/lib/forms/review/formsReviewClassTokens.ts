@@ -64,5 +64,13 @@ export const formsIntakeProvenanceMeta = "text-[11px] leading-snug text-alloy-mi
 /** Group legend under artifact groups */
 export const formsIntakeArtifactLegend = "text-[11px] leading-snug text-alloy-midnight/50";
 
-/** Read-only answer embed container */
-export const formsCaseFileAnswerSurface = "rounded-lg border border-admin-border bg-alloy-stone/15 p-3";
+/** BOS assist region — calm operational framing (UX-H). */
+export const formsBosAssistSurface =
+    "rounded-lg border border-admin-border bg-white px-3.5 py-3.5 shadow-sm";
+
+export const formsBosAssistSubheading =
+    "text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/50";
+
+export const formsBosAssistBulletList = "mt-1 space-y-1 text-xs leading-snug text-alloy-midnight/80";
+
+export const formsBosAssistAuthorityNote = "text-[11px] leading-snug text-alloy-midnight/50";

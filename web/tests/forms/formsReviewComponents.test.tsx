@@ -81,10 +81,11 @@ describe("forms review components", () => {
         expect(empty).toContain('data-testid="forms-review-state-empty"');
     });
 
-    it("BosReviewSummaryPlaceholder reserves assist region", () => {
+    it("BosReviewSummaryPlaceholder reserves assist region with readiness framing", () => {
         const html = renderToStaticMarkup(<BosReviewSummaryPlaceholder />);
         expect(html).toContain('data-testid="bos-review-summary-placeholder"');
         expect(html).toContain("Review assist");
+        expect(html).toContain('data-testid="bos-human-authority-note"');
         expect(html).toContain("read-only");
         expect(html).not.toContain("chat");
     });

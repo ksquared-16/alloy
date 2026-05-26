@@ -76,7 +76,7 @@ export function PacketReviewRollupView({
             compact={compact}
             header={<PacketCaseFileHeader rollup={rollup} />}
             intakeContext={<PacketIntakeContextPanel rollup={rollup} />}
-            bosSummary={<BosReviewSummaryPlaceholder />}
+            bosSummary={<BosReviewSummaryPlaceholder rollup={rollup} compact={compact} />}
             whatChanged={<WhatChangedPanel warnings={rollup.operator_review.warnings} />}
             needsAttention={needsAttention}
             submittedForms={<PacketSubmittedFormsPanel rollup={rollup} />}

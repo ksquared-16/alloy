@@ -801,7 +801,7 @@ cd web && npm run test -- \
 
 ## P2-5 — Deterministic BOS packet review insight
 
-**Prerequisite:** Complete [`forms_documents_operational_experience_hardening.md`](./forms_documents_operational_experience_hardening.md) cards **UX-D** (case-file layout) and **UX-H** (BOS summary region) so insight renders in the designed slot — not mid-page JSON.
+**Prerequisite:** **UX-D** and **UX-H** are complete — `BosReviewSummaryPlaceholder` provides region 3 structure (`data-testid="bos-review-summary-placeholder"`). P2-5 replaces inner bullets via `deriveBosPacketReviewAssist` / insight model — do not add a parallel assist card elsewhere.
 
 ### 1. Goal
 
@@ -815,8 +815,8 @@ Ship **read-only** deterministic `PacketReviewInsightV1` + GET route + collapsib
 | `web/lib/forms/packets/buildPacketReviewInsightV1.ts` | **New** — from rollup |
 | `web/app/api/admin/forms/packet-sessions/[packetSessionId]/review-insight/route.ts` | **New** — GET |
 | `web/lib/bos/bosCapabilityRegistry.ts` | **Add** `enrollment_packet_review_insight` entry |
-| `web/components/forms/packets/PacketReviewAssistCard.tsx` | **New** — collapsible, load on expand |
-| `web/components/forms/packets/PacketReviewRollupView.tsx` | **Embed** assist card |
+| `web/components/forms/review/BosReviewSummaryPlaceholder.tsx` | **Extend** — P2-5 insight bullets replace deterministic placeholders |
+| `web/components/forms/packets/PacketReviewRollupView.tsx` | **Pass** insight model into assist region (optional fetch parent) |
 | `web/tests/forms/packetReviewInsight.test.ts` | **New** |
 | `web/tests/admin/packetSessionReviewInsightRoute.test.ts` | **New** |
 

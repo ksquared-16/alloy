@@ -35,7 +35,8 @@ import {
 } from "@/lib/forms/submissionLinkageReviewUx";
 import { effectiveManualLinkUuid } from "@/lib/admin/forms/crmEntitySearchShared";
 import CrmEntitySearchPicker from "@/components/forms/admin/CrmEntitySearchPicker";
-import { CaseFileSection, SubmissionCaseFileHeader, SubmissionReviewTechnicalPanel } from "@/components/forms/review";
+import { CaseFileSection, SubmissionCaseFileHeader, SubmissionReviewTechnicalPanel, BosReviewSummaryPlaceholder } from "@/components/forms/review";
+import type { BosSubmissionReviewContext } from "@/components/forms/review/BosReviewSummaryPlaceholder";
 import { FORMS_CASE_FILE_SECTION } from "@/lib/forms/review/formsReviewPresentation";
 
 type LinkedDoc = {
@@ -365,6 +366,19 @@ export default function FormSubmissionDetailClient() {
         });
     }, [row, canMutate]);
 
+    const bosSubmissionContext = useMemo((): BosSubmissionReviewContext | null => {
+        if (!row) return null;
+        return {
+            status: row.status,
+            formTitle: schema?.title ?? "Form submission",
+            linkageAttention: linkageCalloutVisible,
+            linkageReasons: linkageCalloutReasons,
+            intakeStatusLabel: intakeSection?.statusLabel ?? null,
+            linkedDocumentsCount: row.linked_documents.length,
+            recommendedActions: nextSteps,
+        };
+    }, [row, schema?.title, linkageCalloutVisible, linkageCalloutReasons, intakeSection?.statusLabel, nextSteps]);
+
     if (!formId || !submissionId) {
         return <p className="p-6 text-sm text-red-700">Missing route params.</p>;
     }
@@ -411,6 +425,8 @@ export default function FormSubmissionDetailClient() {
                             createdAt={row.created_at}
                             viewerTimezone={viewerTz}
                         />
+
+                        <BosReviewSummaryPlaceholder submissionContext={bosSubmissionContext} />
 
                         {linkageCalloutVisible ?
                             <CaseFileSection

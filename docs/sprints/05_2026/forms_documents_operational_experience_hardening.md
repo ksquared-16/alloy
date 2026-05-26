@@ -634,31 +634,53 @@ cd web && npm run test -- tests/forms/intakeArtifactsPanel.test.tsx tests/forms/
 
 ---
 
-### UX-H — BOS summary placeholder region
+### UX-H — BOS summary placeholder region ☑ (2026-05-21)
 
-**Goal:** Reserve read-only **Review assist** region with copy contract for P2-5 — **no LLM, no new routes**.
+**Goal:** Integrated review-assist framing layer — readiness, guidance structure, human authority — without AI or P2-5 insight.
 
-**Files likely touched:**
+**Status:** Shipped on packet review (page + modal) and standalone submission detail header band.
 
-- `web/components/forms/review/BosReviewSummaryPlaceholder.tsx` *(new)*
-- `web/components/forms/packets/PacketReviewRollupView.tsx`
-- `docs/sprints/05_2026/forms_documents_phase_2_packet_review_mvp.md` *(P2-5 card note: slot exists)*
+**Structure (region 3 in case-file layout)**
 
-**Tasks:**
+| Slot | `data-testid` | Source |
+|------|---------------|--------|
+| Readiness badge | `bos-readiness-badge` | Rollup/submission state |
+| Summary | `bos-review-summary` | Deterministic copy |
+| Key changes | `bos-key-changes` | Rollup warnings (max 3) |
+| Attention | `bos-attention-items` | Linkage/intake flags (max 3) |
+| Suggested focus | `bos-suggested-focus` | State-derived orientation |
+| Review paths | `bos-action-guidance` | Approve / investigate / documents framing |
+| Authority note | `bos-human-authority-note` | Operator owns decisions |
 
-1. Render region 3 card with title “Review assist” and deterministic empty copy.
-2. Add `data-testid="bos-review-summary-placeholder"`.
-3. Document bullet rules in component docblock for P2-5 implementer.
+**Files changed**
 
-**Acceptance criteria:**
+- `web/lib/forms/review/bosReviewAssistPresentation.ts` — derive assist model from rollup/submission
+- `web/lib/forms/review/packetNeedsAttentionItems.ts` — shared attention builder (lib, no component import)
+- `web/components/forms/review/BosReviewSummaryPlaceholder.tsx` — full assist shell + P2-5 docblock contract
+- `web/components/forms/packets/PacketReviewRollupView.tsx` — passes `rollup`
+- `web/app/admin/forms/.../FormSubmissionDetailClient.tsx` — secondary alignment via `submissionContext`
+- `web/lib/forms/review/formsReviewClassTokens.ts` — BOS surface tokens
 
-- [ ] Placeholder visible on packet page and opportunity modal.
-- [ ] No network calls; no BOS registry changes.
-- [ ] P2-5 can replace inner content without layout refactor.
+**Tests run**
 
-**Testing:** Modal body test asserts placeholder present.
+```bash
+cd web && npm run test -- tests/forms/bosReviewAssistPresentation.test.ts tests/forms/bosReviewAssistPanel.test.tsx tests/forms/formsReviewComponents.test.tsx tests/forms/packetReviewCaseFileLayout.test.tsx tests/admin/opportunity/OpportunityPacketReviewModalBody.test.tsx
+```
 
-**Rollback:** Remove component; collapse region 3 in layout.
+**Acceptance criteria**
+
+- [x] Region 3 visible on packet page and opportunity modal with structured subsections
+- [x] Readiness states from existing rollup/review/linkage data only
+- [x] No network calls; no BOS registry changes
+- [x] P2-5 can replace inner bullet content without layout refactor (`deriveBosPacketReviewAssist` hook point)
+
+**Remaining debt before P2-5**
+
+- `buildPacketReviewInsightV1` + GET route not started
+- Loading state wired but parent never sets `loading` yet (rollup SSR is synchronous today)
+- Submission assist uses `recommendedNextAction` first line — P2-5 may unify packet + submission insight shape
+
+**Rollback:** Revert `BosReviewSummaryPlaceholder` to UX-G empty aside; remove `rollup` prop from `PacketReviewRollupView`.
 
 ---
 
