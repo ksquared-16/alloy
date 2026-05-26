@@ -13,7 +13,6 @@ import { FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
 import { parseOperatorContext } from "@/lib/forms/operatorFormGuidance";
 import { FORMS_TECHNICAL_DISCLOSURE } from "@/lib/forms/review/formsReviewTechnicalDisclosure";
 import { submissionListLinkageBadge } from "@/lib/forms/submissionLinkageReviewUx";
-import type { AdminViewerTimezoneValue } from "@/contexts/AdminViewerTimezoneContext";
 import {
     opCaseFileCanvas,
     opGroupedRowInner,
@@ -74,7 +73,8 @@ function purposeLine(metadata: Record<string, unknown> | undefined, description:
 }
 
 type Props = {
-    viewerTz: AdminViewerTimezoneValue;
+    /** IANA timezone from useAdminViewerTimezone() */
+    viewerTz: string;
     forms: IntakeWorkspaceFormRow[];
     sessions: IntakeWorkspaceSessionRow[];
     packets: IntakeWorkspacePacketRow[];
