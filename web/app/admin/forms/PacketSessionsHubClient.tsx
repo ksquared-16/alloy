@@ -15,7 +15,7 @@ import { FORMS_MODULE_ROUTES, formsWorkspaceBreadcrumbs } from "@/lib/forms/form
 import {
     groupPacketSessionsIntoInboxLanes,
     PACKET_SESSION_INBOX_LANE_COPY,
-    type PacketSessionInboxLaneKey,
+    type PacketSessionInboxPrimaryLaneKey,
     type PacketSessionInboxRow,
 } from "@/lib/forms/packets/packetSessionsInboxPresentation";
 import {
@@ -40,7 +40,7 @@ function InboxLaneSection({
     viewerTz,
     emphasize,
 }: {
-    laneKey: PacketSessionInboxLaneKey;
+    laneKey: PacketSessionInboxPrimaryLaneKey;
     sessions: PacketSessionInboxRow[];
     viewerTz: string;
     emphasize?: boolean;

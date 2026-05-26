@@ -61,8 +61,10 @@ export const PACKET_SESSION_INBOX_LANE_COPY = {
     },
 } as const;
 
+export type PacketSessionInboxPrimaryLaneKey = keyof typeof PACKET_SESSION_INBOX_LANE_COPY;
+
 /** Primary inbox lanes shown above the fold (excludes cancelled / uncategorized). */
-export const PACKET_SESSION_INBOX_PRIMARY_LANES: PacketSessionInboxLaneKey[] = [
+export const PACKET_SESSION_INBOX_PRIMARY_LANES: PacketSessionInboxPrimaryLaneKey[] = [
     "needsReview",
     "needsCorrection",
     "inProgress",
