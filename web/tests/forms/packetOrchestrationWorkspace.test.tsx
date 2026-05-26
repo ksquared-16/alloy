@@ -80,7 +80,7 @@ describe("PacketBuilderWorkspaceLayout OW-4", () => {
         expect(html).toContain('data-testid="packet-region-sessions"');
         expect(html).toContain('data-testid="packet-step-composition"');
         expect(html).toContain('data-testid="packet-distribution-launch-panel"');
-        expect(html).toContain("Launch packet link");
+        expect(html).toContain("Launch packet");
         expect(html).toContain("Session inbox");
         expect(html).toContain("<details");
     });

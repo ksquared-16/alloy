@@ -147,7 +147,7 @@ export function FormLifecycleWorkspaceLayout({
                         disabled={previewBusy || creating || !canMutate || !hasPublished}
                         data-testid="form-action-preview"
                     >
-                        {previewBusy ? "Opening…" : "Preview form"}
+                        {previewBusy ? "Opening…" : "Preview recipient experience"}
                     </button>
                     <button
                         type="button"
@@ -156,7 +156,7 @@ export function FormLifecycleWorkspaceLayout({
                         disabled={creating || !canMutate || !hasPublished}
                         data-testid="form-action-create-link"
                     >
-                        {creating ? "Creating…" : "Create public link"}
+                        {creating ? "Creating…" : "Share intake"}
                     </button>
                     <Link href={`#${FORM_LIFECYCLE_ANCHORS.design}`} className={intakeWorkspaceBtnSecondary}>
                         New draft
@@ -241,7 +241,7 @@ export function FormLifecycleWorkspaceLayout({
                 </section>
 
                 <section id={FORM_LIFECYCLE_ANCHORS.distribute} className={opRegionSeparator} data-testid="form-region-distribute">
-                    <IntakeWorkspaceRegion title="Distribution" lead="Where this form is shared for intake.">
+                    <IntakeWorkspaceRegion title="Distribution" lead="Send or publish this intake flow.">
                         <FormDistributionPanel
                             formKey={detail.key}
                             canMutate={canMutate}

@@ -55,7 +55,7 @@ describe("FormDistributionPanel OW-3", () => {
 
         expect(html).toContain('data-testid="form-distribution-panel"');
         expect(html).toContain("Family intake");
-        expect(html).toContain("Create public link");
+        expect(html).toContain("Share intake");
         expect(html).not.toContain("<table");
     });
 });

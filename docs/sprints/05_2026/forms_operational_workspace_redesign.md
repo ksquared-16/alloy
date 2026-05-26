@@ -2,7 +2,7 @@
 
 **Path:** `docs/sprints/05_2026/forms_operational_workspace_redesign.md`  
 **Date:** May 2026  
-**Status:** **OW-0 complete** · **OW-1 shipped** · **OW-2 shipped** · **OW-3 shipped** · **OW-4 shipped** · **OW-5 shipped** · **OW-6 shipped**  
+**Status:** **OW-0 complete** · **OW-1 shipped** · **OW-2 shipped** · **OW-3 shipped** · **OW-4 shipped** · **OW-5 shipped** · **OW-6 shipped** · **OW-7 shipped**  
 **Scope:** Forms/Documents **operational workspace layer** — hub, form lifecycle, packet orchestration, distribution, session/submission navigation. **Not** review rollup contracts, BOS logic, or forms engine rewrite.
 
 **Related (already shipped):**
@@ -499,15 +499,28 @@ Intake workspace | Forms | Packet definitions | Packet sessions
 
 ---
 
-### OW-7 — Distribution panels (form + packet)
+### OW-7 — Distribution panels (form + packet) ☑
 
 **Goal:** Unified distribute UX.
 
-**Surfaces:** Public link sections in form detail + packet detail.
+**Shipped (May 2026):**
 
-**Tasks:** Extract `DistributionLinksPanel` shared component; grouped active links; token-once panel styling with PX tokens.
+| Area | Detail |
+|------|--------|
+| Shared panel | `DistributionLinksPanel.tsx` — form + packet modes, one-time URL panel, active/inactive link list |
+| Presentation | `distributionPresentation.ts` — operational copy, link labels, preview detection |
+| Form surface | `FormDistributionPanel.tsx` — thin wrapper; lifecycle orientation uses “Share intake” / “Preview recipient experience” |
+| Packet surface | `PacketDistributionLaunchPanel.tsx` — thin wrapper; builder region titled “Distribution” |
+| Security | One-time panel: “Copy this link now” + “will not be shown again”; embed credential in collapsed `<details>` |
+| Tests | `distributionPresentation.test.ts`, `distributionLinksPanel.test.tsx`; updated lifecycle/packet workspace tests |
 
-**Acceptance:** Form and packet distribution regions share one component family.
+**Acceptance:**
+
+- [x] Form and packet distribution share one component family.  
+- [x] Public links no longer feel primarily technical (no token prefix as identity).  
+- [x] One-time URL security semantics preserved.  
+- [x] Preview/create/launch actions remain accessible.  
+- [x] No backend contract or token security changes.
 
 ---
 

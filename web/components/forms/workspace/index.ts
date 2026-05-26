@@ -4,6 +4,7 @@ export { FormsBreadcrumbs } from "@/components/forms/workspace/FormsBreadcrumbs"
 export { FormsModuleNav } from "@/components/forms/workspace/FormsModuleNav";
 export { FormsOperationalLink } from "@/components/forms/workspace/FormsOperationalLink";
 export { FormsWorkspaceChrome } from "@/components/forms/workspace/FormsWorkspaceChrome";
+export { DistributionLinksPanel } from "@/components/forms/workspace/DistributionLinksPanel";
 export { FormDistributionPanel } from "@/components/forms/workspace/FormDistributionPanel";
 export { FormIntakePreviewPanel } from "@/components/forms/workspace/FormIntakePreviewPanel";
 export { PacketBuilderWorkspaceLayout } from "@/components/forms/workspace/PacketBuilderWorkspaceLayout";

@@ -229,7 +229,7 @@ export function PacketBuilderWorkspaceLayout({
                 </section>
 
                 <section id="packet-distribution" className={opRegionSeparator} data-testid="packet-region-distribution">
-                    <IntakeWorkspaceRegion title="Distribution & launch" lead="Share this workflow with families or staff.">
+                    <IntakeWorkspaceRegion title="Distribution" lead="Send or publish this intake workflow.">
                         <PacketDistributionLaunchPanel
                             packetName={defName}
                             busy={busy}
