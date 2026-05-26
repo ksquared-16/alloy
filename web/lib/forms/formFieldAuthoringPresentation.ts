@@ -98,6 +98,44 @@ export type PrefillSourcePresentation = {
     detail: string | null;
 };
 
+/** Operator-facing prefill behavior — no schema semantic changes (FD-5). */
+export type PrefillModeKey = "context_prefill" | "manual_only" | "locked_crm" | "editable_prefill";
+
+export type PrefillModePresentation = {
+    key: PrefillModeKey;
+    label: string;
+    detail: string | null;
+};
+
+export const PREFILL_MODE_COPY: Record<PrefillModeKey, string> = {
+    context_prefill: "Prefills when context exists",
+    manual_only: "Always completed manually",
+    locked_crm: "Locked from CRM",
+    editable_prefill: "Editable after prefill",
+};
+
+export function describePrefillMode(field: FormField, entry: SystemFieldRegistryEntry | null): PrefillModePresentation {
+    if (isCustomUnmappedField(field) || !entry) {
+        return {
+            key: "manual_only",
+            label: PREFILL_MODE_COPY.manual_only,
+            detail: "No CRM mapping — family or operator enters each time.",
+        };
+    }
+    if (field.read_only) {
+        return {
+            key: "locked_crm",
+            label: PREFILL_MODE_COPY.locked_crm,
+            detail: "Value hydrates from CRM and cannot be changed on intake.",
+        };
+    }
+    return {
+        key: "editable_prefill",
+        label: PREFILL_MODE_COPY.editable_prefill,
+        detail: "Hydrates when launch context or entity binding exists; recipient may edit.",
+    };
+}
+
 export function describePrefillSource(
     field: FormField,
     entry: SystemFieldRegistryEntry | null

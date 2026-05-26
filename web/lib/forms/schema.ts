@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { documentCompositionSchema } from "@/lib/forms/documentComposition";
 
 /** Single visibility condition; submit evaluation uses AND across `visibility.all`. */
 export const formVisibilityConditionSchema = z
@@ -202,6 +203,8 @@ export const formSchemaV1Schema = z
         title: z.string().min(1),
         sections: z.array(formSectionSchema),
         fields: z.array(formFieldSchema).min(1),
+        /** Optional document composition layer — ignored by public renderer until staged (FD-4). */
+        document_composition: documentCompositionSchema.optional(),
     })
     .strict()
     .superRefine((data, ctx) => {

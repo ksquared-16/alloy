@@ -22,7 +22,15 @@ export type SubmissionLinkageConfidence = "high" | "medium" | "low" | "none";
 
 export type SubmissionAccelerationCta = {
     label: string;
-    kind: "review" | "link" | "generate" | "continue" | "open";
+    kind: "review" | "link" | "generate" | "continue" | "open" | "finalize";
+};
+
+export type SubmissionBlockerCategory = "linkage" | "review" | "completion" | "intake";
+
+export type SubmissionBlockerGroup = {
+    category: SubmissionBlockerCategory;
+    label: string;
+    items: string[];
 };
 
 export type SubmissionIntelligenceView = {
@@ -32,6 +40,10 @@ export type SubmissionIntelligenceView = {
     linkageConfidence: SubmissionLinkageConfidence;
     linkageConfidenceLabel: string;
     missingRequirements: string[];
+    blockerGroups: SubmissionBlockerGroup[];
+    entitySummary: string | null;
+    prefillCompletenessLabel: string | null;
+    readyToFinalize: boolean;
     likelyNextAction: string;
     readyAfter: string | null;
     accelerationCta: SubmissionAccelerationCta;
@@ -66,10 +78,11 @@ function linkageConfidence(
     return { level: "medium", label: "Review recommended" };
 }
 
-function readinessForLane(lane: SubmissionInboxLaneKey, blocked: boolean): {
+function readinessForLane(lane: SubmissionInboxLaneKey, blocked: boolean, readyToFinalize: boolean): {
     label: string;
     tone: SubmissionReadinessTone;
 } {
+    if (readyToFinalize) return { label: "Ready to finalize", tone: "ready" };
     if (lane === "drafts") return { label: "In progress", tone: "waiting" };
     if (lane === "needsReview") return { label: "Needs human review", tone: "attention" };
     if (lane === "needsLinking") return { label: "Blocked — linkage", tone: "blocked" };
@@ -124,12 +137,61 @@ function accelerationCta(params: {
     lane: SubmissionInboxLaneKey;
     blocked: boolean;
     hasAttach: boolean;
+    readyToFinalize: boolean;
 }): SubmissionAccelerationCta {
+    if (params.readyToFinalize) return { label: "Open to finalize", kind: "finalize" };
     if (params.lane === "drafts") return { label: "Continue draft", kind: "continue" };
     if (params.lane === "needsLinking") return { label: "Link records", kind: "link" };
-    if (params.lane === "needsReview") return { label: "Review intake now", kind: "review" };
-    if (!params.blocked && params.hasAttach) return { label: "Open — ready", kind: "open" };
-    return { label: "Review intake", kind: "review" };
+    if (params.lane === "needsReview") return { label: "Review now", kind: "review" };
+    if (!params.blocked && params.hasAttach) return { label: "Open", kind: "open" };
+    return { label: "Review", kind: "review" };
+}
+
+function entitySummary(attachRow: SubmissionAttachRow): string | null {
+    const parts: string[] = [];
+    if (attachRow.person_id) parts.push("Person linked");
+    if (attachRow.customer_id) parts.push("Household linked");
+    if (attachRow.customer_member_id) parts.push("Member linked");
+    if (attachRow.opportunity_id) parts.push("Opportunity linked");
+    if (parts.length === 0) return "No CRM records linked";
+    return parts.join(" · ");
+}
+
+function prefillCompletenessLabel(payloadMeta: unknown): string | null {
+    const m = metaRecord(payloadMeta);
+    if (m.prefill_applied === true) return "Prefill applied at intake";
+    if (m.prefill_enabled === false) return "Manual entry — prefill disabled";
+    return null;
+}
+
+function categorizeBlocker(item: string): SubmissionBlockerCategory {
+    const lower = item.toLowerCase();
+    if (lower.includes("crm") || lower.includes("link")) return "linkage";
+    if (lower.includes("family") || lower.includes("submitted")) return "completion";
+    if (lower.includes("policy") || lower.includes("pdf")) return "intake";
+    return "review";
+}
+
+const BLOCKER_GROUP_LABEL: Record<SubmissionBlockerCategory, string> = {
+    linkage: "Linkage",
+    review: "Review",
+    completion: "Completion",
+    intake: "Outputs",
+};
+
+function groupBlockers(missing: string[]): SubmissionBlockerGroup[] {
+    const buckets = new Map<SubmissionBlockerCategory, string[]>();
+    for (const item of missing) {
+        const cat = categorizeBlocker(item);
+        const list = buckets.get(cat) ?? [];
+        list.push(item);
+        buckets.set(cat, list);
+    }
+    return [...buckets.entries()].map(([category, items]) => ({
+        category,
+        label: BLOCKER_GROUP_LABEL[category],
+        items,
+    }));
 }
 
 function operationalSummary(params: {
@@ -161,8 +223,11 @@ export function deriveSubmissionIntelligence(
             documentGenerationBlockedByIntake(payloadMeta, attachRow).blocked
         :   false;
     const confidence = linkageConfidence(row, attachRow, lane);
-    const readiness = readinessForLane(lane, blocked);
     const missing = missingRequirements({ row, lane, blocked, attachRow, payloadMeta });
+    const hasAttach = submissionHasDocumentAttachTarget(attachRow);
+    const readyToFinalize =
+        lane === "recentlySubmitted" && !blocked && hasAttach && missing.length === 0;
+    const readiness = readinessForLane(lane, blocked, readyToFinalize);
     const nextLines = recommendedNextAction({
         status: row.status,
         linkedDocumentsCount: 0,
@@ -179,12 +244,17 @@ export function deriveSubmissionIntelligence(
         linkageConfidence: confidence.level,
         linkageConfidenceLabel: confidence.label,
         missingRequirements: missing,
+        blockerGroups: groupBlockers(missing),
+        entitySummary: row.status === "draft" ? null : entitySummary(attachRow),
+        prefillCompletenessLabel: prefillCompletenessLabel(payloadMeta),
+        readyToFinalize,
         likelyNextAction: nextLines[0] ?? "Open intake review",
         readyAfter: readyAfterLabel({ lane, blocked, attachRow, payloadMeta }),
         accelerationCta: accelerationCta({
             lane,
             blocked,
-            hasAttach: submissionHasDocumentAttachTarget(attachRow),
+            hasAttach,
+            readyToFinalize,
         }),
     };
 }

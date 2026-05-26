@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { IntakeWorkspaceHubView } from "@/components/forms/workspace/IntakeWorkspaceHubView";
 
-describe("IntakeWorkspaceHubView OW-2", () => {
-    it("renders operational lanes and form library without primary table", () => {
+describe("IntakeWorkspaceHubView FD-1", () => {
+    it("renders workload filters and contextual panel without legacy lanes", () => {
         const html = renderToStaticMarkup(
             <IntakeWorkspaceHubView
                 viewerTz="UTC"
@@ -38,25 +38,19 @@ describe("IntakeWorkspaceHubView OW-2", () => {
         );
 
         expect(html).toContain('data-testid="intake-workspace-canvas"');
-        expect(html).toContain('data-testid="intake-lane-sessions"');
-        expect(html).toContain('data-testid="intake-lane-submissions"');
-        expect(html).toContain('data-testid="intake-lane-packets"');
-        expect(html).toContain('data-testid="intake-form-library"');
-        expect(html).toContain("Review sessions");
+        expect(html).toContain('data-testid="intake-workload-filters"');
         expect(html).toContain("Enrollment");
-        expect(html).toContain("Waitlist");
-        expect(html).not.toContain("How Forms usually flow");
-        expect(html).not.toContain("Forms in Alloy");
+        expect(html).toContain('data-testid="intake-filter-panel-needs_review"');
+        expect(html).not.toContain('data-testid="intake-form-library"');
         expect(html).not.toContain("<table");
     });
 
-    it("shows operational empty states", () => {
+    it("shows empty panel copy when workload is clear", () => {
         const html = renderToStaticMarkup(
             <IntakeWorkspaceHubView viewerTz="UTC" forms={[]} sessions={[]} packets={[]} submissions={[]} />
         );
 
-        expect(html).toContain("No packet sessions yet");
-        expect(html).toContain("No submissions waiting right now");
-        expect(html).toContain("Create a form to start collecting intake");
+        expect(html).toContain("Intake workload is clear");
+        expect(html).toContain("No forms in this organization");
     });
 });

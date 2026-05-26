@@ -22,7 +22,8 @@ describe("submissionIntelligencePresentation OI-2", () => {
         expect(intel.linkageConfidence).toBe("medium");
         expect(intel.readyAfter).toBe("After linkage confirmed");
         expect(intel.missingRequirements).toContain("Operator linkage confirmation");
-        expect(intel.accelerationCta.label).toBe("Review intake now");
+        expect(intel.accelerationCta.label).toBe("Review now");
+        expect(intel.blockerGroups.length).toBeGreaterThan(0);
     });
 
     it("surfaces missing CRM attach for needs linking lane", () => {
@@ -43,5 +44,8 @@ describe("submissionIntelligencePresentation OI-2", () => {
         expect(intel.readinessTone).toBe("ready");
         expect(intel.linkageConfidence).toBe("high");
         expect(intel.readyAfter).toBeNull();
+        expect(intel.readyToFinalize).toBe(true);
+        expect(intel.readinessLabel).toBe("Ready to finalize");
+        expect(intel.accelerationCta.kind).toBe("finalize");
     });
 });

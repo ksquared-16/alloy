@@ -2,34 +2,22 @@
 
 import clsx from "clsx";
 import Link from "next/link";
+import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
 import { TechnicalDetailDisclosure } from "@/components/forms/review";
-import { FormsOperationalLink, FormsWorkspaceShell } from "@/components/forms/workspace";
-import { IntakeCommandCenterKpiStrip } from "@/components/forms/workspace/IntakeCommandCenterKpiStrip";
-import { IntakeWorkspaceRegion } from "@/components/forms/workspace/IntakeWorkspaceRegion";
-import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
-import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
-import {
-    deriveIntakeCommandCenterSnapshot,
-    type IntakeCommandCenterSessionRow,
-} from "@/lib/forms/intakeCommandCenterPresentation";
+import { FormsWorkspaceShell } from "@/components/forms/workspace";
+import { IntakeWorkspaceFilterPanelView } from "@/components/forms/workspace/IntakeWorkspaceFilterPanelView";
+import { IntakeWorkloadFilterStrip } from "@/components/forms/workspace/IntakeWorkloadFilterStrip";
+import type { IntakeCommandCenterSessionRow } from "@/lib/forms/intakeCommandCenterPresentation";
 import { FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
-import { parseOperatorContext } from "@/lib/forms/operatorFormGuidance";
-import { FORMS_TECHNICAL_DISCLOSURE } from "@/lib/forms/review/formsReviewTechnicalDisclosure";
-import type { SubmissionInboxRow } from "@/lib/forms/submissionInboxPresentation";
 import {
-    opBody,
-    opCaseFileCanvas,
-    opGroupedRowInner,
-    opGroupedSurface,
-    opMetadata,
-    opMutedMeta,
-    opOrientationSurface,
-    opRegionSeparator,
-    opStackGroup,
-    opStackPage,
-} from "@/lib/operational/ui/operationalVisualTokens";
+    buildIntakeWorkspaceFilterPanel,
+    countIntakeWorkspaceFilters,
+    defaultIntakeWorkspaceFilter,
+    type IntakeWorkspaceFilterKey,
+} from "@/lib/forms/intakeWorkspaceFilters";
+import type { SubmissionInboxRow } from "@/lib/forms/submissionInboxPresentation";
+import { opCaseFileCanvas, opMetadata } from "@/lib/operational/ui/operationalVisualTokens";
 
 export type IntakeWorkspaceFormRow = {
     id: string;
@@ -54,13 +42,6 @@ export const intakeWorkspaceBtnPrimary =
 export const intakeWorkspaceBtnSecondary =
     "rounded-lg border border-alloy-midnight/10 bg-white px-3.5 py-2 text-xs font-medium text-alloy-midnight/85 shadow-sm hover:bg-alloy-stone/20 disabled:opacity-40";
 
-function purposeLine(metadata: Record<string, unknown> | undefined, description: string | null): string | null {
-    const oc = parseOperatorContext(metadata);
-    if (oc?.purpose?.trim()) return oc.purpose.trim();
-    if (description?.trim()) return description.trim();
-    return null;
-}
-
 type Props = {
     viewerTz: string;
     forms: IntakeWorkspaceFormRow[];
@@ -76,7 +57,6 @@ type Props = {
 };
 
 export function IntakeWorkspaceHubView({
-    viewerTz,
     forms,
     sessions,
     packets,
@@ -89,210 +69,106 @@ export function IntakeWorkspaceHubView({
     createPanel,
 }: Props) {
     const formsById = Object.fromEntries(forms.map((f) => [f.id, f.name]));
-    const publishedCount = forms.filter((f) => f.has_published_version).length;
-    const commandCenter = deriveIntakeCommandCenterSnapshot({
-        submissions,
-        sessions,
-        forms,
-        formsById,
-    });
+    const filterCounts = useMemo(
+        () =>
+            countIntakeWorkspaceFilters({
+                submissions,
+                sessions,
+                forms,
+                packets,
+            }),
+        [submissions, sessions, forms, packets]
+    );
+
+    const [activeFilter, setActiveFilter] = useState<IntakeWorkspaceFilterKey>(() =>
+        defaultIntakeWorkspaceFilter(filterCounts)
+    );
+
+    const panel = useMemo(
+        () =>
+            buildIntakeWorkspaceFilterPanel(activeFilter, {
+                submissions,
+                sessions,
+                forms: forms.map((f) => ({ id: f.id, name: f.name, has_published_version: f.has_published_version })),
+                packets: packets.map((p) => ({ id: p.id, name: p.name })),
+                formsById,
+            }),
+        [activeFilter, submissions, sessions, forms, packets, formsById]
+    );
+
+    const workloadHeadline =
+        filterCounts.needs_review + filterCounts.needs_linking > 0 ?
+            `${filterCounts.needs_review + filterCounts.needs_linking} in review or linkage`
+        : filterCounts.waiting > 0 ?
+            `${filterCounts.waiting} waiting on families`
+        :   "Intake workload is clear";
+
+    const reviewCount = filterCounts.needs_review + filterCounts.needs_linking;
 
     return (
         <FormsWorkspaceShell
             title="Intake workspace"
-            subtitle="Command center for review, linkage, and intake distribution."
+            subtitle="Workload, review, and distribution."
             actions={
                 canMutate && onToggleCreate ?
                     <button type="button" className={intakeWorkspaceBtnPrimary} onClick={onToggleCreate}>
-                        {showCreate ? "Close" : "Create form"}
+                        {showCreate ? "Close" : "New form"}
                     </button>
                 :   null
             }
             contentClassName="space-y-0"
         >
-            {showCreate && createPanel ? <div className="mb-4">{createPanel}</div> : null}
+            {showCreate && createPanel ? <div className="mb-3">{createPanel}</div> : null}
 
             {loading ?
                 <p className={opMetadata}>Loading intake workspace…</p>
             : error ?
                 <p className="text-sm text-alloy-ember">{error}</p>
             :   <div data-testid="intake-workspace-command-center">
-                    <div className={opOrientationSurface} data-testid="intake-command-orientation">
-                        <p className="text-sm font-semibold text-alloy-midnight">{commandCenter.urgencyHeadline}</p>
-                        <p className={clsx("mt-1", opMetadata)}>{commandCenter.healthyLine}</p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                            {commandCenter.primaryCta ?
-                                <Link href={commandCenter.primaryCta.href} className={intakeWorkspaceBtnPrimary}>
-                                    {commandCenter.primaryCta.label}
-                                </Link>
-                            :   null}
-                            <Link href={FORMS_MODULE_ROUTES.packetSessions} className={intakeWorkspaceBtnSecondary}>
-                                Session inbox
-                            </Link>
+                    <div
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white px-4 py-2.5 shadow-sm ring-1 ring-alloy-midnight/[0.08]"
+                        data-testid="intake-command-orientation"
+                    >
+                        <div className="min-w-0">
+                            <p className="text-sm font-semibold text-alloy-midnight">{workloadHeadline}</p>
+                            <p className={opMetadata}>
+                                {reviewCount > 0 ? `${reviewCount} need you` : "All clear"}
+                                {" · "}
+                                {filterCounts.forms} forms · {filterCounts.packets} packets
+                            </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
                             <Link href={FORMS_MODULE_ROUTES.submissionsHub} className={intakeWorkspaceBtnSecondary}>
-                                Submissions inbox
+                                Submissions
+                            </Link>
+                            <Link href={FORMS_MODULE_ROUTES.packetSessions} className={intakeWorkspaceBtnSecondary}>
+                                Sessions
                             </Link>
                         </div>
                     </div>
 
-                    <div className="mt-4">
-                        <IntakeCommandCenterKpiStrip kpis={commandCenter.kpis} />
+                    <div
+                        className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] lg:items-start"
+                        data-testid="intake-workspace-canvas"
+                    >
+                        <IntakeWorkloadFilterStrip
+                            counts={filterCounts}
+                            selected={activeFilter}
+                            onSelect={setActiveFilter}
+                            stack
+                        />
+                        <div className={clsx(opCaseFileCanvas, "px-3 py-3 sm:px-4")}>
+                            <IntakeWorkspaceFilterPanelView panel={panel} />
+                        </div>
                     </div>
 
-                    <div className={clsx(opCaseFileCanvas, "mt-5", opStackPage)} data-testid="intake-workspace-canvas">
-                        <section data-testid="intake-action-queue">
-                            <IntakeWorkspaceRegion
-                                title="Action required"
-                                lead="Review and linkage items prioritized by urgency."
-                            >
-                                {commandCenter.actionQueue.length === 0 ?
-                                    <p className={opMetadata}>No urgent review or linkage flags — check waiting-on items below.</p>
-                                :   <ul className={opGroupedSurface}>
-                                        {commandCenter.actionQueue.map((item) => (
-                                            <li
-                                                key={item.id}
-                                                className={clsx(
-                                                    opGroupedRowInner,
-                                                    "transition-colors hover:bg-alloy-stone/10",
-                                                    item.tone === "urgent" && "bg-alloy-ember/[0.03]"
-                                                )}
-                                                data-testid={`intake-action-${item.id}`}
-                                            >
-                                                <div className="flex flex-wrap items-start justify-between gap-3">
-                                                    <div className="min-w-0 flex-1">
-                                                        <p className="text-sm font-semibold text-alloy-midnight">{item.title}</p>
-                                                        <p className={clsx("mt-0.5", opBody)}>{item.summary}</p>
-                                                    </div>
-                                                    <Link href={item.href} className={intakeWorkspaceBtnPrimary}>
-                                                        {item.ctaLabel}
-                                                    </Link>
-                                                </div>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                }
-                            </IntakeWorkspaceRegion>
-                        </section>
-
-                        <div className={clsx(opRegionSeparator, "grid gap-5 lg:grid-cols-2")}>
-                            <IntakeWorkspaceRegion
-                                title="Waiting on"
-                                lead="Families, drafts, or publish work — not operator review yet."
-                                data-testid="intake-lane-waiting"
-                            >
-                                {commandCenter.waitingOn.length === 0 ?
-                                    <p className={opMetadata}>Nothing waiting on external parties right now.</p>
-                                :   <ul className={opStackGroup}>
-                                        {commandCenter.waitingOn.map((w) => (
-                                            <li key={w.id} className="flex items-center justify-between gap-2 text-sm">
-                                                <span className="text-alloy-midnight">{w.label}</span>
-                                                <span className={clsx("font-semibold tabular-nums", opMetadata)}>{w.count}</span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                }
-                            </IntakeWorkspaceRegion>
-
-                            <IntakeWorkspaceRegion
-                                title="Manage intake flows"
-                                lead="Packets and published forms ready to distribute."
-                                data-testid="intake-lane-manage"
-                            >
-                                <div className="grid gap-4 sm:grid-cols-2">
-                                    <div>
-                                        <p className={clsx("text-xs font-semibold uppercase tracking-wide opacity-60")}>
-                                            Packets
-                                        </p>
-                                        {packets.length === 0 ?
-                                            <p className={clsx("mt-2", opMetadata)}>No active packets.</p>
-                                        :   <ul className={clsx(opStackGroup, "mt-2")}>
-                                                {packets.slice(0, 4).map((p) => (
-                                                    <li key={p.id}>
-                                                        <Link
-                                                            href={`${FORMS_MODULE_ROUTES.packetDefinitions}/${p.id}`}
-                                                            className="font-medium text-alloy-midnight hover:underline"
-                                                        >
-                                                            {p.name}
-                                                        </Link>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        }
-                                        <FormsOperationalLink
-                                            href={FORMS_MODULE_ROUTES.packetDefinitions}
-                                            className="mt-2 inline-block"
-                                        >
-                                            All packets
-                                        </FormsOperationalLink>
-                                    </div>
-                                    <div>
-                                        <p className={clsx("text-xs font-semibold uppercase tracking-wide opacity-60")}>
-                                            Forms
-                                        </p>
-                                        <p className={clsx("mt-2", opMetadata)}>
-                                            {forms.length} definition{forms.length === 1 ? "" : "s"} · {publishedCount}{" "}
-                                            published
-                                        </p>
-                                        <FormsOperationalLink href={FORMS_MODULE_ROUTES.submissionsHub} className="mt-2 inline-block">
-                                            Submissions inbox
-                                        </FormsOperationalLink>
-                                    </div>
-                                </div>
-                            </IntakeWorkspaceRegion>
-                        </div>
-
-                        <section className={opRegionSeparator} data-testid="intake-form-library">
-                            <TechnicalDetailDisclosure
-                                title="Form library"
-                                helperText={`${forms.length} definitions — browse when configuring intake.`}
-                            >
-                                {forms.length === 0 ?
-                                    <p className={opMetadata}>No forms in this organization yet.</p>
-                                :   <ul className={clsx(opGroupedSurface, "mt-3")}>
-                                        {forms.map((f) => {
-                                            const purpose = purposeLine(f.metadata, f.description);
-                                            return (
-                                                <li key={f.id} className={opGroupedRowInner}>
-                                                    <div className="flex flex-wrap items-start justify-between gap-3">
-                                                        <div className="min-w-0 flex-1">
-                                                            <Link
-                                                                href={`${ADMIN_FORMS_UI_BASE}/${f.id}`}
-                                                                className="text-sm font-medium text-alloy-midnight hover:underline"
-                                                            >
-                                                                {f.name}
-                                                            </Link>
-                                                            {purpose ?
-                                                                <p className={clsx("mt-0.5 line-clamp-2", opMutedMeta)}>{purpose}</p>
-                                                            :   null}
-                                                        </div>
-                                                        <div className="flex flex-wrap items-center gap-2">
-                                                            {f.has_published_version ?
-                                                                <StatusBadge label="Published" variant="success" />
-                                                            :   <StatusBadge label="Needs publish" variant={getStatusVariant("draft")} />}
-                                                            <FormsOperationalLink href={`${ADMIN_FORMS_UI_BASE}/${f.id}`}>
-                                                                Open
-                                                            </FormsOperationalLink>
-                                                        </div>
-                                                    </div>
-                                                </li>
-                                            );
-                                        })}
-                                    </ul>
-                                }
-                            </TechnicalDetailDisclosure>
-                        </section>
-
-                        <div className={opRegionSeparator}>
-                            <TechnicalDetailDisclosure
-                                title={FORMS_TECHNICAL_DISCLOSURE.reviewDiagnostics.title}
-                                helperText="Schema notes — collapsed by default."
-                            >
-                                <p className={opMetadata}>
-                                    Publish a version before sharing links. Packet review uses the case-file console on each
-                                    session. Prefill and launch context follow link metadata — see intake prefill doctrine.
-                                </p>
-                            </TechnicalDetailDisclosure>
-                        </div>
+                    <div className="mt-3">
+                        <TechnicalDetailDisclosure title="Operator notes" helperText="Collapsed by default.">
+                            <p className={opMetadata}>
+                                Publish before distributing. Packet review uses the session case file. Prefill follows link
+                                metadata.
+                            </p>
+                        </TechnicalDetailDisclosure>
                     </div>
                 </div>
             }

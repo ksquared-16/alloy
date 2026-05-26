@@ -20,13 +20,6 @@ const READINESS_TONE = {
     neutral: "neutral",
 } as const;
 
-const CONFIDENCE_TONE = {
-    high: "success",
-    medium: "warning",
-    low: "attention",
-    none: "neutral",
-} as const;
-
 type Props = {
     row: SubmissionInboxRow;
     formName: string;
@@ -36,7 +29,7 @@ type Props = {
     emphasize?: boolean;
 };
 
-/** Operational intelligence card for submission inbox rows (OI-2 / OI-3). */
+/** Compressed operational intelligence card (FD-2). */
 export function SubmissionIntelligenceCard({
     row,
     formName,
@@ -47,59 +40,37 @@ export function SubmissionIntelligenceCard({
 }: Props) {
     const timestamp =
         row.submitted_at ?
-            `Submitted ${formatDateTimeForUserDisplay(row.submitted_at, viewerTz)}`
-        :   `Created ${formatDateTimeForUserDisplay(row.created_at, viewerTz)}`;
+            formatDateTimeForUserDisplay(row.submitted_at, viewerTz)
+        :   formatDateTimeForUserDisplay(row.created_at, viewerTz);
 
-    const actionClass =
-        intelligence.accelerationCta.kind === "review" || intelligence.accelerationCta.kind === "link" ?
-            intakeWorkspaceBtnPrimary
-        :   intakeWorkspaceBtnSecondary;
+    const primaryCta =
+        intelligence.accelerationCta.kind === "review" ||
+        intelligence.accelerationCta.kind === "link" ||
+        intelligence.accelerationCta.kind === "finalize";
+    const actionClass = primaryCta ? intakeWorkspaceBtnPrimary : intakeWorkspaceBtnSecondary;
+
+    const contextLine = [intelligence.entitySummary, intelligence.prefillCompletenessLabel, timestamp]
+        .filter(Boolean)
+        .join(" · ");
 
     return (
         <li
             className={clsx(
-                "group px-4 py-3.5 transition-colors hover:bg-alloy-stone/10",
+                "group px-4 py-2.5 transition-colors hover:bg-alloy-stone/10",
                 emphasize && "bg-amber-50/70 ring-1 ring-inset ring-amber-200/60 first:rounded-t-xl last:rounded-b-xl"
             )}
             data-testid={`submission-inbox-row-${row.id}`}
         >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                    <Link
-                        href={href}
-                        className="text-sm font-semibold text-alloy-midnight group-hover:underline"
-                    >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                    <Link href={href} className="text-sm font-semibold text-alloy-midnight group-hover:underline">
                         {formName}
                     </Link>
-                    <p className={clsx("mt-1 line-clamp-2", opBody)}>{intelligence.operationalSummary}</p>
-                    <p className={clsx("mt-1", opMutedMeta)}>{timestamp}</p>
-                </div>
-                <div className="flex max-w-[11rem] flex-col items-end gap-1.5">
                     <FormsReviewBadge
                         label={intelligence.readinessLabel}
                         tone={READINESS_TONE[intelligence.readinessTone]}
                     />
-                    <FormsReviewBadge
-                        label={intelligence.linkageConfidenceLabel}
-                        tone={CONFIDENCE_TONE[intelligence.linkageConfidence]}
-                    />
                 </div>
-            </div>
-
-            {intelligence.missingRequirements.length > 0 ?
-                <ul className={clsx("mt-2.5 list-disc space-y-0.5 pl-4", opMetadata)}>
-                    {intelligence.missingRequirements.slice(0, 2).map((req) => (
-                        <li key={req}>{req}</li>
-                    ))}
-                </ul>
-            :   null}
-
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                <p className={clsx("min-w-0 flex-1 text-xs leading-snug", opMutedMeta)}>
-                    {intelligence.readyAfter ?
-                        <>Ready after: {intelligence.readyAfter}</>
-                    :   intelligence.likelyNextAction}
-                </p>
                 <Link
                     href={href}
                     className={actionClass}
@@ -108,6 +79,29 @@ export function SubmissionIntelligenceCard({
                     {intelligence.accelerationCta.label}
                 </Link>
             </div>
+
+            <p className={clsx("mt-1 line-clamp-2", opBody)}>{intelligence.operationalSummary}</p>
+
+            {contextLine ?
+                <p className={clsx("mt-1", opMutedMeta)} data-testid={`submission-inbox-context-${row.id}`}>
+                    {contextLine}
+                </p>
+            :   null}
+
+            {intelligence.blockerGroups.length > 0 ?
+                <div className="mt-2 flex flex-wrap gap-2" data-testid={`submission-inbox-blockers-${row.id}`}>
+                    {intelligence.blockerGroups.map((group) => (
+                        <div
+                            key={group.category}
+                            className="rounded-md bg-alloy-stone/25 px-2 py-1 text-xs text-alloy-midnight/80"
+                        >
+                            <span className="font-semibold">{group.label}:</span> {group.items.join("; ")}
+                        </div>
+                    ))}
+                </div>
+            : intelligence.readyAfter ?
+                <p className={clsx("mt-1.5", opMetadata)}>Blocked until: {intelligence.readyAfter}</p>
+            :   null}
         </li>
     );
 }
