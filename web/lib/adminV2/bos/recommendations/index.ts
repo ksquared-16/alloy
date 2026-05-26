@@ -56,3 +56,7 @@ export * from "@/lib/adminV2/bos/recommendations/signals";
 export * from "@/lib/adminV2/bos/recommendations/fingerprints";
 
 export * from "@/lib/adminV2/bos/recommendations/builders";
+
+export * from "@/lib/adminV2/bos/recommendations/adapters";
+
+export * from "@/lib/adminV2/bos/recommendations/selectors";

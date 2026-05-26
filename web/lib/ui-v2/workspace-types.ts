@@ -198,8 +198,8 @@ export type CrmCompactRowSemanticSlots = {
    */
   queuePriorityExplanation?: string | null;
   /**
-   * Queue-only preview of deterministic suggestion (`_attention_suggestion_preview` on enriched rows).
-   * Same builder as entity GET; list paths usually omit activity so text may differ slightly from the drawer.
+   * Queue-only preview of deterministic recommendation.
+   * Read-order: `_operational_recommendation_preview` → `_attention_suggestion_preview`.
    */
   attentionSuggestionPreview?: { nextLabel: string; whyLine: string } | null;
   /**

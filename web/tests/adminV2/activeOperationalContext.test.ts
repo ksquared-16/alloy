@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { buildOperationalRecommendationV1 } from "@/lib/adminV2/bos/recommendations";
 import {
     buildOpportunityOperationalContext,
     commandExplicitlyRequestsRecordSearch,
@@ -9,6 +10,7 @@ import {
     resolveOpportunityOperationalContextLabel,
     shouldShortCircuitTaskAssistEntitySearch,
 } from "@/lib/adminV2/bos/activeOperationalContext";
+import { buildTestOperationalRecommendationInput } from "@/tests/adminV2/bos/recommendations/buildOperationalRecommendationV1.test";
 
 describe("activeOperationalContext", () => {
     it("resolveOpportunityOperationalContextLabel prefers customer name from entity GET", () => {
@@ -60,6 +62,20 @@ describe("activeOperationalContext", () => {
         expect(isStaleOperationalProposalEntity("a", "a")).toBe(false);
         expect(isStaleOperationalProposalEntity("a", null)).toBe(false);
         expect(isStaleOperationalProposalEntity(null, "a")).toBe(false);
+    });
+
+    it("orchestratorHandoffSeedCommand prefers canonical handoff when present", () => {
+        const rec = buildOperationalRecommendationV1(buildTestOperationalRecommendationInput());
+        const seed = orchestratorHandoffSeedCommand({
+            entityLabel: "Mitchell Family",
+            overviewData: {
+                _operational_recommendation: rec,
+                _attention_suggestion: { next_action: { label: "Send tour confirmation" } },
+            },
+        });
+        expect(seed).toContain("Mitchell Family");
+        expect(seed).toContain(rec.render.handoff.primary_recommendation);
+        expect(seed).not.toContain("Send tour confirmation");
     });
 
     it("orchestratorHandoffSeedCommand uses suggestion next_action when present", () => {

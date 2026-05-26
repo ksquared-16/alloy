@@ -1,7 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { buildNeedsAttentionSuggestion } from "@/lib/agent/needsAttentionSuggestion/buildNeedsAttentionSuggestion";
-import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
 import type { ActivitySignalResult } from "@/lib/admin/activitySignals";
 import {
     loadOpportunityActivitySignal,
@@ -19,6 +17,10 @@ import {
 import { isAiEnrichmentStubEnvEnabled } from "@/lib/ai/aiEnrichmentEnv";
 import { parseAiPolicyFromMetadata } from "@/lib/ai/aiPolicy";
 import type { OperationalSummaryV1 } from "@/lib/ai/enrichmentContracts";
+import { attachOperationalRecommendationBundle } from "@/lib/adminV2/bos/recommendations/adapters/attachOperationalRecommendationBundle";
+import { buildLegacyAttentionSuggestionCompat } from "@/lib/adminV2/bos/recommendations/adapters/buildLegacySuggestionCompat";
+import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
+import type { OperationalRecommendationV1 } from "@/lib/adminV2/bos/recommendations/types";
 import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
 
 const EMPTY_ACTIVITY: ActivitySignalResult = {
@@ -51,6 +53,9 @@ function opportunityRowToSuggestionInput(row: Record<string, unknown>): {
  * Authoritative opportunity payload fragment: operational attention (with activity wired into resolver
  * optional signals) + derived suggestion. Same evaluator substrate as queues; activity from
  * {@link loadOpportunityActivitySignal}.
+ *
+ * Card 1.7: `_attention_suggestion` is projected from `_operational_recommendation` when supported,
+ * with fail-soft fallback to {@link buildNeedsAttentionSuggestion}.
  */
 export async function attachOpportunityAttentionSuggestionBundle(params: {
     supabase: SupabaseClient;
@@ -67,6 +72,7 @@ export async function attachOpportunityAttentionSuggestionBundle(params: {
     _operational_attention_error: OperationalAttentionAttachmentError | null;
     _attention_suggestion: AttentionSuggestionV1 | null;
     _operational_summary: OperationalSummaryV1 | null;
+    _operational_recommendation: OperationalRecommendationV1 | null;
 }> {
     const nowMs = params.nowMs ?? Date.now();
     const nowIso = new Date(nowMs).toISOString();
@@ -97,14 +103,34 @@ export async function attachOpportunityAttentionSuggestionBundle(params: {
         nowMs,
     });
 
-    const suggestion =
+    const legacySuggestionInput =
         attn._operational_attention_error || !attn._operational_attention
             ? null
-            : buildNeedsAttentionSuggestion({
+            : {
                   opportunity: opportunityRowToSuggestionInput(params.opportunityRow),
                   attention: attn._operational_attention,
                   activity,
                   nowIso,
+              };
+
+    const operationalRecommendation =
+        attn._operational_attention_error || !attn._operational_attention
+            ? null
+            : attachOperationalRecommendationBundle({
+                  orgId: params.orgId,
+                  opportunityRow: params.opportunityRow,
+                  attention: attn._operational_attention,
+                  activity,
+                  workUnitId: params.workUnitId,
+                  nowMs,
+              })._operational_recommendation;
+
+    const suggestion =
+        legacySuggestionInput == null
+            ? null
+            : buildLegacyAttentionSuggestionCompat({
+                  recommendation: operationalRecommendation,
+                  legacyInput: legacySuggestionInput,
               });
 
     let _operational_summary: OperationalSummaryV1 | null = null;
@@ -131,5 +157,6 @@ export async function attachOpportunityAttentionSuggestionBundle(params: {
         ...attn,
         _attention_suggestion: suggestion,
         _operational_summary,
+        _operational_recommendation: operationalRecommendation,
     };
 }

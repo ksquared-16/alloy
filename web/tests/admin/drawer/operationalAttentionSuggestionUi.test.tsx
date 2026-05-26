@@ -10,7 +10,8 @@ import OperationalAttentionHeaderStrip from "@/components/admin/drawer/Operation
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
 import { suggestedContentForReason } from "@/lib/agent/needsAttentionSuggestion/suggestedContentTemplates";
 import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
-import type { CrmCompactRowSemanticSlots } from "@/lib/ui-v2/workspace-types";
+import { buildOperationalRecommendationV1 } from "@/lib/adminV2/bos/recommendations";
+import { buildTestOperationalRecommendationInput } from "@/tests/adminV2/bos/recommendations/buildOperationalRecommendationV1.test";
 
 const minimalSuggestion = (): AttentionSuggestionV1 => {
     const sc = suggestedContentForReason("stale_new_inquiry", {
@@ -143,6 +144,24 @@ describe("OperationalAttentionHeaderStrip", () => {
         expect(html).not.toContain("Future:");
         expect(html).not.toContain('data-drawer-slot="alloy_linked_actions_placeholder"');
         expect(html).not.toContain('data-operational-attention-canonical="chrome"');
+    });
+
+    it("prefers canonical recommendation copy when _operational_recommendation is present", () => {
+        const rec = buildOperationalRecommendationV1(buildTestOperationalRecommendationInput());
+        const html = renderToStaticMarkup(
+            <OperationalAttentionHeaderStrip
+                variant="chrome"
+                overviewData={{
+                    _operational_attention: minimalAttention(),
+                    _operational_attention_error: null,
+                    _operational_recommendation: rec,
+                    _attention_suggestion: minimalSuggestion(),
+                }}
+            />,
+        );
+        expect(html).toContain("Send a warm first response");
+        expect(html).toContain("lose momentum");
+        expect(html).not.toContain("Operational attention: New inquiry is stale.");
     });
 
     it("uses deterministic copy when suggestion is absent", () => {

@@ -1,6 +1,10 @@
 /**
  * Needs Attention Suggestion Agent — V1 derived-only contracts.
  * @see docs/sprints/05_2026/ai_agents_v1.md
+ *
+ * Migration (BOS Phase 1): `_operational_recommendation` is canonical on entity GET.
+ * `AttentionSuggestionV1` remains compatibility-only until a later UX wire card replaces consumers.
+ * Future path: `projectRecommendationToLegacyAttentionSuggestion` from the canonical builder output.
  */
 
 export const NEEDS_ATTENTION_SUGGESTION_AGENT_KEY = "needs_attention_suggestion" as const;

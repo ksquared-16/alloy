@@ -21,6 +21,7 @@ import { normalizePhone } from "@/lib/contactNormalize";
 import { formatWorkspaceUsdGrouped } from "@/lib/ui-v2/formatWorkspaceCurrency";
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
 import { buildQueueOperationalAttentionPresentation } from "@/lib/opportunities/operationalAttentionExplain";
+import { getRecommendationQueuePreview } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceSelectors";
 import { buildQueueRowPriorityExplanationLine } from "@/lib/opportunities/queueRowPriorityExplanation";
 
 type OppRow = WorkspaceOpportunityQueueRuntime["items"][number];
@@ -202,17 +203,19 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
     const attentionReason =
         attnPres.summaryLine ??
         ((row as { _attention_reason_label?: string | null })._attention_reason_label?.trim() || null);
-    const rawSugPrev = rowRec._attention_suggestion_preview as { next_label?: unknown; why_line?: unknown } | null | undefined;
+    const queueRecommendationPreview = getRecommendationQueuePreview(rowRec);
     const attentionSuggestionPreview =
-        rawSugPrev &&
-        typeof rawSugPrev === "object" &&
-        typeof rawSugPrev.next_label === "string" &&
-        typeof rawSugPrev.why_line === "string"
+        queueRecommendationPreview?.nextLabel
             ? {
-                  nextLabel: rawSugPrev.next_label.trim(),
-                  whyLine: rawSugPrev.why_line.trim(),
+                  nextLabel: queueRecommendationPreview.nextLabel,
+                  whyLine: queueRecommendationPreview.whyLine,
               }
-            : null;
+            : queueRecommendationPreview?.whyLine
+              ? {
+                    nextLabel: "",
+                    whyLine: queueRecommendationPreview.whyLine,
+                }
+              : null;
     const attentionSuggestionPreviewResolved =
         attentionSuggestionPreview?.nextLabel ? attentionSuggestionPreview : null;
     const operationalNextHint =

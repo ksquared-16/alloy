@@ -37,6 +37,12 @@ export type BuildNeedsAttentionSuggestionInput = {
     nowIso?: string;
 };
 
+/**
+ * Legacy derived suggestion builder (`AttentionSuggestionV1`).
+ * Canonical recommendation path: `tryBuildOperationalRecommendationFromAttention` →
+ * `projectRecommendationToLegacyAttentionSuggestion`. This function remains wired until a later
+ * migration card replaces consumers — do not generate recommendation copy outside catalog/builder paths.
+ */
 export function buildNeedsAttentionSuggestion(input: BuildNeedsAttentionSuggestionInput): AttentionSuggestionV1 | null {
     const attention = input.attention;
     if (!attention?.needs_attention || !attention.primary_reason) {

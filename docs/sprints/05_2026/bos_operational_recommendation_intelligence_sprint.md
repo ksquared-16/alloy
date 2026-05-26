@@ -1,7 +1,7 @@
 # BOS Operational Recommendation Intelligence Sprint
 
 **Path:** `docs/sprints/05_2026/bos_operational_recommendation_intelligence_sprint.md`  
-**Status:** Step 0 audit + Step 1 design complete — **STOP at GATE 0** before implementation  
+**Status:** Phase 1 **COMPLETE** (GATE 1 passed) — Phase 2 UX polish may begin  
 **Date:** 2026-05-21
 
 **GATE 0 implementation doctrine (binding before code):** [`bos_operational_recommendation_intelligence_gate0.md`](./bos_operational_recommendation_intelligence_gate0.md)  
@@ -485,22 +485,45 @@ flowchart LR
 
 **Goal:** Ship `OperationalRecommendationV1` with deep deterministic copy — no new AI routes required.
 
+**Status:** **COMPLETE** (2026-05-21). Closeout: [`bos_operational_recommendation_phase1_execution.md`](./bos_operational_recommendation_phase1_execution.md) §12.
+
 **Implementation spec:** [`bos_operational_recommendation_phase1_execution.md`](./bos_operational_recommendation_phase1_execution.md) (module layout, contract, pipeline, replacement map, GATE 1 checklist).
 
-| Card | Work | See execution pack |
-|------|------|-------------------|
-| 1.1–1.5 | Contract, catalog, builder, fingerprint, projections, adapters | §2–§8 |
-| 1.6–1.9 | Entity + queue wire, UI scaffolding, tests | §9–§11 |
+| Card | Work | Status |
+|------|------|--------|
+| 1.1 | Contract types + validator | ✅ |
+| 1.2 | Deterministic catalog + templates | ✅ |
+| 1.3 | Builder + signals + fingerprint | ✅ |
+| 1.4 | Entity attach bundle | ✅ |
+| 1.5 | Queue preview attach | ✅ |
+| 1.6 | Legacy adapter + parity guard | ✅ |
+| 1.7 | Canonical-to-legacy runtime switch | ✅ |
+| 1.8 | Surface read-order upgrade | ✅ |
+| 1.9 | Verification + documentation closeout | ✅ |
+
+**Key outcomes:**
+
+- Single server-owned pipeline: `buildOperationalRecommendationV1` from resolver + activity signals
+- Entity GET attaches full `_operational_recommendation`; queue rows attach preview-only `_operational_recommendation_preview`
+- Legacy `_attention_suggestion` / `_attention_suggestion_preview` preserved via compat adapters + fail-soft fallback
+- UI surfaces (drawer strip, queue VM, handoff, orchestrator seed) prefer canonical projections when present
+- 187 regression tests passing for recommendation scope (see execution pack §12.6)
 
 **GATE 1 checklist:**
 
-- [ ] Every attention reason code produces non-generic `recommended_action` + `why_it_matters` in tests
-- [ ] `urgency` + `urgency_reason` populated from severity/SLA
-- [ ] `likely_outcome` template present for conversion-critical codes
-- [ ] Entity GET includes recommendation; queue preview still preview-only
-- [ ] No new apply endpoints
+- [x] Deterministic builder + catalog + fingerprints shipped
+- [x] Entity GET includes `_operational_recommendation`; queue preview still preview-only
+- [x] Legacy adapter parity + runtime switch with fallback
+- [x] Surface read-order prefers canonical fields
+- [x] No new apply endpoints; no AI enrich in recommendation modules; no persistence
+- [ ] Every attention reason code produces non-generic copy — **partial:** 6 Phase 1 codes + supplemental keys covered; extend in Phase 2 contract sweep
+- [ ] `validateRecommendationFreshness` helper — **deferred** to Phase 2+
+
+**Readiness for Phase 2:** See §5.4. Phase 2 may begin after closeout verification (complete).
 
 ### 5.4 Phase 2 — Operational UX (drawer, queue, Orchestrator)
+
+**Execution pack (audit + UX hierarchy + cards):** [`bos_operational_recommendation_phase2_operational_ux.md`](./bos_operational_recommendation_phase2_operational_ux.md)
 
 **Goal:** Operators see recommendation anatomy without hunting.
 
@@ -617,10 +640,10 @@ autonomous AI scope.
 
 ---
 
-## 10. Implementation STOP rule
+## 10. Implementation status
 
-**Do not begin code implementation until:**
+- [x] **GATE 0 APPROVED** — [`bos_operational_recommendation_intelligence_gate0.md`](./bos_operational_recommendation_intelligence_gate0.md) §10
+- [x] **Phase 1 COMPLETE** — Cards 1.1–1.9; GATE 1 passed — see [`bos_operational_recommendation_phase1_execution.md`](./bos_operational_recommendation_phase1_execution.md) §12
+- [ ] **Phase 2** — Operational UX polish (may begin after Phase 1 closeout)
 
-- [ ] **GATE 0 APPROVED** — full checklist in [`bos_operational_recommendation_intelligence_gate0.md`](./bos_operational_recommendation_intelligence_gate0.md) §10
-
-When approved, start **Phase 1 Card 1.1** only.
+When starting Phase 2, begin with sprint §5.4 cards (strip hierarchy, handoff polish, queue urgency chip).

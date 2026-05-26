@@ -6,6 +6,7 @@ import { Sparkles } from "lucide-react";
 import OperationalAttentionAnchoredDraftPopover from "@/components/admin/drawer/OperationalAttentionAnchoredDraftPopover";
 import OperationalAttentionEnhanceDraft from "@/components/admin/drawer/OperationalAttentionEnhanceDraft";
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
+import { getRecommendationDrawerStrip } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceSelectors";
 import type { OperationalAttentionAttachmentError } from "@/lib/admin/operationalAttentionEntityAttachment";
 import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
 import {
@@ -49,6 +50,7 @@ export default function OperationalAttentionHeaderStrip({
     const [draftPopoverOpen, setDraftPopoverOpen] = useState(false);
     const payload = overviewData._operational_attention as OpportunityAttentionResult | null | undefined;
     const err = overviewData._operational_attention_error as OperationalAttentionAttachmentError | null | undefined;
+    const recommendationDisplay = getRecommendationDrawerStrip(overviewData);
     const suggestion = overviewData._attention_suggestion as AttentionSuggestionV1 | null | undefined;
 
     const chrome = variant === "chrome";
@@ -114,9 +116,12 @@ export default function OperationalAttentionHeaderStrip({
     const premiumPanelFrame =
         "mt-1.5 rounded-lg border border-admin-border border-l-[3px] border-l-[rgb(188,67,0)] bg-gradient-to-br from-[color-mix(in_srgb,rgb(255,248,240)_65%,white)] via-white to-[color-mix(in_srgb,rgb(245,250,255)_38%,white)] px-2 py-1.5 text-[11px] leading-tight shadow-sm";
 
-    if (suggestion) {
+    if (recommendationDisplay || suggestion) {
         const stale = payload.auxiliary?.activity_stale;
-        const draftBody = suggestion.suggested_content?.body?.trim();
+        const draftBody = suggestion?.suggested_content?.body?.trim();
+        const nextActionLabel =
+            recommendationDisplay?.nextActionLabel ?? suggestion!.next_action.label;
+        const whySummary = recommendationDisplay?.whyLine ?? suggestion!.reasoning.summary;
         const frame = chrome ? premiumChromeFrame : premiumPanelFrame;
 
         return (
@@ -157,7 +162,7 @@ export default function OperationalAttentionHeaderStrip({
                                         : "text-[12px] font-medium leading-tight text-alloy-midnight/90"
                                 }
                             >
-                                {suggestion.next_action.label}
+                                {nextActionLabel}
                             </span>
                         </div>
                         <p
@@ -170,7 +175,7 @@ export default function OperationalAttentionHeaderStrip({
                             <span className="text-[8px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
                                 Why ·{" "}
                             </span>
-                            {conciseWhy(suggestion.reasoning.summary)}
+                            {conciseWhy(whySummary)}
                         </p>
 
                         {draftBody ? (
@@ -198,7 +203,7 @@ export default function OperationalAttentionHeaderStrip({
                             </div>
                         ) : null}
 
-                        <OperationalAttentionEnhanceDraft suggestion={suggestion} />
+                        {suggestion ? <OperationalAttentionEnhanceDraft suggestion={suggestion} /> : null}
 
                         {otherReasons.length > 0 ? (
                             factorsPreferDetails ? (

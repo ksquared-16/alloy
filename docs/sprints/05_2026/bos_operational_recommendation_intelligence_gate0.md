@@ -452,17 +452,22 @@ Secondary items live in `available_actions[]` and L2 `source_signal` / factors �
 
 ### Phase 1 — Contract, deterministic builder, fingerprints, invalidation, trust semantics
 
-| Deliverable | Gate |
-|-------------|------|
-| `OperationalRecommendationV1` types + validators | |
-| `collectRecommendationSignals` + `buildOperationalRecommendationV1` | |
-| `recommendationActionCatalog` | |
-| Fingerprint + `validateRecommendationFreshness` | |
-| Entity attach `_operational_recommendation` | |
-| Legacy adapter to `AttentionSuggestionV1` | |
-| Contract tests per reason code | **GATE 1** |
+**Status:** **COMPLETE** (2026-05-21). Closeout verification: [`bos_operational_recommendation_phase1_execution.md`](./bos_operational_recommendation_phase1_execution.md) §12. **GATE 1 passed** for Phase 1 scope.
 
-**Prohibited in Phase 1:** AI enrich routes, UI redesign beyond attach verification, Task Assist prefill changes.
+| Deliverable | Gate | Status |
+|-------------|------|--------|
+| `OperationalRecommendationV1` types + validators | | ✅ |
+| `buildOperationalRecommendationV1` + signals + catalog | | ✅ |
+| Fingerprint + `stale_state_check` on DTO | | ✅ (`validateRecommendationFreshness` helper deferred) |
+| Entity attach `_operational_recommendation` | | ✅ |
+| Queue preview `_operational_recommendation_preview` | | ✅ |
+| Legacy adapter to `AttentionSuggestionV1` | | ✅ |
+| Runtime switch + surface read-order | | ✅ |
+| Contract tests | **GATE 1** | ✅ (Phase 1 reason codes; full sweep → Phase 2) |
+
+**Prohibited in Phase 1:** AI enrich routes, UI redesign beyond attach verification, Task Assist prefill changes — **none introduced**.
+
+**Phase 2 may begin** only after Phase 1 closeout verification (complete). Phase 2 prohibitions unchanged: no AI enrich, no new signal sources unless explicit card approved.
 
 ### Phase 2 — Recommendation UX replacement
 
@@ -593,8 +598,9 @@ The following are **explicitly prohibited** for this sprint (including “small�
 
 ## After GATE 0 approval
 
-1. Update [`bos_operational_recommendation_intelligence_sprint.md`](./bos_operational_recommendation_intelligence_sprint.md) §5.2 — mark GATE 0 complete with link to this doc.
-2. Begin **Phase 1 Card 1.1** only (`types.ts` + validators).
+1. Update [`bos_operational_recommendation_intelligence_sprint.md`](./bos_operational_recommendation_intelligence_sprint.md) §5.2 — mark GATE 0 complete with link to this doc. ✅
+2. ~~Begin **Phase 1 Card 1.1** only (`types.ts` + validators).~~ **Phase 1 complete** — see execution pack §12.
 3. Any PR that violates §1–§8 must be blocked in review against this document.
+4. **Phase 2** may begin per sprint §5.4; GATE 0 constraints remain binding (no AI enrich, no autonomy, no persistence).
 
 **No code until GATE 0 APPROVED.**

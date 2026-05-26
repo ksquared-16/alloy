@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 
 import { buildOperationalRecommendationHandoffCopy } from "@/lib/adminV2/bos/operationalRecommendationHandoff";
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
-import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
+import { buildOperationalRecommendationV1 } from "@/lib/adminV2/bos/recommendations";
+import { buildTestOperationalRecommendationInput } from "@/tests/adminV2/bos/recommendations/buildOperationalRecommendationV1.test";
 
 const stripPath = join(
     dirname(fileURLToPath(import.meta.url)),
@@ -65,6 +66,21 @@ const minimalSuggestion = (): AttentionSuggestionV1 => ({
 });
 
 describe("buildOperationalRecommendationHandoffCopy", () => {
+    it("prefers canonical handoff projection when _operational_recommendation is present", () => {
+        const rec = buildOperationalRecommendationV1(buildTestOperationalRecommendationInput());
+        const copy = buildOperationalRecommendationHandoffCopy({
+            entityLabel: "Chen household",
+            overviewData: {
+                _operational_attention: minimalAttention(),
+                _operational_recommendation: rec,
+                _attention_suggestion: minimalSuggestion(),
+            },
+        });
+        expect(copy.primaryRecommendation).toBe(rec.render.handoff.primary_recommendation);
+        expect(copy.operationalReason).toBe(rec.render.handoff.operational_reason);
+        expect(copy.primaryRecommendation).not.toBe("Respond to new request");
+    });
+
     it("uses attention suggestion next_action and reasoning when present", () => {
         const copy = buildOperationalRecommendationHandoffCopy({
             entityLabel: "Chen household",

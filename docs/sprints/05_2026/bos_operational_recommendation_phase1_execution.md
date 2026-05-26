@@ -1,7 +1,7 @@
 # BOS Operational Recommendation Intelligence — Phase 1 Execution Pack
 
 **Path:** `docs/sprints/05_2026/bos_operational_recommendation_phase1_execution.md`  
-**Status:** Implementation-grade spec — **execute only after this pack is reviewed**  
+**Status:** Phase 1 **COMPLETE** — GATE 1 passed (closeout §12)  
 **Date:** 2026-05-21
 
 **Binding inputs:**
@@ -952,3 +952,145 @@ export { operationalRecommendationToAttentionSuggestionV1 } from "./adapters/ope
 ---
 
 **Next step after pack approval:** Implement card **1.1** (`types.ts` + validators) in a single focused PR.
+
+---
+
+## SECTION 12 — Phase 1 closeout (2026-05-21)
+
+**Status:** **COMPLETE** — Cards 1.1–1.9 verified. **GATE 1 passed** for Phase 1 scope. Phase 2 UX polish may begin.
+
+### 12.1 Cards completed
+
+| Card | Deliverable | Status |
+|------|-------------|--------|
+| 1.1 | `OperationalRecommendationV1` types + `validateOperationalRecommendationV1` | ✅ |
+| 1.2 | Deterministic catalog + copy templates (8 Phase 1 keys) | ✅ |
+| 1.3 | Builder + signals + fingerprint + render projections | ✅ |
+| 1.4 | Entity attach — `_operational_recommendation` on opportunity GET | ✅ |
+| 1.5 | Queue preview — `_operational_recommendation_preview` on enrich rows | ✅ |
+| 1.6 | Legacy adapter + structural parity tests | ✅ |
+| 1.7 | Canonical-first runtime switch with legacy fallback | ✅ |
+| 1.8 | Surface read-order selectors (queue / drawer / handoff) | ✅ |
+| 1.9 | Verification, regression, documentation closeout | ✅ |
+
+### 12.2 Implemented modules (`web/lib/adminV2/bos/recommendations/`)
+
+| Area | Path | Notes |
+|------|------|-------|
+| Contract | `types.ts`, `validation/validateOperationalRecommendationV1.ts` | Phase 1 wire rejects non-`deterministic` modes |
+| Catalog | `catalog/*` | 8 entries; self-validates on import |
+| Signals | `signals/*` | Normalize, cap, dedupe grounding signals |
+| Fingerprints | `fingerprints/*` | Stale inputs + semantic fingerprint; `stale_state_check` on DTO |
+| Builder | `builders/buildOperationalRecommendationV1.ts` | Single orchestrator — no fork |
+| Projections | `builders/projectOperationalRecommendationRender.ts`, `adapters/projectOperationalRecommendationQueuePreview.ts` | Queue / drawer / handoff / detail render bundle |
+| Adapters | `adapters/*` | Entity attach, queue preview, legacy compat, runtime switch |
+| Selectors | `selectors/recommendationSurfaceSelectors.ts` | UI read-order only — no copy generation |
+| Public API | `index.ts` | Types, builder, validator, catalog, adapters, selectors |
+
+**Wire touchpoints:**
+
+- `web/lib/admin/opportunityAttentionSuggestionAttachment.ts` — entity GET bundle
+- `web/lib/queues/QueueService.ts` — `enrichOpportunityRows` queue preview
+- `web/lib/workspace/viewModels/enrollmentWorkUnitViewModel.ts` — queue VM read-order
+- `web/components/admin/drawer/OperationalAttentionHeaderStrip.tsx` — drawer strip read-order
+- `web/lib/adminV2/bos/operationalRecommendationHandoff.ts` — handoff read-order
+- `web/lib/adminV2/bos/activeOperationalContext.ts` — orchestrator seed read-order
+
+### 12.3 Canonical data flow
+
+```
+resolveOpportunityAttention (+ activity signals on entity GET)
+    → tryBuildOperationalRecommendationFromAttention
+        → buildOperationalRecommendationV1 (catalog + signals + fingerprint + validate)
+            → entity: _operational_recommendation (full DTO)
+            → queue:  _operational_recommendation_preview (render.queue only)
+            → legacy: buildLegacy*Compat → _attention_suggestion / _attention_suggestion_preview
+    → UI selectors: canonical fields first → legacy fallback
+```
+
+**Authority boundaries (unchanged):**
+
+- **Entity GET** — full `OperationalRecommendationV1` is authoritative for drawer/detail.
+- **Queue rows** — preview projections only; not workflow/execution truth.
+- **`_operational_attention`** — resolver truth; recommendation does not replace it.
+
+### 12.4 Runtime field behavior
+
+| Surface | Canonical field | Legacy compat field | Read-order |
+|---------|-----------------|---------------------|------------|
+| Entity GET | `_operational_recommendation` | `_attention_suggestion` | Canonical built first; legacy projected or fallback |
+| Queue row | `_operational_recommendation_preview` | `_attention_suggestion_preview` | Selectors prefer canonical preview |
+| Drawer strip | `render.drawer_strip` | `_attention_suggestion` | Selectors prefer canonical; legacy kept for draft/enhance |
+| Handoff | `render.handoff` | `_attention_suggestion` + attention explain | Selectors prefer canonical |
+
+All legacy fields **preserved** on wire. No removal in Phase 1.
+
+### 12.5 Legacy compatibility status
+
+- `buildNeedsAttentionSuggestion` — **retained** as fail-soft fallback (not deleted).
+- `projectRecommendationToLegacyAttentionSuggestion` — adapter available; runtime switch uses it via `buildLegacyAttentionSuggestionCompat`.
+- `suggested_content` on adapter output — **always null** (no comms bodies from canonical path).
+- Legacy draft templates on direct `buildNeedsAttentionSuggestion` fallback path — unchanged (pre-existing).
+
+### 12.6 Test coverage
+
+**Test directory:** `web/tests/adminV2/bos/recommendations/` (8 files)
+
+| Test file | Focus |
+|-----------|-------|
+| `validateOperationalRecommendationV1.test.ts` | DTO validation |
+| `operationalRecommendationCatalog.test.ts` | Catalog + templates |
+| `buildOperationalRecommendationV1.test.ts` | Builder + fingerprints |
+| `attachOperationalRecommendationBundle.test.ts` | Entity attach |
+| `attachOperationalRecommendationQueuePreview.test.ts` | Queue preview attach |
+| `projectRecommendationToLegacyAttentionSuggestion.test.ts` | Legacy adapter + parity |
+| `buildLegacySuggestionCompat.test.ts` | Runtime switch + fallback |
+| `recommendationSurfaceSelectors.test.ts` | UI read-order selectors |
+
+**Regression suite (Card 1.9):** 187 tests passed (12 files) including handoff, drawer UI smoke, active context, queue priority sort.
+
+```bash
+cd web && npm run test -- tests/adminV2/bos/recommendations/ \
+  tests/adminV2/operationalRecommendationHandoff.test.ts \
+  tests/admin/drawer/operationalAttentionSuggestionUi.test.tsx \
+  tests/adminV2/activeOperationalContext.test.ts \
+  tests/queues/needsAttentionQueuePrioritySort.test.ts
+```
+
+### 12.7 Known limitations / deviations from this pack
+
+| Item | Planned (pack) | Actual | Phase |
+|------|----------------|--------|-------|
+| `validateRecommendationFreshness.ts` | §2.1, §10.5 | Not implemented — `stale_state_check` on DTO only; no live revalidation helper | 2+ |
+| `rationaleQuality.contract.test.ts` | §10.3 | Coverage in catalog + builder + parity tests; no separate contract file | OK |
+| `projection/*` module tree | §2.1 | Projections live in `builders/` + `adapters/` | Naming only |
+| `rendering/renderingFieldMap.ts` | §2.1 | Caps in `types.ts` `OPERATIONAL_RECOMMENDATION_MAX_LENGTHS` | OK |
+| `collectRecommendationSignals` | §2.1 | `extractGroundingSignalsFromAttention` + attach context | OK |
+| Card numbering vs pack §9 table | 1.4 = projections | Implemented as entity attach (cards renumbered in execution) | Doc drift |
+| Full GATE 1 per-reason contract sweep | §5.3 sprint | 6 supported reason codes + supplemental keys in parity tests | Phase 2 can extend |
+| `buildNeedsAttentionSuggestion` deprecation | §9.3 | Retained as fallback; not marked `@deprecated` yet | Phase 2+ |
+
+### 12.8 Explicit confirmations
+
+| Constraint | Phase 1 status |
+|------------|----------------|
+| **No AI / LLM in recommendation modules** | ✅ Confirmed — no enrich imports, no model calls in `recommendations/*` |
+| **No DB persistence** | ✅ Confirmed — ephemeral GET / queue enrich payloads only |
+| **No workflow mutation** | ✅ Confirmed — no `executeWorkflowRun`, no action execution |
+| **No communication body generation from canonical path** | ✅ Confirmed — adapter sets `suggested_content: null` |
+| **No autonomous agents** | ✅ Confirmed |
+| **Queue truth boundary intact** | ✅ Confirmed — preview-only on rows |
+| **No UI-generated recommendation copy** | ✅ Confirmed — selectors read server projections only |
+
+### 12.9 Phase 2 readiness
+
+**Ready to begin Phase 2** (Operational UX polish) with these prerequisites met:
+
+- Canonical contract wired on entity GET and queue enrich
+- Legacy compat + fallback safe
+- Surface read-order prefers canonical copy where attached
+- Test suite green for recommendation scope
+
+**Phase 2 should NOT assume:** freshness revalidation helper, AI enrich, comms prefill, or legacy field removal — those remain gated per parent sprint §5.4–5.6.
+
+**Suggested Phase 2 first cards:** strip visual hierarchy (urgency chip, outcome line), queue urgency band chip, L2 detail expand — per Appendix C and sprint §5.4.

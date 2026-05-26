@@ -1,9 +1,10 @@
 /**
  * Deterministic copy for drawer → Orchestrator recommendation handoff (BOS UX Gate A).
- * Sources: `_attention_suggestion`, `_operational_attention` on opportunity overview only.
+ * Read-order: `_operational_recommendation.render.handoff` → legacy `_attention_suggestion` / attention explain.
  */
 
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
+import { getRecommendationHandoff } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceSelectors";
 import { suggestionActionForReasonCode } from "@/lib/agent/needsAttentionSuggestion/suggestionActionMap";
 import { isEnrollmentWaitBucket } from "@/lib/opportunities/attentionPlatformCatalog";
 import {
@@ -90,6 +91,17 @@ export function buildOperationalRecommendationHandoffCopy(args: {
     /** First open operational task title when loaded in strip (optional). */
     openTaskTitle?: string | null;
 }): OperationalRecommendationHandoffCopy {
+    const canonicalHandoff = getRecommendationHandoff(args.overviewData);
+    if (canonicalHandoff) {
+        const recordName = args.entityLabel?.trim() || "this inquiry";
+        return {
+            ...canonicalHandoff,
+            contextLine: canonicalHandoff.contextLine.includes("Active record")
+                ? `Active record · ${recordName}`
+                : canonicalHandoff.contextLine,
+        };
+    }
+
     const recordName = args.entityLabel?.trim() || "this inquiry";
     const contextLine = `Active record · ${recordName}`;
 
