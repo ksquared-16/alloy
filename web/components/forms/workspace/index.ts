@@ -4,5 +4,9 @@ export { FormsBreadcrumbs } from "@/components/forms/workspace/FormsBreadcrumbs"
 export { FormsModuleNav } from "@/components/forms/workspace/FormsModuleNav";
 export { FormsOperationalLink } from "@/components/forms/workspace/FormsOperationalLink";
 export { FormsWorkspaceChrome } from "@/components/forms/workspace/FormsWorkspaceChrome";
+export { FormDistributionPanel } from "@/components/forms/workspace/FormDistributionPanel";
+export { FormIntakePreviewPanel } from "@/components/forms/workspace/FormIntakePreviewPanel";
+export { FormLifecycleRail } from "@/components/forms/workspace/FormLifecycleRail";
+export { FormLifecycleWorkspaceLayout } from "@/components/forms/workspace/FormLifecycleWorkspaceLayout";
 export { FormsWorkspaceShell } from "@/components/forms/workspace/FormsWorkspaceShell";
 export { PacketSessionInboxRow } from "@/components/forms/workspace/PacketSessionInboxRow";

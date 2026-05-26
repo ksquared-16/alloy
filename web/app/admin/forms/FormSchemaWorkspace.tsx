@@ -1,14 +1,15 @@
 "use client";
 
+import clsx from "clsx";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import PrimaryButton from "@/components/PrimaryButton";
-import SectionCard from "@/components/admin/SectionCard";
 import StructuredFormSchemaEditor from "@/components/admin/forms/StructuredFormSchemaEditor";
 import { emptyFormSchema } from "@/lib/forms/adminFormSchemaBuilder";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
+import { opMetadata } from "@/lib/operational/ui/operationalVisualTokens";
 
 type VersionRow = {
     id: string;
@@ -174,26 +175,26 @@ export default function FormSchemaWorkspace({
     };
 
     return (
-                    <SectionCard title="Form fields & draft">
-            {!canMutate ? <p className="text-sm text-[#59678b]">Admin role required to edit schema.</p> : null}
-            {loadErr ? <p className="text-sm text-red-700">{loadErr}</p> : null}
-            {saveErr ? <p className="text-sm text-red-700">{saveErr}</p> : null}
+        <div data-testid="form-schema-workspace">
+            {!canMutate ? <p className={opMetadata}>Admin role required to edit schema.</p> : null}
+            {loadErr ? <p className="text-sm text-alloy-ember">{loadErr}</p> : null}
+            {saveErr ? <p className="text-sm text-alloy-ember">{saveErr}</p> : null}
 
             {publishSuccess ? (
                 <div
-                    className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950"
+                    className="rounded-lg bg-emerald-50/80 px-4 py-3 text-sm text-emerald-950 ring-1 ring-emerald-200/60"
                     role="status"
                 >
                     <p className="font-medium">Published — this form can go into a packet.</p>
                     <p className="mt-2 text-emerald-900">
                         <Link
                             href={`${ADMIN_FORMS_UI_BASE}/packet-definitions?addForm=${encodeURIComponent(formId)}`}
-                            className="font-semibold text-[#00458C] underline"
+                            className="font-semibold text-alloy-blue underline"
                         >
                             Create a new packet with this form
                         </Link>
                         {" · "}
-                        <Link href={`${ADMIN_FORMS_UI_BASE}/packet-definitions`} className="font-semibold text-[#00458C] underline">
+                        <Link href={`${ADMIN_FORMS_UI_BASE}/packet-definitions`} className="font-semibold text-alloy-blue underline">
                             Browse packets to add a step
                         </Link>
                     </p>
@@ -204,12 +205,12 @@ export default function FormSchemaWorkspace({
             ) : null}
 
             {!draftMeta && canMutate ? (
-                <div className="space-y-3 text-sm text-[#31394d]">
-                    <p className="text-[#59678b]">
+                <div className="space-y-3 text-sm text-alloy-midnight">
+                    <p className={opMetadata}>
                         Start a draft to add questions from the system field list, then publish. Published versions cannot be
                         edited in place — use “new draft from published” to iterate.
                     </p>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2" data-testid="form-new-draft-actions">
                         <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={busy} onClick={() => void startBlankDraft()}>
                             New blank draft
                         </PrimaryButton>
@@ -223,7 +224,7 @@ export default function FormSchemaWorkspace({
                                 New draft from published (v{latestPublished.version_number})
                             </PrimaryButton>
                         ) : (
-                            <span className="self-center text-xs text-[#59678b]">Publish a first version before you can clone.</span>
+                            <span className={clsx("self-center text-xs", opMetadata)}>Publish a first version before you can clone.</span>
                         )}
                     </div>
                 </div>
@@ -242,8 +243,8 @@ export default function FormSchemaWorkspace({
                     </div>
                 </div>
             ) : draftMeta && busy && !schema ? (
-                <p className="text-sm text-[#59678b]">Loading draft…</p>
+                <p className={opMetadata}>Loading draft…</p>
             ) : null}
-        </SectionCard>
+        </div>
     );
 }

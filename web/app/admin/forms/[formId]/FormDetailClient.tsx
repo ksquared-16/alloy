@@ -1,17 +1,24 @@
 "use client";
 
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import SectionCard from "@/components/admin/SectionCard";
+import {
+    FormLifecycleWorkspaceLayout,
+} from "@/components/forms/workspace/FormLifecycleWorkspaceLayout";
+import {
+    type CreatedLinkPayload,
+    type FormPublicLinkRow,
+} from "@/components/forms/workspace/FormDistributionPanel";
 import { FormsOperationalLink, FormsWorkspaceShell } from "@/components/forms/workspace";
-import { formsWorkspaceBreadcrumbs, FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
-import PrimaryButton from "@/components/PrimaryButton";
-import { StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
-import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
-import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
+import {
+    ADMIN_PREVIEW_LINK_LABEL,
+    ADMIN_PREVIEW_LINK_METADATA,
+    appendPreviewQueryToFullUrl,
+    buildPreviewEmbedUrl,
+    previewEmbedSessionStorageKey,
+} from "@/lib/forms/adminFormPreview";
 import {
     buildConnectedSystemsBullets,
     formVersionHasDocumentMapping,
@@ -21,22 +28,13 @@ import {
     resolveWhoCompletesParagraph,
 } from "@/lib/forms/operatorFormGuidance";
 import {
-    ADMIN_PREVIEW_LINK_LABEL,
-    ADMIN_PREVIEW_LINK_METADATA,
-    appendPreviewQueryToFullUrl,
-    buildPreviewEmbedUrl,
-    previewEmbedSessionStorageKey,
-} from "@/lib/forms/adminFormPreview";
-import { MEDICATION_AUTHORIZATION_DEMO_FORM_KEY } from "@/lib/forms/seeds/medicationAuthorizationDemo";
+    buildFormLifecycleSteps,
+    formLifecyclePurposeLine,
+    formLifecyclePublishSummaryLabel,
+} from "@/lib/forms/formLifecyclePresentation";
+import { formsWorkspaceBreadcrumbs, FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
 import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
-import FormSchemaWorkspace from "@/app/admin/forms/FormSchemaWorkspace";
-import {
-    TechnicalDetailDisclosure,
-    TechnicalDetailField,
-    TechnicalDetailFieldList,
-    TechnicalDetailMonospaceValue,
-} from "@/components/forms/review";
-import { FORMS_TECHNICAL_DISCLOSURE } from "@/lib/forms/review/formsReviewTechnicalDisclosure";
+import { opMetadata } from "@/lib/operational/ui/operationalVisualTokens";
 
 type VersionRow = {
     id: string;
@@ -59,22 +57,6 @@ type FormDetail = {
     versions: VersionRow[];
 };
 
-type PublicLinkRow = {
-    id: string;
-    is_active: boolean;
-    expires_at: string | null;
-    token_prefix: string | null;
-    pinned_form_definition_version_id: string | null;
-    created_at: string;
-    metadata?: Record<string, unknown>;
-};
-
-type CreatedLinkPayload = {
-    plaintext_token: string;
-    embed_path: string;
-    embed_url: string | null;
-};
-
 export default function FormDetailClient() {
     const params = useParams();
     const formId = typeof params?.formId === "string" ? params.formId : "";
@@ -82,7 +64,8 @@ export default function FormDetailClient() {
     const { canMutate } = useAdminAuth();
 
     const [detail, setDetail] = useState<FormDetail | null>(null);
-    const [links, setLinks] = useState<PublicLinkRow[]>([]);
+    const [links, setLinks] = useState<FormPublicLinkRow[]>([]);
+    const [submissionStats, setSubmissionStats] = useState({ total: 0, submitted: 0 });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [creating, setCreating] = useState(false);
@@ -98,12 +81,14 @@ export default function FormDetailClient() {
         setLoading(true);
         setError(null);
         try {
-            const [formRes, linksRes] = await Promise.all([
+            const [formRes, linksRes, subRes] = await Promise.all([
                 fetch(`/api/admin/forms/${encodeURIComponent(formId)}`),
                 fetch(`/api/admin/forms/${encodeURIComponent(formId)}/public-links`),
+                fetch(`/api/admin/forms/submissions?form_definition_id=${encodeURIComponent(formId)}&limit=200`),
             ]);
             const formJson = await formRes.json().catch(() => ({}));
             const linksJson = await linksRes.json().catch(() => ({}));
+            const subJson = await subRes.json().catch(() => ({}));
             if (!formRes.ok) throw new Error((formJson as { error?: string }).error ?? "Failed to load form");
             setDetail((formJson as { data?: FormDetail }).data ?? null);
             if (linksRes.ok) {
@@ -113,11 +98,20 @@ export default function FormDetailClient() {
                         const { token_hash: _h, plaintext_token: _p, ...rest } = row;
                         void _h;
                         void _p;
-                        return rest as PublicLinkRow;
+                        return rest as FormPublicLinkRow;
                     })
                 );
             } else {
                 setLinks([]);
+            }
+            if (subRes.ok) {
+                const subs = (subJson as { data?: { status?: string }[] }).data ?? [];
+                setSubmissionStats({
+                    total: subs.length,
+                    submitted: subs.filter((s) => s.status === "submitted").length,
+                });
+            } else {
+                setSubmissionStats({ total: 0, submitted: 0 });
             }
         } catch (e) {
             setError((e as Error).message);
@@ -139,7 +133,7 @@ export default function FormDetailClient() {
             setTimeout(() => setCopied(null), 2000);
         } catch {
             setCopied(null);
-            setCopyWarn("Clipboard unavailable in this browser — select the text above and copy manually.");
+            setCopyWarn("Clipboard unavailable — select the text and copy manually.");
         }
     };
 
@@ -191,7 +185,7 @@ export default function FormDetailClient() {
                     }
                 }
             } catch {
-                /* fall through — mint fresh preview link */
+                /* fall through */
             }
         }
 
@@ -226,7 +220,7 @@ export default function FormDetailClient() {
             try {
                 sessionStorage.setItem(previewEmbedSessionStorageKey(formId), previewUrl);
             } catch {
-                /* quota / privacy mode */
+                /* quota */
             }
             window.open(previewUrl, "_blank", "noopener,noreferrer");
             void load();
@@ -238,14 +232,13 @@ export default function FormDetailClient() {
     }, [formId, canMutate, load]);
 
     const published = detail?.versions.filter((v) => v.status === "published") ?? [];
+    const drafts = detail?.versions.filter((v) => v.status === "draft") ?? [];
     const latestPublished = published.sort((a, b) => b.version_number - a.version_number)[0];
+    const hasDraft = drafts.length > 0;
+    const hasPublished = Boolean(latestPublished);
+    const activeLinkCount = links.filter((l) => l.is_active).length;
 
     const operatorContext = useMemo(() => parseOperatorContext(detail?.metadata), [detail?.metadata]);
-
-    const leadCaptureConfigured = useMemo(
-        () => links.some((L) => linkRequiresLeadCapture(L.metadata)),
-        [links]
-    );
 
     const documentGenerationConfigured = useMemo(
         () => (latestPublished ? formVersionHasDocumentMapping(latestPublished.pdf_mapping_json) : false),
@@ -255,12 +248,30 @@ export default function FormDetailClient() {
     const connectedBullets = useMemo(
         () =>
             buildConnectedSystemsBullets({
-                leadCaptureConfigured,
+                leadCaptureConfigured: links.some((l) => linkRequiresLeadCapture(l.metadata)),
                 documentGenerationConfigured,
                 operatorNotes: operatorContext?.connected_notes ?? null,
             }),
-        [leadCaptureConfigured, documentGenerationConfigured, operatorContext?.connected_notes]
+        [links, documentGenerationConfigured, operatorContext?.connected_notes]
     );
+
+    const lifecycleSteps = useMemo(
+        () =>
+            buildFormLifecycleSteps({
+                hasDraft,
+                hasPublished,
+                activeLinkCount,
+                submissionCount: submissionStats.total,
+                submittedCount: submissionStats.submitted,
+                documentGenerationConfigured,
+            }),
+        [hasDraft, hasPublished, activeLinkCount, submissionStats, documentGenerationConfigured]
+    );
+
+    const purposeLine = useMemo(() => {
+        if (!detail) return null;
+        return formLifecyclePurposeLine(operatorContext?.purpose ?? null, detail.description, detail.kind);
+    }, [detail, operatorContext]);
 
     const openPublicEmbedUrl = useMemo(() => {
         if (!createdOnce) return null;
@@ -270,397 +281,81 @@ export default function FormDetailClient() {
         );
     }, [createdOnce]);
 
-    const submissionsHref = `${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(formId)}/submissions`;
+    const publishSummary = formLifecyclePublishSummaryLabel(hasDraft, hasPublished);
+    const publishTone = hasPublished ? "success" : hasDraft ? "info" : "neutral";
 
     if (!formId) {
-        return <p className="p-6 text-sm text-red-700">Missing form id.</p>;
+        return <p className="p-6 text-sm text-alloy-ember">Missing form id.</p>;
     }
 
     return (
         <FormsWorkspaceShell
             title={detail?.name ?? "Form workspace"}
-            subtitle={
-                detail ?
-                    "Design, publish, distribute, and review intake for this definition."
-                :   "Loading form workspace…"
-            }
+            subtitle={purposeLine ?? "Manage this intake workflow — design through review."}
             breadcrumbs={
                 detail ?
                     formsWorkspaceBreadcrumbs([{ label: detail.name }])
                 :   formsWorkspaceBreadcrumbs([{ label: "Form" }])
             }
             actions={
-                <div className="flex flex-wrap items-center gap-3">
-                    {openPublicEmbedUrl ?
-                        <a
-                            href={openPublicEmbedUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs font-semibold text-alloy-blue hover:underline"
-                        >
-                            Open public form
-                        </a>
-                    :   null}
-                    <FormsOperationalLink href={submissionsHref}>Intake inbox</FormsOperationalLink>
-                    <FormsOperationalLink href={FORMS_MODULE_ROUTES.packetDefinitions}>
-                        Packets
-                    </FormsOperationalLink>
-                </div>
+                detail ?
+                    <div className="flex flex-wrap items-center gap-2">
+                        {openPublicEmbedUrl ?
+                            <a
+                                href={openPublicEmbedUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs font-semibold text-alloy-blue hover:underline"
+                            >
+                                Open public form
+                            </a>
+                        :   null}
+                        <FormsOperationalLink href={FORMS_MODULE_ROUTES.packetDefinitions}>
+                            Packets
+                        </FormsOperationalLink>
+                    </div>
+                :   null
             }
+            contentClassName="space-y-0"
         >
-
-            {detail && !loading ? (
-                <div className="rounded-lg border border-[#e6e8ec] bg-[#fafbfd] px-4 py-4 sm:px-5">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="min-w-0 flex-1 space-y-1">
-                            <p className="text-sm font-semibold text-[#31394d]">Preview the public form</p>
-                            <p className="text-sm leading-relaxed text-[#59678b]">
-                                Opens the real embed experience (same page families and staff see) in a{" "}
-                                <strong className="font-medium text-[#31394d]">new browser tab</strong>. Alloy cannot
-                                reconstruct old share URLs from this screen, so preview creates a dedicated link tagged{" "}
-                                <span className="whitespace-nowrap font-mono text-xs text-[#31394d]">
-                                    {ADMIN_PREVIEW_LINK_LABEL}
-                                </span>{" "}
-                                — you can deactivate it later if you do not want extra links.
-                            </p>
-                            {!canMutate ? (
-                                <p className="text-sm text-amber-900">
-                                    Admin role is required to create a preview link.
-                                </p>
-                            ) : null}
-                            {!latestPublished ? (
-                                <p className="text-sm text-amber-900">
-                                    Publish at least one version before preview — the public page needs a published schema.
-                                </p>
-                            ) : null}
-                            {previewErr ? <p className="text-sm text-red-700">{previewErr}</p> : null}
-                        </div>
-                        <div className="flex flex-shrink-0 flex-col items-stretch gap-2 sm:items-end">
-                            <PrimaryButton
-                                type="button"
-                                className="!px-4 !py-2.5 text-sm whitespace-nowrap sm:min-w-[148px]"
-                                onClick={() => void handlePreviewForm()}
-                                disabled={
-                                    previewBusy || creating || !canMutate || !latestPublished
-                                }
-                            >
-                                {previewBusy ? "Opening…" : "Preview form"}
-                            </PrimaryButton>
-                            <p className="max-w-[220px] text-center text-[11px] leading-snug text-[#59678b] sm:text-right">
-                                Reuses this browser tab&apos;s session when possible so you may not get a new link every
-                                click.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            ) : null}
-
-            {loading ? (
-                <p className="text-sm text-[#59678b]">Loading…</p>
-            ) : error ? (
-                <p className="text-sm text-red-700">{error}</p>
-            ) : detail ? (
-                <>
-                    <SectionCard title="Operator guide">
-                        <div className="space-y-5 text-sm text-[#31394d]">
-                            <div>
-                                <p className="text-xs font-bold uppercase tracking-wide text-[#59678b]">How this form flows</p>
-                                <div className="mt-3 grid gap-2 sm:grid-cols-5">
-                                    {[
-                                        { step: 1, title: "Share", hint: "Preview or create a link" },
-                                        { step: 2, title: "Open", hint: "Recipient opens the form" },
-                                        { step: 3, title: "Submit", hint: "They complete & send" },
-                                        { step: 4, title: "Review", hint: "You check Submissions" },
-                                        { step: 5, title: "Document", hint: "Generate PDF when mapped" },
-                                    ].map((s) => (
-                                        <div
-                                            key={s.step}
-                                            className="flex flex-col rounded-lg border border-[#e6e8ec] bg-white px-3 py-2.5 text-center shadow-sm"
-                                        >
-                                            <span className="mx-auto flex h-7 w-7 items-center justify-center rounded-full bg-[#00458C] text-xs font-bold text-white">
-                                                {s.step}
-                                            </span>
-                                            <span className="mt-2 text-xs font-semibold text-[#31394d]">{s.title}</span>
-                                            <span className="mt-0.5 text-[11px] leading-snug text-[#59678b]">{s.hint}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <details className="rounded-lg border border-[#e6e8ec] bg-white px-4 py-3 open:bg-[#fafbfd]">
-                                <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-[#59678b]">
-                                    What this form is for
-                                </summary>
-                                <p className="mt-2 leading-relaxed">
-                                    {resolvePurposeParagraph(operatorContext, detail.description, detail.name)}
-                                </p>
-                            </details>
-                            <details className="rounded-lg border border-[#e6e8ec] bg-white px-4 py-3 open:bg-[#fafbfd]">
-                                <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-[#59678b]">
-                                    Who completes this?
-                                </summary>
-                                <p className="mt-2 leading-relaxed">{resolveWhoCompletesParagraph(operatorContext, detail.kind)}</p>
-                            </details>
-                            <details className="rounded-lg border border-[#e6e8ec] bg-white px-4 py-3 open:bg-[#fafbfd]">
-                                <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-[#59678b]">
-                                    After someone submits
-                                </summary>
-                                <p className="mt-2 leading-relaxed">{resolveAfterSubmissionParagraph(operatorContext)}</p>
-                            </details>
-                            <details className="rounded-lg border border-[#e6e8ec] bg-white px-4 py-3 open:bg-[#fafbfd]">
-                                <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-[#59678b]">
-                                    Connected systems
-                                </summary>
-                                <ul className="mt-2 list-disc space-y-1.5 pl-5 leading-relaxed">
-                                    {connectedBullets.map((b) => (
-                                        <li key={b.id}>{b.text}</li>
-                                    ))}
-                                </ul>
-                            </details>
-                            <details className="rounded-lg border border-[#e6e8ec] bg-white px-4 py-3 open:bg-[#fafbfd]">
-                                <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-[#59678b]">
-                                    Detailed checklist
-                                </summary>
-                                <ol className="mt-2 list-decimal space-y-1.5 pl-5 leading-relaxed">
-                                    <li>
-                                        Use <strong className="font-medium text-[#31394d]">Preview form</strong> (above) for a
-                                        safe live tab — preview links are labeled so you can deactivate them later.
-                                    </li>
-                                    <li>
-                                        <a href="#form-public-embed-links" className="font-medium text-[#00458C] hover:underline">
-                                            Create a public link
-                                        </a>{" "}
-                                        when you need a URL to share; copy it immediately.
-                                    </li>
-                                    <li>Send the link to the person who should fill it out.</li>
-                                    <li>
-                                        <Link href={submissionsHref} className="font-medium text-[#00458C] hover:underline">
-                                            Review submissions
-                                        </Link>{" "}
-                                        and open one for full answers.
-                                    </li>
-                                    <li>Use Generate document on a submission when PDF mapping is configured.</li>
-                                </ol>
-                                {openPublicEmbedUrl ? (
-                                    <p className="mt-3 text-xs text-[#59678b]">
-                                        Session link:{" "}
-                                        <a
-                                            href={openPublicEmbedUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="font-medium text-[#00458C] hover:underline"
-                                        >
-                                            Open public form
-                                        </a>
-                                    </p>
-                                ) : null}
-                            </details>
-                            <TechnicalDetailDisclosure
-                                title={FORMS_TECHNICAL_DISCLOSURE.technicalDetails.title}
-                                helperText="Form definition id, internal key, and API metadata paths."
-                            >
-                                <TechnicalDetailFieldList>
-                                    <TechnicalDetailField label="Form definition id" fullWidth>
-                                        <TechnicalDetailMonospaceValue>{detail.id}</TechnicalDetailMonospaceValue>
-                                    </TechnicalDetailField>
-                                    <TechnicalDetailField label="Internal key" fullWidth>
-                                        <TechnicalDetailMonospaceValue>{detail.key}</TechnicalDetailMonospaceValue>
-                                    </TechnicalDetailField>
-                                </TechnicalDetailFieldList>
-                                <p className="mt-3 text-xs text-[#59678b]">
-                                    Tailored copy: set{" "}
-                                    <code className="rounded bg-[#F4F6F9] px-1 font-mono text-[11px]">metadata.operator_context</code>{" "}
-                                    via API (purpose, who completes, after submission, notes).
-                                </p>
-                            </TechnicalDetailDisclosure>
-                        </div>
-                    </SectionCard>
-
-                    <SectionCard title="Published versions">
-                        {latestPublished ? (
-                            <p className="text-sm text-[#31394d]">
-                                Latest published:{" "}
-                                <span className="font-medium">v{latestPublished.version_number}</span>
-                                {latestPublished.published_at ? (
-                                    <> · {formatDateTimeForUserDisplay(latestPublished.published_at, viewerTz)}</>
-                                ) : null}
-                            </p>
-                        ) : (
-                            <p className="text-sm text-[#59678b]">No published version yet.</p>
-                        )}
-                        {latestPublished ? (
-                            <p className="mt-3 text-sm text-[#31394d]">
-                                <span className="font-medium">Packets:</span>{" "}
-                                <Link
-                                    href={`${ADMIN_FORMS_UI_BASE}/packet-definitions?addForm=${encodeURIComponent(detail.id)}`}
-                                    className="font-semibold text-[#00458C] hover:underline"
-                                >
-                                    Start a new packet with this form
-                                </Link>
-                                {" · "}
-                                <Link href={`${ADMIN_FORMS_UI_BASE}/packet-definitions`} className="font-semibold text-[#00458C] hover:underline">
-                                    Open packet list
-                                </Link>
-                            </p>
-                        ) : null}
-                        <div className="mt-3 overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-b border-[#e6e8ec]">
-                                        <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Ver</th>
-                                        <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Status</th>
-                                        <th className="pb-2 text-left font-semibold text-[#59678b]">Published</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-[#e6e8ec]">
-                                    {detail.versions.map((v) => (
-                                        <tr key={v.id}>
-                                            <td className="py-2 pr-4">{v.version_number}</td>
-                                            <td className="py-2 pr-4">
-                                                <StatusBadge label={v.status} variant={getStatusVariant(v.status)} />
-                                            </td>
-                                            <td className="py-2 text-[#59678b]">
-                                                {v.published_at ? formatDateTimeForUserDisplay(v.published_at, viewerTz) : "—"}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </SectionCard>
-
-                    <FormSchemaWorkspace
-                        formId={formId}
-                        formName={detail.name}
-                        versions={detail.versions}
-                        onVersionsUpdated={() => void load()}
-                    />
-
-                    <div id="form-public-embed-links">
-                        <SectionCard title="Public embed links">
-                            {!canMutate ? (
-                                <p className="text-sm text-[#59678b]">Admin role required to create links.</p>
-                            ) : (
-                                <div className="flex flex-wrap gap-2">
-                                    <PrimaryButton
-                                        type="button"
-                                        className="!px-3 !py-2 text-sm"
-                                        onClick={() => void createPublicLink()}
-                                        disabled={creating}
-                                    >
-                                        {creating ? "Creating…" : "Create public link"}
-                                    </PrimaryButton>
-                                </div>
-                            )}
-                            {createErr ? <p className="mt-2 text-sm text-red-700">{createErr}</p> : null}
-                            {detail?.key === MEDICATION_AUTHORIZATION_DEMO_FORM_KEY ?
-                                <p className="mt-2 max-w-2xl text-xs leading-relaxed text-[#59678b]">
-                                    New links for this demo automatically enable CRM intake when your org has an active{" "}
-                                    <strong className="font-medium text-[#31394d]">cleaning</strong> vertical (lead capture,
-                                    default vertical, and demo auto-create flags). Preview links use the same defaults.
-                                </p>
-                            : null}
-
-                            <div className="mt-3 rounded-md bg-[#F4F6F9]/80 p-3 text-sm text-[#59678b]">
-                                <p className="font-medium text-[#31394d]">About links and tokens</p>
-                                <p className="mt-1 leading-relaxed">
-                                    For security, existing links cannot be revealed again. The table only shows a short{" "}
-                                    <strong>prefix</strong> so you can tell links apart — not the full secret URL (Alloy stores
-                                    a hash of the token).
-                                </p>
-                                <p className="mt-2 leading-relaxed">
-                                    Create a new public link when you need a copyable URL. Copy the embed URL or token right
-                                    away; it is shown only once at creation.
-                                </p>
-                            </div>
-
-                            {createdOnce ? (
-                                <div className="mt-4 rounded-lg border border-[#DBC078]/50 bg-[#e6d3a0]/15 p-4">
-                                    <p className="text-sm font-semibold text-[#31394d]">
-                                        Copy now — token is shown only once
-                                    </p>
-                                    <div className="mt-2 space-y-2 text-sm">
-                                        <div>
-                                            <span className="text-[#59678b]">Token</span>
-                                            <div className="mt-1 flex flex-wrap items-center gap-2">
-                                                <code className="break-all rounded bg-white px-2 py-1 font-mono text-xs">
-                                                    {createdOnce.plaintext_token}
-                                                </code>
-                                                <button
-                                                    type="button"
-                                                    className="text-[#00458C] hover:underline"
-                                                    onClick={() => void copyText("token", createdOnce.plaintext_token)}
-                                                >
-                                                    {copied === "token" ? "Copied" : "Copy"}
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <span className="text-[#59678b]">Embed URL</span>
-                                            <div className="mt-1 flex flex-wrap items-center gap-2">
-                                                <code className="break-all rounded bg-white px-2 py-1 font-mono text-xs">
-                                                    {createdOnce.embed_url ??
-                                                        `${typeof window !== "undefined" ? window.location.origin : ""}${createdOnce.embed_path}`}
-                                                </code>
-                                                <button
-                                                    type="button"
-                                                    className="text-[#00458C] hover:underline"
-                                                    onClick={() =>
-                                                        void copyText(
-                                                            "url",
-                                                            createdOnce.embed_url ??
-                                                                `${typeof window !== "undefined" ? window.location.origin : ""}${createdOnce.embed_path}`
-                                                        )
-                                                    }
-                                                >
-                                                    {copied === "url" ? "Copied" : "Copy"}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    {copyWarn ? <p className="mt-3 text-xs text-[#59678b]">{copyWarn}</p> : null}
-                                </div>
-                            ) : null}
-
-                            {links.length > 0 ? (
-                                <div className="mt-4 overflow-x-auto">
-                                    <p className="mb-2 text-xs text-[#59678b]">
-                                        Existing links — prefix only. For security, full URLs are not shown here; create a new
-                                        link for a copyable URL.
-                                    </p>
-                                    <table className="w-full text-sm">
-                                        <thead>
-                                            <tr className="border-b border-[#e6e8ec]">
-                                                <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Prefix</th>
-                                                <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Active</th>
-                                                <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Expires</th>
-                                                <th className="pb-2 text-left font-semibold text-[#59678b]">Created</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-[#e6e8ec]">
-                                            {links.map((L) => (
-                                                <tr key={L.id}>
-                                                    <td className="py-2 pr-4 font-mono text-xs">{L.token_prefix ?? "—"}</td>
-                                                    <td className="py-2 pr-4">
-                                                        <StatusBadge
-                                                            label={L.is_active ? "yes" : "no"}
-                                                            variant={L.is_active ? "success" : "neutral"}
-                                                        />
-                                                    </td>
-                                                    <td className="py-2 pr-4 text-[#59678b]">
-                                                        {L.expires_at ? formatDateTimeForUserDisplay(L.expires_at, viewerTz) : "—"}
-                                                    </td>
-                                                    <td className="py-2 text-[#59678b]">{formatDateTimeForUserDisplay(L.created_at, viewerTz)}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            ) : null}
-                        </SectionCard>
-                    </div>
-                </>
-            ) : null}
+            {loading ?
+                <p className={opMetadata}>Loading form workspace…</p>
+            : error ?
+                <p className="text-sm text-alloy-ember">{error}</p>
+            : detail ?
+                <FormLifecycleWorkspaceLayout
+                    formId={formId}
+                    detail={detail}
+                    viewerTz={viewerTz}
+                    canMutate={canMutate}
+                    publishSummary={publishSummary}
+                    publishTone={publishTone}
+                    purposeLine={purposeLine}
+                    lifecycleSteps={lifecycleSteps}
+                    submissionCount={submissionStats.total}
+                    documentGenerationConfigured={documentGenerationConfigured}
+                    links={links}
+                    creating={creating}
+                    createErr={createErr}
+                    createdOnce={createdOnce}
+                    copied={copied}
+                    copyWarn={copyWarn}
+                    previewBusy={previewBusy}
+                    previewErr={previewErr}
+                    hasPublished={hasPublished}
+                    latestPublished={latestPublished}
+                    operatorGuide={{
+                        purpose: resolvePurposeParagraph(operatorContext, detail.description, detail.name),
+                        whoCompletes: resolveWhoCompletesParagraph(operatorContext, detail.kind),
+                        afterSubmission: resolveAfterSubmissionParagraph(operatorContext),
+                        connectedBullets,
+                    }}
+                    onPreview={() => void handlePreviewForm()}
+                    onCreateLink={() => void createPublicLink()}
+                    onCopy={(key, text) => void copyText(key, text)}
+                    onVersionsUpdated={() => void load()}
+                />
+            :   null}
         </FormsWorkspaceShell>
     );
 }

@@ -2,7 +2,7 @@
 
 **Path:** `docs/sprints/05_2026/forms_operational_workspace_redesign.md`  
 **Date:** May 2026  
-**Status:** **OW-0 complete** · **OW-1 shipped** · **OW-2 shipped** · **OW-5 shipped** (packet sessions inbox)  
+**Status:** **OW-0 complete** · **OW-1 shipped** · **OW-2 shipped** · **OW-3 shipped** · **OW-5 shipped**  
 **Scope:** Forms/Documents **operational workspace layer** — hub, form lifecycle, packet orchestration, distribution, session/submission navigation. **Not** review rollup contracts, BOS logic, or forms engine rewrite.
 
 **Related (already shipped):**
@@ -400,17 +400,28 @@ Intake workspace | Forms | Packet definitions | Packet sessions
 
 ---
 
-### OW-3 — Form lifecycle workspace
+### OW-3 — Form lifecycle workspace ☑
 
 **Goal:** Form detail as lifecycle journey.
 
-**Surfaces:** `FormDetailClient.tsx`, `FormSchemaWorkspace.tsx` (spacing only).
+**Shipped (May 2026):**
 
-**Tasks:** Lifecycle rail; region layout; distribute panel refactor; intake preview; remove accordion stack; PX tokens throughout.
+| Area | Detail |
+|------|--------|
+| Lifecycle rail | `FormLifecycleRail.tsx` + `formLifecyclePresentation.ts` — Design → Publish → Distribute → Intake → Review → Documents |
+| Workspace layout | `FormLifecycleWorkspaceLayout.tsx` + refactored `FormDetailClient.tsx` |
+| Regions | Build/design (`FormSchemaWorkspace`), publish versions, distribution (`FormDistributionPanel`), intake preview (`FormIntakePreviewPanel`), review + documents |
+| Header | Publish state badge, purpose line, primary actions: Preview, Create link, New draft, View submissions |
+| Operator guide | Five accordions merged into collapsed `Operator context` disclosure |
+| Schema workspace | Removed `SectionCard` wrapper; operational tokens only |
+| Tests | `formLifecyclePresentation.test.ts`, `formLifecycleWorkspace.test.tsx`, `formDetailLifecycleWorkspace.test.tsx` |
 
-**Risks:** Large file — incremental PR sections.
+**Acceptance:**
 
-**Acceptance:** Single visible lifecycle rail; ≤2 bordered cards on screen; schema + distribute clearly separated by region separators.
+- [x] Single visible lifecycle rail; state derived from existing data only.  
+- [x] No table-first distribution or version lists — grouped surfaces.  
+- [x] Draft/publish/schema controls preserved in design region.  
+- [x] Technical ids collapsed; no backend semantic changes.
 
 ---
 
