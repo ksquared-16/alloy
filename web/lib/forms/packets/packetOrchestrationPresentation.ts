@@ -2,8 +2,6 @@
  * Packet orchestration presentation helpers (OW-4).
  */
 
-import { normalizeJoinedFormDefinition } from "@/lib/admin/forms/packetDefinitionStepForms";
-
 export type PacketOrchestrationListRow = {
     id: string;
     key: string;
@@ -43,6 +41,16 @@ export function packetStepReadinessLabel(stepHasPublished: boolean): string {
     return stepHasPublished ? "Published" : "Needs publish";
 }
 
+function joinedFormDisplayName(
+    raw: { name?: string } | { name?: string }[] | null | undefined
+): string {
+    const row =
+        raw == null ? null
+        : Array.isArray(raw) ? (raw[0] ?? null)
+        : raw;
+    return row?.name?.trim() || "Form";
+}
+
 export function buildPacketStepDisplayRows(
     items: {
         sequence_index: number;
@@ -53,12 +61,11 @@ export function buildPacketStepDisplayRows(
     }[]
 ): PacketStepDisplayRow[] {
     return items.map((item) => {
-        const fd = normalizeJoinedFormDefinition(item.form_definitions as { name: string } | { name: string }[] | null);
         const meta = item.metadata && typeof item.metadata === "object" ? item.metadata : {};
         const stepLabel = typeof meta.step_label === "string" && meta.step_label.trim() ? meta.step_label.trim() : null;
         return {
             sequence_index: item.sequence_index,
-            form_name: fd?.name?.trim() || "Form",
+            form_name: joinedFormDisplayName(item.form_definitions),
             step_label: stepLabel,
             step_has_published: item.step_has_published_version === true,
             form_definition_id: item.form_definition_id,
