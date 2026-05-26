@@ -1,22 +1,17 @@
 "use client";
 
-import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import PrimaryButton from "@/components/PrimaryButton";
-import SectionCard from "@/components/admin/SectionCard";
-import { FormsOperationalLink, FormsWorkspaceShell } from "@/components/forms/workspace";
-import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
-import { formsWorkspaceBreadcrumbs, FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
+import { PacketBuilderWorkspaceLayout } from "@/components/forms/workspace/PacketBuilderWorkspaceLayout";
+import type { StepDraft } from "@/components/forms/workspace/PacketStepCompositionEditor";
+import type { PacketCreatedLinkPayload, PacketPublicLinkRow } from "@/components/forms/workspace/PacketDistributionLaunchPanel";
+import { FormsWorkspaceShell } from "@/components/forms/workspace";
+import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { mergeFormListWithPacketItems, type PacketStepFormOption } from "@/lib/admin/forms/packetDefinitionStepForms";
-import { applyRecentFormToSteps, trimLeadingEmptyStepRows } from "@/lib/admin/forms/packetStepRecentFormPlacement";
-import {
-    TechnicalDetailDisclosure,
-    TechnicalDetailField,
-    TechnicalDetailFieldList,
-    TechnicalDetailMonospaceValue,
-} from "@/components/forms/review";
-import { FORMS_TECHNICAL_DISCLOSURE } from "@/lib/forms/review/formsReviewTechnicalDisclosure";
+import { trimLeadingEmptyStepRows } from "@/lib/admin/forms/packetStepRecentFormPlacement";
+import { formsWorkspaceBreadcrumbs, FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
+import { countSessionsByPacketDefinition } from "@/lib/forms/packets/packetOrchestrationPresentation";
+import { opMetadata } from "@/lib/operational/ui/operationalVisualTokens";
 
 type PacketItem = {
     id: string;
@@ -24,18 +19,9 @@ type PacketItem = {
     form_definition_id: string;
     pinned_form_definition_version_id: string | null;
     metadata?: Record<string, unknown>;
+    step_has_published_version?: boolean;
     form_definitions?: PacketStepFormOption | PacketStepFormOption[] | null;
 };
-type PublicLinkRow = {
-    id: string;
-    form_definition_id: string;
-    is_active: boolean;
-    token_prefix: string | null;
-    metadata?: Record<string, unknown>;
-    created_at: string;
-};
-
-type StepDraft = { packet_item_id?: string; form_definition_id: string; step_label: string };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -43,20 +29,23 @@ export default function PacketDefinitionDetailClient() {
     const params = useParams();
     const searchParams = useSearchParams();
     const packetDefId = typeof params?.packetDefId === "string" ? params.packetDefId : "";
+    const viewerTz = useAdminViewerTimezone();
 
     const [defName, setDefName] = useState("");
     const [defDesc, setDefDesc] = useState("");
     const [defActive, setDefActive] = useState(true);
+    const [defKey, setDefKey] = useState("");
     const [items, setItems] = useState<PacketItem[]>([]);
     const [forms, setForms] = useState<PacketStepFormOption[]>([]);
     const [steps, setSteps] = useState<StepDraft[]>([{ form_definition_id: "", step_label: "" }]);
-    const [links, setLinks] = useState<PublicLinkRow[]>([]);
+    const [links, setLinks] = useState<PacketPublicLinkRow[]>([]);
+    const [sessionCount, setSessionCount] = useState(0);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [err, setErr] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [okBanner, setOkBanner] = useState<string | null>(null);
-    const [createdLink, setCreatedLink] = useState<{ embed_url: string | null; embed_path: string } | null>(null);
+    const [createdLink, setCreatedLink] = useState<PacketCreatedLinkPayload | null>(null);
 
     const hasCompletedInitialLoad = useRef(false);
     const appliedAddFormPrefill = useRef(false);
@@ -69,36 +58,35 @@ export default function PacketDefinitionDetailClient() {
     const loadAll = useCallback(async () => {
         if (!packetDefId) return;
         const initialPass = !hasCompletedInitialLoad.current;
-        if (initialPass) {
-            setLoading(true);
-        } else {
-            setRefreshing(true);
-        }
+        if (initialPass) setLoading(true);
+        else setRefreshing(true);
         setErr(null);
         try {
-            const [pRes, fRes, lRes] = await Promise.all([
+            const [pRes, fRes, lRes, sRes] = await Promise.all([
                 fetch(`/api/admin/forms/packet-definitions/${encodeURIComponent(packetDefId)}`),
                 fetch("/api/admin/forms"),
                 fetch(`/api/admin/forms/packet-definitions/${encodeURIComponent(packetDefId)}/public-links`),
+                fetch("/api/admin/forms/packet-sessions", { credentials: "include" }),
             ]);
             const pj = await pRes.json().catch(() => ({}));
             const fj = await fRes.json().catch(() => ({}));
             const lj = await lRes.json().catch(() => ({}));
+            const sj = await sRes.json().catch(() => ({}));
             if (!pRes.ok) throw new Error((pj as { error?: string }).error ?? "Failed to load packet");
             const def = (pj as { data?: { definition?: { name: string; key: string; description: string | null; is_active: boolean }; items?: PacketItem[] } }).data;
             if (!def?.definition) throw new Error("Invalid response");
             setDefName(def.definition.name);
+            setDefKey(def.definition.key);
             setDefDesc(def.definition.description ?? "");
             setDefActive(def.definition.is_active);
             const it = def.items ?? [];
             setItems(it);
 
             const rawForms = fRes.ok ? ((fj as { data?: PacketStepFormOption[] }).data ?? []) : [];
-            const mergedForms = mergeFormListWithPacketItems(rawForms, it);
-            setForms(mergedForms);
+            setForms(mergeFormListWithPacketItems(rawForms, it));
 
             if (!fRes.ok) {
-                setErr((fj as { error?: string }).error ?? "Could not load the form list for step pickers — steps still saved; retry or refresh.");
+                setErr((fj as { error?: string }).error ?? "Could not load the form list for step pickers.");
             }
 
             if (it.length) {
@@ -116,7 +104,14 @@ export default function PacketDefinitionDetailClient() {
             } else {
                 setSteps([{ form_definition_id: "", step_label: "" }]);
             }
-            if (lRes.ok) setLinks((lj as { data?: PublicLinkRow[] }).data ?? []);
+            if (lRes.ok) setLinks((lj as { data?: PacketPublicLinkRow[] }).data ?? []);
+
+            if (sRes.ok) {
+                const sessions = (sj as { data?: { packet_definition_id?: string }[] }).data ?? [];
+                setSessionCount(countSessionsByPacketDefinition(sessions)[packetDefId] ?? 0);
+            } else {
+                setSessionCount(0);
+            }
         } catch (e) {
             setErr((e as Error).message);
         } finally {
@@ -164,7 +159,7 @@ export default function PacketDefinitionDetailClient() {
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Save failed");
-            setOkBanner("Packet settings saved.");
+            setOkBanner("Packet overview saved.");
             await loadAll();
         } catch (e) {
             setErr((e as Error).message);
@@ -196,7 +191,7 @@ export default function PacketDefinitionDetailClient() {
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Could not save steps");
-            setOkBanner("Packet steps saved. You can create a public link below when ready.");
+            setOkBanner("Pipeline saved. Launch a packet link when ready.");
             await loadAll();
         } catch (e) {
             setErr((e as Error).message);
@@ -251,7 +246,7 @@ export default function PacketDefinitionDetailClient() {
                           ? `${window.location.origin}${embed_path}`
                           : null,
             });
-            setOkBanner("Public packet link created. Copy the URL below, or use Open link to verify it loads.");
+            setOkBanner("Packet link created — copy the URL below.");
             await loadAll();
         } catch (e) {
             setErr((e as Error).message);
@@ -260,7 +255,7 @@ export default function PacketDefinitionDetailClient() {
         }
     };
 
-    const toggleLink = async (link: PublicLinkRow, nextActive: boolean) => {
+    const toggleLink = async (link: PacketPublicLinkRow, nextActive: boolean) => {
         setBusy(true);
         setErr(null);
         setOkBanner(null);
@@ -285,261 +280,77 @@ export default function PacketDefinitionDetailClient() {
     };
 
     const recentPublishedForms = forms.filter((f) => f.has_published_version).slice(0, 8);
+    const allStepsPublished = items.length > 0 && items.every((i) => i.step_has_published_version === true);
 
-    if (!packetDefId) return <p className="p-6 text-sm text-red-700">Missing packet id.</p>;
+    if (!packetDefId) return <p className="p-6 text-sm text-alloy-ember">Missing packet id.</p>;
 
     return (
         <FormsWorkspaceShell
             title={defName || "Packet builder"}
-            subtitle="Configure steps, distribute packet links, and monitor session intake."
+            subtitle="Compose steps, launch intake, and review sessions."
             breadcrumbs={formsWorkspaceBreadcrumbs([
                 { label: "Packets", href: FORMS_MODULE_ROUTES.packetDefinitions },
                 { label: defName || "Packet" },
             ])}
-            actions={
-                <div className="flex flex-wrap gap-3">
-                    <FormsOperationalLink href={FORMS_MODULE_ROUTES.packetSessions}>
-                        Sessions
-                    </FormsOperationalLink>
-                    <FormsOperationalLink href={ADMIN_FORMS_UI_BASE}>Workspace</FormsOperationalLink>
-                </div>
-            }
+            contentClassName="space-y-0"
         >
-            {loading ? <p className="text-sm text-alloy-midnight/60">Loading…</p> : null}
-            {refreshing ? (
-                <p className="text-xs text-[#59678b]" aria-live="polite">
-                    Updating…
-                </p>
-            ) : null}
-            {err ? <p className="text-sm text-red-700">{err}</p> : null}
-            {okBanner ? (
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950" role="status">
-                    {okBanner}
-                    <button
-                        type="button"
-                        className="ml-3 text-xs font-semibold text-emerald-800 underline"
-                        onClick={() => setOkBanner(null)}
-                    >
-                        Dismiss
-                    </button>
-                </div>
-            ) : null}
-
-            {!loading ? (
-                <>
-                    <SectionCard title="Packet settings">
-                        <div className="grid gap-3 sm:grid-cols-2">
-                            <label className="space-y-1 text-sm">
-                                <span className="text-xs font-semibold uppercase text-[#59678b]">Name</span>
-                                <input
-                                    className="w-full rounded border border-[#e6e8ec] px-2 py-1.5"
-                                    value={defName}
-                                    onChange={(e) => setDefName(e.target.value)}
-                                />
-                            </label>
-                            <label className="flex items-center gap-2 pt-6 text-sm">
-                                <input type="checkbox" checked={defActive} onChange={(e) => setDefActive(e.target.checked)} />
-                                Active
-                            </label>
-                            <label className="space-y-1 text-sm sm:col-span-2">
-                                <span className="text-xs font-semibold uppercase text-[#59678b]">Description</span>
-                                <input
-                                    className="w-full rounded border border-[#e6e8ec] px-2 py-1.5"
-                                    value={defDesc}
-                                    onChange={(e) => setDefDesc(e.target.value)}
-                                />
-                            </label>
-                        </div>
-                        <div className="mt-3">
-                            <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={busy} onClick={() => void saveMeta()}>
-                                Save settings
-                            </PrimaryButton>
-                        </div>
-                    </SectionCard>
-
-                    {recentPublishedForms.length > 0 ? (
-                        <SectionCard title="Recently published forms (quick add)">
-                            <p className="mb-2 text-xs text-[#59678b]">
-                                Published forms in your org. Pick one to append a step — you can still reorder or remove before
-                                saving.
-                            </p>
-                            <ul className="flex flex-wrap gap-2">
-                                {recentPublishedForms.map((f) => (
-                                    <li key={f.id}>
-                                        <button
-                                            type="button"
-                                            className="rounded-full border border-[#e6e8ec] bg-white px-3 py-1.5 text-xs font-medium text-[#00458C] hover:bg-[#fafbfd]"
-                                            disabled={busy}
-                                            onClick={() => setSteps((rows) => applyRecentFormToSteps(rows, f.id))}
-                                        >
-                                            + {f.name}
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
-                        </SectionCard>
-                    ) : null}
-
-                    <SectionCard title="Steps (ordered)">
-                        <p className="mb-3 text-sm text-[#59678b]">
-                            Add each form as a step, then <strong className="font-medium text-[#31394d]">Save steps</strong>.
-                            Only forms with a published version can run in a packet.
+            {loading ?
+                <p className={opMetadata}>Loading packet builder…</p>
+            :   <>
+                    {refreshing ?
+                        <p className={opMetadata} aria-live="polite">
+                            Updating…
                         </p>
-                        {steps.map((s, idx) => (
-                            <div
-                                key={s.packet_item_id ?? `draft-${idx}-${s.form_definition_id || "empty"}`}
-                                className="mb-3 flex flex-wrap items-end gap-2 rounded border border-[#e6e8ec] p-3"
-                            >
-                                <label className="min-w-[200px] flex-1 space-y-1 text-sm">
-                                    <span className="text-xs font-semibold uppercase text-[#59678b]">Form</span>
-                                    <select
-                                        className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
-                                        value={s.form_definition_id}
-                                        onChange={(e) => {
-                                            const v = e.target.value;
-                                            setSteps((rows) =>
-                                                rows.map((r, j) =>
-                                                    j === idx ? { ...r, form_definition_id: v, packet_item_id: undefined } : r
-                                                )
-                                            );
-                                        }}
-                                    >
-                                        <option value="">Select form…</option>
-                                        {forms.map((f) => (
-                                            <option key={f.id} value={f.id} disabled={!f.has_published_version}>
-                                                {f.name} {!f.has_published_version ? "(not published)" : ""}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </label>
-                                <label className="min-w-[160px] flex-1 space-y-1 text-sm">
-                                    <span className="text-xs font-semibold uppercase text-[#59678b]">Step label (optional)</span>
-                                    <input
-                                        className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
-                                        value={s.step_label}
-                                        onChange={(e) => {
-                                            const v = e.target.value;
-                                            setSteps((rows) => rows.map((r, j) => (j === idx ? { ...r, step_label: v } : r)));
-                                        }}
-                                    />
-                                </label>
-                                <div className="flex gap-1">
-                                    <button type="button" className="text-xs text-[#00458C]" disabled={busy || idx === 0} onClick={() => moveStep(idx, -1)}>
-                                        Up
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="text-xs text-[#00458C]"
-                                        disabled={busy || idx >= steps.length - 1}
-                                        onClick={() => moveStep(idx, 1)}
-                                    >
-                                        Down
-                                    </button>
-                                    <button type="button" className="text-xs text-red-700" disabled={busy || steps.length <= 1} onClick={() => removeStep(idx)}>
-                                        Remove
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-                        <div className="flex flex-wrap gap-2">
-                            <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={busy} onClick={addStep}>
-                                Add step
-                            </PrimaryButton>
-                            <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={busy} onClick={() => void saveSteps()}>
-                                Save steps
-                            </PrimaryButton>
-                        </div>
-                        {items.length > 0 ? (
-                            <p className="mt-3 text-xs text-amber-900">
-                                If this packet already has sessions, step changes are blocked — create a new packet definition instead.
-                            </p>
-                        ) : null}
-                        <TechnicalDetailDisclosure
-                            title={FORMS_TECHNICAL_DISCLOSURE.technicalDetails.title}
-                            helperText="Packet definition id and public link identifiers."
-                            className="mt-4"
+                    :   null}
+                    {err ?
+                        <p className="text-sm text-alloy-ember">{err}</p>
+                    :   null}
+                    {okBanner ?
+                        <div
+                            className="mb-4 rounded-lg bg-emerald-50/80 px-4 py-3 text-sm text-emerald-950 ring-1 ring-emerald-200/60"
+                            role="status"
                         >
-                            <p className="text-xs text-[#59678b]">
-                                {items.length} saved step row(s) on server.
-                            </p>
-                            <TechnicalDetailFieldList className="mt-2">
-                                <TechnicalDetailField label="Packet definition id" fullWidth>
-                                    <TechnicalDetailMonospaceValue>{packetDefId}</TechnicalDetailMonospaceValue>
-                                </TechnicalDetailField>
-                                {links.map((L) => (
-                                    <TechnicalDetailField
-                                        key={L.id}
-                                        label={`Link ${L.is_active ? "(active)" : "(inactive)"}`}
-                                        fullWidth
-                                    >
-                                        <TechnicalDetailMonospaceValue>
-                                            {L.token_prefix ? `prefix ${L.token_prefix} · ` : ""}
-                                            {L.id}
-                                        </TechnicalDetailMonospaceValue>
-                                    </TechnicalDetailField>
-                                ))}
-                            </TechnicalDetailFieldList>
-                        </TechnicalDetailDisclosure>
-                    </SectionCard>
-
-                    <SectionCard title="Public packet links">
-                        <p className="mb-2 text-sm text-[#59678b]">
-                            Creates a shareable URL for this packet. Recipients complete each step in order.
-                        </p>
-                        <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={busy} onClick={() => void mintLink()}>
-                            Create packet link
-                        </PrimaryButton>
-                        {createdLink ? (
-                            <div className="mt-3 rounded-lg border border-[#DBC078]/50 bg-[#e6d3a0]/15 p-3 text-sm">
-                                <p className="font-semibold text-[#31394d]">Copy this URL once</p>
-                                <code className="mt-1 block break-all text-xs">{createdLink.embed_url ?? createdLink.embed_path}</code>
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                    <PrimaryButton
-                                        type="button"
-                                        className="!px-3 !py-2 text-sm"
-                                        onClick={() => {
-                                            const u = createdLink.embed_url ?? `${typeof window !== "undefined" ? window.location.origin : ""}${createdLink.embed_path}`;
-                                            void navigator.clipboard.writeText(u).catch(() => {});
-                                        }}
-                                    >
-                                        Copy URL
-                                    </PrimaryButton>
-                                    <a
-                                        className="inline-flex items-center rounded border border-[#00458C] px-3 py-2 text-sm font-semibold text-[#00458C] hover:bg-[#00458C]/5"
-                                        href={createdLink.embed_url ?? createdLink.embed_path}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                    >
-                                        Open link (new tab)
-                                    </a>
-                                </div>
-                            </div>
-                        ) : null}
-                        {links.length > 0 ? (
-                            <ul className="mt-4 divide-y divide-[#e6e8ec] text-sm">
-                                {links.map((L) => (
-                                    <li key={L.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                                        <span className="text-xs text-[#31394d]">
-                                            {L.is_active ? "Active link" : "Inactive link"}
-                                        </span>
-                                        <span className="text-xs text-[#59678b]">{L.is_active ? "active" : "inactive"}</span>
-                                        <button
-                                            type="button"
-                                            className="text-xs text-[#00458C]"
-                                            disabled={busy}
-                                            onClick={() => void toggleLink(L, !L.is_active)}
-                                        >
-                                            {L.is_active ? "Deactivate" : "Activate"}
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
-                        ) : (
-                            <p className="mt-2 text-xs text-[#59678b]">No links yet for this packet.</p>
-                        )}
-                    </SectionCard>
+                            {okBanner}
+                            <button
+                                type="button"
+                                className="ml-3 text-xs font-semibold text-emerald-800 underline"
+                                onClick={() => setOkBanner(null)}
+                            >
+                                Dismiss
+                            </button>
+                        </div>
+                    :   null}
+                    <PacketBuilderWorkspaceLayout
+                        packetDefId={packetDefId}
+                        defName={defName}
+                        defDesc={defDesc}
+                        defActive={defActive}
+                        defKey={defKey}
+                        stepCount={items.length}
+                        sessionCount={sessionCount}
+                        allStepsPublished={allStepsPublished}
+                        savedItems={items}
+                        steps={steps}
+                        forms={forms}
+                        recentPublishedForms={recentPublishedForms}
+                        links={links}
+                        createdLink={createdLink}
+                        busy={busy}
+                        viewerTz={viewerTz}
+                        onDefNameChange={setDefName}
+                        onDefDescChange={setDefDesc}
+                        onDefActiveChange={setDefActive}
+                        onSaveMeta={() => void saveMeta()}
+                        onStepsChange={setSteps}
+                        onAddStep={addStep}
+                        onSaveSteps={() => void saveSteps()}
+                        onMoveStep={moveStep}
+                        onRemoveStep={removeStep}
+                        onMintLink={() => void mintLink()}
+                        onToggleLink={(link, next) => void toggleLink(link, next)}
+                    />
                 </>
-            ) : null}
+            }
         </FormsWorkspaceShell>
     );
 }

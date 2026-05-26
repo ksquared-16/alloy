@@ -2,7 +2,7 @@
 
 **Path:** `docs/sprints/05_2026/forms_operational_workspace_redesign.md`  
 **Date:** May 2026  
-**Status:** **OW-0 complete** · **OW-1 shipped** · **OW-2 shipped** · **OW-3 shipped** · **OW-5 shipped**  
+**Status:** **OW-0 complete** · **OW-1 shipped** · **OW-2 shipped** · **OW-3 shipped** · **OW-4 shipped** · **OW-5 shipped**  
 **Scope:** Forms/Documents **operational workspace layer** — hub, form lifecycle, packet orchestration, distribution, session/submission navigation. **Not** review rollup contracts, BOS logic, or forms engine rewrite.
 
 **Related (already shipped):**
@@ -425,15 +425,28 @@ Intake workspace | Forms | Packet definitions | Packet sessions
 
 ---
 
-### OW-4 — Packet orchestration builder
+### OW-4 — Packet orchestration builder ☑
 
 **Goal:** Packet hub + detail feel like pipeline composition.
 
-**Surfaces:** `PacketDefinitionsHubClient.tsx`, `PacketDefinitionDetailClient.tsx`.
+**Shipped (May 2026):**
 
-**Tasks:** Hub list → grouped orchestration rows; detail pipeline composer + launch band; link sessions.
+| Area | Detail |
+|------|--------|
+| Hub | `PacketOrchestrationHubView.tsx` + refactored `PacketDefinitionsHubClient.tsx` |
+| Builder | `PacketBuilderWorkspaceLayout.tsx` + refactored `PacketDefinitionDetailClient.tsx` |
+| Steps | `PacketStepCompositionEditor.tsx` — ordered pipeline rows with readiness |
+| Launch | `PacketDistributionLaunchPanel.tsx` — launch links grouped, tokens secondary |
+| Presentation | `packetOrchestrationPresentation.ts` — status labels, step display, session counts |
+| Data | Existing APIs only — parallel detail fetch for step counts on hub index |
+| Tests | `packetOrchestrationPresentation.test.ts`, `packetOrchestrationWorkspace.test.tsx` |
 
-**Acceptance:** Step list uses `opGroupedSurface`; create packet is not a gray SectionCard form at top.
+**Acceptance:**
+
+- [x] Index uses grouped workflow rows, not bare CRUD list.  
+- [x] Builder shows overview, steps, distribution, sessions, collapsed technical ids.  
+- [x] Create/edit/save steps and mint link behavior preserved.  
+- [x] No backend contract changes.
 
 ---
 

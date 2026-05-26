@@ -1,0 +1,292 @@
+"use client";
+
+import clsx from "clsx";
+import { FormsReviewBadge } from "@/components/forms/review/FormsReviewBadge";
+import {
+    TechnicalDetailDisclosure,
+    TechnicalDetailField,
+    TechnicalDetailFieldList,
+    TechnicalDetailMonospaceValue,
+} from "@/components/forms/review";
+import { FormsOperationalLink } from "@/components/forms/workspace/FormsOperationalLink";
+import { IntakeWorkspaceRegion } from "@/components/forms/workspace/IntakeWorkspaceRegion";
+import {
+    PacketDistributionLaunchPanel,
+    type PacketCreatedLinkPayload,
+    type PacketPublicLinkRow,
+} from "@/components/forms/workspace/PacketDistributionLaunchPanel";
+import {
+    PacketStepCompositionEditor,
+    type StepDraft,
+} from "@/components/forms/workspace/PacketStepCompositionEditor";
+import {
+    intakeWorkspaceBtnPrimary,
+    intakeWorkspaceBtnSecondary,
+} from "@/components/forms/workspace/IntakeWorkspaceHubView";
+import type { PacketStepFormOption } from "@/lib/admin/forms/packetDefinitionStepForms";
+import { FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
+import {
+    buildPacketStepDisplayRows,
+    packetOrchestrationStatusLabel,
+    packetOrchestrationStatusTone,
+    packetStepReadinessLabel,
+} from "@/lib/forms/packets/packetOrchestrationPresentation";
+import { FORMS_TECHNICAL_DISCLOSURE } from "@/lib/forms/review/formsReviewTechnicalDisclosure";
+import PrimaryButton from "@/components/PrimaryButton";
+import {
+    opCaseFileCanvas,
+    opGroupedRowInner,
+    opGroupedSurface,
+    opMetadata,
+    opMutedMeta,
+    opOrientationSurface,
+    opRegionSeparator,
+    opStackPage,
+} from "@/lib/operational/ui/operationalVisualTokens";
+
+type SavedItem = {
+    id: string;
+    sequence_index: number;
+    form_definition_id: string;
+    metadata?: Record<string, unknown>;
+    step_has_published_version?: boolean;
+    form_definitions?: { name?: string } | { name?: string }[] | null;
+};
+
+type Props = {
+    packetDefId: string;
+    defName: string;
+    defDesc: string;
+    defActive: boolean;
+    defKey: string;
+    stepCount: number;
+    sessionCount: number;
+    allStepsPublished: boolean;
+    savedItems: SavedItem[];
+    steps: StepDraft[];
+    forms: PacketStepFormOption[];
+    recentPublishedForms: PacketStepFormOption[];
+    links: PacketPublicLinkRow[];
+    createdLink: PacketCreatedLinkPayload | null;
+    busy: boolean;
+    viewerTz: string;
+    onDefNameChange: (v: string) => void;
+    onDefDescChange: (v: string) => void;
+    onDefActiveChange: (v: boolean) => void;
+    onSaveMeta: () => void;
+    onStepsChange: (updater: (rows: StepDraft[]) => StepDraft[]) => void;
+    onAddStep: () => void;
+    onSaveSteps: () => void;
+    onMoveStep: (index: number, dir: -1 | 1) => void;
+    onRemoveStep: (index: number) => void;
+    onMintLink: () => void;
+    onToggleLink: (link: PacketPublicLinkRow, nextActive: boolean) => void;
+};
+
+/** Packet builder orchestration layout (OW-4). */
+export function PacketBuilderWorkspaceLayout({
+    packetDefId,
+    defName,
+    defDesc,
+    defActive,
+    defKey,
+    stepCount,
+    sessionCount,
+    allStepsPublished,
+    savedItems,
+    steps,
+    forms,
+    recentPublishedForms,
+    links,
+    createdLink,
+    busy,
+    viewerTz,
+    onDefNameChange,
+    onDefDescChange,
+    onDefActiveChange,
+    onSaveMeta,
+    onStepsChange,
+    onAddStep,
+    onSaveSteps,
+    onMoveStep,
+    onRemoveStep,
+    onMintLink,
+    onToggleLink,
+}: Props) {
+    const statusRow = {
+        is_active: defActive,
+        step_count: stepCount,
+        all_steps_published: allStepsPublished,
+    };
+    const pipelinePreview = buildPacketStepDisplayRows(savedItems);
+
+    return (
+        <>
+            <div className={opOrientationSurface} data-testid="packet-builder-overview">
+                <div className="flex flex-wrap items-center gap-2">
+                    <FormsReviewBadge
+                        label={packetOrchestrationStatusLabel(statusRow)}
+                        tone={packetOrchestrationStatusTone(statusRow)}
+                    />
+                    <span className={opMetadata}>
+                        {stepCount} step{stepCount === 1 ? "" : "s"} · {sessionCount} session
+                        {sessionCount === 1 ? "" : "s"}
+                    </span>
+                </div>
+                {defDesc ?
+                    <p className={clsx("mt-2", opMetadata)}>{defDesc}</p>
+                :   null}
+                <div className="mt-3 flex flex-wrap gap-2">
+                    <FormsOperationalLink href={FORMS_MODULE_ROUTES.packetSessions} className={intakeWorkspaceBtnPrimary}>
+                        Session inbox
+                    </FormsOperationalLink>
+                    <a href="#packet-distribution" className={intakeWorkspaceBtnSecondary}>
+                        Launch packet
+                    </a>
+                </div>
+            </div>
+
+            <div className={clsx(opCaseFileCanvas, "mt-5", opStackPage)} data-testid="packet-builder-workspace">
+                <IntakeWorkspaceRegion
+                    title="Packet overview"
+                    lead="Name, description, and whether this workflow accepts new intake."
+                    data-testid="packet-region-overview"
+                >
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="space-y-1 text-sm sm:col-span-2">
+                            <span className={opMutedMeta}>Name</span>
+                            <input
+                                className="w-full rounded-lg border border-alloy-midnight/10 bg-white px-2.5 py-1.5 text-sm"
+                                value={defName}
+                                disabled={busy}
+                                onChange={(e) => onDefNameChange(e.target.value)}
+                            />
+                        </label>
+                        <label className="flex items-center gap-2 pt-1 text-sm sm:col-span-2">
+                            <input type="checkbox" checked={defActive} disabled={busy} onChange={(e) => onDefActiveChange(e.target.checked)} />
+                            <span className={opMetadata}>Active — allow new packet runs</span>
+                        </label>
+                        <label className="space-y-1 text-sm sm:col-span-2">
+                            <span className={opMutedMeta}>Description</span>
+                            <input
+                                className="w-full rounded-lg border border-alloy-midnight/10 bg-white px-2.5 py-1.5 text-sm"
+                                value={defDesc}
+                                disabled={busy}
+                                onChange={(e) => onDefDescChange(e.target.value)}
+                            />
+                        </label>
+                    </div>
+                    <div className="mt-3">
+                        <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={busy} onClick={onSaveMeta}>
+                            Save overview
+                        </PrimaryButton>
+                    </div>
+                </IntakeWorkspaceRegion>
+
+                {pipelinePreview.length > 0 ?
+                    <section className={opRegionSeparator}>
+                        <IntakeWorkspaceRegion title="Saved pipeline" lead="Current step order on the server.">
+                            <ol className={opGroupedSurface}>
+                                {pipelinePreview.map((step) => (
+                                    <li key={`${step.sequence_index}-${step.form_definition_id}`} className={opGroupedRowInner}>
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                            <span className="text-sm font-medium text-alloy-midnight">
+                                                {step.sequence_index + 1}. {step.form_name}
+                                            </span>
+                                            <FormsReviewBadge
+                                                label={packetStepReadinessLabel(step.step_has_published)}
+                                                tone={step.step_has_published ? "success" : "warning"}
+                                            />
+                                        </div>
+                                        {step.step_label ?
+                                            <p className={clsx("mt-0.5", opMutedMeta)}>{step.step_label}</p>
+                                        :   null}
+                                    </li>
+                                ))}
+                            </ol>
+                        </IntakeWorkspaceRegion>
+                    </section>
+                :   null}
+
+                <section id="packet-steps" className={opRegionSeparator} data-testid="packet-region-steps">
+                    <IntakeWorkspaceRegion
+                        title="Step composition"
+                        lead="Build the ordered intake flow — each step is one form."
+                    >
+                        <PacketStepCompositionEditor
+                            steps={steps}
+                            forms={forms}
+                            recentPublishedForms={recentPublishedForms}
+                            busy={busy}
+                            savedStepCount={savedItems.length}
+                            onStepsChange={onStepsChange}
+                            onAddStep={onAddStep}
+                            onSaveSteps={onSaveSteps}
+                            onMoveStep={onMoveStep}
+                            onRemoveStep={onRemoveStep}
+                        />
+                    </IntakeWorkspaceRegion>
+                </section>
+
+                <section id="packet-distribution" className={opRegionSeparator} data-testid="packet-region-distribution">
+                    <IntakeWorkspaceRegion title="Distribution & launch" lead="Share this workflow with families or staff.">
+                        <PacketDistributionLaunchPanel
+                            packetName={defName}
+                            busy={busy}
+                            links={links}
+                            createdLink={createdLink}
+                            viewerTz={viewerTz}
+                            onMintLink={onMintLink}
+                            onToggleLink={onToggleLink}
+                        />
+                    </IntakeWorkspaceRegion>
+                </section>
+
+                <section className={opRegionSeparator} data-testid="packet-region-sessions">
+                    <IntakeWorkspaceRegion
+                        title="Sessions & review"
+                        lead="Families appear here after they submit a completed packet run."
+                    >
+                        <p className={opMetadata}>
+                            {sessionCount > 0 ?
+                                `${sessionCount} session${sessionCount === 1 ? "" : "s"} recorded for this packet. Open the inbox to review case files and record decisions.`
+                            :   "No sessions yet. Launch a packet link — completed runs will show in the session inbox."}
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-3">
+                            <FormsOperationalLink href={FORMS_MODULE_ROUTES.packetSessions}>Open session inbox</FormsOperationalLink>
+                            <FormsOperationalLink href={FORMS_MODULE_ROUTES.workspace}>Intake workspace</FormsOperationalLink>
+                        </div>
+                    </IntakeWorkspaceRegion>
+                </section>
+
+                <div className={opRegionSeparator}>
+                    <TechnicalDetailDisclosure
+                        title={FORMS_TECHNICAL_DISCLOSURE.technicalDetails.title}
+                        helperText="Internal keys, link ids, and configuration identifiers."
+                    >
+                        <TechnicalDetailFieldList>
+                            <TechnicalDetailField label="Packet definition id" fullWidth>
+                                <TechnicalDetailMonospaceValue>{packetDefId}</TechnicalDetailMonospaceValue>
+                            </TechnicalDetailField>
+                            <TechnicalDetailField label="Internal key" fullWidth>
+                                <TechnicalDetailMonospaceValue>{defKey}</TechnicalDetailMonospaceValue>
+                            </TechnicalDetailField>
+                            {links.map((L) => (
+                                <TechnicalDetailField
+                                    key={L.id}
+                                    label={`Link ${L.is_active ? "(active)" : "(inactive)"}`}
+                                    fullWidth
+                                >
+                                    <TechnicalDetailMonospaceValue>
+                                        {L.token_prefix ? `prefix ${L.token_prefix} · ` : ""}
+                                        {L.id}
+                                    </TechnicalDetailMonospaceValue>
+                                </TechnicalDetailField>
+                            ))}
+                        </TechnicalDetailFieldList>
+                    </TechnicalDetailDisclosure>
+                </div>
+            </div>
+        </>
+    );
+}

@@ -6,6 +6,10 @@ export { FormsOperationalLink } from "@/components/forms/workspace/FormsOperatio
 export { FormsWorkspaceChrome } from "@/components/forms/workspace/FormsWorkspaceChrome";
 export { FormDistributionPanel } from "@/components/forms/workspace/FormDistributionPanel";
 export { FormIntakePreviewPanel } from "@/components/forms/workspace/FormIntakePreviewPanel";
+export { PacketBuilderWorkspaceLayout } from "@/components/forms/workspace/PacketBuilderWorkspaceLayout";
+export { PacketDistributionLaunchPanel } from "@/components/forms/workspace/PacketDistributionLaunchPanel";
+export { PacketOrchestrationHubView } from "@/components/forms/workspace/PacketOrchestrationHubView";
+export { PacketStepCompositionEditor } from "@/components/forms/workspace/PacketStepCompositionEditor";
 export { FormLifecycleRail } from "@/components/forms/workspace/FormLifecycleRail";
 export { FormLifecycleWorkspaceLayout } from "@/components/forms/workspace/FormLifecycleWorkspaceLayout";
 export { FormsWorkspaceShell } from "@/components/forms/workspace/FormsWorkspaceShell";
