@@ -102,9 +102,7 @@ export default function FormsHubClient() {
             );
             setPackets(
                 packetsRes.ok ?
-                    (
-                        (packetsJson as { data?: (IntakeWorkspacePacketRow & { is_active?: boolean })[] }).data ?? []
-                    )
+                    ((packetsJson as { data?: IntakeWorkspacePacketRow[] }).data ?? [])
                         .filter((p) => p.is_active !== false)
                         .map((p) => ({ id: p.id, name: p.name }))
                 :   []

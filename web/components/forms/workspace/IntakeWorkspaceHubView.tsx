@@ -44,6 +44,8 @@ export type IntakeWorkspaceSessionRow = {
 export type IntakeWorkspacePacketRow = {
     id: string;
     name: string;
+    /** Present on packet-definitions API rows; hub strips inactive packets from pickers. */
+    is_active?: boolean;
 };
 
 export type IntakeWorkspaceSubmissionRow = {
