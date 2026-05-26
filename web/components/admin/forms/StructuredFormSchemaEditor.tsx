@@ -1,49 +1,31 @@
 "use client";
 
+import clsx from "clsx";
 import { useCallback, useMemo } from "react";
-import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import PrimaryButton from "@/components/PrimaryButton";
+import { FormFieldAuthoringCard } from "@/components/admin/forms/FormFieldAuthoringCard";
+import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
+import {
+    FIELD_AUTHORING_COPY,
+    isCustomUnmappedField,
+    uiKindForField,
+    type UiScalarKind,
+} from "@/lib/forms/formFieldAuthoringPresentation";
 import {
     OPERATIONAL_FORM_SYSTEM_FIELDS,
     SYSTEM_FIELD_BY_ID,
-    linesToStaticOptions,
     type SystemFieldRegistryEntry,
 } from "@/lib/forms/systemFieldRegistry";
 import { customUnmappedTextField, formFieldFromRegistryEntry } from "@/lib/forms/systemFieldToFormField";
-
-type UiScalarKind =
-    | "text"
-    | "textarea"
-    | "email"
-    | "phone"
-    | "number"
-    | "date"
-    | "checkbox"
-    | "select"
-    | "signature";
+import {
+    opGroupedSurface,
+    opMetadata,
+    opMutedMeta,
+    opTechnicalSurface,
+} from "@/lib/operational/ui/operationalVisualTokens";
 
 const EMAIL_PATTERN = "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$";
 const PHONE_PATTERN = "^[+0-9()\\-\\s]{7,}$";
-
-function staticOptionsToLines(opts: ReadonlyArray<{ value: string; label: string }> | undefined): string {
-    if (!opts?.length) return "a|Option A\nb|Option B";
-    return opts.map((o) => `${o.value}|${o.label}`).join("\n");
-}
-
-function uiKindForField(f: FormField): UiScalarKind {
-    if (f.type === "signature") return "signature";
-    if (f.type === "boolean") return "checkbox";
-    if (f.type === "number") return "number";
-    if (f.type === "date") return "date";
-    if (f.type === "select") return "select";
-    if (f.type === "text") {
-        if (f.multiline) return "textarea";
-        if (f.validate?.pattern === EMAIL_PATTERN) return "email";
-        if (f.validate?.pattern === PHONE_PATTERN) return "phone";
-        return "text";
-    }
-    return "text";
-}
 
 function registryEntryForField(f: FormField): SystemFieldRegistryEntry | null {
     if (f.field_source?.entity_type === "custom") return null;
@@ -54,10 +36,6 @@ function pickerValueForField(f: FormField): string {
     if (f.field_source?.entity_type === "custom" && f.field_source.field_key === "unmapped") return "__custom";
     const hit = OPERATIONAL_FORM_SYSTEM_FIELDS.find((e) => e.field_key === f.id);
     return hit ? `sys:${hit.id}` : "__custom";
-}
-
-function isCustomUnmappedField(f: FormField): boolean {
-    return f.field_source?.entity_type === "custom" && f.field_source.field_key === "unmapped";
 }
 
 function isTypeLocked(entry: SystemFieldRegistryEntry | null, custom: boolean): boolean {
@@ -214,35 +192,74 @@ export default function StructuredFormSchemaEditor({ schema, onChange, disabled 
         [mainSection?.field_ids, onChange, schema]
     );
 
-    const entityLabel = (t: string) => {
-        const map: Record<string, string> = {
-            child: "Child",
-            guardian: "Guardian",
-            opportunity: "Opportunity",
-            customer: "Customer / household",
-            associate: "Associate",
-            enrollment: "Enrollment",
-            custom: "Custom",
-        };
-        return map[t] ?? t;
-    };
+    const handlePickerChange = useCallback(
+        (index: number, value: string) => {
+            const field = topFields[index];
+            if (!field) return;
+
+            if (value.startsWith("kind:")) {
+                const nextKind = value.slice(5) as UiScalarKind;
+                const entry = registryEntryForField(field);
+                const custom = isCustomUnmappedField(field);
+                const locked = isTypeLocked(entry, custom);
+                if (locked) return;
+                const textKinds: UiScalarKind[] = ["text", "textarea", "email", "phone"];
+                if (custom) {
+                    const nf = buildFieldFromUiCustom(nextKind, field.id, field.label);
+                    setFieldAt(index, {
+                        ...nf,
+                        ...layoutPassThrough(field),
+                        required: field.required,
+                        description: field.description,
+                        placeholder: field.placeholder,
+                        field_source: { entity_type: "custom", field_key: "unmapped" },
+                    } as FormField);
+                    return;
+                }
+                if (entry && textKinds.includes(entry.suggested_kind) && textKinds.includes(nextKind)) {
+                    setFieldAt(index, applyTextLikeKind(field, nextKind, field.id));
+                }
+                return;
+            }
+
+            if (value === "__custom") {
+                setFieldAt(index, customUnmappedTextField());
+                return;
+            }
+            if (value.startsWith("sys:")) {
+                const rid = value.slice(4);
+                const ent = SYSTEM_FIELD_BY_ID.get(rid);
+                if (ent) setFieldAt(index, formFieldFromRegistryEntry(ent, {}));
+            }
+        },
+        [setFieldAt, topFields]
+    );
+
+    const takenIdsForIndex = useCallback(
+        (index: number) => new Set(topFields.filter((_, i) => i !== index).map((f) => f.id)),
+        [topFields]
+    );
+
+    const inputClass =
+        "w-full rounded-lg border border-alloy-midnight/10 bg-white px-2.5 py-1.5 text-sm text-alloy-midnight shadow-sm";
 
     return (
-        <div className="space-y-4 text-sm text-[#31394d]">
-            <div className="grid gap-2 sm:grid-cols-2">
+        <div className="space-y-4" data-testid="structured-form-schema-editor">
+            <div className="grid gap-3 sm:grid-cols-2">
                 <label className="space-y-1">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-[#59678b]">Form name</span>
+                    <span className={opMetadata}>{FIELD_AUTHORING_COPY.documentTitle}</span>
                     <input
-                        className="w-full rounded border border-[#e6e8ec] px-2 py-1.5"
+                        className={inputClass}
                         value={schema.title}
                         disabled={disabled}
                         onChange={(e) => patchSchema({ title: e.target.value })}
+                        data-testid="form-document-title"
                     />
                 </label>
                 <label className="space-y-1">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-[#59678b]">Section heading</span>
+                    <span className={opMetadata}>{FIELD_AUTHORING_COPY.sectionHeading}</span>
                     <input
-                        className="w-full rounded border border-[#e6e8ec] px-2 py-1.5"
+                        className={inputClass}
                         value={schema.sections[0]?.title ?? ""}
                         disabled={disabled}
                         onChange={(e) => {
@@ -251,260 +268,66 @@ export default function StructuredFormSchemaEditor({ schema, onChange, disabled 
                             const nextSecs = [{ ...s0, title: e.target.value }, ...schema.sections.slice(1)];
                             patchSchema({ sections: nextSecs });
                         }}
+                        data-testid="form-section-heading"
                     />
                 </label>
             </div>
 
-            <div className="overflow-x-auto rounded-lg border border-[#e6e8ec]">
-                <table className="w-full min-w-[900px] text-left text-sm">
-                    <thead className="bg-[#fafbfd] text-xs font-semibold uppercase text-[#59678b]">
-                        <tr>
-                            <th className="px-2 py-2">Data field</th>
-                            <th className="px-2 py-2">Label</th>
-                            <th className="px-2 py-2">Help</th>
-                            <th className="px-2 py-2">Req</th>
-                            <th className="px-2 py-2">Width</th>
-                            <th className="px-2 py-2">Input type</th>
-                            <th className="px-2 py-2">Placeholder / options</th>
-                            <th className="px-2 py-2">Order</th>
-                            <th className="px-2 py-2" />
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#e6e8ec]">
+            <div data-testid="form-field-authoring-section">
+                <p className={opMutedMeta}>{FIELD_AUTHORING_COPY.sectionLead}</p>
+
+                {topFields.length === 0 ?
+                    <div className={clsx("mt-3 rounded-xl px-4 py-5 text-center", opTechnicalSurface)} data-testid="form-field-authoring-empty">
+                        <p className="text-sm font-medium text-alloy-midnight">{FIELD_AUTHORING_COPY.emptyTitle}</p>
+                        <p className={clsx("mt-1", opMetadata)}>{FIELD_AUTHORING_COPY.emptyLead}</p>
+                    </div>
+                :   <ul className={clsx(opGroupedSurface, "mt-3")} data-testid="form-field-authoring-list">
                         {topFields.map((field, idx) => {
                             const entry = registryEntryForField(field);
                             const custom = isCustomUnmappedField(field);
-                            const locked = isTypeLocked(entry, custom);
-                            const kind = uiKindForField(field);
-                            const intakeNote =
-                                entry && !entry.public_intake_safe ? (
-                                    <p className="mt-1 text-[11px] text-amber-900">Internal / staff-only suggested use.</p>
-                                ) : null;
-                            const customWarn = custom ? (
-                                <p className="mt-1 text-[11px] text-amber-900">Custom / unmapped — not auto-linked to CRM.</p>
-                            ) : null;
-
                             return (
-                                <tr key={field.id} className="align-top">
-                                    <td className="px-2 py-2">
-                                        <select
-                                            className="max-w-[220px] rounded border border-[#e6e8ec] px-1 py-1 text-xs"
-                                            disabled={disabled}
-                                            value={pickerValueForField(field)}
-                                            onChange={(e) => {
-                                                const v = e.target.value;
-                                                if (v === "__custom") {
-                                                    setFieldAt(idx, customUnmappedTextField());
-                                                    return;
-                                                }
-                                                if (v.startsWith("sys:")) {
-                                                    const rid = v.slice(4);
-                                                    const ent = SYSTEM_FIELD_BY_ID.get(rid);
-                                                    if (ent) setFieldAt(idx, formFieldFromRegistryEntry(ent, {}));
-                                                }
-                                            }}
-                                        >
-                                            <optgroup label="System fields">
-                                                {OPERATIONAL_FORM_SYSTEM_FIELDS.map((e) => {
-                                                    const takenElsewhere = topFields.some((f, i) => i !== idx && f.id === e.field_key);
-                                                    return (
-                                                        <option key={e.id} value={`sys:${e.id}`} disabled={takenElsewhere}>
-                                                            {entityLabel(e.entity_type)} — {e.default_label}
-                                                        </option>
-                                                    );
-                                                })}
-                                            </optgroup>
-                                            <option value="__custom">Custom / unmapped (text)</option>
-                                        </select>
-                                        {intakeNote}
-                                        {customWarn}
-                                    </td>
-                                    <td className="px-2 py-2">
-                                        <input
-                                            className="w-full min-w-[120px] rounded border border-[#e6e8ec] px-1 py-1"
-                                            disabled={disabled}
-                                            value={field.label}
-                                            onChange={(e) => {
-                                                if (field.type === "group") return;
-                                                setFieldAt(idx, { ...field, label: e.target.value } as FormField);
-                                            }}
-                                        />
-                                    </td>
-                                    <td className="px-2 py-2">
-                                        <input
-                                            className="w-full min-w-[120px] rounded border border-[#e6e8ec] px-1 py-1 text-xs"
-                                            disabled={disabled}
-                                            value={"description" in field ? field.description ?? "" : ""}
-                                            placeholder="Help text"
-                                            onChange={(e) => {
-                                                if (field.type === "group") return;
-                                                const v = e.target.value.trim();
-                                                setFieldAt(idx, {
-                                                    ...field,
-                                                    ...(v ? { description: v } : { description: undefined }),
-                                                } as FormField);
-                                            }}
-                                        />
-                                    </td>
-                                    <td className="px-2 py-2">
-                                        <input
-                                            type="checkbox"
-                                            disabled={disabled}
-                                            checked={field.required}
-                                            onChange={(e) => {
-                                                if (field.type === "group") return;
-                                                setFieldAt(idx, { ...field, required: e.target.checked } as FormField);
-                                            }}
-                                        />
-                                    </td>
-                                    <td className="px-2 py-2">
-                                        {field.type === "group" ? (
-                                            <span className="text-xs text-[#59678b]">—</span>
-                                        ) : (
-                                            <select
-                                                className="max-w-[100px] rounded border border-[#e6e8ec] px-1 py-1 text-xs"
-                                                disabled={disabled}
-                                                value={field.layout_width === "half" ? "half" : "full"}
-                                                onChange={(e) => {
-                                                    const v = e.target.value === "half" ? "half" : "full";
-                                                    setFieldAt(idx, {
-                                                        ...field,
-                                                        ...(v === "full" ? { layout_width: undefined } : { layout_width: "half" }),
-                                                    } as FormField);
-                                                }}
-                                            >
-                                                <option value="full">Full</option>
-                                                <option value="half">Half</option>
-                                            </select>
-                                        )}
-                                    </td>
-                                    <td className="px-2 py-2">
-                                        <select
-                                            className="max-w-[130px] rounded border border-[#e6e8ec] px-1 py-1 text-xs"
-                                            disabled={disabled || locked}
-                                            value={kind}
-                                            title={locked ? "Type is fixed for this system field." : undefined}
-                                            onChange={(e) => {
-                                                const nextKind = e.target.value as UiScalarKind;
-                                                if (locked) return;
-                                                const textKinds: UiScalarKind[] = ["text", "textarea", "email", "phone"];
-                                                if (custom) {
-                                                    const nf = buildFieldFromUiCustom(nextKind, field.id, field.label);
-                                                    setFieldAt(idx, {
-                                                        ...nf,
-                                                        ...layoutPassThrough(field),
-                                                        required: field.required,
-                                                        description: field.description,
-                                                        placeholder: field.placeholder,
-                                                        field_source: { entity_type: "custom", field_key: "unmapped" },
-                                                    } as FormField);
-                                                    return;
-                                                }
-                                                if (entry && textKinds.includes(entry.suggested_kind) && textKinds.includes(nextKind)) {
-                                                    setFieldAt(idx, applyTextLikeKind(field, nextKind, field.id));
-                                                }
-                                            }}
-                                        >
-                                            <option value="text">Text</option>
-                                            <option value="textarea">Text area</option>
-                                            <option value="email">Email</option>
-                                            <option value="phone">Phone</option>
-                                            <option value="number">Number</option>
-                                            <option value="date">Date</option>
-                                            <option value="checkbox">Checkbox</option>
-                                            <option value="select">Select</option>
-                                            <option value="signature">Signature</option>
-                                        </select>
-                                    </td>
-                                    <td className="px-2 py-2">
-                                        {field.type === "select" ? (
-                                            <textarea
-                                                className="h-20 w-full min-w-[160px] rounded border border-[#e6e8ec] px-1 py-1 font-mono text-xs"
-                                                disabled={disabled}
-                                                value={staticOptionsToLines(field.static_options)}
-                                                placeholder={"value|Label per line"}
-                                                onChange={(e) => {
-                                                    const raw = e.target.value;
-                                                    if (entry) {
-                                                        setFieldAt(
-                                                            idx,
-                                                            {
-                                                                ...formFieldFromRegistryEntry(entry, { static_options_lines: raw }),
-                                                                ...layoutPassThrough(field),
-                                                            } as FormField
-                                                        );
-                                                    } else {
-                                                        setFieldAt(idx, {
-                                                            ...field,
-                                                            type: "select",
-                                                            static_options: linesToStaticOptions(raw),
-                                                        } as FormField);
-                                                    }
-                                                }}
-                                            />
-                                        ) : field.type === "text" ? (
-                                            <input
-                                                className="w-full min-w-[120px] rounded border border-[#e6e8ec] px-1 py-1 text-xs"
-                                                disabled={disabled}
-                                                value={field.placeholder ?? ""}
-                                                onChange={(e) => {
-                                                    const v = e.target.value;
-                                                    setFieldAt(idx, {
-                                                        ...field,
-                                                        ...(v.trim() ? { placeholder: v } : { placeholder: undefined }),
-                                                    } as FormField);
-                                                }}
-                                            />
-                                        ) : (
-                                            <span className="text-xs text-[#59678b]">—</span>
-                                        )}
-                                    </td>
-                                    <td className="px-2 py-2 whitespace-nowrap">
-                                        <button
-                                            type="button"
-                                            className="mr-1 text-[#00458C] disabled:opacity-40"
-                                            disabled={disabled || idx === 0}
-                                            onClick={() => move(idx, -1)}
-                                        >
-                                            Up
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className="text-[#00458C] disabled:opacity-40"
-                                            disabled={disabled || idx >= topFields.length - 1}
-                                            onClick={() => move(idx, 1)}
-                                        >
-                                            Down
-                                        </button>
-                                    </td>
-                                    <td className="px-2 py-2">
-                                        <button
-                                            type="button"
-                                            className="text-red-700 disabled:opacity-40"
-                                            disabled={disabled || topFields.length <= 1}
-                                            onClick={() => removeFieldAt(idx)}
-                                        >
-                                            Remove
-                                        </button>
-                                    </td>
-                                </tr>
+                                <FormFieldAuthoringCard
+                                    key={field.id}
+                                    field={field}
+                                    index={idx}
+                                    total={topFields.length}
+                                    disabled={disabled}
+                                    entry={entry}
+                                    custom={custom}
+                                    locked={isTypeLocked(entry, custom)}
+                                    kind={uiKindForField(field)}
+                                    pickerValue={pickerValueForField(field)}
+                                    systemFields={OPERATIONAL_FORM_SYSTEM_FIELDS}
+                                    takenFieldIds={takenIdsForIndex(idx)}
+                                    onPickerChange={handlePickerChange}
+                                    onFieldChange={setFieldAt}
+                                    onMove={move}
+                                    onRemove={removeFieldAt}
+                                />
                             );
                         })}
-                    </tbody>
-                </table>
+                    </ul>
+                }
             </div>
 
-            <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={disabled} onClick={addField}>
-                Add field
+            <PrimaryButton
+                type="button"
+                className="!px-3 !py-2 text-sm"
+                disabled={disabled}
+                onClick={addField}
+                data-testid="form-add-question"
+            >
+                {FIELD_AUTHORING_COPY.addQuestion}
             </PrimaryButton>
 
-            <details className="rounded border border-[#e6e8ec] bg-[#fafbfd] px-3 py-2 text-xs text-[#59678b]">
-                <summary className="cursor-pointer font-medium text-[#31394d]">Technical details (IDs)</summary>
-                <p className="mt-2 leading-relaxed">
-                    Internal keys are assigned from the system field you pick (or from a custom row). You normally do not need
-                    these values — they keep submissions, shared values, and future CRM mapping aligned.
+            <details className={clsx("rounded-lg px-3 py-2", opTechnicalSurface)} data-testid="form-field-authoring-technical">
+                <summary className={clsx("cursor-pointer text-sm font-medium text-alloy-midnight/80")}>
+                    Technical details (internal keys)
+                </summary>
+                <p className={clsx("mt-2 leading-relaxed", opMetadata)}>
+                    Internal keys align submissions with CRM mapping — you normally do not need to edit these.
                 </p>
-                <ul className="mt-2 list-disc pl-5 font-mono text-[11px]">
+                <ul className="mt-2 list-disc pl-5 font-mono text-[11px] text-alloy-midnight/75">
                     {topFields.map((f) => (
                         <li key={f.id}>
                             {f.id}
@@ -516,3 +339,5 @@ export default function StructuredFormSchemaEditor({ schema, onChange, disabled 
         </div>
     );
 }
+
+export { StructuredFormSchemaEditor };

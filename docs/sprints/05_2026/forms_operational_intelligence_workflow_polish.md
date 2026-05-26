@@ -1,6 +1,6 @@
 # Forms Operational Intelligence + Workflow Polish Sprint
 
-**Status:** **OI-0 complete** · **OI-1 shipped** · **OI-2 shipped** · **OI-3 shipped** · **OI-4 partial** · **OI-5 shipped** · **OI-6 ongoing**
+**Status:** **OI-0 complete** · **OI-1 shipped** · **OI-2 shipped** · **OI-3 shipped** · **OI-4 shipped** · **OI-5 shipped** · **OI-6 ongoing**
 
 **Prerequisites:** OW-0–OW-7 ☑ · PX-0–PX-2 ☑ · P2 review MVP ☑
 
@@ -103,24 +103,30 @@ This document. Sequencing OI-1 → OI-6.
 
 ---
 
-### OI-4 — Document-oriented form authoring (partial ☑)
+### OI-4 — Document-oriented form authoring ☑
 
 **Goal:** Builder feels like designing intake documents, not editing a field table.
 
-**Shipped (partial):**
+**Shipped:**
 
 | Area | Detail |
 |------|--------|
 | Shell | `FormDocumentAuthoringShell.tsx` — document intro, branding placeholder, preview framing |
-| Integration | `FormSchemaWorkspace.tsx` wraps `StructuredFormSchemaEditor` |
-| Remaining | Replace field table primary path with grouped field cards (future card) |
+| Field cards | `FormFieldAuthoringCard.tsx` + `formFieldAuthoringPresentation.ts` — grouped question cards |
+| Editor | `StructuredFormSchemaEditor.tsx` — table removed; document labels, empty state, collapsed technical IDs |
+| Integration | `FormSchemaWorkspace.tsx` — shell wrap; save/publish unchanged |
+
+#### OI-4B — Document-oriented field authoring cards ☑
 
 **Acceptance:**
 
-- [x] Builder primary path is document-framed
-- [x] Section headers editable (existing schema editor)
-- [x] Preview framing visible
-- [x] No schema contract break
+- [x] Field cards replace table rows on primary path
+- [x] All edit controls preserved (label, help, required, layout, answer type, options, order, remove)
+- [x] Mapped fields show “Prefills from: …” operator copy
+- [x] Empty state: “Start by adding the first question”
+- [x] No schema semantics or renderer changes
+
+**Tests:** `formFieldAuthoringPresentation.test.ts`, `structuredFormSchemaEditor.test.tsx`
 
 ---
 
@@ -184,6 +190,6 @@ flowchart TD
 ## Verification
 
 ```bash
-cd web && npm run test -- tests/forms/intakeCommandCenterPresentation.test.ts tests/forms/submissionIntelligencePresentation.test.ts tests/forms/submissionsInboxWorkspace.test.tsx tests/forms/intakeWorkspaceCommandCenter.test.tsx
+cd web && npm run test -- tests/forms/intakeCommandCenterPresentation.test.ts tests/forms/submissionIntelligencePresentation.test.ts tests/forms/intakeWorkspaceCommandCenter.test.tsx tests/forms/submissionsInboxWorkspace.test.tsx tests/forms/formFieldAuthoringPresentation.test.ts tests/forms/structuredFormSchemaEditor.test.tsx tests/forms/formDocumentAuthoringShell.test.tsx
 cd web && npx tsc --noEmit  # touched paths
 ```
