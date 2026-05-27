@@ -14728,11 +14728,12 @@ export default function AdminEntityDrawer() {
                 title={actionFormState?.action?.label ?? "Schedule tour"}
                 submitLabel={actionFormState?.action?.label ?? "Save"}
                 opportunityId={drawer.type === "opportunities" && drawer.id !== "new" ? drawer.id : ""}
-                locationId={
-                    data && typeof data === "object" && (data as { location_id?: unknown }).location_id != null
-                        ? String((data as { location_id: unknown }).location_id).trim()
-                        : null
-                }
+                locationId={(() => {
+                    if (!data || typeof data !== "object") return null;
+                    const d = data as { location_id?: unknown; _location_id?: unknown };
+                    const lid = String(d.location_id ?? d._location_id ?? "").trim();
+                    return lid || null;
+                })()}
                 initialTourDate={(() => {
                     const md = data && typeof data === "object" ? ((data as any).metadata ?? null) : null;
                     const d = md && typeof md.tour_date === "string" ? md.tour_date.trim() : "";
@@ -14786,6 +14787,72 @@ export default function AdminEntityDrawer() {
                     setOpportunityActionLoading(actionKey);
                     setSaveError(null);
                     try {
+                        const locId =
+                            data && typeof data === "object"
+                                ? String(
+                                      (data as { location_id?: unknown; _location_id?: unknown }).location_id ??
+                                          (data as { _location_id?: unknown })._location_id ??
+                                          ""
+                                  ).trim()
+                                : "";
+                        if (locId) {
+                            const res = await fetch("/api/admin/tours/bookings", {
+                                method: "POST",
+                                credentials: "include",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    opportunity_id: drawer.id,
+                                    location_id: locId,
+                                    tour_date: payload.tour_date,
+                                    tour_time: payload.tour_time,
+                                }),
+                            });
+                            const json = (await res.json().catch(() => ({}))) as {
+                                booking?: { start_at?: string; timezone?: string; status_key?: string };
+                                error?: string;
+                            };
+                            if (!res.ok) throw new Error(json.error ?? "Failed to schedule tour");
+                            const booking = json.booking;
+                            const sk = booking && typeof booking.status_key === "string" ? booking.status_key : "";
+                            if (
+                                booking &&
+                                typeof booking.start_at === "string" &&
+                                typeof booking.timezone === "string" &&
+                                (sk === "confirmed" || sk === "rescheduled" || sk === "pending_approval" || sk === "requested")
+                            ) {
+                                try {
+                                    const mirror = deriveTourMetadataMirrorFromBooking(booking.start_at, booking.timezone);
+                                    setData((prev) => {
+                                        if (!prev || typeof prev !== "object") return prev;
+                                        const p = prev as Record<string, unknown>;
+                                        const mdRaw = p.metadata;
+                                        const md =
+                                            mdRaw && typeof mdRaw === "object" && !Array.isArray(mdRaw)
+                                                ? { ...(mdRaw as Record<string, unknown>) }
+                                                : {};
+                                        return {
+                                            ...p,
+                                            metadata: { ...md, ...mirror },
+                                            status_key:
+                                                sk === "confirmed" || sk === "rescheduled"
+                                                    ? TOUR_BOOKING_OPPORTUNITY_STATUS.scheduled
+                                                    : p.status_key,
+                                        };
+                                    });
+                                    if (sk === "confirmed" || sk === "rescheduled") {
+                                        setFormData((prev) => ({ ...prev, status_key: TOUR_BOOKING_OPPORTUNITY_STATUS.scheduled }));
+                                    }
+                                } catch {
+                                    /* invalid start_at — rely on refetch */
+                                }
+                            }
+                            const rf = refetch();
+                            if (rf) await rf;
+                            window.dispatchEvent(
+                                new CustomEvent("adminv2:opportunity-updated", { detail: { id: drawer.id, action_key: actionKey } })
+                            );
+                            return;
+                        }
                         const workUnitId =
                             data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
                                 ? String((data as { work_unit_id?: unknown }).work_unit_id)

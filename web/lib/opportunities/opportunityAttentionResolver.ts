@@ -268,7 +268,11 @@ function collectQueueLaneCodes(input: {
     const nowMs = batch?.nowDate.getTime() ?? now.getTime();
 
     const nfu = parseMetadataInstantMs(md, "next_follow_up_at");
-    if (nfu != null && nfu < nowMs) {
+    const tourMs = md ? parseTourDateYmdUtcMs(md.tour_date) : null;
+    const startTodayUtc = batch?.startTodayUtcMs ?? Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const hasUpcomingTour = sk === "tour_scheduled" && tourMs != null && tourMs >= startTodayUtc;
+
+    if (nfu != null && nfu < nowMs && !hasUpcomingTour) {
         out.push("follow_up_date_passed");
     }
 
@@ -278,7 +282,6 @@ function collectQueueLaneCodes(input: {
     }
 
     if (sk === "tour_scheduled") {
-        const tourMs = md ? parseTourDateYmdUtcMs(md.tour_date) : null;
         const startTodayUtc = batch?.startTodayUtcMs ?? Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
         if (tourMs != null && tourMs < startTodayUtc) {
             out.push("tour_date_passed");

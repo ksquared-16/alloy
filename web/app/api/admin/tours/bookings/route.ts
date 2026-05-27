@@ -4,6 +4,9 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createTourBooking } from "@/lib/tours/bookings/tourBookingService";
 import type { CreateTourBookingInput } from "@/lib/tours/bookings/types";
+import { parseTourManualLocalDateTime } from "@/lib/tours/bookings/parseTourManualLocalDateTime";
+import { resolveTourLocationSlotDurationMinutes } from "@/lib/tours/availability/resolveTourLocationSlotDurationMinutes";
+import { resolveTourLocationTimezone } from "@/lib/tours/availability/resolveTourLocationTimezone";
 import { assertBookingLocationMatchesOpportunity, fetchOpportunityForTourAdmin } from "@/lib/tours/admin/opportunityTourContext";
 
 type Body = {
@@ -12,6 +15,9 @@ type Body = {
     start_at?: string;
     end_at?: string;
     timezone?: string;
+    tour_date?: string;
+    tour_time?: string;
+    duration_minutes?: number;
     approval_required?: boolean;
     initial_status?: "requested" | "pending_approval" | "confirmed";
 };
@@ -35,11 +41,16 @@ export async function POST(request: NextRequest) {
 
     const opportunityId = String(body.opportunity_id ?? "").trim();
     const locationId = String(body.location_id ?? "").trim();
-    const startAt = body.start_at != null ? new Date(String(body.start_at)) : null;
-    const endAt = body.end_at != null ? new Date(String(body.end_at)) : null;
-    const timezone = String(body.timezone ?? "").trim();
-    if (!opportunityId || !locationId || !startAt || !endAt || !timezone || Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime())) {
-        return NextResponse.json({ error: "opportunity_id, location_id, start_at, end_at, timezone required" }, { status: 400 });
+    const tourDate = body.tour_date != null ? String(body.tour_date).trim() : "";
+    const tourTime = body.tour_time != null ? String(body.tour_time).trim() : "";
+    const manualWall = Boolean(tourDate && tourTime);
+
+    let startAt = body.start_at != null ? new Date(String(body.start_at)) : null;
+    let endAt = body.end_at != null ? new Date(String(body.end_at)) : null;
+    let timezone = String(body.timezone ?? "").trim();
+
+    if (!opportunityId || !locationId) {
+        return NextResponse.json({ error: "opportunity_id and location_id required" }, { status: 400 });
     }
 
     const supabase = createAdminClient();
@@ -56,6 +67,35 @@ export async function POST(request: NextRequest) {
         .eq("org_id", ctx.orgId)
         .maybeSingle();
     if (lErr || !locRow) return NextResponse.json({ error: "Location not found for org" }, { status: 400 });
+
+    if (manualWall) {
+        try {
+            const resolvedTz = timezone || (await resolveTourLocationTimezone(supabase, ctx.orgId, locationId));
+            const durationMinutes =
+                Number.isFinite(Number(body.duration_minutes)) && Number(body.duration_minutes) > 0
+                    ? Number(body.duration_minutes)
+                    : await resolveTourLocationSlotDurationMinutes(supabase, ctx.orgId, locationId);
+            const parsed = parseTourManualLocalDateTime({
+                tourDate,
+                tourTime,
+                timezoneIana: resolvedTz,
+                durationMinutes,
+            });
+            startAt = parsed.startAt;
+            endAt = parsed.endAt;
+            timezone = parsed.timezone;
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            return NextResponse.json({ error: msg || "Invalid manual tour date/time" }, { status: 400 });
+        }
+    }
+
+    if (!startAt || !endAt || !timezone || Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime())) {
+        return NextResponse.json(
+            { error: "start_at, end_at, timezone required (or tour_date + tour_time for manual entry)" },
+            { status: 400 }
+        );
+    }
 
     const approvalRequired = Boolean(body.approval_required);
     const input: CreateTourBookingInput = {

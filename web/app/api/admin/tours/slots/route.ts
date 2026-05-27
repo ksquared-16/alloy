@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const locationId = (searchParams.get("location_id") ?? "").trim();
     const userId = (searchParams.get("user_id") ?? "").trim() || null;
+    const excludeBookingId = (searchParams.get("exclude_booking_id") ?? "").trim() || null;
     const fromRaw = searchParams.get("from");
     const toRaw = searchParams.get("to");
     if (!locationId || !fromRaw || !toRaw) {
@@ -37,6 +38,7 @@ export async function GET(request: NextRequest) {
         userId,
         from,
         to,
+        excludeBookingId,
     });
     return NextResponse.json({ slots });
 }

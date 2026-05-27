@@ -62,6 +62,6 @@ export async function computeAvailableTourSlots(
         userId,
         fromUtc: from,
         toUtc: to,
-        excludeBookingId: null,
+        excludeBookingId: params.excludeBookingId ?? null,
     });
 }

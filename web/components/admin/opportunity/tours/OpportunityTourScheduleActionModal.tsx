@@ -211,7 +211,7 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
                 {showSlotChrome && slotPhase === "reschedule" && primaryActive ? (
                     <OpportunityTourSlotSchedulePanel
                         opportunityId={oid}
-                        locationId={loc}
+                        locationId={String(primaryActive.location_id ?? loc).trim() || loc}
                         mode="reschedule"
                         primaryBooking={primaryActive}
                         onCancel={() => setSlotPhase(activeBookings.length > 0 ? "duplicate_guard" : "schedule")}
@@ -221,8 +221,9 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
                         }}
                         footerSlot={
                             <p className="text-[11px] text-alloy-midnight/60">
-                                <strong>Legacy manual entry</strong> (link on the schedule screen) only updates CRM metadata; it does not
-                                replace this <code className="rounded bg-alloy-stone/10 px-1">tour_booking</code> row.
+                                <strong>Legacy manual entry</strong> (link on the schedule screen) creates a{" "}
+                                <code className="rounded bg-alloy-stone/10 px-1">tour_booking</code> when a site is set; use slot
+                                picker to reschedule this row instead.
                             </p>
                         }
                     />
@@ -254,7 +255,11 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
                             open
                             variant="embedded"
                             title={title}
-                            subtitle="Manual entry updates metadata via the existing action workflow (does not create a tour_booking row)."
+                            subtitle={
+                                hasSite
+                                    ? "Manual entry creates a tour_booking using the site timezone (same as slot scheduling)."
+                                    : "Manual entry updates metadata via the existing action workflow (does not create a tour_booking row)."
+                            }
                             submitLabel={submitLabel}
                             initialTourDate={initialTourDate}
                             initialTourTime={initialTourTime}

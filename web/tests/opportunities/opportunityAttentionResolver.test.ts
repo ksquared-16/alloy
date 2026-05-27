@@ -105,6 +105,29 @@ describe("resolveOpportunityAttention", () => {
         expect(r.primary_reason?.code).toBe("tour_date_passed");
     });
 
+    it("suppresses follow_up_date_passed when tour_scheduled with upcoming tour date", () => {
+        const nowMs = Date.parse("2026-06-02T12:00:00.000Z");
+        const r = resolveOpportunityAttention({
+            opportunity: {
+                id: "1",
+                status_key: "tour_scheduled",
+                created_at: "2026-05-01T12:00:00.000Z",
+                updated_at: "2026-05-20T12:00:00.000Z",
+                metadata: {
+                    tour_date: "2026-06-10",
+                    tour_time: "09:00",
+                    next_follow_up_at: "2026-05-30T12:00:00.000Z",
+                },
+                customer_id: "c1",
+                primary_person_id: "p1",
+            },
+            nowMs,
+            defs: [defFor("tour_scheduled", "qualification")],
+        });
+        expect(r.reasons.map((x) => x.code)).not.toContain("follow_up_date_passed");
+        expect(r.reasons.map((x) => x.code)).not.toContain("tour_date_passed");
+    });
+
     it("emits overdue_commitment when commitment_due_at is past", () => {
         const nowMs = Date.parse("2026-06-02T12:00:00.000Z");
         const r = resolveOpportunityAttention({

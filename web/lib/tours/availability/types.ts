@@ -8,6 +8,8 @@ export type ComputeAvailableTourSlotsParams = {
     from: Date;
     /** UTC inclusive upper bound for candidate slot **starts** (slots starting after this are dropped). */
     to: Date;
+    /** When rescheduling, ignore this booking id in overlap counts (matches server write path). */
+    excludeBookingId?: string | null;
 };
 
 export type AvailableTourSlot = {

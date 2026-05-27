@@ -62,32 +62,34 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
             from: windowFrom.toISOString(),
             to: windowTo.toISOString(),
         });
+        if (mode === "reschedule" && primaryBooking?.id) {
+            qs.set("exclude_booking_id", primaryBooking.id);
+        }
         const slotsUrl = `/api/admin/tours/slots?${qs.toString()}`;
         try {
+            const slotsRes = await fetch(slotsUrl, { credentials: "include" });
+            if (gen !== loadGeneration.current) return;
+            const slotsJ = (await slotsRes.json()) as { slots?: AvailableTourSlot[]; error?: string };
+            if (!slotsRes.ok) throw new Error(slotsJ.error ?? slotsRes.statusText);
+            setSlots(slotsJ.slots ?? []);
+
             if (mode === "schedule") {
-                const [rulesRes, slotsRes] = await Promise.all([
-                    fetch(`/api/admin/tours/availability-rules?location_id=${encodeURIComponent(locationId)}`, {
+                try {
+                    const rulesRes = await fetch(`/api/admin/tours/availability-rules?location_id=${encodeURIComponent(locationId)}`, {
                         credentials: "include",
-                    }),
-                    fetch(slotsUrl, { credentials: "include" }),
-                ]);
-                if (gen !== loadGeneration.current) return;
-                const rulesJ = (await rulesRes.json()) as { rules?: { id: string; approval_required: boolean }[] };
-                const map: Record<string, { approval_required: boolean }> = {};
-                for (const r of rulesJ.rules ?? []) {
-                    map[r.id] = { approval_required: Boolean(r.approval_required) };
+                    });
+                    if (gen !== loadGeneration.current) return;
+                    const rulesJ = (await rulesRes.json()) as { rules?: { id: string; approval_required: boolean }[] };
+                    const map: Record<string, { approval_required: boolean }> = {};
+                    for (const r of rulesJ.rules ?? []) {
+                        map[r.id] = { approval_required: Boolean(r.approval_required) };
+                    }
+                    setRulesById(map);
+                } catch {
+                    if (gen === loadGeneration.current) setRulesById({});
                 }
-                setRulesById(map);
-                const slotsJ = (await slotsRes.json()) as { slots?: AvailableTourSlot[]; error?: string };
-                if (!slotsRes.ok) throw new Error(slotsJ.error ?? slotsRes.statusText);
-                setSlots(slotsJ.slots ?? []);
             } else {
-                const slotsRes = await fetch(slotsUrl, { credentials: "include" });
-                if (gen !== loadGeneration.current) return;
                 setRulesById({});
-                const slotsJ = (await slotsRes.json()) as { slots?: AvailableTourSlot[]; error?: string };
-                if (!slotsRes.ok) throw new Error(slotsJ.error ?? slotsRes.statusText);
-                setSlots(slotsJ.slots ?? []);
             }
         } catch (e) {
             if (gen !== loadGeneration.current) return;
@@ -97,7 +99,7 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
                 setSlotsLoading(false);
             }
         }
-    }, [locationId, mode, windowFrom, windowTo]);
+    }, [locationId, mode, primaryBooking?.id, windowFrom, windowTo]);
 
     useEffect(() => {
         void loadSlots();
