@@ -2809,7 +2809,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
         const hasPlacementCandidateRows = liveVmItems.some((i) => i.placementWaitlistCandidate != null);
         const workUnitGroupHeaders = hasPlacementCandidateRows
-            ? buildPlacementWaitlistWorkUnitGroupHeaders(liveVmItems)
+            ? buildPlacementWaitlistWorkUnitGroupHeaders(
+                  liveVmItems.map((item) => ({
+                      groupKey: item.placementWaitlistCandidate?.cohortKey ?? undefined,
+                      groupLabel: item.placementWaitlistCandidate?.cohortSectionTitle ?? undefined,
+                  }))
+              )
             : undefined;
 
         return {

@@ -7,7 +7,7 @@ import { normalizePlacementWaitlistCohort } from "@/lib/orchestration/placement/
 import { formatPlacementBucketLabel } from "@/lib/ui-v2/queuePlacementPriorityV2Presentation";
 import { formatPlacementWaitlistSectionLabel } from "@/lib/ui-v2/queuePlacementPriorityPresentation";
 import { formatDateUtcAudit } from "@/lib/adminFormatters";
-import type { QueueItemVm, QueueRowPlacementWaitlistCandidateVm } from "@/lib/ui-v2/workspace-types";
+import type { QueueRowPlacementWaitlistCandidateVm } from "@/lib/ui-v2/workspace-types";
 
 const LINK_LABELS: Record<string, string> = {
     preferred_together: "Preferred together",
@@ -93,9 +93,14 @@ export function parsePlacementWaitlistCandidateRowVm(
     };
 }
 
+export type PlacementWaitlistGroupHeaderInput = {
+    groupKey?: string | null;
+    groupLabel?: string | null;
+};
+
 /** Map normalized cohort keys → human section titles for queue headers. */
 export function buildPlacementWaitlistWorkUnitGroupHeaders(
-    items: ReadonlyArray<Pick<QueueItemVm, "groupKey" | "groupLabel">>
+    items: ReadonlyArray<PlacementWaitlistGroupHeaderInput>
 ): Record<string, { label: string }> {
     const out: Record<string, { label: string }> = {};
     for (const item of items) {
