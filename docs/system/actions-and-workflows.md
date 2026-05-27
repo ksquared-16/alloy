@@ -16,6 +16,29 @@ Explain how **business facts** become **`workflow_events`**, trigger **workflows
 
 Settings configures **placement + enablement**, not execution semantics. Older **`record_actions`** chrome and dedicated modals (tour, quote, job) remain alongside the registry — see **`docs/system/configuration-system.md`** (Admin Settings capability inventory).
 
+### `action_definitions` uniqueness (migrations)
+
+Uniqueness is enforced by **partial** unique indexes (see `20260430215000_repair_action_registry_foundation.sql`):
+
+- `ux_action_definitions_org_key` on `(org_id, key)` where `org_id IS NOT NULL`
+- `ux_action_definitions_global_key` on `(key)` where `org_id IS NULL`
+
+Platform (`org_id` null) and org-scoped rows can share the same `key`. Seed migrations must use `INSERT … SELECT … WHERE NOT EXISTS (… AND x.org_id IS NOT DISTINCT FROM v.org_id)` — **not** `ON CONFLICT (org_id, key)`, which does not match those partial indexes.
+
+### Action buttons — source of truth (May 2026)
+
+- **Definitions + placements** in Supabase (`action_definitions`, `action_placements`) are authoritative for registry-backed buttons (drawer header, drawer sections, work-unit right rail, **queue row registry chips**).
+- **Queue row preview tokens** (`ui.row_preview.actions`) supply **Open** only (and optional Call/Email on non-enrollment queues). Runtime **merges** preview chips with `surface=queue_row` placements (`mergeQueueRowQuickActions.ts`). **Message**, **Ask BOS**, and other configurable actions must be added via Settings → Action buttons (`action_placements`); preview JSON must not author them.
+- **Placeholder actions** (`*_placeholder`) are seed/migration compatibility only — **not** shown in Settings create dropdown and not intended for operator placement.
+- **Message** from queue preview opens the **Quick Message** modal with person context prefilled; the user must review and send manually (no autonomous send).
+- **Settings** can create, edit, enable/disable, and **remove** org-owned placements; built-in platform placements are view-only (add an org override instead).
+
+Sprint audit: `docs/sprints/06_2026/action_button_configuration_ux_sprint.md`.
+
+**Phase 2 (May 2026):** Settings uses a **compact action chooser** (addable actions only, visible **Add** per row) and a **guided placement editor** — no raw action keys in the UI. **Action library** = available definitions; **action placements** = what renders on queue rows and drawers. Enrollment queue preview policy (`enrollmentQueueRowPreviewPolicy.ts`) strips Call/Email and placement-authored tokens (`message`, `orchestrator`, `update_status`); default preview is **Open** only. Configurable **Message** (`quick_message`) and **Ask BOS** (`ask_bos`) are platform-seeded `ui_intent` definitions; they appear on work-unit rows **only after** an org adds a `queue_row` placement in Settings. Runtime opens Quick Message or BOS handoff via `AskBosHandoffListener`. **Ask BOS** is the operator-facing label for BOS orchestration handoff (not “orchestration”). **Update status** uses `update_status_add_note` open_form + transition rules for required fields.
+
+**Entity labels (May 2026):** Tenant-configured entity labels (`entity_labels`, `EntityLabelsContext`) must drive all operator-facing copy in Settings → Action buttons and work-unit queue/KPI chips. Internal keys (`opportunity`, `inquiry`, …) stay in payloads and data; UI resolves via `web/lib/admin/resolveEntityDisplayLabel.ts` (`resolveEntityLabel`, `applyEntityLabelToOperatorCopy`). Do not show `inquiry/opportunity` composites when a singular configured label exists (e.g. **Lead**).
+
 ### Settings → Action buttons (May 2026 closeout)
 
 | Operation | API / module | Notes |

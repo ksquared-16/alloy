@@ -17,12 +17,15 @@ import {
     parseQueueRowCrmChildrenStructured,
 } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 import type { QueueUiRowPreviewField } from "@/lib/ui-v2/queueUiConfig";
-import { normalizePhone } from "@/lib/contactNormalize";
 import { formatWorkspaceUsdGrouped } from "@/lib/ui-v2/formatWorkspaceCurrency";
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
 import { buildQueueOperationalAttentionPresentation } from "@/lib/opportunities/operationalAttentionExplain";
 import { resolveQueueOperationalReadSlot } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceViewModels";
 import { buildQueueRowPriorityExplanationLine } from "@/lib/opportunities/queueRowPriorityExplanation";
+import { CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1 } from "@/lib/config/enrollmentPipelineQueueDefinitionV1";
+import type { QueueUiRowPreviewAction } from "@/lib/ui-v2/queueUiConfig";
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
+import { mergeQueueRowQuickActionsForOpportunityRow } from "@/lib/workspace/viewModels/mergeQueueRowQuickActions";
 
 type OppRow = WorkspaceOpportunityQueueRuntime["items"][number];
 
@@ -65,81 +68,6 @@ function formatAgeCompact(ms: number): string {
     if (h > 0) return `${h}h`;
     if (m > 0) return `${m}m`;
     return `${s}s`;
-}
-
-function opportunityQuickActionsForLane(workUnitKey: string): QueueItemQuickActionVm[] {
-    const k = workUnitKey.trim().toLowerCase();
-    if (k === "needs_attention") {
-        return [{ id: "open_quote", label: "Open" }];
-    }
-    if (k === "priced_followup") {
-        return [
-            { id: "open_quote", label: "Open inquiry" },
-            { id: "mark_won", label: "Enrolled" },
-            { id: "mark_lost", label: "Lost" },
-        ];
-    }
-    if (k === "quoting") {
-        return [
-            { id: "open_quote", label: "Open inquiry" },
-            { id: "start_quote", label: "Schedule tour" },
-            { id: "mark_lost", label: "Lost" },
-        ];
-    }
-    return [
-        { id: "qualify_opportunity", label: "Conversation had" },
-        { id: "start_quote", label: "Schedule tour" },
-        { id: "mark_lost", label: "Lost" },
-    ];
-}
-
-function laneQuickActionsForAttentionRow(row: OppRow, workUnitKey: string): QueueItemQuickActionVm[] {
-    const wk = workUnitKey.trim().toLowerCase();
-    const reason = (row as { _attention_reason?: string | null })._attention_reason?.trim() || null;
-    if (wk === "needs_attention" && reason) {
-        if (reason === "stale_quote_followup") {
-            return [
-                { id: "open_quote", label: "Open inquiry" },
-                { id: "mark_won", label: "Enrolled" },
-                { id: "mark_lost", label: "Lost" },
-            ];
-        }
-        if (reason === "missing_quote_after_execution") {
-            return [
-                { id: "open_quote", label: "Open inquiry" },
-                { id: "start_quote", label: "Schedule tour" },
-                { id: "mark_lost", label: "Lost" },
-            ];
-        }
-        if (reason === "waiting_on_staff") {
-            return [
-                { id: "open_quote", label: "Open inquiry" },
-                { id: "qualify_opportunity", label: "Conversation had" },
-                { id: "mark_lost", label: "Lost" },
-            ];
-        }
-        return [
-            { id: "qualify_opportunity", label: "Conversation had" },
-            { id: "start_quote", label: "Schedule tour" },
-            { id: "mark_lost", label: "Lost" },
-        ];
-    }
-    return opportunityQuickActionsForLane(workUnitKey);
-}
-
-function crmContactQuickActions(row: OppRow): QueueItemQuickActionVm[] {
-    const cap = enrollmentCrmContactCapabilityForRow(row);
-    const email = (row as { _primary_email?: string | null })._primary_email?.trim();
-    const phone = (row as { _primary_phone?: string | null })._primary_phone?.trim();
-    const out: QueueItemQuickActionVm[] = [];
-    if (cap.emailMailto && email) {
-        out.push({ id: "crm_mailto", label: "Email", payload: { href: `mailto:${email}` } });
-    }
-    if (cap.phoneTel && phone) {
-        const tel = normalizePhone(phone) ?? `+1${phone.replace(/\D/g, "").slice(-10)}`;
-        out.push({ id: "crm_tel", label: "Call", payload: { href: `tel:${tel}` } });
-    }
-    return out;
 }
 
 export type BuildEnrollmentCrmRowOptions = {
@@ -304,9 +232,17 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
  * Enrollment work-unit queue row — binds `semanticCrmCompact` for config-driven layout,
  * plus legacy `QueueItemVm` fields for grouping and fallbacks.
  */
+const DEFAULT_ENROLLMENT_ROW_PREVIEW_ACTIONS: QueueUiRowPreviewAction[] =
+    CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1.ui?.row_preview?.actions ?? ["open"];
+
 export function buildEnrollmentOpportunityQueueItemVm(
     row: OppRow,
-    ctx: { workUnitKey: string; rowPreviewFieldLabels?: Record<string, string> | null }
+    ctx: {
+        workUnitKey: string;
+        rowPreviewFieldLabels?: Record<string, string> | null;
+        previewActions?: QueueUiRowPreviewAction[];
+        queueRowRegistryPlacements?: ResolvedActionForClient[] | null;
+    }
 ): QueueItemVm {
     const slots = buildEnrollmentCrmRowSemanticSlots(row, {
         rowPreviewFieldLabels: ctx.rowPreviewFieldLabels,
@@ -317,11 +253,10 @@ export function buildEnrollmentOpportunityQueueItemVm(
     const status = (row.status_key ?? "").trim();
     const statusLabel = (row._status_display ?? "").trim() || status;
 
-    const laneActions =
-        ctx.workUnitKey.trim().toLowerCase() === "needs_attention"
-            ? laneQuickActionsForAttentionRow(row, ctx.workUnitKey)
-            : opportunityQuickActionsForLane(ctx.workUnitKey);
-    const quickActions = [...crmContactQuickActions(row), ...laneActions];
+    const previewActions = ctx.previewActions ?? DEFAULT_ENROLLMENT_ROW_PREVIEW_ACTIONS;
+    const quickActions = mergeQueueRowQuickActionsForOpportunityRow(row, previewActions, ctx.queueRowRegistryPlacements, {
+        enrollmentLike: true,
+    });
 
     const wk = ctx.workUnitKey.trim().toLowerCase();
     const needsOperationalAttention = Boolean((row as { _needs_attention?: boolean })._needs_attention);

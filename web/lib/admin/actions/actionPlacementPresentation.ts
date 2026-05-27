@@ -53,7 +53,7 @@ export const SETTINGS_SURFACE_OPTIONS: readonly SettingsSurfaceOption[] = [
     },
     {
         value: "queue_row",
-        label: "Workspace (queue row)",
+        label: "Workspace queue row",
         description: "Inline actions on a queue row in the workspace pipeline.",
         requiresSectionKey: false,
     },

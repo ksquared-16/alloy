@@ -28,7 +28,12 @@ import {
 } from "@/lib/adminV2/aiCommandSurface/workflowAssistWorkspaceEvents";
 import { fetchWorkflowAutomationWorkspacePanels } from "@/lib/workspace/fetchWorkflowAutomationWorkspacePanels";
 import type { WorkflowScopePartitionV1 } from "@/lib/workflows/workflowScopeMetadata";
+import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
+import {
+    applyEntityLabelToOperatorCopy,
+    resolveOperatorQueueSummaryLabels,
+} from "@/lib/admin/resolveEntityDisplayLabel";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import {
     appendWorkspaceSiteToPath,
@@ -85,6 +90,17 @@ import type {
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
 import { parseAttentionReasonCountsPayload } from "@/lib/workspace/attentionReasonCountsSummary";
 import { buildQueueOperationalAttentionPresentation } from "@/lib/opportunities/operationalAttentionExplain";
+import {
+    buildOpportunityOperationalContext,
+    orchestratorHandoffSeedCommand,
+} from "@/lib/adminV2/bos/activeOperationalContext";
+import {
+    launchAdminV2AskBos,
+    queueBosHandoffPreviewFromOperationalRead,
+} from "@/lib/adminV2/bos/bosDrawerAssistHandoff";
+import { resolveQueueOperationalReadSlot } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceViewModels";
+import { resolveQueueRowPreviewActionsForWorkUnit } from "@/lib/ui-v2/enrollmentQueueRowPreviewPolicy";
+import { mergeQueueRowQuickActions } from "@/lib/workspace/viewModels/mergeQueueRowQuickActions";
 import { buildRealOpportunityWorkUnitWorkspaceModel } from "@/lib/ui-v2/adapters/realWorkUnitFromOpportunities";
 import { buildWorkUnitQueueCrmCompactRowSlice } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 import { mergeEnrollmentRightRailActions } from "@/lib/workspace/viewModels/enrollmentRightRailMerge";
@@ -301,14 +317,6 @@ function resolveBootstrapPrimaryQueueKey(
     return resolveNavTimeRowQueueKey(wu, qFromUrl);
 }
 
-function registryQuickActionsFromResolved(rowInline: { key: string; label: string; action_type: string }[]): QueueItemQuickActionVm[] {
-    return rowInline.map((a) => ({
-        id: a.key,
-        label: a.label,
-        payload: { source: "action_registry" as const, actionType: a.action_type },
-    }));
-}
-
 type WorkUnitRow = {
     id: string;
     department_id: string;
@@ -411,6 +419,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const legacyFilterAttentionReasonCode = initialLocationRef.current.attentionReasonCode;
     const legacyFilterActivitySignalKey = initialLocationRef.current.activitySignalKey;
     const { orgId, principalUserId, accessScopeFingerprint } = useWorkspaceOrg();
+    const { labels: entityLabels } = useEntityLabels();
     const siteFilter = useWorkspaceSiteFilter();
     const selectedSiteId = siteFilter?.selectedSiteId ?? null;
     const siteSelectionReady = siteFilter?.siteSelectionReady ?? true;
@@ -424,7 +433,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [dept, setDept] = useState<DeptRow | null>(null);
     const [oq, setOq] = useState<WorkspaceOpportunityQueueRuntime | null>(null);
     const [needsAttentionWorkUnitId, setNeedsAttentionWorkUnitId] = useState<string | null>(null);
-    const [opportunityQueueRowActions, setOpportunityQueueRowActions] = useState<QueueItemQuickActionVm[] | null>(null);
     const [opportunityQueueRowResolved, setOpportunityQueueRowResolved] = useState<ResolvedActionForClient[] | null>(null);
     const [enrollmentRightRailResolved, setEnrollmentRightRailResolved] = useState<ResolvedActionForClient[] | null>(null);
     const [enrollmentActionsSettled, setEnrollmentActionsSettled] = useState(false);
@@ -529,13 +537,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
         return getQueueUiConfig(queueDef);
     }, [queueDef]);
 
+    const displayQueueSummaries = useMemo(
+        () => (queueSummaries ? resolveOperatorQueueSummaryLabels(queueSummaries, entityLabels) : null),
+        [queueSummaries, entityLabels]
+    );
+
     const sectionedQueueSummaries = useMemo(() => {
-        if (!queueSummaries) return null;
+        if (!displayQueueSummaries) return null;
         if (!queueUi) {
             // fallback to existing flat list; but still deterministic
-            return [{ key: "all", label: "Queues", tone: "standard" as const, queues: queueSummaries }];
+            return [{ key: "all", label: "Queues", tone: "standard" as const, queues: displayQueueSummaries }];
         }
-        const byKey = new Map(queueSummaries.map((q) => [q.key, q]));
+        const byKey = new Map(displayQueueSummaries.map((q) => [q.key, q]));
         const used = new Set<string>();
         const sections = queueUi.sections
             .map((s) => {
@@ -543,13 +556,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     .map((k) => byKey.get(k) ?? null)
                     .filter((x): x is QueueSummary => Boolean(x));
                 for (const q of qs) used.add(q.key);
-                return { key: s.key, label: s.label, tone: s.tone ?? "standard", queues: qs };
+                return {
+                    key: s.key,
+                    label: applyEntityLabelToOperatorCopy(s.label, entityLabels),
+                    tone: s.tone ?? "standard",
+                    queues: qs,
+                };
             })
             .filter((s) => s.queues.length > 0);
         if (sections.length > 0) return sections;
         // If config sections don't match summaries, fall back to all queues.
-        return [{ key: "all", label: "Queues", tone: "standard" as const, queues: queueSummaries }];
-    }, [queueSummaries, queueUi]);
+        return [{ key: "all", label: "Queues", tone: "standard" as const, queues: displayQueueSummaries }];
+    }, [displayQueueSummaries, queueUi, entityLabels]);
 
     const allRecordsQueueKey = useMemo(() => {
         if (!queueDef) return null;
@@ -572,13 +590,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
     }, [workUnit, dept, wuBootstrapAttentionBuckets]);
 
     const queuePillSections = useMemo(() => {
-        if (!sectionedQueueSummariesOrdered?.length || !queueSummaries?.length) return null;
-        const naSummary = queueSummaries.find((x) => x.key.trim().toLowerCase() === "needs_attention");
+        if (!sectionedQueueSummariesOrdered?.length || !displayQueueSummaries?.length) return null;
+        const naSummary = displayQueueSummaries.find((x) => x.key.trim().toLowerCase() === "needs_attention");
         return sectionedQueueSummariesOrdered.map((sec) => ({
             ...sec,
             queues: expandNeedsAttentionQueueSummariesForPills(sec.queues, naSummary, enabledAttentionBuckets),
         }));
-    }, [sectionedQueueSummariesOrdered, queueSummaries, enabledAttentionBuckets]);
+    }, [sectionedQueueSummariesOrdered, displayQueueSummaries, enabledAttentionBuckets]);
 
     /** Tab shells from definition only (no counts) while exact summaries are in flight. */
     const queueTabPlaceholders = useMemo(() => {
@@ -587,7 +605,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         const sections = queueUi.sections
             .map((s) => ({
                 key: s.key,
-                label: s.label,
+                label: applyEntityLabelToOperatorCopy(s.label, entityLabels),
                 tone: s.tone ?? ("standard" as const),
                 queues: s.queue_keys
                     .filter((k) => keySet.has(k))
@@ -596,7 +614,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         if (!qc) return null;
                         return {
                             key: qc.key,
-                            label: qc.label,
+                            label: applyEntityLabelToOperatorCopy(qc.label, entityLabels),
                             priority: (qc.priority ?? "standard") as "standard" | "attention" | "critical",
                         };
                     })
@@ -608,7 +626,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             .filter((s) => s.queues.length > 0);
         if (!sections.length) return null;
         return reorderSectionsWithAllRecordsFirst(sections, allRecordsQueueKey);
-    }, [queueUi, queueDef, allRecordsQueueKey]);
+    }, [queueUi, queueDef, allRecordsQueueKey, entityLabels]);
 
     const queueTabPlaceholdersExpanded = useMemo(() => {
         if (!queueTabPlaceholders?.length || !enabledAttentionBuckets.length) return queueTabPlaceholders;
@@ -924,7 +942,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const loadWorkUnitDeferredSupplement = useCallback(async () => {
         if (!workUnitId || !departmentId) return;
         const init = workspaceDataFetchInit();
-        let parsedQueueRowQuick: QueueItemQuickActionVm[] | null = null;
 
         try {
             const rightRailList = await fetchWorkspaceRightRailResolvedActions({
@@ -956,16 +973,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 if (ar.ok) {
                     const rowInline = aj.actions?.row_inline ?? [];
                     const overflow = aj.actions?.overflow ?? [];
-                    const combined = [...rowInline, ...overflow];
-                    setOpportunityQueueRowResolved(combined);
-                    if (combined.length) parsedQueueRowQuick = registryQuickActionsFromResolved(combined);
+                    setOpportunityQueueRowResolved([...rowInline, ...overflow]);
                 }
             } catch {
                 /* non-fatal */
             }
         }
-
-        setOpportunityQueueRowActions(parsedQueueRowQuick);
 
         setWorkflowKpisLoading(true);
         try {
@@ -1537,7 +1550,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
             setQueueItemsError(null);
             setQueueItemsRoute(null);
             setQueueItemsLoading(false);
-            setOpportunityQueueRowActions(null);
             setOpportunityQueueRowResolved(null);
             setEnrollmentRightRailResolved(null);
             setWuPlacementRows(undefined);
@@ -1585,7 +1597,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
             }
             setOq(null);
             setNeedsAttentionWorkUnitId(null);
-            setOpportunityQueueRowActions(null);
             setOpportunityQueueRowResolved(null);
             setEnrollmentRightRailResolved(null);
             setEnrollmentActionsSettled(false);
@@ -2238,7 +2249,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     setQueueItemsError(null);
                     setQueueItemsRoute(null);
                     setQueueItemsLoading(false);
-                    setOpportunityQueueRowActions(null);
                     setOpportunityQueueRowResolved(null);
                     setEnrollmentRightRailResolved(null);
                     setWuQueueLaneAuthorityReady(true);
@@ -2487,9 +2497,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
             actions: ["open"] satisfies QueueUiRowPreviewAction[],
         };
         const previewFields = previewCfg.fields ?? (["title", "status"] as QueueUiRowPreviewField[]);
-        const previewActions: QueueUiRowPreviewAction[] = previewCfg.actions?.length
-            ? [...previewCfg.actions]
-            : ["open"];
+        const isEnrollmentDept = isEnrollmentLikeDepartmentKey(dept.key);
+        const previewActions = resolveQueueRowPreviewActionsForWorkUnit({
+            actions: previewCfg.actions,
+            enrollmentLike: isEnrollmentDept,
+        });
+        const queueRowRegistry = opportunityQueueRowResolved ?? [];
 
         const liveVmItems = (
             sourceRows as Array<Record<string, unknown> & { id?: string }>
@@ -2527,9 +2540,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 const attnPres = buildQueueOperationalAttentionPresentation(r as Record<string, unknown>, {
                     queueScan: true,
                 });
-                const attentionReason =
-                    attnPres.summaryLine ||
-                    (typeof r?._attention_reason_label === "string" ? r._attention_reason_label.trim() : "");
+                const operationalReadResolved = resolveQueueOperationalReadSlot(r as Record<string, unknown>);
+                const hasOperationalRead = Boolean(operationalReadResolved?.operationalRead);
+                const attentionReason = hasOperationalRead
+                    ? null
+                    : attnPres.summaryLine ||
+                      (typeof r?._attention_reason_label === "string" ? r._attention_reason_label.trim() : "");
+                const operationalNextHint = hasOperationalRead ? null : attnPres.nextHintLine;
 
                 const wfAt = typeof r?.last_activity_at === "string" && r.last_activity_at.trim() ? r.last_activity_at.trim() : null;
                 const wfSummary =
@@ -2547,48 +2564,22 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         ? { label: staleSig.label.trim(), severity: staleSig.severity ?? "low" }
                         : null;
 
-                const quickActions: Array<{
-                    id: string;
-                    label: string;
-                    actionId: string;
-                    variant?: "primary" | "secondary" | "danger";
-                    payload?: Record<string, unknown>;
-                }> = [
-                    ...(previewActions.includes("open")
-                        ? [{ id: "open", label: "Open", actionId: "open_record", variant: "primary" as const }]
-                        : []),
-                ];
-                if (previewActions.includes("call") && phone) {
-                    const tel = normalizePhone(phone) ?? `+1${phone.replace(/\D/g, "").slice(-10)}`;
-                    quickActions.push({
-                        id: "call",
-                        label: "Call",
-                        actionId: "crm_tel",
-                        variant: "secondary" as const,
-                        payload: { href: `tel:${tel}` },
-                    });
-                }
-                if (previewActions.includes("email") && email) {
-                    quickActions.push({
-                        id: "email",
-                        label: "Email",
-                        actionId: "crm_mailto",
-                        variant: "secondary" as const,
-                        payload: { href: `mailto:${email}` },
-                    });
-                }
-
-                if (entity === "opportunity" && opportunityQueueRowActions?.length) {
-                    for (const qa of opportunityQueueRowActions) {
-                        quickActions.push({
-                            id: qa.id,
-                            label: qa.label,
-                            actionId: qa.id,
-                            variant: "secondary" as const,
-                            payload: qa.payload,
-                        });
-                    }
-                }
+                const personId =
+                    typeof r?._primary_person_id === "string" ? r._primary_person_id.trim() : "";
+                const quickActions: QueueItemQuickActionVm[] = mergeQueueRowQuickActions({
+                    previewActions,
+                    registryPlacements: queueRowRegistry,
+                    enrollmentLike: isEnrollmentDept,
+                    row: {
+                        previewActions,
+                        opportunityId: rid,
+                        personId,
+                        displayName: contactName || familyTitle,
+                        email: email || null,
+                        phone: phone || null,
+                        rowRecord: r as Record<string, unknown>,
+                    },
+                });
 
                 const want = (f: QueueUiRowPreviewField) => isRowPreviewFieldEnabled(previewFields, f);
 
@@ -2667,7 +2658,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                       roomContext: null,
                                       locationContext: locationLabel || null,
                                       attentionReason: attentionReason || null,
-                                      operationalNextHint: attnPres.nextHintLine,
+                                      operationalReadPreview: operationalReadResolved,
+                                      operationalNextHint: operationalNextHint || null,
                                       familyNote: note || null,
                                       familyNotePreview: notePreview,
                                       activityStale,
@@ -2815,12 +2807,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
         workUnit,
         loading,
         queueUi,
-        opportunityQueueRowActions,
         laneUnmappedOnly,
         allRecordsQueueKey,
         coveredThroughputStatusKeys,
         unmappedPillCount,
         viewerTz,
+        opportunityQueueRowResolved,
     ]);
 
     const showOtherBucketPill =
@@ -2904,6 +2896,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
             items: filteredItems,
             attention_reason_counts: oq.attention_reason_counts,
         };
+        const previewCfg = queueUi?.row_preview;
+        const rowPreviewActions = resolveQueueRowPreviewActionsForWorkUnit({
+            actions: previewCfg?.actions,
+            enrollmentLike: isEnrollmentLikeDepartmentKey(dept.key),
+        });
         return buildRealOpportunityWorkUnitWorkspaceModel({
             workUnitId: workUnit.id,
             workUnitKey: workUnit.key ?? "work_unit",
@@ -2912,7 +2909,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
             deptName: dept.name ?? "Department",
             departmentKey: dept.key,
             oq: oqFiltered,
-            queueRowQuickActions: opportunityQueueRowActions,
+            rowPreviewActions,
+            queueRowRegistryPlacements: opportunityQueueRowResolved ?? [],
             rightRailResolved: enrollmentRightRailResolved ?? [],
             rowPreviewFieldLabels: queueUi?.row_preview.fieldLabels ?? null,
         });
@@ -2920,8 +2918,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
         departmentId,
         dept,
         enrollmentRightRailResolved,
+        opportunityQueueRowResolved,
         oq,
-        opportunityQueueRowActions,
         queueUi,
         legacyFilterStatusKeys,
         legacyFilterAttentionReason,
@@ -2933,7 +2931,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const workUnitKpiContext = useMemo(() => {
         if (!workUnit?.id || !departmentId) return null;
         const summariesForKpi =
-            queueSummaries?.map((q) => ({
+            displayQueueSummaries?.map((q) => ({
                 key: q.key,
                 label: q.label,
                 count: q.count,
@@ -2973,7 +2971,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     }, [
         departmentId,
         workUnit?.id,
-        queueSummaries,
+        displayQueueSummaries,
         queueSummariesError,
         selectedQueueKey,
         queueItems,
@@ -3227,6 +3225,22 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 action.itemId
             ) {
                 const resolved = queueRowResolvedByKey.get(action.actionId);
+                if (
+                    resolved?.key === "ask_bos" ||
+                    (resolved?.action_type === "ui_intent" &&
+                        String(resolved.payload?.intent ?? "").trim() === "ask_bos")
+                ) {
+                    const queueItem = findQueuePreviewItemById(queueDisplayItemsRef.current, action.itemId);
+                    const queuePreview = queueBosHandoffPreviewFromOperationalRead(
+                        queueItem?.semanticCrmCompact?.operationalReadPreview ?? null
+                    );
+                    launchAdminV2AskBos({
+                        opportunity_id: action.itemId,
+                        display_name: queueItem?.title?.trim() ?? null,
+                        queue_preview: queuePreview,
+                    });
+                    return;
+                }
                 if (resolved?.action_type === "open_drawer") {
                     logAdminV2QueueRowClick({
                         phase: "registry_action",
@@ -3360,6 +3374,54 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 return;
             }
             if (action.type === "queue.item.action" && action.actionId && action.itemId) {
+                if (action.actionId === "crm_message" || action.actionId === "quick_message") {
+                    const payload = action.payload as
+                        | {
+                              personId?: string | null;
+                              displayName?: string;
+                              email?: string | null;
+                              phone?: string | null;
+                          }
+                        | undefined;
+                    const personId = payload?.personId?.trim();
+                    if (!personId) {
+                        setActionSurfaceError(
+                            "No contact is linked to this inquiry yet. Open the record to add a parent or contact, then try Message again."
+                        );
+                        return;
+                    }
+                    setActionSurfaceError(null);
+                    const { launchAdminV2QuickMessage } = await import("@/lib/adminV2/quickMessageLaunch");
+                    launchAdminV2QuickMessage({
+                        personId,
+                        displayName: payload?.displayName,
+                        email: payload?.email ?? null,
+                        phone: payload?.phone ?? null,
+                    });
+                    return;
+                }
+                if (action.actionId === "ask_bos" || action.actionId === "crm_open_orchestrator") {
+                    const payload = action.payload as
+                        | {
+                              opportunityId?: string;
+                              displayName?: string;
+                          }
+                        | undefined;
+                    const opportunityId = payload?.opportunityId?.trim() ?? action.itemId;
+                    if (!opportunityId) return;
+                    const queueItem = findQueuePreviewItemById(queueDisplayItemsRef.current, opportunityId);
+                    const queuePreview = queueBosHandoffPreviewFromOperationalRead(
+                        queueItem?.semanticCrmCompact?.operationalReadPreview ?? null
+                    );
+                    const { launchAdminV2AskBos: launchAskBos } = await import("@/lib/adminV2/bos/bosDrawerAssistHandoff");
+                    launchAskBos({
+                        opportunity_id: opportunityId,
+                        display_name:
+                            payload?.displayName?.trim() || queueItem?.title?.trim() || null,
+                        queue_preview: queuePreview,
+                    });
+                    return;
+                }
                 if (action.actionId === "crm_mailto" || action.actionId === "crm_tel") {
                     const href = action.payload && typeof action.payload.href === "string" ? action.payload.href : "";
                     if (href) window.location.href = href;
@@ -3470,7 +3532,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
         if (wuPlacementRows === undefined) {
             return { ...base, kpis: [] };
         }
-        const kpis = wuResolvedPlacementKpis ?? buildDefaultWorkUnitKpis(workUnitKpiContext);
+        const rawKpis = wuResolvedPlacementKpis ?? buildDefaultWorkUnitKpis(workUnitKpiContext);
+        const kpis = rawKpis.map((k) => ({
+            ...k,
+            label: applyEntityLabelToOperatorCopy(k.label, entityLabels),
+        }));
         return { ...base, kpis };
     }, [
         queueModel,
@@ -3479,6 +3545,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         wuResolvedPlacementKpis,
         suppressWorkUnitKpiStrip,
         wuPlacementRows,
+        entityLabels,
     ]);
 
     const effectiveModel = mergedWorkspaceModel;

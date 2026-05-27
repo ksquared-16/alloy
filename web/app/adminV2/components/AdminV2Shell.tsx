@@ -18,6 +18,7 @@ import AICommandBar from "./AICommandBar";
 import AICommandSurfaceShell from "./aiCommandSurface/AICommandSurfaceShell";
 import RecentAiActionsStrip from "./aiActivity/RecentAiActionsStrip";
 import { GlobalAssistantProvider } from "@/contexts/GlobalAssistantContext";
+import AskBosHandoffListener from "@/components/adminV2/AskBosHandoffListener";
 import BreadcrumbBar from "./navigation/BreadcrumbBar";
 import KPIBand from "./dashboard/KPIBand";
 import SystemCanvas from "./canvas/SystemCanvas";
@@ -139,6 +140,7 @@ export default function AdminV2Shell({
   if (isWorkspaceV2Route || isAiActivityRoute || isSettingsRoute || isWorkflowsRoute || isFormsRoute) {
     return (
       <GlobalAssistantProvider>
+        <AskBosHandoffListener />
         <WorkspaceSiteFilterProvider>
           <div
             className="flex h-screen w-full overflow-hidden"
@@ -184,6 +186,7 @@ export default function AdminV2Shell({
 
   return (
     <GlobalAssistantProvider>
+    <AskBosHandoffListener />
     <div
       className="flex h-screen w-full overflow-hidden"
       style={{ backgroundColor: neutral.background }}

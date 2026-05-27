@@ -131,6 +131,36 @@ export async function applyRegistryResolvedActionClient(
             }
             return { ok: true };
         }
+        if (intent === "quick_message") {
+            const personId =
+                p.person_id != null
+                    ? String(p.person_id).trim()
+                    : p.personId != null
+                      ? String(p.personId).trim()
+                      : "";
+            if (!personId) {
+                window.alert(
+                    "No contact is linked to this record yet. Add a parent or contact on the record, then try Message again."
+                );
+                return { ok: true };
+            }
+            const { launchAdminV2QuickMessage } = await import("@/lib/adminV2/quickMessageLaunch");
+            launchAdminV2QuickMessage({
+                personId,
+                displayName: p.display_name != null ? String(p.display_name) : undefined,
+                email: p.email != null ? String(p.email) : null,
+                phone: p.phone != null ? String(p.phone) : null,
+            });
+            return { ok: true };
+        }
+        if (intent === "ask_bos") {
+            const eid = host.entityId?.trim();
+            if (eid) {
+                const { launchAdminV2AskBos } = await import("@/lib/adminV2/bos/bosDrawerAssistHandoff");
+                launchAdminV2AskBos({ opportunity_id: eid });
+            }
+            return { ok: true };
+        }
         if (message) {
             window.alert(message);
             return { ok: true };

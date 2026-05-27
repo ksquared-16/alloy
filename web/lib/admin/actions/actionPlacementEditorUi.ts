@@ -1,3 +1,5 @@
+import type { EntityLabelsMap } from "@/contexts/EntityLabelsContext";
+import { resolveEntityLabel } from "@/lib/admin/resolveEntityDisplayLabel";
 import type { ActionSurface, ActionSlot } from "@/lib/admin/actions/types";
 import {
     ACTION_PLACEMENT_DISPLAY_STYLES,
@@ -28,12 +30,25 @@ export type ActionPlacementEditorRow = {
     is_active: boolean;
 };
 
+function formatPlacementEntitySuffix(
+    entityType: string | null | undefined,
+    labels?: EntityLabelsMap
+): string {
+    const et = entityType?.trim();
+    if (!et) return "";
+    const label = labels
+        ? resolveEntityLabel(et, labels, { fallback: "Record" })
+        : et;
+    return ` · ${label}`;
+}
+
 /** Operator-facing summary of where a placement renders. */
 export function formatActionPlacementWhere(
-    row: Pick<ActionPlacementEditorRow, "surface" | "slot" | "section_key" | "entity_type">
+    row: Pick<ActionPlacementEditorRow, "surface" | "slot" | "section_key" | "entity_type">,
+    labels?: EntityLabelsMap
 ): string {
     const surface = settingsSurfaceLabel(row.surface);
-    const entity = row.entity_type ? ` · ${row.entity_type}` : "";
+    const entity = formatPlacementEntitySuffix(row.entity_type, labels);
     const slot = row.slot ? ` · ${settingsSlotLabel(row.slot)}` : "";
     const section =
         row.surface === "record_section" && row.section_key?.trim()
@@ -78,7 +93,27 @@ export function actionPlacementEditorCapabilities(row: ActionPlacementEditorRow,
     };
 }
 
-export function groupPlacementEditorRows(rows: ActionPlacementEditorRow[]): Array<{
+/** Settings list: org-editable placements vs locked platform defaults. */
+export function partitionPlacementRowsForSettings(
+    rows: ActionPlacementEditorRow[],
+    orgId: string
+): { orgPlacements: ActionPlacementEditorRow[]; systemDefaults: ActionPlacementEditorRow[] } {
+    const orgPlacements: ActionPlacementEditorRow[] = [];
+    const systemDefaults: ActionPlacementEditorRow[] = [];
+    for (const row of rows) {
+        if (actionPlacementEditorCapabilities(row, orgId).editable) {
+            orgPlacements.push(row);
+        } else {
+            systemDefaults.push(row);
+        }
+    }
+    return { orgPlacements, systemDefaults };
+}
+
+export function groupPlacementEditorRows(
+    rows: ActionPlacementEditorRow[],
+    labels?: EntityLabelsMap
+): Array<{
     id: string;
     title: string;
     items: ActionPlacementEditorRow[];
@@ -95,9 +130,15 @@ export function groupPlacementEditorRows(rows: ActionPlacementEditorRow[]): Arra
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([key, items]) => {
             const [surface, entity] = key.split("::");
+            const entityTitle =
+                entity === "any"
+                    ? "All types"
+                    : labels
+                      ? resolveEntityLabel(entity, labels, { fallback: "Record" })
+                      : entity;
             return {
                 id: key,
-                title: `${actionPlacementSurfaceLabel(surface)} — ${entity === "any" ? "All types" : entity}`,
+                title: `${actionPlacementSurfaceLabel(surface)} — ${entityTitle}`,
                 items: [...items].sort((a, b) => a.order_index - b.order_index || a.label.localeCompare(b.label)),
             };
         });

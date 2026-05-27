@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { filterSettingsActionCatalogDefinitions } from "@/lib/admin/actions/actionDefinitionRegistry";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 
 export const dynamic = "force-dynamic";
@@ -32,18 +33,20 @@ export async function GET() {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    const definitions: ActionDefinitionCatalogRow[] = (data ?? []).map((row) => {
-        const r = row as ActionDefinitionCatalogRow;
-        return {
-            id: String(r.id),
-            key: String(r.key),
-            label: String(r.label),
-            action_type: String(r.action_type),
-            entity_type: r.entity_type ? String(r.entity_type) : null,
-            org_id: r.org_id ? String(r.org_id) : null,
-            is_active: Boolean(r.is_active),
-        };
-    });
+    const definitions: ActionDefinitionCatalogRow[] = filterSettingsActionCatalogDefinitions(
+        (data ?? []).map((row) => {
+            const r = row as ActionDefinitionCatalogRow;
+            return {
+                id: String(r.id),
+                key: String(r.key),
+                label: String(r.label),
+                action_type: String(r.action_type),
+                entity_type: r.entity_type ? String(r.entity_type) : null,
+                org_id: r.org_id ? String(r.org_id) : null,
+                is_active: Boolean(r.is_active),
+            };
+        })
+    ) as ActionDefinitionCatalogRow[];
 
     return NextResponse.json({ definitions });
 }

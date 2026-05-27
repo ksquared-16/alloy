@@ -59,7 +59,7 @@ const RAW_CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1 = {
                 "desired_start_date",
                 "tour_date",
             ],
-            actions: ["open", "call", "email"],
+            actions: ["open"],
         },
     },
     queues: [
