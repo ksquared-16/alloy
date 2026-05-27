@@ -404,6 +404,15 @@ export function loadQueueDefinitionBundle(raw: unknown): QueueDefinitionLoadBund
     return { def, normalized };
 }
 
+/** Lenient loader for UI surfaces — returns null instead of throwing. */
+export function tryLoadWorkUnitQueueDefinitionBundle(raw: unknown): QueueDefinitionLoadBundle | null {
+    try {
+        return loadQueueDefinitionBundle(raw);
+    } catch {
+        return null;
+    }
+}
+
 export function queueSummaryRuntimeMetadata(
     entry: NormalizedQueueEntry | null | undefined,
     resolution?: QueueKeyResolution | null

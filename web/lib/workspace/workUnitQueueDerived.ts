@@ -1,5 +1,5 @@
 import type { QueueDefinitionV1, QueueConfig } from "@/lib/config/queueDefinitionSchema";
-import type { QueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
+import type { QueueUiConfig, QueueUiSection } from "@/lib/ui-v2/queueUiConfig";
 import { getQueueUiConfig, partitionQueueUiSections } from "@/lib/ui-v2/queueUiConfig";
 
 export const WORK_UNIT_OTHER_PILL_KEY = "__derived_other__" as const;
@@ -278,4 +278,120 @@ export function summarizeUnmappedRowsForDiagnostics(
         statusKeyCounts,
         missingStatusKeyCount,
     };
+}
+
+export type WorkUnitPillSection<TQueue = { key: string }> = {
+    key: string;
+    label: string;
+    tone?: "standard" | "attention" | "critical";
+    queues: TQueue[];
+};
+
+function isAttentionUiSection(section: QueueUiSection): boolean {
+    if (section.tone === "critical") return true;
+    return section.key.trim().toLowerCase() === "needs_attention";
+}
+
+function dedupeQueuesByKey<T extends { key: string }>(queues: T[]): T[] {
+    const out: T[] = [];
+    const seen = new Set<string>();
+    for (const q of queues) {
+        if (seen.has(q.key)) continue;
+        seen.add(q.key);
+        out.push(q);
+    }
+    return out;
+}
+
+/** Work-unit above-fold uses pipeline layout (v1 pipeline section or v2 domain sections). */
+export function isPipelineExecQueueUiLayout(ui: QueueUiConfig | null | undefined): boolean {
+    return ui?.layout === "pipeline_with_attention";
+}
+
+/** Throughput pill section label — config-driven from pipeline section or primary total label. */
+export function resolveThroughputPillSectionLabel(ui: QueueUiConfig): string {
+    const pipelineSection = ui.sections.find((s) => s.key === "pipeline");
+    if (pipelineSection?.label?.trim()) return pipelineSection.label.trim();
+    if (ui.primary_total_label?.trim()) return ui.primary_total_label.trim();
+    const { throughput } = partitionQueueUiSections(ui);
+    if (throughput.length === 1 && throughput[0]?.label?.trim()) return throughput[0].label.trim();
+    return "Pipeline";
+}
+
+/**
+ * Collapse config sections into two above-fold pill groups:
+ * throughput (pipeline domains) + needs attention overlay.
+ */
+export function buildWorkUnitAboveFoldPillSections<T extends { key: string }>(params: {
+    ui: QueueUiConfig | null | undefined;
+    sectionedSummaries?: WorkUnitPillSection<T>[] | null;
+}): WorkUnitPillSection<T>[] | null {
+    const ui = params.ui;
+    const sectionedSummaries = params.sectionedSummaries ?? [];
+    if (!sectionedSummaries.length) return null;
+    if (!ui) return sectionedSummaries;
+
+    if (!isPipelineExecQueueUiLayout(ui)) {
+        return sectionedSummaries;
+    }
+
+    const attentionSectionKeys = new Set(
+        (ui.sections ?? []).filter(isAttentionUiSection).map((s) => s.key)
+    );
+
+    const throughputQueues: T[] = [];
+    const attentionQueues: T[] = [];
+
+    for (const sec of sectionedSummaries) {
+        if (attentionSectionKeys.has(sec.key) || sec.key.trim().toLowerCase() === "needs_attention") {
+            attentionQueues.push(...sec.queues);
+        } else if (sec.key === "pipeline") {
+            throughputQueues.push(...sec.queues);
+        } else {
+            throughputQueues.push(...sec.queues);
+        }
+    }
+
+    const { attention: uiAttention } = partitionQueueUiSections(ui);
+    const out: WorkUnitPillSection<T>[] = [];
+
+    const mergedThroughput = dedupeQueuesByKey(throughputQueues);
+    if (mergedThroughput.length) {
+        out.push({
+            key: "pipeline",
+            label: resolveThroughputPillSectionLabel(ui),
+            tone: "standard",
+            queues: mergedThroughput,
+        });
+    }
+
+    const mergedAttention = dedupeQueuesByKey(attentionQueues);
+    if (mergedAttention.length) {
+        out.push({
+            key: "needs_attention",
+            label: uiAttention[0]?.label?.trim() || "Needs Attention",
+            tone: "critical",
+            queues: mergedAttention,
+        });
+    }
+
+    return out.length ? out : null;
+}
+
+/** Placeholder pill sections while counts load — mirrors {@link buildWorkUnitAboveFoldPillSections}. */
+export function buildWorkUnitAboveFoldPlaceholderSections(params: {
+    ui: QueueUiConfig | null | undefined;
+    sections?: WorkUnitPillSection<{ key: string; label: string; priority: "standard" | "attention" | "critical" }>[];
+    sectionedSummaries?: WorkUnitPillSection<{ key: string; label: string; priority: "standard" | "attention" | "critical" }>[];
+}): WorkUnitPillSection<{ key: string; label: string; priority: "standard" | "attention" | "critical" }>[] | null {
+    const sectionedSummaries = params.sectionedSummaries ?? params.sections ?? [];
+    return buildWorkUnitAboveFoldPillSections({ ui: params.ui, sectionedSummaries });
+}
+
+/** Section key hosting the derived "Other" unmapped pill on pipeline work units. */
+export function resolveWorkUnitOtherPillSectionKey(ui: QueueUiConfig | null | undefined): string | null {
+    if (!ui || !isPipelineExecQueueUiLayout(ui)) return null;
+    const { throughput } = partitionQueueUiSections(ui);
+    if (!throughput.length) return null;
+    return "pipeline";
 }
