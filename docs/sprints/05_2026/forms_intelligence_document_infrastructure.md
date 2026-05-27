@@ -1,6 +1,6 @@
 # Forms Intelligence + Document Infrastructure (Phase Next)
 
-**Status:** **FD-0–FD-14.6 shipped** (public renderer still ignores `document_composition`; no OCR / embed route redesign / rich-text editor)
+**Status:** **Sprint closed** (2026-05-27) — FD-0–FD-14.6 shipped; intake runtime validated in Demo Childcare Co (Test 2D)
 
 **Builds on:** PX-0–PX-2 · OW-0–OW-7 · OI-0–OI-4B
 
@@ -92,13 +92,48 @@ Wider preview column, document-canvas styling, sticky scroll containment — edi
 
 ---
 
-## Deferred
+## Sprint closeout — validated & shipped
+
+| Area | Outcome |
+|------|---------|
+| Forms workspace visual system | Wide layout + premium chrome restored |
+| Document composition authoring | Editor, section regions, sticky preview, block cards |
+| Embed / public intake runtime | Medication demo — submit, signature, intake apply |
+| Opportunity routing | Link metadata: vertical, location, work unit, department, status, source |
+| Duplicate attach | Second submit → `attached_existing`, Recent workload lane |
+| Demo Childcare Co validation | Test 2D link prepared; org-scoped fixtures |
+| Workload visibility | Review / Recent pills; derived active filter |
+| Quick review | Centered modal; operator-first copy (sprint closeout polish) |
+| Operational narratives | Intake-case row language — family name, created/matched summary |
+| Operator diagnostic | Collapsed org/session mismatch notes |
+
+**Intentionally deferred** — see [Next Phase: Intake Case Operational Model](#next-phase-intake-case-operational-model) below and [`forms_intake_case_operational_model.md`](./forms_intake_case_operational_model.md).
+
+---
+
+## Next Phase: Intake Case Operational Model
+
+**Do not implement in this sprint.** Planned follow-on:
+
+1. **Intake Case** as canonical operational object (not raw submission rows)
+2. **Outcome configuration panel** in `/adminV2/forms` (visual link metadata editor)
+3. **Confidence-based review routing** — auto-clear vs human review
+4. **Auto-operationalization** for high-confidence new leads
+5. **Workload grouping** by intake case / opportunity instead of per-submission list
+6. **Workflow events:** `intake_case_created`, `intake_case_auto_operationalized`, `intake_case_needs_review`, `duplicate_intake_attached`, `form_intake_reviewed`
+7. **Enrollment packet** with prefilled fields from CRM context
+8. **Public runtime consuming `document_composition`**
+9. **Rich Text Inline Field Tokens** — e.g. `I, {{guardian_name}}, authorize {{child_name}}…`
+10. **AI document recreation** from uploaded PDFs/forms
+11. **BOS validation/monitoring agent** for intake health
+
+Also still deferred from FD scope: packet runtime validation, OCR, public renderer composition pass, drag/drop reorder (FD-15).
+
+---
 
 ### FD-15 — Composition drag/drop (optional)
 
 Within-section field reorder and section reorder via drag handles if a low-risk library fits existing patterns.
-
----
 
 ## Runtime note
 

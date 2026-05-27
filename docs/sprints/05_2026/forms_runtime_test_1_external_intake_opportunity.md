@@ -1,6 +1,6 @@
 # Forms Runtime Test 1 — External intake creates opportunity
 
-**Status:** **Closed** — Runtime Test 1C/1D passed on Alloy Bend staging (2026-05-27)  
+**Status:** **Closed** — sprint closeout 2026-05-27. Historical Alloy Bend fixtures (Test 1C/1D); **active validation org: Demo Childcare Co** (Test 2D).  
 **Scope:** One end-to-end path only — external embed intake → opportunity create + dedup attach.
 
 **Shipped fixes:** Test 1C routing (`parseIntakeLinkDefaults`, `intakeOpportunityDedup`, wired in `applyFormIntakeSafe`).

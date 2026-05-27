@@ -1,10 +1,13 @@
 # Forms intake — runtime validation plan
 
-**Status:** Active — **Runtime Test 1 closed** on medication demo embed path (2026-05-27)  
+**Status:** **Closed** — Forms intake runtime validation sprint (2026-05-27)  
 **Scope:** Manual QA path + configuration doctrine for public/embed/packet submission outcomes. **No OCR.** **No default opportunity creation.**
 
-**Completed:** [Runtime Test 1](../sprints/05_2026/forms_runtime_test_1_external_intake_opportunity.md) — embed intake → opportunity create + dedup attach.  
-**Next:** [forms-intake-runtime-phase.md](./forms-intake-runtime-phase.md) — operating model + Tests 2–5 plan.
+**Validated:** Embed intake → opportunity create + dedup attach (Alloy Bend Test 1C/1D; Demo Childcare Co Test 2D). Workload Review/Recent lanes, centered quick review, operator narratives.
+
+**Active validation org:** Demo Childcare Co — [Test 2D](../sprints/05_2026/forms_runtime_test_2d_demo_childcare_intake.md).
+
+**Next sprint:** [Intake Case Operational Model](../sprints/05_2026/forms_intake_case_operational_model.md) — case grouping, outcome config UI, workflow events (deferred).
 
 Aligns with [forms-intake-prefill-doctrine.md](./forms-intake-prefill-doctrine.md), [forms-intake-embed-doctrine.md](./forms-intake-embed-doctrine.md), and [../sprints/05_2026/forms_runtime_test_1_external_intake_opportunity.md](../sprints/05_2026/forms_runtime_test_1_external_intake_opportunity.md).
 
@@ -221,17 +224,19 @@ Seed into a staging org via AdminV2 publish + link mint, or extend a org seed sc
 
 ---
 
-## Remaining known gaps (post Runtime Test 1)
+## Remaining known gaps (post sprint closeout)
 
-Validated on **embed + medication demo + opportunity create/dedup** only. Still open:
+Validated on **embed + medication demo + opportunity create/dedup** in Demo Childcare Co (Test 2D). Still open for **next sprint**:
 
 | Gap | Notes |
 |-----|-------|
-| **Forms hub UI polish regression** | `/adminV2/forms` workload presentation needs follow-up polish |
-| **Rich text inline field tokens** | Not built — composition authoring does not emit inline tokens for public render |
-| **Public `document_composition`** | Embed/public renderer uses flat `schema_json`; admin preview reads composition blocks |
-| **Packet runtime** | Enrollment / minimal packet step intake not validated in Test 1 |
-| **Review / finalize flow** | Submission case-file approve → document generate not validated in Test 1 |
+| **Intake Case operational model** | Workload still lists raw submissions — grouping by case/opportunity deferred |
+| **Outcome configuration UI** | Link metadata still set via seed/API patch, not visual admin panel |
+| **Rich text inline field tokens** | Composition authoring does not emit inline tokens for public render |
+| **Public `document_composition`** | Embed/public renderer uses flat `schema_json` |
+| **Packet runtime** | Enrollment / minimal packet step intake not validated |
+| **Review → document generate** | Full case-file finalize path not validated in Test 2D |
+| **AI document recreation** | Planning doc only |
 
 Prefilled fields, blank/manual fields, standard (no CRM) link, and packet run-through checklist items remain **unchecked** for FD-14 fixture form.
 

@@ -2,7 +2,7 @@
 
 import clsx from "clsx";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { TechnicalDetailDisclosure } from "@/components/forms/review";
 import { FormsWorkspaceShell } from "@/components/forms/workspace";
@@ -17,10 +17,19 @@ import {
     defaultIntakeWorkspaceFilter,
     type IntakeWorkspaceFilterKey,
 } from "@/lib/forms/intakeWorkspaceFilters";
+import {
+    buildIntakeWorkloadBrowserDebug,
+} from "@/lib/forms/intakeWorkloadBrowserDebug";
+import { FORMS_SUBMISSIONS_API_PATH } from "@/lib/forms/intakeRuntimeTestFixtures";
+import {
+    buildIntakeWorkloadDiagnostics,
+    intakeWorkloadLaneCounts,
+} from "@/lib/forms/intakeWorkloadDiagnostics";
 import type { SubmissionInboxRow } from "@/lib/forms/submissionInboxPresentation";
 import {
     opCaseFileCanvas,
     opMetadata,
+    opMutedMeta,
     opOrientationSurface,
 } from "@/lib/operational/ui/operationalVisualTokens";
 
@@ -60,8 +69,8 @@ type Props = {
     onToggleCreate?: () => void;
     createPanel?: ReactNode;
     onRefresh?: () => void;
-    /** Resolved CRM org — surfaced in operator notes for visibility debugging. */
     activeOrgId?: string | null;
+    apiFetchMeta?: { apiOrgId: string | null; apiUrl: string } | null;
 };
 
 export function IntakeWorkspaceHubView({
@@ -78,6 +87,7 @@ export function IntakeWorkspaceHubView({
     createPanel,
     onRefresh,
     activeOrgId = null,
+    apiFetchMeta = null,
 }: Props) {
     const formsById = Object.fromEntries(forms.map((f) => [f.id, f.name]));
     const filterCounts = useMemo(
@@ -103,31 +113,45 @@ export function IntakeWorkspaceHubView({
     );
 
     const recommendedFilter = useMemo(() => defaultIntakeWorkspaceFilter(filterCounts), [filterCounts]);
+    const [userFilter, setUserFilter] = useState<IntakeWorkspaceFilterKey | null>(null);
 
-    const [activeFilter, setActiveFilter] = useState<IntakeWorkspaceFilterKey>(recommendedFilter);
-    const [filterPinnedByUser, setFilterPinnedByUser] = useState(false);
+    /** Derived — never stale after async load unless operator pinned a pill. */
+    const effectiveFilter = userFilter ?? recommendedFilter;
 
-    /** Workload data loads after mount — follow highest-priority filter once counts arrive. */
     useEffect(() => {
-        if (loading || filterPinnedByUser) return;
-        setActiveFilter(recommendedFilter);
-    }, [loading, recommendedFilter, filterPinnedByUser]);
+        setUserFilter(null);
+    }, [activeOrgId]);
 
     const handleSelectFilter = (filter: IntakeWorkspaceFilterKey) => {
-        setFilterPinnedByUser(true);
-        setActiveFilter(filter);
+        setUserFilter(filter);
     };
+
+    const laneCounts = useMemo(() => intakeWorkloadLaneCounts(submissions), [submissions]);
+    const diagnostics = useMemo(() => buildIntakeWorkloadDiagnostics(submissions), [submissions]);
 
     const panel = useMemo(
         () =>
-            buildIntakeWorkspaceFilterPanel(activeFilter, {
+            buildIntakeWorkspaceFilterPanel(effectiveFilter, {
                 submissions,
                 sessions,
                 forms: forms.map((f) => ({ id: f.id, name: f.name, has_published_version: f.has_published_version })),
                 packets: packets.map((p) => ({ id: p.id, name: p.name })),
                 formsById,
             }),
-        [activeFilter, submissions, sessions, forms, packets, formsById]
+        [effectiveFilter, submissions, sessions, forms, packets, formsById]
+    );
+
+    const browserDebug = useMemo(
+        () =>
+            buildIntakeWorkloadBrowserDebug({
+                sessionOrgId: activeOrgId,
+                apiOrgId: apiFetchMeta?.apiOrgId ?? null,
+                apiUrl: apiFetchMeta?.apiUrl ?? FORMS_SUBMISSIONS_API_PATH,
+                submissions,
+                activeFilter: effectiveFilter,
+                formsById,
+            }),
+        [activeOrgId, apiFetchMeta, submissions, effectiveFilter, formsById]
     );
 
     return (
@@ -167,10 +191,13 @@ export function IntakeWorkspaceHubView({
                     <div className={clsx(opCaseFileCanvas, "space-y-3")} data-testid="intake-workspace-canvas">
                         <IntakeWorkloadFilterStrip
                             counts={filterCounts}
-                            selected={activeFilter}
+                            selected={effectiveFilter}
                             onSelect={handleSelectFilter}
                         />
-                        <div className="rounded-xl bg-white/95 px-4 py-3 shadow-[0_1px_3px_rgba(49,57,77,0.05)] ring-1 ring-alloy-midnight/[0.07]">
+                        <div
+                            className="rounded-xl bg-white/95 px-4 py-3 shadow-[0_1px_3px_rgba(49,57,77,0.05)] ring-1 ring-alloy-midnight/[0.07]"
+                            data-testid={`intake-active-filter-${effectiveFilter}`}
+                        >
                             <IntakeWorkspaceFilterPanelView panel={panel} viewerTz={viewerTz} onRefresh={onRefresh} />
                         </div>
                     </div>
@@ -180,13 +207,48 @@ export function IntakeWorkspaceHubView({
                             Publish before distributing. Native admin authoring and review — iframe embed is for external
                             intake only.
                         </p>
-                        {!loading && activeOrgId ?
-                            <p className={clsx("mt-2 font-mono text-[11px]", opMetadata)} data-testid="intake-workspace-org">
-                                Active org: {activeOrgId}
-                                {submissions.length === 0 ?
-                                    " · No submissions returned for this org — confirm you are logged into Alloy Bend (7803388d…) if testing Runtime Test 1 fixtures."
-                                :   ` · ${submissions.length} submission row(s) loaded.`}
+
+                        <div
+                            className={clsx("mt-3 space-y-1 font-mono text-[10px]", opMetadata)}
+                            data-testid="intake-workload-browser-debug"
+                        >
+                            <p className="font-semibold text-alloy-midnight/80">Diagnostic — org / session mismatch</p>
+                            <p className={opMutedMeta}>For engineering validation only. Collapsed by default.</p>
+                            <p>session org: {browserDebug.sessionOrgId ?? "—"}</p>
+                            <p>API org (response header): {browserDebug.apiOrgId ?? "—"}</p>
+                            <p>API URL: {browserDebug.apiUrl}</p>
+                            <p>total loaded: {browserDebug.totalLoaded}</p>
+                            <p>active filter: {browserDebug.activeFilter}</p>
+                            <p>Test 1C in loaded rows: {String(browserDebug.hasTest1C)}</p>
+                            <p>Test 1D in loaded rows: {String(browserDebug.hasTest1D)}</p>
+                            {browserDebug.orgMismatchHint ?
+                                <p className="text-alloy-ember">{browserDebug.orgMismatchHint}</p>
+                            :   null}
+                            {browserDebug.loadedPreview.length > 0 ?
+                                <ul className="mt-1 space-y-0.5">
+                                    {browserDebug.loadedPreview.map((r) => (
+                                        <li key={r.id}>
+                                            {r.id} · {r.submitted_at ?? "no submitted_at"}
+                                        </li>
+                                    ))}
+                                </ul>
+                            :   null}
+                            <p className="mt-2">Review row IDs: {browserDebug.reviewRowIds.join(", ") || "—"}</p>
+                            <p>Recent row IDs: {browserDebug.recentRowIds.join(", ") || "—"}</p>
+                            <p className="mt-2">
+                                lanes: review={laneCounts.needsReview} recent={laneCounts.recentlySubmitted} linking=
+                                {laneCounts.needsLinking}
                             </p>
+                        </div>
+
+                        {diagnostics.length > 0 ?
+                            <ul className={clsx("mt-2 space-y-1 font-mono text-[10px]", opMetadata)} data-testid="intake-workload-diagnostics">
+                                {diagnostics.map((d) => (
+                                    <li key={d.id}>
+                                        {d.id.slice(0, 8)}… · {d.lane} · needs_review={String(d.intake_needs_review)} · {d.headline}
+                                    </li>
+                                ))}
+                            </ul>
                         :   null}
                     </TechnicalDetailDisclosure>
                 </div>

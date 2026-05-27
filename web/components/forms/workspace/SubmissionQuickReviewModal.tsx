@@ -9,8 +9,11 @@ import { FormsReviewBadge } from "@/components/forms/review/FormsReviewBadge";
 import { submissionDetailHref } from "@/components/forms/workspace/SubmissionInboxRowView";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
-import { deriveSubmissionIntelligence } from "@/lib/forms/submissionIntelligencePresentation";
-import { deriveSubmissionOperationalNarrative } from "@/lib/forms/submissionOperationalNarrative";
+import {
+    deriveSubmissionOperationalNarrative,
+    submissionCreatedOrMatchedSummary,
+    submissionFamilyLabel,
+} from "@/lib/forms/submissionOperationalNarrative";
 import type { SubmissionInboxRow } from "@/lib/forms/submissionInboxPresentation";
 import {
     opBody,
@@ -29,8 +32,20 @@ type Props = {
     onUpdated?: () => void;
 };
 
-/** Lightweight side drawer for confirm-linkage without full-page navigation (OI-4). */
-export function SubmissionQuickReviewDrawer({ open, onClose, row, formName, viewerTz, onUpdated }: Props) {
+function submitterLine(row: SubmissionInboxRow): string | null {
+    const family = submissionFamilyLabel(row);
+    const payload = row.payload as Record<string, unknown> | undefined;
+    const values = payload?.values;
+    if (!values || typeof values !== "object" || Array.isArray(values)) return family;
+    const email = typeof (values as Record<string, unknown>).guardian_email === "string"
+        ? (values as Record<string, unknown>).guardian_email.trim()
+        : "";
+    if (family && email) return `${family} · ${email}`;
+    return family ?? (email || null);
+}
+
+/** Centered quick review modal — operator-first copy, Tasks/Messages pattern. */
+export function SubmissionQuickReviewModal({ open, onClose, row, formName, viewerTz, onUpdated }: Props) {
     const { canMutate, role } = useAdminAuth();
     const canConfirm = role === "admin" || role === "ops";
     const [confirmBusy, setConfirmBusy] = useState(false);
@@ -46,23 +61,20 @@ export function SubmissionQuickReviewDrawer({ open, onClose, row, formName, view
     }, [open, row?.id]);
 
     const narrative = useMemo(() => (row ? deriveSubmissionOperationalNarrative(row) : null), [row]);
-    const intelligence = useMemo(
-        () => (row ? deriveSubmissionIntelligence(row, narrative?.lane ?? "needsReview") : null),
-        [row, narrative?.lane]
-    );
+    const createdSummary = useMemo(() => (row ? submissionCreatedOrMatchedSummary(row) : null), [row]);
 
     const needsConfirm = useMemo(() => {
         if (!row || row.status !== "submitted") return false;
-        const hasCrm = !!(row.person_id || row.customer_id || row.customer_member_id || row.opportunity_id);
+        const hasLinks = !!(row.person_id || row.customer_id || row.customer_member_id || row.opportunity_id);
         const meta = row.payload?.meta;
         const needsReview =
             meta && typeof meta === "object" && !Array.isArray(meta) ?
                 (meta as Record<string, unknown>).intake_needs_review === true
             :   false;
-        return hasCrm && needsReview;
+        return hasLinks && needsReview;
     }, [row]);
 
-    const confirmLinkage = useCallback(async () => {
+    const confirmMatch = useCallback(async () => {
         if (!row?.id) return;
         setConfirmBusy(true);
         setConfirmErr(null);
@@ -81,69 +93,60 @@ export function SubmissionQuickReviewDrawer({ open, onClose, row, formName, view
         }
     }, [row?.id, onUpdated]);
 
-    if (!open || !row || !narrative || !intelligence) return null;
+    if (!open || !row || !narrative) return null;
 
-    const timestamp =
+    const submittedAt =
         row.submitted_at ?
             formatDateTimeForUserDisplay(row.submitted_at, viewerTz)
         :   formatDateTimeForUserDisplay(row.created_at, viewerTz);
     const detailHref = submissionDetailHref(row.form_definition_id, row.id);
+    const who = submitterLine(row);
+
+    const overlay = "fixed inset-0 z-[120] bg-black/20 backdrop-blur-[1px]";
+    const panel =
+        "fixed left-1/2 top-1/2 z-[121] flex max-h-[min(88vh,720px)] w-[92vw] max-w-[520px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-admin-border bg-white shadow-xl";
 
     return (
-        <div className="fixed inset-0 z-[120]" data-testid="submission-quick-review-drawer">
-            <button
-                type="button"
-                className="absolute inset-0 bg-alloy-midnight/25 backdrop-blur-[1px]"
-                aria-label="Close quick review"
-                onClick={onClose}
-            />
-            <aside
-                className="absolute right-0 top-0 flex h-full w-full max-w-md flex-col bg-white shadow-2xl ring-1 ring-alloy-midnight/10"
-                role="dialog"
-                aria-modal="true"
-                aria-label="Quick intake review"
-            >
-                <div className="flex items-start justify-between gap-3 border-b border-alloy-midnight/[0.08] px-4 py-3">
+        <>
+            <div className={overlay} onClick={onClose} aria-hidden="true" />
+            <div className={panel} role="dialog" aria-modal="true" aria-label="Quick intake review" data-testid="submission-quick-review-modal">
+                <div className="flex items-start justify-between gap-3 border-b border-alloy-stone/15 px-5 py-4">
                     <div className="min-w-0">
                         <p className={opContextLabel}>Quick review</p>
-                        <p className="text-sm font-semibold text-alloy-midnight">{formName}</p>
-                        <p className={clsx("mt-0.5", opMutedMeta)}>{timestamp}</p>
+                        {who ?
+                            <p className="text-sm font-semibold text-alloy-midnight">{who}</p>
+                        :   null}
+                        <p className={clsx("mt-0.5", opMutedMeta)}>
+                            {formName} · Submitted {submittedAt}
+                        </p>
                     </div>
-                    <button type="button" className={opMetadata} onClick={onClose}>
+                    <button
+                        type="button"
+                        className="text-xs font-semibold text-alloy-midnight/60 hover:text-alloy-midnight"
+                        onClick={onClose}
+                    >
                         Close
                     </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+                <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
                     <div className={opOrientationSurface}>
-                        <div className="flex flex-wrap items-center gap-2">
-                            <FormsReviewBadge label={intelligence.readinessLabel} tone="warning" />
-                        </div>
+                        <FormsReviewBadge label={narrative.statusLabel} tone="warning" />
                         <p className="mt-2 text-sm font-medium text-alloy-midnight">{narrative.headline}</p>
-                        <p className={clsx("mt-1", opBody)}>{narrative.detail}</p>
-                        <p className={clsx("mt-2", opMetadata)}>
-                            <span className="font-medium text-alloy-midnight/80">Next:</span> {narrative.operatorAction}
+                        {createdSummary ?
+                            <p className={clsx("mt-1", opBody)}>{createdSummary}</p>
+                        :   null}
+                        <p className={clsx("mt-1", opMutedMeta)}>{narrative.detail}</p>
+                        <p className={clsx("mt-3 font-medium", opMetadata)}>
+                            Next: {narrative.operatorAction}
                         </p>
                     </div>
 
-                    {intelligence.blockerGroups.length > 0 ?
-                        <ul className="space-y-1 text-xs text-alloy-midnight/80">
-                            {intelligence.blockerGroups.flatMap((g) =>
-                                g.items.map((item) => (
-                                    <li key={`${g.category}-${item}`}>
-                                        <span className="font-semibold">{g.label}:</span> {item}
-                                    </li>
-                                ))
-                            )}
-                        </ul>
-                    :   null}
-
                     {needsConfirm && canConfirm && !confirmOk ?
                         <div className="rounded-xl bg-alloy-stone/20 px-3 py-3 ring-1 ring-alloy-midnight/[0.06]">
-                            <p className={clsx("font-medium", opContextLabel)}>Confirm linked records</p>
+                            <p className={clsx("font-medium", opContextLabel)}>Confirm family match</p>
                             <p className={clsx("mt-1", opMetadata)}>
-                                If person, household, child, and opportunity above match this family, confirm so document
-                                generation can proceed.
+                                If this is the correct family and enrollment inquiry, confirm to continue enrollment workflows.
                             </p>
                             {confirmErr ?
                                 <p className="mt-2 text-sm text-alloy-ember">{confirmErr}</p>
@@ -152,33 +155,36 @@ export function SubmissionQuickReviewDrawer({ open, onClose, row, formName, view
                                 type="button"
                                 className="!mt-3 !px-3 !py-2 text-sm"
                                 disabled={confirmBusy}
-                                onClick={() => void confirmLinkage()}
+                                onClick={() => void confirmMatch()}
                                 data-testid="quick-review-confirm-linkage"
                             >
-                                {confirmBusy ? "Confirming…" : "Confirm record linkage"}
+                                {confirmBusy ? "Confirming…" : "Confirm family match"}
                             </PrimaryButton>
                         </div>
                     : confirmOk ?
                         <p className="text-sm text-alloy-pine" data-testid="quick-review-confirmed">
-                            Linkage confirmed — you can generate a document from the full case file.
+                            Family match confirmed — continue enrollment from the intake file.
                         </p>
                     :   null}
                 </div>
 
-                <div className="flex flex-wrap gap-2 border-t border-alloy-midnight/[0.08] px-4 py-3">
+                <div className="flex flex-wrap gap-2 border-t border-alloy-stone/15 px-5 py-4">
                     <Link href={detailHref} className="inline-flex">
                         <PrimaryButton type="button" className="!px-3 !py-2 text-sm">
-                            Open full case file
+                            Open intake file
                         </PrimaryButton>
                     </Link>
                     <SecondaryButton type="button" className="!px-3 !py-2 text-sm" onClick={onClose}>
                         Done
                     </SecondaryButton>
                     {!canMutate ?
-                        <p className={clsx("w-full", opMutedMeta)}>Generate document requires admin on the case file.</p>
+                        <p className={clsx("w-full", opMutedMeta)}>Document generation requires admin access on the intake file.</p>
                     :   null}
                 </div>
-            </aside>
-        </div>
+            </div>
+        </>
     );
 }
+
+/** @deprecated Use SubmissionQuickReviewModal */
+export const SubmissionQuickReviewDrawer = SubmissionQuickReviewModal;

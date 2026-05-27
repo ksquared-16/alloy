@@ -1,6 +1,6 @@
 /**
- * Operational intake narrative for workload rows (OI-4).
- * Explains what happened, what is blocked, and what the operator should do next.
+ * Operational intake narrative for workload rows (OI-4 / sprint closeout).
+ * Operator-first language — intake-case oriented, not technical CRM jargon.
  */
 
 import {
@@ -11,13 +11,12 @@ import {
 } from "@/lib/forms/submissionInboxPresentation";
 
 export type SubmissionOperationalNarrative = {
-    /** Primary operational headline — what happened */
     headline: string;
-    /** Secondary line — blocker or status detail */
     detail: string;
-    /** Imperative next step for the operator */
     operatorAction: string;
     lane: SubmissionInboxLaneKey;
+    /** Short status for modal badge */
+    statusLabel: string;
 };
 
 function metaRecord(payloadMeta: unknown): Record<string, unknown> {
@@ -25,17 +24,60 @@ function metaRecord(payloadMeta: unknown): Record<string, unknown> {
     return payloadMeta as Record<string, unknown>;
 }
 
-function opportunityMatchLabel(match: string): string | null {
-    switch (match) {
-        case "created":
-            return "New enrollment inquiry created";
-        case "attached_existing":
-            return "Attached to active enrollment inquiry";
-        case "ambiguous":
-            return "Multiple open inquiries — pick the correct one";
-        default:
-            return null;
+function payloadValues(row: SubmissionInboxRow): Record<string, unknown> {
+    const payload = row.payload as Record<string, unknown> | undefined;
+    const values = payload?.values;
+    if (!values || typeof values !== "object" || Array.isArray(values)) return {};
+    return values as Record<string, unknown>;
+}
+
+/** Guardian or child name for workload row lead-in. */
+export function submissionFamilyLabel(row: SubmissionInboxRow): string | null {
+    const v = payloadValues(row);
+    const guardian = typeof v.guardian_full_name === "string" ? v.guardian_full_name.trim() : "";
+    if (guardian) return guardian;
+    const first = typeof v.child_first_name === "string" ? v.child_first_name.trim() : "";
+    const last = typeof v.child_last_name === "string" ? v.child_last_name.trim() : "";
+    const child = [first, last].filter(Boolean).join(" ");
+    return child || null;
+}
+
+/** Human summary of what intake created or matched — not raw FK ids. */
+export function submissionCreatedOrMatchedSummary(row: SubmissionInboxRow): string | null {
+    const m = metaRecord(row.payload?.meta);
+    const match = typeof m.intake_opportunity_match === "string" ? m.intake_opportunity_match.trim() : "";
+    const path = typeof m.intake_resolution_path === "string" ? m.intake_resolution_path.trim() : "";
+
+    if (match === "attached_existing" || path === "matched_email") {
+        return "Matched: Existing enrollment inquiry";
     }
+    if (match === "ambiguous" || path === "ambiguous_opportunity" || path === "ambiguous_contact") {
+        return "Needs review: Potential duplicate";
+    }
+    if (path === "skipped_intake_disabled" || path === "skipped_missing_config") {
+        return null;
+    }
+
+    const created: string[] = [];
+    if (row.opportunity_id) created.push("Enrollment inquiry");
+    if (row.person_id) created.push("Parent profile");
+    if (row.customer_id && !row.person_id) created.push("Family profile");
+    if (row.customer_member_id) created.push("Child profile");
+    if (created.length === 0) return null;
+    return `Created: ${created.join(", ")}`;
+}
+
+/** @deprecated Prefer submissionCreatedOrMatchedSummary */
+export function formatIntakeRecordsSummary(row: SubmissionInboxRow): string | null {
+    return submissionCreatedOrMatchedSummary(row);
+}
+
+function statusLabelForLane(lane: SubmissionInboxLaneKey, needsReview: boolean): string {
+    if (lane === "needsLinking") return "Missing family match";
+    if (lane === "needsReview" || needsReview) return "Ready for enrollment review";
+    if (lane === "recentlySubmitted") return "Ready to continue enrollment";
+    if (lane === "drafts") return "In progress";
+    return "Intake submitted";
 }
 
 /** Deterministic operational copy from intake meta + inbox lane. */
@@ -45,84 +87,78 @@ export function deriveSubmissionOperationalNarrative(row: SubmissionInboxRow): S
     const path = typeof m.intake_resolution_path === "string" ? m.intake_resolution_path.trim() : "";
     const match = typeof m.intake_opportunity_match === "string" ? m.intake_opportunity_match.trim() : "";
     const needsReview = m.intake_needs_review === true;
-    const reviewResult = typeof m.intake_review_result === "string" ? m.intake_review_result.trim() : "";
-    const reason = typeof m.intake_review_reason === "string" && m.intake_review_reason.trim() ? m.intake_review_reason.trim() : null;
 
     const primaryAction = submissionInboxPrimaryAction(lane);
-    const oppLabel = opportunityMatchLabel(match);
 
-    let headline = "Form submitted — intake recorded";
-    let detail = reason ?? "Submitted intake recorded for operator review.";
+    let headline = "Intake submitted";
+    let detail = "Form answers saved — review when ready.";
     let operatorAction =
-        lane === "recentlySubmitted" && !needsReview ? "Open to finalize" : primaryAction.label;
+        lane === "recentlySubmitted" && !needsReview ?
+            "Continue enrollment"
+        :   primaryAction.label;
 
     if (row.status === "draft") {
         return {
-            headline: "Family still completing this form",
-            detail: "Draft saved — not yet submitted for intake processing.",
+            headline: "Family still completing",
+            detail: "Draft saved — not submitted yet.",
             operatorAction: "Monitor until submit",
             lane,
+            statusLabel: "In progress",
         };
     }
 
     if (path === "created_records" || (path === "matched_email" && match === "created")) {
-        headline = "New family intake created CRM records";
-        detail =
-            reason ??
-            "Person, household, and opportunity were created or linked from this embed submit.";
-        operatorAction = needsReview ? "Confirm linkage, then generate document" : "Review answers and generate document";
-    } else if (match === "attached_existing" || path === "matched_email") {
-        headline = "Existing opportunity matched by guardian email";
-        detail =
-            reason ??
-            "Intake attached this submission to an open inquiry — no duplicate opportunity created.";
-        operatorAction = needsReview ? "Confirm linkage before outputs" : "Open to finalize or generate document";
+        headline = "New enrollment inquiry created";
+        detail = "Parent, family, and enrollment inquiry were set up from this submission.";
+        operatorAction = needsReview ? "Review intake and continue enrollment" : "Continue enrollment";
+    } else if (match === "attached_existing" || (path === "matched_email" && match !== "created")) {
+        headline = "Existing family matched";
+        detail = "Attached to an open enrollment inquiry — no duplicate inquiry created.";
+        operatorAction = needsReview ? "Review match and continue enrollment" : "Continue enrollment";
     } else if (path === "matched_phone") {
-        headline = "Person matched by phone — verify identity";
-        detail = reason ?? "CRM linked by phone match; confirm the correct guardian before outputs.";
-        operatorAction = needsReview ? "Confirm identity and linkage" : "Review and generate document";
-    } else if (path === "ambiguous_contact") {
-        headline = "Intake could not confidently link the contact";
-        detail = "Multiple CRM persons match — pick the correct records before any document output.";
-        operatorAction = "Correct linked records";
-    } else if (path === "ambiguous_opportunity") {
-        headline = "Multiple open opportunities match this family";
-        detail = "Guardian + child + location match more than one inquiry — link manually.";
-        operatorAction = "Correct opportunity link";
+        headline = "Existing family matched";
+        detail = "Matched by phone — confirm this is the correct family before continuing.";
+        operatorAction = needsReview ? "Confirm family match" : "Continue enrollment";
+    } else if (path === "ambiguous_contact" || path === "ambiguous_opportunity") {
+        headline = "Potential duplicate found";
+        detail = "More than one family or inquiry could match — pick the correct one.";
+        operatorAction = "Resolve duplicate match";
     } else if (path === "needs_human_review") {
-        headline = "Review required before downstream enrollment workflows";
-        detail = reason ?? "Intake stopped short of auto-linking — operator must choose CRM records.";
-        operatorAction = "Link or confirm records";
+        headline = "Ready for enrollment review";
+        detail = "Intake paused for operator — choose the correct family and inquiry.";
+        operatorAction = "Review intake and continue enrollment";
     } else if (path === "manually_linked") {
-        headline = "Operator corrected CRM linkage";
-        detail = reviewResult === "corrected" ? "Manual link applied — verify before generating outputs." : detail;
-        operatorAction = "Open case file";
+        headline = "Family match updated";
+        detail = "Operator corrected the family link — verify before generating documents.";
+        operatorAction = "Open intake file";
     } else if (path === "skipped_intake_disabled" || path === "skipped_missing_config") {
-        headline = "Submission stored — CRM intake did not run";
-        detail = reason ?? "Public link missing intake configuration; link CRM records manually if needed.";
-        operatorAction = "Link records or fix distribution link";
+        headline = "Intake not configured";
+        detail = "Submission saved only — enable intake on the distribution link if CRM setup is needed.";
+        operatorAction = "Fix distribution link or match manually";
     } else if (lane === "needsLinking") {
-        headline = "Submitted intake missing CRM attach targets";
-        detail = reason ?? "No person, household, member, or opportunity linked yet.";
-        operatorAction = "Link CRM records";
+        headline = "Missing family match";
+        detail = "No enrollment inquiry or family profile linked yet.";
+        operatorAction = "Match to family profile";
     } else if (lane === "needsReview") {
-        headline = "Auto-linked intake needs operator confirmation";
-        detail = reason ?? "CRM rows were attached but intake flagged human review.";
-        operatorAction = "Confirm linkage";
+        headline = "Ready for enrollment review";
+        detail = "Family records linked — confirm before enrollment workflows continue.";
+        operatorAction = "Review intake and continue enrollment";
     } else if (lane === "recentlySubmitted") {
-        headline = oppLabel ?? "Submitted intake ready for outputs";
+        headline = match === "attached_existing" ? "Existing family matched" : "Ready to continue enrollment";
         detail =
-            reviewResult === "confirmed" ?
-                "Linkage confirmed — generate document or continue enrollment workflow."
-            :   "Linked and clear — review answers or generate document.";
-        operatorAction = "Open to finalize";
+            match === "attached_existing" ?
+                "Linked to an open inquiry — review answers or continue enrollment."
+            :   "Linked and clear — review answers or continue enrollment.";
+        operatorAction = "Continue enrollment";
     }
 
-    if (oppLabel && !headline.includes("inquiry") && !headline.includes("opportunity")) {
-        detail = `${oppLabel}. ${detail}`;
-    }
-
-    return { headline, detail, operatorAction, lane };
+    return {
+        headline,
+        detail,
+        operatorAction,
+        lane,
+        statusLabel: statusLabelForLane(lane, needsReview),
+    };
 }
 
 export function submissionActivitySortKey(row: SubmissionInboxRow): string {

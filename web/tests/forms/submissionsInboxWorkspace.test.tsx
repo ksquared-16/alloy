@@ -55,7 +55,7 @@ describe("SubmissionsInboxView OW-6", () => {
         expect(html).toContain("Quick review");
         expect(html).toContain("Continue draft");
         expect(html).toContain("Enrollment form");
-        expect(html).toContain("Auto-created child member");
+        expect(html).toContain("Family records linked");
         expect(html).not.toContain("<table");
         expect(html.indexOf("Needs review")).toBeLessThan(html.indexOf("Drafts"));
     });

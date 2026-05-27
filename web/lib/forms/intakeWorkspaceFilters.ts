@@ -9,6 +9,8 @@ import {
     deriveSubmissionOperationalNarrative,
     sortSubmissionsByActivity,
     submissionActivitySortKey,
+    submissionCreatedOrMatchedSummary,
+    submissionFamilyLabel,
 } from "@/lib/forms/submissionOperationalNarrative";
 import {
     groupSubmissionsIntoInboxLanes,
@@ -43,9 +45,11 @@ export type IntakeWorkspaceFilterItem = {
     title: string;
     meta: string;
     formName?: string;
+    familyLabel?: string | null;
+    createdSummary?: string | null;
+    operatorAction?: string;
     href: string;
     cta: string;
-    /** Submission rows only — enables inline quick review */
     submission?: SubmissionInboxRow;
     submissionLane?: SubmissionInboxLaneKey;
     sortKey: string;
@@ -80,6 +84,9 @@ function submissionItem(
         title: narrative.headline,
         meta: narrative.detail,
         formName: formLabel,
+        familyLabel: submissionFamilyLabel(row),
+        createdSummary: submissionCreatedOrMatchedSummary(row),
+        operatorAction: narrative.operatorAction,
         href: `${ADMIN_FORMS_UI_BASE}/${row.form_definition_id}/submissions/${row.id}`,
         cta: narrative.operatorAction,
         submission: row,
@@ -128,6 +135,9 @@ export function buildIntakeWorkspaceFilterPanel(
 
     switch (filter) {
         case "needs_review": {
+            for (const row of sortSubmissionsByActivity(lanes.needsReview)) {
+                items.push(submissionItem(row, params.formsById, "needsReview"));
+            }
             for (const s of params.sessions.filter(sessionNeedsReview)) {
                 items.push({
                     id: `session-${s.id}`,
@@ -137,9 +147,6 @@ export function buildIntakeWorkspaceFilterPanel(
                     cta: "Review packet",
                     sortKey: s.created_at,
                 });
-            }
-            for (const row of sortSubmissionsByActivity(lanes.needsReview)) {
-                items.push(submissionItem(row, params.formsById, "needsReview"));
             }
             return {
                 filter,

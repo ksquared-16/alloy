@@ -1,14 +1,39 @@
 /**
- * Diagnose Test 1C/1D visibility — compares DB rows vs dbListSubmissions for Alloy Bend org.
+ * Diagnose Test 1C/1D visibility — compares DB rows vs dbListSubmissions per org.
  * Usage: cd web && npx tsx --tsconfig tsconfig.json scripts/diagnoseFormsSubmissionVisibility.ts
  */
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { dbListSubmissions } from "@/lib/admin/forms/formsAdminDb";
 import { groupSubmissionsIntoInboxLanes, resolveSubmissionInboxLane } from "@/lib/forms/submissionInboxPresentation";
+import {
+    DEMO_CHILDCARE_ORG_ID,
+    INTAKE_RUNTIME_TEST_1C_ID,
+    INTAKE_RUNTIME_TEST_1D_ID,
+    INTAKE_RUNTIME_TEST_FORM_ID,
+    INTAKE_RUNTIME_TEST_ORG_ID,
+} from "@/lib/forms/intakeRuntimeTestFixtures";
 
-const ALLOY_BEND_ORG = "7803388d-cdee-4afb-89cf-23a137f39423";
-const FORM_ID = "e68e0160-3157-44fd-b207-2c0f14d1764f";
-const TEST_IDS = ["c5e2e078-97ee-4e17-9d66-1527a9f0c46b", "50ac6911-5887-4934-9ae8-a221d61f81f6"];
+const TEST_IDS = [INTAKE_RUNTIME_TEST_1C_ID, INTAKE_RUNTIME_TEST_1D_ID];
+
+async function auditOrg(label: string, orgId: string) {
+    const supabase = createAdminClient();
+    const { data: org } = await supabase.from("orgs").select("id,name,slug").eq("id", orgId).maybeSingle();
+    console.log(`\n=== ${label}: ${org?.name ?? orgId} ===`);
+
+    const { data: all, error } = await dbListSubmissions(supabase, orgId, { limit: 20 });
+    if (error) {
+        console.log("QUERY ERROR:", error.message);
+        return;
+    }
+    console.log("submission count:", all?.length ?? 0);
+    for (const r of all ?? []) {
+        console.log(`  ${r.id.slice(0, 8)}… ${(r.submitted_at ?? r.created_at)?.slice(0, 10)} ${r.status}`);
+    }
+    for (const id of TEST_IDS) {
+        const hit = all?.find((r) => r.id === id);
+        console.log(`  ${id}: ${hit ? `FOUND lane=${resolveSubmissionInboxLane(hit)}` : "MISSING"}`);
+    }
+}
 
 async function main() {
     const supabase = createAdminClient();
@@ -24,28 +49,18 @@ async function main() {
         else console.log(JSON.stringify(data, null, 2));
     }
 
-    console.log("\n=== dbListSubmissions (org-wide limit 200) ===");
-    const { data: all, error: allErr } = await dbListSubmissions(supabase, ALLOY_BEND_ORG, { limit: 200 });
-    if (allErr) {
-        console.log("QUERY ERROR:", allErr.message, allErr.code, allErr.details);
-        process.exit(1);
-    }
-    console.log("row count:", all?.length ?? 0);
-    for (const id of TEST_IDS) {
-        const hit = all?.find((r) => r.id === id);
-        console.log(id, hit ? `FOUND lane=${resolveSubmissionInboxLane(hit)}` : "MISSING from API query");
-    }
+    await auditOrg("Alloy Bend (Test 1 fixtures)", INTAKE_RUNTIME_TEST_ORG_ID);
+    await auditOrg("Demo Childcare Co (common browser session)", DEMO_CHILDCARE_ORG_ID);
 
-    console.log("\n=== dbListSubmissions (form-scoped) ===");
-    const { data: scoped, error: scopedErr } = await dbListSubmissions(supabase, ALLOY_BEND_ORG, {
-        form_definition_id: FORM_ID,
+    console.log("\n=== Alloy Bend form-scoped lanes ===");
+    const { data: scoped, error: scopedErr } = await dbListSubmissions(supabase, INTAKE_RUNTIME_TEST_ORG_ID, {
+        form_definition_id: INTAKE_RUNTIME_TEST_FORM_ID,
         limit: 200,
     });
     if (scopedErr) {
         console.log("QUERY ERROR:", scopedErr.message);
         process.exit(1);
     }
-    console.log("row count:", scoped?.length ?? 0);
     const lanes = groupSubmissionsIntoInboxLanes(
         (scoped ?? []).map((r) => ({
             id: r.id,

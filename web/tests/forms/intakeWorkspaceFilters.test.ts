@@ -86,7 +86,7 @@ describe("intakeWorkspaceFilters FD-1", () => {
         });
 
         expect(panel.title).toBe("Recent intake");
-        expect(panel.items[0]?.title).toContain("Existing opportunity matched");
+        expect(panel.items[0]?.title).toContain("Existing family matched");
         expect(panel.items[0]?.quickReview).toBe(true);
     });
 
@@ -101,6 +101,6 @@ describe("intakeWorkspaceFilters FD-1", () => {
 
         expect(panel.title).toBe("Needs linking");
         expect(panel.items).toHaveLength(1);
-        expect(panel.items[0]?.cta).toBe("Link CRM records");
+        expect(panel.items[0]?.cta).toBe("Match to family profile");
     });
 });

@@ -80,7 +80,9 @@ export async function GET(request: NextRequest) {
     const supabase = createAdminClient();
     const { data, error } = await dbListSubmissions(supabase, ctx.orgId, filters);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return jsonData(data ?? []);
+    const response = jsonData(data ?? []);
+    response.headers.set("X-Admin-Org-Id", ctx.orgId);
+    return response;
 }
 
 /** POST /api/admin/forms/submissions — draft submission (admin only). */

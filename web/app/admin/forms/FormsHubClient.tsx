@@ -17,6 +17,7 @@ import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 import { opMetadata, opOrientationSurface } from "@/lib/operational/ui/operationalVisualTokens";
 import { sortSubmissionsByActivity } from "@/lib/forms/submissionOperationalNarrative";
+import { FORMS_SUBMISSIONS_API_PATH } from "@/lib/forms/intakeRuntimeTestFixtures";
 
 type FormRow = IntakeWorkspaceFormRow & {
     key: string;
@@ -65,6 +66,7 @@ export default function FormsHubClient() {
     const [sessions, setSessions] = useState<IntakeWorkspaceSessionRow[]>([]);
     const [packets, setPackets] = useState<IntakeWorkspacePacketRow[]>([]);
     const [submissions, setSubmissions] = useState<IntakeWorkspaceSubmissionRow[]>([]);
+    const [apiFetchMeta, setApiFetchMeta] = useState<{ apiOrgId: string | null; apiUrl: string } | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -84,7 +86,7 @@ export default function FormsHubClient() {
                 fetch("/api/admin/forms", { credentials: "include" }),
                 fetch("/api/admin/forms/packet-sessions", { credentials: "include" }),
                 fetch("/api/admin/forms/packet-definitions", { credentials: "include" }),
-                fetch("/api/admin/forms/submissions?limit=200", { credentials: "include" }),
+                fetch(FORMS_SUBMISSIONS_API_PATH, { credentials: "include" }),
             ]);
 
             const formsJson = await formsRes.json().catch(() => ({}));
@@ -102,41 +104,45 @@ export default function FormsHubClient() {
             setSessions(
                 sessionsRes.ok ?
                     sortSessionsForReview((sessionsJson as { data?: PacketSessionRow[] }).data ?? [])
-                :   []
+                    : []
             );
             setPackets(
                 packetsRes.ok ?
                     ((packetsJson as { data?: IntakeWorkspacePacketRow[] }).data ?? [])
                         .filter((p) => p.is_active !== false)
                         .map((p) => ({ id: p.id, name: p.name }))
-                :   []
+                    : []
             );
-            setSubmissions(
-                sortSubmissionsByActivity(
-                    ((subJson as { data?: IntakeWorkspaceSubmissionRow[] }).data ?? []).map((r) => ({
-                        id: r.id,
-                        status: r.status,
-                        created_at: r.created_at,
-                        submitted_at: r.submitted_at,
-                        form_definition_id: r.form_definition_id,
-                        person_id: r.person_id,
-                        customer_id: r.customer_id,
-                        customer_member_id: r.customer_member_id,
-                        opportunity_id: r.opportunity_id,
-                        payload: r.payload,
-                    }))
-                )
+            const mapped = sortSubmissionsByActivity(
+                ((subJson as { data?: IntakeWorkspaceSubmissionRow[] }).data ?? []).map((r) => ({
+                    id: r.id,
+                    status: r.status,
+                    created_at: r.created_at,
+                    submitted_at: r.submitted_at,
+                    form_definition_id: r.form_definition_id,
+                    person_id: r.person_id,
+                    customer_id: r.customer_id,
+                    customer_member_id: r.customer_member_id,
+                    opportunity_id: r.opportunity_id,
+                    payload: r.payload,
+                }))
             );
+            setSubmissions(mapped);
+            setApiFetchMeta({
+                apiOrgId: subRes.headers.get("X-Admin-Org-Id"),
+                apiUrl: FORMS_SUBMISSIONS_API_PATH,
+            });
         } catch (e) {
             setError((e as Error).message);
             setForms([]);
             setSessions([]);
             setPackets([]);
             setSubmissions([]);
+            setApiFetchMeta(null);
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [activeOrgId]);
 
     useEffect(() => {
         void load();
@@ -217,7 +223,7 @@ export default function FormsHubClient() {
                 </div>
                 {createErr ?
                     <p className="mt-2 text-sm text-alloy-ember">{createErr}</p>
-                :   null}
+                    : null}
                 <PrimaryButton
                     type="button"
                     className="!mt-3 !px-3 !py-2 text-sm"
@@ -246,6 +252,7 @@ export default function FormsHubClient() {
             createPanel={createPanel}
             onRefresh={() => void load()}
             activeOrgId={activeOrgId}
+            apiFetchMeta={apiFetchMeta}
         />
     );
 }

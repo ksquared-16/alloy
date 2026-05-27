@@ -3,13 +3,15 @@
 import clsx from "clsx";
 import Link from "next/link";
 import { useCallback, useState } from "react";
+import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
 import type { IntakeWorkspaceFilterPanel } from "@/lib/forms/intakeWorkspaceFilters";
-import { SubmissionQuickReviewDrawer } from "@/components/forms/workspace/SubmissionQuickReviewDrawer";
+import { SubmissionQuickReviewModal } from "@/components/forms/workspace/SubmissionQuickReviewModal";
 import {
     opBody,
     opGroupedRowInner,
     opGroupedSurface,
     opMetadata,
+    opMutedMeta,
     opSectionTitle,
 } from "@/lib/operational/ui/operationalVisualTokens";
 import {
@@ -23,11 +25,18 @@ type Props = {
     onRefresh?: () => void;
 };
 
-/** Inline contextual workload panel with quick review drawer (OI-4). */
+function formatSubmittedTime(iso: string, viewerTz: string): string {
+    const full = formatDateTimeForUserDisplay(iso, viewerTz);
+    const comma = full.indexOf(", ");
+    if (comma > 0) return full.slice(comma + 2);
+    return full;
+}
+
+/** Inline contextual workload panel — intake-case oriented rows. */
 export function IntakeWorkspaceFilterPanelView({ panel, viewerTz, onRefresh }: Props) {
     const [quickReviewRow, setQuickReviewRow] = useState<(typeof panel.items)[number] | null>(null);
 
-    const closeDrawer = useCallback(() => setQuickReviewRow(null), []);
+    const closeModal = useCallback(() => setQuickReviewRow(null), []);
 
     return (
         <>
@@ -51,47 +60,79 @@ export function IntakeWorkspaceFilterPanelView({ panel, viewerTz, onRefresh }: P
                         {panel.empty}
                     </p>
                 :   <ul className={clsx(opGroupedSurface, "mt-2")}>
-                        {panel.items.map((item) => (
-                            <li
-                                key={item.id}
-                                className={clsx(
-                                    opGroupedRowInner,
-                                    "flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between transition-colors hover:bg-alloy-stone/10"
-                                )}
-                                data-testid={`intake-filter-item-${item.id}`}
-                            >
-                                <div className="min-w-0 flex-1">
-                                    {item.formName ?
-                                        <p className={opMetadata}>{item.formName}</p>
-                                    :   null}
-                                    <p className="text-sm font-semibold text-alloy-midnight">{item.title}</p>
-                                    <p className={clsx("mt-1 line-clamp-3", opBody)}>{item.meta}</p>
-                                </div>
-                                <div className="flex flex-shrink-0 flex-wrap gap-2">
-                                    {item.quickReview && item.submission ?
-                                        <button
-                                            type="button"
-                                            className={intakeWorkspaceBtnPrimary}
-                                            data-testid={`intake-quick-review-${item.id}`}
-                                            onClick={() => setQuickReviewRow(item)}
-                                        >
-                                            Quick review
-                                        </button>
-                                    :   null}
-                                    <Link href={item.href} className={intakeWorkspaceBtnSecondary}>
-                                        {item.quickReview ? "Open" : item.cta}
-                                    </Link>
-                                </div>
-                            </li>
-                        ))}
+                        {panel.items.map((item) => {
+                            const submittedIso = item.submission?.submitted_at ?? item.submission?.created_at;
+                            const submittedTime =
+                                submittedIso ? formatSubmittedTime(submittedIso, viewerTz) : null;
+                            const rowLead =
+                                item.familyLabel && item.title ?
+                                    `${item.familyLabel} — ${item.title}`
+                                :   item.title;
+
+                            return (
+                                <li
+                                    key={item.id}
+                                    className={clsx(
+                                        opGroupedRowInner,
+                                        "flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between transition-colors hover:bg-alloy-stone/10"
+                                    )}
+                                    data-testid={
+                                        item.submission ?
+                                            `intake-submission-row-${item.submission.id}`
+                                        :   `intake-filter-item-${item.id}`
+                                    }
+                                >
+                                    <div className="min-w-0 flex-1 space-y-1">
+                                        <p className="text-sm font-semibold text-alloy-midnight">{rowLead}</p>
+                                        {item.formName && submittedTime ?
+                                            <p className={opMutedMeta} data-testid="intake-row-submitted-at">
+                                                {item.formName} submitted · {submittedTime}
+                                            </p>
+                                        : item.formName ?
+                                            <p className={opMutedMeta}>{item.formName}</p>
+                                        : submittedTime ?
+                                            <p className={opMutedMeta} data-testid="intake-row-submitted-at">
+                                                Submitted · {submittedTime}
+                                            </p>
+                                        :   null}
+                                        {item.createdSummary ?
+                                            <p className={opBody}>{item.createdSummary}</p>
+                                        :   null}
+                                        {!item.createdSummary && item.meta ?
+                                            <p className={opMutedMeta}>{item.meta}</p>
+                                        :   null}
+                                        {item.operatorAction ?
+                                            <p className={clsx("font-medium", opMetadata)}>
+                                                Next: {item.operatorAction}
+                                            </p>
+                                        :   null}
+                                    </div>
+                                    <div className="flex flex-shrink-0 flex-wrap gap-2">
+                                        {item.quickReview && item.submission ?
+                                            <button
+                                                type="button"
+                                                className={intakeWorkspaceBtnPrimary}
+                                                data-testid={`intake-quick-review-${item.id}`}
+                                                onClick={() => setQuickReviewRow(item)}
+                                            >
+                                                Quick review
+                                            </button>
+                                        :   null}
+                                        <Link href={item.href} className={intakeWorkspaceBtnSecondary}>
+                                            {item.quickReview ? "Open" : item.cta}
+                                        </Link>
+                                    </div>
+                                </li>
+                            );
+                        })}
                     </ul>
                 }
             </section>
 
             {quickReviewRow ?
-                <SubmissionQuickReviewDrawer
+                <SubmissionQuickReviewModal
                     open
-                    onClose={closeDrawer}
+                    onClose={closeModal}
                     row={quickReviewRow.submission ?? null}
                     formName={quickReviewRow.formName ?? "Form"}
                     viewerTz={viewerTz}

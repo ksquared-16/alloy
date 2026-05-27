@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import { useCallback, useState } from "react";
 import { IntakeWorkspaceRegion } from "@/components/forms/workspace/IntakeWorkspaceRegion";
-import { SubmissionQuickReviewDrawer } from "@/components/forms/workspace/SubmissionQuickReviewDrawer";
+import { SubmissionQuickReviewModal } from "@/components/forms/workspace/SubmissionQuickReviewModal";
 import {
     SubmissionInboxRowView,
     submissionDetailHref,
@@ -157,7 +157,7 @@ export function SubmissionsInboxView({
             </div>
 
             {quickReviewRow ?
-                <SubmissionQuickReviewDrawer
+                <SubmissionQuickReviewModal
                     open
                     onClose={closeDrawer}
                     row={quickReviewRow}
