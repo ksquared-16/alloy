@@ -20,7 +20,10 @@ describe("opportunityActivityTimelineFormat", () => {
     it("titles use friendly labels", () => {
         expect(getWorkflowActivityEventTitle("opportunity_status_changed")).toBe("Status changed");
         expect(getWorkflowActivityEventTitle("action_executed")).toBe("Action completed");
-        expect(getWorkflowActivityEventTitle("message_received")).toBe("SMS received");
+        expect(getWorkflowActivityEventTitle("message_received")).toBe("Message received");
+        expect(getWorkflowActivityEventTitle("message_received", { channel: "sms" })).toBe("SMS received");
+        expect(getWorkflowActivityEventTitle("message_sent", { channel: "email" })).toBe("Email sent");
+        expect(getWorkflowActivityEventTitle("message_sent", { channel: "sms" })).toBe("SMS sent");
         expect(getWorkflowActivityEventTitle("opportunity_enrollment_packet_created")).toBe("Enrollment packet created");
         expect(getWorkflowActivityEventTitle("opportunity_enrollment_packet_sent")).toBe("Enrollment packet sent");
         expect(getWorkflowActivityEventTitle("opportunity_enrollment_packet_step_completed")).toBe(
