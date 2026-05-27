@@ -249,6 +249,97 @@ describe("processDueCommunicationScheduledSends", () => {
             expect(res.result.failed).toBe(0);
         }
         expect(executeCommunicationsSend).toHaveBeenCalledOnce();
+        expect(executeCommunicationsSend).toHaveBeenCalledWith(
+            expect.objectContaining({
+                textRaw: "hi",
+                sendMetadataAugment: {
+                    communication_scheduled_send_id: sendId,
+                    task_assist_scheduled_send: true,
+                },
+            })
+        );
+    });
+
+    it("passes tour scheduling metadata for tour_scheduling source rows", async () => {
+        const row = baseRow({
+            source: "tour_scheduling",
+            channel: "email",
+            subject_snapshot: "Reminder subject",
+            body_snapshot: "Rendered reminder body from Batch 5",
+            metadata: {
+                tour_booking_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                reminder_key: "tour_reminder_24h",
+                schedule_generation: 7,
+                event_key: "tour_reminder",
+                tour_start_at: "2026-06-16T12:00:00.000Z",
+                location_id: "loc-1",
+            },
+        });
+        vi.mocked(executeCommunicationsSend).mockResolvedValue({
+            ok: true,
+            communication_message_id: "msg-11111111-1111-4111-8111-111111111111",
+            thread_id: null,
+            channel: "email",
+            process_trigger_attempted_note: "queued",
+        });
+
+        const maybeSingleSelect = vi.fn().mockResolvedValue({ data: row, error: null });
+        const maybeSingleUpdate = vi.fn().mockResolvedValue({
+            data: { ...row, status: "queued", communication_message_id: "msg-11111111-1111-4111-8111-111111111111" },
+            error: null,
+        });
+
+        const supabase = {
+            rpc: vi.fn().mockResolvedValue({ data: [row], error: null }),
+            from: vi.fn(() => ({
+                select: vi.fn(() => ({
+                    eq: vi.fn(() => ({
+                        maybeSingle: maybeSingleSelect,
+                    })),
+                })),
+                update: vi.fn(() => ({
+                    eq: vi.fn(() => ({
+                        eq: vi.fn(() => ({
+                            eq: vi.fn(() => ({
+                                is: vi.fn(() => ({
+                                    select: vi.fn(() => ({
+                                        maybeSingle: maybeSingleUpdate,
+                                    })),
+                                })),
+                            })),
+                        })),
+                    })),
+                })),
+            })),
+        } as never;
+
+        const res = await processDueCommunicationScheduledSends({
+            supabase,
+            limit: 5,
+            now: new Date("2026-12-02T00:00:00.000Z"),
+            orgIdFilter: null,
+        });
+
+        expect(res.ok).toBe(true);
+        expect(executeCommunicationsSend).toHaveBeenCalledWith(
+            expect.objectContaining({
+                textRaw: "Rendered reminder body from Batch 5",
+                subjectRawEmail: "Reminder subject",
+                sendMetadataAugment: expect.objectContaining({
+                    communication_scheduled_send_id: sendId,
+                    source: "tour_scheduling",
+                    tour_booking_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                    reminder_key: "tour_reminder_24h",
+                    schedule_generation: 7,
+                    event_key: "tour_reminder",
+                }),
+            })
+        );
+        const augment = vi.mocked(executeCommunicationsSend).mock.calls[0]?.[0]?.sendMetadataAugment as Record<
+            string,
+            unknown
+        >;
+        expect(augment?.task_assist_scheduled_send).toBeUndefined();
     });
 
     it("skips enqueue when communication_message_id already set", async () => {

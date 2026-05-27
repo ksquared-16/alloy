@@ -10,6 +10,15 @@ import type {
 import { TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS } from "@/lib/tours/constants";
 import { emitTourBookingLifecycleEvent } from "@/lib/tours/events/tourLifecycleEvents";
 import { applyTourBookingOpportunityIntegration } from "@/lib/tours/opportunity/tourBookingOpportunityIntegration";
+import {
+    orchestrateTourBookingCanceled,
+    orchestrateTourBookingCompleted,
+    orchestrateTourBookingConfirmed,
+    orchestrateTourBookingNoShow,
+    orchestrateTourBookingRescheduled,
+    runTourCommsOrchestratorBestEffort,
+    type TourCommsOrchestrationResult,
+} from "@/lib/tours/comms/tourCommsOrchestrator";
 
 const ACTIVE = [...TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS];
 
@@ -85,6 +94,13 @@ function resolveInitialStatus(input: CreateTourBookingInput): "requested" | "pen
     return input.approvalRequired ? "pending_approval" : "confirmed";
 }
 
+async function afterTourBookingComms(
+    label: string,
+    fn: () => Promise<TourCommsOrchestrationResult>
+): Promise<void> {
+    await runTourCommsOrchestratorBestEffort(label, fn);
+}
+
 export async function createTourBooking(supabase: SupabaseClient, input: CreateTourBookingInput): Promise<TourBookingRow> {
     const orgId = String(input.orgId).trim();
     const opportunityId = String(input.opportunityId).trim();
@@ -144,6 +160,13 @@ export async function createTourBooking(supabase: SupabaseClient, input: CreateT
         await emitTourBookingLifecycleEvent(supabase, "tour_booking_pending", row, { previous_status_key: null }, ctx);
     } else {
         await emitTourBookingLifecycleEvent(supabase, "tour_confirmed", row, { previous_status_key: null }, ctx);
+        await afterTourBookingComms("create_confirmed", () =>
+            orchestrateTourBookingConfirmed(supabase, {
+                orgId,
+                booking: row,
+                actorUserId: input.requestedByUserId ?? null,
+            })
+        );
     }
 
     return row;
@@ -192,6 +215,13 @@ export async function confirmTourBooking(
         row,
         { previous_status_key: prev, previous_start_at: existing.start_at, previous_end_at: existing.end_at },
         { correlation_id: opts?.correlationId ?? null, actor_user_id: opts?.actorUserId ?? null }
+    );
+    await afterTourBookingComms("confirm", () =>
+        orchestrateTourBookingConfirmed(supabase, {
+            orgId,
+            booking: row,
+            actorUserId: opts?.actorUserId ?? null,
+        })
     );
     return row;
 }
@@ -261,6 +291,12 @@ export async function rescheduleTourBooking(
         },
         { correlation_id: input.correlationId ?? null, actor_user_id: null }
     );
+    await afterTourBookingComms("reschedule", () =>
+        orchestrateTourBookingRescheduled(supabase, {
+            orgId,
+            booking: row,
+        })
+    );
     return row;
 }
 
@@ -298,6 +334,13 @@ export async function cancelTourBooking(
         { previous_status_key: prev, previous_start_at: existing.start_at, previous_end_at: existing.end_at },
         { correlation_id: input.correlationId ?? null, actor_user_id: null }
     );
+    await afterTourBookingComms("cancel", () =>
+        orchestrateTourBookingCanceled(supabase, {
+            orgId,
+            booking: row,
+            actorUserId: input.canceledBy,
+        })
+    );
     return row;
 }
 
@@ -334,6 +377,12 @@ export async function markTourBookingCompleted(
         { previous_status_key: prev },
         { correlation_id: opts?.correlationId ?? null, actor_user_id: null }
     );
+    await afterTourBookingComms("complete", () =>
+        orchestrateTourBookingCompleted(supabase, {
+            orgId,
+            booking: row,
+        })
+    );
     return row;
 }
 
@@ -369,6 +418,12 @@ export async function markTourBookingNoShow(
         row,
         { previous_status_key: prev },
         { correlation_id: opts?.correlationId ?? null, actor_user_id: null }
+    );
+    await afterTourBookingComms("no_show", () =>
+        orchestrateTourBookingNoShow(supabase, {
+            orgId,
+            booking: row,
+        })
     );
     return row;
 }

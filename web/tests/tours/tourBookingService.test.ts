@@ -24,6 +24,23 @@ vi.mock("@/lib/tours/opportunity/tourBookingOpportunityIntegration", () => ({
     applyTourBookingOpportunityIntegration: vi.fn().mockResolvedValue(undefined),
 }));
 
+const mockOrchestrateConfirmed = vi.fn().mockResolvedValue({
+    ok: true,
+    disabled: true,
+    skippedReasons: ["config_disabled"],
+    immediate: [],
+    reminders: { action: "none" },
+});
+
+vi.mock("@/lib/tours/comms/tourCommsOrchestrator", () => ({
+    orchestrateTourBookingConfirmed: (...args: unknown[]) => mockOrchestrateConfirmed(...args),
+    orchestrateTourBookingRescheduled: vi.fn(),
+    orchestrateTourBookingCanceled: vi.fn(),
+    orchestrateTourBookingCompleted: vi.fn(),
+    orchestrateTourBookingNoShow: vi.fn(),
+    runTourCommsOrchestratorBestEffort: vi.fn(async (_label: string, fn: () => Promise<unknown>) => fn()),
+}));
+
 import { computeAvailableTourSlots } from "@/lib/tours/availability/computeAvailableTourSlots";
 import { emitTourBookingLifecycleEvent } from "@/lib/tours/events/tourLifecycleEvents";
 import { applyTourBookingOpportunityIntegration } from "@/lib/tours/opportunity/tourBookingOpportunityIntegration";
@@ -33,6 +50,7 @@ describe("createTourBooking", () => {
         vi.mocked(emitTourBookingLifecycleEvent).mockClear();
         vi.mocked(computeAvailableTourSlots).mockClear();
         vi.mocked(applyTourBookingOpportunityIntegration).mockClear();
+        mockOrchestrateConfirmed.mockClear();
     });
 
     function makeSupabaseForCreate(row: Record<string, unknown>) {
@@ -108,6 +126,10 @@ describe("createTourBooking", () => {
         const emitOrder = vi.mocked(emitTourBookingLifecycleEvent).mock.invocationCallOrder[0]!;
         expect(applyOrder).toBeLessThan(emitOrder);
         expect(computeAvailableTourSlots).toHaveBeenCalled();
+        expect(mockOrchestrateConfirmed).toHaveBeenCalledWith(
+            supabase,
+            expect.objectContaining({ orgId: "org-1", booking: expect.objectContaining({ id: "b-new", status_key: "confirmed" }) })
+        );
     });
 
     it("requested initial skips slot validation and emits tour_requested", async () => {
@@ -155,5 +177,6 @@ describe("createTourBooking", () => {
             expect.anything()
         );
         expect(applyTourBookingOpportunityIntegration).not.toHaveBeenCalled();
+        expect(mockOrchestrateConfirmed).not.toHaveBeenCalled();
     });
 });

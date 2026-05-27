@@ -61,3 +61,119 @@ export type {
     TourSchedulingScheduledSendSource,
 } from "./comms/tourCommsConfig";
 export { resolveTourCommsConfig } from "./comms/resolveTourCommsConfig";
+export {
+    applyTourCommsPlaceholders,
+    getDefaultTourCommsTemplateSet,
+    normalizeTourCommsEventKey,
+    omitEmptyOptionalTourCommsLines,
+    renderTourCommsTemplate,
+} from "./comms/tourCommsTemplates";
+export type {
+    RenderedTourCommsEmail,
+    RenderedTourCommsMessage,
+    RenderedTourCommsSms,
+    RenderTourCommsTemplateInput,
+    TourCommsDefaultTemplateSet,
+    TourCommsTemplateEventAlias,
+} from "./comms/tourCommsTemplates";
+export {
+    buildTourCommsMergeFields,
+    formatTourCommsDateTimeLabels,
+} from "./comms/tourCommsTemplateContext";
+export type { TourCommsFormattedDateTimeLabels, TourCommsTemplateContext } from "./comms/tourCommsTemplateContext";
+export {
+    buildGoogleCalendarUrl,
+    buildOutlookCalendarUrl,
+    buildTourAddToCalendarLinks,
+    buildTourAddToCalendarLinksFromContext,
+    buildTourIcsDownloadPath,
+    buildTourIcsDownloadUrl,
+    resolveTourCalendarAbsoluteUrl,
+    tourAddToCalendarEventFromContext,
+    withTourAddToCalendarLinks,
+} from "./comms/tourAddToCalendarLinks";
+export type {
+    TourAddToCalendarEventInput,
+    TourAddToCalendarLinks,
+    TourIcsDownloadPathInput,
+} from "./comms/tourAddToCalendarLinks";
+export {
+    buildTourBookingIcs,
+    buildTourBookingIcsUid,
+    escapeIcsText,
+    formatIcsUtcDateTime,
+    tourBookingStatusKeyToIcsStatus,
+} from "./comms/tourBookingIcs";
+export type {
+    BuildTourBookingIcsInput,
+    TourBookingIcsEventStatus,
+    TourBookingIcsMethod,
+} from "./comms/tourBookingIcs";
+export {
+    buildTourReminderSchedulePlans,
+    computeTourReminderInstant,
+    deferTourReminderFromQuietHours,
+    evaluateTourReminderScheduledTime,
+    isInstantInQuietHours,
+    isTourBookingEligibleForReminders,
+    isTourBookingTerminalForReminders,
+    resolveTourReminderTimezone,
+} from "./comms/tourReminderTiming";
+export type {
+    TourReminderSchedulePlan,
+    TourReminderSuppressionReason,
+    TourReminderTimingResult,
+} from "./comms/tourReminderTiming";
+export {
+    TOUR_COMMS_OUTBOUND_METADATA,
+    TOUR_COMMS_OUTBOUND_SOURCE,
+} from "./comms/tourCommsConfig";
+export { loadTourCommsContext } from "./comms/loadTourCommsContext";
+export type { LoadedTourCommsContext, LoadTourCommsContextInput } from "./comms/loadTourCommsContext";
+export {
+    resolveTourCommsParentRecipient,
+    tourCommsRecipientHasChannel,
+} from "./comms/resolveTourCommsRecipient";
+export type { TourCommsParentRecipient } from "./comms/resolveTourCommsRecipient";
+export {
+    buildTourCommsImmediateIdempotencyKey,
+    buildTourCommsImmediateOutboundMetadata,
+    hasExistingTourCommsImmediateSend,
+    orchestrateTourBookingCanceled,
+    orchestrateTourBookingCompleted,
+    orchestrateTourBookingConfirmed,
+    orchestrateTourBookingNoShow,
+    orchestrateTourBookingRescheduled,
+    orchestrateTourCommsForBooking,
+    resolveTourCommsActorUserId,
+    resolveTourCommsScheduleGeneration,
+    runTourCommsOrchestratorBestEffort,
+} from "./comms/tourCommsOrchestrator";
+export type {
+    TourCommsImmediateSendResult,
+    TourCommsOrchestrationResult,
+    TourCommsOrchestrateInput,
+    TourCommsOrchestratorDeps,
+    TourCommsReminderActionResult,
+} from "./comms/tourCommsOrchestrator";
+export {
+    TOUR_REMINDER_EVENT_KEY,
+    TOUR_SCHEDULING_REMINDER_BODY_PLACEHOLDER,
+    TOUR_SCHEDULING_REMINDER_SUBJECT_PLACEHOLDER,
+    buildTourSchedulingReminderMetadata,
+    cancelPendingTourSchedulingRemindersForBooking,
+    insertTourSchedulingReminderSend,
+    listPendingTourSchedulingRemindersForBooking,
+    replaceTourSchedulingRemindersForBooking,
+    resolveTourSchedulingReminderApprovedAtIso,
+    scheduleTourSchedulingRemindersForBooking,
+} from "./comms/tourSchedulingScheduledSends";
+export type {
+    ReplaceTourSchedulingRemindersResult,
+    ScheduleTourSchedulingRemindersForBookingInput,
+    ScheduleTourSchedulingRemindersResult,
+    TourSchedulingReminderBookingRef,
+    TourSchedulingReminderMetadata,
+    TourSchedulingReminderSnapshot,
+    TourSchedulingReminderSuppressed,
+} from "./comms/tourSchedulingScheduledSends";

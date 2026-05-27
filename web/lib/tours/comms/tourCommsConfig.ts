@@ -13,7 +13,28 @@ export const TOUR_COMMS_SCHEDULED_SEND_METADATA = {
     tourBookingId: "tour_booking_id",
     reminderKey: "reminder_key",
     scheduleGeneration: "schedule_generation",
+    eventKey: "event_key",
+    tourStartAt: "tour_start_at",
+    locationId: "location_id",
+    reason: "reason",
+    quietHoursAdjusted: "quiet_hours_adjusted",
 } as const;
+
+/** Metadata keys on immediate outbound messages (Batch 5+). */
+export const TOUR_COMMS_OUTBOUND_METADATA = {
+    source: "source",
+    tourBookingId: "tour_booking_id",
+    opportunityId: "opportunity_id",
+    eventKey: "event_key",
+    channel: "channel",
+    idempotencyKey: "idempotency_key",
+    sendGeneration: "send_generation",
+    lifecycleAction: "lifecycle_action",
+    recipientPersonId: "recipient_person_id",
+    communicationScheduledSendId: "communication_scheduled_send_id",
+} as const;
+
+export const TOUR_COMMS_OUTBOUND_SOURCE = "tour_scheduling" as const;
 
 export type TourCommsChannel = "email" | "sms";
 

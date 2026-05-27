@@ -721,7 +721,117 @@ void runTourCommsAfterBookingMutation(supabase, { booking, kind, previous }).cat
 
 **Human gates:** None for code; ops confirms cron
 
-**Exit criteria:** Band A acceptance gates from foundation doc §21 met in staging.
+**Exit criteria:** Band A acceptance gates from foundation doc §22 met in staging.
+
+---
+
+## Band A closeout (Batches 1–6 shipped)
+
+**Status:** Code complete — staging QA required before prod enable.
+
+### Shipped capabilities
+
+| Area | Implementation |
+|------|----------------|
+| Config | `org_settings.metadata.tour_comms` + location overrides via `resolveTourCommsConfig` |
+| Templates | Default email/SMS bodies + `renderTourCommsTemplate` |
+| Calendar links | Google/Outlook deeplinks + ICS builder (link-based; routes optional) |
+| Reminders | `communication_scheduled_sends` with `source = tour_scheduling`, quiet-hours deferral |
+| Lifecycle | `tourCommsOrchestrator` wired into `tourBookingService` (best-effort) |
+| Process-due | Tour metadata passthrough; snapshots used as-is (no re-render) |
+| Idempotency | Immediate sends dedupe via `metadata.idempotency_key` |
+
+### Default-off behavior
+
+`DEFAULT_TOUR_COMMS_CONFIG.enabled = false`. No confirmation, reminder, or lifecycle notifications until an org explicitly sets `tour_comms.enabled: true` in metadata. SMS defaults off (`channels.sms: false`).
+
+### Required org config to enable
+
+```json
+{
+  "tour_comms": {
+    "enabled": true,
+    "channels": { "email": true, "sms": false },
+    "reminder_offsets": [
+      { "reminder_key": "tour_reminder_24h", "offset_minutes": 1440, "channels": ["email"] },
+      { "reminder_key": "tour_reminder_2h", "offset_minutes": 120, "channels": ["email"] }
+    ]
+  }
+}
+```
+
+Optional location overrides: `locations.metadata.tour_comms`.
+
+### Reminder runtime
+
+- **Storage:** `communication_scheduled_sends` (`source = tour_scheduling`, `entity_id = opportunity_id`)
+- **Schedule time:** Computed at confirm/reschedule; rendered subject/body stored in row snapshots
+- **Due processing:** Existing `processDueCommunicationScheduledSends` cron / admin process-due route
+- **Enqueue:** `executeCommunicationsSend` with tour metadata augment (not `task_assist_scheduled_send`)
+
+### Process-due behavior (Batch 6)
+
+| Row `source` | Outbound metadata augment |
+|--------------|---------------------------|
+| `task_assist` | `task_assist_scheduled_send: true`, `communication_scheduled_send_id` |
+| `tour_scheduling` | `source: tour_scheduling`, booking/reminder fields from row metadata, `opportunity_id`, `channel` |
+| other | `scheduled_send_source`, `communication_scheduled_send_id` only |
+
+Body/subject come from `body_snapshot` / `subject_snapshot` — **no template re-render at process-due**.
+
+### Telemetry metadata (communication records)
+
+**Immediate sends** (`communication_messages.metadata`):
+
+- `source: tour_scheduling`
+- `tour_booking_id`, `opportunity_id`, `event_key`, `channel`
+- `idempotency_key`, `send_generation`, `lifecycle_action`, `recipient_person_id`
+
+**Scheduled reminders** (row metadata + process-due augment):
+
+- `tour_booking_id`, `reminder_key`, `schedule_generation`, `event_key`, `tour_start_at`, `location_id`
+- `quiet_hours_adjusted` when applicable
+- `communication_scheduled_send_id` on enqueued message
+
+### Explicit non-shipped (Band A)
+
+- External calendar OAuth / two-way calendar sync
+- Public booking flow redesign
+- Host/staff/internal notifications (`host_recipient` config not wired)
+- ICS download API routes (`/api/admin/tours/bookings/:id/ics`, public token ICS)
+- Settings UI for template/config editing
+- SMS enabled by default (requires explicit config + compliance review)
+- Band B+ (rate limits, CAPTCHA, branded public site, etc.)
+
+### Staging QA checklist
+
+1. Apply migration `20260527150000_tour_scheduling_comm_scheduled_sends_source.sql`.
+2. Enable `org_settings.metadata.tour_comms.enabled = true` for a test org.
+3. Keep SMS disabled initially (`channels.sms: false`).
+4. Confirm a tour booking (admin confirm or create-without-approval).
+5. Verify confirmation email row in `communication_messages` (`metadata.source = tour_scheduling`, `event_key = tour_confirmation`).
+6. Verify reminder rows in `communication_scheduled_sends` (`source = tour_scheduling`, pending status).
+7. Reschedule the booking.
+8. Verify reschedule notification enqueued and pending reminders replaced (old rows canceled, new generation).
+9. Cancel the booking (or use a fresh booking).
+10. Verify cancel notification and pending reminder cancellation.
+11. Advance clock or set `scheduled_for` in past; run process-due (cron or admin route).
+12. Verify due reminder enqueues with tour metadata (`source = tour_scheduling`, not Task Assist).
+13. Retry confirm/process-due — no duplicate immediate sends.
+14. Set `tour_comms.enabled = false` — confirm/reschedule produces no new sends or reminders.
+
+### Code map (Band A)
+
+| Path | Role |
+|------|------|
+| `web/lib/tours/comms/tourCommsConfig.ts` | Types + defaults |
+| `web/lib/tours/comms/resolveTourCommsConfig.ts` | Config resolution |
+| `web/lib/tours/comms/tourCommsTemplates.ts` | Template rendering |
+| `web/lib/tours/comms/tourAddToCalendarLinks.ts` | Google/Outlook links |
+| `web/lib/tours/comms/tourSchedulingScheduledSends.ts` | Reminder CRUD |
+| `web/lib/tours/comms/tourCommsOrchestrator.ts` | Lifecycle orchestration |
+| `web/lib/communications/communicationScheduledSendProcessMetadata.ts` | Process-due metadata |
+| `web/lib/tours/bookings/tourBookingService.ts` | Lifecycle hooks |
 
 ---
 
@@ -746,5 +856,6 @@ void runTourCommsAfterBookingMutation(supabase, { booking, kind, previous }).cat
 | [`tour_scheduling_phase2_foundation.md`](./tour_scheduling_phase2_foundation.md) | Band A scope + doctrine |
 | [`docs/product/communications.md`](../../product/communications.md) | Canonical comms |
 | `web/lib/communications/communicationScheduledSendsService.ts` | Scheduled send processor |
+| `web/lib/communications/communicationScheduledSendProcessMetadata.ts` | Process-due metadata augment |
 | `web/lib/tours/bookings/tourBookingService.ts` | Mutation hooks |
 | `docs/supabase/reference/supabase_constraints.csv` | `source` / `entity_type` CHECKs |

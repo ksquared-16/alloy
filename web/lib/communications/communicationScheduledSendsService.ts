@@ -7,6 +7,7 @@ import {
     validateTaskAssistV1ParsedJsonNoForbiddenWorkflowKeys,
 } from "@/lib/agent/taskAssist/taskAssistSuggestionValidators";
 import { executeCommunicationsSend } from "@/lib/communications/executeCommunicationsSend";
+import { buildCommunicationScheduledSendProcessMetadataAugment } from "@/lib/communications/communicationScheduledSendProcessMetadata";
 
 export type CommunicationScheduledSendRow = {
     id: string;
@@ -656,10 +657,7 @@ export async function processDueCommunicationScheduledSends(params: {
             bindingIdOpt: fresh.communication_provider_binding_id ?? "",
             recipientPersonIdRaw: fresh.recipient_person_id,
             toRawInput: "",
-            sendMetadataAugment: {
-                communication_scheduled_send_id: fresh.id,
-                task_assist_scheduled_send: true,
-            },
+            sendMetadataAugment: buildCommunicationScheduledSendProcessMetadataAugment(fresh),
         });
 
         if (!exec.ok) {

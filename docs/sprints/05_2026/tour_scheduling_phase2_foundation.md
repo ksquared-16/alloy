@@ -1,7 +1,7 @@
 # Tour Scheduling Phase 2 — Foundation (Audit, Doctrine & Implementation Plan)
 
-**Status:** Planning / audit sprint only — **no Phase 2 code is shipped by this document.**  
-**Date:** 2026-05-27  
+**Status:** Planning / audit sprint + **Band A implementation complete** (Batches 1–6, May 2026).  
+**Date:** 2026-05-27 (Band A closeout: 2026-05-27)  
 **Supersedes for implementation planning:** [`tour_scheduling_phase_2.md`](./tour_scheduling_phase_2.md) (roadmap sketch retained as sibling; this doc is the execution contract).  
 **V1 reference:** [`tour_scheduling_v1.md`](./tour_scheduling_v1.md) (shipped, manual QA May 2026).
 
@@ -482,7 +482,11 @@ Cards are **dependency-ordered**; each card should ship with tests + doc updates
 | A10 | Add-to-calendar public/admin links | Signed URL or data URI policy |
 | A11 | Comms audit + telemetry | `metadata.source=tour_*`, dedup metrics, failure logs |
 
-**Band A exit:** Confirm tour → parent receives email with ICS; reminder fires once per offset; reschedule cancels old reminders.
+**Band A exit:** Confirm tour → parent receives confirmation email with add-to-calendar links; reminder fires once per offset via `communication_scheduled_sends`; reschedule cancels old reminders. **Default off** until org enables `metadata.tour_comms.enabled`.
+
+**Band A shipped (Batches 1–6):** Config/types, template rendering, ICS/add-to-calendar helpers, reminder scheduling + quiet hours, orchestrator + booking hooks, process-due tour metadata passthrough. See [`tour_scheduling_phase2_band_a_readiness.md`](./tour_scheduling_phase2_band_a_readiness.md) § Band A closeout.
+
+**Not shipped in Band A:** External calendar OAuth, two-way sync, public booking redesign, host/internal notifications, ICS download API routes, settings UI for templates/config.
 
 ### Band B — Public Booking Hardening
 
@@ -587,12 +591,25 @@ Cards are **dependency-ordered**; each card should ship with tests + doc updates
 
 ### Manual — Band A (priority)
 
+**Staging QA checklist** (full steps in [`tour_scheduling_phase2_band_a_readiness.md`](./tour_scheduling_phase2_band_a_readiness.md) § Band A closeout):
+
+1. Apply migration `20260527150000_tour_scheduling_comm_scheduled_sends_source.sql`.
+2. Enable `org_settings.metadata.tour_comms.enabled = true` for test org; keep SMS disabled initially.
+3. Confirm a tour booking → verify confirmation `communication_messages` row and reminder `communication_scheduled_sends` rows.
+4. Reschedule → verify reschedule notification + reminder replacement (old pending rows canceled).
+5. Cancel → verify cancel notification + pending reminder cancellation.
+6. Run process-due cron or `POST /api/admin/communication-scheduled-sends/process-due` → verify reminder enqueues with `metadata.source = tour_scheduling` (not Task Assist).
+7. Retry orchestration / process-due → no duplicate immediate sends (idempotency key).
+8. Disable `tour_comms.enabled` → confirm no new sends/reminders.
+
+**Acceptance scenarios:**
+
 1. Admin confirms tour → opportunity `tour_scheduled` + mirror updated.
-2. Parent receives confirmation email with correct site-local time + ICS attachment.
+2. Parent receives confirmation email with correct site-local time + Google/Outlook add-to-calendar link (not ICS attachment).
 3. Reminder sends at configured offset; second cron pass does not duplicate.
-4. Reschedule updates email/ICS; old reminder canceled.
+4. Reschedule updates notification; old reminder canceled.
 5. Cancel sends cancel notification; mirror policy per D1 decision.
-6. Pending approval path: internal notification only if configured.
+6. Pending approval path: no parent reminders until confirm (default).
 
 ### Manual — Band B
 
