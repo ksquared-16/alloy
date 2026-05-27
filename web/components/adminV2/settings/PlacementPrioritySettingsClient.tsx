@@ -63,6 +63,8 @@ export default function PlacementPrioritySettingsClient() {
     const [profileId, setProfileId] = useState(DEFAULT_LAYER.profile_id ?? "");
     const [waitlistedLaneOnly, setWaitlistedLaneOnly] = useState(true);
     const [shadowMode, setShadowMode] = useState(false);
+    const [engineVersion, setEngineVersion] = useState<"v1" | "v2">("v1");
+    const [profileRevision, setProfileRevision] = useState<string>("");
     const [evaluationCap, setEvaluationCap] = useState(200);
     const [showBucketChip, setShowBucketChip] = useState(true);
     const [showSortHint, setShowSortHint] = useState(true);
@@ -103,6 +105,8 @@ export default function PlacementPrioritySettingsClient() {
             Array.isArray(qk) && qk.length === 1 && qk[0] === "waitlisted"
         );
         setShadowMode(L.shadow_mode ?? false);
+        setEngineVersion(L.engine_version === "v2" ? "v2" : "v1");
+        setProfileRevision(L.profile_revision ?? "");
         setEvaluationCap(typeof L.evaluation_cap === "number" ? L.evaluation_cap : 200);
         setShowBucketChip(L.display?.show_bucket_chip !== false);
         setShowSortHint(L.display?.show_sort_hint !== false);
@@ -134,6 +138,7 @@ export default function PlacementPrioritySettingsClient() {
         return {
             version: 1,
             enabled,
+            ...(engineVersion === "v2" ? { engine_version: "v2" as const } : {}),
             profile_id: id,
             profile_revision: revision,
             queue_keys_enabled: waitlistedLaneOnly ? ["waitlisted"] : ["waitlisted", "ready_to_enroll"],
@@ -192,7 +197,9 @@ export default function PlacementPrioritySettingsClient() {
                 </p>
                 <p className="mt-1 max-w-[40rem] text-[10px] leading-snug text-alloy-midnight/45">
                     Stored on the work unit as <code className="rounded bg-alloy-forge/8 px-1">placement_priority_v1</code>{" "}
-                    metadata (merged with existing work-unit metadata when you save).
+                    metadata (merged with existing work-unit metadata when you save). Phase 2 pilot uses{" "}
+                    <code className="rounded bg-alloy-forge/8 px-1">engine_version: &quot;v2&quot;</code> with{" "}
+                    <code className="rounded bg-alloy-forge/8 px-1">shadow_mode: true</code> until ops sign-off.
                 </p>
             </header>
 
@@ -225,6 +232,23 @@ export default function PlacementPrioritySettingsClient() {
                 >
                     <legend className="sr-only">Placement priority</legend>
 
+                    <div className="rounded-md border border-alloy-forge/10 bg-alloy-forge/[0.03] px-3 py-2 text-[11px] leading-snug text-alloy-midnight/65">
+                        <p className="font-semibold text-alloy-midnight/75">Effective config (this work unit)</p>
+                        <ul className="mt-1 list-inside list-disc space-y-0.5">
+                            <li>
+                                Engine: <code>{engineVersion}</code>
+                                {engineVersion === "v2" ? " — one waitlist row per child × cohort" : " — one row per opportunity"}
+                            </li>
+                            <li>
+                                Profile: <code>{profileId || "—"}</code>
+                                {profileRevision ? ` @ ${profileRevision}` : ""}
+                            </li>
+                            <li>
+                                Preview mode (shadow): <code>{shadowMode ? "on" : "off"}</code>
+                            </li>
+                        </ul>
+                    </div>
+
                     <label className="flex items-center gap-2 text-sm text-alloy-midnight">
                         <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
                         Enable waitlist priority for this work unit
@@ -249,6 +273,22 @@ export default function PlacementPrioritySettingsClient() {
                                 </option>
                             ))}
                         </select>
+                    </div>
+
+                    <div className="space-y-1">
+                        <span className="text-xs font-semibold text-alloy-midnight/70">Queue engine</span>
+                        <select
+                            className="w-full max-w-md rounded border border-alloy-forge/15 bg-white px-2 py-1.5 text-sm"
+                            value={engineVersion}
+                            onChange={(e) => setEngineVersion(e.target.value === "v2" ? "v2" : "v1")}
+                        >
+                            <option value="v1">V1 — opportunity rows (legacy)</option>
+                            <option value="v2">V2 — placement candidate rows (Phase 2)</option>
+                        </select>
+                        <p className="text-[11px] leading-snug text-alloy-midnight/55">
+                            V2 requires backfilled <code>placement_candidates</code>. Keep preview mode on for pilot unless
+                            ops explicitly tests live ordering.
+                        </p>
                     </div>
 
                     <label className="flex items-center gap-2 text-sm text-alloy-midnight">

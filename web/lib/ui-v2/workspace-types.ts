@@ -226,6 +226,8 @@ export type CrmCompactRowSemanticSlots = {
   familyNotePreview?: { timestamp: string | null; body: string } | null;
   /** Activity Signals V1 — config-driven stale hint (workflow_events + metadata). */
   activityStale?: { label: string; severity: "low" | "medium" | "high" } | null;
+  /** Card 4.6 — household / parent context under child primary identity on waitlist candidate rows. */
+  waitlistHouseholdContext?: string | null;
   /**
    * Work-unit queue row doctrine: ordered fact groups for CRM compact middle zone.
    * When non-empty, `QueueBlock` renders these via the shared fact-group renderer.
@@ -276,6 +278,83 @@ export type QueueItemVm = {
   semanticCrmCompact?: CrmCompactRowSemanticSlots;
   /** Optional placement preview — never a global rank (Card 7). */
   placementPriority?: QueueRowPlacementPriorityVm;
+  /** Child-first placement preview from `_placement_priority_v2` (legacy family_row parse — API). */
+  placementPriorityV2?: QueueRowPlacementPriorityV2Vm;
+  /** Card 4.6 — one waitlist list row per placement candidate. */
+  placementWaitlistCandidate?: QueueRowPlacementWaitlistCandidateVm;
+  /** Lifecycle entity for drawer/actions when `id` is a candidate-row composite key. */
+  opportunityId?: string;
+};
+
+/** Candidate-row waitlist queue presentation (`_placement_waitlist_row`). */
+export type QueueRowPlacementWaitlistCandidateVm = {
+  placementCandidateId: string;
+  opportunityId: string;
+  childDisplayName: string;
+  familyDisplayName: string;
+  parentDisplayName: string | null;
+  cohortKey: string;
+  cohortLabel: string;
+  cohortSectionTitle: string;
+  bucketLabel: string;
+  waitSinceLabel: string | null;
+  linkModeLabel: string | null;
+  isSyntheticFallback: boolean;
+  hasActiveOverride: boolean;
+  activeOverrideKinds: string[];
+  activeOverrides: Array<{
+    id: string;
+    overrideKind: string;
+    reason: string;
+  }>;
+  /** Card 5.1 — active pin override for manual waitlist position. */
+  hasManualPositionAdjustment: boolean;
+  manualAdjustmentReason: string | null;
+  pinOverrideId: string | null;
+  shadowMode: boolean;
+  /** Card 6 — optional forecast hint labels (informational only). */
+  forecastHints: string[];
+  siblingLabel: string | null;
+  siblingCohorts: Array<{
+    placementCandidateId: string;
+    childDisplayName: string;
+    cohortLabel: string;
+    linkModeLabel: string | null;
+  }>;
+};
+
+/** One child placement line under a family row (read-only). */
+export type QueueRowPlacementCandidateLineVm = {
+  placementCandidateId: string;
+  childDisplayName: string;
+  cohortLabel: string;
+  cohortKey: string;
+  bucketLabel: string;
+  waitSinceLabel: string | null;
+  linkMode: "independent" | "preferred_together" | "strictly_together";
+  linkModeLabel: string | null;
+  hasActiveOverride: boolean;
+  activeOverrideKinds: string[];
+  isSyntheticFallback: boolean;
+  /** Preformatted line for list UI. */
+  detailLine: string;
+};
+
+/** Family-row placement V2 preview (`_placement_priority_v2`). */
+export type QueueRowPlacementPriorityV2Vm = {
+  evaluated: boolean;
+  shadowMode: boolean;
+  fallbackToV1: boolean;
+  primaryCohortLabel: string;
+  primaryCohortSectionTitle: string;
+  waitlistProgramShortLabel: string;
+  familyBucketLabel: string;
+  childCountLabel: string;
+  candidateCount: number;
+  candidates: QueueRowPlacementCandidateLineVm[];
+  blockedByStrictLink: boolean;
+  strictLinkCrossOpportunityIncomplete: boolean;
+  showPlacementV2Badge: boolean;
 };
 
 /**

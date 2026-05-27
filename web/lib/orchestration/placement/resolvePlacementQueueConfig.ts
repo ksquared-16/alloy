@@ -35,6 +35,7 @@ export type ResolvedPlacementQueueConfig =
     | {
           status: "enabled";
           queue_key: string;
+          engine_version: "v1" | "v2";
           profile: PlacementProfile;
           merged: MergedPlacementPriorityConfig;
           options: PlacementQueueEvaluationOptions;
@@ -70,12 +71,22 @@ export function resolvePlacementQueueConfig(params: ResolvePlacementQueueConfigP
         };
     }
 
+    const engineVersion = merged.engine_version === "v2" ? "v2" : "v1";
+
     const profile = getPlacementProfileFromRegistry(merged.profile_id.trim());
     if (!profile) {
         return {
             status: "disabled",
             queue_key: qk,
             reason: `unknown profile_id: ${merged.profile_id}`,
+        };
+    }
+
+    if (engineVersion === "v2" && !merged.profile_id.trim().endsWith("_v2")) {
+        return {
+            status: "disabled",
+            queue_key: qk,
+            reason: `engine_version v2 requires a v2 preset profile_id (got ${merged.profile_id})`,
         };
     }
 
@@ -129,6 +140,7 @@ export function resolvePlacementQueueConfig(params: ResolvePlacementQueueConfigP
     return {
         status: "enabled",
         queue_key: qk,
+        engine_version: engineVersion,
         profile: profileForEval,
         merged,
         options: {

@@ -35,6 +35,9 @@ const OPPORTUNITY_EVENT_TYPE_LABELS: Record<string, string> = {
     opportunity_enrollment_packet_sent: "Enrollment packet sent",
     opportunity_enrollment_packet_submitted_for_review: "Packet submitted for review",
     opportunity_enrollment_packet_review_decision: "Packet review decision",
+    opportunity_waitlist_manual_adjustment_created: "Waitlist position manually adjusted",
+    opportunity_waitlist_manual_adjustment_updated: "Waitlist position manually adjusted",
+    opportunity_waitlist_manual_adjustment_released: "Waitlist manual adjustment removed",
 };
 
 /** Default options for opportunity workflow_events and related UI. */

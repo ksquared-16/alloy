@@ -50,7 +50,10 @@ export function QueueRowPlacementPriorityStrip({ preview, layout = "default", st
             >
                 <div className="adminv2-ws-queue-placement-strip__row">
                     {hasScopedPosition ? (
-                        <span className="adminv2-ws-queue-placement-position" aria-hidden>
+                        <span
+                            className="adminv2-ws-queue-placement-position"
+                            title="Queue position in current view — not a permanent rank"
+                        >
                             #{preview.scopedWaitlistPosition}
                         </span>
                     ) : null}
@@ -92,7 +95,10 @@ export function QueueRowPlacementPriorityStrip({ preview, layout = "default", st
             ) : null}
             <div className="adminv2-ws-queue-placement-strip__row adminv2-ws-queue-placement-strip__row--tight">
                 {hasScopedPosition ? (
-                    <span className="adminv2-ws-queue-placement-position" aria-hidden>
+                    <span
+                        className="adminv2-ws-queue-placement-position"
+                        title="Queue position in current view — not a permanent rank"
+                    >
                         #{preview.scopedWaitlistPosition}
                     </span>
                 ) : null}

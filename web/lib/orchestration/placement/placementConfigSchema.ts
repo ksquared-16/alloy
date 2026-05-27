@@ -13,6 +13,10 @@ export const PLACEMENT_EVALUATION_CAP_DEFAULT = 800;
 
 export const missingFactBehaviorSchema = z.enum(["inherit", "strict", "soft"]);
 
+/** Evaluator / queue projection engine — distinct from layer `version` (config schema revision). */
+export const placementEngineVersionSchema = z.enum(["v1", "v2"]);
+export type PlacementEngineVersion = z.infer<typeof placementEngineVersionSchema>;
+
 export const placementPriorityDisplayConfigSchema = z
     .object({
         show_bucket_chip: z.boolean().optional(),
@@ -28,6 +32,11 @@ export const placementPriorityLayerSchema = z
         version: z.literal(PLACEMENT_PRIORITY_CONFIG_VERSION),
         /** Default false when layer missing — effective merge sets disabled unless explicitly enabled. */
         enabled: z.boolean().optional(),
+        /**
+         * Placement evaluator engine (`v1` = opportunity-only, `v2` = placement_candidates + family rollup).
+         * Omitted → `v1` when enabled.
+         */
+        engine_version: placementEngineVersionSchema.optional(),
         profile_id: z.string().min(1).optional(),
         /** Pin to a preset revision; mismatch with registry preset emits resolve warning (future). */
         profile_revision: z.string().min(1).optional(),
@@ -99,6 +108,7 @@ export function parsePlacementPriorityLayerStrict(
 
 export type MergedPlacementPriorityConfig = {
     enabled: boolean;
+    engine_version: PlacementEngineVersion;
     profile_id: string | null;
     profile_revision: string | null;
     queue_keys_enabled: string[] | null;
@@ -114,6 +124,7 @@ export type MergedPlacementPriorityConfig = {
 
 const DEFAULT_MERGED: MergedPlacementPriorityConfig = {
     enabled: false,
+    engine_version: "v1",
     profile_id: null,
     profile_revision: null,
     queue_keys_enabled: null,
@@ -129,6 +140,7 @@ function mergeLayer(base: MergedPlacementPriorityConfig, layer: PlacementPriorit
     if (!layer) return base;
     return {
         enabled: layer.enabled !== undefined ? layer.enabled : base.enabled,
+        engine_version: layer.engine_version !== undefined ? layer.engine_version : base.engine_version,
         profile_id: layer.profile_id !== undefined ? layer.profile_id : base.profile_id,
         profile_revision: layer.profile_revision !== undefined ? layer.profile_revision : base.profile_revision,
         queue_keys_enabled:

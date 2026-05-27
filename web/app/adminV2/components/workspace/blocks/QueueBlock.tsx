@@ -7,6 +7,7 @@ import type {
   QueueItemQuickActionVm,
   QueueItemVm,
   QueueRowPlacementPriorityVm,
+  QueueRowPlacementPriorityV2Vm,
   QueueVm,
   WorkUnitQueueCrmFactColumnGridVm,
   WorkUnitQueueCrmFactGroupKind,
@@ -25,12 +26,19 @@ import { normalizePreviewLooseDateTokens } from "@/lib/adminFormatters";
 import { CRM_COMPACT_VALUE_DOT_SEP } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 import { QUEUE_PREVIEW_BOUNDARY_LABEL } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceViewModels";
 import { QueueRowPlacementPriorityStrip } from "@/app/adminV2/components/workspace/blocks/QueueRowPlacementPriorityStrip";
+import {
+    QueueRowPlacementCandidateContext,
+    QueueRowPlacementCandidateMetaChips,
+} from "@/app/adminV2/components/workspace/blocks/QueueRowPlacementCandidatePanel";
+import { QueueRowPlacementManualOrderControls } from "@/app/adminV2/components/workspace/blocks/QueueRowPlacementManualOrderControls";
+import { QueueRowPlacementPriorityV2Panel } from "@/app/adminV2/components/workspace/blocks/QueueRowPlacementPriorityV2Panel";
 import { WorkUnitQueueLaneRowSkeleton } from "@/components/admin/workspace/WorkUnitQueueCompactRowSkeleton";
 import { ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT } from "@/lib/ui-v2/adminV2LoadingGeometry";
 import {
     formatPlacementGroupHeaderTitle,
     placementWaitlistGroupRowMode,
 } from "@/lib/ui-v2/queuePlacementPriorityPresentation";
+import { buildPlacementV2QueueHint } from "@/lib/ui-v2/queuePlacementPriorityV2Presentation";
 
 type Props = {
   queue: QueueVm;
@@ -52,6 +60,10 @@ function queueRowEntityPayload(queue: QueueVm): Record<string, unknown> {
 function mergeQueueActionPayload(queue: QueueVm, extra?: Record<string, unknown>): Record<string, unknown> | undefined {
   const merged = { ...(extra ?? {}), ...queueRowEntityPayload(queue) };
   return Object.keys(merged).length ? merged : undefined;
+}
+
+function queueItemOpportunityId(item: QueueItemVm): string {
+  return item.opportunityId?.trim() || item.id;
 }
 
 function fireQueueRowOpenRecord(
@@ -677,6 +689,8 @@ export function CrmCompactQueuePreview({
   operationalAttentionBadge = false,
   scanMode = false,
   waitlistPlacementPreview,
+  waitlistPlacementV2,
+  waitlistCandidateRow,
   waitlistStatusLabel,
 }: {
   slots: CrmCompactRowSemanticSlots;
@@ -686,6 +700,8 @@ export function CrmCompactQueuePreview({
   /** Work-unit lane: minimal left column — status, operational attention, next hint; detail belongs in drawer. */
   scanMode?: boolean;
   waitlistPlacementPreview?: QueueRowPlacementPriorityVm;
+  waitlistPlacementV2?: QueueRowPlacementPriorityV2Vm;
+  waitlistCandidateRow?: import("@/lib/ui-v2/workspace-types").QueueRowPlacementWaitlistCandidateVm;
   waitlistStatusLabel?: string;
 }) {
   const stageStatus =
@@ -721,7 +737,7 @@ export function CrmCompactQueuePreview({
   const showNoteFooter = scanMode ? false : Boolean(hasStructuredNote || flatNote);
 
   const bodyClass =
-    `adminv2-ws-crm-queue-preview__body${hasMiddle ? "" : " adminv2-ws-crm-queue-preview__body--identity-only"}`;
+    `adminv2-ws-crm-queue-preview__body${hasMiddle || waitlistCandidateRow ? "" : " adminv2-ws-crm-queue-preview__body--identity-only"}`;
 
   const hasFooter = scanMode
     ? Boolean(slots.lastActivity?.trim())
@@ -750,7 +766,13 @@ export function CrmCompactQueuePreview({
                 </span>
               </div>
             ) : null}
-            {waitlistPlacementPreview ? (
+            {!waitlistCandidateRow && waitlistPlacementV2 ? (
+              <QueueRowPlacementPriorityV2Panel
+                preview={waitlistPlacementV2}
+                layout="statusColumn"
+                statusLabel={waitlistStatusLabel}
+              />
+            ) : !waitlistCandidateRow && waitlistPlacementPreview ? (
               <QueueRowPlacementPriorityStrip
                 preview={waitlistPlacementPreview}
                 layout="statusColumn"
@@ -761,7 +783,15 @@ export function CrmCompactQueuePreview({
               <span className="adminv2-ws-crm-queue-preview__title" title={slots.primaryIdentity}>
                 {slots.primaryIdentity}
               </span>
-              {slots.locationContext?.trim() ? (
+              {slots.waitlistHouseholdContext?.trim() ? (
+                <span
+                  className="adminv2-ws-crm-queue-preview__household-context text-[11px] text-alloy-midnight/65"
+                  data-queue-preview-slot="waitlist_household"
+                >
+                  {slots.waitlistHouseholdContext.trim()}
+                </span>
+              ) : null}
+              {!waitlistCandidateRow && slots.locationContext?.trim() ? (
                 <span
                   className="adminv2-ws-crm-queue-preview__location-badge shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/70"
                   data-queue-preview-slot="location"
@@ -770,6 +800,7 @@ export function CrmCompactQueuePreview({
                 </span>
               ) : null}
             </div>
+            {waitlistCandidateRow ? <QueueRowPlacementCandidateContext row={waitlistCandidateRow} /> : null}
             {slots.attentionReason?.trim() && !operationalRead?.operationalRead ? (
               <div className="adminv2-ws-crm-queue-preview__attention-headline">{slots.attentionReason.trim()}</div>
             ) : null}
@@ -802,11 +833,17 @@ export function CrmCompactQueuePreview({
             ) : null}
           </div>
 
-          {hasMiddle ? (
+          {hasMiddle || waitlistCandidateRow ? (
             <div className="adminv2-ws-crm-queue-preview__zone adminv2-ws-crm-queue-preview__zone--middle">
               {useDoctrine
                 ? slots.crmFactGroups!.map((g, i) => <CrmWorkUnitFactGroup key={i} group={g} />)
                 : <LegacyCrmCompactQueueMiddle slots={slots} />}
+              {waitlistCandidateRow ? (
+                <QueueRowPlacementCandidateMetaChips
+                  row={waitlistCandidateRow}
+                  siteLabel={slots.locationContext}
+                />
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -885,11 +922,17 @@ export function CrmCompactQueuePreview({
           {slots.activityStale ? <span className={staleToneResolved}>{slots.activityStale.label}</span> : null}
         </div>
 
-        {hasMiddle ? (
+        {hasMiddle || waitlistCandidateRow ? (
           <div className="adminv2-ws-crm-queue-preview__zone adminv2-ws-crm-queue-preview__zone--middle">
             {useDoctrine
               ? slots.crmFactGroups!.map((g, i) => <CrmWorkUnitFactGroup key={i} group={g} />)
               : <LegacyCrmCompactQueueMiddle slots={slots} />}
+            {waitlistCandidateRow ? (
+              <QueueRowPlacementCandidateMetaChips
+                row={waitlistCandidateRow}
+                siteLabel={slots.locationContext}
+              />
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -951,6 +994,19 @@ function WorkUnitQueueLane({
   const [refreshMinHeightPx, setRefreshMinHeightPx] = useState<number>();
   /** Client-only collapsed waitlist program/room groups (placement sections). */
   const [collapsedPlacementGroups, setCollapsedPlacementGroups] = useState<Set<string>>(() => new Set());
+  const v2PlacementCollapseInitRef = useRef(false);
+
+  const hasV2PlacementRows = useMemo(
+    () =>
+      queue.items.some(
+        (i) => i.placementWaitlistCandidate != null || i.placementPriorityV2?.showPlacementV2Badge
+      ),
+    [queue.items]
+  );
+  const hasCandidatePlacementRows = useMemo(
+    () => queue.items.some((i) => i.placementWaitlistCandidate != null),
+    [queue.items]
+  );
 
   useLayoutEffect(() => {
     if (!queue.rowsRefreshing) {
@@ -973,15 +1029,62 @@ function WorkUnitQueueLane({
     return m;
   }, [queue.items]);
 
+  const placementCandidateCohortMeta = useMemo(() => {
+    const bySection = new Map<string, string[]>();
+    for (const item of queue.items) {
+      const sk = workUnitSectionKey(item);
+      if (!sk || !item.placementWaitlistCandidate) continue;
+      const list = bySection.get(sk) ?? [];
+      list.push(item.id);
+      bySection.set(sk, list);
+    }
+    const meta = new Map<string, { indexInSection: number; sectionSize: number }>();
+    for (const ids of bySection.values()) {
+      ids.forEach((id, i) => meta.set(id, { indexInSection: i, sectionSize: ids.length }));
+    }
+    return meta;
+  }, [queue.items]);
+
   let lastSectionKey: string | undefined;
 
   const showQueueHeader = Boolean(queue.title?.trim());
   const placementShowBucketChip = queue.placementDisplay?.show_bucket_chip !== false;
   const placementShowSortHint = queue.placementDisplay?.show_sort_hint !== false;
   const waitlistPlacementSections = useMemo(
-    () => queue.items.some((i) => i.placementPriority != null && !i.placementPriority.evaluateError),
+    () =>
+      queue.items.some(
+        (i) =>
+          i.placementWaitlistCandidate != null ||
+          (i.placementPriorityV2?.showPlacementV2Badge === true) ||
+          (i.placementPriority != null && !i.placementPriority.evaluateError)
+      ),
     [queue.items]
   );
+
+  useLayoutEffect(() => {
+    if (!hasV2PlacementRows || v2PlacementCollapseInitRef.current) return;
+    const keys = new Set<string>();
+    for (const item of queue.items) {
+      const k = workUnitSectionKey(item);
+      if (k) keys.add(k);
+    }
+    if (keys.size > 0) {
+      setCollapsedPlacementGroups(keys);
+      v2PlacementCollapseInitRef.current = true;
+    }
+  }, [hasV2PlacementRows, queue.items]);
+
+  const placementLaneHint = useMemo(() => {
+    const v2Shadow = queue.items.some((i) => i.placementPriorityV2?.shadowMode === true);
+    if (hasV2PlacementRows) {
+      return buildPlacementV2QueueHint({
+        shadowMode: v2Shadow,
+        placementProjectionHint: queue.placementProjectionHint,
+        candidateRowLayout: hasCandidatePlacementRows,
+      });
+    }
+    return queue.placementProjectionHint;
+  }, [hasV2PlacementRows, hasCandidatePlacementRows, queue.items, queue.placementProjectionHint]);
   return (
     <section
       className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--primary adminv2-ws-wu-queue-shell"
@@ -1006,9 +1109,9 @@ function WorkUnitQueueLane({
           {queue.sortCaption}
         </p>
       ) : null}
-      {placementShowSortHint && queue.placementProjectionHint?.trim() ? (
+      {placementShowSortHint && placementLaneHint?.trim() ? (
         <p className="adminv2-ws-wu-queue-placement-hint" role="note">
-          {queue.placementProjectionHint.trim()}
+          {placementLaneHint.trim()}
         </p>
       ) : null}
       <div
@@ -1057,6 +1160,11 @@ function WorkUnitQueueLane({
           const crm = item.semanticCrmCompact;
           const valueShown = (crm?.commercialValue ?? item.valueLabel)?.trim() ?? "";
           const hasValue = Boolean(valueShown);
+          const actionEntityId = queueItemOpportunityId(item);
+          const cohortMeta =
+            item.placementWaitlistCandidate && placementShowBucketChip
+              ? placementCandidateCohortMeta.get(item.id)
+              : undefined;
 
           const headerCfg = sectionKey ? queue.workUnitGroupHeaders?.[sectionKey] : undefined;
           const count = sectionKey ? (groupCounts.get(sectionKey) ?? 0) : 0;
@@ -1128,32 +1236,61 @@ function WorkUnitQueueLane({
                 data-ws-needs-attention={attentionAccent ? "true" : undefined}
                 role="button"
                 tabIndex={0}
-                onMouseEnter={() => prefetchOpportunityQueueRowIntent(queue, item.id, opportunityDrawerWorkspaceContext)}
-                onMouseDown={() => prefetchOpportunityQueueRowIntent(queue, item.id, opportunityDrawerWorkspaceContext)}
-                onFocus={() => prefetchOpportunityQueueRowIntent(queue, item.id, opportunityDrawerWorkspaceContext)}
-                onClick={() => fireQueueRowOpenRecord(queue, item.id, onAction, "card")}
+                onMouseEnter={() => prefetchOpportunityQueueRowIntent(queue, actionEntityId, opportunityDrawerWorkspaceContext)}
+                onMouseDown={() => prefetchOpportunityQueueRowIntent(queue, actionEntityId, opportunityDrawerWorkspaceContext)}
+                onFocus={() => prefetchOpportunityQueueRowIntent(queue, actionEntityId, opportunityDrawerWorkspaceContext)}
+                onClick={() => fireQueueRowOpenRecord(queue, actionEntityId, onAction, "card")}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
-                    fireQueueRowOpenRecord(queue, item.id, onAction, "keyboard");
+                    fireQueueRowOpenRecord(queue, actionEntityId, onAction, "keyboard");
                   }
                 }}
               >
                 {crm ? (
-                  <div className="adminv2-ws-enrollment-crm-row adminv2-ws-enrollment-crm-row--split" data-enrollment-row-layout="split_actions">
+                  <div
+                    className={`adminv2-ws-enrollment-crm-row adminv2-ws-enrollment-crm-row--split${
+                      item.placementWaitlistCandidate && placementShowBucketChip
+                        ? " adminv2-ws-enrollment-crm-row--manual-order"
+                        : ""
+                    }`}
+                    data-enrollment-row-layout="split_actions"
+                  >
+                    {cohortMeta ? (
+                      <QueueRowPlacementManualOrderControls
+                        row={item.placementWaitlistCandidate!}
+                        indexInSection={cohortMeta.indexInSection}
+                        sectionSize={cohortMeta.sectionSize}
+                      />
+                    ) : null}
                     <div className="adminv2-ws-enrollment-crm-row__content">
                       <CrmCompactQueuePreview
                         slots={crm}
                         urgencyTier={tier}
                         operationalAttentionBadge={attentionAccent}
                         scanMode
+                        waitlistCandidateRow={
+                          item.placementWaitlistCandidate && placementShowBucketChip
+                            ? item.placementWaitlistCandidate
+                            : undefined
+                        }
+                        waitlistPlacementV2={
+                          !item.placementWaitlistCandidate && item.placementPriorityV2 && placementShowBucketChip
+                            ? item.placementPriorityV2
+                            : undefined
+                        }
                         waitlistPlacementPreview={
-                          item.placementPriority && placementShowBucketChip ? item.placementPriority : undefined
+                          !item.placementWaitlistCandidate &&
+                          !item.placementPriorityV2 &&
+                          item.placementPriority &&
+                          placementShowBucketChip
+                            ? item.placementPriority
+                            : undefined
                         }
                         waitlistStatusLabel={crm.statusLabel?.trim() || undefined}
                       />
                     </div>
-                    {rowQuickActions.length ? (
+                    {(rowQuickActions.length) ? (
                       <div className="adminv2-ws-enrollment-crm-row__actions" role="group" aria-label="Actions">
                         <div className="adminv2-ws-enrollment-crm-row__action-stack">
                           {rowQuickActions.map((qa) => {
@@ -1173,7 +1310,7 @@ function WorkUnitQueueLane({
                                   onAction({
                                     type: "queue.item.action",
                                     queueId: queue.id,
-                                    itemId: item.id,
+                                    itemId: actionEntityId,
                                     actionId: dispatchId,
                                     payload: mergeQueueActionPayload(queue, qa.payload),
                                   });
@@ -1242,7 +1379,11 @@ function WorkUnitQueueLane({
                         ))}
                       </ul>
                     ) : null}
-                    {item.placementPriority && placementShowBucketChip ? (
+                    {item.placementWaitlistCandidate && placementShowBucketChip ? (
+                      <QueueRowPlacementCandidateContext row={item.placementWaitlistCandidate} />
+                    ) : item.placementPriorityV2 && placementShowBucketChip ? (
+                      <QueueRowPlacementPriorityV2Panel preview={item.placementPriorityV2} />
+                    ) : item.placementPriority && placementShowBucketChip ? (
                       <QueueRowPlacementPriorityStrip preview={item.placementPriority} />
                     ) : null}
                   </div>
@@ -1274,7 +1415,7 @@ function WorkUnitQueueLane({
                                   onAction({
                                     type: "queue.item.action",
                                     queueId: queue.id,
-                                    itemId: item.id,
+                                    itemId: actionEntityId,
                                     actionId: qaDispatchId,
                                     payload: mergeQueueActionPayload(queue, qa.payload),
                                   });
@@ -1295,7 +1436,7 @@ function WorkUnitQueueLane({
                             onAction({
                               type: "queue.item.action",
                               queueId: queue.id,
-                              itemId: item.id,
+                              itemId: actionEntityId,
                               actionId: "open_record",
                               payload: mergeQueueActionPayload(queue),
                             });

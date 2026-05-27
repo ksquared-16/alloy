@@ -536,6 +536,37 @@ export type WorkUnitQueueCrmCompactRowSlice = {
  * Live adapter for work-unit queue rows (`page.tsx` CRM compact path): structured children, display fallbacks,
  * fact groups, and dev-only consistency warn when Program is non-empty but Child resolves empty.
  */
+/**
+ * CRM compact slice for placement candidate queue rows — contact/timing only;
+ * child/program identity lives on `_placement_waitlist_row` / candidate panel.
+ */
+export function buildWorkUnitQueueCrmCompactRowSliceForPlacementCandidate(
+    row: Record<string, unknown>,
+    want: (f: QueueUiRowPreviewField) => boolean,
+    rowPreviewFieldLabels: Record<string, string> | null | undefined,
+    candidate: import("@/lib/ui-v2/workspace-types").QueueRowPlacementWaitlistCandidateVm
+): WorkUnitQueueCrmCompactRowSlice {
+    const crmPresentation = buildCrmQueueRowPreviewPresentation(row, want, rowPreviewFieldLabels);
+    const crmFactGroups = buildCrmCompactWorkUnitFactGroups({
+        row,
+        want,
+        rowPreviewFieldLabels,
+        childrenLines: null,
+        childNameSingle: candidate.childDisplayName,
+        programSingle: candidate.cohortLabel,
+        roomContext: null,
+        ageBandContext: crmPresentation.ageBandContext ?? null,
+    });
+    return {
+        multiChildren: false,
+        childrenLinesForVm: null,
+        programDeduped: candidate.cohortLabel,
+        childDisplayLine: candidate.childDisplayName,
+        crmPresentation,
+        crmFactGroups,
+    };
+}
+
 export function buildWorkUnitQueueCrmCompactRowSlice(
     row: Record<string, unknown>,
     want: (f: QueueUiRowPreviewField) => boolean,

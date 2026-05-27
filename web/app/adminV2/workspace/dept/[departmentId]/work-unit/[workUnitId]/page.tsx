@@ -105,7 +105,10 @@ import { resolveQueueOperationalReadSlot } from "@/lib/adminV2/bos/recommendatio
 import { resolveQueueRowPreviewActionsForWorkUnit } from "@/lib/ui-v2/enrollmentQueueRowPreviewPolicy";
 import { mergeQueueRowQuickActions } from "@/lib/workspace/viewModels/mergeQueueRowQuickActions";
 import { buildRealOpportunityWorkUnitWorkspaceModel } from "@/lib/ui-v2/adapters/realWorkUnitFromOpportunities";
-import { buildWorkUnitQueueCrmCompactRowSlice } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
+import {
+    buildWorkUnitQueueCrmCompactRowSlice,
+    buildWorkUnitQueueCrmCompactRowSliceForPlacementCandidate,
+} from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 import { mergeEnrollmentRightRailActions } from "@/lib/workspace/viewModels/enrollmentRightRailMerge";
 import { fetchWorkspaceRightRailResolvedActions } from "@/lib/workspace/fetchWorkspaceRightRailResolvedActions";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
@@ -208,6 +211,12 @@ import {
     formatPlacementWaitlistSectionLabel,
     parseQueueRowPlacementPriorityVm,
 } from "@/lib/ui-v2/queuePlacementPriorityPresentation";
+import { parseQueueRowPlacementPriorityV2Vm } from "@/lib/ui-v2/queuePlacementPriorityV2Presentation";
+import {
+    buildPlacementWaitlistWorkUnitGroupHeaders,
+    parsePlacementWaitlistCandidateRowVm,
+} from "@/lib/ui-v2/queuePlacementWaitlistCandidatePresentation";
+import { readOpportunityIdFromQueueRow } from "@/lib/orchestration/placement/placementWaitlistCandidateRowProjection";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
 
@@ -2510,7 +2519,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
         const liveVmItems = (
             sourceRows as Array<Record<string, unknown> & { id?: string }>
         ).map((r) => {
-                const rid = r.id as string;
+                const listRowId = r.id as string;
+                const opportunityId = readOpportunityIdFromQueueRow(r);
+                const waitlistCandidate = parsePlacementWaitlistCandidateRowVm(
+                    (r as { _placement_waitlist_row?: unknown })._placement_waitlist_row
+                );
+                const rid = opportunityId || listRowId;
                 const title =
                     typeof r?.name === "string" && r.name.trim()
                         ? r.name.trim()
@@ -2600,12 +2614,34 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 }
 
                 const needsAttentionRow = queueRowHasOperationalAttention(r as Record<string, unknown>);
-                const placementPriority = parseQueueRowPlacementPriorityVm(
+                const placementPriorityV2Raw = (r as { _placement_priority_v2?: unknown })._placement_priority_v2;
+                const placementPriorityV2 = parseQueueRowPlacementPriorityV2Vm(placementPriorityV2Raw);
+                const placementPriorityV1 = parseQueueRowPlacementPriorityVm(
                     (r as { _placement_priority?: unknown })._placement_priority
                 );
+                const usePlacementV2 =
+                    !waitlistCandidate &&
+                    placementPriorityV2?.evaluated === true &&
+                    placementPriorityV2.fallbackToV1 !== true;
+                const placementPriority = usePlacementV2 || waitlistCandidate ? undefined : placementPriorityV1;
+
+                const householdContextParts = [
+                    waitlistCandidate?.familyDisplayName,
+                    waitlistCandidate?.parentDisplayName,
+                ].filter(Boolean);
+                const waitlistHouseholdContext = waitlistCandidate
+                    ? waitlistCandidate.parentDisplayName?.trim() || null
+                    : householdContextParts.length
+                      ? householdContextParts.join(" · ")
+                      : null;
+
+                const rowPrimaryIdentity = familyTitle;
+                const rowTitle = familyTitle;
+
                 return {
-                    id: rid,
-                    title: familyTitle,
+                    id: listRowId,
+                    opportunityId: rid,
+                    title: rowTitle,
                     subtitle: previewCfg.variant === "basic" ? (basicSubtitleParts.filter(Boolean).join(" · ") || undefined) : undefined,
                     needsOperationalAttention: needsAttentionRow,
                     urgencyTier:
@@ -2622,11 +2658,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     semanticCrmCompact:
                         previewCfg.variant === "crm_compact"
                             ? (() => {
-                                  const slice = buildWorkUnitQueueCrmCompactRowSlice(
-                                      r as Record<string, unknown>,
-                                      want,
-                                      queueUi?.row_preview.fieldLabels
-                                  );
+                                  const slice = waitlistCandidate
+                                      ? buildWorkUnitQueueCrmCompactRowSliceForPlacementCandidate(
+                                            r as Record<string, unknown>,
+                                            want,
+                                            queueUi?.row_preview.fieldLabels,
+                                            waitlistCandidate
+                                        )
+                                      : buildWorkUnitQueueCrmCompactRowSlice(
+                                            r as Record<string, unknown>,
+                                            want,
+                                            queueUi?.row_preview.fieldLabels
+                                        );
                                   const {
                                       crmPresentation,
                                       crmFactGroups,
@@ -2636,13 +2679,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                       childDisplayLine,
                                   } = slice;
                                   return {
-                                      primaryIdentity: familyTitle,
-                                      childrenLines: childrenLinesForVm,
-                                      childName: want("child_name")
-                                          ? multiChildren
-                                              ? null
-                                              : childDisplayLine || childrenLinesForVm?.[0]?.primary || null
-                                          : null,
+                                      primaryIdentity: rowPrimaryIdentity,
+                                      waitlistHouseholdContext,
+                                      childrenLines: waitlistCandidate ? null : childrenLinesForVm,
+                                      childName: waitlistCandidate
+                                          ? waitlistCandidate.childDisplayName
+                                          : want("child_name")
+                                            ? multiChildren
+                                                ? null
+                                                : childDisplayLine || childrenLinesForVm?.[0]?.primary || null
+                                            : null,
                                       stageLabel: null,
                                       statusLabel: want("status") ? statusLabel || null : null,
                                       nextStep:
@@ -2653,11 +2699,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                       commercialValue: null,
                                       ...crmPresentation,
                                       crmFactGroups,
-                                      programContext: want("program")
-                                          ? childrenLinesForVm?.length || multiChildren
-                                              ? null
-                                              : programDeduped
-                                          : null,
+                                      programContext: waitlistCandidate
+                                          ? waitlistCandidate.cohortLabel
+                                          : want("program")
+                                            ? childrenLinesForVm?.length || multiChildren
+                                                ? null
+                                                : programDeduped
+                                            : null,
                                       roomContext: null,
                                       locationContext: locationLabel || null,
                                       attentionReason: attentionReason || null,
@@ -2669,13 +2717,25 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                   };
                               })()
                             : undefined,
-                    ...(placementPriority
+                    ...(placementPriority ? { placementPriority } : {}),
+                    ...(waitlistCandidate ? { placementWaitlistCandidate: waitlistCandidate } : {}),
+                    ...(placementPriorityV2 && usePlacementV2 ? { placementPriorityV2 } : {}),
+                    ...(waitlistCandidate
                         ? {
-                              placementPriority,
-                              /** Program / room section headers (loaded page) — {@link QueueBlock} grouping. */
-                              groupLabel: formatPlacementWaitlistSectionLabel(placementPriority.programGroupSectionTitle),
+                              groupKey: waitlistCandidate.cohortKey,
+                              groupLabel: waitlistCandidate.cohortSectionTitle,
                           }
-                        : {}),
+                        : usePlacementV2 && placementPriorityV2
+                          ? {
+                                groupLabel: placementPriorityV2.primaryCohortSectionTitle,
+                            }
+                          : placementPriority
+                            ? {
+                                  groupLabel: formatPlacementWaitlistSectionLabel(
+                                      placementPriority.programGroupSectionTitle
+                                  ),
+                              }
+                            : {}),
                 };
             });
 
@@ -2747,6 +2807,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 ? queueItems.placement_projection_diagnostics
                 : undefined;
 
+        const hasPlacementCandidateRows = liveVmItems.some((i) => i.placementWaitlistCandidate != null);
+        const workUnitGroupHeaders = hasPlacementCandidateRows
+            ? buildPlacementWaitlistWorkUnitGroupHeaders(liveVmItems)
+            : undefined;
+
         return {
             workspaceLevel: "work_unit",
             workUnitId: workUnit.id,
@@ -2791,6 +2856,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 queueEntityType: entity,
                 rowsLoading: false,
                 rowsRefreshing,
+                ...(workUnitGroupHeaders ? { workUnitGroupHeaders } : {}),
             },
             workSummary: null,
             actionsRail: enrollmentActionsRail(),

@@ -314,10 +314,16 @@ export function evaluatePlacementPriority(input: PlacementEvaluateInput): Placem
     if (primaryGroupKey) {
         const gc = factSortComponent(input.facts, primaryGroupKey, "asc");
         sortTuple.push(gc);
-        const gfv = input.facts[primaryGroupKey];
-        if (gfv?.presence === "present" && gfv.value != null) {
-            const raw = String(gfv.value).trim();
-            programRoomGroupLabel = raw.length ? raw : null;
+        const labelFact = input.facts.program_room_group_label;
+        if (labelFact?.presence === "present" && labelFact.value != null) {
+            const lab = String(labelFact.value).trim();
+            programRoomGroupLabel = lab.length ? lab : null;
+        } else {
+            const gfv = input.facts[primaryGroupKey];
+            if (gfv?.presence === "present" && gfv.value != null) {
+                const raw = String(gfv.value).trim();
+                programRoomGroupLabel = raw.length ? raw : null;
+            }
         }
     }
     sortTuple.push(bucket.priority_order);

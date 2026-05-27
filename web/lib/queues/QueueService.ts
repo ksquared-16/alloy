@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { validateQueueDefinition, type QueueConfig, type QueueDefinitionV1, type QueueFilter } from "@/lib/config/queueDefinitionSchema";
 import type {
@@ -56,6 +57,10 @@ import { buildQueueServiceAttentionSemantics } from "@/lib/workspace/opportunity
 import { logQueueSummaryPerf } from "@/lib/queues/queueSummaryPerf";
 import { applyPlacementToOpportunityQueueRows } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
 import type { WorkUnitPlacementQueueDiagnostics } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
+import { applyPlacementV2ToOpportunityQueueRows } from "@/lib/orchestration/placement/applyPlacementV2ToOpportunityQueueRows";
+import { bulkLoadPlacementCandidatesByOpportunity } from "@/lib/orchestration/placement/bulkLoadPlacementCandidatesByOpportunity";
+import { expandOpportunityRowsToPlacementCandidateRows } from "@/lib/orchestration/placement/placementWaitlistCandidateRowProjection";
+import { sortPlacementCandidateQueueRows } from "@/lib/orchestration/placement/sortPlacementCandidateQueueRows";
 import { resolvePlacementQueueConfig } from "@/lib/orchestration/placement/resolvePlacementQueueConfig";
 import { sortNeedsAttentionFilteredRows } from "@/lib/queues/needsAttentionQueuePrioritySort";
 
@@ -163,7 +168,9 @@ function opportunityQueueStatusKeysAllowed(queue: QueueConfig): string[] | undef
     return [...keys];
 }
 
-function attachPlacementToEnrichedOpportunityItems(params: {
+async function attachPlacementToEnrichedOpportunityItems(params: {
+    supabase: SupabaseClient;
+    orgId: string;
     enrichedRows: Array<Record<string, unknown>>;
     workUnitId: string;
     queueKey: string;
@@ -171,7 +178,9 @@ function attachPlacementToEnrichedOpportunityItems(params: {
     departmentMetadata: unknown | null;
     workUnitMetadata: unknown | null;
     nowMs: number;
-}): { rows: Array<Record<string, unknown>>; diagnostics: WorkUnitPlacementQueueDiagnostics | null } {
+    /** Test injection — skips Supabase bulk load when provided. */
+    placementCandidatesByOpportunityId?: import("@/lib/orchestration/placement/bulkLoadPlacementCandidatesByOpportunity").PlacementCandidatesByOpportunityId;
+}): Promise<{ rows: Array<Record<string, unknown>>; diagnostics: WorkUnitPlacementQueueDiagnostics | null }> {
     const resolved = resolvePlacementQueueConfig({
         departmentMetadata: params.departmentMetadata,
         workUnitMetadata: params.workUnitMetadata,
@@ -181,15 +190,51 @@ function attachPlacementToEnrichedOpportunityItems(params: {
         return { rows: params.enrichedRows, diagnostics: null };
     }
     const statusKeysAllowed = opportunityQueueStatusKeysAllowed(params.queueConfig);
+    const ctx = {
+        workUnitId: params.workUnitId,
+        queueKey: params.queueKey,
+        nowMs: params.nowMs,
+        statusKeysAllowed,
+    };
+
+    if (resolved.engine_version === "v2") {
+        const oppIds = params.enrichedRows
+            .map((r) => (typeof r.id === "string" ? r.id.trim() : ""))
+            .filter(Boolean);
+        const candidatesByOpportunityId =
+            params.placementCandidatesByOpportunityId ??
+            (await bulkLoadPlacementCandidatesByOpportunity({
+                supabase: params.supabase,
+                orgId: params.orgId,
+                opportunityIds: oppIds,
+            }));
+        const out = applyPlacementV2ToOpportunityQueueRows({
+            rows: params.enrichedRows,
+            placement: { ...resolved, engine_version: "v2" },
+            ctx,
+            candidatesByOpportunityId,
+            v1FallbackForEmpty: true,
+        });
+        const expanded = expandOpportunityRowsToPlacementCandidateRows(out.rows);
+        const sorted = sortPlacementCandidateQueueRows(expanded.rows, out.diagnostics.shadow_mode);
+        const stripped = sorted.map((row) => {
+            const { __placement_v2_sort_tuple: _t, ...rest } = row;
+            return rest;
+        });
+        return {
+            rows: stripped,
+            diagnostics: {
+                ...out.diagnostics,
+                v2_candidate_queue_rows: expanded.expanded_candidate_row_count,
+                v2_opportunity_queue_rows: expanded.opportunity_row_count,
+            },
+        };
+    }
+
     const out = applyPlacementToOpportunityQueueRows({
         rows: params.enrichedRows,
         placement: resolved,
-        ctx: {
-            workUnitId: params.workUnitId,
-            queueKey: params.queueKey,
-            nowMs: params.nowMs,
-            statusKeysAllowed,
-        },
+        ctx,
     });
     return { rows: out.rows, diagnostics: out.diagnostics };
 }
@@ -720,14 +765,16 @@ function opportunityNeedsAttention(row: OpportunityNeedsAttentionRow, now: Date)
 
     const md = opportunityMetadataRecord(row);
 
+    const tourMs = md ? parseTourDateYmdUtcMs(md.tour_date) : null;
+    const startTodayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const hasUpcomingTour = sk === "tour_scheduled" && tourMs != null && tourMs >= startTodayUtc;
+
     // 1) Explicit follow-up date passed (metadata; enrollment drawer / seeds).
     const nfu = parseMetadataInstantMs(md, "next_follow_up_at");
-    if (nfu != null && nfu < now.getTime()) return true;
+    if (nfu != null && nfu < now.getTime() && !hasUpcomingTour) return true;
 
     // 2) Tour window passed while still scheduled (confirm / complete tour).
     if (sk === "tour_scheduled") {
-        const tourMs = md ? parseTourDateYmdUtcMs(md.tour_date) : null;
-        const startTodayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
         if (tourMs != null && tourMs < startTodayUtc) return true;
     }
 
@@ -759,12 +806,13 @@ function opportunityNeedsAttentionReasonLabel(row: OpportunityNeedsAttentionRow,
     if (NEEDS_ATTENTION_EXCLUDED_STATUS_KEYS.has(sk)) return null;
 
     const md = opportunityMetadataRecord(row);
+    const tourMs = md ? parseTourDateYmdUtcMs(md.tour_date) : null;
+    const startTodayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const hasUpcomingTour = sk === "tour_scheduled" && tourMs != null && tourMs >= startTodayUtc;
     const nfu = parseMetadataInstantMs(md, "next_follow_up_at");
-    if (nfu != null && nfu < now.getTime()) return "Follow-up date passed";
+    if (nfu != null && nfu < now.getTime() && !hasUpcomingTour) return "Follow-up date passed";
 
     if (sk === "tour_scheduled") {
-        const tourMs = md ? parseTourDateYmdUtcMs(md.tour_date) : null;
-        const startTodayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
         if (tourMs != null && tourMs < startTodayUtc) return "Tour date passed — follow up";
     }
 
@@ -2955,7 +3003,9 @@ export async function getWorkUnitQueueItems(params: {
         const enrichment_ms = Date.now() - tEn0;
         const placementPack = skipPlacementProjection
             ? { rows: enrichedRows as Array<Record<string, unknown>>, diagnostics: null }
-            : attachPlacementToEnrichedOpportunityItems({
+            : await attachPlacementToEnrichedOpportunityItems({
+                  supabase,
+                  orgId: params.orgId,
                   enrichedRows: enrichedRows as Array<Record<string, unknown>>,
                   workUnitId: params.workUnitId,
                   queueKey: params.queueKey,
@@ -3045,7 +3095,9 @@ export async function getWorkUnitQueueItems(params: {
         const enrichment_ms = Date.now() - tEn0;
         const placementPackOmit = skipPlacementProjection
             ? { rows: enrichedRows as Array<Record<string, unknown>>, diagnostics: null }
-            : attachPlacementToEnrichedOpportunityItems({
+            : await attachPlacementToEnrichedOpportunityItems({
+                  supabase,
+                  orgId: params.orgId,
                   enrichedRows: enrichedRows as Array<Record<string, unknown>>,
                   workUnitId: params.workUnitId,
                   queueKey: params.queueKey,
@@ -3135,7 +3187,9 @@ export async function getWorkUnitQueueItems(params: {
 
     const placementPackFull = skipPlacementProjection
         ? { rows: enrichedRows as Array<Record<string, unknown>>, diagnostics: null }
-        : attachPlacementToEnrichedOpportunityItems({
+        : await attachPlacementToEnrichedOpportunityItems({
+              supabase,
+              orgId: params.orgId,
               enrichedRows: enrichedRows as Array<Record<string, unknown>>,
               workUnitId: params.workUnitId,
               queueKey: params.queueKey,

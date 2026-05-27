@@ -18,6 +18,19 @@ export const PLACEMENT_PRIORITY_DEMO_LAYER_V1 = {
     display: { show_bucket_chip: true, show_sort_hint: true },
 } satisfies PlacementPriorityLayer;
 
+/** Phase 2 pilot — candidate-backed queue projection (shadow by default). */
+export const PLACEMENT_PRIORITY_DEMO_LAYER_V2 = {
+    version: 1 as const,
+    enabled: true,
+    engine_version: "v2" as const,
+    profile_id: "childcare_enrollment_waitlist_v2",
+    profile_revision: "2026-05-27",
+    queue_keys_enabled: ["waitlisted"],
+    shadow_mode: true,
+    evaluation_cap: 200,
+    display: { show_bucket_chip: true, show_sort_hint: true },
+} satisfies PlacementPriorityLayer;
+
 export type PlacementDemoScenarioId =
     | "staff"
     | "community"

@@ -69,6 +69,14 @@ export type WorkUnitPlacementQueueDiagnostics = {
         show_bucket_chip?: boolean;
         show_sort_hint?: boolean;
     } | null;
+    /** Present when V2 engine ran (`applyPlacementV2ToOpportunityQueueRows`). */
+    placement_engine_version?: "v2";
+    v2_opportunities_with_candidates?: number;
+    v2_opportunities_fallback_v1?: number;
+    v2_candidates_evaluated?: number;
+    /** Card 4.6 — list rows after candidate-row fan-out. */
+    v2_candidate_queue_rows?: number;
+    v2_opportunity_queue_rows?: number;
 };
 
 type EnabledPlacement = Extract<ResolvedPlacementQueueConfig, { status: "enabled" }>;
