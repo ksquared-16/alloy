@@ -1,23 +1,20 @@
 /**
- * Intake workspace operational filters (FD-1 / OI-4).
- * Client-side drill-in from workload pills — existing list data only.
+ * Intake workspace operational filters (FD-1 / OI-4 / IC-3).
+ * Client-side drill-in from workload pills — submission-backed, case-presented.
  */
 
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 import { FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
 import {
-    deriveSubmissionOperationalNarrative,
-    sortSubmissionsByActivity,
-    submissionActivitySortKey,
-    submissionCreatedOrMatchedSummary,
-    submissionFamilyLabel,
-} from "@/lib/forms/submissionOperationalNarrative";
+    buildIntakeCasePresentationRows,
+    type IntakeCasePresentationRow,
+} from "@/lib/forms/intakeCasePresentation";
+import type { IntakeCommandCenterSessionRow } from "@/lib/forms/intakeCommandCenterPresentation";
 import {
     groupSubmissionsIntoInboxLanes,
     type SubmissionInboxLaneKey,
     type SubmissionInboxRow,
 } from "@/lib/forms/submissionInboxPresentation";
-import type { IntakeCommandCenterSessionRow } from "@/lib/forms/intakeCommandCenterPresentation";
 
 export type IntakeWorkspaceFilterKey =
     | "needs_review"
@@ -54,6 +51,14 @@ export type IntakeWorkspaceFilterItem = {
     submissionLane?: SubmissionInboxLaneKey;
     sortKey: string;
     quickReview?: boolean;
+    /** IC-3 — derived intake case presentation */
+    caseKey?: string;
+    submissionCount?: number;
+    latestActivityAt?: string;
+    hasSignature?: boolean;
+    hasGeneratedDocument?: boolean;
+    attentionReasons?: string[];
+    isCaseRow?: boolean;
 };
 
 export type IntakeWorkspaceFilterPanel = {
@@ -72,32 +77,133 @@ function sessionNeedsReview(session: IntakeCommandCenterSessionRow): boolean {
     return review == null;
 }
 
-function submissionItem(
-    row: SubmissionInboxRow,
+function sortItems(items: IntakeWorkspaceFilterItem[]): IntakeWorkspaceFilterItem[] {
+    return [...items].sort((a, b) => b.sortKey.localeCompare(a.sortKey));
+}
+
+function submissionsById(submissions: SubmissionInboxRow[]): Map<string, SubmissionInboxRow> {
+    return new Map(submissions.map((row) => [row.id, row]));
+}
+
+function buildIntakeCases(params: {
+    submissions: SubmissionInboxRow[];
+    sessions: IntakeCommandCenterSessionRow[];
+    formsById: Record<string, string>;
+}): IntakeCasePresentationRow[] {
+    return buildIntakeCasePresentationRows({
+        submissions: params.submissions,
+        sessions: params.sessions,
+        formsById: params.formsById,
+    });
+}
+
+/** Map derived intake case to existing workspace filter lanes. */
+export function intakeCaseMatchesWorkspaceFilter(
+    intakeCase: IntakeCasePresentationRow,
+    filter: IntakeWorkspaceFilterKey
+): boolean {
+    const { status_bucket, review_state } = intakeCase;
+    switch (filter) {
+        case "needs_review":
+            return (
+                status_bucket === "review_required" ||
+                status_bucket === "needs_attention" ||
+                review_state === "packet_review_pending"
+            );
+        case "needs_linking":
+            return status_bucket === "needs_linking";
+        case "recent":
+            return status_bucket === "recent" || status_bucket === "auto_operationalized";
+        case "waiting":
+            return status_bucket === "waiting" || status_bucket === "packet_in_progress";
+        default:
+            return false;
+    }
+}
+
+function filterIntakeCases(
+    cases: IntakeCasePresentationRow[],
+    filter: IntakeWorkspaceFilterKey
+): IntakeCasePresentationRow[] {
+    return cases.filter((intakeCase) => intakeCaseMatchesWorkspaceFilter(intakeCase, filter));
+}
+
+function primarySubmissionForCase(
+    intakeCase: IntakeCasePresentationRow,
+    byId: Map<string, SubmissionInboxRow>
+): SubmissionInboxRow | undefined {
+    for (const id of intakeCase.submission_ids) {
+        const row = byId.get(id);
+        if (row) return row;
+    }
+    return undefined;
+}
+
+function caseFilterItem(
+    intakeCase: IntakeCasePresentationRow,
+    byId: Map<string, SubmissionInboxRow>,
     formsById: Record<string, string>,
-    lane: SubmissionInboxLaneKey
+    filter: IntakeWorkspaceFilterKey
 ): IntakeWorkspaceFilterItem {
-    const narrative = deriveSubmissionOperationalNarrative(row);
-    const formLabel = formsById[row.form_definition_id] ?? "Form";
+    const primarySubmission = primarySubmissionForCase(intakeCase, byId);
+    const primaryFormName =
+        primarySubmission ? (formsById[primarySubmission.form_definition_id] ?? "Form") : undefined;
+
     return {
-        id: `sub-${row.id}`,
-        title: narrative.headline,
-        meta: narrative.detail,
-        formName: formLabel,
-        familyLabel: submissionFamilyLabel(row),
-        createdSummary: submissionCreatedOrMatchedSummary(row),
-        operatorAction: narrative.operatorAction,
-        href: `${ADMIN_FORMS_UI_BASE}/${row.form_definition_id}/submissions/${row.id}`,
-        cta: narrative.operatorAction,
-        submission: row,
-        submissionLane: lane,
-        sortKey: submissionActivitySortKey(row),
-        quickReview: lane === "needsReview" || lane === "needsLinking" || lane === "recentlySubmitted",
+        id: `case-${intakeCase.case_key}`,
+        title: intakeCase.display_title,
+        meta: intakeCase.subtitle,
+        formName:
+            intakeCase.submission_count > 1 ?
+                `${intakeCase.submission_count} forms`
+            :   primaryFormName,
+        operatorAction: intakeCase.recommended_next_action,
+        href: intakeCase.href,
+        cta: intakeCase.recommended_next_action,
+        submission: primarySubmission,
+        sortKey: intakeCase.sort_key,
+        quickReview: filter === "needs_review" || filter === "needs_linking" || filter === "recent",
+        caseKey: intakeCase.case_key,
+        submissionCount: intakeCase.submission_count,
+        latestActivityAt: intakeCase.latest_activity_at,
+        hasSignature: intakeCase.has_signature,
+        hasGeneratedDocument: intakeCase.has_generated_document,
+        attentionReasons: intakeCase.attention_reasons,
+        isCaseRow: true,
     };
 }
 
-function sortItems(items: IntakeWorkspaceFilterItem[]): IntakeWorkspaceFilterItem[] {
-    return [...items].sort((a, b) => b.sortKey.localeCompare(a.sortKey));
+function sessionFilterItem(
+    session: IntakeCommandCenterSessionRow,
+    variant: "needs_review" | "waiting"
+): IntakeWorkspaceFilterItem {
+    if (variant === "needs_review") {
+        return {
+            id: `session-${session.id}`,
+            title: "Packet ready for operator review",
+            meta: `${session.packet_name} · Case file complete — approve or request corrections`,
+            href: `${FORMS_MODULE_ROUTES.packetSessions}/${encodeURIComponent(session.id)}`,
+            cta: "Review packet",
+            sortKey: session.created_at,
+        };
+    }
+
+    return {
+        id: `session-${session.id}`,
+        title: "Waiting for packet completion",
+        meta: `${session.packet_name} · Family still completing required forms`,
+        href: `${FORMS_MODULE_ROUTES.packetSessions}/${encodeURIComponent(session.id)}`,
+        cta: "Monitor",
+        sortKey: session.created_at,
+    };
+}
+
+function coveredPacketSessionIds(cases: IntakeCasePresentationRow[]): Set<string> {
+    const ids = new Set<string>();
+    for (const intakeCase of cases) {
+        if (intakeCase.packet_session_id) ids.add(intakeCase.packet_session_id);
+    }
+    return ids;
 }
 
 export function countIntakeWorkspaceFilters(params: {
@@ -105,18 +211,46 @@ export function countIntakeWorkspaceFilters(params: {
     sessions: IntakeCommandCenterSessionRow[];
     forms: { id: string; has_published_version?: boolean }[];
     packets: { id: string }[];
+    formsById?: Record<string, string>;
 }): Record<IntakeWorkspaceFilterKey, number> {
-    const lanes = groupSubmissionsIntoInboxLanes(params.submissions);
-    const reviewSessions = params.sessions.filter(sessionNeedsReview);
-    const inProgress = params.sessions.filter((s) => s.status === "in_progress");
+    const formsById = params.formsById ?? {};
+    const cases = buildIntakeCases({
+        submissions: params.submissions,
+        sessions: params.sessions,
+        formsById,
+    });
+    const coveredSessions = coveredPacketSessionIds(cases);
+
+    const reviewSessions = params.sessions.filter(
+        (session) => sessionNeedsReview(session) && !coveredSessions.has(session.id)
+    );
+    const inProgressSessions = params.sessions.filter(
+        (session) => session.status === "in_progress" && !coveredSessions.has(session.id)
+    );
 
     return {
-        needs_review: lanes.needsReview.length + reviewSessions.length,
-        needs_linking: lanes.needsLinking.length,
-        recent: lanes.recentlySubmitted.length,
-        waiting: lanes.drafts.length + inProgress.length,
+        needs_review: filterIntakeCases(cases, "needs_review").length + reviewSessions.length,
+        needs_linking: filterIntakeCases(cases, "needs_linking").length,
+        recent: filterIntakeCases(cases, "recent").length,
+        waiting: filterIntakeCases(cases, "waiting").length + inProgressSessions.length,
         forms: params.forms.length,
         packets: params.packets.length,
+    };
+}
+
+/** Submission lane counts — preserved for diagnostics (pre-case aggregation). */
+export function countIntakeWorkspaceSubmissionLanes(submissions: SubmissionInboxRow[]): {
+    needsReview: number;
+    needsLinking: number;
+    recentlySubmitted: number;
+    drafts: number;
+} {
+    const lanes = groupSubmissionsIntoInboxLanes(submissions);
+    return {
+        needsReview: lanes.needsReview.length,
+        needsLinking: lanes.needsLinking.length,
+        recentlySubmitted: lanes.recentlySubmitted.length,
+        drafts: lanes.drafts.length,
     };
 }
 
@@ -130,76 +264,72 @@ export function buildIntakeWorkspaceFilterPanel(
         formsById: Record<string, string>;
     }
 ): IntakeWorkspaceFilterPanel {
-    const lanes = groupSubmissionsIntoInboxLanes(params.submissions);
+    const byId = submissionsById(params.submissions);
+    const cases = buildIntakeCases({
+        submissions: params.submissions,
+        sessions: params.sessions,
+        formsById: params.formsById,
+    });
+    const coveredSessions = coveredPacketSessionIds(cases);
     const items: IntakeWorkspaceFilterItem[] = [];
 
     switch (filter) {
         case "needs_review": {
-            for (const row of sortSubmissionsByActivity(lanes.needsReview)) {
-                items.push(submissionItem(row, params.formsById, "needsReview"));
+            for (const intakeCase of filterIntakeCases(cases, "needs_review")) {
+                items.push(caseFilterItem(intakeCase, byId, params.formsById, filter));
             }
-            for (const s of params.sessions.filter(sessionNeedsReview)) {
-                items.push({
-                    id: `session-${s.id}`,
-                    title: "Packet ready for operator review",
-                    meta: `${s.packet_name} · Case file complete — approve or request corrections`,
-                    href: `${FORMS_MODULE_ROUTES.packetSessions}/${encodeURIComponent(s.id)}`,
-                    cta: "Review packet",
-                    sortKey: s.created_at,
-                });
+            for (const session of params.sessions.filter(
+                (s) => sessionNeedsReview(s) && !coveredSessions.has(s.id)
+            )) {
+                items.push(sessionFilterItem(session, "needs_review"));
             }
             return {
                 filter,
                 title: "Needs review",
-                lead: "Intake flagged for human confirmation before outputs or enrollment workflows.",
+                lead: "Intake cases flagged for human confirmation before outputs or enrollment workflows.",
                 items: sortItems(items),
-                empty: "Nothing needs review right now.",
+                empty: "No intake cases need review.",
             };
         }
         case "needs_linking": {
-            for (const row of sortSubmissionsByActivity(lanes.needsLinking)) {
-                items.push(submissionItem(row, params.formsById, "needsLinking"));
+            for (const intakeCase of filterIntakeCases(cases, "needs_linking")) {
+                items.push(caseFilterItem(intakeCase, byId, params.formsById, filter));
             }
             return {
                 filter,
                 title: "Needs linking",
-                lead: "Submitted intake missing CRM attach targets — link before document generation.",
+                lead: "Intake cases missing a family match — link before document generation.",
                 items: sortItems(items),
-                empty: "No linkage flags in this inbox.",
+                empty: "No intake cases need family matching.",
             };
         }
         case "recent": {
-            for (const row of sortSubmissionsByActivity(lanes.recentlySubmitted)) {
-                items.push(submissionItem(row, params.formsById, "recentlySubmitted"));
+            for (const intakeCase of filterIntakeCases(cases, "recent")) {
+                items.push(caseFilterItem(intakeCase, byId, params.formsById, filter));
             }
             return {
                 filter,
                 title: "Recent intake",
-                lead: "Newest submitted intake cleared for review — generate documents or continue workflows.",
+                lead: "Recently operationalized intake cases — generate documents or continue workflows.",
                 items: sortItems(items),
-                empty: "No recently submitted intake in this workload.",
+                empty: "No recently operationalized intake cases.",
             };
         }
         case "waiting": {
-            for (const s of params.sessions.filter((x) => x.status === "in_progress")) {
-                items.push({
-                    id: `session-${s.id}`,
-                    title: "Family completing packet",
-                    meta: `${s.packet_name} · In progress — monitor for completion`,
-                    href: `${FORMS_MODULE_ROUTES.packetSessions}/${encodeURIComponent(s.id)}`,
-                    cta: "Monitor",
-                    sortKey: s.created_at,
-                });
+            for (const intakeCase of filterIntakeCases(cases, "waiting")) {
+                items.push(caseFilterItem(intakeCase, byId, params.formsById, filter));
             }
-            for (const row of sortSubmissionsByActivity(lanes.drafts)) {
-                items.push(submissionItem(row, params.formsById, "drafts"));
+            for (const session of params.sessions.filter(
+                (s) => s.status === "in_progress" && !coveredSessions.has(s.id)
+            )) {
+                items.push(sessionFilterItem(session, "waiting"));
             }
             return {
                 filter,
                 title: "Waiting on families",
-                lead: "In-progress packets and draft submissions.",
+                lead: "Intake cases and packets waiting on family completion.",
                 items: sortItems(items),
-                empty: "No families are mid-intake right now.",
+                empty: "No intake cases are waiting on completion.",
             };
         }
         case "forms": {

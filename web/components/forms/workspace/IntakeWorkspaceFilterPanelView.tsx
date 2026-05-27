@@ -4,7 +4,7 @@ import clsx from "clsx";
 import Link from "next/link";
 import { useCallback, useState } from "react";
 import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
-import type { IntakeWorkspaceFilterPanel } from "@/lib/forms/intakeWorkspaceFilters";
+import type { IntakeWorkspaceFilterItem, IntakeWorkspaceFilterPanel } from "@/lib/forms/intakeWorkspaceFilters";
 import { SubmissionQuickReviewModal } from "@/components/forms/workspace/SubmissionQuickReviewModal";
 import {
     opBody,
@@ -32,6 +32,16 @@ function formatSubmittedTime(iso: string, viewerTz: string): string {
     return full;
 }
 
+function caseRowTestId(item: IntakeWorkspaceFilterItem): string {
+    if (item.caseKey) {
+        return `intake-case-row-${item.caseKey.replace(/[^a-zA-Z0-9_-]+/g, "-")}`;
+    }
+    if (item.submission) {
+        return `intake-submission-row-${item.submission.id}`;
+    }
+    return `intake-filter-item-${item.id}`;
+}
+
 /** Inline contextual workload panel — intake-case oriented rows. */
 export function IntakeWorkspaceFilterPanelView({ panel, viewerTz, onRefresh }: Props) {
     const [quickReviewRow, setQuickReviewRow] = useState<(typeof panel.items)[number] | null>(null);
@@ -56,16 +66,21 @@ export function IntakeWorkspaceFilterPanelView({ panel, viewerTz, onRefresh }: P
                             "mt-2 rounded-xl bg-alloy-stone/20 px-3 py-4 text-center ring-1 ring-alloy-midnight/[0.05]",
                             opMetadata
                         )}
+                        data-testid={`intake-filter-empty-${panel.filter}`}
                     >
                         {panel.empty}
                     </p>
                 :   <ul className={clsx(opGroupedSurface, "mt-2")}>
                         {panel.items.map((item) => {
-                            const submittedIso = item.submission?.submitted_at ?? item.submission?.created_at;
-                            const submittedTime =
-                                submittedIso ? formatSubmittedTime(submittedIso, viewerTz) : null;
+                            const activityIso =
+                                item.latestActivityAt ??
+                                item.submission?.submitted_at ??
+                                item.submission?.created_at;
+                            const activityTime =
+                                activityIso ? formatSubmittedTime(activityIso, viewerTz) : null;
                             const rowLead =
-                                item.familyLabel && item.title ?
+                                item.isCaseRow ? item.title
+                                : item.familyLabel && item.title ?
                                     `${item.familyLabel} — ${item.title}`
                                 :   item.title;
 
@@ -76,30 +91,40 @@ export function IntakeWorkspaceFilterPanelView({ panel, viewerTz, onRefresh }: P
                                         opGroupedRowInner,
                                         "flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between transition-colors hover:bg-alloy-stone/10"
                                     )}
-                                    data-testid={
-                                        item.submission ?
-                                            `intake-submission-row-${item.submission.id}`
-                                        :   `intake-filter-item-${item.id}`
-                                    }
+                                    data-testid={caseRowTestId(item)}
                                 >
                                     <div className="min-w-0 flex-1 space-y-1">
                                         <p className="text-sm font-semibold text-alloy-midnight">{rowLead}</p>
-                                        {item.formName && submittedTime ?
-                                            <p className={opMutedMeta} data-testid="intake-row-submitted-at">
-                                                {item.formName} submitted · {submittedTime}
-                                            </p>
-                                        : item.formName ?
-                                            <p className={opMutedMeta}>{item.formName}</p>
-                                        : submittedTime ?
-                                            <p className={opMutedMeta} data-testid="intake-row-submitted-at">
-                                                Submitted · {submittedTime}
+                                        {item.meta ?
+                                            <p className={opMutedMeta}>{item.meta}</p>
+                                        :   null}
+                                        {activityTime ?
+                                            <p className={opMutedMeta} data-testid="intake-row-activity-at">
+                                                Latest activity · {activityTime}
                                             </p>
                                         :   null}
-                                        {item.createdSummary ?
+                                        {(item.submissionCount ?? 0) > 1 ?
+                                            <p className={opBody} data-testid="intake-row-submission-count">
+                                                {item.submissionCount} forms in this intake case
+                                            </p>
+                                        :   null}
+                                        {!item.isCaseRow && item.createdSummary ?
                                             <p className={opBody}>{item.createdSummary}</p>
                                         :   null}
-                                        {!item.createdSummary && item.meta ?
-                                            <p className={opMutedMeta}>{item.meta}</p>
+                                        {(item.hasSignature || item.hasGeneratedDocument) ?
+                                            <p className={opMutedMeta} data-testid="intake-row-evidence-indicators">
+                                                {[
+                                                    item.hasSignature ? "Signed" : null,
+                                                    item.hasGeneratedDocument ? "Document generated" : null,
+                                                ]
+                                                    .filter(Boolean)
+                                                    .join(" · ")}
+                                            </p>
+                                        :   null}
+                                        {item.attentionReasons && item.attentionReasons.length > 0 ?
+                                            <p className={clsx("font-medium text-alloy-ember/90", opMetadata)}>
+                                                {item.attentionReasons.join(" · ")}
+                                            </p>
                                         :   null}
                                         {item.operatorAction ?
                                             <p className={clsx("font-medium", opMetadata)}>
@@ -137,6 +162,7 @@ export function IntakeWorkspaceFilterPanelView({ panel, viewerTz, onRefresh }: P
                     formName={quickReviewRow.formName ?? "Form"}
                     viewerTz={viewerTz}
                     onUpdated={onRefresh}
+                    submissionCount={quickReviewRow.submissionCount}
                 />
             :   null}
         </>

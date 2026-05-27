@@ -29,6 +29,7 @@ describe("FormLifecycleWorkspaceLayout OW-3", () => {
                     name: "Waitlist",
                     kind: "intake",
                     is_active: true,
+                    metadata: {},
                     versions: [
                         {
                             id: "11111111-1111-4111-8111-111111111111",
@@ -97,10 +98,13 @@ describe("FormLifecycleWorkspaceLayout OW-3", () => {
         expect(html).toContain('data-testid="form-action-preview"');
         expect(html).toContain('data-testid="form-action-create-link"');
         expect(html).toContain('data-testid="form-action-submissions"');
-        expect(html).toContain("Preview form");
-        expect(html).toContain("New draft");
-        expect(html).toContain("View submissions (3)");
+        expect(html).toContain("Create link");
+        expect(html).not.toContain(">Share<");
+        expect(html).toContain("Draft in progress");
+        expect(html).toContain("Submissions (3)");
         expect(html).toContain('data-testid="form-region-design"');
+        expect(html).toContain('data-testid="form-region-operational-outcome"');
+        expect(html).toContain("Operational Outcome");
         expect(html).toContain('data-testid="form-region-distribute"');
         expect(html).toContain('data-testid="form-region-intake"');
         expect(html).toContain('data-testid="form-region-review"');
@@ -121,6 +125,7 @@ describe("FormLifecycleWorkspaceLayout OW-3", () => {
                     name: "Waitlist",
                     kind: "intake",
                     is_active: true,
+                    metadata: {},
                     versions: [],
                 }}
                 viewerTz="UTC"

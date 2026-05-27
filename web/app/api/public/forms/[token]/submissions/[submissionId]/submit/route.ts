@@ -24,6 +24,7 @@ import {
     emitFormSignedSafe,
     emitFormSubmittedSafe,
 } from "@/lib/forms/workflow/formSubmissionEvents";
+import { emitIntakeCaseLifecycleEventsSafe } from "@/lib/forms/workflow/intakeCaseLifecycleEvents";
 import {
     emitOpportunityEnrollmentPacketCompletedProjectionSafe,
     emitOpportunityEnrollmentPacketOpenedSafe,
@@ -340,6 +341,15 @@ export async function POST(
     await emitFormSubmittedSafe(submittedRow as Parameters<typeof emitFormSubmittedSafe>[0]);
     if (sigRes.inserted > 0) {
         await emitFormSignedSafe(submittedRow as Parameters<typeof emitFormSignedSafe>[0]);
+    }
+
+    if (linkRequiresLeadCapture(metaRecord)) {
+        await emitIntakeCaseLifecycleEventsSafe({
+            submission: submittedRow as Parameters<typeof emitFormSubmittedSafe>[0],
+            payloadMeta: finalPayload.meta as Record<string, unknown> | undefined,
+            linkMetadata: metaRecord,
+            packetSessionId: ctx.packet?.packet_session_id ?? null,
+        });
     }
 
     let packetStepSequenceIndex = 0;

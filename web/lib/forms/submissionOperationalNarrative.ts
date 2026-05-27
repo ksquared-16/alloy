@@ -49,7 +49,7 @@ export function submissionCreatedOrMatchedSummary(row: SubmissionInboxRow): stri
     const path = typeof m.intake_resolution_path === "string" ? m.intake_resolution_path.trim() : "";
 
     if (match === "attached_existing" || path === "matched_email") {
-        return "Matched: Existing enrollment inquiry";
+        return "Matched: Existing enrollment lead";
     }
     if (match === "ambiguous" || path === "ambiguous_opportunity" || path === "ambiguous_contact") {
         return "Needs review: Potential duplicate";
@@ -59,7 +59,7 @@ export function submissionCreatedOrMatchedSummary(row: SubmissionInboxRow): stri
     }
 
     const created: string[] = [];
-    if (row.opportunity_id) created.push("Enrollment inquiry");
+    if (row.opportunity_id) created.push("Enrollment lead");
     if (row.person_id) created.push("Parent profile");
     if (row.customer_id && !row.person_id) created.push("Family profile");
     if (row.customer_member_id) created.push("Child profile");
@@ -108,12 +108,12 @@ export function deriveSubmissionOperationalNarrative(row: SubmissionInboxRow): S
     }
 
     if (path === "created_records" || (path === "matched_email" && match === "created")) {
-        headline = "New enrollment inquiry created";
-        detail = "Parent, family, and enrollment inquiry were set up from this submission.";
+        headline = "New enrollment lead created";
+        detail = "Parent, family, and enrollment lead were set up from this submission.";
         operatorAction = needsReview ? "Review intake and continue enrollment" : "Continue enrollment";
     } else if (match === "attached_existing" || (path === "matched_email" && match !== "created")) {
         headline = "Existing family matched";
-        detail = "Attached to an open enrollment inquiry — no duplicate inquiry created.";
+        detail = "Attached to an open enrollment lead — no duplicate lead created.";
         operatorAction = needsReview ? "Review match and continue enrollment" : "Continue enrollment";
     } else if (path === "matched_phone") {
         headline = "Existing family matched";
@@ -121,11 +121,11 @@ export function deriveSubmissionOperationalNarrative(row: SubmissionInboxRow): S
         operatorAction = needsReview ? "Confirm family match" : "Continue enrollment";
     } else if (path === "ambiguous_contact" || path === "ambiguous_opportunity") {
         headline = "Potential duplicate found";
-        detail = "More than one family or inquiry could match — pick the correct one.";
+        detail = "More than one family or lead could match — pick the correct one.";
         operatorAction = "Resolve duplicate match";
     } else if (path === "needs_human_review") {
         headline = "Ready for enrollment review";
-        detail = "Intake paused for operator — choose the correct family and inquiry.";
+        detail = "Intake paused for operator — choose the correct family and lead.";
         operatorAction = "Review intake and continue enrollment";
     } else if (path === "manually_linked") {
         headline = "Family match updated";
@@ -137,7 +137,7 @@ export function deriveSubmissionOperationalNarrative(row: SubmissionInboxRow): S
         operatorAction = "Fix distribution link or match manually";
     } else if (lane === "needsLinking") {
         headline = "Missing family match";
-        detail = "No enrollment inquiry or family profile linked yet.";
+        detail = "No enrollment lead or family profile linked yet.";
         operatorAction = "Match to family profile";
     } else if (lane === "needsReview") {
         headline = "Ready for enrollment review";
@@ -147,7 +147,7 @@ export function deriveSubmissionOperationalNarrative(row: SubmissionInboxRow): S
         headline = match === "attached_existing" ? "Existing family matched" : "Ready to continue enrollment";
         detail =
             match === "attached_existing" ?
-                "Linked to an open inquiry — review answers or continue enrollment."
+                "Linked to an open lead — review answers or continue enrollment."
             :   "Linked and clear — review answers or continue enrollment.";
         operatorAction = "Continue enrollment";
     }

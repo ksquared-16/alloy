@@ -30,6 +30,7 @@ import { FORM_LIFECYCLE_ANCHORS } from "@/lib/forms/formLifecyclePresentation";
 import { FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
 import { FORMS_TECHNICAL_DISCLOSURE } from "@/lib/forms/review/formsReviewTechnicalDisclosure";
 import FormSchemaWorkspace from "@/app/admin/forms/FormSchemaWorkspace";
+import { FormOutcomeConfigPanel } from "@/components/forms/admin/FormOutcomeConfigPanel";
 import {
     opGroupedRowInner,
     opGroupedSurface,
@@ -54,6 +55,7 @@ type FormDetailSlice = {
     name: string;
     kind: string;
     is_active: boolean;
+    metadata?: Record<string, unknown>;
     versions: VersionRow[];
 };
 
@@ -90,6 +92,7 @@ type Props = {
     onCreateLink: () => void;
     onCopy: (key: string, text: string) => void;
     onVersionsUpdated: () => void;
+    onLinkMetadataSaved?: (linkId: string, metadata: Record<string, unknown>) => void;
 };
 
 /** Loaded-state lifecycle workspace layout (OW-3). */
@@ -119,6 +122,7 @@ export function FormLifecycleWorkspaceLayout({
     onCreateLink,
     onCopy,
     onVersionsUpdated,
+    onLinkMetadataSaved,
 }: Props) {
     const submissionsHref = `${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(formId)}/submissions`;
 
@@ -148,8 +152,9 @@ export function FormLifecycleWorkspaceLayout({
                             onClick={onCreateLink}
                             disabled={creating || !canMutate || !hasPublished}
                             data-testid="form-action-create-link"
+                            title="Creates a new intake link — copy the URL from Share intake below"
                         >
-                            {creating ? "…" : "Share"}
+                            {creating ? "Creating link…" : "Create link"}
                         </button>
                         <Link href={submissionsHref} className={intakeWorkspaceBtnSecondary} data-testid="form-action-submissions">
                             Submissions{submissionCount > 0 ? ` (${submissionCount})` : ""}
@@ -219,6 +224,18 @@ export function FormLifecycleWorkspaceLayout({
                             ))}
                         </ul>
                     </TechnicalDetailDisclosure>
+                </section>
+
+                <section className={opRegionSeparator} data-testid="form-region-operational-outcome">
+                    <FormOutcomeConfigPanel
+                        formId={formId}
+                        formMetadata={detail.metadata}
+                        links={links}
+                        formKey={detail.key}
+                        documentGenerationConfigured={documentGenerationConfigured}
+                        canMutate={canMutate}
+                        onLinkMetadataSaved={onLinkMetadataSaved}
+                    />
                 </section>
 
                 <section

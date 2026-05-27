@@ -9,11 +9,7 @@ import { FormsReviewBadge } from "@/components/forms/review/FormsReviewBadge";
 import { submissionDetailHref } from "@/components/forms/workspace/SubmissionInboxRowView";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
-import {
-    deriveSubmissionOperationalNarrative,
-    submissionCreatedOrMatchedSummary,
-    submissionFamilyLabel,
-} from "@/lib/forms/submissionOperationalNarrative";
+import { buildIntakeQuickReviewViewModel } from "@/lib/forms/intakeQuickReviewPresentation";
 import type { SubmissionInboxRow } from "@/lib/forms/submissionInboxPresentation";
 import {
     opBody,
@@ -30,22 +26,34 @@ type Props = {
     formName: string;
     viewerTz: string;
     onUpdated?: () => void;
+    /** When opened from a grouped intake case row (IC-3). */
+    submissionCount?: number;
 };
 
 function submitterLine(row: SubmissionInboxRow): string | null {
-    const family = submissionFamilyLabel(row);
     const payload = row.payload as Record<string, unknown> | undefined;
     const values = payload?.values;
-    if (!values || typeof values !== "object" || Array.isArray(values)) return family;
+    if (!values || typeof values !== "object" || Array.isArray(values)) return null;
     const v = values as Record<string, unknown>;
     const emailRaw = v.guardian_email;
     const email = typeof emailRaw === "string" ? emailRaw.trim() : "";
-    if (family && email) return `${family} · ${email}`;
-    return family ?? (email || null);
+    return email || null;
 }
 
-/** Centered quick review modal — operator-first copy, Tasks/Messages pattern. */
-export function SubmissionQuickReviewModal({ open, onClose, row, formName, viewerTz, onUpdated }: Props) {
+function statusBadgeTone(tone: "success" | "warning" | "neutral"): "success" | "warning" | "neutral" {
+    return tone;
+}
+
+/** Centered quick review modal — intake-case oriented operator summary (IC-6). */
+export function SubmissionQuickReviewModal({
+    open,
+    onClose,
+    row,
+    formName,
+    viewerTz,
+    onUpdated,
+    submissionCount,
+}: Props) {
     const { canMutate, role } = useAdminAuth();
     const canConfirm = role === "admin" || role === "ops";
     const [confirmBusy, setConfirmBusy] = useState(false);
@@ -60,19 +68,21 @@ export function SubmissionQuickReviewModal({ open, onClose, row, formName, viewe
         }
     }, [open, row?.id]);
 
-    const narrative = useMemo(() => (row ? deriveSubmissionOperationalNarrative(row) : null), [row]);
-    const createdSummary = useMemo(() => (row ? submissionCreatedOrMatchedSummary(row) : null), [row]);
+    const submittedAtLabel = useMemo(() => {
+        if (!row) return "";
+        const iso = row.submitted_at ?? row.created_at;
+        return formatDateTimeForUserDisplay(iso, viewerTz);
+    }, [row, viewerTz]);
 
-    const needsConfirm = useMemo(() => {
-        if (!row || row.status !== "submitted") return false;
-        const hasLinks = !!(row.person_id || row.customer_id || row.customer_member_id || row.opportunity_id);
-        const meta = row.payload?.meta;
-        const needsReview =
-            meta && typeof meta === "object" && !Array.isArray(meta) ?
-                (meta as Record<string, unknown>).intake_needs_review === true
-            :   false;
-        return hasLinks && needsReview;
-    }, [row]);
+    const viewModel = useMemo(() => {
+        if (!row) return null;
+        return buildIntakeQuickReviewViewModel({
+            row,
+            formName,
+            submittedAtLabel,
+            submissionCount,
+        });
+    }, [row, formName, submittedAtLabel, submissionCount]);
 
     const confirmMatch = useCallback(async () => {
         if (!row?.id) return;
@@ -93,31 +103,39 @@ export function SubmissionQuickReviewModal({ open, onClose, row, formName, viewe
         }
     }, [row?.id, onUpdated]);
 
-    if (!open || !row || !narrative) return null;
+    if (!open || !row || !viewModel) return null;
 
-    const submittedAt =
-        row.submitted_at ?
-            formatDateTimeForUserDisplay(row.submitted_at, viewerTz)
-        :   formatDateTimeForUserDisplay(row.created_at, viewerTz);
     const detailHref = submissionDetailHref(row.form_definition_id, row.id);
-    const who = submitterLine(row);
+    const email = submitterLine(row);
+    const who = viewModel.headerTitle;
 
     const overlay = "fixed inset-0 z-[120] bg-black/20 backdrop-blur-[1px]";
     const panel =
         "fixed left-1/2 top-1/2 z-[121] flex max-h-[min(88vh,720px)] w-[92vw] max-w-[520px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-admin-border bg-white shadow-xl";
 
+    const showConfirmBlock = viewModel.showConfirmLinkage && canConfirm && !confirmOk;
+
     return (
         <>
             <div className={overlay} onClick={onClose} aria-hidden="true" />
-            <div className={panel} role="dialog" aria-modal="true" aria-label="Quick intake review" data-testid="submission-quick-review-modal">
+            <div
+                className={panel}
+                role="dialog"
+                aria-modal="true"
+                aria-label="Quick intake review"
+                data-testid="submission-quick-review-modal"
+            >
                 <div className="flex items-start justify-between gap-3 border-b border-alloy-stone/15 px-5 py-4">
                     <div className="min-w-0">
-                        <p className={opContextLabel}>Quick review</p>
+                        <p className={opContextLabel}>Intake case review</p>
                         {who ?
                             <p className="text-sm font-semibold text-alloy-midnight">{who}</p>
                         :   null}
+                        {email ?
+                            <p className={opMutedMeta}>{email}</p>
+                        :   null}
                         <p className={clsx("mt-0.5", opMutedMeta)}>
-                            {formName} · Submitted {submittedAt}
+                            {formName} · Submitted {submittedAtLabel}
                         </p>
                     </div>
                     <button
@@ -130,19 +148,54 @@ export function SubmissionQuickReviewModal({ open, onClose, row, formName, viewe
                 </div>
 
                 <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-                    <div className={opOrientationSurface}>
-                        <FormsReviewBadge label={narrative.statusLabel} tone="warning" />
-                        <p className="mt-2 text-sm font-medium text-alloy-midnight">{narrative.headline}</p>
-                        {createdSummary ?
-                            <p className={clsx("mt-1", opBody)}>{createdSummary}</p>
-                        :   null}
-                        <p className={clsx("mt-1", opMutedMeta)}>{narrative.detail}</p>
-                        <p className={clsx("mt-3 font-medium", opMetadata)}>
-                            Next: {narrative.operatorAction}
-                        </p>
-                    </div>
+                    <section data-testid="quick-review-intake-summary">
+                        <p className={opContextLabel}>Intake summary</p>
+                        <div className={clsx(opOrientationSurface, "mt-2")}>
+                            <FormsReviewBadge
+                                label={viewModel.intakeSummary.statusLine}
+                                tone={statusBadgeTone(viewModel.intakeSummary.statusTone)}
+                            />
+                            <p className={clsx("mt-2 text-sm font-medium text-alloy-midnight", opBody)}>
+                                {viewModel.intakeSummary.capturedLine}
+                            </p>
+                            {viewModel.intakeSummary.operationalLine ?
+                                <p className={clsx("mt-1", opBody)} data-testid="quick-review-operational-line">
+                                    {viewModel.intakeSummary.operationalLine}
+                                </p>
+                            :   null}
+                            {viewModel.intakeSummary.routingLine ?
+                                <p className={clsx("mt-1", opMetadata)} data-testid="quick-review-routing-line">
+                                    {viewModel.intakeSummary.routingLine}
+                                </p>
+                            :   null}
+                        </div>
+                    </section>
 
-                    {needsConfirm && canConfirm && !confirmOk ?
+                    <section data-testid="quick-review-needs-action">
+                        <p className={opContextLabel}>Needs action</p>
+                        {viewModel.needsAction.clearMessage ?
+                            <p className={clsx("mt-2", opBody)} data-testid="quick-review-no-action">
+                                {viewModel.needsAction.clearMessage}
+                            </p>
+                        : viewModel.needsAction.items.length > 0 ?
+                            <ul className={clsx("mt-2 space-y-1", opBody)}>
+                                {viewModel.needsAction.items.map((item) => (
+                                    <li key={item} className="font-medium text-alloy-ember/90">
+                                        {item}
+                                    </li>
+                                ))}
+                            </ul>
+                        :   null}
+                    </section>
+
+                    <section data-testid="quick-review-next-step">
+                        <p className={opContextLabel}>Recommended next step</p>
+                        <p className={clsx("mt-2 font-medium text-alloy-midnight", opBody)}>
+                            {viewModel.recommendedNextStep}
+                        </p>
+                    </section>
+
+                    {showConfirmBlock ?
                         <div className="rounded-xl bg-alloy-stone/20 px-3 py-3 ring-1 ring-alloy-midnight/[0.06]">
                             <p className={clsx("font-medium", opContextLabel)}>Confirm family match</p>
                             <p className={clsx("mt-1", opMetadata)}>
@@ -166,6 +219,26 @@ export function SubmissionQuickReviewModal({ open, onClose, row, formName, viewe
                             Family match confirmed — continue enrollment from the intake file.
                         </p>
                     :   null}
+
+                    <section
+                        className="rounded-xl bg-alloy-stone/10 px-3 py-3 ring-1 ring-alloy-midnight/[0.04]"
+                        data-testid="quick-review-evidence"
+                    >
+                        <p className={opContextLabel}>Evidence</p>
+                        <ul className={clsx("mt-2 space-y-1", opMutedMeta)}>
+                            <li>Form · {viewModel.evidence.formName}</li>
+                            <li>Submitted · {viewModel.evidence.submittedAtLabel}</li>
+                            {viewModel.evidence.submissionCount > 1 ?
+                                <li>{viewModel.evidence.submissionCount} forms in this intake case</li>
+                            :   null}
+                            {viewModel.evidence.hasSignature ?
+                                <li>Signed</li>
+                            :   null}
+                            {viewModel.evidence.hasGeneratedDocument ?
+                                <li>Generated document on file</li>
+                            :   null}
+                        </ul>
+                    </section>
                 </div>
 
                 <div className="flex flex-wrap gap-2 border-t border-alloy-stone/15 px-5 py-4">
@@ -178,7 +251,9 @@ export function SubmissionQuickReviewModal({ open, onClose, row, formName, viewe
                         Done
                     </SecondaryButton>
                     {!canMutate ?
-                        <p className={clsx("w-full", opMutedMeta)}>Document generation requires admin access on the intake file.</p>
+                        <p className={clsx("w-full", opMutedMeta)}>
+                            Document generation requires admin access on the intake file.
+                        </p>
                     :   null}
                 </div>
             </div>

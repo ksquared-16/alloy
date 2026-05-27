@@ -14,6 +14,10 @@ import {
 import { parseIntakeAutoCreateFlags } from "./parseIntakeAutoCreateFlags";
 import { parseIntakeLinkDefaults, resolveIntakeOpportunitySource } from "./parseIntakeLinkDefaults";
 import {
+    intakeReviewDecisionToOutcomeMeta,
+    resolveIntakeReviewDecision,
+} from "./resolveIntakeReviewDecision";
+import {
     findExistingIntakeOpportunity,
     findCustomerMemberIdOnOpportunity,
     resolveIntakeWorkUnitId,
@@ -465,42 +469,31 @@ export async function applyFormIntakeSafe(
         }
     }
 
-    const intakeNeedsReview =
-        matchStrategy === "reuse_submission_person_id"
-            ? workUnitDepartmentMismatch
-            : personCreated || matchStrategy === "matched_phone" || memberAutoCreated || workUnitDepartmentMismatch;
-
-    let intakeReviewReason: string | undefined;
-    if (workUnitDepartmentMismatch) {
-        intakeReviewReason =
-            "Work unit does not belong to the configured department on this link — verify routing before generating documents.";
-    }
-    if (intakeNeedsReview && !intakeReviewReason) {
-        if (personCreated) {
-            intakeReviewReason =
-                "A new person record was created from this form — verify identity before generating documents.";
-        } else if (matchStrategy === "matched_phone") {
-            intakeReviewReason =
-                "Person was matched by phone only — verify identity before generating documents.";
-        } else if (memberAutoCreated) {
-            intakeReviewReason =
-                "A child customer member was auto-created — verify household linkage before generating documents.";
-        } else {
-            intakeReviewReason =
-                "Verify CRM linkage before generating documents.";
-        }
-    }
+    const reviewDecision = resolveIntakeReviewDecision({
+        linkMetadata: input.linkMetadata,
+        matchStrategy,
+        matchConfidence: confidence,
+        emailPresent: !!emailNorm,
+        phonePresent: !!phoneNorm,
+        personCreated,
+        memberAutoCreated,
+        workUnitDepartmentMismatch,
+        opportunityDedupStrategy,
+        autoCreateOpportunity: flags.auto_create_opportunity,
+        hasOpportunity: !!opportunityId,
+        hasCustomer: !!customerId,
+        hasPerson: !!personId,
+    });
 
     const outcomeMeta = outcomeBase({
         intake_resolution_path: resolutionPath,
         intake_match_strategy: matchStrategy,
         intake_match_confidence: confidence,
-        intake_needs_review: intakeNeedsReview,
-        intake_review_reason: intakeReviewReason,
         intake_candidate_email_count: emailCount,
         intake_candidate_phone_count: phoneCount,
         ...(opportunityDedupStrategy !== "skipped" ? { intake_opportunity_match: opportunityDedupStrategy } : {}),
         ...(workUnitDepartmentMismatch ? { intake_work_unit_department_mismatch: true } : {}),
+        ...intakeReviewDecisionToOutcomeMeta(reviewDecision),
     });
 
     return {

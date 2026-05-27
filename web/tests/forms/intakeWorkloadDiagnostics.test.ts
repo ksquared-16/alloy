@@ -69,7 +69,9 @@ describe("intakeWorkloadDiagnostics Test 2B", () => {
             formsById: { [FORM_ID]: "Medication Authorization — Demo" },
         });
 
-        expect(panel.items[0]?.title).toContain("New enrollment inquiry created");
+        expect(panel.items[0]?.meta).toContain("1 form received");
+        expect(panel.items[0]?.operatorAction).toBe("Review intake and continue enrollment");
         expect(panel.items[0]?.submission?.id).toBe(TEST_1C);
+        expect(panel.items[0]?.isCaseRow).toBe(true);
     });
 });

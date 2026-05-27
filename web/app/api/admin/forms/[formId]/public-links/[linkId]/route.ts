@@ -83,7 +83,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         if (typeof body.metadata !== "object" || body.metadata === null || Array.isArray(body.metadata)) {
             return jsonError("metadata must be an object", 400);
         }
-        const meta = { ...(body.metadata as Record<string, unknown>) };
+        const incoming = body.metadata as Record<string, unknown>;
+        const existingMeta =
+            existing.metadata && typeof existing.metadata === "object" && !Array.isArray(existing.metadata)
+                ? { ...(existing.metadata as Record<string, unknown>) }
+                : {};
+        const meta = { ...existingMeta, ...incoming };
         const label =
             typeof body.label === "string"
                 ? body.label.trim()

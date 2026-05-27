@@ -1,6 +1,6 @@
 # Forms Runtime Test 2D — Demo Childcare Co intake validation
 
-**Status:** Closed (2026-05-27) — link prepared; operator manual submit pending or in progress  
+**Status:** IC-5.6 — medication path validated; enrollment lead proof added (see below)  
 **Org:** Demo Childcare Co `93667019-bd28-49b5-a688-acc9bb1e0a19`  
 **Do not validate in Alloy Bend** — prior Test 1C/1D rows are the wrong org.
 
@@ -109,11 +109,15 @@ All IDs belong to Demo Childcare Co (or global childcare vertical).
 | Opportunity | Created in Demo Childcare Co |
 | Opportunity fields | `vertical_id` = childcare, `location_id` = BrightStart, `work_unit_id` = enrollment_pipeline, `status_key` = `new`, `source` = `embed` |
 | Submission FKs | `person_id`, `customer_id`, `opportunity_id` populated |
-| Payload meta | `intake_needs_review: true`, `intake_opportunity_match: created` |
+| Payload meta | `intake_needs_review: true`, `intake_auto_operationalized: false`, `intake_opportunity_match: created` — reasons include `new_person_created`, `child_member_auto_created` (IC-4 blocks auto-op when child member auto-created) |
 
 ### Second submit visibility
 
-Second submit (`intake_needs_review: false`, `intake_opportunity_match: attached_existing`) routes to **`recentlySubmitted`** lane → **`Recent`** workload pill on `/adminV2/forms`. Also visible on form inbox `/adminV2/forms/{formId}/submissions` under **Recently submitted**. No intake-case grouping yet — deferred to next sprint.
+Second submit (`intake_needs_review: false`, `intake_opportunity_match: attached_existing`) routes to **`recentlySubmitted`** lane → **`Recent`** workload pill on `/adminV2/forms`. Grouped intake case rolls up to Recent when no submission in the case requires review.
+
+### Lead-only auto-op proof (IC-5.5 gate Flow B2)
+
+For IC-4 auto-operationalization proof without weakening childcare-member safety, the QA gate temporarily patches the demo link with `auto_create_customer_member: false` (see `DEMO_CHILDCARE_LEAD_ONLY_AUTO_OP_LINK_METADATA`). That path expects `intake_auto_operationalized: true` and Recent workload.
 
 ### Test 2D-2 — Second submit (dedup attach)
 
@@ -132,12 +136,44 @@ Second submit (`intake_needs_review: false`, `intake_opportunity_match: attached
 
 ---
 
+## IC-5.6 — Enrollment Lead proof (canonical opportunity path)
+
+**Medication Authorization** remains the review-required child/member path (IC-4). For proving forms create real leads/opportunities, use the guardian-only demo form instead.
+
+| Field | Value |
+|-------|-------|
+| **Form id** | `7cb6bd8f-8579-4a2b-8a64-969b4a37b457` |
+| **Public link id** | `81f5ba41-1619-4b39-9b1c-d282ba5e79a5` |
+| **Form key** | `enrollment_lead_capture_demo` |
+| **Form name** | Enrollment Lead — Demo |
+| **Embed token** | `alloy_demo_enrollment_lead_capture_v1__org_93667019-bd28-49b5-a688-acc9bb1e0a19` |
+| **Embed URL** | `http://localhost:3000/forms/embed/alloy_demo_enrollment_lead_capture_v1__org_93667019-bd28-49b5-a688-acc9bb1e0a19` |
+
+Prepare + gate:
+
+```bash
+cd web && npx tsx --tsconfig tsconfig.json scripts/prepareDemoChildcareEnrollmentLeadIntakeTest.ts
+cd web && npx tsx --tsconfig tsconfig.json scripts/qaEnrollmentLeadOpportunityProof.ts
+```
+
+| Check | Expected |
+|-------|----------|
+| Public submit | Succeeds |
+| `opportunities` row | Created with `status_key: new`, enrollment work unit |
+| Workload | **Recent** (auto-operationalized) |
+| Case subtitle | “New lead created” |
+| Quick review | “New lead created” + open path via `opportunity_id` |
+| Workflow events | `form_submitted`, `intake_case_created`, `intake_case_operationalized` |
+| Child member | **Not** auto-created |
+
+---
+
 ## Where to verify in UI
 
 | Surface | Path |
 |---------|------|
 | Workload hub | `/adminV2/forms` → Review / Recent pills |
-| First submit narrative | “New enrollment inquiry created” |
+| First submit narrative | “New enrollment lead created” (med path: **Needs Review** because child member auto-created) |
 | Second submit narrative | “Existing family matched” |
 | Form inbox | `/adminV2/forms/8432c527-8799-4a55-88c7-f860bd78e747/submissions` |
 | Submission detail | `/adminV2/forms/8432c527-8799-4a55-88c7-f860bd78e747/submissions/{submissionId}` |

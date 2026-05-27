@@ -2,7 +2,7 @@
 
 **Path:** `docs/sprints/05_2026/forms_intake_case_operational_model.md`  
 **Date:** May 2026  
-**Status:** Phase 0 audit + doctrine + cards — **awaiting review before implementation**  
+**Status:** IC-0.5 through IC-6 code shipped · **IC-5.5 browser validation in progress** — sprint closeout paused  
 **Scope:** Shift operator work from raw submissions to **Intake Cases**; surface outcome configuration near form authoring; confidence-based review routing. **No OCR. No packet runtime rewrite. No large schema migration without approval.**
 
 **Validated baseline (Runtime Tests 1–2D):**
@@ -38,7 +38,162 @@
 | **Safe without migration?** | Outcome config panel (read-only → editable), derived intake case view model, workload row regrouping (client-side), confidence-based review rule changes in `applyFormIntakeSafe`, additive workflow events, quick review modal UX, form definition default-outcome JSON in existing `metadata` column. |
 | **Requires schema later?** | Persisted `intake_cases` row if we need case identity **independent of opportunity**, cross-org analytics on case lifecycle, or case-level permissions/audit separate from CRM. Until then, opportunity + packet session + submission grouping is sufficient. |
 
-**Recommended first implementation card:** **IC-1 — Outcome Configuration Panel (read-only)** — surfaces existing link metadata and form operator context without changing runtime behavior; unblocks operator trust and sets up editable config in IC-1b.
+**Recommended first implementation card:** **IC-1 — Outcome Configuration Panel (read-only)** — **shipped** · next: IC-1b editable config, then IC-4 confidence routing.
+
+---
+
+# IC-0.5 — Operational Outcome Resolution (doctrine)
+
+**Status:** Active doctrine (May 2026)  
+**Scope:** How Alloy resolves “what happens on submit” across layers. **No new schema.**
+
+## New runtime flow
+
+```
+create form → configure intake outcome → distribute → capture → create/update intake case → trigger workflow → operator acts
+```
+
+Forms are reusable artifacts. **Distribution carries operational context.** Submissions are evidence. Intake cases (derived) are what operators work from.
+
+## Resolution precedence
+
+When multiple layers define outcome behavior, effective config resolves in this order (highest wins):
+
+| Priority | Layer | Storage today | Role |
+|----------|-------|---------------|------|
+| **1** | **Explicit runtime override** | Admin action, workflow mint, or audited API body at submit/mint time | Highest — must be explicit and auditable; not inferred from UI defaults |
+| **2** | **Public link metadata** | `form_public_links.metadata` | **Authoritative for distribution** — location, work unit, status, source, auto-create flags |
+| **3** | **Packet / session config** | `form_packet_sessions.launch_context`, packet link metadata | Journey-specific context; step submits inherit session stamps |
+| **4** | **Form default metadata** | `form_definitions.metadata.intake_outcome` (JSONB) | Reusable base intent when minting links; overridden by link/session |
+| **5** | **Org defaults** | Org config / vertical presets (future) | Fallback only when upper layers silent |
+
+### Layer rules
+
+- **Form defaults** express reusable base intent (“this form usually creates an inquiry and routes to enrollment”). They apply when creating a new public link unless the operator overrides at mint time.
+- **Public link metadata** is distribution-specific and **must override** form defaults for routing and intake flags at runtime.
+- **Packet / session config** may add journey-specific context (anchored opportunity, household snapshot). Standalone form submit does not read session config.
+- **Runtime overrides** are highest priority and must be **explicit and auditable** (logged mint body, workflow action, or admin API — not silent client inference).
+- **Org defaults** are fallback only — never override an explicit link or runtime stamp.
+
+## Ownership boundaries
+
+| Layer | Owns |
+|-------|------|
+| **Form definition** | Reusable structure (fields, composition, PDF mapping), default outcome **intent** (`intake_outcome` template) |
+| **Distribution (public link)** | Location, work unit, department, status, source, auto-create toggles, embed context, existing-record launch binding |
+| **Submission** | Captured evidence (`payload`, signatures, timestamps, intake trace meta) |
+| **Opportunity** | Business lifecycle (CRM record, queue placement, pipeline status) |
+| **Intake case (derived)** | Operator-facing situation — who, what happened, review state, next action |
+| **Workflow** | Automation execution — reacts to events; does not own CRM truth |
+
+## Review doctrine (exception-based)
+
+Human review is **not** mandatory for every successful submit.
+
+| Signal | Target routing |
+|--------|----------------|
+| High confidence + complete routing + policy allows | Auto-operationalize → Recent / queue |
+| Medium confidence | Soft review / visible in Recent |
+| Low confidence / ambiguous match | Needs review |
+| Missing CRM links | Needs linking |
+| Explicit `review_mode: always` or `review_required: true` | Needs review regardless of match |
+
+**Current runtime (pre–IC-4):** new person create still flags review in `applyFormIntakeSafe` — IC-4 aligns code with this doctrine.
+
+## IC-1 read-only panel (shipped)
+
+**UI:** `/adminV2/forms/[formId]` → **Operational Outcome** panel (between Publish and Share intake).
+
+**Files:**
+
+- `web/components/forms/admin/FormOutcomeConfigPanel.tsx`
+- `web/lib/forms/outcomeConfigPresentation.ts`
+- Wired via `FormLifecycleWorkspaceLayout` / `FormDetailClient`
+
+**Display precedence for panel:** representative active distribution link (most recent, non-preview) merged with `form_definitions.metadata.intake_outcome`; form defaults fill gaps only. Does **not** change runtime submit behavior.
+
+**Not yet in panel:** entity name resolution for location/work unit UUIDs (shows “assigned on submit” until lookup API in IC-1b).
+
+---
+
+## IC-1b — Outcome label resolution + distribution summary (shipped)
+
+**Status:** Shipped (May 2026)  
+**Scope:** Display-only improvements to the Operational Outcome panel. **No runtime / submit changes.**
+
+### What shipped
+
+- **`GET /api/admin/forms/[formId]/outcome-labels`** — org-scoped batch resolve of routing UUIDs from form `intake_outcome` + all non-preview public links
+- **Label catalog** resolves when possible:
+  - **Location** — `locations.label` or address fallback
+  - **Work unit** — `Department · Work unit` (via `work_units` + `departments`)
+  - **Department** — department name
+  - **Vertical** — vertical name or slug
+  - **Inquiry status** — org opportunity status registry (`status_label`)
+  - **Source** — humanized embed/public (unchanged from IC-1)
+- **Unresolved UUIDs** show **“Configured, label not resolved”** — never raw UUID in primary copy; UUIDs remain in collapsed debug JSON only
+- **Multiple active links** — clearer summary: which link is summarized, count of differing active links, note that distribution links may route differently
+
+### Doctrine preserved
+
+- **Public link metadata remains authoritative** for runtime routing (unchanged)
+- Label resolution is **admin display only** — missing labels are not runtime errors
+- Form `intake_outcome` defaults still **not merged at submit** (IC-1b editable + runtime merge is follow-on)
+
+### Files
+
+| File | Role |
+|------|------|
+| `web/lib/forms/outcomeConfigLabelCatalog.ts` | Catalog types + UUID collection |
+| `web/lib/forms/resolveOutcomeConfigLabelCatalog.ts` | Server batch resolve |
+| `web/app/api/admin/forms/[formId]/outcome-labels/route.ts` | Admin API |
+| `web/lib/forms/outcomeConfigPresentation.ts` | Label-aware presentation |
+| `web/components/forms/admin/FormOutcomeConfigPanel.tsx` | Fetches catalog on mount |
+
+### Limitations
+
+- Verticals query is not org-scoped (global `verticals` table) — slug shown when name missing
+- Packet/session launch context labels not resolved on standalone form detail (packet-specific follow-on)
+
+---
+
+## IC-1c — Editable Operational Outcome Configuration (shipped)
+
+**Status:** Shipped (May 2026)  
+**Scope:** Admin can edit **distribution/public link** outcome metadata from form detail. **No schema. No public renderer changes. No runtime precedence changes.**
+
+### What shipped
+
+- **Edit mode** on Operational Outcome panel — select distribution link, edit, save
+- **PATCH** ` /api/admin/forms/[formId]/public-links/[linkId]` — metadata **merged** with existing (unknown keys preserved)
+- **`GET outcome-labels?include_picker_options=1`** — routing pickers for admin editor (admin role)
+- **Form defaults** (`form_definitions.metadata.intake_outcome`) remain **read-only / separate** — not written by IC-1c
+
+### Editable fields (link metadata)
+
+| Area | Keys written |
+|------|----------------|
+| Intake | `lead_capture`, `intake`, `mode`, `auto_create_*` |
+| Review (IC-4) | `review_mode`, `review_required`, `auto_operationalize` |
+| Routing | `default_location_id`, `default_work_unit_id`, `default_department_id`, `default_vertical_id`, `default_opportunity_status_key`, `intake_opportunity_source`, `embed_mode` |
+
+Review mode UI maps to runtime: `always` | `confidence` (exception-based) | `never`.
+
+### Validation
+
+- `review_required: true` disables auto-operationalize on save
+- Auto-operationalize forces `review_mode: confidence` when unset
+- Missing routing shows warning (auto-op may still require review at runtime)
+- Lead capture disabled clears intake flags without deleting unrelated metadata
+
+### Files
+
+| File | Role |
+|------|------|
+| `web/lib/forms/outcomeConfigEditor.ts` | Parse/merge/validate edit form |
+| `web/lib/forms/resolveOutcomeConfigPickerOptions.ts` | Org routing pickers |
+| `web/components/forms/admin/FormOutcomeConfigPanel.tsx` | Edit UI |
+| `web/app/api/admin/forms/[formId]/public-links/[linkId]/route.ts` | Metadata merge on PATCH |
 
 ---
 
@@ -343,6 +498,8 @@ Outcome configuration belongs **between compose and distribute**, visible on the
 
 ## IC-1 — Outcome Configuration Panel
 
+**Status:** Read-only v1 **shipped** (May 2026)
+
 **Goal:** Admin-side panel on form detail / distribution showing effective outcome config.
 
 **Read-only v1 fields:**
@@ -369,120 +526,262 @@ Outcome configuration belongs **between compose and distribute**, visible on the
 
 ## IC-2 — Intake Case Presentation Model
 
-**Goal:** Derived view model for operator surfaces.
+**Status:** Shipped (May 2026)
 
-**Proposed shape (`IntakeCaseViewModel`):**
+**Goal:** Derived view model for operator surfaces — groups submission evidence into intake situations.
 
-```typescript
-{
-  caseKey: string;                    // `opp:${id}` | `session:${id}` | `submission:${id}` fallback
-  anchorType: "opportunity" | "packet_session" | "submission";
-  anchorId: string;
-  title: string;                      // e.g. "Donald Duck — Enrollment intake"
-  primaryPerson?: { id, label };
-  primaryCustomer?: { id, label };
-  opportunity?: { id, label, status_key, location_id };
-  submissions: SubmissionSummary[];   // count, latest, form names
-  packetSession?: { id, status, operator_review_status };
-  reviewState: "needs_review" | "needs_linking" | "auto_operationalized" | "in_progress" | "complete";
-  confidence: "high" | "medium" | "low" | "none";
-  latestActivityAt: string;
-  nextAction: string;
-  href: string;                       // primary deep link (opportunity drawer or case file)
-}
-```
+**Module:** `web/lib/forms/intakeCasePresentation.ts`
 
-**Grouping key priority:** `opportunity_id` → `packet_session_id` (from item join) → standalone `submission_id`.
+**Exports:**
 
-| Attribute | Value |
-|-----------|-------|
-| Migration | None |
-| Runtime risk | None (read/presentation) |
+- `resolveIntakeCaseGroupKey` / `parseIntakeCaseGroupKey`
+- `resolveSubmissionPacketSessionId`
+- `groupSubmissionsByIntakeCaseKey`
+- `buildIntakeCasePresentationRows`
+
+### Grouping rules (deterministic, presentation-only)
+
+| Priority | Anchor | `case_key` format |
+|----------|--------|-------------------|
+| 1 | `opportunity_id` on submission | `opportunity:{uuid}` |
+| 2 | `packet_session_id` (field or `payload.meta`) | `packet_session:{uuid}` |
+| 3 | Standalone submission | `submission:{uuid}` |
+
+Opportunity wins when both opportunity and packet session are present on the same submission.
+
+**No persisted `intake_cases` table.** Keys are not stored — recomputed from list payloads.
+
+### `IntakeCasePresentationRow` shape
+
+- `case_key`, `anchor_type`, `anchor_id`
+- `display_title`, `subtitle`
+- `status_bucket`: `needs_attention` \| `needs_linking` \| `review_required` \| `packet_in_progress` \| `auto_operationalized` \| `waiting` \| `recent`
+- `latest_activity_at`, `review_state`, `operationalized_state`
+- `opportunity_id`, `packet_session_id`, `submission_ids`, `submission_count`
+- `has_signature`, `has_generated_document`
+- `attention_reasons`, `recommended_next_action`, `href`, `sort_key`
+
+### Runtime behavior
+
+**Unchanged for submit/runtime.** IC-2 helper is presentation-only. **IC-3** wires it into workload UI (read/presentation path only).
 
 ---
 
 ## IC-3 — Workload Rows Become Intake Cases
 
-**Goal:** Workload panel rows represent operational cases, not isolated submissions.
+**Status:** Shipped (May 2026)
 
-**Example row:**
+**Goal:** Workload panel rows represent operational intake cases, not isolated submissions.
 
-> **Donald Duck — Enrollment intake**  
-> 2 submissions received · Latest 2h ago · Auto-operationalized · Open opportunity
+**Modules:**
 
-Submissions accessible inside expanded row or case detail.
+- `web/lib/forms/intakeWorkspaceFilters.ts` — case-backed filter panels + counts
+- `web/components/forms/workspace/IntakeWorkspaceFilterPanelView.tsx` — case-centric row UI
 
-**Implementation:** Client-side group in `intakeWorkspaceFilters.ts` using IC-2 helper; optional server-side group later for pagination.
+### Architecture
 
-| Attribute | Value |
-|-----------|-------|
-| Migration | None |
-| Depends on | IC-2 |
+| Layer | Role |
+|-------|------|
+| Data source | Existing submission list + packet sessions (unchanged API) |
+| Presentation | `buildIntakeCasePresentationRows` (IC-2) |
+| Workload UI | One row per derived case; submissions remain evidence |
+
+**No persisted `intake_cases` table.** Cases recomputed client-side on each render.
+
+### Lane mapping (stable taxonomy)
+
+Existing workload pills unchanged. Cases map via `status_bucket` + `review_state`:
+
+| Filter pill | Case signals |
+|-------------|--------------|
+| Needs review | `review_required`, `needs_attention`, `packet_review_pending` |
+| Needs linking | `needs_linking` |
+| Recent intake | `recent`, `auto_operationalized` |
+| Waiting | `waiting`, `packet_in_progress` + orphan in-progress sessions |
+
+Submission lane counts preserved via `countIntakeWorkspaceSubmissionLanes` for diagnostics.
+
+### Row behavior
+
+- Multiple submissions → one case row with submission count
+- Latest activity timestamp from case model
+- Recommended next action from case model
+- Quick review opens `SubmissionQuickReviewModal` with **most recent submission** in case
+- Orphan packet sessions (no submissions in loaded list) still appear as session rows
+
+### IC-4 follow-on
+
+Runtime review routing shipped — configured links with `review_mode: confidence` + `auto_operationalize: true` auto-operationalize clean creates. **IC-5** emits workflow events.
 
 ---
 
 ## IC-4 — Confidence-Based Review Routing
 
-**Goal:** Change default happy path — clean new lead with complete routing does not require hard review.
+**Status:** Shipped (May 2026)
 
-**Code touch:** `applyFormIntakeSafe.ts` — revise `intakeNeedsReview` computation:
+**Goal:** Exception-based review — clean, high-confidence intake auto-operationalizes instead of always requiring human review.
 
-- Add link/form override: `review_mode: always | confidence | never` (metadata)
-- High-confidence cold create (email present, all auto-create succeeded, routing complete, no ambiguity) → `intake_needs_review: false`, stamp `intake_auto_operationalized: true`
-- Preserve review for: ambiguity, phone-only match, work unit mismatch, explicit `review_required`, disabled auto-create partial paths
+**Module:** `web/lib/forms/intake/resolveIntakeReviewDecision.ts`  
+**Runtime touch:** `web/lib/forms/intake/applyFormIntakeSafe.ts`
 
-**Emit:** pairs with IC-5 `intake_case_auto_operationalized`.
+### Review decision helper
+
+`resolveIntakeReviewDecision(input)` returns:
+
+```typescript
+{
+  needsReview: boolean;
+  reviewMode: "required" | "exception_only" | "never" | "legacy_default";
+  confidence: "high" | "medium" | "low" | "unknown";
+  reasons: string[];
+  autoOperationalized: boolean;
+  reviewReason?: string;
+}
+```
+
+### Review mode (link metadata)
+
+| `review_mode` | Behavior |
+|---------------|----------|
+| *(missing)* | **legacy_default** — new person create still requires review |
+| `always` | Always review |
+| `confidence` / `exception_only` | Review only on exceptions when `auto_operationalize: true` |
+| `never` | Skip review (explicit opt-in) |
+
+`review_required: true` overrides and forces review.
+
+### Auto-operationalize eligibility (exception mode)
+
+All required:
+
+- `auto_operationalize: true`
+- Email present for new person create
+- Opportunity created or confident duplicate attach (`matched_email` + `attached_existing`)
+- Complete routing: vertical + location + work unit on link
+- No work unit / department mismatch
+- No phone-only match, child auto-create, or ambiguous opportunity
+
+### Metadata written on submit
+
+| Field | Purpose |
+|-------|---------|
+| `intake_needs_review` | Workload lane signal (unchanged consumers) |
+| `intake_review_reason` | Operator-facing primary reason |
+| `intake_auto_operationalized` | High-confidence auto path marker |
+| `intake_confidence` | Match/decision confidence |
+| `intake_review_decision` | Structured `{ needs_review, review_mode, confidence, reasons, auto_operationalized }` |
+
+### Safe defaults
+
+Missing or legacy links **keep review on new person create**. Exception routing applies only when config explicitly sets `review_mode: confidence|exception_only` and `auto_operationalize: true`.
+
+### Demo Childcare Co regression
+
+Prepare script patches link with IC-4 fields:
+
+- `review_mode: "confidence"`
+- `auto_operationalize: true`
+
+Unit tests validate Demo routing metadata via `DEMO_CHILDCARE_MED_INTAKE_LINK_METADATA` fixture. Re-run manual Test 2D after deploy.
 
 | Attribute | Value |
 |-----------|-------|
-| Migration | None (meta flags in payload + link metadata) |
-| Runtime risk | **Medium** — changes workload lane distribution; requires Test 2D regression |
-| Preserve | Demo Childcare path; dedup attach behavior |
+| Migration | None |
+| Runtime risk | **Medium** — workload lane distribution changes for configured links |
+| Preserve | Duplicate attach; ambiguous match still review; legacy links unchanged |
+
+**IC-5** lifecycle events shipped — workflows can subscribe to operational intake outcomes.
 
 ---
 
-## IC-5 — Workflow Event Emission
+## IC-5 — Additive Intake Lifecycle Workflow Events
 
-**Goal:** Additive case-oriented events without breaking existing consumers.
+**Status:** Shipped (May 2026)
 
-| New event | When |
-|-----------|------|
-| `intake_case_created` | First submission operationalizes new opportunity (or case anchor) |
-| `intake_case_updated` | Subsequent submission attached to same anchor |
-| `intake_case_needs_review` | Review flag set |
-| `intake_case_auto_operationalized` | High-confidence auto path (IC-4) |
-| `form_intake_reviewed` | Confirm linkage or manual link clears review |
-| `duplicate_intake_attached` | Dedup attach to existing opportunity |
+**Goal:** Emit additive intake lifecycle events from the public submit path so workflow/BOS/automation can react to Intake Case outcomes.
 
-**Preserve:** `form_submitted`, `form_signed`, `form_document_generated`, `form_packet_completed`.
+**Module:** `web/lib/forms/workflow/intakeCaseLifecycleEvents.ts`  
+**Emit site:** `web/app/api/public/forms/[token]/submissions/[submissionId]/submit/route.ts` (after `form_submitted`)
 
-**Implementation:** extend `formSubmissionEvents.ts` + call sites in submit / confirm-linkage routes; register event keys in workflow config docs.
+### Event names (additive)
+
+| Event | When |
+|-------|------|
+| `intake_case_created` | Lead-capture intake ran and established a case anchor |
+| `intake_case_operationalized` | Intake auto-operationalized (IC-4) — no review required |
+| `intake_case_review_required` | Intake flagged for human review |
+| `intake_case_linked` | Confident attach to existing opportunity/family (`attached_existing` + email match) |
+
+**Unchanged:** `form_submitted`, `form_signed`, `form_document_generated`, `form_packet_completed`.
+
+**Not in IC-5:** `intake_case_packet_completed` (deferred — `form_packet_completed` already exists), confirm-linkage events, persisted `intake_cases`.
+
+### Payload contract
+
+Each event payload includes:
+
+- `org_id`, `form_id`, `form_submission_id`
+- `case_key`, `case_anchor_type`, `case_anchor_id` (derived — same rules as IC-2)
+- `opportunity_id`, `packet_session_id` (when available)
+- `review_mode`, `intake_needs_review`, `intake_auto_operationalized`, `intake_confidence`
+- `intake_review_reasons`, `source: "forms_intake"`
+- CRM FK hints: `person_id`, `customer_id`, `customer_member_id`
+
+Entity type: `form_submissions` · entity id: submission id.
+
+### Emission rules
+
+1. Only when lead-capture intake ran with a real outcome path (not `skipped_*`).
+2. Always `intake_case_created` when eligible.
+3. Then exactly one outcome event: `review_required` OR `operationalized` OR `linked`.
+4. No duplicate event types within the same submit transaction.
 
 | Attribute | Value |
 |-----------|-------|
 | Migration | None |
 | Runtime risk | Low (additive) |
+| Depends on | IC-2 case keys, IC-4 review metadata |
+
+**Follow-on:** Workflow templates/BOS triggers can subscribe to new event types; confirm-linkage path may emit review-cleared events in a later card.
 
 ---
 
-## IC-6 — Quick Review Modal Simplification
+## IC-6 — Quick Review Modal Simplification (shipped)
 
-**Goal:** Action-first modal — reduce prose density.
+**Status:** Shipped (May 2026)  
+**Goal:** Operator-first quick review aligned with Intake Case doctrine — no runtime/submit changes.
 
-**Sections:**
+### What shipped
 
-1. Who submitted?
-2. What happened? (one line)
-3. What was created/linked? (CRM chips)
-4. What needs action?
-5. Primary action (confirm / open case / generate)
-6. Secondary deep link
+- **`buildIntakeQuickReviewViewModel`** — structured modal copy from submission + derived case context
+- **Modal sections:** Intake summary → Needs action → Recommended next step → Evidence (secondary)
+- **Operator language:** “New inquiry created”, “Attached to existing family”, “Auto-operationalized”, “Review required before enrollment continues”, “No manual review required.”
+- **Preserved:** confirm-linkage flow, open intake file, admin/ops gate, case-centric quick review open from workload rows
 
-**Preserve:** Modal pattern (centered), confirm-linkage API, admin/ops gate.
+### Modal structure
+
+| Section | Content |
+|---------|---------|
+| **Intake summary** | What was captured, operational record created/attached, routing hint, case status badge |
+| **Needs action** | Action items when required; otherwise “No manual review required.” |
+| **Recommended next step** | From derived intake case `recommended_next_action` |
+| **Evidence** | Form name, timestamp, signatures, generated document, submission count |
 
 | Attribute | Value |
 |-----------|-------|
 | Migration | None |
+| Runtime | Unchanged |
+| Public renderer | Unchanged |
+
+### Files
+
+| File | Change |
+|------|--------|
+| `web/lib/forms/intakeQuickReviewPresentation.ts` | **New** — view model |
+| `web/components/forms/workspace/SubmissionQuickReviewModal.tsx` | IC-6 layout + copy |
+| `web/components/forms/workspace/IntakeWorkspaceFilterPanelView.tsx` | Pass `submissionCount` to modal |
+| `web/tests/forms/intakeQuickReviewPresentation.test.ts` | **New** |
+| `web/tests/forms/submissionQuickReviewModal.test.tsx` | **New** |
 
 ---
 
@@ -529,49 +828,65 @@ Submissions accessible inside expanded row or case detail.
 
 # Files likely touched (by card)
 
-## IC-1
+## IC-1 / IC-1b / IC-1c
 
 | File | Change |
 |------|--------|
-| `web/components/forms/workspace/FormOutcomeConfigPanel.tsx` | **New** — read-only panel |
-| `web/app/admin/forms/[formId]/FormDetailClient.tsx` | Mount panel in lifecycle / distribution region |
-| `web/lib/forms/intake/parseIntakeLinkDefaults.ts` | Export human labels / summary helper |
-| `web/lib/forms/intake/parseIntakeAutoCreateFlags.ts` | Summary helper |
-| `web/lib/forms/intake/outcomeConfigPresentation.ts` | **New** — parse + display model |
-| `web/tests/forms/outcomeConfigPresentation.test.ts` | **New** |
+| `web/lib/forms/outcomeConfigPresentation.ts` | Read-only view model |
+| `web/lib/forms/outcomeConfigEditor.ts` | **IC-1c** parse/merge/validate |
+| `web/lib/forms/resolveOutcomeConfigPickerOptions.ts` | **IC-1c** routing pickers |
+| `web/components/forms/admin/FormOutcomeConfigPanel.tsx` | IC-1 read + **IC-1c edit** |
+| `web/app/api/admin/forms/[formId]/outcome-labels/route.ts` | IC-1b labels + IC-1c pickers |
+| `web/app/api/admin/forms/[formId]/public-links/[linkId]/route.ts` | IC-1c metadata merge |
+| `web/tests/forms/outcomeConfigEditor.test.ts` | **New** |
+| `web/tests/forms/formOutcomeConfigPanel.test.tsx` | **New** |
 
-## IC-2 / IC-3
+## IC-2
 
 | File | Change |
 |------|--------|
 | `web/lib/forms/intakeCasePresentation.ts` | **New** — view model + grouping |
-| `web/lib/forms/intakeWorkspaceFilters.ts` | Group rows by case |
-| `web/components/forms/workspace/IntakeWorkspaceHubView.tsx` | Case row UI |
 | `web/tests/forms/intakeCasePresentation.test.ts` | **New** |
+
+## IC-3
+
+| File | Change |
+|------|--------|
+| `web/lib/forms/intakeWorkspaceFilters.ts` | Case-backed panels + lane mapping |
+| `web/components/forms/workspace/IntakeWorkspaceFilterPanelView.tsx` | Case-centric row UI |
+| `web/tests/forms/intakeWorkspaceFilters.test.ts` | IC-3 grouping + empty states |
+| `web/tests/forms/formsIntakeWorkspaceHub.test.tsx` | Case row assertions |
 
 ## IC-4
 
 | File | Change |
 |------|--------|
-| `web/lib/forms/intake/applyFormIntakeSafe.ts` | Confidence review rules |
-| `web/lib/public/forms/publicFormTypes.ts` | `review_mode` type |
-| `web/tests/forms/applyFormIntakeSafe.test.ts` | **New or extend** |
+| `web/lib/forms/intake/resolveIntakeReviewDecision.ts` | **New** — review decision helper |
+| `web/lib/forms/intake/applyFormIntakeSafe.ts` | Wire decision + metadata stamps |
+| `web/lib/public/forms/publicFormTypes.ts` | `review_mode`, `auto_operationalize` types |
+| `web/lib/forms/intakeRuntimeTestFixtures.ts` | Demo Childcare IC-4 metadata fixture |
+| `web/scripts/prepareDemoChildcareMedicationIntakeTest.ts` | Patch link with IC-4 fields |
+| `web/tests/forms/resolveIntakeReviewDecision.test.ts` | **New** |
 
 ## IC-5
 
 | File | Change |
 |------|--------|
-| `web/lib/forms/workflow/formSubmissionEvents.ts` | New emit helpers |
-| `web/app/api/public/forms/.../submit/route.ts` | Emit case events |
-| `web/app/api/admin/forms/submissions/.../confirm-linkage/route.ts` | `form_intake_reviewed` |
-| `docs/system/forms-intake-runtime-validation.md` | Event catalog update |
+| `web/lib/forms/workflow/intakeCaseLifecycleEvents.ts` | **New** — payload + emit helpers |
+| `web/app/api/public/forms/[token]/submissions/[submissionId]/submit/route.ts` | Emit after `form_submitted` |
+| `web/lib/workflowVocab.ts` | Register new event type keys |
+| `web/tests/forms/intakeCaseLifecycleEvents.test.ts` | **New** |
 
 ## IC-6
 
 | File | Change |
 |------|--------|
-| `web/components/forms/workspace/SubmissionQuickReviewModal.tsx` | Layout simplification |
-| `web/tests/forms/formsIntakeWorkspaceHub.test.tsx` | Modal assertions |
+| `web/lib/forms/intakeQuickReviewPresentation.ts` | **New** — operator-first view model |
+| `web/components/forms/workspace/SubmissionQuickReviewModal.tsx` | IC-6 section layout + copy |
+| `web/components/forms/workspace/IntakeWorkspaceFilterPanelView.tsx` | Pass case submission count |
+| `web/tests/forms/intakeQuickReviewPresentation.test.ts` | **New** |
+| `web/tests/forms/submissionQuickReviewModal.test.tsx` | **New** |
+| `web/tests/forms/formsIntakeWorkspaceHub.test.tsx` | Quick review trigger preserved |
 
 ## Docs (all cards)
 
@@ -582,12 +897,175 @@ Submissions accessible inside expanded row or case detail.
 
 ---
 
+# Sprint closeout (May 2026)
+
+> **Paused** — IC-5.6 comprehension + enrollment lead proof validation must pass before closeout is final.
+
+## IC-5.6 — Intake Semantics + Enrollment Opportunity Proof
+
+**Goal:** Make Forms/Intake UI understandable to operators and prove a configured enrollment lead form creates a real opportunity/lead.
+
+**Not in scope:** schema changes, persisted `intake_cases`, full forms workspace redesign, loosening child/member review safety, removing Medication Authorization validation.
+
+### Part 1 — Operational Outcome panel UX
+
+- **When this form is submitted** story summary with checkmark-style bullets (create lead, attach family, route to pipeline, review when child created)
+- Business labels: **Lead** / **Lead status** when configured status label resolves as lead (not hardcoded Inquiry)
+- Prominent multi-link variance callout: “Different links can route this form differently”
+- Distribution link selector copy: “Selected distribution link” + scope note
+- **Copy outcome settings — coming soon** (disabled affordance; full copy-across-locations is follow-up)
+
+### Part 2 — Share / distribution clarity
+
+- Top action renamed **Create link** (was ambiguous “Share”)
+- After create: scroll to distribute section; optimistic link append + quiet links refresh (no full workspace reload)
+- Tooltip explains link is created and URL is copied from Share intake below
+
+### Part 3 — Enrollment lead opportunity proof (canonical)
+
+| Path | Role |
+|------|------|
+| **Enrollment Lead — Demo** (`enrollment_lead_capture_demo`) | **Canonical proof** that forms create real opportunities/leads |
+| **Medication Authorization — Demo** | Review-required child/member path (IC-4); **not** the clean lead proof |
+
+Guardian-only demo form — no `auto_create_customer_member`. Expect auto-operationalized Recent lane, “New lead created”, workflow events `form_submitted` + `intake_case_created` + `intake_case_operationalized`.
+
+```bash
+cd web && npx tsx --tsconfig tsconfig.json scripts/prepareDemoChildcareEnrollmentLeadIntakeTest.ts
+cd web && npx tsx --tsconfig tsconfig.json scripts/qaEnrollmentLeadOpportunityProof.ts
+```
+
+Embed token: `alloy_demo_enrollment_lead_capture_v1__org_93667019-bd28-49b5-a688-acc9bb1e0a19`
+
+### Intake semantics (operator-facing)
+
+| Intake type | Primary outcome |
+|-------------|-----------------|
+| Enrollment lead intake | Opportunity-centric — new lead in enrollment pipeline |
+| Existing record / document intake | Attach / evidence-centric |
+| Packet step | Packet-centric |
+
+### Follow-up
+
+- Copy outcome settings across distribution links / locations (planned; not built in IC-5.6)
+
+## IC-5.5 — Browser/UI Validation Pass
+
+**Goal:** Validate operator flows in browser + live Demo Childcare Co before sprint closeout.
+
+**Gate script:** `web/scripts/qaIntakeCaseOperationalModelGate.ts`
+
+```bash
+cd web && npx tsx --tsconfig tsconfig.json scripts/prepareDemoChildcareMedicationIntakeTest.ts
+cd web && npx tsx --tsconfig tsconfig.json scripts/qaIntakeCaseOperationalModelGate.ts
+```
+
+**Test org / form / link:**
+
+| Field | Value |
+|-------|-------|
+| Org | Demo Childcare Co `93667019-bd28-49b5-a688-acc9bb1e0a19` |
+| Form | Medication Authorization — Demo `8432c527-8799-4a55-88c7-f860bd78e747` |
+| Public link | `187ba369-78ab-4df1-99d9-ca8d3120379f` |
+| Embed token | `alloy_demo_medication_authorization_v1__org_93667019-bd28-49b5-a688-acc9bb1e0a19` |
+| Form detail | `/adminV2/forms/8432c527-8799-4a55-88c7-f860bd78e747` |
+| Intake workspace | `/adminV2/forms` |
+
+### Gate results (Option B aligned — 7/7 pass)
+
+Last run: automated gate against Demo Childcare Co + `localhost:3000`.
+
+| Flow | Expected |
+|------|----------|
+| **B — Demo medication first submit** | Review-required: `child_member_auto_created` + `new_person_created`; Needs Review lane; `intake_case_review_required` |
+| **B2 — Lead-only auto-op** | Gate patches `auto_create_customer_member: false`; auto-operationalized; Recent lane; `intake_case_operationalized` |
+| **C — Legacy review_required** | Explicit `review_required: true` on link |
+| **D — Duplicate attach** | After Flow B (member on opportunity); second submit attaches; recent lane; grouped case stays **Needs Review** until first submission cleared |
+| **E — Workflow events** | Separate assertions for review-required vs operationalized paths |
+
+### IC-4 safety doctrine (Option B — no rule change)
+
+Demo medication intake sets `auto_create_customer_member: true`. IC-4 **correctly** blocks auto-operationalization when `memberAutoCreated` / `child_member_auto_created` is true. First-time childcare intake that creates a child profile remains **review-required** even when `review_mode: confidence` and `auto_operationalize: true` are set on the link.
+
+Auto-operationalization is proven separately via the **lead-only** gate path (`auto_create_customer_member: false`) — not by loosening IC-4.
+
+### Manual browser checklist (remaining)
+
+- [ ] Log into Demo Childcare Co
+- [ ] Form detail → Operational Outcome panel labels (no raw UUIDs)
+- [ ] Edit outcome → save → read-only refresh
+- [ ] Intake workspace pills + case row copy
+- [ ] Quick review modal from case row
+
+---
+
+# Sprint closeout (May 2026)
+
+## What shipped
+
+| Card | Deliverable |
+|------|-------------|
+| IC-0.5 | Outcome configuration doctrine + precedence |
+| IC-1 / IC-1b | Read-only operational outcome panel + label resolution |
+| IC-1c | Editable distribution link outcome config (PATCH merge) |
+| IC-2 | Derived intake case presentation model (`buildIntakeCasePresentationRows`) |
+| IC-3 | Case-centric intake workspace filter rows |
+| IC-4 | Confidence-based review routing in `applyFormIntakeSafe` |
+| IC-5 | Additive `intake_case_*` workflow lifecycle events |
+| IC-6 | Operator-first quick review modal |
+
+## Runtime behavior now supported
+
+- Public link metadata drives intake outcome (lead capture, routing, review mode, auto-operationalize)
+- Admin can edit link outcome config from form detail (IC-1c)
+- Submit path stamps `intake_needs_review`, `intake_auto_operationalized`, `intake_review_decision`
+- Workload groups submissions into derived intake cases (opportunity → packet session → submission)
+- Workflow emits `intake_case_created`, `intake_case_operationalized`, `intake_case_review_required`, `intake_case_linked`
+- Quick review modal answers: what happened, what needs action, is it operationalized, what next
+
+## Deferred follow-ons
+
+| Item | Notes |
+|------|-------|
+| Copy outcome settings across links/locations | IC-5.6 disabled “coming soon” affordance only |
+| Form-level defaults merge/mint | `form_definitions.metadata.intake_outcome` read-only; runtime merge at submit not implemented |
+| Workflow template trigger UI | Subscribe to `intake_case_*` events — no editor in this sprint |
+| Automation section editor | Outcome panel placeholders only (workflow/task/packet/document) |
+| Persisted `intake_cases` table | Only if case identity must be independent of opportunity |
+| AI document recreation | Out of scope |
+| Public renderer document composition | Out of scope |
+| Rich text inline tokens | IC-7 backlog |
+| Confirm-linkage workflow events | Deferred from IC-5 |
+| Packet/session launch label resolution on form detail | IC-1b limitation |
+
+## Regression checklist
+
+- [ ] Enrollment Lead — Demo gate (`qaEnrollmentLeadOpportunityProof.ts`) passes
+- [ ] Demo Childcare medication intake (Test 2D) — first submit Needs Review; lead-only auto-op via gate B2
+- [ ] Public embed submit — no renderer changes in sprint
+- [ ] Edit link outcome config — unknown metadata keys preserved
+- [ ] Quick review from case row — confirm linkage + open intake file
+- [ ] `cd web && npx tsc --noEmit`
+- [ ] `cd web && npm run test -- tests/forms/intakeCasePresentation.test.ts tests/forms/intakeQuickReviewPresentation.test.ts tests/forms/submissionQuickReviewModal.test.ts tests/forms/resolveIntakeReviewDecision.test.ts tests/forms/intakeCaseLifecycleEvents.test.ts tests/forms/outcomeConfigEditor.test.ts`
+
+## Recommended next sprint
+
+1. **Workflow hooks for intake lifecycle** — template triggers for `intake_case_*` events (BOS/workflow editor minimal wiring)
+2. **Form-level outcome defaults** — mint new links from form template; optional runtime merge at submit
+3. **Automation outcome editor** — wire workflow/task/packet actions from outcome panel (config-driven, not full editor)
+4. **Confirm-linkage events** — emit review-cleared lifecycle event after operator confirms match
+5. **IC-7 rich text tokens** — only if document composition becomes active priority
+
+---
+
 # Stop line
 
-**No implementation in this sprint doc pass.** Review IC-1 read-only scope and IC-4 doctrine alignment before coding.
+**IC-0.5 through IC-6 code shipped · IC-5.6 validation in progress — closeout paused.**
 
-**Suggested commit message (doc only):**
+**Suggested commit message:**
 
 ```
-Add intake case operational model sprint doc (audit, doctrine, cards).
+Simplify quick review modal for intake case doctrine and close sprint (IC-6).
+
+Operator-first modal sections with derived case context; no runtime changes.
 ```
