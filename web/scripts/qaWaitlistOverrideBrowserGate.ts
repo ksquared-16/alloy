@@ -18,7 +18,10 @@ import { config as loadEnv } from "dotenv";
 import { resolve } from "path";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { bulkLoadPlacementCandidatesByOpportunity } from "@/lib/orchestration/placement/bulkLoadPlacementCandidatesByOpportunity";
-import { resolvePlacementQueueConfig } from "@/lib/orchestration/placement/resolvePlacementQueueConfig";
+import {
+    resolvePlacementQueueConfig,
+    type ResolvedPlacementQueueConfig,
+} from "@/lib/orchestration/placement/resolvePlacementQueueConfig";
 import { __testing as queueServiceTesting } from "@/lib/queues/QueueService";
 import { parsePlacementWaitlistCandidateRowVm } from "@/lib/ui-v2/queuePlacementWaitlistCandidatePresentation";
 import {
@@ -52,7 +55,19 @@ function check(id: string, pass: boolean, detail: string) {
     checks.push({ id, pass, detail });
 }
 
-async function loadWaitlistQueueRows(supabase: ReturnType<typeof createAdminClient>, orgId: string) {
+type WaitlistQueueRow = Record<string, unknown>;
+
+type WaitlistQueueLoadResult = {
+    rows: WaitlistQueueRow[];
+    shadowMode: boolean;
+    placementResolved: ResolvedPlacementQueueConfig;
+    attachedDiagnostics?: unknown;
+};
+
+async function loadWaitlistQueueRows(
+    supabase: ReturnType<typeof createAdminClient>,
+    orgId: string
+): Promise<WaitlistQueueLoadResult> {
     const { data: wu } = await supabase
         .from("work_units")
         .select("metadata, department_id")
@@ -95,7 +110,7 @@ async function loadWaitlistQueueRows(supabase: ReturnType<typeof createAdminClie
     });
 
     if (placementResolved.status !== "enabled") {
-        return { rows: enrichedRows, shadowMode: true, placementResolved };
+        return { rows: enrichedRows as WaitlistQueueRow[], shadowMode: true, placementResolved };
     }
 
     const attached = await queueServiceTesting.attachPlacementToEnrichedOpportunityItems({
@@ -116,10 +131,15 @@ async function loadWaitlistQueueRows(supabase: ReturnType<typeof createAdminClie
     });
 
     const shadowMode =
-        placementResolved.engine_version === "v2" && placementResolved.shadow_mode !== false;
+        placementResolved.engine_version === "v2" && placementResolved.options.shadow_mode !== false;
 
     const { rows: candidateRows } = expandOpportunityRowsToPlacementCandidateRows(attached.rows);
-    return { rows: candidateRows, shadowMode, placementResolved, attachedDiagnostics: attached.diagnostics };
+    return {
+        rows: candidateRows as WaitlistQueueRow[],
+        shadowMode,
+        placementResolved,
+        attachedDiagnostics: attached.diagnostics,
+    };
 }
 
 function findCandidateRow(rows: Array<Record<string, unknown>>, candidateId: string) {
