@@ -10,6 +10,7 @@ import { OpportunityTourBookingLifecycleBar } from "@/components/admin/opportuni
 export type OpportunityInquiryTourDateBlockProps = {
     opportunityId: string;
     locationId: string;
+    statusKey?: string | null;
     metadata: unknown;
     viewerTimezone: string | null | undefined;
     canMutate: boolean;
@@ -30,6 +31,7 @@ export function OpportunityInquiryTourDateBlock(props: OpportunityInquiryTourDat
     const {
         opportunityId,
         locationId,
+        statusKey = null,
         metadata,
         viewerTimezone,
         canMutate,
@@ -52,8 +54,13 @@ export function OpportunityInquiryTourDateBlock(props: OpportunityInquiryTourDat
     if (bookingBacked && primary) {
         tourDisplay = formatTourBookingInstantSiteLocal(primary.start_at, primary.timezone);
     } else {
-        const { tourDate, tourTime } = resolveOpportunityInquiryTourDateDisplay(metadata, activeBookings);
-        tourDisplay = formatTourDateTime(tourDate, tourTime, { displayTimeZoneIana: viewerTimezone ?? null }).display;
+        const { tourDate, tourTime, displayTimeZoneIana } = resolveOpportunityInquiryTourDateDisplay(
+            metadata,
+            activeBookings
+        );
+        tourDisplay = formatTourDateTime(tourDate, tourTime, {
+            displayTimeZoneIana: displayTimeZoneIana ?? viewerTimezone ?? null,
+        }).display;
     }
 
     return (
@@ -65,6 +72,8 @@ export function OpportunityInquiryTourDateBlock(props: OpportunityInquiryTourDat
             <OpportunityTourBookingLifecycleBar
                 opportunityId={opportunityId}
                 locationId={locationId}
+                statusKey={statusKey}
+                metadata={metadata}
                 canMutate={canMutate}
                 onRefresh={onRefresh}
                 activeBookings={activeBookings}

@@ -125,6 +125,27 @@ export default function FormDetailClient() {
         void load();
     }, [load]);
 
+    const loadLinksQuiet = useCallback(async () => {
+        if (!formId) return;
+        try {
+            const linksRes = await fetch(`/api/admin/forms/${encodeURIComponent(formId)}/public-links`);
+            const linksJson = await linksRes.json().catch(() => ({}));
+            if (linksRes.ok) {
+                const raw = (linksJson as { data?: Record<string, unknown>[] }).data ?? [];
+                setLinks(
+                    raw.map((row) => {
+                        const { token_hash: _h, plaintext_token: _p, ...rest } = row;
+                        void _h;
+                        void _p;
+                        return rest as FormPublicLinkRow;
+                    })
+                );
+            }
+        } catch {
+            /* keep existing links on background refresh failure */
+        }
+    }, [formId]);
+
     const copyText = async (key: string, text: string) => {
         setCopyWarn(null);
         try {
@@ -153,7 +174,10 @@ export default function FormDetailClient() {
                 setCreateErr((json as { error?: string }).error ?? "Could not create link");
                 return;
             }
-            const d = (json as { data?: CreatedLinkPayload }).data;
+            const d = (json as {
+                data?: CreatedLinkPayload &
+                    Partial<FormPublicLinkRow> & { id?: string; created_at?: string; is_active?: boolean; metadata?: Record<string, unknown> };
+            }).data;
             if (d?.plaintext_token && d.embed_path) {
                 setCreatedOnce({
                     plaintext_token: d.plaintext_token,
@@ -163,13 +187,37 @@ export default function FormDetailClient() {
                         (typeof window !== "undefined" ? `${window.location.origin}${d.embed_path}` : null),
                 });
             }
-            void load();
+            if (d?.id) {
+                const linkId = d.id;
+                setLinks((prev) => {
+                    if (prev.some((link) => link.id === linkId)) return prev;
+                    const nextLink: FormPublicLinkRow = {
+                        id: linkId,
+                        is_active: d.is_active ?? true,
+                        created_at: d.created_at ?? new Date().toISOString(),
+                        metadata: (d.metadata ?? {}) as Record<string, unknown>,
+                        token_prefix: d.token_prefix ?? null,
+                        pinned_form_definition_version_id: d.pinned_form_definition_version_id ?? null,
+                    };
+                    return [nextLink, ...prev];
+                });
+            }
+            if (typeof window !== "undefined") {
+                requestAnimationFrame(() => {
+                    document.getElementById("lifecycle-distribute")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                });
+            }
+            void loadLinksQuiet();
         } catch (e) {
             setCreateErr((e as Error).message);
         } finally {
             setCreating(false);
         }
     };
+
+    const handleLinkMetadataSaved = useCallback((linkId: string, metadata: Record<string, unknown>) => {
+        setLinks((prev) => prev.map((link) => (link.id === linkId ? { ...link, metadata } : link)));
+    }, []);
 
     const handlePreviewForm = useCallback(async () => {
         if (!formId || !canMutate) return;
@@ -325,7 +373,15 @@ export default function FormDetailClient() {
             : detail ?
                 <FormLifecycleWorkspaceLayout
                     formId={formId}
-                    detail={detail}
+                    detail={{
+                        id: detail.id,
+                        key: detail.key,
+                        name: detail.name,
+                        kind: detail.kind,
+                        is_active: detail.is_active,
+                        metadata: detail.metadata,
+                        versions: detail.versions,
+                    }}
                     viewerTz={viewerTz}
                     canMutate={canMutate}
                     publishSummary={publishSummary}
@@ -354,6 +410,7 @@ export default function FormDetailClient() {
                     onCreateLink={() => void createPublicLink()}
                     onCopy={(key, text) => void copyText(key, text)}
                     onVersionsUpdated={() => void load()}
+                    onLinkMetadataSaved={handleLinkMetadataSaved}
                 />
             :   null}
         </FormsWorkspaceShell>

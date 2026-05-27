@@ -17,6 +17,7 @@ import {
 import type { EnrollmentWaitBucket } from "@/lib/opportunities/attentionPlatformCatalog";
 import { isEnrollmentWaitBucket } from "@/lib/opportunities/attentionPlatformCatalog";
 import type { OpportunityQueuePreviewSeed } from "@/lib/adminV2/bos/activeOperationalContext";
+import { resolveOperationalAttentionCalmState } from "@/lib/admin/drawer/operationalAttentionCalmState";
 import {
     opIntelligenceSurface,
     opLabelCaps,
@@ -87,6 +88,24 @@ export default function OperationalAttentionHeaderStrip({
     const primary = payload.primary_reason;
 
     if (!payload.needs_attention || !primary) {
+        const calm = resolveOperationalAttentionCalmState(overviewData, payload);
+        if (calm && !payload.auxiliary?.activity_stale) {
+            return (
+                <div
+                    className={
+                        chrome
+                            ? `${opIntelligenceSurface} px-2.5 py-2 text-[11px] leading-snug text-alloy-midnight/78`
+                            : "mt-2 rounded-lg border border-alloy-stone/18 bg-alloy-stone/[0.04] px-2.5 py-2 text-[12px] text-alloy-midnight/78"
+                    }
+                    data-drawer-slot="operational_attention_header"
+                    data-attention-surface="calm_state"
+                    {...(chrome ? { "data-operational-attention-canonical": "chrome" as const } : {})}
+                >
+                    <p className="font-medium text-alloy-midnight/88">{calm.headline}</p>
+                    <p className="mt-0.5 text-alloy-midnight/72">{calm.subline}</p>
+                </div>
+            );
+        }
         if (!payload.auxiliary?.activity_stale) return null;
         const line = payload.auxiliary.activity_stale.label;
         return (

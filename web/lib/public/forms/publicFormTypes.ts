@@ -27,6 +27,15 @@ export type FormPublicLinkMetadata = {
     auto_create_customer?: boolean;
     auto_create_customer_member?: boolean;
     auto_create_opportunity?: boolean;
+    /**
+     * Review routing (IC-4). `always` = review every intake; `confidence` / `exception_only` =
+     * review only on exceptions when `auto_operationalize` is true; `never` skips review.
+     */
+    review_mode?: "always" | "confidence" | "exception_only" | "never";
+    /** Force operator review regardless of confidence signals. */
+    review_required?: boolean;
+    /** Allow high-confidence intake to skip review when review_mode is confidence/exception_only. */
+    auto_operationalize?: boolean;
 };
 
 const UUID_RE =

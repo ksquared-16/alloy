@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import { TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS } from "@/lib/tours/constants";
+import { resolveTourDrawerBookingUiState } from "@/lib/tours/opportunity/resolveTourDrawerBookingUiState";
 import { OpportunityTourSlotSchedulePanel } from "@/components/admin/opportunity/tours/OpportunityTourSlotSchedulePanel";
 
 const ACTIVE = new Set<string>(TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS);
@@ -28,6 +29,8 @@ function statusLabel(statusKey: string | null | undefined): string {
 type Props = {
     opportunityId: string;
     locationId: string;
+    statusKey?: string | null;
+    metadata?: unknown;
     canMutate: boolean;
     onRefresh: () => void | Promise<void>;
     /** Shared bookings from parent — avoids duplicate GET when tour date block already loaded. */
@@ -37,7 +40,16 @@ type Props = {
 
 /** Inline actions below inquiry "Tour date" — uses tour_bookings APIs only (no duplicate Schedule entry point). */
 export function OpportunityTourBookingLifecycleBar(props: Props) {
-    const { opportunityId, locationId, canMutate, onRefresh, activeBookings, fetchEnabled = true } = props;
+    const {
+        opportunityId,
+        locationId,
+        statusKey = null,
+        metadata = null,
+        canMutate,
+        onRefresh,
+        activeBookings,
+        fetchEnabled = true,
+    } = props;
     const useSharedBookings = activeBookings != null;
     const [loading, setLoading] = useState(!useSharedBookings);
     const [err, setErr] = useState<string | null>(null);
@@ -79,7 +91,18 @@ export function OpportunityTourBookingLifecycleBar(props: Props) {
         void load();
     }, [activeBookings, load, useSharedBookings]);
 
-    const primary = useMemo(() => active[0] ?? null, [active]);
+    const uiState = useMemo(
+        () =>
+            resolveTourDrawerBookingUiState({
+                statusKey,
+                metadata,
+                locationId,
+                activeBookings: active,
+            }),
+        [active, locationId, metadata, statusKey]
+    );
+
+    const primary = uiState.kind === "active_booking" ? uiState.primary : null;
 
     const postBookingAction = async (path: string, body?: Record<string, unknown>) => {
         if (!primary) return;
@@ -106,7 +129,13 @@ export function OpportunityTourBookingLifecycleBar(props: Props) {
         }
     };
 
-    if (!locationId) return null;
+    if (uiState.kind === "missing_location") {
+        return (
+            <div className="mt-1 text-[11px] text-alloy-midnight/60" data-tour-booking-ui-state="missing_location">
+                Add a location to this inquiry to manage tour bookings.
+            </div>
+        );
+    }
 
     if (loading) {
         return <div className="mt-1 text-[11px] text-alloy-midnight/45">Loading tour booking…</div>;
@@ -114,6 +143,23 @@ export function OpportunityTourBookingLifecycleBar(props: Props) {
     if (err) {
         return <div className="mt-1 text-[11px] text-red-700">{err}</div>;
     }
+
+    if (uiState.kind === "metadata_only") {
+        return (
+            <div
+                className="mt-1.5 rounded-md border border-amber-200/70 bg-amber-50/40 px-2 py-1.5 text-[11px] leading-snug text-alloy-midnight/78"
+                data-tour-booking-ui-state="metadata_only"
+            >
+                <p className="font-medium text-alloy-midnight/88">Tour scheduled on file — no active booking found</p>
+                <p className="mt-0.5">
+                    {uiState.legacyMetadataOnly
+                        ? "This record was scheduled with the legacy date/time path (metadata only). Use Schedule tour to create a booking-backed tour."
+                        : "Status shows Tour Scheduled, but there is no active tour_bookings row. Use Schedule tour to repair or create the booking."}
+                </p>
+            </div>
+        );
+    }
+
     if (!primary) {
         return null;
     }
@@ -123,7 +169,7 @@ export function OpportunityTourBookingLifecycleBar(props: Props) {
     const canComplete = canMutate && ["confirmed", "rescheduled"].includes(primary.status_key);
 
     return (
-        <div className="mt-1.5 space-y-1">
+        <div className="mt-1.5 space-y-1" data-tour-booking-ui-state="active_booking">
             <p className="text-[11px] text-alloy-midnight/70">
                 Status: {statusLabel(primary.status_key)}
                 {ACTIVE.has(primary.status_key) ? (

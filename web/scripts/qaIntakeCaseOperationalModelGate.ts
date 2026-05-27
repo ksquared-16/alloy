@@ -286,7 +286,10 @@ async function flowA(supabase: ReturnType<typeof createAdminClient>) {
         departmentId: String(targetLink!.metadata.default_department_id ?? ""),
         verticalId: String(targetLink!.metadata.default_vertical_id ?? ""),
         statusKey: String(targetLink!.metadata.default_opportunity_status_key ?? "new"),
-        source: String(targetLink!.metadata.intake_opportunity_source ?? "embed"),
+        source: (() => {
+            const raw = String(targetLink!.metadata.intake_opportunity_source ?? "embed").trim();
+            return raw === "public_form" || raw === "embed" ? raw : "embed";
+        })(),
     });
     assert(merged.runtime_test === "forms_2d_demo_childcare", "unknown metadata key runtime_test preserved", errors);
     assert(merged.review_mode === "confidence", "edit merge writes review_mode", errors);

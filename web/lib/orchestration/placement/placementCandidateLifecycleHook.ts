@@ -29,7 +29,7 @@ export async function ensurePlacementCandidateForWaitlistedChild(
     }
 ): Promise<EnsurePlacementCandidateHookResult> {
     if (!isPlacementLifecycleCandidateHookEnabled()) {
-        return { attempted: false, skipped_reason: "hook_disabled" };
+        return { attempted: false, created: false, skipped_reason: "hook_disabled" };
     }
 
     const { data: opp, error: oppErr } = await supabase

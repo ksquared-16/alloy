@@ -169,6 +169,13 @@ ORDER BY tb.created_at DESC;
 
 Expected: after confirm/reschedule, prior pending rows for the booking are canceled/replaced and new rows appear with `metadata.reminder_key` values such as `tour_reminder_24h` / `tour_reminder_2h` (per org/location comms config).
 
+### Work-unit load audit (Tour Scheduled)
+
+- **Rows API:** `GET /api/admin/queues/{workUnitId}/{queueKey}` → `QueueService.getWorkUnitQueueItems` (status filter + enrichment).
+- **Counts API:** `GET /api/admin/queues/{workUnitId}/summaries` → per-lane COUNT queries; v2 canonical key is `tours` while legacy dept links may still pass `?queue=tour_scheduled` (alias).
+- **Known parity bug fixed (May 2026):** client compared `queueItems.queue.key` (`tours`) to selected pill key (`tour_scheduled`), dropping buffered rows after refresh and showing empty/mismatched counts. Fix resolves alias → canonical key before fetch and summary lookup.
+- **Post-schedule refresh:** drawer dispatches `adminv2:opportunity-updated`, which busts queue row cache and refetches rows + summaries in parallel — intentional for lane movement; broader prefetch/debounce optimization is future work.
+
 ---
 
 ## References

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { enrichActivityEventsWithCommunicationChannels } from "@/lib/admin/enrichActivityEventsWithCommunicationChannels";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 
@@ -44,5 +45,7 @@ export async function GET(request: NextRequest) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    return NextResponse.json({ events: rows ?? [] });
+    const events = await enrichActivityEventsWithCommunicationChannels(supabase, ctx.orgId, rows ?? []);
+
+    return NextResponse.json({ events });
 }

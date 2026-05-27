@@ -38,6 +38,8 @@ const INTAKE_METADATA = {
     default_department_id: ENROLLMENT_DEPT_ID,
     default_work_unit_id: ENROLLMENT_WORK_UNIT_ID,
     default_opportunity_status_key: "new",
+    review_mode: "confidence",
+    auto_operationalize: true,
     embed_mode: true,
     intake_opportunity_source: "embed",
     runtime_test: "forms_2d_demo_childcare",
@@ -176,8 +178,13 @@ async function main() {
             pinnedVersionId: link.pinned_form_definition_version_id,
             finalMetadata,
             expectedFirstSubmit: {
-                workloadPill: "Review (needs_review)",
-                narrative: "New family intake created CRM records",
+                workloadPill: "Needs Review",
+                narrative:
+                    "New inquiry created — review required (child member auto-created; IC-4 blocks auto-operationalize)",
+                intake_auto_operationalized: false,
+                intake_needs_review: true,
+                intake_review_reasons: ["new_person_created", "child_member_auto_created"],
+                workflowEvent: "intake_case_review_required",
                 opportunity: {
                     vertical_id: CHILDCARE_VERTICAL_ID,
                     location_id: centerLocationId,
@@ -186,6 +193,18 @@ async function main() {
                     status_key: "new",
                     source: "embed",
                 },
+            },
+            expectedLeadOnlyAutoOpSubmit: {
+                note: "Gate patches link with auto_create_customer_member: false for IC-4 auto-op proof",
+                metadata: {
+                    ...INTAKE_METADATA,
+                    auto_create_customer_member: false,
+                    runtime_test: "forms_2d_demo_childcare_lead_only_auto_op",
+                },
+                workloadPill: "Recent (auto_operationalized)",
+                intake_auto_operationalized: true,
+                intake_needs_review: false,
+                workflowEvent: "intake_case_operationalized",
             },
             expectedSecondSubmit: {
                 workloadPill: "Recent",

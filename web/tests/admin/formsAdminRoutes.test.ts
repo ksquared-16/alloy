@@ -1076,6 +1076,44 @@ describe("Admin forms routes", () => {
         expect(storeRef.publicLinks[lid].token_hash).toBe("h");
     });
 
+    it("PATCH public link merges metadata without dropping unknown keys (IC-1c)", async () => {
+        const fid = crypto.randomUUID();
+        const lid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        storeRef.publicLinks[lid] = {
+            id: lid,
+            org_id: ORG,
+            form_definition_id: fid,
+            token_hash: "h",
+            token_prefix: "pre",
+            pinned_form_definition_version_id: null,
+            is_active: true,
+            expires_at: null,
+            allowed_embed_origins: null,
+            metadata: { runtime_test: "keep", label: "Demo" },
+            rate_limit_profile: null,
+            created_at: new Date().toISOString(),
+            updated_at: null,
+            last_used_at: null,
+        };
+        const res = await patchPublicLink(
+            new NextRequest("http://x", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    metadata: { lead_capture: true, auto_operationalize: true, review_mode: "confidence" },
+                }),
+            }),
+            { params: Promise.resolve({ formId: fid, linkId: lid }) }
+        );
+        expect(res.status).toBe(200);
+        const j = (await res.json()) as { data: { metadata: Record<string, unknown> } };
+        expect(j.data.metadata.runtime_test).toBe("keep");
+        expect(j.data.metadata.label).toBe("Demo");
+        expect(j.data.metadata.auto_operationalize).toBe(true);
+        expect(j.data.metadata.review_mode).toBe("confidence");
+    });
+
     it("returns 404 when form belongs to another org", async () => {
         const fid = crypto.randomUUID();
         storeRef.forms[fid] = {

@@ -5956,6 +5956,9 @@
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-count-badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.2rem;
   flex-shrink: 0;
   font-size: 11px;
   font-weight: 800;
@@ -5965,6 +5968,12 @@
   border: 1px solid color-mix(in srgb, var(--d-brand) 16%, color-mix(in srgb, var(--d-pine) 22%, var(--d-border)));
   color: color-mix(in srgb, var(--d-muted) 42%, color-mix(in srgb, var(--d-brand) 18%, var(--d-text-primary, #273f52)));
   background: color-mix(in srgb, var(--d-brand) 6%, color-mix(in srgb, var(--d-pine) 6%, var(--d-surface)));
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-count-unit {
+  font-size: 9px;
+  font-weight: 600;
+  opacity: 0.78;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-summary {

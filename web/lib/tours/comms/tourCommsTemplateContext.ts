@@ -1,4 +1,5 @@
 import { formatInTimeZone } from "date-fns-tz";
+import { formatTourCommsTimezoneLabel } from "@/lib/tours/comms/formatTourCommsTimezoneLabel";
 
 import { isValidIanaTimeZone, UTC_FALLBACK_IANA } from "@/lib/admin/timezoneContract";
 import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
@@ -91,6 +92,7 @@ export function buildTourCommsMergeFields(ctx: TourCommsTemplateContext): Record
             : formatTourCommsDateTimeLabels({ tourStartAt: ctx.tourStartAt, timezone: ctx.timezone });
 
     const tz = resolveIana(ctx.timezone);
+    const timezoneFriendly = formatTourCommsTimezoneLabel(tz);
     const parent = firstName(ctx.parentName);
     const locationName = String(ctx.locationName ?? "").trim();
     const locationAddress = String(ctx.locationAddress ?? "").trim();
@@ -105,6 +107,7 @@ export function buildTourCommsMergeFields(ctx: TourCommsTemplateContext): Record
         tour_start_at: String(ctx.tourStartAt ?? "").trim(),
         tour_end_at: String(ctx.tourEndAt ?? "").trim(),
         timezone: tz,
+        timezone_friendly_label: timezoneFriendly,
         tour_date_label: dt.tourDateLabel,
         tour_time_label: dt.tourTimeLabel,
         tour_display_label: dt.tourDisplayLabel,
