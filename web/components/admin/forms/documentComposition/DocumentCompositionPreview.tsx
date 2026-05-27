@@ -275,13 +275,16 @@ export function DocumentCompositionPreview({
 
     return (
         <div
-            className={clsx("w-full rounded-xl bg-alloy-stone/20 px-3 py-3 ring-1 ring-alloy-midnight/[0.08]", className)}
+            className={clsx(
+                "w-full rounded-xl bg-gradient-to-br from-alloy-stone/30 via-white to-alloy-stone/20 px-3 py-3 shadow-[0_1px_3px_rgba(49,57,77,0.07)] ring-1 ring-alloy-midnight/[0.08]",
+                className
+            )}
             data-testid="document-composition-preview"
         >
             <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/50">Live preview</p>
             <p className={clsx("mt-0.5", opMutedMeta)}>Hover a field to reorder or move sections.</p>
             <div
-                className="mt-2 space-y-3 rounded-lg bg-white/95 px-4 py-4 ring-1 ring-alloy-midnight/[0.06]"
+                className="mt-2 space-y-3 rounded-lg bg-white px-4 py-4 shadow-[0_1px_2px_rgba(49,57,77,0.04)] ring-1 ring-alloy-midnight/[0.06]"
                 data-testid="document-composition-preview-canvas"
             >
                 {blocks.map((block) => (

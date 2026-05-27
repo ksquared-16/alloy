@@ -13,7 +13,7 @@ import {
     resolveDocumentComposition,
 } from "@/lib/forms/documentCompositionAuthoring";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
-import { opMetadata } from "@/lib/operational/ui/operationalVisualTokens";
+import { opMetadata, opCaseFileCanvas } from "@/lib/operational/ui/operationalVisualTokens";
 
 type Props = {
     schema: FormSchemaV1;
@@ -86,7 +86,8 @@ export function FormDocumentAuthoringShell({ schema, onChange, disabled = false 
                 Compose the intake document below. Preview updates as you edit — save draft to persist composition.
             </p>
 
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(420px,520px)] lg:items-start">
+            <div className={clsx(opCaseFileCanvas, "space-y-4")} data-testid="form-document-authoring-studio">
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(420px,520px)] lg:items-start">
                 <div className="min-w-0">
                     <DocumentCompositionEditor
                         schema={schema}
@@ -116,6 +117,7 @@ export function FormDocumentAuthoringShell({ schema, onChange, disabled = false 
                         Recipient preview opens from the toolbar when published.
                     </p>
                 </aside>
+            </div>
             </div>
         </div>
     );

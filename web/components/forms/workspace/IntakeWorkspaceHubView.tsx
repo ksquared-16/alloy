@@ -6,9 +6,11 @@ import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { TechnicalDetailDisclosure } from "@/components/forms/review";
 import { FormsWorkspaceShell } from "@/components/forms/workspace";
+import { IntakeCommandCenterKpiStrip } from "@/components/forms/workspace/IntakeCommandCenterKpiStrip";
 import { IntakeWorkspaceFilterPanelView } from "@/components/forms/workspace/IntakeWorkspaceFilterPanelView";
 import { IntakeWorkloadFilterStrip } from "@/components/forms/workspace/IntakeWorkloadFilterStrip";
 import type { IntakeCommandCenterSessionRow } from "@/lib/forms/intakeCommandCenterPresentation";
+import { deriveIntakeCommandCenterSnapshot } from "@/lib/forms/intakeCommandCenterPresentation";
 import { FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
 import {
     buildIntakeWorkspaceFilterPanel,
@@ -17,7 +19,11 @@ import {
     type IntakeWorkspaceFilterKey,
 } from "@/lib/forms/intakeWorkspaceFilters";
 import type { SubmissionInboxRow } from "@/lib/forms/submissionInboxPresentation";
-import { opMetadata } from "@/lib/operational/ui/operationalVisualTokens";
+import {
+    opCaseFileCanvas,
+    opMetadata,
+    opOrientationSurface,
+} from "@/lib/operational/ui/operationalVisualTokens";
 
 export type IntakeWorkspaceFormRow = {
     id: string;
@@ -38,9 +44,9 @@ export type IntakeWorkspacePacketRow = {
 export type IntakeWorkspaceSubmissionRow = SubmissionInboxRow;
 
 export const intakeWorkspaceBtnPrimary =
-    "rounded-lg bg-alloy-blue px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-40";
+    "rounded-lg border border-alloy-blue/20 bg-alloy-blue px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-40";
 export const intakeWorkspaceBtnSecondary =
-    "rounded-lg px-3 py-1.5 text-xs font-medium text-alloy-midnight/75 hover:bg-alloy-stone/30 hover:text-alloy-midnight disabled:opacity-40";
+    "rounded-lg border border-alloy-midnight/10 bg-white px-3.5 py-2 text-xs font-medium text-alloy-midnight/85 shadow-sm hover:bg-alloy-stone/20 hover:text-alloy-midnight disabled:opacity-40";
 
 type Props = {
     viewerTz: string;
@@ -80,6 +86,17 @@ export function IntakeWorkspaceHubView({
         [submissions, sessions, forms, packets]
     );
 
+    const commandCenter = useMemo(
+        () =>
+            deriveIntakeCommandCenterSnapshot({
+                submissions,
+                sessions,
+                forms,
+                formsById,
+            }),
+        [submissions, sessions, forms, formsById]
+    );
+
     const [activeFilter, setActiveFilter] = useState<IntakeWorkspaceFilterKey>(() =>
         defaultIntakeWorkspaceFilter(filterCounts)
     );
@@ -96,12 +113,10 @@ export function IntakeWorkspaceHubView({
         [activeFilter, submissions, sessions, forms, packets, formsById]
     );
 
-    const reviewCount = filterCounts.needs_review + filterCounts.needs_linking;
-
     return (
         <FormsWorkspaceShell
-            title="Forms"
-            subtitle="Intake workload, packets, sessions, and submissions."
+            title="Intake workspace"
+            subtitle="Command center for review, linkage, and intake distribution."
             actions={
                 canMutate && onToggleCreate ?
                     <button type="button" className={intakeWorkspaceBtnPrimary} onClick={onToggleCreate}>
@@ -118,24 +133,15 @@ export function IntakeWorkspaceHubView({
             : error ?
                 <p className="text-sm text-alloy-ember">{error}</p>
             :   <div data-testid="intake-workspace-command-center" className="space-y-4">
-                    <div
-                        className="flex flex-wrap items-center justify-between gap-3"
-                        data-testid="intake-command-orientation"
-                    >
-                        <div>
-                            <p className="text-sm font-semibold text-alloy-midnight">
-                                {reviewCount > 0 ?
-                                    `${reviewCount} need review or linkage`
-                                : filterCounts.waiting > 0 ?
-                                    `${filterCounts.waiting} waiting on families`
-                                :   "Workload is clear"}
-                            </p>
-                            <p className={opMetadata}>
-                                {filterCounts.forms} forms · {filterCounts.packets} packets ·{" "}
-                                {filterCounts.needs_review + filterCounts.needs_linking + filterCounts.waiting} active
-                            </p>
-                        </div>
-                        <div className="flex flex-wrap gap-1">
+                    <div className={opOrientationSurface} data-testid="intake-command-orientation">
+                        <p className="text-sm font-semibold text-alloy-midnight">{commandCenter.urgencyHeadline}</p>
+                        <p className={clsx("mt-1", opMetadata)}>{commandCenter.healthyLine}</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                            {commandCenter.primaryCta ?
+                                <Link href={commandCenter.primaryCta.href} className={intakeWorkspaceBtnPrimary}>
+                                    {commandCenter.primaryCta.label}
+                                </Link>
+                            :   null}
                             <Link href={FORMS_MODULE_ROUTES.submissionsHub} className={intakeWorkspaceBtnSecondary}>
                                 Submissions
                             </Link>
@@ -148,13 +154,15 @@ export function IntakeWorkspaceHubView({
                         </div>
                     </div>
 
-                    <div data-testid="intake-workspace-canvas" className="space-y-3">
+                    <IntakeCommandCenterKpiStrip kpis={commandCenter.kpis} />
+
+                    <div className={clsx(opCaseFileCanvas, "space-y-3")} data-testid="intake-workspace-canvas">
                         <IntakeWorkloadFilterStrip
                             counts={filterCounts}
                             selected={activeFilter}
                             onSelect={setActiveFilter}
                         />
-                        <div className="rounded-xl bg-white/80 px-4 py-3 ring-1 ring-alloy-midnight/[0.06]">
+                        <div className="rounded-xl bg-white/95 px-4 py-3 shadow-[0_1px_3px_rgba(49,57,77,0.05)] ring-1 ring-alloy-midnight/[0.07]">
                             <IntakeWorkspaceFilterPanelView panel={panel} />
                         </div>
                     </div>

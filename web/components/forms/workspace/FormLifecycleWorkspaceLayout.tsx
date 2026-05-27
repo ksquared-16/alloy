@@ -35,6 +35,7 @@ import {
     opGroupedSurface,
     opInsightSupport,
     opMetadata,
+    opOrientationSurface,
     opRegionSeparator,
 } from "@/lib/operational/ui/operationalVisualTokens";
 
@@ -123,7 +124,7 @@ export function FormLifecycleWorkspaceLayout({
 
     return (
         <>
-            <div className="rounded-lg border border-alloy-midnight/[0.06] bg-alloy-stone/15 px-3 py-2" data-testid="form-lifecycle-orientation">
+            <div className={opOrientationSurface} data-testid="form-lifecycle-orientation">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-2">
                         <FormsReviewBadge label={publishSummary} tone={publishTone} />

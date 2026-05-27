@@ -52,7 +52,7 @@ export function DocumentCompositionBlockCard({
 
     return (
         <div
-            className="rounded-lg bg-white/95 px-2.5 py-2 ring-1 ring-alloy-midnight/[0.06]"
+            className="rounded-xl bg-white px-2.5 py-2 shadow-[0_1px_2px_rgba(49,57,77,0.05)] ring-1 ring-alloy-midnight/[0.07]"
             data-testid={`document-block-card-${block.type}-${block.id}`}
         >
             <div className="flex flex-wrap items-start justify-between gap-2">
