@@ -503,6 +503,42 @@ AS $function$
   WHERE r.detail IS NOT NULL;
 $function$
 "
+public,claim_due_communication_scheduled_sends,function,plpgsql,VOLATILE,false,"p_limit integer, p_now timestamp with time zone, p_org_id uuid",communication_scheduled_sends,"CREATE OR REPLACE FUNCTION public.claim_due_communication_scheduled_sends(p_limit integer, p_now timestamp with time zone, p_org_id uuid DEFAULT NULL::uuid)
+ RETURNS SETOF communication_scheduled_sends
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    IF p_limit IS NULL OR p_limit < 1 THEN
+        RAISE EXCEPTION 'claim_due_communication_scheduled_sends: p_limit must be >= 1';
+    END IF;
+
+    RETURN QUERY
+    WITH picked AS (
+        SELECT css.id
+        FROM public.communication_scheduled_sends AS css
+        WHERE css.status = 'pending'::text
+          AND css.scheduled_for <= p_now
+          AND css.communication_message_id IS NULL
+          AND (p_org_id IS NULL OR css.org_id = p_org_id)
+        ORDER BY css.scheduled_for ASC, css.id ASC
+        FOR UPDATE OF css SKIP LOCKED
+        LIMIT p_limit
+    ),
+    updated AS (
+        UPDATE public.communication_scheduled_sends AS t
+        SET
+            status = 'claimed'::text,
+            claim_token = gen_random_uuid(),
+            claimed_at = p_now,
+            updated_at = now()
+        FROM picked
+        WHERE t.id = picked.id
+        RETURNING t.*
+    )
+    SELECT * FROM updated;
+END;
+$function$
+"
 public,current_org_id,function,sql,STABLE,true,,uuid,"CREATE OR REPLACE FUNCTION public.current_org_id()
  RETURNS uuid
  LANGUAGE sql
@@ -527,6 +563,125 @@ begin
   cents := round(base_cents * pct)::int;
   return public.round_to_nearest_5_cents(cents);
 end;
+$function$
+"
+public,enforce_communication_scheduled_sends_org_matches_entities,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.enforce_communication_scheduled_sends_org_matches_entities()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    opp_org uuid;
+    person_org uuid;
+BEGIN
+    SELECT o.org_id INTO opp_org FROM public.opportunities o WHERE o.id = NEW.entity_id;
+    IF opp_org IS NULL OR opp_org <> NEW.org_id THEN
+        RAISE EXCEPTION 'communication_scheduled_sends: entity org mismatch' USING ERRCODE = '23514';
+    END IF;
+    SELECT p.org_id INTO person_org FROM public.persons p WHERE p.id = NEW.recipient_person_id;
+    IF person_org IS NULL OR person_org <> NEW.org_id THEN
+        RAISE EXCEPTION 'communication_scheduled_sends: recipient person org mismatch' USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END;
+$function$
+"
+public,enforce_form_definition_versions_immutability,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.enforce_form_definition_versions_immutability()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    IF TG_OP <> 'UPDATE' THEN
+        RETURN NEW;
+    END IF;
+
+    IF OLD.status = 'published'::text THEN
+        IF NEW.status = 'archived'::text AND OLD.status IS DISTINCT FROM NEW.status THEN
+            IF NEW.schema_json IS DISTINCT FROM OLD.schema_json
+                OR NEW.pdf_mapping_json IS DISTINCT FROM OLD.pdf_mapping_json
+                OR NEW.version_number IS DISTINCT FROM OLD.version_number
+                OR NEW.published_at IS DISTINCT FROM OLD.published_at
+                OR NEW.published_by_user_id IS DISTINCT FROM OLD.published_by_user_id
+                OR NEW.form_definition_id IS DISTINCT FROM OLD.form_definition_id
+                OR NEW.org_id IS DISTINCT FROM OLD.org_id
+                OR NEW.metadata IS DISTINCT FROM OLD.metadata
+            THEN
+                RAISE EXCEPTION 'form_definition_versions: only status may change when archiving a published version';
+            END IF;
+            RETURN NEW;
+        END IF;
+
+        IF NEW.schema_json IS DISTINCT FROM OLD.schema_json
+            OR NEW.pdf_mapping_json IS DISTINCT FROM OLD.pdf_mapping_json
+            OR NEW.version_number IS DISTINCT FROM OLD.version_number
+            OR NEW.published_at IS DISTINCT FROM OLD.published_at
+            OR NEW.published_by_user_id IS DISTINCT FROM OLD.published_by_user_id
+            OR NEW.form_definition_id IS DISTINCT FROM OLD.form_definition_id
+            OR NEW.org_id IS DISTINCT FROM OLD.org_id
+            OR NEW.metadata IS DISTINCT FROM OLD.metadata
+            OR NEW.status IS DISTINCT FROM OLD.status
+        THEN
+            RAISE EXCEPTION 'form_definition_versions: published rows are immutable (publish -> archive only)';
+        END IF;
+        RETURN NEW;
+    END IF;
+
+    IF OLD.status = 'archived'::text THEN
+        -- Allow updated_at-only bumps from set_updated_at; all substantive columns frozen
+        IF NEW.id IS DISTINCT FROM OLD.id
+            OR NEW.form_definition_id IS DISTINCT FROM OLD.form_definition_id
+            OR NEW.org_id IS DISTINCT FROM OLD.org_id
+            OR NEW.version_number IS DISTINCT FROM OLD.version_number
+            OR NEW.status IS DISTINCT FROM OLD.status
+            OR NEW.schema_json IS DISTINCT FROM OLD.schema_json
+            OR NEW.pdf_mapping_json IS DISTINCT FROM OLD.pdf_mapping_json
+            OR NEW.published_at IS DISTINCT FROM OLD.published_at
+            OR NEW.published_by_user_id IS DISTINCT FROM OLD.published_by_user_id
+            OR NEW.metadata IS DISTINCT FROM OLD.metadata
+            OR NEW.created_at IS DISTINCT FROM OLD.created_at
+        THEN
+            RAISE EXCEPTION 'form_definition_versions: archived rows are immutable';
+        END IF;
+        RETURN NEW;
+    END IF;
+
+    RETURN NEW;
+END;
+$function$
+"
+public,enforce_form_submissions_submitted_immutability,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.enforce_form_submissions_submitted_immutability()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    IF TG_OP <> 'UPDATE' THEN
+        RETURN NEW;
+    END IF;
+
+    IF OLD.status IS DISTINCT FROM 'submitted'::text AND OLD.status IS DISTINCT FROM 'void'::text THEN
+        RETURN NEW;
+    END IF;
+
+    IF NEW.form_definition_version_id IS DISTINCT FROM OLD.form_definition_version_id
+        OR NEW.form_definition_id IS DISTINCT FROM OLD.form_definition_id
+    THEN
+        RAISE EXCEPTION 'form_submissions: finalized rows cannot change payload or form version linkage';
+    END IF;
+
+    IF public.form_submission_canonical_capture(NEW.payload) IS DISTINCT FROM public.form_submission_canonical_capture(OLD.payload)
+    THEN
+        RAISE EXCEPTION 'form_submissions: finalized rows cannot change captured answers';
+    END IF;
+
+    IF OLD.status = 'submitted'::text AND NEW.status IS DISTINCT FROM OLD.status THEN
+        IF NEW.status <> 'void'::text THEN
+            RAISE EXCEPTION 'form_submissions: submitted rows may only transition to void';
+        END IF;
+    ELSIF OLD.status = 'void'::text AND NEW.status IS DISTINCT FROM OLD.status THEN
+        RAISE EXCEPTION 'form_submissions: void rows cannot change status';
+    END IF;
+
+    RETURN NEW;
+END;
 $function$
 "
 public,enforce_jobs_work_unit_same_org,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.enforce_jobs_work_unit_same_org()
@@ -556,6 +711,21 @@ BEGIN
   END IF;
 
   RETURN NEW;
+END;
+$function$
+"
+public,enforce_operational_tasks_org_matches_opportunity,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.enforce_operational_tasks_org_matches_opportunity()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    opp_org uuid;
+BEGIN
+    SELECT o.org_id INTO opp_org FROM public.opportunities o WHERE o.id = NEW.entity_id;
+    IF opp_org IS NULL OR opp_org <> NEW.org_id THEN
+        RAISE EXCEPTION 'operational_tasks: entity org mismatch' USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
 END;
 $function$
 "
@@ -589,6 +759,24 @@ BEGIN
 END;
 $function$
 "
+public,enforce_task_assist_proposals_org_matches_opportunity,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.enforce_task_assist_proposals_org_matches_opportunity()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    opp_org uuid;
+BEGIN
+    SELECT o.org_id INTO opp_org FROM public.opportunities o WHERE o.id = NEW.entity_id;
+    IF opp_org IS NULL THEN
+        RAISE EXCEPTION 'task_assist_proposals: entity_id % not found', NEW.entity_id USING ERRCODE = '23503';
+    END IF;
+    IF opp_org <> NEW.org_id THEN
+        RAISE EXCEPTION 'task_assist_proposals: org_id does not match opportunity.org_id' USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END;
+$function$
+"
 public,ensure_vendor_primary_contact_link,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.ensure_vendor_primary_contact_link()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -618,6 +806,21 @@ begin
     return query select 9000, 1000; -- job 11+
   end if;
 end;
+$function$
+"
+public,form_submission_canonical_capture,function,sql,IMMUTABLE,false,p jsonb,jsonb,"CREATE OR REPLACE FUNCTION public.form_submission_canonical_capture(p jsonb)
+ RETURNS jsonb
+ LANGUAGE sql
+ IMMUTABLE
+AS $function$
+    SELECT jsonb_build_object(
+        'values',
+        COALESCE(p -> 'values', '{}'::jsonb),
+        'signatures',
+        COALESCE(p -> 'signatures', '{}'::jsonb),
+        'option_values_by_field_id',
+        COALESCE(p -> 'option_values_by_field_id', '{}'::jsonb)
+    );
 $function$
 "
 public,get_quote_pricing,function,plpgsql,VOLATILE,true,"p_vertical_slug text, p_service_key text, p_sqft_key text, p_frequency_key text, p_addon_keys text[]",record,"CREATE OR REPLACE FUNCTION public.get_quote_pricing(p_vertical_slug text, p_service_key text, p_sqft_key text, p_frequency_key text, p_addon_keys text[] DEFAULT '{}'::text[])
@@ -1242,6 +1445,173 @@ BEGIN
 END;
 $function$
 "
+public,sync_form_definition_versions_org_id,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.sync_form_definition_versions_org_id()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    p_org uuid;
+BEGIN
+    SELECT fd.org_id INTO p_org
+    FROM public.form_definitions fd
+    WHERE fd.id = NEW.form_definition_id;
+    IF p_org IS NULL THEN
+        RAISE EXCEPTION 'form_definition_versions: form_definition_id % not found', NEW.form_definition_id;
+    END IF;
+    IF NEW.org_id IS NOT NULL AND NEW.org_id <> p_org THEN
+        RAISE EXCEPTION 'form_definition_versions: org_id must match form_definitions.org_id';
+    END IF;
+    NEW.org_id := p_org;
+    RETURN NEW;
+END;
+$function$
+"
+public,sync_form_packet_items_org_from_packet,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.sync_form_packet_items_org_from_packet()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    p_org uuid;
+BEGIN
+    SELECT fpd.org_id INTO p_org
+    FROM public.form_packet_definitions fpd
+    WHERE fpd.id = NEW.packet_definition_id;
+    IF p_org IS NULL THEN
+        RAISE EXCEPTION 'form_packet_items: packet_definition_id % not found', NEW.packet_definition_id;
+    END IF;
+    IF NEW.org_id IS NOT NULL AND NEW.org_id <> p_org THEN
+        RAISE EXCEPTION 'form_packet_items: org_id must match form_packet_definitions.org_id';
+    END IF;
+    NEW.org_id := p_org;
+    RETURN NEW;
+END;
+$function$
+"
+public,sync_form_packet_session_items_org_from_session,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.sync_form_packet_session_items_org_from_session()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    o uuid;
+BEGIN
+    SELECT fps.org_id INTO o FROM public.form_packet_sessions fps WHERE fps.id = NEW.packet_session_id;
+    IF o IS NULL THEN
+        RAISE EXCEPTION 'form_packet_session_items: packet_session_id not found';
+    END IF;
+    NEW.org_id := o;
+    RETURN NEW;
+END;
+$function$
+"
+public,sync_form_packet_sessions_org_from_packet_def,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.sync_form_packet_sessions_org_from_packet_def()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    p_org uuid;
+BEGIN
+    SELECT fpd.org_id INTO p_org
+    FROM public.form_packet_definitions fpd
+    WHERE fpd.id = NEW.packet_definition_id;
+    IF p_org IS NULL THEN
+        RAISE EXCEPTION 'form_packet_sessions: packet_definition_id not found';
+    END IF;
+    IF NEW.org_id IS NOT NULL AND NEW.org_id <> p_org THEN
+        RAISE EXCEPTION 'form_packet_sessions: org_id must match packet definition org';
+    END IF;
+    NEW.org_id := p_org;
+    RETURN NEW;
+END;
+$function$
+"
+public,sync_form_public_links_org_from_definition,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.sync_form_public_links_org_from_definition()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    p_org uuid;
+BEGIN
+    IF TG_OP = 'UPDATE' AND NEW.form_definition_id IS NOT DISTINCT FROM OLD.form_definition_id THEN
+        RETURN NEW;
+    END IF;
+    SELECT fd.org_id INTO p_org FROM public.form_definitions fd WHERE fd.id = NEW.form_definition_id;
+    IF p_org IS NULL THEN
+        RAISE EXCEPTION 'form_public_links: form_definition_id invalid';
+    END IF;
+    NEW.org_id := p_org;
+    RETURN NEW;
+END;
+$function$
+"
+public,sync_form_submission_documents_org_from_submission,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.sync_form_submission_documents_org_from_submission()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    o uuid;
+BEGIN
+    SELECT fs.org_id INTO o FROM public.form_submissions fs WHERE fs.id = NEW.form_submission_id;
+    IF o IS NULL THEN
+        RAISE EXCEPTION 'form_submission_documents: submission % not found', NEW.form_submission_id;
+    END IF;
+    NEW.org_id := o;
+    RETURN NEW;
+END;
+$function$
+"
+public,sync_form_submission_signatures_org_from_submission,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.sync_form_submission_signatures_org_from_submission()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    o uuid;
+BEGIN
+    SELECT fs.org_id INTO o FROM public.form_submissions fs WHERE fs.id = NEW.form_submission_id;
+    IF o IS NULL THEN
+        RAISE EXCEPTION 'form_submission_signatures: submission % not found', NEW.form_submission_id;
+    END IF;
+    NEW.org_id := o;
+    RETURN NEW;
+END;
+$function$
+"
+public,sync_form_submissions_org_and_definition_from_version,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.sync_form_submissions_org_and_definition_from_version()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    vid uuid := NEW.form_definition_version_id;
+    v_def uuid;
+    v_org uuid;
+    link_org uuid;
+BEGIN
+    SELECT v.form_definition_id, v.org_id INTO v_def, v_org
+    FROM public.form_definition_versions v
+    WHERE v.id = vid;
+    IF v_def IS NULL THEN
+        RAISE EXCEPTION 'form_submissions: form_definition_version_id % not found', vid;
+    END IF;
+    IF NEW.form_definition_id IS NOT NULL AND NEW.form_definition_id <> v_def THEN
+        RAISE EXCEPTION 'form_submissions: form_definition_id must match version.form_definition_id';
+    END IF;
+    NEW.form_definition_id := v_def;
+    NEW.org_id := v_org;
+
+    -- Run after org_id is authoritative (ordering-safe vs separate triggers)
+    IF NEW.created_via_public_link_id IS NOT NULL THEN
+        SELECT fpl.org_id INTO link_org FROM public.form_public_links fpl WHERE fpl.id = NEW.created_via_public_link_id;
+        IF link_org IS NULL THEN
+            RAISE EXCEPTION 'form_submissions: created_via_public_link_id not found';
+        END IF;
+        IF link_org <> NEW.org_id THEN
+            RAISE EXCEPTION 'form_submissions: public link org_id must match submission org_id';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$function$
+"
 public,trg_assign_org_scoped_record_number,function,plpgsql,VOLATILE,true,,trigger,"CREATE OR REPLACE FUNCTION public.trg_assign_org_scoped_record_number()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -1434,6 +1804,185 @@ AS $function$
   );
 $function$
 "
+public,validate_form_packet_items_form_org,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_form_packet_items_form_org()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    def_org uuid;
+    ver_form uuid;
+    ver_org uuid;
+BEGIN
+    SELECT fd.org_id INTO def_org FROM public.form_definitions fd WHERE fd.id = NEW.form_definition_id;
+    IF def_org IS NULL THEN
+        RAISE EXCEPTION 'form_packet_items: form_definition_id % not found', NEW.form_definition_id;
+    END IF;
+    IF def_org <> NEW.org_id THEN
+        RAISE EXCEPTION 'form_packet_items: form_definition must belong to same org as packet';
+    END IF;
+
+    IF NEW.pinned_form_definition_version_id IS NOT NULL THEN
+        SELECT v.form_definition_id, v.org_id INTO ver_form, ver_org
+        FROM public.form_definition_versions v
+        WHERE v.id = NEW.pinned_form_definition_version_id;
+        IF ver_form IS NULL THEN
+            RAISE EXCEPTION 'form_packet_items: pinned_form_definition_version_id not found';
+        END IF;
+        IF ver_form <> NEW.form_definition_id THEN
+            RAISE EXCEPTION 'form_packet_items: pinned version must match form_definition_id';
+        END IF;
+        IF ver_org <> NEW.org_id THEN
+            RAISE EXCEPTION 'form_packet_items: pinned version org mismatch';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_form_packet_session_items_packet_match,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_form_packet_session_items_packet_match()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    sess_def uuid;
+    item_def uuid;
+BEGIN
+    SELECT fps.packet_definition_id INTO sess_def FROM public.form_packet_sessions fps WHERE fps.id = NEW.packet_session_id;
+    SELECT fpi.packet_definition_id INTO item_def FROM public.form_packet_items fpi WHERE fpi.id = NEW.packet_item_id;
+    IF sess_def IS DISTINCT FROM item_def THEN
+        RAISE EXCEPTION 'form_packet_session_items: packet_item does not belong to session packet_definition';
+    END IF;
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_form_packet_session_items_submission_org,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_form_packet_session_items_submission_org()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    sub_org uuid;
+BEGIN
+    IF NEW.form_submission_id IS NULL THEN
+        RETURN NEW;
+    END IF;
+    SELECT fs.org_id INTO sub_org FROM public.form_submissions fs WHERE fs.id = NEW.form_submission_id;
+    IF sub_org IS NULL THEN
+        RAISE EXCEPTION 'form_packet_session_items: form_submission_id not found';
+    END IF;
+    IF sub_org <> NEW.org_id THEN
+        RAISE EXCEPTION 'form_packet_session_items: submission org_id mismatch';
+    END IF;
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_form_packet_sessions_link_org,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_form_packet_sessions_link_org()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    link_org uuid;
+BEGIN
+    SELECT fpl.org_id INTO link_org FROM public.form_public_links fpl WHERE fpl.id = NEW.started_via_public_link_id;
+    IF link_org IS NULL THEN
+        RAISE EXCEPTION 'form_packet_sessions: started_via_public_link_id not found';
+    END IF;
+    IF link_org <> NEW.org_id THEN
+        RAISE EXCEPTION 'form_packet_sessions: link org_id must match session org_id';
+    END IF;
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_form_public_links_consistency,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_form_public_links_consistency()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    def_org uuid;
+    ver_form uuid;
+    ver_org uuid;
+BEGIN
+    SELECT fd.org_id INTO def_org
+    FROM public.form_definitions fd
+    WHERE fd.id = NEW.form_definition_id;
+    IF def_org IS NULL THEN
+        RAISE EXCEPTION 'form_public_links: form_definition_id % not found', NEW.form_definition_id;
+    END IF;
+    IF def_org <> NEW.org_id THEN
+        RAISE EXCEPTION 'form_public_links: org_id must match form_definitions.org_id';
+    END IF;
+
+    IF NEW.pinned_form_definition_version_id IS NOT NULL THEN
+        SELECT v.form_definition_id, v.org_id INTO ver_form, ver_org
+        FROM public.form_definition_versions v
+        WHERE v.id = NEW.pinned_form_definition_version_id;
+
+        IF ver_form IS NULL THEN
+            RAISE EXCEPTION 'form_public_links: pinned_form_definition_version_id % not found', NEW.pinned_form_definition_version_id;
+        END IF;
+        IF ver_form <> NEW.form_definition_id THEN
+            RAISE EXCEPTION 'form_public_links: pinned version must belong to same form_definition_id';
+        END IF;
+        IF ver_org <> NEW.org_id THEN
+            RAISE EXCEPTION 'form_public_links: pinned version org_id mismatch';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_form_submission_documents_org_matches_document,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_form_submission_documents_org_matches_document()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    row_org uuid;
+    doc_org uuid;
+BEGIN
+    SELECT fs.org_id INTO row_org FROM public.form_submissions fs WHERE fs.id = NEW.form_submission_id;
+    SELECT d.org_id INTO doc_org FROM public.documents d WHERE d.id = NEW.document_id;
+    IF doc_org IS NULL THEN
+        RAISE EXCEPTION 'form_submission_documents: document_id % not found', NEW.document_id;
+    END IF;
+    IF doc_org <> row_org THEN
+        RAISE EXCEPTION 'form_submission_documents: document.org_id must match submission.org_id';
+    END IF;
+    IF NEW.org_id <> row_org THEN
+        RAISE EXCEPTION 'form_submission_documents: org_id must match submission';
+    END IF;
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_form_submission_signatures_drawn_asset_org,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_form_submission_signatures_drawn_asset_org()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    row_org uuid;
+    doc_org uuid;
+BEGIN
+    IF NEW.drawn_asset_document_id IS NULL THEN
+        RETURN NEW;
+    END IF;
+
+    SELECT fs.org_id INTO row_org FROM public.form_submissions fs WHERE fs.id = NEW.form_submission_id;
+    SELECT d.org_id INTO doc_org FROM public.documents d WHERE d.id = NEW.drawn_asset_document_id;
+    IF doc_org IS NULL THEN
+        RAISE EXCEPTION 'form_submission_signatures: drawn_asset_document_id not found';
+    END IF;
+    IF doc_org <> row_org THEN
+        RAISE EXCEPTION 'form_submission_signatures: drawn asset document.org_id must match submission.org_id';
+    END IF;
+
+    RETURN NEW;
+END;
+$function$
+"
 public,validate_opportunity_customer_members_consistency,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_opportunity_customer_members_consistency()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -1499,6 +2048,308 @@ BEGIN
     END IF;
     IF NEW.org_id IS DISTINCT FROM person_org THEN
         RAISE EXCEPTION 'opportunity_persons: org_id mismatch (row %, person %)', NEW.org_id, person_org;
+    END IF;
+
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_placement_candidates_consistency,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_placement_candidates_consistency()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    opp_org uuid;
+    opp_customer uuid;
+    ocm_org uuid;
+    ocm_opp uuid;
+    ocm_member uuid;
+    mem_org uuid;
+    mem_customer uuid;
+    person_org uuid;
+    site_org uuid;
+BEGIN
+    SELECT o.org_id, o.customer_id
+    INTO opp_org, opp_customer
+    FROM public.opportunities o
+    WHERE o.id = NEW.opportunity_id;
+
+    IF opp_org IS NULL THEN
+        RAISE EXCEPTION 'placement_candidates: opportunity_id % not found', NEW.opportunity_id
+            USING ERRCODE = '23503';
+    END IF;
+    IF opp_org <> NEW.org_id THEN
+        RAISE EXCEPTION 'placement_candidates: org_id mismatch with opportunity'
+            USING ERRCODE = '23514';
+    END IF;
+
+    IF NEW.customer_id IS NOT NULL AND opp_customer IS NOT NULL AND NEW.customer_id <> opp_customer THEN
+        RAISE EXCEPTION 'placement_candidates: customer_id does not match opportunity.customer_id'
+            USING ERRCODE = '23514';
+    END IF;
+
+    IF NEW.opportunity_customer_member_id IS NOT NULL THEN
+        SELECT ocm.org_id, ocm.opportunity_id, ocm.customer_member_id
+        INTO ocm_org, ocm_opp, ocm_member
+        FROM public.opportunity_customer_members ocm
+        WHERE ocm.id = NEW.opportunity_customer_member_id;
+
+        IF ocm_org IS NULL THEN
+            RAISE EXCEPTION 'placement_candidates: opportunity_customer_member_id % not found', NEW.opportunity_customer_member_id
+                USING ERRCODE = '23503';
+        END IF;
+        IF ocm_org <> NEW.org_id OR ocm_opp <> NEW.opportunity_id THEN
+            RAISE EXCEPTION 'placement_candidates: OCM org/opportunity mismatch'
+                USING ERRCODE = '23514';
+        END IF;
+
+        IF NEW.customer_member_id IS NULL THEN
+            NEW.customer_member_id := ocm_member;
+        ELSIF NEW.customer_member_id <> ocm_member THEN
+            RAISE EXCEPTION 'placement_candidates: customer_member_id does not match OCM row'
+                USING ERRCODE = '23514';
+        END IF;
+    END IF;
+
+    IF NEW.customer_member_id IS NOT NULL THEN
+        SELECT cm.org_id, cm.customer_id
+        INTO mem_org, mem_customer
+        FROM public.customer_members cm
+        WHERE cm.id = NEW.customer_member_id;
+
+        IF mem_org IS NULL THEN
+            RAISE EXCEPTION 'placement_candidates: customer_member_id % not found', NEW.customer_member_id
+                USING ERRCODE = '23503';
+        END IF;
+        IF mem_org <> NEW.org_id THEN
+            RAISE EXCEPTION 'placement_candidates: customer_member org mismatch'
+                USING ERRCODE = '23514';
+        END IF;
+        IF opp_customer IS NOT NULL AND mem_customer IS NOT NULL AND mem_customer <> opp_customer THEN
+            RAISE EXCEPTION 'placement_candidates: customer_member customer mismatch with opportunity'
+                USING ERRCODE = '23514';
+        END IF;
+
+        IF NEW.person_id IS NULL THEN
+            SELECT cm.person_id INTO NEW.person_id
+            FROM public.customer_members cm
+            WHERE cm.id = NEW.customer_member_id;
+        END IF;
+    END IF;
+
+    IF NEW.person_id IS NOT NULL THEN
+        SELECT p.org_id INTO person_org FROM public.persons p WHERE p.id = NEW.person_id;
+        IF person_org IS NULL THEN
+            RAISE EXCEPTION 'placement_candidates: person_id % not found', NEW.person_id USING ERRCODE = '23503';
+        END IF;
+        IF person_org <> NEW.org_id THEN
+            RAISE EXCEPTION 'placement_candidates: person org mismatch' USING ERRCODE = '23514';
+        END IF;
+    END IF;
+
+    IF NEW.site_id IS NOT NULL THEN
+        SELECT l.org_id INTO site_org FROM public.locations l WHERE l.id = NEW.site_id;
+        IF site_org IS NULL THEN
+            RAISE EXCEPTION 'placement_candidates: site_id % not found', NEW.site_id USING ERRCODE = '23503';
+        END IF;
+        IF site_org <> NEW.org_id THEN
+            RAISE EXCEPTION 'placement_candidates: site org mismatch' USING ERRCODE = '23514';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_placement_link_group_members_consistency,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_placement_link_group_members_consistency()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    grp_org uuid;
+    grp_opp uuid;
+    cand_org uuid;
+    cand_opp uuid;
+BEGIN
+    SELECT g.org_id, g.opportunity_id INTO grp_org, grp_opp
+    FROM public.placement_link_groups g WHERE g.id = NEW.placement_link_group_id;
+
+    IF grp_org IS NULL THEN
+        RAISE EXCEPTION 'placement_link_group_members: group % not found', NEW.placement_link_group_id USING ERRCODE = '23503';
+    END IF;
+
+    SELECT c.org_id, c.opportunity_id INTO cand_org, cand_opp
+    FROM public.placement_candidates c WHERE c.id = NEW.placement_candidate_id;
+
+    IF cand_org IS NULL THEN
+        RAISE EXCEPTION 'placement_link_group_members: candidate % not found', NEW.placement_candidate_id USING ERRCODE = '23503';
+    END IF;
+
+    IF NEW.org_id <> grp_org OR NEW.org_id <> cand_org THEN
+        RAISE EXCEPTION 'placement_link_group_members: org_id mismatch' USING ERRCODE = '23514';
+    END IF;
+    IF grp_opp <> cand_opp THEN
+        RAISE EXCEPTION 'placement_link_group_members: group and candidate opportunity mismatch' USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_placement_link_groups_consistency,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_placement_link_groups_consistency()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    opp_org uuid;
+    opp_customer uuid;
+BEGIN
+    SELECT o.org_id, o.customer_id INTO opp_org, opp_customer
+    FROM public.opportunities o WHERE o.id = NEW.opportunity_id;
+
+    IF opp_org IS NULL THEN
+        RAISE EXCEPTION 'placement_link_groups: opportunity_id % not found', NEW.opportunity_id USING ERRCODE = '23503';
+    END IF;
+    IF opp_org <> NEW.org_id THEN
+        RAISE EXCEPTION 'placement_link_groups: org_id mismatch' USING ERRCODE = '23514';
+    END IF;
+    IF NEW.customer_id IS NOT NULL AND opp_customer IS NOT NULL AND NEW.customer_id <> opp_customer THEN
+        RAISE EXCEPTION 'placement_link_groups: customer_id mismatch' USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_placement_overrides_consistency,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_placement_overrides_consistency()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    cand_org uuid;
+    cand_cohort text;
+BEGIN
+    SELECT c.org_id, c.program_room_cohort_key
+    INTO cand_org, cand_cohort
+    FROM public.placement_candidates c
+    WHERE c.id = NEW.placement_candidate_id;
+
+    IF cand_org IS NULL THEN
+        RAISE EXCEPTION 'placement_overrides: candidate % not found', NEW.placement_candidate_id USING ERRCODE = '23503';
+    END IF;
+    IF cand_org <> NEW.org_id THEN
+        RAISE EXCEPTION 'placement_overrides: org_id mismatch' USING ERRCODE = '23514';
+    END IF;
+    IF btrim(NEW.program_room_cohort_key) <> btrim(cand_cohort) THEN
+        RAISE EXCEPTION 'placement_overrides: program_room_cohort_key must match candidate cohort'
+            USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_tour_availability_rules_location_org,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_tour_availability_rules_location_org()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    loc_org uuid;
+BEGIN
+    IF NEW.location_id IS NULL THEN
+        RETURN NEW;
+    END IF;
+    SELECT l.org_id INTO loc_org FROM public.locations l WHERE l.id = NEW.location_id;
+    IF loc_org IS NULL THEN
+        RAISE EXCEPTION 'tour_availability_rules: location_id % not found', NEW.location_id;
+    END IF;
+    IF loc_org IS DISTINCT FROM NEW.org_id THEN
+        RAISE EXCEPTION 'tour_availability_rules: location_id must belong to org_id';
+    END IF;
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_tour_booking_org_integrity,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_tour_booking_org_integrity()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    opp_org uuid;
+    loc_org uuid;
+    fs_org uuid;
+    fpl_org uuid;
+    parent_org uuid;
+BEGIN
+    SELECT o.org_id INTO opp_org FROM public.opportunities o WHERE o.id = NEW.opportunity_id;
+    IF opp_org IS NULL THEN
+        RAISE EXCEPTION 'tour_bookings: opportunity_id % not found', NEW.opportunity_id;
+    END IF;
+    IF NEW.org_id IS DISTINCT FROM opp_org THEN
+        RAISE EXCEPTION 'tour_bookings: org_id must match opportunities.org_id for opportunity_id';
+    END IF;
+
+    SELECT l.org_id INTO loc_org FROM public.locations l WHERE l.id = NEW.location_id;
+    IF loc_org IS NULL THEN
+        RAISE EXCEPTION 'tour_bookings: location_id % not found', NEW.location_id;
+    END IF;
+    IF loc_org IS DISTINCT FROM NEW.org_id THEN
+        RAISE EXCEPTION 'tour_bookings: location_id must belong to the same org_id';
+    END IF;
+
+    IF NEW.form_submission_id IS NOT NULL THEN
+        SELECT fs.org_id INTO fs_org FROM public.form_submissions fs WHERE fs.id = NEW.form_submission_id;
+        IF fs_org IS NULL THEN
+            RAISE EXCEPTION 'tour_bookings: form_submission_id % not found', NEW.form_submission_id;
+        END IF;
+        IF fs_org IS DISTINCT FROM NEW.org_id THEN
+            RAISE EXCEPTION 'tour_bookings: form_submission_id org_id mismatch';
+        END IF;
+    END IF;
+
+    IF NEW.form_public_link_id IS NOT NULL THEN
+        SELECT fpl.org_id INTO fpl_org FROM public.form_public_links fpl WHERE fpl.id = NEW.form_public_link_id;
+        IF fpl_org IS NULL THEN
+            RAISE EXCEPTION 'tour_bookings: form_public_link_id % not found', NEW.form_public_link_id;
+        END IF;
+        IF fpl_org IS DISTINCT FROM NEW.org_id THEN
+            RAISE EXCEPTION 'tour_bookings: form_public_link_id org_id mismatch';
+        END IF;
+    END IF;
+
+    IF NEW.rescheduled_from_booking_id IS NOT NULL THEN
+        SELECT tb.org_id INTO parent_org FROM public.tour_bookings tb WHERE tb.id = NEW.rescheduled_from_booking_id;
+        IF parent_org IS NULL THEN
+            RAISE EXCEPTION 'tour_bookings: rescheduled_from_booking_id % not found', NEW.rescheduled_from_booking_id;
+        END IF;
+        IF parent_org IS DISTINCT FROM NEW.org_id THEN
+            RAISE EXCEPTION 'tour_bookings: rescheduled_from_booking_id org_id mismatch';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_tour_public_booking_link_scope,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_tour_public_booking_link_scope()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    opp_org uuid;
+    loc_org uuid;
+BEGIN
+    SELECT o.org_id INTO opp_org FROM public.opportunities o WHERE o.id = NEW.opportunity_id;
+    IF opp_org IS NULL THEN
+        RAISE EXCEPTION 'tour_public_booking_links: opportunity_id % not found', NEW.opportunity_id;
+    END IF;
+    IF opp_org IS DISTINCT FROM NEW.org_id THEN
+        RAISE EXCEPTION 'tour_public_booking_links: opportunity org_id mismatch';
+    END IF;
+
+    SELECT l.org_id INTO loc_org FROM public.locations l WHERE l.id = NEW.location_id;
+    IF loc_org IS NULL THEN
+        RAISE EXCEPTION 'tour_public_booking_links: location_id % not found', NEW.location_id;
+    END IF;
+    IF loc_org IS DISTINCT FROM NEW.org_id THEN
+        RAISE EXCEPTION 'tour_public_booking_links: location org_id mismatch';
     END IF;
 
     RETURN NEW;
@@ -1577,4 +2428,3 @@ begin
 end;
 $function$
 "
-public,claim_due_communication_scheduled_sends,function,plpgsql,VOLATILE,false,"p_limit integer, p_now timestamptz, p_org_id uuid",SETOF public.communication_scheduled_sends,"Canonical DDL and grants: supabase/migrations/20260522140000_claim_due_communication_scheduled_sends.sql — atomically claims due communication_scheduled_sends rows (pending, scheduled_for <= p_now, communication_message_id IS NULL) using FOR UPDATE SKIP LOCKED; REVOKE ALL FROM PUBLIC; GRANT EXECUTE TO service_role only."
