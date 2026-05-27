@@ -4,6 +4,7 @@
  *
  * Stored on `work_units.queue_definition` where `key = enrollment_pipeline`.
  * Seeded by `supabase/migrations/20260601130000_enrollment_pipeline_queue_definition_v2.sql`.
+ * UI labels simplified in Card 14A (`20260602100000_enrollment_pipeline_queue_definition_v2_14a.sql`).
  */
 
 import { loadQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
@@ -14,31 +15,17 @@ export const RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2 = {
     entity_type: "opportunity" as const,
     ui: {
         layout: "domain_with_attention" as const,
-        primary_total_label: "Pipeline families",
+        primary_total_label: "Work Units",
         primary_total_queue: "pipeline_total",
+        suppress_other_pill: true,
+        suppress_lifecycle_panel: true,
         sections: [
             { key: "new_leads", label: "New Leads", queue_keys: ["new_leads"] },
-            {
-                key: "tours",
-                label: "Tours",
-                queue_keys: ["tours", "tours_follow_up"],
-            },
-            {
-                key: "communications_followup",
-                label: "Communications / Follow-up",
-                queue_keys: ["communications_followup"],
-            },
-            {
-                key: "forms_documents",
-                label: "Forms / Documents",
-                queue_keys: ["forms_documents"],
-            },
+            { key: "tours", label: "Tours", queue_keys: ["tours"] },
+            { key: "communications_followup", label: "Follow Up", queue_keys: ["communications_followup"] },
             { key: "waitlist", label: "Waitlist", queue_keys: ["waitlist"] },
-            {
-                key: "enrollment_offers",
-                label: "Enrollment / Offers",
-                queue_keys: ["enrollment_offers", "enrollment_completed"],
-            },
+            { key: "enrolling", label: "Enrolling", queue_keys: ["enrollment_offers"] },
+            { key: "enrolled", label: "Enrolled", queue_keys: ["enrollment_completed"] },
             {
                 key: "needs_attention",
                 label: "Needs Attention",
@@ -93,7 +80,7 @@ export const RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2 = {
         },
         {
             key: "communications_followup",
-            label: "Communications / Follow-up",
+            label: "Follow Up",
             icon: "phone",
             description: "Staff has attempted contact; conversation may be in progress.",
             domain: "communications_followup",
@@ -127,7 +114,7 @@ export const RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2 = {
         },
         {
             key: "tours_follow_up",
-            label: "Tour Completed / Follow-up",
+            label: "Tours",
             icon: "clipboard-check",
             description: "Post-tour decision window — completed tour, follow-up attempts, or tour no-show.",
             domain: "tours",
@@ -184,7 +171,7 @@ export const RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2 = {
         },
         {
             key: "enrollment_offers",
-            label: "Enrollment / Offers",
+            label: "Enrolling",
             icon: "file-text",
             description: "Paperwork or decision in motion toward a start date.",
             domain: "enrollment_offers",
@@ -208,7 +195,7 @@ export const RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2 = {
         },
         {
             key: "enrollment_completed",
-            label: "Enrolled children",
+            label: "Enrolled",
             icon: "check-circle-2",
             description: "Confirmed enrollment (child completion view).",
             domain: "enrollment_offers",
@@ -259,7 +246,27 @@ export const ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2_BUNDLE = loadQueueDefinitio
     RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2
 );
 
-/** Expected domain keys in v2 ui.sections (excluding internal pipeline_total). */
+/** Visible throughput domain section keys (Card 14A — excludes hidden forms_documents). */
+export const ENROLLMENT_PIPELINE_V2_VISIBLE_THROUGHPUT_SECTION_KEYS = [
+    "new_leads",
+    "tours",
+    "communications_followup",
+    "waitlist",
+    "enrolling",
+    "enrolled",
+] as const;
+
+/** Visible throughput pill labels in UI order. */
+export const ENROLLMENT_PIPELINE_V2_VISIBLE_THROUGHPUT_LABELS = [
+    "New Leads",
+    "Tours",
+    "Follow Up",
+    "Waitlist",
+    "Enrolling",
+    "Enrolled",
+] as const;
+
+/** All domain keys with execution queues (includes hidden forms_documents). */
 export const ENROLLMENT_PIPELINE_V2_DOMAIN_KEYS = [
     "new_leads",
     "tours",
@@ -283,3 +290,16 @@ export const ENROLLMENT_PIPELINE_V2_QUEUE_ALIASES: Record<string, string> = {
     enrolled: "enrollment_completed",
     lost: "case_closed",
 };
+
+/** Throughput section labels from config (excludes needs_attention). */
+export function enrollmentPipelineVisibleThroughputLabels(
+    raw: unknown = RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2
+): string[] {
+    if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return [];
+    const ui = (raw as { ui?: { sections?: Array<{ label?: string; tone?: string }> } }).ui;
+    const sections = ui?.sections ?? [];
+    return sections
+        .filter((s) => s.tone !== "critical")
+        .map((s) => String(s.label ?? "").trim())
+        .filter(Boolean);
+}

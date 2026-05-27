@@ -4,8 +4,12 @@ import { CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1 } from "@/lib/config/
 import {
     ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2_BUNDLE,
     ENROLLMENT_PIPELINE_V2_QUEUE_ALIASES,
+    ENROLLMENT_PIPELINE_V2_VISIBLE_THROUGHPUT_LABELS,
+    ENROLLMENT_PIPELINE_V2_VISIBLE_THROUGHPUT_SECTION_KEYS,
+    enrollmentPipelineVisibleThroughputLabels,
     RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2,
 } from "@/lib/config/enrollmentPipelineQueueDefinitionV2";
+import { readQueueUiPresentationFlags } from "@/lib/ui-v2/readQueueUiPresentationFlags";
 import { resolveQueueKeyFromDefinition } from "@/lib/config/queueDefinitionV2Runtime";
 
 describe("enrollmentPipelineQueueDefinitionV2", () => {
@@ -56,5 +60,69 @@ describe("enrollmentPipelineQueueDefinitionV2", () => {
             (q) => q.key === "enrollment_offers"
         );
         expect(offers?.grain).toBe("child");
+    });
+
+    it("exposes Card 14A visible throughput section keys and labels", () => {
+        expect([...ENROLLMENT_PIPELINE_V2_VISIBLE_THROUGHPUT_SECTION_KEYS]).toEqual([
+            "new_leads",
+            "tours",
+            "communications_followup",
+            "waitlist",
+            "enrolling",
+            "enrolled",
+        ]);
+        expect([...ENROLLMENT_PIPELINE_V2_VISIBLE_THROUGHPUT_LABELS]).toEqual([
+            "New Leads",
+            "Tours",
+            "Follow Up",
+            "Waitlist",
+            "Enrolling",
+            "Enrolled",
+        ]);
+        expect(enrollmentPipelineVisibleThroughputLabels()).toEqual([
+            ...ENROLLMENT_PIPELINE_V2_VISIBLE_THROUGHPUT_LABELS,
+        ]);
+    });
+
+    it("hides Forms/Documents and Other from ui.sections while keeping execution queues", () => {
+        const ui = RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2.ui;
+        const sectionQueueKeys = ui.sections.flatMap((s) => s.queue_keys);
+        expect(sectionQueueKeys).not.toContain("forms_documents");
+        expect(sectionQueueKeys).not.toContain("tours_follow_up");
+
+        const formsQueue = RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2.queues.find((q) => q.key === "forms_documents");
+        expect(formsQueue).toBeDefined();
+
+        const followUpQueue = RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2.queues.find(
+            (q) => q.key === "tours_follow_up"
+        );
+        expect(followUpQueue?.aliases).toContain("tour_completed_follow_up");
+    });
+
+    it("uses Card 14A renamed queue labels", () => {
+        const byKey = new Map(RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2.queues.map((q) => [q.key, q]));
+        expect(byKey.get("communications_followup")?.label).toBe("Follow Up");
+        expect(byKey.get("enrollment_offers")?.label).toBe("Enrolling");
+        expect(byKey.get("enrollment_completed")?.label).toBe("Enrolled");
+    });
+
+    it("enables UI presentation flags to suppress Other pill and lifecycle panel", () => {
+        const flags = readQueueUiPresentationFlags(RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2);
+        expect(flags.suppressOtherPill).toBe(true);
+        expect(flags.suppressLifecyclePanel).toBe(true);
+    });
+
+    it("preserves legacy alias routes for old deep links", () => {
+        const queues = ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2_BUNDLE.normalized.queues;
+        const legacyLinks = [
+            ["communications_followup", "communications_followup"],
+            ["enrollment_offers", "enrollment_offers"],
+            ["ready_to_enroll", "enrollment_offers"],
+            ["tour_completed_follow_up", "tours_follow_up"],
+        ] as const;
+        for (const [requested, expected] of legacyLinks) {
+            const resolution = resolveQueueKeyFromDefinition(requested, queues);
+            expect(resolution.resolvedKey).toBe(expected);
+        }
     });
 });

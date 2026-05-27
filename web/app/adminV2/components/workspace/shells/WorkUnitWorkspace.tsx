@@ -25,6 +25,8 @@ type Props = {
   onAction: WorkspaceActionHandler;
   /** Shown under chips when header slot is ready (lifecycle coverage). */
   lifecyclePanel?: ReactNode;
+  /** Client-side record filter bar above queue rows (Card 14B). */
+  recordFilterBar?: ReactNode;
   otherPillSectionKey?: string | null;
   kpiStripPlaceholder: boolean;
   kpiStripSkeletonCellCount?: number;
@@ -41,6 +43,7 @@ export default function WorkUnitWorkspace({
   aboveFoldHandlers,
   onAction,
   lifecyclePanel = null,
+  recordFilterBar = null,
   otherPillSectionKey = null,
   kpiStripPlaceholder,
   kpiStripSkeletonCellCount: _kpiStripSkeletonCellCount,
@@ -201,6 +204,9 @@ export default function WorkUnitWorkspace({
                         </p>
                       ) : null}
                     </div>
+                  ) : null}
+                  {recordFilterBar ? (
+                    <div className="adminv2-ws-wu-record-filter-bar-slot px-1">{recordFilterBar}</div>
                   ) : null}
                   <QueueBlock
                     queue={primaryQueue}

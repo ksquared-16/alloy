@@ -1,6 +1,6 @@
 # Child-Level Enrollment Lifecycle + Work Unit Convergence — Audit
 
-**Status:** **Card 0 COMPLETE** · **Card 1 COMPLETE** · **Card 2 COMPLETE** · **Card 3 COMPLETE** · **Card 4 COMPLETE** · **Card 5 COMPLETE** (Supabase v2 config migration) · **Card 6 COMPLETE** (waitlist candidate-grain queue runtime) · **Card 7 COMPLETE** (grain-aware UI/KPI labels) · **Card 8 COMPLETE** (enrollment/offers child-grain runtime) · **Card 9 COMPLETE** (placement backfill eligibility + row context) · **Card 10 COMPLETE** (child lifecycle mutation paths) · **Card 11 COMPLETE** (read-only case rollup / child lifecycle summary) · **Card 12 COMPLETE** (strict-mode readiness audit) · **Card 13 COMPLETE** (UI / runtime QA checkpoint — no new architecture)  
+**Status:** **Card 0 COMPLETE** · **Card 1 COMPLETE** · **Card 2 COMPLETE** · **Card 3 COMPLETE** · **Card 4 COMPLETE** · **Card 5 COMPLETE** (Supabase v2 config migration) · **Card 6 COMPLETE** (waitlist candidate-grain queue runtime) · **Card 7 COMPLETE** (grain-aware UI/KPI labels) · **Card 8 COMPLETE** (enrollment/offers child-grain runtime) · **Card 9 COMPLETE** (placement backfill eligibility + row context) · **Card 10 COMPLETE** (child lifecycle mutation paths) · **Card 11 COMPLETE** (read-only case rollup / child lifecycle summary) · **Card 12 COMPLETE** (strict-mode readiness audit) · **Card 13 COMPLETE** (UI / runtime QA checkpoint) · **Card 13C COMPLETE** (work unit navigation + config UI regression fix)  
 **Date:** 2026-05-27 (audit) · Card 5 migrations 2026-06-01 · Card 6 runtime 2026-05-27  
 **Precedes:** Implementation cards (Card 1–7)  
 **Context:** Waitlist Orchestration Phase 2 is **pilot-ready** (`shadow_mode`, candidate-row waitlist, manual overrides, forecast hooks, V1 fallback). The next architectural correction is **child-level enrollment lifecycle truth** and **work units as execution domains** — without moving **family/case coordination workflows** to child scope.
@@ -2395,6 +2395,124 @@ None captured in this checkpoint. Recommended manual capture targets after OCM b
 | **D — Enable strict mode** | After A + candidate integrity clean | `ALLOY_PLACEMENT_CHILD_WAITLIST_ELIGIBILITY_STRICT=1` only when audit reports `strict_mode_ready: true`. |
 
 **Recommended next card title:** **Card 14 — Pilot OCM backfill + operator browser QA** (apply safe recommendations, re-audit, manual checklist closeout). Defer quick actions and strict mode until lifecycle data and UI coherence are validated.
+
+---
+
+## Card 13C — Work unit navigation + config UI regression fix (COMPLETE)
+
+**Card scope:** Runtime display/navigation fixes from browser QA. **No** Card 14 backfill, **no** settings CRUD, **no** queue membership / DB / strict-mode changes.
+
+### 13C.1 Fixes applied
+
+| Bug | Fix |
+|-----|-----|
+| Placeholder pill crash (`sectionedSummaries.length` on undefined) | `buildWorkUnitAboveFoldPillSections` normalizes `sectionedSummaries ?? []`; placeholder builder accepts `sections` alias |
+| Breadcrumb hydration mismatch (`Enrollment Pipeline` vs `Work unit`) | Shell title uses deterministic `WORK_UNIT_SHELL_DISPLAY_FALLBACK` on SSR/first paint; session cache read only in `useLayoutEffect` |
+| Dept stale KPI copy (`Active inquiries`) | `resolveDeptWorkUnitDisplayLabel` — prefer `work_units.name` / configured label |
+| Dept pipeline panel title | Prefer canonical work unit name over `primary_total_label` when pipeline lanes render |
+| Pill unit noise | Unchanged from 13B — counts only in pills; grain units in aria/tooltip/lane caption |
+
+### 13C.2 Future settings card (not in scope)
+
+Full **create / edit / delete** of work units, queue domains, and needs-attention rules belongs in a future **Settings — Config Management** card. This card only fixes **runtime consumption and display** of existing `work_units.queue_definition` config.
+
+### 13C.3 Tests
+
+```bash
+cd web && npm run test -- \
+  tests/workspace/workUnitShellDisplayTitle.test.ts \
+  tests/workspace/workUnitAboveFoldPillSections.test.ts \
+  tests/workspace/extractPipelineExecutionLanes.test.ts \
+  tests/adminV2/workUnitQueuePillPolish.test.ts
+```
+
+---
+
+## Card 14A — Clean enrollment work unit configuration (COMPLETE)
+
+**Card scope:** Simplify visible work-unit/domain labels after browser review. **No** queue runtime membership changes, **no** child/candidate grain changes, **no** strict mode, **no** OCM backfill, **no** Settings CRUD.
+
+### 14A.1 Product changes
+
+| Area | Before | After |
+|------|--------|-------|
+| Throughput section header | Pipeline families | **Work Units** |
+| Communications / Follow-up | visible pill | **Follow Up** |
+| Enrollment / Offers | visible pill | **Enrolling** |
+| Enrolled children | visible pill | **Enrolled** |
+| Forms / Documents | visible pill | **hidden** (execution queue retained) |
+| Tour Completed / Follow-up | separate visible domain | **merged under Tours** (`tours_follow_up` queue retained; hidden from `ui.sections`) |
+| Other unmapped pill | shown when overflow | **suppressed** via `ui.suppress_other_pill` |
+| Lifecycle KPI copy below NA pills | shown | **suppressed** via `ui.suppress_lifecycle_panel` |
+
+**Target visible work-unit pills:** New Leads, Tours, Follow Up, Waitlist, Enrolling, Enrolled — plus separate **Needs Attention** overlay.
+
+### 14A.2 Source of truth + migration
+
+| Artifact | Path |
+|----------|------|
+| TS config | `web/lib/config/enrollmentPipelineQueueDefinitionV2.ts` |
+| UI flags helper | `web/lib/ui-v2/readQueueUiPresentationFlags.ts` |
+| Migration | `supabase/migrations/20260602100000_enrollment_pipeline_queue_definition_v2_14a.sql` |
+
+**Alias preservation (old deep links):**
+
+| Legacy key | Resolves to |
+|------------|-------------|
+| `communications_followup` | `communications_followup` |
+| `enrollment_offers` | `enrollment_offers` |
+| `ready_to_enroll` | `enrollment_offers` |
+| `tour_completed_follow_up` | `tours_follow_up` |
+
+Historical status definitions and work unit rows were **not** deleted; hidden domains use inactive/deprecated metadata only where applicable.
+
+### 14A.3 Tests
+
+```bash
+cd web && npm run test -- \
+  tests/config/enrollmentPipelineQueueDefinitionV2.test.ts \
+  tests/workspace/extractPipelineExecutionLanes.test.ts \
+  tests/workspace/workUnitAboveFoldPillSections.test.ts
+cd web && npx tsc --noEmit
+```
+
+---
+
+## Card 14B — Work unit queue record filters UX (COMPLETE)
+
+**Card scope:** Config-aware client-side filter bar for work-unit queue rows. **No** lifecycle architecture changes, **no** queue grain / membership changes.
+
+### 14B.1 Filter surface
+
+| Control | Behavior |
+|---------|----------|
+| Search | Name, contact, child, program, site text |
+| Status | Case `status_key`; child lifecycle; candidate bucket |
+| Date range | Filters on row `updated_at` (loaded page) |
+| Site / location | From `location_id` / `_location_label` facets |
+| Program / cohort | From `_requested_program` or waitlist cohort label |
+| Owner | When present on row (`assigned_to`, metadata) |
+| Needs-attention reason | When `needs_attention` lane; merges bootstrap bucket labels |
+| Sort | Newest, oldest, follow-up due, tour date, priority/order (waitlist) |
+
+Filters apply **client-side** to the current API page of previews (membership unchanged). URL params (`q`, `rf_*`) sync via `history.replaceState` — no full page refresh.
+
+### 14B.2 Source modules
+
+| Module | Role |
+|--------|------|
+| `web/lib/workspace/workUnitQueueRecordFilterTypes.ts` | Types |
+| `web/lib/workspace/workUnitQueueRecordFilterConfig.ts` | Grain-aware field specs |
+| `web/lib/workspace/workUnitQueueRecordFilterUrl.ts` | URL read/write |
+| `web/lib/workspace/extractWorkUnitQueueRecordFilterFacets.ts` | Facets from loaded rows |
+| `web/lib/workspace/applyWorkUnitQueueRecordFilters.ts` | Filter + sort |
+| `web/components/admin/workspace/WorkUnitQueueRecordFilterBar.tsx` | UI |
+
+### 14B.3 Tests
+
+```bash
+cd web && npm run test -- tests/workspace/workUnitQueueRecordFilters.test.ts
+```
 
 ---
 
