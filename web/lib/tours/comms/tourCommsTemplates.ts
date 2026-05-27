@@ -66,38 +66,38 @@ const DEFAULT_EMAIL_BODY: Record<TourCommsEventKey, string> = {
     tour_confirmation: [
         "Hello {{parent_name}},",
         "",
-        "Your tour is scheduled for {{tour_display_label}} ({{timezone}}).",
-        "{{site_line}}",
-        "",
-        "Add to calendar: {{add_to_calendar_url}}",
-        "Need to reschedule? {{reschedule_url}}",
-        "",
-        "If you have questions, reply to this message.",
-        "",
-        "Thank you,",
-        "{{org_name}}",
-    ].join("\n"),
-    tour_reminder: [
-        "Hello {{parent_name}},",
-        "",
-        "This is a friendly reminder about your upcoming tour on {{tour_display_label}} at {{location_name}}.",
+        "Your tour is confirmed for {{tour_display_label}}.",
         "{{site_line}}",
         "",
         "Add to calendar: {{add_to_calendar_url}}",
         "Need to reschedule? {{reschedule_url}}",
         "",
         "We look forward to meeting you.",
+        "",
+        "Warmly,",
+        "{{org_name}}",
+    ].join("\n"),
+    tour_reminder: [
+        "Hello {{parent_name}},",
+        "",
+        "This is a friendly reminder about your upcoming tour on {{tour_display_label}}.",
+        "{{site_line}}",
+        "",
+        "Add to calendar: {{add_to_calendar_url}}",
+        "Need to reschedule? {{reschedule_url}}",
+        "",
+        "See you soon,",
         "{{org_name}}",
     ].join("\n"),
     tour_reschedule: [
         "Hello {{parent_name}},",
         "",
-        "Your tour has been rescheduled to {{tour_display_label}} ({{timezone}}).",
+        "Your tour has been moved to {{tour_display_label}}.",
         "{{site_line}}",
         "",
         "Add to calendar: {{add_to_calendar_url}}",
         "",
-        "If this time does not work, please contact us or use: {{reschedule_url}}",
+        "If this time does not work, please contact us or reschedule here: {{reschedule_url}}",
         "",
         "Thank you,",
         "{{org_name}}",
@@ -131,7 +131,7 @@ const DEFAULT_EMAIL_BODY: Record<TourCommsEventKey, string> = {
 
 const DEFAULT_SMS_BODY: Partial<Record<TourCommsEventKey, string>> = {
     tour_confirmation:
-        "Hi {{parent_name}}, your tour is set for {{tour_display_label}} at {{location_name}}. Add to calendar: {{add_to_calendar_url}}",
+        "Hi {{parent_name}}, your tour is set for {{tour_display_label}} at {{location_name}}. Details: {{add_to_calendar_url}}",
     tour_reminder: "Reminder: tour {{tour_display_label}} at {{location_name}}. Reply if you need to reschedule.",
     tour_reschedule: "Your tour was moved to {{tour_display_label}} at {{location_name}}.",
     tour_cancel: "Your tour on {{tour_display_label}} at {{location_name}} was canceled. Reply to rebook.",
@@ -202,6 +202,32 @@ function plainTextToSimpleHtml(text: string): string {
     return paras.map((p) => `<p>${p}</p>`).join("\n");
 }
 
+/** Turn plain merged lines into parent-friendly HTML CTAs (text body keeps raw URLs). */
+export function polishTourCommsEmailHtml(bodyHtml: string): string {
+    let out = bodyHtml;
+    out = out.replace(
+        /Add to calendar:\s*(https?:\/\/[^\s<]+)/gi,
+        '<a href="$1" style="color:#2563eb;text-decoration:underline;">Add to calendar</a>'
+    );
+    out = out.replace(
+        /Need to reschedule\?\s*(https?:\/\/[^\s<]+)/gi,
+        '<a href="$1" style="color:#2563eb;text-decoration:underline;">Reschedule your tour</a>'
+    );
+    out = out.replace(
+        /If this time does not work, please contact us or reschedule here:\s*(https?:\/\/[^\s<]+)/gi,
+        'If this time does not work, please <a href="$1" style="color:#2563eb;text-decoration:underline;">reschedule here</a> or reply to this email.'
+    );
+    out = out.replace(
+        /If you would like to book a new time:\s*(https?:\/\/[^\s<]+)/gi,
+        '<a href="$1" style="color:#2563eb;text-decoration:underline;">Book a new time</a>'
+    );
+    out = out.replace(
+        /Book a new time:\s*(https?:\/\/[^\s<]+)/gi,
+        '<a href="$1" style="color:#2563eb;text-decoration:underline;">Book a new time</a>'
+    );
+    return out;
+}
+
 function resolveEffectiveTemplate(
     eventKey: TourCommsEventKey,
     channel: TourCommsChannel,
@@ -246,7 +272,7 @@ export function renderTourCommsTemplate(input: RenderTourCommsTemplateInput): Re
 
     const bodyHtml = effective.body_html?.trim()
         ? omitEmptyOptionalTourCommsLines(applyTourCommsPlaceholders(effective.body_html, mergeFields))
-        : plainTextToSimpleHtml(bodyText);
+        : polishTourCommsEmailHtml(plainTextToSimpleHtml(bodyText));
 
     return {
         channel: "email",

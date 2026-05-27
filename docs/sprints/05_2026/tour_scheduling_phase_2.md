@@ -125,6 +125,52 @@ Decisions that should land **before** large engineering bets:
 
 ---
 
+## Band A QA — tour reminder inspection (SQL)
+
+After scheduling a tour, reminder rows live in `communication_scheduled_sends` with `source = 'tour_scheduling'`. Use these read-only queries during QA (replace ids):
+
+```sql
+-- Pending tour reminders for a booking
+SELECT id, org_id, channel, status, scheduled_for, metadata
+FROM communication_scheduled_sends
+WHERE source = 'tour_scheduling'
+  AND entity_type = 'tour_bookings'
+  AND entity_id = '<booking_uuid>'
+ORDER BY scheduled_for ASC;
+
+-- Reminder keys + offsets stored on each row
+SELECT
+  id,
+  status,
+  scheduled_for,
+  metadata->>'reminder_key' AS reminder_key,
+  metadata->>'tour_start_at' AS tour_start_at,
+  metadata->>'event_key' AS event_key
+FROM communication_scheduled_sends
+WHERE source = 'tour_scheduling'
+  AND org_id = '<org_uuid>'
+ORDER BY scheduled_for DESC
+LIMIT 20;
+
+-- Join booking + opportunity for lane QA after schedule
+SELECT
+  tb.id AS booking_id,
+  tb.start_at,
+  tb.timezone,
+  tb.status_key AS booking_status,
+  o.id AS opportunity_id,
+  o.status_key AS opportunity_status
+FROM tour_bookings tb
+JOIN opportunities o ON o.id = tb.opportunity_id AND o.org_id = tb.org_id
+WHERE tb.org_id = '<org_uuid>'
+  AND tb.opportunity_id = '<opportunity_uuid>'
+ORDER BY tb.created_at DESC;
+```
+
+Expected: after confirm/reschedule, prior pending rows for the booking are canceled/replaced and new rows appear with `metadata.reminder_key` values such as `tour_reminder_24h` / `tour_reminder_2h` (per org/location comms config).
+
+---
+
 ## References
 
 - **V1 sprint + audit table:** `docs/sprints/05_2026/tour_scheduling_v1.md`

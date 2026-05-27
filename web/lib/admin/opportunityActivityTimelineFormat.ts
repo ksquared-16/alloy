@@ -13,6 +13,7 @@ import {
     getActivityTimelineActorLabel,
     humanizeSnakeCaseToken,
 } from "@/lib/admin/activityTimelineFormat";
+import { resolveCommunicationMessageEventTitle } from "@/lib/admin/activityMessageEventLabels";
 
 /** Status-key display labels used for enrollment / growth CRM (payload.summary, transitions). */
 export const OPPORTUNITY_ACTIVITY_STATUS_KEY_LABELS: Record<string, string> = {
@@ -52,9 +53,11 @@ export function formatOpportunityActivityTimelineEvent(event: ActivityTimelineEv
     return formatActivityTimelineEvent(event, opportunityActivityTimelineOptions);
 }
 
-export function getWorkflowActivityEventTitle(eventType: string | null): string {
+export function getWorkflowActivityEventTitle(eventType: string | null, payload: Record<string, unknown> = {}): string {
+    const channelTitle = resolveCommunicationMessageEventTitle(eventType, payload);
+    if (channelTitle) return channelTitle;
     return formatActivityTimelineEvent(
-        { event_type: eventType, payload: {} },
+        { event_type: eventType, payload },
         opportunityActivityTimelineOptions
     ).title;
 }

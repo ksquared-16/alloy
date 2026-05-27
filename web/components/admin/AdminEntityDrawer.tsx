@@ -118,6 +118,7 @@ import OpportunityDrawerHeaderActionsPanel from "@/components/admin/opportunity/
 import OpportunityRecordSectionRegistryActions from "@/components/admin/opportunity/OpportunityRecordSectionRegistryActions";
 import { OpportunityHouseholdPeoplePanel } from "@/components/admin/opportunity/OpportunityHouseholdPeoplePanel";
 import { useOpportunityActiveTourBookings } from "@/lib/tours/hooks/useOpportunityActiveTourBookings";
+import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import { OpportunityInquiryTourDateBlock } from "@/components/admin/opportunity/tours/OpportunityInquiryTourDateBlock";
 import { FamilyContactsPanel, OppInquiryContactChannelsRow } from "@/components/admin/opportunity/FamilyContactsPanel";
 import EntityDrawerSection from "@/components/admin/entity/EntityDrawerSection";
@@ -151,7 +152,7 @@ import {
 import { OpportunityInquirySummaryActivity } from "@/components/admin/opportunity/OpportunityInquirySummaryActivity";
 import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
 import { TOUR_BOOKING_OPPORTUNITY_STATUS } from "@/lib/tours/opportunity/tourBookingOpportunityIntegration";
-import { patchOpportunityDrawerRecordAfterTourBooking } from "@/lib/admin/opportunityDrawerTourBookingRefresh";
+import { patchOpportunityDrawerRecordAfterTourBooking, mergeOptimisticTourBookings, readOptimisticTourBookingFromOverview } from "@/lib/admin/opportunityDrawerTourBookingRefresh";
 import { validateQueueDefinition, type QueueDefinitionV1, type QueueFilter } from "@/lib/config/queueDefinitionSchema";
 import {
     JobDrawerV2TabBar,
@@ -1382,9 +1383,18 @@ export default function AdminEntityDrawer() {
         opportunityTourBookingsId,
         inquiryTourFetchArmed
     );
+    const opportunityInquiryTourBookingsForDisplay = useMemo((): TourBookingRow[] => {
+        const optimistic = readOptimisticTourBookingFromOverview(
+            data && typeof data === "object" ? (data as Record<string, unknown>) : null
+        );
+        return mergeOptimisticTourBookings(
+            opportunityRecordHeaderActiveTours,
+            optimistic as TourBookingRow | null
+        );
+    }, [data, opportunityRecordHeaderActiveTours]);
     const opportunityRecordHeaderActionsForUi = useMemo(() => {
         const base = opportunityResolvedHeaderActions;
-        if (!base || !opportunityRecordHeaderActiveTours.length) return base;
+        if (!base || !opportunityInquiryTourBookingsForDisplay.length) return base;
         const relabel = (arr: ResolvedActionForClient[]) =>
             arr.map((a) => (a.key === "schedule_tour" ? { ...a, label: "Reschedule tour" } : a));
         return {
@@ -1396,7 +1406,7 @@ export default function AdminEntityDrawer() {
             row_inline: relabel(base.row_inline ?? []),
             header: relabel(base.header ?? []),
         };
-    }, [opportunityResolvedHeaderActions, opportunityRecordHeaderActiveTours]);
+    }, [opportunityResolvedHeaderActions, opportunityInquiryTourBookingsForDisplay]);
     /** After primary reveal + contract — arms post-reveal enrich queue (not gated on full). */
     const [postDrawerVisibleKey, setPostDrawerVisibleKey] = useState<string | null>(null);
     const postRevealEnrichEndReportedRef = useRef<string | null>(null);
@@ -12530,7 +12540,7 @@ export default function AdminEntityDrawer() {
                                                                                                 readonlyFieldClassName={oppInqReadonlyField}
                                                                                                 sharedActiveBookings={
                                                                                                     inquiryTourFetchArmed
-                                                                                                        ? opportunityRecordHeaderActiveTours
+                                                                                                        ? opportunityInquiryTourBookingsForDisplay
                                                                                                         : undefined
                                                                                                 }
                                                                                                 fetchEnabled={false}
@@ -12545,8 +12555,14 @@ export default function AdminEntityDrawer() {
                                                                                             >
                                                                                                 {(() => {
                                                                                                     const md = (d.metadata ?? null) as Record<string, unknown> | null;
+                                                                                                    const siteTz =
+                                                                                                        md &&
+                                                                                                        typeof md.tour_timezone === "string" &&
+                                                                                                        md.tour_timezone.trim()
+                                                                                                            ? md.tour_timezone.trim()
+                                                                                                            : viewerTz;
                                                                                                     const fmt = formatTourDateTime(md?.tour_date, md?.tour_time, {
-                                                                                                        displayTimeZoneIana: viewerTz,
+                                                                                                        displayTimeZoneIana: siteTz,
                                                                                                     });
                                                                                                     return fmt.display;
                                                                                                 })()}
@@ -14759,6 +14775,10 @@ export default function AdminEntityDrawer() {
                                     start_at: booking.start_at,
                                     timezone: booking.timezone,
                                     status_key: sk,
+                                    booking_id:
+                                        booking && typeof (booking as { id?: string }).id === "string"
+                                            ? (booking as { id: string }).id
+                                            : null,
                                 });
                             });
                             if (sk === "confirmed" || sk === "rescheduled") {
@@ -14801,7 +14821,12 @@ export default function AdminEntityDrawer() {
                                 }),
                             });
                             const json = (await res.json().catch(() => ({}))) as {
-                                booking?: { start_at?: string; timezone?: string; status_key?: string };
+                                booking?: {
+                                    id?: string;
+                                    start_at?: string;
+                                    timezone?: string;
+                                    status_key?: string;
+                                };
                                 error?: string;
                             };
                             if (!res.ok) throw new Error(json.error ?? "Failed to schedule tour");
@@ -14821,6 +14846,12 @@ export default function AdminEntityDrawer() {
                                             start_at: startAt,
                                             timezone,
                                             status_key: sk,
+                                            booking_id:
+                                                booking && typeof booking.id === "string" ? booking.id : null,
+                                            mirror_override: {
+                                                tour_date: payload.tour_date,
+                                                tour_time: payload.tour_time,
+                                            },
                                         });
                                     });
                                     if (sk === "confirmed" || sk === "rescheduled") {

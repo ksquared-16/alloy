@@ -4,6 +4,7 @@ import {
     applyTourCommsPlaceholders,
     getDefaultTourCommsTemplateSet,
     normalizeTourCommsEventKey,
+    polishTourCommsEmailHtml,
     renderTourCommsTemplate,
 } from "@/lib/tours/comms/tourCommsTemplates";
 
@@ -43,7 +44,10 @@ describe("renderTourCommsTemplate", () => {
         expect(msg.bodyText).toContain("Jordan");
         expect(msg.bodyText).toContain("Sunrise Learning Center");
         expect(msg.bodyText).toContain("https://example.com/calendar.ics");
+        expect(msg.bodyText).not.toContain("America/Los_Angeles");
         expect(msg.bodyHtml).toContain("<p>");
+        expect(msg.bodyHtml).toContain('href="https://example.com/calendar.ics"');
+        expect(msg.bodyHtml).toContain("Add to calendar</a>");
     });
 
     it("renders default reminder SMS", () => {
@@ -73,7 +77,7 @@ describe("renderTourCommsTemplate", () => {
         expect(msg?.channel).toBe("email");
         if (msg?.channel !== "email") return;
         expect(msg.subject).toBe("Custom subject for Jordan");
-        expect(msg.bodyText).toContain("Your tour is scheduled");
+        expect(msg.bodyText).toContain("Your tour is confirmed");
     });
 
     it("override email body only keeps default subject", () => {
@@ -179,6 +183,17 @@ describe("formatTourCommsDateTimeLabels", () => {
             timezone: "America/Los_Angeles",
         });
         expect(labels.tourDisplayLabel).not.toBe("");
+    });
+});
+
+describe("polishTourCommsEmailHtml", () => {
+    it("wraps calendar URL in a CTA link", () => {
+        const html = polishTourCommsEmailHtml(
+            "<p>Add to calendar: https://example.com/calendar.ics</p>"
+        );
+        expect(html).toContain('href="https://example.com/calendar.ics"');
+        expect(html).toContain("Add to calendar</a>");
+        expect(html).not.toContain("https://example.com/calendar.ics</p>");
     });
 });
 
