@@ -37,9 +37,9 @@ function submitterLine(row: SubmissionInboxRow): string | null {
     const payload = row.payload as Record<string, unknown> | undefined;
     const values = payload?.values;
     if (!values || typeof values !== "object" || Array.isArray(values)) return family;
-    const email = typeof (values as Record<string, unknown>).guardian_email === "string"
-        ? (values as Record<string, unknown>).guardian_email.trim()
-        : "";
+    const v = values as Record<string, unknown>;
+    const emailRaw = v.guardian_email;
+    const email = typeof emailRaw === "string" ? emailRaw.trim() : "";
     if (family && email) return `${family} · ${email}`;
     return family ?? (email || null);
 }
