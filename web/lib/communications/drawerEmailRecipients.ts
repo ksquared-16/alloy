@@ -41,7 +41,7 @@ function personLabel(p: { full_name?: string | null; first_name?: string | null;
     return a || "—";
 }
 
-/** Opportunity: opportunity_persons + primary_person — include phone even when no email (Card 27). */
+/** Opportunity: opportunity_persons, household customer_persons, primary person, primary contact person. */
 export async function fetchOpportunityDrawerEmailRecipients(
     supabase: AdminSupabase,
     orgId: string,
@@ -49,13 +49,21 @@ export async function fetchOpportunityDrawerEmailRecipients(
 ): Promise<DrawerEmailRecipientRow[]> {
     const { data: opp } = await supabase
         .from("opportunities")
-        .select("primary_person_id")
+        .select("primary_person_id, primary_contact_id, customer_id")
         .eq("id", opportunityId)
         .eq("org_id", orgId)
         .maybeSingle();
     const primaryPid =
         opp && typeof (opp as { primary_person_id?: string }).primary_person_id === "string"
             ? ((opp as { primary_person_id: string }).primary_person_id as string).trim()
+            : null;
+    const primaryContactId =
+        opp && typeof (opp as { primary_contact_id?: string }).primary_contact_id === "string"
+            ? ((opp as { primary_contact_id: string }).primary_contact_id as string).trim()
+            : null;
+    const customerId =
+        opp && typeof (opp as { customer_id?: string }).customer_id === "string"
+            ? ((opp as { customer_id: string }).customer_id as string).trim()
             : null;
 
     const { data: opRows } = await supabase
@@ -72,6 +80,53 @@ export async function fetchOpportunityDrawerEmailRecipients(
         pidSet.add(pid);
         roleMap.set(pid, r.role_type != null ? String(r.role_type) : null);
     }
+
+    if (customerId) {
+        const { data: cpRows } = await supabase
+            .from("customer_persons")
+            .select("person_id, role_type, is_primary")
+            .eq("org_id", orgId)
+            .eq("customer_id", customerId);
+        for (const r of (cpRows ?? []) as {
+            person_id?: string | null;
+            role_type?: string | null;
+            is_primary?: boolean;
+        }[]) {
+            const pid = r.person_id != null ? String(r.person_id).trim() : "";
+            if (!pid) continue;
+            pidSet.add(pid);
+            if (!roleMap.has(pid)) {
+                roleMap.set(
+                    pid,
+                    r.role_type === "primary_contact"
+                        ? "Primary contact"
+                        : r.is_primary
+                          ? "Primary on household"
+                          : r.role_type != null
+                            ? String(r.role_type)
+                            : "Household member"
+                );
+            }
+        }
+    }
+
+    if (primaryContactId) {
+        const { data: cRow } = await supabase
+            .from("contacts")
+            .select("person_id")
+            .eq("id", primaryContactId)
+            .eq("org_id", orgId)
+            .maybeSingle();
+        const contactPid =
+            cRow && typeof (cRow as { person_id?: string | null }).person_id === "string"
+                ? String((cRow as { person_id: string }).person_id).trim()
+                : null;
+        if (contactPid) {
+            pidSet.add(contactPid);
+            if (!roleMap.has(contactPid)) roleMap.set(contactPid, "Primary contact");
+        }
+    }
+
     if (primaryPid) pidSet.add(primaryPid);
 
     if (pidSet.size === 0) return [];

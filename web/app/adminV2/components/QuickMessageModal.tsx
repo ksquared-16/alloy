@@ -2,17 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { launchAdminV2OpenOpportunityFromContext } from "@/lib/adminV2/contextualRecordOpen";
+import {
+    drawerRecipientToQuickMessageHit,
+    fetchQuickMessageOpportunityRecipients,
+    resolveQuickMessageSelection,
+    type QuickMessagePersonHit,
+} from "@/lib/adminV2/quickMessageRecordRecipients";
 
 const COMPOSER_LABEL = "mb-1 text-[8px] font-semibold tracking-[0.12em] text-alloy-midnight/45";
 
-type PersonHit = {
-    person_id: string;
-    display_name: string;
-    email: string | null;
-    phone: string | null;
-    has_email: boolean;
-    has_phone: boolean;
-};
+type PersonHit = QuickMessagePersonHit;
 
 type ThreadPreviewRow = {
     id: string;
@@ -77,8 +76,8 @@ export type QuickMessageModalSeed = {
     displayName?: string;
     email?: string | null;
     phone?: string | null;
-    /** Record-scoped launch without a linked contact — hide global person search. */
-    contextualOnly?: boolean;
+    /** Record-scoped launch — load linked contacts for opportunity (no global search). */
+    recordScoped?: boolean;
 };
 
 export interface QuickMessageModalProps {
@@ -115,6 +114,12 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
     const [threadMsgsErr, setThreadMsgsErr] = useState<string | null>(null);
 
     const searchSeq = useRef(0);
+    const scopedFetchSeq = useRef(0);
+
+    const [scopedRecipients, setScopedRecipients] = useState<PersonHit[]>([]);
+    const [scopedRecipientsLoading, setScopedRecipientsLoading] = useState(false);
+    const [scopedRecipientsErr, setScopedRecipientsErr] = useState<string | null>(null);
+    const [scopedRecipientsResolved, setScopedRecipientsResolved] = useState(false);
 
     const emailReady = channelsAvailable.includes("email") && !bindingsErr && !loadingBindings;
     const smsReady = channelsAvailable.includes("sms") && !bindingsErr && !loadingBindings;
@@ -162,8 +167,60 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
             setThreadsErr(null);
             setThreadMsgsPreview([]);
             setThreadMsgsErr(null);
+            setScopedRecipients([]);
+            setScopedRecipientsErr(null);
+            setScopedRecipientsResolved(false);
             return;
         }
+    }, [open]);
+
+    const recordScoped = Boolean(seed?.recordScoped && seed?.opportunityId?.trim());
+    const opportunityId = seed?.opportunityId?.trim() ?? "";
+
+    useEffect(() => {
+        if (!open || !recordScoped || !opportunityId) return;
+        const seq = ++scopedFetchSeq.current;
+        setScopedRecipientsLoading(true);
+        setScopedRecipientsErr(null);
+        setScopedRecipientsResolved(false);
+        setSelectedRecipients([]);
+        void (async () => {
+            const { recipients, error } = await fetchQuickMessageOpportunityRecipients(opportunityId, {
+                personId: seed?.personId ?? null,
+                displayName: seed?.displayName ?? seed?.recordDisplayName ?? null,
+                email: seed?.email ?? null,
+                phone: seed?.phone ?? null,
+            });
+            if (scopedFetchSeq.current !== seq) return;
+            setScopedRecipientsLoading(false);
+            setScopedRecipientsResolved(true);
+            if (error) {
+                setScopedRecipientsErr(error);
+                setScopedRecipients([]);
+                return;
+            }
+            const hits = recipients.map(drawerRecipientToQuickMessageHit);
+            setScopedRecipients(hits);
+            const selected = resolveQuickMessageSelection({
+                rows: recipients,
+                preferredPersonId: seed?.personId ?? null,
+            });
+            setSelectedRecipients(selected);
+            if (selected[0]) setSearchQ(selected[0].display_name);
+        })();
+    }, [
+        open,
+        recordScoped,
+        opportunityId,
+        seed?.personId,
+        seed?.displayName,
+        seed?.recordDisplayName,
+        seed?.email,
+        seed?.phone,
+    ]);
+
+    useEffect(() => {
+        if (!open || recordScoped) return;
         if (!seed?.personId) return;
         const hit: PersonHit = {
             person_id: seed.personId,
@@ -172,12 +229,14 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
             phone: seed.phone ?? null,
             has_email: Boolean(seed.email?.trim()),
             has_phone: Boolean(seed.phone?.trim()),
+            relationship_label: null,
         };
         setSelectedRecipients([hit]);
         setSearchQ(hit.display_name);
-    }, [open, seed?.personId, seed?.displayName, seed?.email, seed?.phone]);
+    }, [open, recordScoped, seed?.personId, seed?.displayName, seed?.email, seed?.phone]);
 
-    const contextualOnly = Boolean(seed?.contextualOnly && seed?.opportunityId && !seed?.personId);
+    const showRecordEmptyState =
+        recordScoped && scopedRecipientsResolved && !scopedRecipientsLoading && scopedRecipients.length === 0;
 
     useEffect(() => {
         if (!open || !previewPersonId) {
@@ -265,7 +324,7 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
     }, [open, firstPreviewThreadId]);
 
     useEffect(() => {
-        if (!open) return;
+        if (!open || recordScoped) return;
         const q = searchQ.trim();
         if (q.length < 2) {
             setSearchHits([]);
@@ -296,7 +355,7 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
             })();
         }, 280);
         return () => window.clearTimeout(t);
-    }, [searchQ, open]);
+    }, [searchQ, open, recordScoped]);
 
     const toggleRecipient = useCallback((p: PersonHit) => {
         setSelectedRecipients((prev) => {
@@ -428,8 +487,8 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
                             Quick message
                         </p>
                         <p className="mt-0.5 text-[11px] leading-snug text-alloy-midnight/55">
-                            {contextualOnly
-                                ? "Message is scoped to this inquiry. Add a parent or contact on the record to send."
+                            {recordScoped
+                                ? "Message is scoped to this record. Choose a linked parent or contact below."
                                 : "Person-first · org-scoped · person-anchored threads. Search to add or remove recipients."}
                         </p>
                     </div>
@@ -445,30 +504,94 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
                 <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5 lg:flex-row lg:items-stretch lg:gap-0 lg:overflow-hidden lg:py-0">
                     {/* Left ~30% — search + chips */}
                     <aside className="flex w-full shrink-0 flex-col gap-3 lg:w-[30%] lg:min-w-0 lg:max-w-[22rem] lg:border-r lg:border-alloy-stone/12 lg:px-5 lg:py-5">
-                        {contextualOnly ? (
-                            <div
-                                className="rounded-lg border border-alloy-stone/16 bg-alloy-stone/[0.04] px-3 py-3 text-[12px] leading-snug text-alloy-midnight/70"
-                                data-testid="quick-message-no-contact"
-                            >
-                                <p>
-                                    No parent/contact linked yet.{" "}
-                                    <button
-                                        type="button"
-                                        className="font-semibold text-alloy-blue underline-offset-2 hover:underline"
-                                        onClick={() => {
-                                            const id = seed?.opportunityId?.trim();
-                                            if (!id) return;
-                                            launchAdminV2OpenOpportunityFromContext(id);
-                                            onClose();
-                                        }}
-                                    >
-                                        Add contact →
-                                    </button>
-                                </p>
-                                {seed?.recordDisplayName?.trim() ? (
-                                    <p className="mt-1 text-[11px] text-alloy-midnight/50">
-                                        {seed.recordDisplayName.trim()}
+                        {recordScoped ? (
+                            <div data-testid="quick-message-record-scoped">
+                                {scopedRecipientsLoading ? (
+                                    <p className="text-[11px] text-alloy-midnight/45" aria-live="polite">
+                                        Loading linked contacts…
                                     </p>
+                                ) : null}
+                                {scopedRecipientsErr ? (
+                                    <p className="text-[11px] text-alloy-ember">{scopedRecipientsErr}</p>
+                                ) : null}
+                                {showRecordEmptyState ? (
+                                    <div
+                                        className="rounded-lg border border-alloy-stone/16 bg-alloy-stone/[0.04] px-3 py-3 text-[12px] leading-snug text-alloy-midnight/70"
+                                        data-testid="quick-message-no-contact"
+                                    >
+                                        <p>
+                                            No parent/contact linked yet.{" "}
+                                            <button
+                                                type="button"
+                                                className="font-semibold text-alloy-blue underline-offset-2 hover:underline"
+                                                onClick={() => {
+                                                    if (!opportunityId) return;
+                                                    launchAdminV2OpenOpportunityFromContext(opportunityId);
+                                                    onClose();
+                                                }}
+                                            >
+                                                Add contact →
+                                            </button>
+                                        </p>
+                                        {seed?.recordDisplayName?.trim() ? (
+                                            <p className="mt-1 text-[11px] text-alloy-midnight/50">
+                                                Inquiry: {seed.recordDisplayName.trim()}
+                                            </p>
+                                        ) : null}
+                                    </div>
+                                ) : null}
+                                {scopedRecipients.length > 0 ? (
+                                    <div>
+                                        <div className={COMPOSER_LABEL}>Recipients</div>
+                                        <ul
+                                            className="mt-1 max-h-[min(40vh,14rem)] overflow-y-auto rounded-lg border border-alloy-stone/14 bg-alloy-stone/[0.03] lg:max-h-[min(52vh,22rem)]"
+                                            role="listbox"
+                                            aria-label="Linked contacts for this record"
+                                            data-testid="quick-message-recipient-list"
+                                        >
+                                            {scopedRecipients.map((p) => {
+                                                const selected = selectedRecipients.some(
+                                                    (r) => r.person_id === p.person_id
+                                                );
+                                                return (
+                                                    <li key={p.person_id}>
+                                                        <button
+                                                            type="button"
+                                                            role="option"
+                                                            aria-selected={selected}
+                                                            onClick={() => toggleRecipient(p)}
+                                                            className={`flex w-full flex-col gap-0.5 px-2 py-1.5 text-left text-[12px] transition ${
+                                                                selected
+                                                                    ? "bg-alloy-midnight/[0.1]"
+                                                                    : "hover:bg-white/80"
+                                                            }`}
+                                                        >
+                                                            <span className="font-semibold text-alloy-forge">
+                                                                {p.display_name}
+                                                                {p.relationship_label ? (
+                                                                    <span className="ml-1 font-normal text-alloy-midnight/50">
+                                                                        · {p.relationship_label}
+                                                                    </span>
+                                                                ) : null}
+                                                            </span>
+                                                            <span className="text-[10px] text-alloy-midnight/55">
+                                                                {p.has_email ? p.email : "No email"}
+                                                                {p.has_email && p.has_phone ? " · " : null}
+                                                                {p.has_phone
+                                                                    ? formatDisplayPhoneUs(p.phone)
+                                                                    : p.has_email
+                                                                      ? ""
+                                                                      : " · No phone"}
+                                                                <span className="ml-1 text-alloy-blue">
+                                                                    {selected ? "· Remove" : "· Add"}
+                                                                </span>
+                                                            </span>
+                                                        </button>
+                                                    </li>
+                                                );
+                                            })}
+                                        </ul>
+                                    </div>
                                 ) : null}
                             </div>
                         ) : (

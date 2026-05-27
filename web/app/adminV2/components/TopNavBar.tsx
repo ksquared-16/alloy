@@ -116,7 +116,7 @@ export default function TopNavBar() {
         displayName: detail.displayName,
         email: detail.email,
         phone: detail.phone,
-        contextualOnly: Boolean(opportunityId && !personId),
+        recordScoped: detail.recordScoped ?? Boolean(opportunityId),
       });
       setQuickMessageOpen(true);
     };

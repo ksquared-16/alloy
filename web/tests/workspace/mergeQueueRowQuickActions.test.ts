@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { normalizeEnrollmentQueueRowPreviewActions } from "@/lib/ui-v2/enrollmentQueueRowPreviewPolicy";
-import { mergeQueueRowQuickActions } from "@/lib/workspace/viewModels/mergeQueueRowQuickActions";
+import {
+    mergeQueueRowQuickActions,
+    mergeQueueRowQuickActionsForOpportunityRow,
+} from "@/lib/workspace/viewModels/mergeQueueRowQuickActions";
 
 const baseRow = {
     previewActions: ["open"] as const,
@@ -89,5 +92,32 @@ describe("mergeQueueRowQuickActions", () => {
         expect(labels).not.toContain("Message");
         expect(labels).not.toContain("Call");
         expect(labels).not.toContain("Email");
+    });
+
+    it("reads primary_person_id from queue row (not only _primary_person_id)", () => {
+        const actions = mergeQueueRowQuickActionsForOpportunityRow(
+            {
+                id: "opp-9",
+                primary_person_id: "person-kelly",
+                _customer_name: "Kelly Kurzman",
+                _primary_email: "kelly@example.com",
+            } as never,
+            ["open"],
+            [
+                {
+                    key: "quick_message",
+                    label: "Message",
+                    action_type: "ui_intent",
+                    payload: { intent: "quick_message" },
+                },
+            ] as never,
+            { enrollmentLike: true }
+        );
+        const msg = actions.find((a) => a.actionId === "quick_message");
+        expect(msg?.payload).toMatchObject({
+            opportunityId: "opp-9",
+            personId: "person-kelly",
+            displayName: "Kelly Kurzman",
+        });
     });
 });

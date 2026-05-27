@@ -128,11 +128,13 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
     deptName: string;
     departmentKey?: string | null;
     oq: WorkspaceOpportunityQueueRuntime;
-    /** Resolved `ui.row_preview.actions` from queue definition (config-driven row buttons). */
-    rowPreviewActions?: QueueUiRowPreviewAction[];
-    /** Resolved `queue_row` placements for this work unit. */
+    /** When set (e.g. from GET /api/admin/actions?surface=queue_row), overrides per-row hardcoded quick actions. */
+    queueRowQuickActions?: QueueItemQuickActionVm[] | null;
+    /** Queue definition `ui.row_preview.actions` (Open-only enrollment policy applied per row). */
+    rowPreviewActions?: QueueUiRowPreviewAction[] | null;
+    /** Resolved `queue_row` placements (GET …/actions?surface=queue_row); merged with preview Open. */
     queueRowRegistryPlacements?: ResolvedActionForClient[] | null;
-    /** Resolved `right_rail` placements (GET …/actions?surface=right_rail). */
+    /** Resolved `right_rail` placements (GET …/actions?surface=right_rail); merged ahead of hardcoded enrollment rail. */
     rightRailResolved?: ResolvedActionForClient[] | null;
     /** Queue definition `ui.row_preview.field_labels` merged with defaults (CRM compact captions). */
     rowPreviewFieldLabels?: Record<string, string> | null;
@@ -146,10 +148,13 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
             ? buildEnrollmentOpportunityQueueItemVm(row, {
                   workUnitKey: input.workUnitKey,
                   rowPreviewFieldLabels: input.rowPreviewFieldLabels,
-                  previewActions: input.rowPreviewActions,
-                  queueRowRegistryPlacements: input.queueRowRegistryPlacements,
+                  previewActions: input.rowPreviewActions ?? undefined,
+                  queueRowRegistryPlacements: input.queueRowRegistryPlacements ?? undefined,
               })
             : defaultOpportunityQueueItemVm(row, input.workUnitKey);
+        if (input.queueRowQuickActions?.length) {
+            return { ...base, quickActions: input.queueRowQuickActions };
+        }
         return base;
     });
 

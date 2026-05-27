@@ -111,14 +111,21 @@ export function mergeQueueRowQuickActionsForOpportunityRow(
     opts?: { enrollmentLike?: boolean }
 ): QueueItemQuickActionVm[] {
     const r = row as Record<string, unknown>;
-    const personId = typeof r._primary_person_id === "string" ? r._primary_person_id.trim() : "";
+    const personId =
+        (typeof r._primary_person_id === "string" ? r._primary_person_id.trim() : "") ||
+        (typeof r.primary_person_id === "string" ? r.primary_person_id.trim() : "");
     const displayName =
         (typeof r._primary_person_name === "string" ? r._primary_person_name.trim() : "") ||
         (typeof r._contact_name === "string" ? r._contact_name.trim() : "") ||
+        (typeof r._primary_contact_name === "string" ? r._primary_contact_name.trim() : "") ||
         (typeof r._customer_name === "string" ? r._customer_name.trim() : "") ||
         undefined;
-    const email = typeof r._primary_email === "string" ? r._primary_email.trim() || null : null;
-    const phone = typeof r._primary_phone === "string" ? r._primary_phone.trim() || null : null;
+    const email =
+        (typeof r._primary_email === "string" ? r._primary_email.trim() || null : null) ??
+        (typeof r._primary_contact_email === "string" ? r._primary_contact_email.trim() || null : null);
+    const phone =
+        (typeof r._primary_phone === "string" ? r._primary_phone.trim() || null : null) ??
+        (typeof r._primary_contact_phone === "string" ? r._primary_contact_phone.trim() || null : null);
 
     return mergeQueueRowQuickActions({
         previewActions,

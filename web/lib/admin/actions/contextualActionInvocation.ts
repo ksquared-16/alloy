@@ -104,6 +104,7 @@ export async function launchContextualQuickMessage(invocation: ContextualActionI
         email: invocation.email,
         phone: invocation.phone,
         originatingSurface: invocation.surface,
+        recordScoped: true,
     });
 }
 
