@@ -34,3 +34,30 @@ export {
     TOUR_BOOKING_OPPORTUNITY_STATUS,
 } from "./opportunity/tourBookingOpportunityIntegration";
 export type { TourBookingOpportunityIntegrationKind } from "./opportunity/tourBookingOpportunityIntegration";
+
+export {
+    DEFAULT_TOUR_COMMS_CONFIG,
+    TOUR_COMMS_CHANNELS,
+    TOUR_COMMS_EVENT_KEYS,
+    TOUR_COMMS_SCHEDULED_SEND_METADATA,
+    TOUR_SCHEDULING_SCHEDULED_SEND_SOURCE,
+    extractTourCommsMetadataRoot,
+    mergeTourCommsConfig,
+    parseTourCommsConfigFragment,
+} from "./comms/tourCommsConfig";
+export type {
+    ResolveTourCommsConfigInput,
+    ResolveTourCommsConfigResult,
+    TourCommsChannel,
+    TourCommsConfig,
+    TourCommsConfigMetadataFragment,
+    TourCommsEventKey,
+    TourCommsHostRecipientPolicy,
+    TourCommsIcsPolicy,
+    TourCommsQuietHoursConfig,
+    TourCommsTemplate,
+    TourCommsTemplates,
+    TourReminderOffset,
+    TourSchedulingScheduledSendSource,
+} from "./comms/tourCommsConfig";
+export { resolveTourCommsConfig } from "./comms/resolveTourCommsConfig";
