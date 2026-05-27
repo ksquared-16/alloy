@@ -115,6 +115,8 @@ import {
 } from "@/lib/admin/drawer/drawerSaveErrors";
 import OpportunityDrawerHeaderActionButton from "@/components/admin/opportunity/OpportunityDrawerHeaderActionButton";
 import OpportunityDrawerHeaderActionsPanel from "@/components/admin/opportunity/OpportunityDrawerHeaderActionsPanel";
+import { OpportunityChildLifecycleSummaryStrip } from "@/components/admin/opportunity/OpportunityChildLifecycleSummaryStrip";
+import type { OpportunityChildLifecycleSummary } from "@/lib/opportunities/buildOpportunityChildLifecycleSummary";
 import OpportunityRecordSectionRegistryActions from "@/components/admin/opportunity/OpportunityRecordSectionRegistryActions";
 import { OpportunityHouseholdPeoplePanel } from "@/components/admin/opportunity/OpportunityHouseholdPeoplePanel";
 import { useOpportunityActiveTourBookings } from "@/lib/tours/hooks/useOpportunityActiveTourBookings";
@@ -9123,6 +9125,15 @@ export default function AdminEntityDrawer() {
         setFormData,
     ]);
 
+    const opportunityChildLifecycleSummary = useMemo((): OpportunityChildLifecycleSummary | null => {
+        if (drawer.type !== "opportunities" || !overviewData || (overviewData as { _create?: boolean })._create) {
+            return null;
+        }
+        const raw = (overviewData as Record<string, unknown>)._child_lifecycle_summary;
+        if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
+        return raw as OpportunityChildLifecycleSummary;
+    }, [drawer.type, overviewData]);
+
     const opportunityInquiryWorkflowHeaderTimeline = useMemo(() => {
         if (!opportunityInquiryWorkflowDrawer || drawer.type !== "opportunities") return undefined;
         if (!overviewData || (overviewData as { _create?: boolean })._create) return undefined;
@@ -9611,6 +9622,11 @@ export default function AdminEntityDrawer() {
                         </span>
                     ) : null}
                 </div>
+                <OpportunityChildLifecycleSummaryStrip
+                    summary={opportunityChildLifecycleSummary}
+                    showCaseNote
+                    className="mt-0.5"
+                />
                 {opportunityActivityHeaderLine}
             </div>
         ) : drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? (
@@ -9638,6 +9654,11 @@ export default function AdminEntityDrawer() {
                         {opportunityOperTrustPreview.headline.trim()}
                     </p>
                 ) : null}
+                <OpportunityChildLifecycleSummaryStrip
+                    summary={opportunityChildLifecycleSummary}
+                    showCaseNote
+                    className="mt-0.5"
+                />
                 {opportunityActivityHeaderLine}
             </div>
         ) : (
@@ -12532,6 +12553,11 @@ export default function AdminEntityDrawer() {
                                                                                             <OpportunityInquiryTourDateBlock
                                                                                                 opportunityId={drawer.id}
                                                                                                 locationId={String((d.location_id as string | null | undefined) ?? "").trim()}
+                                                                                                statusKey={
+                                                                                                    typeof d.status_key === "string"
+                                                                                                        ? d.status_key
+                                                                                                        : null
+                                                                                                }
                                                                                                 metadata={d.metadata}
                                                                                                 viewerTimezone={viewerTz}
                                                                                                 canMutate={!!canMutate}

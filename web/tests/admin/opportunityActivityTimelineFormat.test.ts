@@ -17,6 +17,15 @@ describe("opportunityActivityTimelineFormat", () => {
         expect(humanizeOpportunitySnakeCaseToken("won")).toBe("Won");
     });
 
+    it("labels tour_scheduling email using canonical channel after enrichment shape", () => {
+        const payload = {
+            channel: "email",
+            communication_message_id: "msg-1",
+            metadata: { source: "tour_scheduling" },
+        };
+        expect(getWorkflowActivityEventTitle("message_sent", payload)).toBe("Email sent");
+    });
+
     it("titles use friendly labels", () => {
         expect(getWorkflowActivityEventTitle("opportunity_status_changed")).toBe("Status changed");
         expect(getWorkflowActivityEventTitle("action_executed")).toBe("Action completed");

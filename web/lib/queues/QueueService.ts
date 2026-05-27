@@ -1,13 +1,29 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { validateQueueDefinition, type QueueConfig, type QueueDefinitionV1, type QueueFilter } from "@/lib/config/queueDefinitionSchema";
+import type { QueueConfig, QueueDefinitionV1, QueueFilter } from "@/lib/config/queueDefinitionSchema";
+import {
+    loadQueueDefinitionBundle,
+    resolveQueueKeyFromDefinition,
+    withQueueSummaryRuntimeMetadata,
+    type NormalizedQueueDefinitionDocument,
+} from "@/lib/config/queueDefinitionV2Runtime";
 import type {
     QueueItemsResult,
     QueueOperationalCalendarMeta,
     QueueSummary,
     QueueViewerTimezoneMeta,
 } from "@/lib/queues/types";
-import { workUnitScopeTotalFromSummaries, findAllRecordsQueueKey } from "@/lib/workspace/workUnitQueueDerived";
+import {
+    countWaitlistCandidateGrainItems,
+    loadWaitlistCandidateGrainQueueItems,
+    resolveWaitlistCandidateGrainContext,
+    resolveWaitlistPlacementConfigQueueKey,
+} from "@/lib/queues/candidateGrainWaitlistQueue";
+import {
+    countEnrollmentOffersChildGrainItems,
+    loadChildGrainEnrollmentQueueItems,
+    resolveEnrollmentOffersChildGrainContext,
+} from "@/lib/queues/childGrainEnrollmentQueue";
 import { getQueueUiConfig, type QueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
 import {
     fetchEffectiveStatusDefinitions,
@@ -52,8 +68,13 @@ import { projectOperationalRecommendationQueuePreview } from "@/lib/adminV2/bos/
 import { tryBuildOperationalRecommendationFromAttention } from "@/lib/adminV2/bos/recommendations/adapters/tryBuildOperationalRecommendationFromAttention";
 import { buildOperationalSummaryDeterministic, toOperationalSummaryQueuePreview } from "@/lib/ai/buildOperationalSummary";
 import { childDesiredStartSummaryFromOcmRows } from "@/lib/ui-v2/childDesiredStartQueuePresentation";
+import {
+    buildOpportunityChildLifecycleSummary,
+    childLifecycleMembersFromInquiryChildren,
+} from "@/lib/opportunities/buildOpportunityChildLifecycleSummary";
 import { DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1 } from "@/lib/workspace/opportunityAttentionRules";
 import { buildQueueServiceAttentionSemantics } from "@/lib/workspace/opportunityAttentionCountSemantics";
+import { findAllRecordsQueueKey, workUnitScopeTotalFromSummaries } from "@/lib/workspace/workUnitQueueDerived";
 import { logQueueSummaryPerf } from "@/lib/queues/queueSummaryPerf";
 import { applyPlacementToOpportunityQueueRows } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
 import type { WorkUnitPlacementQueueDiagnostics } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
@@ -139,11 +160,39 @@ function getStoredQueueDefinitionVersion(raw: unknown): number | null {
 
 function loadQueueDefinitionOrThrow(raw: unknown): QueueDefinitionV1 {
     try {
-        const validated = validateQueueDefinition(raw);
-        return validated;
+        return loadQueueDefinitionBundle(raw).def;
     } catch {
         throw new QueueServiceError("Work unit queue_definition is not QueueDefinitionV1", 400, "INVALID_QUEUE_DEFINITION");
     }
+}
+
+function loadQueueDefinitionBundleOrThrow(raw: unknown) {
+    try {
+        return loadQueueDefinitionBundle(raw);
+    } catch {
+        throw new QueueServiceError("Work unit queue_definition is not QueueDefinitionV1", 400, "INVALID_QUEUE_DEFINITION");
+    }
+}
+
+function placementConfigQueueKeyForLane(
+    executableQueueKey: string,
+    normalized: NormalizedQueueDefinitionDocument
+): string | undefined {
+    const entry = normalized.queues.find((q) => q.key === executableQueueKey.trim());
+    if (entry?.key === "waitlist") {
+        return resolveWaitlistPlacementConfigQueueKey(entry);
+    }
+    return undefined;
+}
+
+function augmentQueueSummary(
+    summary: QueueSummary,
+    normalized: NormalizedQueueDefinitionDocument | null
+): QueueSummary {
+    if (!normalized) return summary;
+    const meta = withQueueSummaryRuntimeMetadata(summary, normalized);
+    if (Object.keys(meta).length === 0) return summary;
+    return { ...summary, ...meta } as QueueSummary;
 }
 
 function findQueueByKey(def: QueueDefinitionV1, queueKey: string): QueueConfig {
@@ -174,6 +223,8 @@ async function attachPlacementToEnrichedOpportunityItems(params: {
     enrichedRows: Array<Record<string, unknown>>;
     workUnitId: string;
     queueKey: string;
+    /** Legacy placement config may key lanes by alias (e.g. `waitlisted` vs `waitlist`). */
+    placementConfigQueueKey?: string;
     queueConfig: QueueConfig;
     departmentMetadata: unknown | null;
     workUnitMetadata: unknown | null;
@@ -181,10 +232,11 @@ async function attachPlacementToEnrichedOpportunityItems(params: {
     /** Test injection — skips Supabase bulk load when provided. */
     placementCandidatesByOpportunityId?: import("@/lib/orchestration/placement/bulkLoadPlacementCandidatesByOpportunity").PlacementCandidatesByOpportunityId;
 }): Promise<{ rows: Array<Record<string, unknown>>; diagnostics: WorkUnitPlacementQueueDiagnostics | null }> {
+    const configQueueKey = (params.placementConfigQueueKey ?? params.queueKey).trim();
     const resolved = resolvePlacementQueueConfig({
         departmentMetadata: params.departmentMetadata,
         workUnitMetadata: params.workUnitMetadata,
-        queue_key: params.queueKey,
+        queue_key: configQueueKey,
     });
     if (resolved.status !== "enabled") {
         return { rows: params.enrichedRows, diagnostics: null };
@@ -192,7 +244,7 @@ async function attachPlacementToEnrichedOpportunityItems(params: {
     const statusKeysAllowed = opportunityQueueStatusKeysAllowed(params.queueConfig);
     const ctx = {
         workUnitId: params.workUnitId,
-        queueKey: params.queueKey,
+        queueKey: configQueueKey,
         nowMs: params.nowMs,
         statusKeysAllowed,
     };
@@ -1355,6 +1407,14 @@ async function enrichOpportunityRows(params: {
             ocmDesiredStartByOpportunityId.get(oppIdStr) ?? []
         );
 
+        const childLifecycleSummary =
+            inquiryChildren.length > 0
+                ? buildOpportunityChildLifecycleSummary({
+                      opportunityId: oppIdStr,
+                      members: childLifecycleMembersFromInquiryChildren(inquiryChildren),
+                  })
+                : null;
+
         return {
             ...r,
             title: r.name ?? null,
@@ -1368,6 +1428,12 @@ async function enrichOpportunityRows(params: {
             _requested_program: programsDisplay ?? programCombined,
             _desired_start_date: desiredStart,
             _child_desired_start_summary: childDesiredStartSummary,
+            ...(childLifecycleSummary
+                ? {
+                      _child_lifecycle_summary: childLifecycleSummary,
+                      _child_lifecycle_summary_display: childLifecycleSummary.display_summary,
+                  }
+                : {}),
             _tour_context: tourContext,
             _tour_queue_display: tourQueueDisplay,
             _notes_preview: notesPreview,
@@ -1763,6 +1829,7 @@ function applySortToJobQuery(
 type WorkUnitQueueDefinitionCacheEntry = {
     at: number;
     def: QueueDefinitionV1;
+    normalized: NormalizedQueueDefinitionDocument;
     revision: string | null;
     /** `work_units.metadata` — feeds opportunity attention resolver config (same TTL as definition). */
     workUnitMetadata: unknown | null;
@@ -1774,6 +1841,7 @@ const WU_QUEUE_DEF_CACHE_ENABLED = process.env.NODE_ENV !== "test";
 
 async function loadWorkUnitQueueDefinitionWithMeta(params: { orgId: string; workUnitId: string }): Promise<{
     def: QueueDefinitionV1;
+    normalized: NormalizedQueueDefinitionDocument;
     cacheHit: boolean;
     workUnitMetadata: unknown | null;
     departmentId: string | null;
@@ -1785,6 +1853,7 @@ async function loadWorkUnitQueueDefinitionWithMeta(params: { orgId: string; work
         if (hit && now - hit.at < WU_QUEUE_DEF_TTL_MS) {
             return {
                 def: hit.def,
+                normalized: hit.normalized,
                 cacheHit: true,
                 workUnitMetadata: hit.workUnitMetadata ?? null,
                 departmentId: hit.departmentId ?? null,
@@ -1820,18 +1889,20 @@ async function loadWorkUnitQueueDefinitionWithMeta(params: { orgId: string; work
     if (raw == null || (isPlainObject(raw) && Object.keys(raw).length === 0)) {
         throw new QueueServiceError("Work unit has no queue_definition configured", 400, "MISSING_QUEUE_DEFINITION");
     }
-    if (storedVersion !== null && storedVersion !== 1) {
+    if (storedVersion !== null && storedVersion !== 1 && storedVersion !== 2) {
         throw new QueueServiceError("Unsupported stored queue_definition version", 400, "UNSUPPORTED_VERSION");
     }
-    const def = loadQueueDefinitionOrThrow(raw);
+    const bundle = loadQueueDefinitionBundleOrThrow(raw);
+    const def = bundle.def;
+    const normalized = bundle.normalized;
     const workUnitMetadata = (data as { metadata?: unknown | null }).metadata ?? null;
     const departmentIdRaw = (data as { department_id?: unknown }).department_id;
     const departmentId =
         typeof departmentIdRaw === "string" && departmentIdRaw.trim() ? departmentIdRaw.trim() : null;
     if (WU_QUEUE_DEF_CACHE_ENABLED) {
-        WU_QUEUE_DEF_CACHE.set(cacheKey, { at: now, def, revision, workUnitMetadata, departmentId });
+        WU_QUEUE_DEF_CACHE.set(cacheKey, { at: now, def, normalized, revision, workUnitMetadata, departmentId });
     }
-    return { def, cacheHit: false, workUnitMetadata, departmentId };
+    return { def, normalized, cacheHit: false, workUnitMetadata, departmentId };
 }
 
 async function loadWorkUnitQueueDefinition(params: { orgId: string; workUnitId: string }): Promise<QueueDefinitionV1> {
@@ -2056,11 +2127,14 @@ export async function getWorkUnitQueueSummaries(params: {
         : resolveOperationalDayPlanContext(supabase, params.orgId, refUtc);
 
     let def: QueueDefinitionV1;
+    let normalized: NormalizedQueueDefinitionDocument;
     let workUnitMetadata: unknown | null;
     let operationalDay: OperationalDayPlanContext;
     if (preloaded?.queue_definition != null) {
         operationalDay = await operationalDayPromise;
-        def = loadQueueDefinitionOrThrow(preloaded.queue_definition);
+        const bundle = loadQueueDefinitionBundleOrThrow(preloaded.queue_definition);
+        def = bundle.def;
+        normalized = bundle.normalized;
         workUnitMetadata = preloaded.workUnitMetadata ?? null;
     } else {
         const [loaded, od] = await Promise.all([
@@ -2068,24 +2142,28 @@ export async function getWorkUnitQueueSummaries(params: {
             operationalDayPromise,
         ]);
         def = loaded.def;
+        normalized = loaded.normalized;
         workUnitMetadata = loaded.workUnitMetadata;
         operationalDay = od;
     }
+    const augmentSummaries = (queues: QueueSummary[]) => queues.map((s) => augmentQueueSummary(s, normalized));
     const loadDefMs = Date.now() - tParallelBoot0;
     assertSupportedEntityType(def);
 
     if (params.recordScopeImpossible === true) {
         const et = def.entity_type === "job" ? "job" : "opportunity";
-        const summaries: QueueSummary[] = def.queues.map((q) => ({
-            key: q.key,
-            label: q.label,
-            description: queueSummaryOptionalString(q.description),
-            entity_type: et,
-            priority: q.priority ?? "standard",
-            display: q.display ?? "list",
-            count: 0,
-            preview: [],
-        }));
+        const summaries = augmentSummaries(
+            def.queues.map((q) => ({
+                key: q.key,
+                label: q.label,
+                description: queueSummaryOptionalString(q.description),
+                entity_type: et,
+                priority: q.priority ?? "standard",
+                display: q.display ?? "list",
+                count: 0,
+                preview: [],
+            }))
+        );
         const scopeMeta = workUnitScopeTotalFromSummaries(def, summaries);
         const totalMsImp = Date.now() - tW0;
         console.log("[queue-opt]", { phase: "summary_impossible", duration_ms: totalMsImp, work_unit_id: params.workUnitId });
@@ -2232,7 +2310,179 @@ export async function getWorkUnitQueueSummaries(params: {
             );
         }
 
-        // opportunity
+        // opportunity — candidate-grain waitlist (Card 6)
+        const waitlistGrainCtx = resolveWaitlistCandidateGrainContext({
+            normalized,
+            executableQueueKey: q.key,
+        });
+        if (waitlistGrainCtx) {
+            try {
+                const tCand0 = Date.now();
+                if (!includePreviews) {
+                    const count = await countWaitlistCandidateGrainItems({
+                        supabase,
+                        orgId: params.orgId,
+                        workUnitId: params.workUnitId,
+                        ctx: waitlistGrainCtx,
+                        recordScopeConstraints: scopeFilter,
+                        recordScopeImpossible: params.recordScopeImpossible,
+                    });
+                    countMs = Date.now() - tCand0;
+                    return finish(
+                        augmentQueueSummary(
+                            {
+                                key: q.key,
+                                label: q.label,
+                                description: queueSummaryOptionalString(q.description),
+                                entity_type: def.entity_type,
+                                priority: q.priority ?? "standard",
+                                display: q.display ?? "list",
+                                count,
+                                preview: [],
+                                grain: "candidate",
+                                domain: waitlistGrainCtx.queueEntry.domain ?? "waitlist",
+                            },
+                            normalized
+                        )
+                    );
+                }
+
+                const candLoad = await loadWaitlistCandidateGrainQueueItems({
+                    supabase,
+                    orgId: params.orgId,
+                    workUnitId: params.workUnitId,
+                    ctx: waitlistGrainCtx,
+                    recordScopeConstraints: scopeFilter,
+                    recordScopeImpossible: params.recordScopeImpossible,
+                    limit: previewLimit,
+                    offset: 0,
+                    departmentMetadata: null,
+                    workUnitMetadata: workUnitMetadata ?? null,
+                    nowMs: refUtc.getTime(),
+                    enrichOpportunityRows: async (rows) =>
+                        enrichOpportunityRows({
+                            supabase,
+                            orgId: params.orgId,
+                            rows: rows as OpportunityRowPreview[],
+                            enrichment: "queue_preview",
+                            viewerDisplayTimeZoneIana: viewerPreviewIana,
+                        }),
+                });
+                countMs = Date.now() - tCand0;
+                previewMs = countMs;
+                enrichMs = 0;
+                rowsEnriched = candLoad.items.length;
+                return finish(
+                    augmentQueueSummary(
+                        {
+                            key: q.key,
+                            label: q.label,
+                            description: queueSummaryOptionalString(q.description),
+                            entity_type: def.entity_type,
+                            priority: q.priority ?? "standard",
+                            display: q.display ?? "list",
+                            count: candLoad.total,
+                            preview: candLoad.items as unknown[],
+                            grain: "candidate",
+                            domain: waitlistGrainCtx.queueEntry.domain ?? "waitlist",
+                        },
+                        normalized
+                    )
+                );
+            } catch (e) {
+                console.warn("[queue-perf] waitlist candidate-grain summary fallback to v1 compat", {
+                    work_unit_id: params.workUnitId,
+                    queue_key: q.key,
+                    error: e instanceof Error ? e.message : String(e),
+                });
+            }
+        }
+
+        // opportunity — child-grain enrollment_offers (Card 8)
+        const enrollmentChildGrainCtx = resolveEnrollmentOffersChildGrainContext({
+            normalized,
+            executableQueueKey: q.key,
+        });
+        if (enrollmentChildGrainCtx) {
+            try {
+                const tChild0 = Date.now();
+                if (!includePreviews) {
+                    const count = await countEnrollmentOffersChildGrainItems({
+                        supabase,
+                        orgId: params.orgId,
+                        workUnitId: params.workUnitId,
+                        ctx: enrollmentChildGrainCtx,
+                        recordScopeConstraints: scopeFilter,
+                        recordScopeImpossible: params.recordScopeImpossible,
+                    });
+                    countMs = Date.now() - tChild0;
+                    return finish(
+                        augmentQueueSummary(
+                            {
+                                key: q.key,
+                                label: q.label,
+                                description: queueSummaryOptionalString(q.description),
+                                entity_type: def.entity_type,
+                                priority: q.priority ?? "standard",
+                                display: q.display ?? "list",
+                                count,
+                                preview: [],
+                                grain: "child",
+                                domain: enrollmentChildGrainCtx.queueEntry.domain ?? "enrollment_offers",
+                            },
+                            normalized
+                        )
+                    );
+                }
+
+                const childLoad = await loadChildGrainEnrollmentQueueItems({
+                    supabase,
+                    orgId: params.orgId,
+                    workUnitId: params.workUnitId,
+                    ctx: enrollmentChildGrainCtx,
+                    recordScopeConstraints: scopeFilter,
+                    recordScopeImpossible: params.recordScopeImpossible,
+                    limit: previewLimit,
+                    offset: 0,
+                    enrichOpportunityRows: async (rows) =>
+                        enrichOpportunityRows({
+                            supabase,
+                            orgId: params.orgId,
+                            rows: rows as OpportunityRowPreview[],
+                            enrichment: "queue_preview",
+                            viewerDisplayTimeZoneIana: viewerPreviewIana,
+                        }),
+                });
+                countMs = Date.now() - tChild0;
+                previewMs = countMs;
+                enrichMs = 0;
+                rowsEnriched = childLoad.items.length;
+                return finish(
+                    augmentQueueSummary(
+                        {
+                            key: q.key,
+                            label: q.label,
+                            description: queueSummaryOptionalString(q.description),
+                            entity_type: def.entity_type,
+                            priority: q.priority ?? "standard",
+                            display: q.display ?? "list",
+                            count: childLoad.total,
+                            preview: childLoad.items as unknown[],
+                            grain: "child",
+                            domain: enrollmentChildGrainCtx.queueEntry.domain ?? "enrollment_offers",
+                        },
+                        normalized
+                    )
+                );
+            } catch (e) {
+                console.warn("[queue-perf] enrollment child-grain summary fallback to v1 compat", {
+                    work_unit_id: params.workUnitId,
+                    queue_key: q.key,
+                    error: e instanceof Error ? e.message : String(e),
+                });
+            }
+        }
+
         let ops: OpportunityQueryPlanOp[] = [];
         let sort: OpportunitySortPlan[] = [];
         let calendar_meta: QueueOperationalCalendarMeta | undefined;
@@ -2454,14 +2704,19 @@ export async function getWorkUnitQueueSummaries(params: {
         },
     });
     if (summaryMode === "partial") {
-        return { queues: rowResults.filter((x): x is QueueSummary => x != null), ...viewerTimeZonePayload };
+        return {
+            queues: augmentSummaries(rowResults.filter((x): x is QueueSummary => x != null)),
+            ...viewerTimeZonePayload,
+        };
     }
 
-    const summaries: QueueSummary[] = def.queues.map((q, i) => {
-        const r = rowResults[i];
-        if (r) return r;
-        return stubDeferredQueueSummary(q, def);
-    });
+    const summaries: QueueSummary[] = augmentSummaries(
+        def.queues.map((q, i) => {
+            const r = rowResults[i];
+            if (r) return r;
+            return stubDeferredQueueSummary(q, def);
+        })
+    );
 
     const scopeMeta = workUnitScopeTotalFromSummaries(def, summaries);
     const scopePayload = {
@@ -2691,6 +2946,7 @@ export async function getWorkUnitQueueItems(params: {
 
     let queueDefCacheHit: boolean | null = null;
     let def: QueueDefinitionV1;
+    let normalized: NormalizedQueueDefinitionDocument;
     let workUnitMetadata: unknown | null;
     let workUnitDepartmentId: string | null;
     let load_def_ms: number;
@@ -2713,7 +2969,9 @@ export async function getWorkUnitQueueItems(params: {
             operationalDayCacheHit = opsTimed.value.cacheHit;
             operational_day_ms = opsTimed.ms;
         }
-        def = loadQueueDefinitionOrThrow(preloaded.queue_definition);
+        const bundle = loadQueueDefinitionBundleOrThrow(preloaded.queue_definition);
+        def = bundle.def;
+        normalized = bundle.normalized;
         workUnitMetadata = preloaded.workUnitMetadata ?? null;
         workUnitDepartmentId = preloaded.departmentId ?? null;
         queueDefCacheHit = true;
@@ -2727,6 +2985,7 @@ export async function getWorkUnitQueueItems(params: {
         ]);
         queueDefCacheHit = defTimed.value.cacheHit;
         def = defTimed.value.def;
+        normalized = defTimed.value.normalized;
         workUnitMetadata = defTimed.value.workUnitMetadata ?? null;
         workUnitDepartmentId = defTimed.value.departmentId;
         operationalDay = opsTimed.value.ctx;
@@ -2735,13 +2994,16 @@ export async function getWorkUnitQueueItems(params: {
         operational_day_ms = opsTimed.ms;
     }
 
+    const queueKeyResolution = resolveQueueKeyFromDefinition(params.queueKey, normalized.queues);
+    const executableQueueKey = queueKeyResolution.resolvedKey;
+
     const opportunityAttentionConfigResolved =
         def.entity_type === "opportunity"
             ? resolveOpportunityAttentionConfigFromMetadata(workUnitMetadata)
             : null;
 
     assertSupportedEntityType(def);
-    const q = findQueueByKey(def, params.queueKey);
+    const q = findQueueByKey(def, executableQueueKey);
     const rowListUi = getQueueUiConfig(def);
     const queueListRelationPlan = queueListRelationFetchPlan(rowListUi);
 
@@ -2929,9 +3191,161 @@ export async function getWorkUnitQueueItems(params: {
     }
 
     // opportunity entity
+    const waitlistGrainCtx = resolveWaitlistCandidateGrainContext({
+        normalized,
+        executableQueueKey,
+    });
+    if (waitlistGrainCtx) {
+        try {
+            const tCand0 = Date.now();
+            const candLoad = await loadWaitlistCandidateGrainQueueItems({
+                supabase,
+                orgId: params.orgId,
+                workUnitId: params.workUnitId,
+                ctx: waitlistGrainCtx,
+                recordScopeConstraints: scopeFilter,
+                recordScopeImpossible: params.recordScopeImpossible,
+                limit: effectiveLimit,
+                offset: effectiveOffset,
+                departmentMetadata,
+                workUnitMetadata,
+                nowMs: refUtc.getTime(),
+                enrichOpportunityRows: async (rows) => {
+                    const statusTimed = await timedBranch(
+                        fetchEffectiveStatusDefinitionsTagged(supabase as never, params.orgId, def.entity_type, {
+                            activeOnly: true,
+                        })
+                    );
+                    return enrichOpportunityRows({
+                        supabase,
+                        orgId: params.orgId,
+                        rows: rows as OpportunityRowPreview[],
+                        effectiveStatusDefs: statusTimed.value.rows,
+                        enrichment: enrichMode,
+                        relationFetchPlan: queueListRelationPlan,
+                        viewerDisplayTimeZoneIana: viewerPreviewIana,
+                        skipOptionalEnrichmentFetches: rowEnrichment === "queue_reveal",
+                    });
+                },
+            });
+            const base_query_ms = Date.now() - tCand0;
+            return finalize(
+                {
+                    queue: {
+                        key: q.key,
+                        label: q.label,
+                        description: queueSummaryOptionalString(q.description),
+                        entity_type: def.entity_type,
+                        priority: q.priority ?? "standard",
+                        display: q.display ?? "list",
+                    },
+                    items: candLoad.items as unknown[],
+                    total: candLoad.total,
+                    limit: effectiveLimit,
+                    offset: effectiveOffset,
+                    ...(candLoad.placementDiagnostics
+                        ? { placement_projection_diagnostics: candLoad.placementDiagnostics }
+                        : {}),
+                },
+                {
+                    load_def_ms,
+                    operational_day_ms,
+                    base_query_ms,
+                    count_ms: 0,
+                    status_defs_ms: 0,
+                    enrichment_ms: base_query_ms,
+                    status_defs_cache_hit: null,
+                    status_defs_resolve: null,
+                    queue_def_cache_hit: queueDefCacheHit,
+                    operational_day_cache_hit: operationalDayCacheHit,
+                    enrichment_subtimings_ms: candLoad.enrichmentSubtimings ?? null,
+                }
+            );
+        } catch (e) {
+            console.warn("[queue-perf] waitlist candidate-grain items fallback to v1 compat", {
+                work_unit_id: params.workUnitId,
+                queue_key: executableQueueKey,
+                error: e instanceof Error ? e.message : String(e),
+            });
+        }
+    }
+
+    const enrollmentChildGrainCtx = resolveEnrollmentOffersChildGrainContext({
+        normalized,
+        executableQueueKey,
+    });
+    if (enrollmentChildGrainCtx) {
+        try {
+            const tChild0 = Date.now();
+            const childLoad = await loadChildGrainEnrollmentQueueItems({
+                supabase,
+                orgId: params.orgId,
+                workUnitId: params.workUnitId,
+                ctx: enrollmentChildGrainCtx,
+                recordScopeConstraints: scopeFilter,
+                recordScopeImpossible: params.recordScopeImpossible,
+                limit: effectiveLimit,
+                offset: effectiveOffset,
+                enrichOpportunityRows: async (rows) => {
+                    const statusTimed = await timedBranch(
+                        fetchEffectiveStatusDefinitionsTagged(supabase as never, params.orgId, def.entity_type, {
+                            activeOnly: true,
+                        })
+                    );
+                    return enrichOpportunityRows({
+                        supabase,
+                        orgId: params.orgId,
+                        rows: rows as OpportunityRowPreview[],
+                        effectiveStatusDefs: statusTimed.value.rows,
+                        enrichment: enrichMode,
+                        relationFetchPlan: queueListRelationPlan,
+                        viewerDisplayTimeZoneIana: viewerPreviewIana,
+                        skipOptionalEnrichmentFetches: rowEnrichment === "queue_reveal",
+                    });
+                },
+            });
+            const base_query_ms = Date.now() - tChild0;
+            return finalize(
+                {
+                    queue: {
+                        key: q.key,
+                        label: q.label,
+                        description: queueSummaryOptionalString(q.description),
+                        entity_type: def.entity_type,
+                        priority: q.priority ?? "standard",
+                        display: q.display ?? "list",
+                    },
+                    items: childLoad.items as unknown[],
+                    total: childLoad.total,
+                    limit: effectiveLimit,
+                    offset: effectiveOffset,
+                },
+                {
+                    load_def_ms,
+                    operational_day_ms,
+                    base_query_ms,
+                    count_ms: 0,
+                    status_defs_ms: 0,
+                    enrichment_ms: base_query_ms,
+                    status_defs_cache_hit: null,
+                    status_defs_resolve: null,
+                    queue_def_cache_hit: queueDefCacheHit,
+                    operational_day_cache_hit: operationalDayCacheHit,
+                    enrichment_subtimings_ms: childLoad.enrichmentSubtimings ?? null,
+                }
+            );
+        } catch (e) {
+            console.warn("[queue-perf] enrollment child-grain items fallback to v1 compat", {
+                work_unit_id: params.workUnitId,
+                queue_key: executableQueueKey,
+                error: e instanceof Error ? e.message : String(e),
+            });
+        }
+    }
+
     const { ops, sort, calendar_meta } = buildOpportunityPlan(q, refUtc, operationalDay);
 
-    if (params.queueKey === "needs_attention") {
+    if (executableQueueKey === "needs_attention" || q.key === "needs_attention") {
         const attentionConfigResolved = opportunityAttentionConfigResolved!;
         let effectiveStatusDefs: StatusDefinitionRow[];
         let statusDefsCacheHit: boolean | null = null;
@@ -3009,6 +3423,7 @@ export async function getWorkUnitQueueItems(params: {
                   enrichedRows: enrichedRows as Array<Record<string, unknown>>,
                   workUnitId: params.workUnitId,
                   queueKey: params.queueKey,
+                  placementConfigQueueKey: placementConfigQueueKeyForLane(executableQueueKey, normalized),
                   queueConfig: q,
                   departmentMetadata,
                   workUnitMetadata,
@@ -3101,6 +3516,7 @@ export async function getWorkUnitQueueItems(params: {
                   enrichedRows: enrichedRows as Array<Record<string, unknown>>,
                   workUnitId: params.workUnitId,
                   queueKey: params.queueKey,
+                  placementConfigQueueKey: placementConfigQueueKeyForLane(executableQueueKey, normalized),
                   queueConfig: q,
                   departmentMetadata,
                   workUnitMetadata,
@@ -3193,6 +3609,7 @@ export async function getWorkUnitQueueItems(params: {
               enrichedRows: enrichedRows as Array<Record<string, unknown>>,
               workUnitId: params.workUnitId,
               queueKey: params.queueKey,
+              placementConfigQueueKey: placementConfigQueueKeyForLane(executableQueueKey, normalized),
               queueConfig: q,
               departmentMetadata,
               workUnitMetadata,
@@ -3264,5 +3681,8 @@ export const __testing = {
     displayBaseNameForCustomerMember,
     ageLabelFromDob,
     opportunityProgramLabelOnlyFromMetadata,
+    placementConfigQueueKeyForLane,
+    resolveWaitlistCandidateGrainContext,
+    resolveEnrollmentOffersChildGrainContext,
 };
 

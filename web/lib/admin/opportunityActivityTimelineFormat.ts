@@ -25,8 +25,9 @@ export const OPPORTUNITY_ACTIVITY_STATUS_KEY_LABELS: Record<string, string> = {
 const OPPORTUNITY_EVENT_TYPE_LABELS: Record<string, string> = {
     opportunity_status_changed: "Status changed",
     entity_status_changed: "Status changed",
-    message_received: "SMS received",
-    message_sent: "SMS sent",
+    child_lifecycle_status_changed: "Child lifecycle changed",
+    message_received: "Message received",
+    message_sent: "Message sent",
     note_added: "Note added",
     action_executed: "Action completed",
     opportunity_enrollment_packet_created: "Enrollment packet created",
@@ -45,7 +46,11 @@ const OPPORTUNITY_EVENT_TYPE_LABELS: Record<string, string> = {
 export const opportunityActivityTimelineOptions: ActivityTimelineFormatOptions = {
     eventTypeLabels: OPPORTUNITY_EVENT_TYPE_LABELS,
     statusKeyLabels: OPPORTUNITY_ACTIVITY_STATUS_KEY_LABELS,
-    statusTransitionEventTypes: ["opportunity_status_changed", "entity_status_changed"],
+    statusTransitionEventTypes: [
+        "opportunity_status_changed",
+        "entity_status_changed",
+        "child_lifecycle_status_changed",
+    ],
     actionEventTypes: ["action_executed"],
 };
 
