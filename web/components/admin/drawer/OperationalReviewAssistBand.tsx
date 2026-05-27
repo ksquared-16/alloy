@@ -9,6 +9,14 @@ import type {
     ResolvedDrawerReadinessChrome,
     ResolvedDrawerSupportingDetail,
 } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceSelectors";
+import type { QueueUrgencyChipContext } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceSelectors";
+import type { OperationalPriorityExplainability } from "@/lib/adminV2/bos/recommendations/operationalPriorityExplainability";
+import {
+    drawerUrgencyChipLabel,
+    shouldShowDrawerLikelyOutcome,
+    shouldShowDrawerUrgencyChip,
+    shouldShowDrawerWhatChanged,
+} from "@/lib/adminV2/bos/recommendations/selectors/reviewAssistPresentation";
 import type { UrgencyBandV1 } from "@/lib/adminV2/bos/recommendations/types";
 import {
     opInsightSummaryCompact,
@@ -30,6 +38,10 @@ type Props = {
     supportingDetail?: ResolvedDrawerSupportingDetail | null;
     draftSlot?: ReactNode;
     enhanceSlot?: ReactNode;
+    /** Native BOS assist CTA — fixed platform action, not configurable. */
+    bosAssistSlot?: ReactNode;
+    urgencyChipContext?: QueueUrgencyChipContext;
+    priorityExplanation?: OperationalPriorityExplainability | null;
 };
 
 function SupportingDetailDisclosure({ detail }: { detail: ResolvedDrawerSupportingDetail }) {
@@ -90,11 +102,6 @@ function urgencyChipTone(band: UrgencyBandV1 | null | undefined): FormsReviewBad
     }
 }
 
-function showUrgencyChip(band: UrgencyBandV1 | null | undefined, label: string | null | undefined): boolean {
-    if (!label?.trim()) return false;
-    return band !== "p3_fyi";
-}
-
 function RowLabel({ children }: { children: React.ReactNode }) {
     return <span className={clsx(opLabelCaps, "text-[10px]")}>{children}</span>;
 }
@@ -111,21 +118,29 @@ export default function OperationalReviewAssistBand({
     supportingDetail,
     draftSlot,
     enhanceSlot,
+    bosAssistSlot,
+    urgencyChipContext,
+    priorityExplanation = null,
 }: Props) {
     const chrome = variant === "chrome";
-    const showChip = showUrgencyChip(display.urgencyBand, display.urgencyLabel);
+    const drawerChipLabel = drawerUrgencyChipLabel(display, urgencyChipContext);
+    const showChip = shouldShowDrawerUrgencyChip(display, urgencyChipContext);
     const showEscalationChip = Boolean(display.escalationChipLabel?.trim());
     const trustLines = readinessChrome?.trustLines ?? [];
+    const showLikely = shouldShowDrawerLikelyOutcome(display, variant);
+    const showWhatChanged = shouldShowDrawerWhatChanged(display);
+    const stackClass = chrome ? "space-y-1.5" : opStackSectionCompact;
 
     return (
         <div
             className={clsx(
                 opIntelligenceSurface,
-                chrome ? "px-2.5 py-2 text-[11px] leading-snug" : "px-3 py-2.5 text-[11px] leading-snug",
+                "min-w-0 max-w-full",
+                chrome ? "px-2 py-1.5 text-[11px] leading-snug" : "px-3 py-2.5 text-[11px] leading-snug",
             )}
             data-drawer-slot="operational_review_assist"
             data-attention-surface="review_assist"
-            {...(chrome ? { "data-operational-attention-canonical": "chrome" as const } : {})}
+            {...(chrome ? { "data-operational-attention-canonical": "chrome" as const, "data-review-assist-compact": "true" as const } : {})}
         >
             {!suppressSectionBrandLabel ? (
                 <div className="flex flex-wrap items-start justify-between gap-1.5">
@@ -136,9 +151,13 @@ export default function OperationalReviewAssistBand({
                     {showChip || showEscalationChip ? (
                         <div className="flex flex-wrap items-center justify-end gap-1">
                             {showChip ? (
-                                <span data-testid="review-assist-urgency-chip">
+                                <span
+                                    data-testid="review-assist-urgency-chip"
+                                    title={priorityExplanation?.ariaLabel ?? drawerChipLabel ?? undefined}
+                                    aria-label={priorityExplanation?.ariaLabel ?? drawerChipLabel ?? undefined}
+                                >
                                     <FormsReviewBadge
-                                        label={display.urgencyLabel!.trim()}
+                                        label={drawerChipLabel!.trim()}
                                         tone={urgencyChipTone(display.urgencyBand)}
                                     />
                                 </span>
@@ -157,9 +176,13 @@ export default function OperationalReviewAssistBand({
             ) : showChip || showEscalationChip ? (
                 <div className="flex flex-wrap justify-end gap-1">
                     {showChip ? (
-                        <span data-testid="review-assist-urgency-chip">
+                        <span
+                            data-testid="review-assist-urgency-chip"
+                            title={priorityExplanation?.ariaLabel ?? drawerChipLabel ?? undefined}
+                            aria-label={priorityExplanation?.ariaLabel ?? drawerChipLabel ?? undefined}
+                        >
                             <FormsReviewBadge
-                                label={display.urgencyLabel!.trim()}
+                                label={drawerChipLabel!.trim()}
                                 tone={urgencyChipTone(display.urgencyBand)}
                             />
                         </span>
@@ -175,8 +198,8 @@ export default function OperationalReviewAssistBand({
                 </div>
             ) : null}
 
-            <div className={clsx(opStackSectionCompact, suppressSectionBrandLabel ? "" : "mt-2")}>
-                <div data-review-assist-row="operational_read">
+            <div className={clsx(stackClass, suppressSectionBrandLabel ? "" : "mt-2")}>
+                <div data-review-assist-row="operational_read" className="min-w-0">
                     {!suppressSectionBrandLabel ? (
                         <div className="mb-0.5">
                             <RowLabel>Operational read</RowLabel>
@@ -186,61 +209,82 @@ export default function OperationalReviewAssistBand({
                         className={clsx(
                             chrome ? opInsightSummaryCompact : "text-sm leading-snug text-alloy-midnight/85",
                             "font-medium text-alloy-midnight",
+                            chrome ? "line-clamp-2" : "",
                         )}
                     >
                         {display.operationalRead}
                     </p>
-                    {display.typeCue?.trim() ? (
+                    {!chrome && display.typeCue?.trim() ? (
                         <p className={clsx("mt-0.5", opMetadata)} data-testid="review-assist-type-line">
                             Type · {display.typeCue.trim()}
                         </p>
                     ) : null}
-                    {display.classificationContextLine?.trim() ? (
+                    {!chrome && display.classificationContextLine?.trim() ? (
                         <p className={clsx("mt-0.5", opMetadata)} data-testid="review-assist-classification-context">
                             {display.classificationContextLine.trim()}
                         </p>
                     ) : null}
-                    {trustLines.length > 0 ? (
-                        <p className={clsx("mt-0.5", opMetadata)} data-testid="review-assist-trust-notes">
-                            {trustLines.join(" · ")}
-                        </p>
-                    ) : null}
                 </div>
 
-                {display.urgencyReason?.trim() &&
-                display.urgencyReason.trim() !== display.whyNow.trim() ? (
-                    <div data-review-assist-row="what_changed">
+                {showWhatChanged ? (
+                    <div data-review-assist-row="what_changed" className="min-w-0">
                         <div className="mb-0.5">
                             <RowLabel>What changed</RowLabel>
                         </div>
-                        <p className={opMetadata}>{display.urgencyReason.trim()}</p>
+                        <p className={clsx(opMetadata, chrome ? "line-clamp-2" : "")}>{display.urgencyReason!.trim()}</p>
                     </div>
                 ) : null}
 
-                <div data-review-assist-row="why_now">
+                <div data-review-assist-row="why_now" className="min-w-0">
                     <div className="mb-0.5">
                         <RowLabel>Why now</RowLabel>
                     </div>
-                    <p className={chrome ? opInsightSummaryCompact : "text-sm leading-snug text-alloy-midnight/80"}>
+                    <p
+                        className={clsx(
+                            chrome ? opInsightSummaryCompact : "text-sm leading-snug text-alloy-midnight/80",
+                            chrome ? "line-clamp-2" : "",
+                        )}
+                    >
                         {display.whyNow}
                     </p>
                 </div>
 
-                <div data-review-assist-row="do_next">
+                <div data-review-assist-row="do_next" className="min-w-0">
                     <div className="mb-0.5">
                         <RowLabel>Do next</RowLabel>
                     </div>
-                    <p className={clsx(chrome ? opInsightSummaryCompact : "text-sm leading-snug", "text-alloy-midnight/88")}>
+                    <p
+                        className={clsx(
+                            chrome ? opInsightSummaryCompact : "text-sm leading-snug",
+                            "text-alloy-midnight/88",
+                            chrome ? "line-clamp-2" : "",
+                        )}
+                    >
                         {display.doNext}
                     </p>
                 </div>
 
-                {display.likelyOutcome?.trim() ? (
-                    <div data-review-assist-row="likely_outcome" className="text-alloy-midnight/55">
+                {trustLines.length > 0 ? (
+                    <p className={clsx(opMetadata, "min-w-0")} data-testid="review-assist-trust-notes">
+                        {trustLines.join(" · ")}
+                    </p>
+                ) : null}
+
+                {showChip && priorityExplanation?.compactReason ? (
+                    <p
+                        className={clsx(opMetadata, "min-w-0")}
+                        data-testid="review-assist-priority-explanation"
+                    >
+                        Priority · {priorityExplanation.compactReason}
+                    </p>
+                ) : null}
+
+                {showLikely ? (
+                    <div data-review-assist-row="likely_outcome" className="min-w-0 text-alloy-midnight/55">
                         <div className="mb-0.5">
                             <RowLabel>Likely</RowLabel>
                         </div>
-                        <p className={opMetadata}>{display.likelyOutcome.trim()}</p>
+                        <p className={opMetadata}>{display.likelyOutcome!.trim()}</p>
                     </div>
                 ) : null}
 
@@ -248,6 +292,7 @@ export default function OperationalReviewAssistBand({
 
                 {draftSlot}
                 {enhanceSlot}
+                {bosAssistSlot}
             </div>
         </div>
     );

@@ -7,8 +7,10 @@
 **GATE 0 implementation doctrine (binding before code):** [`completed/bos_operational_recommendation_intelligence_gate0.md`](./completed/bos_operational_recommendation_intelligence_gate0.md)  
 **Phase 1 execution pack:** [`completed/bos_operational_recommendation_phase1_execution.md`](./completed/bos_operational_recommendation_phase1_execution.md)  
 **Phase 2 closeout:** [`completed/bos_operational_recommendation_phase2_operational_ux.md`](./completed/bos_operational_recommendation_phase2_operational_ux.md)  
-**Phase 3 planning:** [`../06_2026/bos_operational_intelligence_phase3_workflow_comms.md`](../06_2026/bos_operational_intelligence_phase3_workflow_comms.md)  
-**Phase 4 planning:** [`../06_2026/bos_operational_intelligence_phase4_bounded_ai_enrich.md`](../06_2026/bos_operational_intelligence_phase4_bounded_ai_enrich.md)
+**May 2026 operational assist closeout:** [`../06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`](../06_2026/completed/bos_assist_routing_communication_drafting_closeout.md) — **COMPLETE**
+**Forward planning (Phase 2 opportunities):** [`../future/bos_operational_assist_phase2.md`](../future/bos_operational_assist_phase2.md) — not implemented
+**Phase 3 planning:** [`../future/bos_operational_intelligence_phase3_workflow_comms.md`](../future/bos_operational_intelligence_phase3_workflow_comms.md)
+**Phase 4 planning:** [`../future/bos_operational_intelligence_phase4_bounded_ai_enrich.md`](../future/bos_operational_intelligence_phase4_bounded_ai_enrich.md)
 
 **Prerequisite sprints (must be landed or in closeout):**
 
@@ -623,7 +625,7 @@ flowchart LR
 
 ### 5.5 Phase 3 — Workflow + communications integration
 
-**Execution pack:** [`../06_2026/bos_operational_intelligence_phase3_workflow_comms.md`](../06_2026/bos_operational_intelligence_phase3_workflow_comms.md) — workflow-native operational intelligence; **deterministic-first**.
+**Execution pack:** [`../future/bos_operational_intelligence_phase3_workflow_comms.md`](../future/bos_operational_intelligence_phase3_workflow_comms.md) — workflow-native operational intelligence; **forward-looking / not implemented**.
 
 | Card | Work |
 |------|------|
@@ -634,7 +636,7 @@ flowchart LR
 
 ### 5.6 Phase 4 — Trust, governance, AI-assisted (V1.5 behind gate)
 
-**Execution pack:** [`../06_2026/bos_operational_intelligence_phase4_bounded_ai_enrich.md`](../06_2026/bos_operational_intelligence_phase4_bounded_ai_enrich.md) — bounded AI enrich; grounded inputs/outputs only.
+**Execution pack:** [`../future/bos_operational_intelligence_phase4_bounded_ai_enrich.md`](../future/bos_operational_intelligence_phase4_bounded_ai_enrich.md) — bounded AI enrich; **forward-looking / not implemented**.
 
 | Card | Work |
 |------|------|
@@ -756,7 +758,9 @@ autonomous AI scope.
 - [x] **GATE 0 APPROVED** — [`completed/bos_operational_recommendation_intelligence_gate0.md`](./completed/bos_operational_recommendation_intelligence_gate0.md) §10
 - [x] **Phase 1 COMPLETE** — Cards 1.1–1.9; GATE 1 passed — see [`completed/bos_operational_recommendation_phase1_execution.md`](./completed/bos_operational_recommendation_phase1_execution.md) §12
 - [x] **Phase 2 COMPLETE** — Cards 2.1–2.8; GATE 2 passed — see [`completed/bos_operational_recommendation_phase2_operational_ux.md`](./completed/bos_operational_recommendation_phase2_operational_ux.md) §2.1.2
-- [ ] **Phase 3** — Workflow + comms — planning: [`../06_2026/bos_operational_intelligence_phase3_workflow_comms.md`](../06_2026/bos_operational_intelligence_phase3_workflow_comms.md)
-- [ ] **Phase 4** — Bounded AI enrich — planning: [`../06_2026/bos_operational_intelligence_phase4_bounded_ai_enrich.md`](../06_2026/bos_operational_intelligence_phase4_bounded_ai_enrich.md)
+- [x] **May 2026 operational assist** — routing + synthesis + channel-aware drafting — [`../06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`](../06_2026/completed/bos_assist_routing_communication_drafting_closeout.md)
+- [ ] **Phase 2 opportunities** — forward planning only: [`../future/bos_operational_assist_phase2.md`](../future/bos_operational_assist_phase2.md)
+- [ ] **Phase 3** — Workflow + comms — planning: [`../future/bos_operational_intelligence_phase3_workflow_comms.md`](../future/bos_operational_intelligence_phase3_workflow_comms.md)
+- [ ] **Phase 4** — Bounded AI enrich — planning: [`../future/bos_operational_intelligence_phase4_bounded_ai_enrich.md`](../future/bos_operational_intelligence_phase4_bounded_ai_enrich.md)
 
 Phase 3 may begin with §5.5 Card **3.1** (`available_actions` placement mapping).

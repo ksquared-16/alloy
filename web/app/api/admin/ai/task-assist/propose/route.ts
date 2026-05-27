@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
             { status: parsed.status }
         );
     }
-    const { entity_id: entityId, channel, instruction, persist, expiresAt } = parsed.value;
+    const { entity_id: entityId, channel, instruction, persist, expiresAt, synthesizedDraft } = parsed.value;
 
     const supabase = createAdminClient();
     const { data: orgSettings, error: orgErr } = await supabase
@@ -146,6 +146,7 @@ export async function POST(request: NextRequest) {
         channel,
         instruction,
         context: assembled.context,
+        synthesizedDraft,
     });
 
     const validation_codes = validateTaskAssistSuggestionV1ForPropose(proposal);

@@ -21,6 +21,8 @@ import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunity
 /** Review-assist vocabulary (aligned with drawer band). */
 export const HANDOFF_EYEBROW = "Review assist";
 export const HANDOFF_CTA_CONTINUE = "Continue in Orchestrator";
+/** @deprecated Header placement removed — use {@link BOS_ASSIST_CTA_DRAWER} in Review Assist. */
+export const HANDOFF_CTA_OPEN = "Open in Orchestrator";
 
 export type OperationalRecommendationHandoffCopy = {
     eyebrow: string;

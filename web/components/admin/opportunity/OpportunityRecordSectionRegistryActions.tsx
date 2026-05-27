@@ -10,6 +10,7 @@ import {
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
+import { OPPORTUNITY_DRAWER_SECTION_SECONDARY_BUTTON_CLASS } from "@/lib/admin/drawer/opportunityDrawerRecordActionButtonClasses";
 
 type OpenDrawerFn = (opts: {
     type: AdminDrawerEntityType;
@@ -204,8 +205,7 @@ export default function OpportunityRecordSectionRegistryActions({
     const compactActions = layoutDensity === "summary";
     const primaryCls =
         "px-3 py-1.5 text-sm font-semibold rounded-md bg-alloy-blue text-white hover:opacity-90 disabled:opacity-50";
-    const secondaryCls =
-        "px-3 py-1.5 text-sm font-semibold rounded-md border border-alloy-stone/60 text-alloy-midnight/90 hover:bg-alloy-stone/15 disabled:opacity-50";
+    const secondaryCls = OPPORTUNITY_DRAWER_SECTION_SECONDARY_BUTTON_CLASS;
 
     return (
         <div

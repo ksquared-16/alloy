@@ -14,7 +14,7 @@ export default async function UsersRolesSettingsPage() {
     const canManageUsersRoles = canManageUsersAndRoles(access);
 
     return (
-        <div className="w-full max-w-6xl space-y-3">
+        <div className="w-full min-w-0 space-y-3">
             <header>
                 <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">Users &amp; Roles</h1>
                 <p className="mt-1 max-w-2xl text-xs leading-snug text-alloy-midnight/60">

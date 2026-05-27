@@ -12,6 +12,11 @@ import type {
 } from "@/lib/adminV2/bos/recommendations/signals/operationalRecommendationSignals";
 import type { OperationalContextSourceSurfaceV1 } from "@/lib/adminV2/bos/recommendations/types";
 import {
+    buildGroundedUrgencyReasonLine,
+    formatIntakeAgePhrase,
+    intakeAgeDaysFromRow,
+} from "@/lib/adminV2/bos/recommendations/operationalTimingCopy";
+import {
     waitingBucketQueueToken,
     timingPhraseForReason,
 } from "@/lib/opportunities/operationalAttentionExplain";
@@ -30,14 +35,6 @@ function opportunityPrimaryDisplayName(row: Record<string, unknown>): string | n
     const customer = trimOrNull(row._customer_name);
     if (customer) return customer;
     return trimOrNull(row.name);
-}
-
-function roughDaysBetween(nowMs: number, pastIso: string | null | undefined): number | null {
-    if (!pastIso?.trim()) return null;
-    const t = Date.parse(pastIso);
-    if (!Number.isFinite(t)) return null;
-    const d = (nowMs - t) / (24 * 60 * 60 * 1000);
-    return d >= 0 ? Math.round(d) : null;
 }
 
 function resolveActivityStaleKey(
@@ -182,7 +179,9 @@ export function buildOperationalRecommendationAttachInput(input: {
     const activityKey = resolveActivityStaleKey(input.activity, attention);
     const timingPhrase = timingPhraseForReason(primary, attention.waiting, nowMs);
     const waitBucketLabel = waitingBucketQueueToken(attention.waiting.bucket);
-    const updatedDays = roughDaysBetween(nowMs, trimOrNull(input.opportunityRow.updated_at));
+    const intakeDays = intakeAgeDaysFromRow(input.opportunityRow, nowMs);
+    const intakeAgePhrase = formatIntakeAgePhrase(intakeDays);
+    const urgencyReasonLine = buildGroundedUrgencyReasonLine(primary.sla_tier, intakeAgePhrase);
 
     const rawSignals: RawGroundingSignalInputV1[] = [
         {
@@ -237,7 +236,9 @@ export function buildOperationalRecommendationAttachInput(input: {
             sla_tier: primary.sla_tier,
             timing_phrase: timingPhrase,
             wait_bucket_label: waitBucketLabel ?? undefined,
-            days: updatedDays ?? undefined,
+            days: intakeDays ?? undefined,
+            intake_age_phrase: intakeAgePhrase ?? undefined,
+            urgency_reason_line: urgencyReasonLine,
             status_label: statusKey ?? undefined,
         },
         secondary_factors: secondaryFactors.length ? secondaryFactors : undefined,

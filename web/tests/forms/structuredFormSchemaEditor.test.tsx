@@ -22,34 +22,30 @@ const schemaWithFields: FormSchemaV1 = {
     fields: [formFieldFromRegistryEntry(childEntry, {}), customField],
 };
 
-describe("StructuredFormSchemaEditor OI-4B", () => {
-    it("renders field cards instead of table rows", () => {
+describe("StructuredFormSchemaEditor FD-8", () => {
+    it("renders field cards inside composition field region", () => {
         const html = renderToStaticMarkup(
             <StructuredFormSchemaEditor schema={schemaWithFields} onChange={() => {}} />
         );
 
-        expect(html).toContain('data-testid="structured-form-schema-editor"');
-        expect(html).toContain('data-testid="form-field-authoring-list"');
+        expect(html).toContain('data-testid="document-composition-editor"');
         expect(html).toContain('data-testid="form-field-authoring-card-child_first_name"');
         expect(html).not.toContain("<table");
         expect(html).not.toContain("Data field");
     });
 
-    it("shows mapped prefill label and editing controls", () => {
+    it("shows prefill mode and editing controls on field cards", () => {
         const html = renderToStaticMarkup(
             <StructuredFormSchemaEditor schema={schemaWithFields} onChange={() => {}} />
         );
 
-        expect(html).toContain("Prefills from: Child first name");
+        expect(html).toContain("Editable after prefill");
         expect(html).toContain('data-testid="form-field-label-child_first_name"');
-        expect(html).toContain('data-testid="form-field-required-child_first_name"');
-        expect(html).toContain('data-testid="form-field-answer-type-child_first_name"');
-        expect(html).toContain('data-testid="form-field-layout-child_first_name"');
-        expect(html).toContain('data-testid="form-field-move-up-child_first_name"');
-        expect(html).toContain('data-testid="form-field-move-down-custom_q"');
+        expect(html).toContain('data-testid="form-add-question"');
+        expect(html).toContain("Instruction text");
     });
 
-    it("renders empty state when no fields", () => {
+    it("renders empty field region message when no fields", () => {
         const emptySchema: FormSchemaV1 = {
             schema_version: 1,
             title: "New form",
@@ -60,18 +56,7 @@ describe("StructuredFormSchemaEditor OI-4B", () => {
             <StructuredFormSchemaEditor schema={emptySchema} onChange={() => {}} />
         );
 
-        expect(html).toContain('data-testid="form-field-authoring-empty"');
-        expect(html).toContain("Start by adding the first question");
+        expect(html).toContain("No questions in this section yet");
         expect(html).toContain('data-testid="form-add-question"');
-    });
-
-    it("uses document-oriented section labels", () => {
-        const html = renderToStaticMarkup(
-            <StructuredFormSchemaEditor schema={schemaWithFields} onChange={() => {}} />
-        );
-
-        expect(html).toContain("Document title");
-        expect(html).toContain("Section");
-        expect(html).toContain("Add question");
     });
 });

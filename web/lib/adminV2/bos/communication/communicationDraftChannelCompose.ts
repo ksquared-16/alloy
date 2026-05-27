@@ -79,17 +79,14 @@ function joinEmailParagraphs(paragraphs: string[], facts: ChannelComposeFacts): 
 }
 
 function joinSms(parts: string[], facts: ChannelComposeFacts): string {
+    const greet = smsGreeting(facts);
     const intro = smsOperatorSiteIntro(facts);
-    const segments = [smsGreeting(facts), intro, ...parts.filter(Boolean)].filter(Boolean);
-    const sentence = segments
-        .map((seg, i) => {
-            const t = seg.trim();
-            if (i === 0) return t;
-            if (t.endsWith(".")) return t;
-            return `${t}.`;
-        })
-        .join(" ");
-    return clipSms(sentence);
+    const clauses = parts.filter(Boolean).map((p) => {
+        const t = p.trim();
+        return t.endsWith(".") ? t : `${t}.`;
+    });
+    const afterGreet = [intro ? `${intro}.` : null, ...clauses].filter(Boolean).join(" ");
+    return clipSms(afterGreet ? `${greet} ${afterGreet}` : greet);
 }
 
 function composeInitialOutreach(facts: ChannelComposeFacts): ChannelComposedDraft {

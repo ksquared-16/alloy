@@ -1,6 +1,6 @@
 # Forms Intelligence + Document Infrastructure (Phase Next)
 
-**Status:** **FD-0–FD-11 shipped** (public renderer still ignores `document_composition`; no OCR / embed route / rich-text editor)
+**Status:** **FD-0–FD-14.6 shipped** (public renderer still ignores `document_composition`; no OCR / embed route redesign / rich-text editor)
 
 **Builds on:** PX-0–PX-2 · OW-0–OW-7 · OI-0–OI-4B
 
@@ -11,6 +11,7 @@
 | [`forms_operational_intelligence_workflow_polish.md`](./forms_operational_intelligence_workflow_polish.md) | OI command center + intelligence cards |
 | [`../system/forms-intake-prefill-doctrine.md`](../system/forms-intake-prefill-doctrine.md) | Prefill precedence |
 | [`../system/forms-intake-embed-doctrine.md`](../system/forms-intake-embed-doctrine.md) | Embed / iframe boundaries (FD-6) |
+| [`../system/forms-intake-runtime-validation.md`](../system/forms-intake-runtime-validation.md) | Runtime validation plan + outcome doctrine (FD-14) |
 | [`../system/forms-ai-document-recreation.md`](../system/forms-ai-document-recreation.md) | PDF → draft architecture (FD-7) |
 
 ---
@@ -69,6 +70,34 @@ Authoring cards for instruction text, signature region, header/logo, divider, sp
 
 Hub: side-by-side filters + panel; form lifecycle: combined share/recent intake grid, collapsed version history and link details.
 
+### FD-12 — Forms UI coherence + composition preview fidelity ☑
+
+Landing page cleanup; Forms in AdminV2 sidebar; authoring layout compression; live preview reflects 1/2/3-column and compact field regions; embed doctrine clarified (admin native vs external iframe).
+
+### FD-13 — Document composition editing usability ☑
+
+Multiple field sections (add/rename/helper/layout/remove/reorder); compact question rows; preview-assisted field reorder (up/down/move section/edit/focus sync). Drag/drop deferred to FD-15.
+
+### FD-14 — Composition editor polish + runtime validation prep ☑
+
+Editor field rows stay single-column regardless of section layout (layout affects preview/output only). Runtime validation fixture seed + intake outcome doctrine doc — opportunity creation opt-in via link metadata only.
+
+### FD-14.5 — Composition preview canvas balance ☑
+
+Wider preview column, document-canvas styling, sticky scroll containment — editor rows unchanged.
+
+### FD-14.6 — Forms authoring page width constraint ☑
+
+`FormsWorkspaceChrome` widened from `max-w-5xl` (1024px) to `max-w-[1600px]`; authoring shell preview column `420–520px`; preview typography restored to normal scale.
+
+---
+
+## Deferred
+
+### FD-15 — Composition drag/drop (optional)
+
+Within-section field reorder and section reorder via drag handles if a low-risk library fits existing patterns.
+
 ---
 
 ## Runtime note
@@ -88,6 +117,11 @@ cd web && npm run test -- tests/forms/intakeWorkspaceFilters.test.ts \
   tests/forms/documentComposition.test.ts \
   tests/forms/documentCompositionAuthoring.test.ts \
   tests/forms/documentCompositionEditor.test.tsx \
+  tests/forms/documentCompositionUsability.test.ts \
+  tests/forms/intakeRuntimeValidationDemo.test.ts \
+  tests/forms/documentCompositionPreview.test.ts \
+  tests/forms/documentCompositionPreviewPresentation.test.ts \
   tests/forms/structuredFormSchemaEditor.test.tsx \
-  tests/forms/formDocumentAuthoringShell.test.tsx
+  tests/forms/formDocumentAuthoringShell.test.tsx \
+  tests/forms/adminV2FormsSidebarNav.test.ts
 ```

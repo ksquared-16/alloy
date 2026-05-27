@@ -70,8 +70,8 @@ export function projectOperationalRecommendationRender(args: {
 
     return {
         queue: {
-            next_label: truncate(args.recommended_action_label, 60),
-            why_line: truncate(args.why_it_matters, OPERATIONAL_RECOMMENDATION_MAX_LENGTHS.queue_why_line),
+            next_label: truncate(args.recommended_action_label, 96),
+            why_line: truncate(args.urgency_reason, OPERATIONAL_RECOMMENDATION_MAX_LENGTHS.queue_why_line),
             urgency_band: args.urgency,
             recommendation_type: args.recommendation_type,
             is_stale: args.is_stale,

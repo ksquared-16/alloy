@@ -1,10 +1,14 @@
-import { buildOpportunityOperationalContext, type OpportunityQueuePreviewSeed } from "@/lib/adminV2/bos/activeOperationalContext";
+import {
+    buildOpportunityOperationalContext,
+    type OpportunityQueuePreviewSeed,
+} from "@/lib/adminV2/bos/activeOperationalContext";
 import { operatorDisplayNameFromEmail } from "@/lib/adminV2/bos/communication/operatorDisplayNameFromEmail";
 import {
     buildBosAssistHandoffPackage,
     buildOverviewDataForBosHandoff,
     type QueueBosHandoffPreview,
 } from "@/lib/adminV2/bos/bosAssistHandoffRouting";
+import type { GlobalAssistantSourceSurface } from "@/contexts/GlobalAssistantContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import type { QueueOperationalReadPreviewSlot } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceViewModels";
 
@@ -20,6 +24,7 @@ export type AskBosHandoffDetail = {
     display_name?: string | null;
     /** Queue L0 operational read — grounds assist when entity GET is not loaded. */
     queue_preview?: QueueBosHandoffPreview | null;
+    source_surface?: GlobalAssistantSourceSurface;
 };
 
 /** Build queue preview payload from CRM compact operational read slot. */
@@ -42,7 +47,12 @@ export function launchAdminV2AskBos(detail: AskBosHandoffDetail): void {
     if (!opportunityId) return;
     window.dispatchEvent(
         new CustomEvent<AskBosHandoffDetail>(ADMINV2_ASK_BOS_HANDOFF_EVENT, {
-            detail: { opportunity_id: opportunityId, display_name: detail.display_name ?? null },
+            detail: {
+                opportunity_id: opportunityId,
+                display_name: detail.display_name ?? null,
+                queue_preview: detail.queue_preview ?? null,
+                source_surface: detail.source_surface ?? "queue",
+            },
         })
     );
 }
@@ -54,6 +64,7 @@ export function triggerBosDrawerAssistHandoff(args: {
     queuePreviewSeed?: OpportunityQueuePreviewSeed | null;
     opportunitySingular?: string;
     operatorDisplayName?: string | null;
+    sourceSurface?: GlobalAssistantSourceSurface;
 }): void {
     const entityId = args.entityId.trim();
     if (!entityId) return;
@@ -66,13 +77,14 @@ export function triggerBosDrawerAssistHandoff(args: {
         entityLabel,
         overviewData: args.overviewData,
     });
+    const sourceSurface = args.sourceSurface ?? "opportunity_drawer";
     args.globalAssistant.setAssistantContext(
         buildOpportunityOperationalContext({
             entityId,
             overviewData: overview,
             queuePreviewSeed: args.queuePreviewSeed ?? null,
             opportunitySingular: args.opportunitySingular?.trim() || "Inquiry",
-            sourceSurface: "opportunity_drawer",
+            sourceSurface,
         })
     );
     const handoff = buildBosAssistHandoffPackage({
@@ -87,5 +99,6 @@ export function triggerBosDrawerAssistHandoff(args: {
         autoSubmitSeedCommand: true,
         taskAssistHandoffIntent: handoff.taskAssistIntent,
         taskAssistHandoffBootstrap: handoff.taskAssistBootstrap,
+        handoffEntity: { entity_id: entityId, label: entityLabel },
     });
 }

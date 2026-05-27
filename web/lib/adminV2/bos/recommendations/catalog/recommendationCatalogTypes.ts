@@ -18,6 +18,8 @@ import type {
 export const CATALOG_TEMPLATE_PLACEHOLDERS = [
     "primary_label",
     "days",
+    "intake_age_phrase",
+    "urgency_reason_line",
     "wait_bucket_label",
     "timing_phrase",
     "status_label",

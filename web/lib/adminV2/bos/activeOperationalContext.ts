@@ -9,11 +9,6 @@ import type {
     GlobalAssistantSourceSurface,
 } from "@/contexts/GlobalAssistantContext";
 import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
-import {
-    buildOperationalRecommendationHandoffCopy,
-    formatOrchestratorHandoffSeedFromCopy,
-    hasStructuredOperationalHandoff,
-} from "@/lib/adminV2/bos/operationalRecommendationHandoff";
 
 export type OpportunityQueuePreviewSeed = {
     title?: string | null;
@@ -181,17 +176,5 @@ export function usingActiveRecordNoticeText(label: string): string {
     return `Using active record: ${t || "this inquiry"}`;
 }
 
-export function orchestratorHandoffSeedCommand(args: {
-    entityLabel: string | null | undefined;
-    overviewData: Record<string, unknown> | null | undefined;
-}): string | undefined {
-    const label = args.entityLabel?.trim() || "this inquiry";
-    if (!hasStructuredOperationalHandoff(args.overviewData)) {
-        return `Draft message for ${label}`;
-    }
-    const copy = buildOperationalRecommendationHandoffCopy({
-        entityLabel: args.entityLabel,
-        overviewData: args.overviewData,
-    });
-    return formatOrchestratorHandoffSeedFromCopy(label, copy);
-}
+/** @see {@link orchestratorHandoffSeedCommand} in bosAssistHandoffRouting.ts */
+export { orchestratorHandoffSeedCommand } from "@/lib/adminV2/bos/bosAssistHandoffRouting";

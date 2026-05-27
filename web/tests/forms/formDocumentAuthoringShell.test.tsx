@@ -11,18 +11,26 @@ const schema: FormSchemaV1 = {
     fields: [{ id: "q1", type: "text", label: "Child name", required: true }],
 };
 
-describe("FormDocumentAuthoringShell OI-4", () => {
-    it("renders document framing and preview pane", () => {
+describe("FormDocumentAuthoringShell FD-12 / FD-14.5", () => {
+    it("renders composition editor and live preview pane", () => {
         const html = renderToStaticMarkup(
-            <FormDocumentAuthoringShell schema={schema} formName="Medication">
-                <div data-testid="editor-slot">editor</div>
-            </FormDocumentAuthoringShell>
+            <FormDocumentAuthoringShell schema={schema} onChange={() => {}} />
         );
 
         expect(html).toContain('data-testid="form-document-authoring-shell"');
         expect(html).toContain('data-testid="form-document-preview-frame"');
+        expect(html).toContain('data-testid="document-composition-preview"');
+        expect(html).toContain('data-testid="document-composition-preview-canvas"');
         expect(html).toContain("Medication authorization");
-        expect(html).toContain("Guardian information");
-        expect(html).toContain("editor");
+    });
+
+    it("allocates a wider preview column on desktop", () => {
+        const html = renderToStaticMarkup(
+            <FormDocumentAuthoringShell schema={schema} onChange={() => {}} />
+        );
+
+        expect(html).toContain("minmax(420px,520px)");
+        expect(html).toContain("lg:sticky");
+        expect(html).toContain("lg:max-h-[calc(100vh-2rem)]");
     });
 });

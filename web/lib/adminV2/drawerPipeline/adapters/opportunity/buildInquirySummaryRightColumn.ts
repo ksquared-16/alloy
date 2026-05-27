@@ -1,5 +1,4 @@
 import { parseInquirySummaryTaskPreview } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
-import { drawerOperationalStripReady } from "@/lib/adminV2/drawerPipeline/layoutLock";
 import type {
     DrawerEnrichmentState,
     DrawerInquirySummaryRightColumnRenderModel,
@@ -56,12 +55,6 @@ export function buildInquirySummaryRightColumnModel(input: {
 
     const taskPreview = parseInquirySummaryTaskPreview(input.record);
     const nextFollowUpIso = nextFollowUpFromRecord(input.record);
-    const handoffVisible = drawerOperationalStripReady(
-        true,
-        input.below_fold_enrichment_ready,
-        input.enrichment
-    );
-
     return {
         tasks: {
             visible: true,
@@ -75,8 +68,8 @@ export function buildInquirySummaryRightColumnModel(input: {
             next_follow_up_iso: nextFollowUpIso,
         },
         orchestrator_handoff: {
-            visible: handoffVisible,
-            state: handoffVisible ? "ready" : "hidden",
+            visible: false,
+            state: "hidden",
         },
     };
 }

@@ -66,6 +66,9 @@ describe("AdminV2 shell navigation helpers", () => {
         const src = read("app/adminV2/components/Sidebar.tsx");
         expect(src).toContain("AdminV2NavLink");
         expect(src).toContain("Home");
+        expect(src).toContain("Forms");
+        expect(src).toContain('FORMS_HREF = "/adminV2/forms"');
+        expect(src).toContain("onForms");
         expect(src).toContain("loadWorkspaceNavTree");
         expect(src).toContain("getInitialWorkspaceNavTreeState");
         expect(src).not.toContain("scheduleAdminV2BackgroundWork");

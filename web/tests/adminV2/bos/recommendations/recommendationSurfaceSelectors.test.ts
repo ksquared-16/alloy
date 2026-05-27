@@ -72,8 +72,8 @@ describe("getRecommendationDrawerStrip", () => {
         expect(display?.whyNow).toBe(rec.render.drawer_strip.why_line);
         expect(display?.whyNow).not.toContain("Operational attention:");
         expect(display?.operationalRead).toBe(rec.render.drawer_strip.title);
-        expect(display?.urgencyLabel).toBe("Today");
-        expect(display?.urgencyBand).toBe("p1_today");
+        expect(display?.urgencyLabel).toBe("Soon");
+        expect(display?.urgencyBand).toBe("p2_soon");
         expect(display?.urgencyReason).toMatch(/Response window/i);
         expect(display?.signalLabels?.length).toBeGreaterThan(0);
     });
@@ -114,14 +114,14 @@ describe("getRecommendationDrawerStrip", () => {
 });
 
 describe("resolveQueueOperationalReadPreview", () => {
-    it("joins next_label and why_line for L0 scan line", () => {
+    it("splits do-next and why for L0 scan lines", () => {
         const rec = buildOperationalRecommendationV1(buildTestOperationalRecommendationInput());
         const line = resolveQueueOperationalReadPreview({
             _operational_recommendation_preview: rec.render.queue,
         });
         expect(line?.operationalRead).toContain("Send a warm first response");
-        expect(line?.operationalRead).toContain("—");
-        expect(line?.operationalRead).toMatch(/lose momentum/i);
+        expect(line?.whyNow).toMatch(/Response window|inquiry was created/i);
+        expect(line?.operationalRead).not.toContain("—");
     });
 });
 
@@ -152,7 +152,7 @@ describe("getRecommendationDetailSummary / Card 2.4", () => {
         const rec = buildOperationalRecommendationV1(buildTestOperationalRecommendationInput());
         const detail = getRecommendationDetailSummary({ _operational_recommendation: rec });
         expect(detail).not.toBeNull();
-        expect(detail!.collapsedSummary).toMatch(/Supporting detail · Based on \d+ signal/);
+        expect(detail!.collapsedSummary).toMatch(/More detail · \d+ signal/);
         expect(detail!.displaySignalLabels.length).toBeGreaterThan(0);
         expect(detail!.displaySignalLabels.length).toBeLessThanOrEqual(3);
     });

@@ -1,0 +1,62 @@
+"use client";
+
+import {
+    BOS_ASSIST_CTA_DRAWER,
+    triggerBosDrawerAssistHandoff,
+} from "@/lib/adminV2/bos/bosDrawerAssistHandoff";
+import type { OpportunityQueuePreviewSeed } from "@/lib/adminV2/bos/activeOperationalContext";
+import { operatorDisplayNameFromEmail } from "@/lib/adminV2/bos/communication/operatorDisplayNameFromEmail";
+import OpportunityDrawerHeaderActionButton from "@/components/admin/opportunity/OpportunityDrawerHeaderActionButton";
+import OpportunityDrawerHeaderActionsPanel from "@/components/admin/opportunity/OpportunityDrawerHeaderActionsPanel";
+import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
+import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
+
+type Props = {
+    entityId: string;
+    overviewData: Record<string, unknown>;
+    opportunitySingular?: string;
+    queuePreviewSeed?: OpportunityQueuePreviewSeed | null;
+};
+
+/**
+ * Native Review Assist BOS handoff — uses the same header action button primitive as registry drawer actions.
+ */
+export default function BosDrawerAssistCta({
+    entityId,
+    overviewData,
+    opportunitySingular = "Inquiry",
+    queuePreviewSeed = null,
+}: Props) {
+    const globalAssistant = useGlobalAssistantOptional();
+    const { userEmail } = useAdminAuth();
+    const id = entityId.trim();
+    if (!id || !globalAssistant || !isTaskAssistV1UiEnabled()) return null;
+
+    const operatorDisplayName = operatorDisplayNameFromEmail(userEmail);
+
+    return (
+        <OpportunityDrawerHeaderActionsPanel
+            inquiryWorkflow
+            align="start"
+            data-drawer-slot="bos_assist_cta"
+        >
+            <OpportunityDrawerHeaderActionButton
+                label={BOS_ASSIST_CTA_DRAWER}
+                inquiryWorkflow
+                data-drawer-action="bos_assist"
+                data-bos-assist-button="true"
+                onClick={() =>
+                    triggerBosDrawerAssistHandoff({
+                        globalAssistant,
+                        entityId: id,
+                        overviewData,
+                        queuePreviewSeed,
+                        opportunitySingular,
+                        operatorDisplayName,
+                    })
+                }
+            />
+        </OpportunityDrawerHeaderActionsPanel>
+    );
+}

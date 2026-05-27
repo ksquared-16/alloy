@@ -4,9 +4,32 @@ import {
     validateTaskAssistV1ParsedJsonNoForbiddenWorkflowKeys,
 } from "@/lib/agent/taskAssist/taskAssistSuggestionValidators";
 
-const ALLOWED_BODY_KEYS = new Set(["entity_type", "entity_id", "channel", "instruction", "goal", "persist", "expires_at"]);
+const ALLOWED_BODY_KEYS = new Set([
+    "entity_type",
+    "entity_id",
+    "channel",
+    "instruction",
+    "goal",
+    "persist",
+    "expires_at",
+    "communication_objective",
+    "synthesized_draft",
+]);
 
 const MAX_INSTRUCTION_LEN = 8000;
+
+function parseSynthesizedDraft(v: unknown): ParsedTaskAssistProposeRequestV1["synthesizedDraft"] {
+    if (!isRecord(v)) return null;
+    const body = typeof v.body === "string" ? v.body.trim() : "";
+    const sms_body = typeof v.sms_body === "string" ? v.sms_body.trim() : "";
+    if (!body && !sms_body) return null;
+    const subject = typeof v.subject === "string" ? v.subject.trim() : null;
+    return {
+        subject: subject || null,
+        body: (body || sms_body).slice(0, 8000),
+        sms_body: sms_body ? sms_body.slice(0, 8000) : null,
+    };
+}
 
 function isRecord(v: unknown): v is Record<string, unknown> {
     return v != null && typeof v === "object" && !Array.isArray(v);
@@ -20,6 +43,12 @@ export type ParsedTaskAssistProposeRequestV1 = {
     /** When true, server may insert `task_assist_proposals` after a valid proposal (opt-in; default ephemeral). */
     persist: boolean;
     expiresAt: string | null;
+    communicationObjective: string | null;
+    synthesizedDraft: {
+        subject: string | null;
+        body: string;
+        sms_body: string | null;
+    } | null;
 };
 
 export function parseTaskAssistProposeRequest(
@@ -118,6 +147,9 @@ export function parseTaskAssistProposeRequest(
             instruction,
             persist,
             expiresAt,
+            communicationObjective:
+                typeof body.communication_objective === "string" ? body.communication_objective.trim() || null : null,
+            synthesizedDraft: parseSynthesizedDraft(body.synthesized_draft),
         },
     };
 }

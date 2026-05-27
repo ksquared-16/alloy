@@ -102,6 +102,23 @@ function collapseDeferredOverviewSections(sections: EntityDrawerSectionConfig[])
     );
 }
 
+/**
+ * Inquiry workflow drawer may reveal only when shell contract + identity frame are structurally stable.
+ */
+export function opportunityInquiryDrawerShellStructurallyReady(params: {
+    shellContractPresent: boolean;
+    primaryContractSatisfied: boolean;
+    record: OpportunityDrawerPaintRecord | null | undefined;
+    familyContactsInSummary: boolean;
+}): boolean {
+    if (!params.shellContractPresent || !params.primaryContractSatisfied) return false;
+    if (!params.record || typeof params.record !== "object") return false;
+    if (params.familyContactsInSummary) {
+        return opportunityInquiryFamilyBlockReadyOnPrimary(params.record);
+    }
+    return true;
+}
+
 export function filterOpportunityOverviewSectionsForFirstPaint(
     sections: EntityDrawerSectionConfig[],
     firstPaintActive: boolean,

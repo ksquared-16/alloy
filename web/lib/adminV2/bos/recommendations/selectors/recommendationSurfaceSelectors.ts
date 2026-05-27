@@ -53,8 +53,12 @@ export type ResolvedQueueRecommendationPreview = {
 
 /** L0 queue scan line — structural join of server preview fields only (Phase 2 / Card 2.3). */
 export type ResolvedQueueOperationalReadPreview = {
-    /** Merged next + why scan line for queue L0. */
+    /** L0 line 1 — do next (recommended action label). */
     operationalRead: string;
+    /** L0 line 2 — grounded why (urgency / intake timing). */
+    whyNow: string | null;
+    nextLabel: string;
+    whyLine: string;
     urgencyChipLabel: string | null;
     urgencyBand: UrgencyBandV1 | null;
     /** Quiet type cue when recommendation_type adds scan meaning (Card 2.5). */
@@ -73,8 +77,26 @@ const QUEUE_URGENCY_CHIP_LABELS: Record<UrgencyBandV1, string> = {
     p3_fyi: "FYI",
 };
 
-export function queueUrgencyChipLabel(band: UrgencyBandV1 | null | undefined): string | null {
-    if (!band || band === "p3_fyi") return null;
+export type QueueUrgencyChipContext = {
+    primarySeverity?: string | null;
+    slaTier?: string | null;
+};
+
+/** L0 scan chips — only when truly time-sensitive (avoid medium/stale saturation). */
+export function queueUrgencyChipLabel(
+    band: UrgencyBandV1 | null | undefined,
+    context?: QueueUrgencyChipContext | null
+): string | null {
+    if (!band || band === "p3_fyi" || band === "p2_soon") return null;
+    if (band === "p0_urgent") return QUEUE_URGENCY_CHIP_LABELS.p0_urgent;
+    if (band === "p1_today") {
+        const sev = context?.primarySeverity?.trim().toLowerCase();
+        const sla = context?.slaTier?.trim().toLowerCase();
+        if (sla === "breached" || sev === "critical" || sev === "high") {
+            return QUEUE_URGENCY_CHIP_LABELS.p1_today;
+        }
+        return null;
+    }
     return QUEUE_URGENCY_CHIP_LABELS[band];
 }
 
@@ -95,15 +117,24 @@ export function resolveQueueOperationalReadPreview(
 ): ResolvedQueueOperationalReadPreview | null {
     const preview = getRecommendationQueuePreview(row);
     if (!preview) return null;
-    const line = formatQueueOperationalReadLine(preview);
-    if (!line) return null;
+    const nextLabel = preview.nextLabel.trim();
+    const whyLine = preview.whyLine.trim();
+    if (!nextLabel && !whyLine) return null;
     const urgencyBand = preview.urgencyBand ?? null;
     const recommendationType = preview.recommendationType ?? null;
     const staleCue = resolveQueuePreviewTrustChrome(preview.isStale).staleCueLabel;
+    const attention = row ? parseOperationalAttentionForQueue(row) : null;
+    const chipContext: QueueUrgencyChipContext = {
+        primarySeverity: attention?.primary_reason?.severity ?? null,
+        slaTier: attention?.primary_reason?.sla_tier ?? null,
+    };
     return {
-        operationalRead: line,
+        operationalRead: nextLabel || whyLine,
+        whyNow: nextLabel && whyLine ? whyLine : null,
+        nextLabel,
+        whyLine,
         urgencyBand,
-        urgencyChipLabel: queueUrgencyChipLabel(urgencyBand),
+        urgencyChipLabel: queueUrgencyChipLabel(urgencyBand, chipContext),
         typeCue: queueTypeCueLabel(recommendationType),
         staleCue,
         source: preview.source,
@@ -165,12 +196,12 @@ function uniqueTrimmedLabels(labels: string[]): string[] {
 
 function buildSupportingDetailCollapsedSummary(signalCount: number, factorCount: number): string {
     if (signalCount > 0) {
-        return `Supporting detail · Based on ${signalCount} signal${signalCount === 1 ? "" : "s"}`;
+        return `More detail · ${signalCount} signal${signalCount === 1 ? "" : "s"}`;
     }
     if (factorCount > 0) {
-        return `Supporting detail · ${factorCount} factor${factorCount === 1 ? "" : "s"}`;
+        return `More detail · ${factorCount} factor${factorCount === 1 ? "" : "s"}`;
     }
-    return "Supporting detail";
+    return "More detail";
 }
 
 function stripLegacyOperationalAttentionPrefix(text: string): string {
@@ -180,6 +211,14 @@ function stripLegacyOperationalAttentionPrefix(text: string): string {
 function asRecord(value: unknown): Record<string, unknown> | null {
     if (!value || typeof value !== "object" || Array.isArray(value)) return null;
     return value as Record<string, unknown>;
+}
+
+function parseOperationalAttentionForQueue(
+    row: Record<string, unknown>
+): OpportunityAttentionResult | null {
+    const raw = row._operational_attention;
+    if (!raw || typeof raw !== "object") return null;
+    return raw as OpportunityAttentionResult;
 }
 
 function parseOperationalRecommendation(

@@ -69,7 +69,7 @@ export default function AdminV2SettingsStatusTransitionRulesPage() {
     }, [items]);
 
     return (
-        <div className="w-full max-w-6xl space-y-4 pb-2">
+        <div className="w-full min-w-0 space-y-4 pb-2">
             <header>
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-alloy-midnight/40">Workflows · Diagnostics</p>
                 <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">Workflow automation rules</h1>

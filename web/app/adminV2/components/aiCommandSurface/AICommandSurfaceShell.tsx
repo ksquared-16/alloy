@@ -44,6 +44,7 @@ import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import {
   buildTaskAssistCommandBootstrap,
   parseTaskAssistCommandIntent,
+  type TaskAssistCommandBootstrap,
   type TaskAssistCommandIntent,
 } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
 import {
@@ -684,7 +685,12 @@ export default function AICommandSurfaceShell() {
   }, [globalAssistant, globalAssistant?.currentContext?.entity_id, globalAssistant?.currentContext?.label, setThread]);
 
   const proceedToTaskAssistAction = useCallback(
-    (candidate: TaskAssistEntitySearchCandidate, intent: TaskAssistCommandIntent) => {
+    (
+      candidate: TaskAssistEntitySearchCandidate,
+      intent: TaskAssistCommandIntent,
+      bootstrapOverride?: TaskAssistCommandBootstrap | null,
+      opts?: { communicationHandoff?: boolean }
+    ) => {
       if (!globalAssistant) return;
       globalAssistant.setAssistantContext({
         entity_type: "opportunities",
@@ -692,28 +698,37 @@ export default function AICommandSurfaceShell() {
         label: candidate.label,
         source_surface: "command_bar",
       });
-      const bootstrap = intent ? buildTaskAssistCommandBootstrap(intent) : buildTaskAssistCommandBootstrap({
-        intent_type: "draft_message",
-        channel_hint: null,
-        timing_hint_text: null,
-        message_goal_text: null,
-        search_text_hint: null,
-        confidence: "low",
-        warnings: [],
-        workflow_blocked: false,
-      });
+      const bootstrap =
+        bootstrapOverride ??
+        (intent
+            ? buildTaskAssistCommandBootstrap(intent)
+            : buildTaskAssistCommandBootstrap({
+                intent_type: "draft_message",
+                channel_hint: null,
+                timing_hint_text: null,
+                message_goal_text: null,
+                search_text_hint: null,
+                confidence: "low",
+                warnings: [],
+                workflow_blocked: false,
+              }));
       const locationLabel = candidate.disambiguation?.location_name ?? null;
       const isReminderIntent = intent?.intent_type === "create_reminder";
       const messageIntent =
         !isReminderIntent &&
         (intent?.intent_type === "draft_message" ||
           intent?.intent_type === "schedule_message" ||
-          Boolean(intent?.message_goal_text?.trim()));
+          Boolean(intent?.message_goal_text?.trim()) ||
+          Boolean(bootstrap.synthesized_draft));
       const uiPhase: "draft" | "workspace" | "reminder" = isReminderIntent ? "reminder" : messageIntent ? "draft" : "workspace";
+      const noticeText =
+        opts?.communicationHandoff && bootstrap.synthesized_draft
+            ? "Suggested message ready for review."
+            : taskAssistFollowUpNoticeText(candidate, locationLabel, intent);
       setThread((prev) => {
         let next = appendThreadTurn(prev, {
           kind: "assistant_notice",
-          text: taskAssistFollowUpNoticeText(candidate, locationLabel, intent),
+          text: noticeText,
         });
         next = appendThreadTurn(next, {
           kind: "action_card",
@@ -1675,6 +1690,14 @@ export default function AICommandSurfaceShell() {
   }, []);
 
   const runSubmittedCommandRef = useRef<(cmd: string) => Promise<void>>(async () => { });
+  const runBosAssistHandoffRef = useRef<
+    (
+      cmd: string,
+      intent: TaskAssistCommandIntent,
+      bootstrap?: TaskAssistCommandBootstrap | null,
+      handoffEntity?: { entity_id: string; label: string } | null
+    ) => Promise<void>
+  >(async () => { });
 
   const runSubmittedCommand = useCallback(
     async (rawCmd: string) => {
@@ -1775,9 +1798,52 @@ export default function AICommandSurfaceShell() {
     ]
   );
 
+  const runBosAssistHandoff = useCallback(
+    async (
+      rawCmd: string,
+      handoffIntent: TaskAssistCommandIntent,
+      handoffBootstrap?: TaskAssistCommandBootstrap | null,
+      handoffEntity?: { entity_id: string; label: string } | null
+    ) => {
+      const cmd = rawCmd.trim();
+      if (!cmd || busy || !globalAssistant || !taskAssistUiEnabled) return;
+
+      setThread((prev) => appendThreadTurn(prev, { kind: "user_message", text: cmd }));
+      setThreadExpanded(true);
+      setBusy(true);
+
+      try {
+        const activeOpp =
+            activeOpportunityFromContext(globalAssistant.currentContext) ??
+            (handoffEntity?.entity_id?.trim()
+                ? {
+                      entity_id: handoffEntity.entity_id.trim(),
+                      label: handoffEntity.label?.trim() || "Current opportunity",
+                  }
+                : null);
+        if (!activeOpp?.entity_id) {
+          await runSubmittedCommand(cmd);
+          return;
+        }
+        const chip = buildActiveOpportunitySearchCandidate(activeOpp);
+        proceedToTaskAssistAction(chip, handoffIntent, handoffBootstrap ?? null, {
+          communicationHandoff: Boolean(handoffBootstrap?.synthesized_draft),
+        });
+      } finally {
+        setBusy(false);
+        queueMicrotask(() => inputRef.current?.focus());
+      }
+    },
+    [busy, globalAssistant, proceedToTaskAssistAction, runSubmittedCommand, setThread, taskAssistUiEnabled]
+  );
+
   useEffect(() => {
     runSubmittedCommandRef.current = runSubmittedCommand;
   }, [runSubmittedCommand]);
+
+  useEffect(() => {
+    runBosAssistHandoffRef.current = runBosAssistHandoff;
+  }, [runBosAssistHandoff]);
 
   const handleSubmit = useCallback(async () => {
     const cmd = commandText.trim();
@@ -1954,7 +2020,17 @@ export default function AICommandSurfaceShell() {
       const seed = detail.seedCommand?.trim() ?? "";
       if (detail.autoSubmitSeedCommand && seed) {
         setCommandText("");
-        void runSubmittedCommandRef.current(seed);
+        const handoffIntent = detail.taskAssistHandoffIntent ?? null;
+        if (handoffIntent) {
+          void runBosAssistHandoffRef.current(
+            seed,
+            handoffIntent,
+            detail.taskAssistHandoffBootstrap ?? null,
+            detail.handoffEntity ?? null
+          );
+        } else {
+          void runSubmittedCommandRef.current(seed);
+        }
       } else if (seed) {
         setCommandText(seed);
       }

@@ -11,7 +11,10 @@ export { normalizeEnrollmentQueueRowPreviewActions } from "@/lib/ui-v2/enrollmen
 
 function registryQuickActions(
     placements: ResolvedActionForClient[],
-    row: Pick<QueueRowPreviewQuickActionBuildInput, "opportunityId" | "personId" | "displayName" | "email" | "phone">
+    row: Pick<
+        QueueRowPreviewQuickActionBuildInput,
+        "opportunityId" | "personId" | "displayName" | "email" | "phone" | "rowRecord"
+    >
 ): QueueItemQuickActionVm[] {
     const out: QueueItemQuickActionVm[] = [];
     for (const a of placements) {
@@ -24,6 +27,7 @@ function registryQuickActions(
                 variant: "secondary",
                 payload: {
                     source: "action_registry",
+                    registryKey: a.key,
                     opportunityId: row.opportunityId,
                     personId: row.personId?.trim() || null,
                     displayName: row.displayName,
@@ -41,6 +45,7 @@ function registryQuickActions(
                 variant: "secondary",
                 payload: {
                     source: "action_registry",
+                    registryKey: a.key,
                     opportunityId: row.opportunityId,
                     displayName: row.displayName,
                     rowRecord: row.rowRecord ?? { id: row.opportunityId },
@@ -55,6 +60,7 @@ function registryQuickActions(
             variant: "secondary",
             payload: {
                 source: "action_registry",
+                registryKey: a.key,
                 opportunityId: row.opportunityId,
                 rowRecord: row.rowRecord ?? null,
             },

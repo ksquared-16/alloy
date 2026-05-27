@@ -60,7 +60,11 @@ export type TaskAssistSuggestionV1 = {
     channel: "sms" | "email" | "in_app";
 
     draft_subject: string | null;
+    /** Body for the channel used at propose time. */
     draft_body: string;
+    /** When BOS synthesis provided both channels — UI swaps without re-propose. */
+    draft_body_sms?: string | null;
+    draft_body_email?: string | null;
 
     /** V1.1+ scheduling; MUST be null in V1 core ship. */
     scheduled_for_iso: string | null;

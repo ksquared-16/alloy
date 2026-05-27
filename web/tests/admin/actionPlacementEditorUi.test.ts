@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
+import type { EntityLabelsMap } from "@/contexts/EntityLabelsContext";
 import {
     actionPlacementEditorCapabilities,
     formatActionPlacementWhere,
     groupPlacementEditorRows,
     type ActionPlacementEditorRow,
 } from "@/lib/admin/actions/actionPlacementEditorUi";
+
+const LEAD_LABELS: EntityLabelsMap = {
+    opportunities: { singular: "Lead", plural: "Leads" },
+};
 
 describe("actionPlacementEditorUi", () => {
     it("groups placements by surface and entity", () => {
@@ -26,28 +31,69 @@ describe("actionPlacementEditorUi", () => {
                 is_active: true,
             },
         ];
-        const groups = groupPlacementEditorRows(rows);
+        const groups = groupPlacementEditorRows(rows, LEAD_LABELS);
         expect(groups).toHaveLength(1);
         expect(groups[0]?.title).toContain("Record header");
+        expect(groups[0]?.title).toContain("Lead");
+        expect(groups[0]?.title).not.toContain("opportunity");
     });
 
     it("formats placement location for operators", () => {
         expect(
-            formatActionPlacementWhere({
-                surface: "record_section",
-                slot: "primary",
-                section_key: "details",
-                entity_type: "opportunity",
-            })
+            formatActionPlacementWhere(
+                {
+                    surface: "record_section",
+                    slot: "primary",
+                    section_key: "details",
+                    entity_type: "opportunity",
+                },
+                LEAD_LABELS
+            )
         ).toContain("Record section");
         expect(
-            formatActionPlacementWhere({
-                surface: "record_section",
-                slot: "primary",
-                section_key: "details",
-                entity_type: "opportunity",
-            })
+            formatActionPlacementWhere(
+                {
+                    surface: "record_section",
+                    slot: "primary",
+                    section_key: "details",
+                    entity_type: "opportunity",
+                },
+                LEAD_LABELS
+            )
         ).toContain("details");
+        expect(
+            formatActionPlacementWhere(
+                {
+                    surface: "queue_row",
+                    slot: "row_inline",
+                    section_key: null,
+                    entity_type: "opportunity",
+                },
+                LEAD_LABELS
+            )
+        ).toContain("Workspace queue row");
+        expect(
+            formatActionPlacementWhere(
+                {
+                    surface: "queue_row",
+                    slot: "row_inline",
+                    section_key: null,
+                    entity_type: "opportunity",
+                },
+                LEAD_LABELS
+            )
+        ).toContain("Lead");
+        expect(
+            formatActionPlacementWhere(
+                {
+                    surface: "queue_row",
+                    slot: "row_inline",
+                    section_key: null,
+                    entity_type: "opportunity",
+                },
+                LEAD_LABELS
+            )
+        ).not.toContain("opportunity");
     });
 
     it("allows label edit only for org-owned definitions", () => {

@@ -52,7 +52,7 @@ export default function RelationshipsSettingsClient() {
     );
 
     return (
-        <div className="w-full max-w-6xl space-y-5 pb-2">
+        <div className="w-full min-w-0 space-y-5 pb-2">
             <SettingsPageHeader title="Relationships" subtitle={RELATIONSHIPS_SUBTITLE} />
             <SettingsEntityTabBar<RelationshipsTab>
                 aria-label="Relationship vocabulary"

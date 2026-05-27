@@ -82,7 +82,6 @@ describe("inquiry summary right_column atomic structure", () => {
         expect(rightColumnStructureKeys(primaryRc!)).toEqual([
             "tasks",
             "reminders",
-            "orchestrator_handoff",
         ]);
     });
 
@@ -104,8 +103,8 @@ describe("inquiry summary right_column atomic structure", () => {
         expect(model.tasks.open_count).toBe(1);
         expect(model.reminders.visible).toBe(true);
         expect(model.reminders.state).toBe("empty");
-        expect(model.orchestrator_handoff.visible).toBe(true);
-        expect(model.orchestrator_handoff.state).toBe("ready");
+        expect(model.orchestrator_handoff.visible).toBe(false);
+        expect(model.orchestrator_handoff.state).toBe("hidden");
     });
 
     it("reminders ready when primary carries next_follow_up_at", () => {

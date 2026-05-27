@@ -8,7 +8,9 @@
 
 **Parent sprint:** [`bos_operational_recommendation_intelligence_sprint.md`](../bos_operational_recommendation_intelligence_sprint.md) (audit + framework + phase map)
 
-**Doctrine stack (unchanged):** `docs/execution/operating-doctrine.md`, `docs/product/bos-foundation.md`, `docs/system/workspace-system.md`, `docs/system/actions-and-workflows.md`, `docs/product/crm-system.md`, `docs/product/communications.md`, `docs/execution/roadmap-and-gaps.md`
+**Doctrine stack (unchanged):** `docs/execution/operating-doctrine.md`, `docs/product/bos-foundation.md` (§ Operational assist doctrine), `docs/system/workspace-system.md`, `docs/system/actions-and-workflows.md`, `docs/product/crm-system.md`, `docs/product/communications.md`, `docs/execution/roadmap-and-gaps.md`
+
+**May 2026 operational assist closeout (extends GATE 0):** [`../../06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`](../../06_2026/completed/bos_assist_routing_communication_drafting_closeout.md) — recommendations ≠ customer communication; deterministic-first routing; BOS ≠ chatbot.
 
 ---
 

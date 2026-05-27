@@ -20,9 +20,9 @@ export type FormsModuleNavItem = {
 export const FORMS_MODULE_NAV_ITEMS: FormsModuleNavItem[] = [
     {
         key: "workspace",
-        label: "Workspace",
+        label: "Workload",
         href: FORMS_MODULE_ROUTES.workspace,
-        description: "Intake command surface — forms, health, and review entry",
+        description: "Intake command center — review, linkage, and workload filters",
     },
     {
         key: "packets",

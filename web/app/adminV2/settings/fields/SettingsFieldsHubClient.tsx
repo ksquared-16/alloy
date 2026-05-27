@@ -70,7 +70,7 @@ export default function SettingsFieldsHubClient({ initialEntity }: { initialEnti
     );
 
     return (
-        <div className="w-full max-w-6xl space-y-4">
+        <div className="w-full min-w-0 space-y-4">
             <SettingsEntityTabBar tabs={entityTabs} activeKey={entity} onSelect={onEntityChange} />
 
             <div key={entity} className="space-y-4">

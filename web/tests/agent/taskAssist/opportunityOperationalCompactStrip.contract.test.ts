@@ -63,21 +63,17 @@ describe("OpportunityOperationalCompactStrip", () => {
         expect(src).toContain("setPopoverTaskId");
     });
 
-    it("operational strip handoff focuses Orchestrator with active drawer context", () => {
+    it("orchestrator handoff lives in Review Assist band, not drawer header or compact strip card", () => {
         const src = readFileSync(stripPath, "utf8");
-        expect(src).toContain("OrchestratorHandoffCard");
-        expect(src).toContain("Review assist");
-        expect(src).toContain("Operational read");
-        expect(src).toContain("Continue in Orchestrator");
-        expect(src).toContain("data-operational-orchestrator-handoff-card");
-        expect(src).toContain("data-operational-orchestrator-handoff-eyebrow");
-        expect(src).toContain("data-operational-orchestrator-handoff=\"true\"");
-        expect(src).toContain("data-drawer-slot=\"operational_orchestrator_handoff\"");
-        expect(src).toContain("focusCommandBar");
-        expect(src).toContain("buildOpportunityOperationalContext");
-        expect(src).toContain("orchestratorHandoffSeedCommand");
-        expect(src).toContain("setAssistantContext");
-        expect(src).toContain("autoSubmitSeedCommand: true");
+        const drawer = readFileSync(drawerPath, "utf8");
+        const bosCta = readFileSync(
+            join(dirname(fileURLToPath(import.meta.url)), "../../../components/admin/drawer/BosDrawerAssistCta.tsx"),
+            "utf8",
+        );
+        expect(drawer).not.toContain('data-drawer-action="open_in_orchestrator"');
+        expect(bosCta).toContain('data-drawer-action="bos_assist"');
+        expect(bosCta).toContain("triggerBosDrawerAssistHandoff");
+        expect(src).toContain("const showHandoffCard = false");
         expect(src).not.toContain("Ask AI");
         expect(src).not.toContain("Chat with AI");
     });

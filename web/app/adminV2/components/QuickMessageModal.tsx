@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { launchAdminV2OpenOpportunityFromContext } from "@/lib/adminV2/contextualRecordOpen";
 
 const COMPOSER_LABEL = "mb-1 text-[8px] font-semibold tracking-[0.12em] text-alloy-midnight/45";
 
@@ -69,12 +70,24 @@ function userFriendlySendNote(processNote: string, channel: "email" | "sms"): st
     return `${noun} queued for delivery.`;
 }
 
+export type QuickMessageModalSeed = {
+    personId?: string;
+    opportunityId?: string | null;
+    recordDisplayName?: string | null;
+    displayName?: string;
+    email?: string | null;
+    phone?: string | null;
+    /** Record-scoped launch without a linked contact — hide global person search. */
+    contextualOnly?: boolean;
+};
+
 export interface QuickMessageModalProps {
     open: boolean;
     onClose: () => void;
+    seed?: QuickMessageModalSeed | null;
 }
 
-export default function QuickMessageModal({ open, onClose }: QuickMessageModalProps) {
+export default function QuickMessageModal({ open, onClose, seed = null }: QuickMessageModalProps) {
     const [searchQ, setSearchQ] = useState("");
     const [searchHits, setSearchHits] = useState<PersonHit[]>([]);
     const [searchBusy, setSearchBusy] = useState(false);
@@ -149,8 +162,22 @@ export default function QuickMessageModal({ open, onClose }: QuickMessageModalPr
             setThreadsErr(null);
             setThreadMsgsPreview([]);
             setThreadMsgsErr(null);
+            return;
         }
-    }, [open]);
+        if (!seed?.personId) return;
+        const hit: PersonHit = {
+            person_id: seed.personId,
+            display_name: seed.displayName?.trim() || "Contact",
+            email: seed.email ?? null,
+            phone: seed.phone ?? null,
+            has_email: Boolean(seed.email?.trim()),
+            has_phone: Boolean(seed.phone?.trim()),
+        };
+        setSelectedRecipients([hit]);
+        setSearchQ(hit.display_name);
+    }, [open, seed?.personId, seed?.displayName, seed?.email, seed?.phone]);
+
+    const contextualOnly = Boolean(seed?.contextualOnly && seed?.opportunityId && !seed?.personId);
 
     useEffect(() => {
         if (!open || !previewPersonId) {
@@ -401,7 +428,9 @@ export default function QuickMessageModal({ open, onClose }: QuickMessageModalPr
                             Quick message
                         </p>
                         <p className="mt-0.5 text-[11px] leading-snug text-alloy-midnight/55">
-                            Person-first · org-scoped · person-anchored threads. Search to add or remove recipients.
+                            {contextualOnly
+                                ? "Message is scoped to this inquiry. Add a parent or contact on the record to send."
+                                : "Person-first · org-scoped · person-anchored threads. Search to add or remove recipients."}
                         </p>
                     </div>
                     <button
@@ -416,6 +445,33 @@ export default function QuickMessageModal({ open, onClose }: QuickMessageModalPr
                 <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5 lg:flex-row lg:items-stretch lg:gap-0 lg:overflow-hidden lg:py-0">
                     {/* Left ~30% — search + chips */}
                     <aside className="flex w-full shrink-0 flex-col gap-3 lg:w-[30%] lg:min-w-0 lg:max-w-[22rem] lg:border-r lg:border-alloy-stone/12 lg:px-5 lg:py-5">
+                        {contextualOnly ? (
+                            <div
+                                className="rounded-lg border border-alloy-stone/16 bg-alloy-stone/[0.04] px-3 py-3 text-[12px] leading-snug text-alloy-midnight/70"
+                                data-testid="quick-message-no-contact"
+                            >
+                                <p>
+                                    No parent/contact linked yet.{" "}
+                                    <button
+                                        type="button"
+                                        className="font-semibold text-alloy-blue underline-offset-2 hover:underline"
+                                        onClick={() => {
+                                            const id = seed?.opportunityId?.trim();
+                                            if (!id) return;
+                                            launchAdminV2OpenOpportunityFromContext(id);
+                                            onClose();
+                                        }}
+                                    >
+                                        Add contact →
+                                    </button>
+                                </p>
+                                {seed?.recordDisplayName?.trim() ? (
+                                    <p className="mt-1 text-[11px] text-alloy-midnight/50">
+                                        {seed.recordDisplayName.trim()}
+                                    </p>
+                                ) : null}
+                            </div>
+                        ) : (
                         <div>
                             <div className={COMPOSER_LABEL}>Search</div>
                             <input
@@ -469,6 +525,7 @@ export default function QuickMessageModal({ open, onClose }: QuickMessageModalPr
                                 </ul>
                             ) : null}
                         </div>
+                        )}
 
                         <div>
                             <div className={COMPOSER_LABEL}>Selected</div>

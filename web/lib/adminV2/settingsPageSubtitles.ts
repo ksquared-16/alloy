@@ -11,4 +11,5 @@ export const SETTINGS_LAYOUTS_SUBTITLE =
 
 export const SETTINGS_FIELD_SECTIONS_SUBTITLE = "Organize fields into reusable catalog groups.";
 
-export const SETTINGS_ACTIONS_SUBTITLE = "Configure record buttons and operator actions.";
+export const SETTINGS_ACTIONS_SUBTITLE =
+    "Add buttons to queue rows and record drawers — message families, update status, tours, and BOS assist.";

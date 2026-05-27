@@ -22,11 +22,16 @@ describe("command surface handoff UX (Gate A)", () => {
     it("exports autoSubmitSeedCommand on focus detail (handoff-only)", () => {
         const src = readFileSync(eventsPath, "utf8");
         expect(src).toContain("autoSubmitSeedCommand?: boolean");
+        expect(src).toContain("taskAssistHandoffIntent?: TaskAssistCommandIntent");
     });
 
     it("shell auto-submits seed only when autoSubmitSeedCommand is set", () => {
         const src = readFileSync(shellPath, "utf8");
         expect(src).toContain("detail.autoSubmitSeedCommand && seed");
+        expect(src).toContain("detail.taskAssistHandoffIntent");
+        expect(src).toContain("handoffEntity");
+        expect(src).toContain("runBosAssistHandoffRef.current(");
+        expect(src).toContain("detail.handoffEntity");
         expect(src).toContain("runSubmittedCommandRef.current(seed)");
         expect(src).toContain('setCommandText("")');
     });

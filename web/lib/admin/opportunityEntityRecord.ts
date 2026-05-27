@@ -1314,6 +1314,49 @@ export async function respondOpportunityEntityGet(
         : JSON.stringify({ total_ms: enrichTotalMsPrimary, phases_ms: {} });
     const serverRouteMsPrimary = Date.now() - opportunityRouteStartedAt;
     const primaryDeptId = trimOrNull(out._work_unit_department_id as string | null);
+    const oppSkRawPrimary =
+      out.status_key != null && String(out.status_key).trim() !== ""
+        ? String(out.status_key).trim()
+        : opp.status != null && String(opp.status).trim() !== ""
+          ? String(opp.status).trim()
+          : null;
+    const tAttnPrimary0 = Date.now();
+    const [wuDeptRowPrimary, opportunityDefsPrimary] = await Promise.all([
+      wuidForDept
+        ? supabase
+            .from("work_units")
+            .select("metadata, department_id")
+            .eq("id", wuidForDept)
+            .eq("org_id", orgId)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      oppOrgIdForDefs
+        ? fetchEffectiveStatusDefinitionsTagged(supabase, oppOrgIdForDefs, "opportunities", {
+            activeOnly: true,
+          })
+        : Promise.resolve({ rows: [] as StatusDefinitionRow[] }),
+    ]);
+    const deptMetaPrimary = await fetchDepartmentMetadataForActivity(
+      supabase,
+      orgId,
+      (wuDeptRowPrimary.data as { department_id?: string | null } | null)?.department_id,
+    );
+    const attnPrimary = await attachOpportunityAttentionSuggestionBundle({
+      supabase,
+      orgId,
+      opportunityRow: out,
+      defs: opportunityDefsPrimary.rows ?? [],
+      attentionConfigMetadata: (wuDeptRowPrimary.data as { metadata?: unknown } | null)?.metadata ?? null,
+      workUnitId: wuidForDept,
+      statusKey: oppSkRawPrimary,
+      preloadedActivityOrgMetadata: {
+        workUnitMetadata: (wuDeptRowPrimary.data as { metadata?: unknown } | null)?.metadata ?? null,
+        departmentMetadata: deptMetaPrimary,
+      },
+      nowMs: Date.now(),
+    });
+    Object.assign(out, attnPrimary);
+    enrichPhaseMs.operational_attention_primary_ms = Date.now() - tAttnPrimary0;
     if (process.env.NODE_ENV !== "production" || enrichTotalMsPrimary > 200) {
       timingOpportunityDrawerPrimary({
         opportunity_id: id,

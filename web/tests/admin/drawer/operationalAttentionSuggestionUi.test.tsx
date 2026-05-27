@@ -105,8 +105,8 @@ describe("OperationalAttentionHeaderStrip", () => {
                 }}
             />,
         );
-        expect(html).toContain("Review assist");
-        expect(html).toContain("Operational read");
+        expect(html).toContain('data-review-assist-compact="true"');
+        expect(html).toContain('data-review-assist-row="operational_read"');
         expect(html).not.toContain("Future:");
         expect(html).not.toContain('data-drawer-slot="alloy_linked_actions_placeholder"');
         expect(html).toContain('data-operational-attention-canonical="chrome"');
@@ -164,7 +164,9 @@ describe("OperationalAttentionHeaderStrip", () => {
         );
         expect(html).toContain("New inquiry needs timely response");
         expect(html).toContain("Send a warm first response");
-        expect(html).toContain("lose momentum");
+        expect(html).toContain("inquiry was created");
+        expect(html).toContain("Timely first contact");
+        expect(html).not.toContain("lose momentum");
         expect(html).not.toContain("Operational attention: New inquiry is stale.");
         expect(html).toContain('data-drawer-slot="operational_review_assist"');
     });

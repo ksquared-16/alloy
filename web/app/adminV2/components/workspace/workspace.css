@@ -6461,7 +6461,7 @@
 
 /* CRM compact scan mode — left column: status → identity → operational attention → muted next */
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview--scan .adminv2-ws-crm-queue-preview__body {
-  grid-template-columns: minmax(0, min(40%, 12rem)) minmax(14rem, 1fr);
+  grid-template-columns: minmax(0, min(48%, 17rem)) minmax(12rem, 1fr);
   align-items: start;
 }
 
@@ -6469,6 +6469,8 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__scan-status-row {
@@ -7061,21 +7063,53 @@
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__operational-read {
   margin-top: 5px;
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 6px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  width: 100%;
   max-width: 100%;
+  text-align: left;
   font-size: 10px;
   line-height: 1.38;
   color: color-mix(in srgb, var(--d-text-primary, #273f52) 88%, var(--d-muted));
 }
 
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__operational-read-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px 6px;
+  width: 100%;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__operational-read-lines {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  width: 100%;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__operational-read-primary {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+}
+
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__operational-read-boundary {
-  font-size: 9px;
-  font-weight: 650;
+  font-size: 8px;
+  font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--d-muted) 55%, var(--d-text-primary, #273f52));
+  color: color-mix(in srgb, var(--d-muted) 62%, var(--d-text-primary, #273f52));
+  align-self: flex-start;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__operational-read--scan .adminv2-ws-crm-queue-preview__operational-read-boundary {
+  margin-top: 1px;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__operational-read-label {
@@ -7087,8 +7121,35 @@
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__operational-read-text {
-  font-weight: 550;
-  line-height: 1.38;
+  font-weight: 600;
+  line-height: 1.4;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__operational-read--scan .adminv2-ws-crm-queue-preview__operational-read-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__operational-read-why {
+  font-size: 9px;
+  line-height: 1.35;
+  font-weight: 450;
+  color: color-mix(in srgb, var(--d-muted) 72%, var(--d-text-primary, #273f52));
+  display: block;
+  width: 100%;
+  text-align: left;
+  overflow-wrap: anywhere;
+  padding-left: 0;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__operational-read--scan .adminv2-ws-crm-queue-preview__operational-read-why {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;

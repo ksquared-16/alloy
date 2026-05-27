@@ -156,6 +156,17 @@ export type TaskAssistCommandBootstrap = {
     open_schedule?: boolean;
     reminder_title?: string | null;
     reminder_due_hint?: string | null;
+    /** BOS communication objective — internal routing, not customer copy. */
+    communication_objective?: string | null;
+    /** Internal operator guidance from recommendation — not customer-facing. */
+    operator_guidance?: string | null;
+    /** Pre-synthesized outbound draft from BOS communication layer. */
+    synthesized_draft?: {
+        subject: string | null;
+        body: string;
+        sms_body?: string | null;
+        mode?: "deterministic" | "ai_assisted";
+    } | null;
 };
 
 export function buildTaskAssistCommandBootstrap(intent: TaskAssistCommandIntent): TaskAssistCommandBootstrap {

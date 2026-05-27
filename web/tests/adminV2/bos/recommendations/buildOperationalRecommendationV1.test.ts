@@ -59,6 +59,8 @@ export function buildTestOperationalRecommendationInput(
             primary_label: "New inquiry is stale",
             severity: "medium",
             days: 2,
+            intake_age_phrase: "2 days since the inquiry was created",
+            urgency_reason_line: "Response window exceeded · 2 days since the inquiry was created",
         },
         stale_inputs: {
             status_key: "new_inquiry",
@@ -81,7 +83,8 @@ describe("buildOperationalRecommendationV1", () => {
         expect(rec.version).toBe(1);
         expect(rec.deterministic_vs_ai_assisted).toBe("deterministic");
         expect(rec.recommendation_type).toBe("communication");
-        expect(rec.why_it_matters).toContain("lose momentum");
+        expect(rec.why_it_matters).toContain("Timely first contact");
+        expect(rec.why_it_matters).toContain("inquiry was created");
         expect(rec.stale_state_check.fingerprint_version).toBe(1);
         expect(rec.stale_state_check.is_stale).toBe(false);
         expect(rec.render.queue.why_line.length).toBeGreaterThan(0);

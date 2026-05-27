@@ -30,8 +30,9 @@ describe("resolveQueueOperationalReadPreview", () => {
         });
         expect(resolved?.source).toBe("canonical_queue_preview");
         expect(resolved?.operationalRead).toContain("Send a warm first response");
-        expect(resolved?.operationalRead).toContain("lose momentum");
-        expect(resolved?.urgencyChipLabel).toBe("Today");
+        expect(resolved?.whyNow).toContain("Response window exceeded");
+        expect(resolved?.operationalRead).not.toContain("lose momentum");
+        expect(resolved?.urgencyChipLabel).toBeNull();
     });
 
     it("falls back to legacy _attention_suggestion_preview", () => {
@@ -66,9 +67,13 @@ describe("resolveQueueOperationalReadPreview", () => {
         expect(resolved?.urgencyChipLabel).toBeNull();
     });
 
-    it("shows chip for P0/P1/P2", () => {
+    it("shows chip for P0; P1 only when SLA breached or high severity; P2 quiet", () => {
         expect(queueUrgencyChipLabel("p0_urgent")).toBe("Urgent");
-        expect(queueUrgencyChipLabel("p2_soon")).toBe("Soon");
+        expect(queueUrgencyChipLabel("p2_soon")).toBeNull();
+        expect(queueUrgencyChipLabel("p1_today", { primarySeverity: "medium", slaTier: "ok" })).toBeNull();
+        expect(queueUrgencyChipLabel("p1_today", { primarySeverity: "high", slaTier: "approaching" })).toBe(
+            "Today"
+        );
     });
 });
 
@@ -103,7 +108,7 @@ describe("CrmCompactQueuePreview operational read L0", () => {
         const slot = resolveQueueOperationalReadSlot({
             _operational_recommendation_preview: {
                 next_label: "Send a warm first response",
-                why_line: "New inquiries lose momentum when delayed.",
+                why_line: "Response window exceeded · 24 days since the inquiry was created",
                 urgency_band: "p1_today",
             },
         });
@@ -130,11 +135,11 @@ describe("CrmCompactQueuePreview operational read L0", () => {
             />,
         );
         expect(html).toContain('data-queue-preview-slot="operational_read"');
-        expect(html).toContain("Operational read:");
+        expect(html).toContain('data-queue-operational-read-layout="scan"');
+        expect(html).not.toContain("Operational read:");
         expect(html).toContain("Send a warm first response");
-        expect(html).toContain("lose momentum");
-        expect(html).toContain('data-testid="queue-operational-read-urgency-chip"');
-        expect(html).toContain("Today");
+        expect(html).toContain("Response window exceeded");
+        expect(html).not.toContain('data-testid="queue-operational-read-urgency-chip"');
         expect(html).toContain("Preview");
         expect(html).not.toContain("Alloy suggestion");
         expect(html).not.toContain("Suggested next step");

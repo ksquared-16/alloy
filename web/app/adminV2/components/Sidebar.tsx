@@ -6,6 +6,7 @@ import {
     Building2,
     ChevronDown,
     ChevronRight,
+    FileText,
     GitBranch,
     Home,
     PanelLeftClose,
@@ -35,6 +36,7 @@ import {
 
 const WORKSPACE = "/adminV2/workspace";
 const WORKFLOWS_HREF = "/adminV2/workflows";
+const FORMS_HREF = "/adminV2/forms";
 const SETTINGS_HREF = "/adminV2/settings";
 
 const EXPANDED_PRIMARY_LINK =
@@ -90,6 +92,7 @@ function SidebarNav({
     const activeQueueKey = searchParams.get("queue")?.trim() || null;
     const onSettings = path.startsWith(SETTINGS_HREF);
     const onWorkflows = path.startsWith(WORKFLOWS_HREF);
+    const onForms = path.startsWith(FORMS_HREF);
 
     const initialTree = getInitialWorkspaceNavTreeState();
     const [depts, setDepts] = useState<WorkspaceNavTreeDept[]>(initialTree.depts);
@@ -185,6 +188,26 @@ function SidebarNav({
                 <span className="inline-flex items-center gap-2">
                     <GitBranch size={16} strokeWidth={1.75} />
                     Automations
+                </span>
+            )}
+        </AdminV2NavLink>
+    );
+
+    const formsLink = (
+        <AdminV2NavLink
+            href={FORMS_HREF}
+            title="Forms"
+            aria-label="Forms"
+            active={onForms}
+            className={collapsed ? "adminv2-sidebar-rail-link" : EXPANDED_PRIMARY_LINK}
+            style={primaryLinkStyle}
+        >
+            {collapsed ? (
+                <FileText size={20} strokeWidth={1.75} />
+            ) : (
+                <span className="inline-flex items-center gap-2">
+                    <FileText size={16} strokeWidth={1.75} />
+                    Forms
                 </span>
             )}
         </AdminV2NavLink>
@@ -331,6 +354,7 @@ function SidebarNav({
                     <div className="flex shrink-0 flex-col items-stretch gap-1">
                         {homeLink}
                         {automationsLink}
+                        {formsLink}
                     </div>
                     <div className="min-h-0 flex-1" aria-hidden />
                     <div
@@ -348,6 +372,7 @@ function SidebarNav({
                     <div className="shrink-0 space-y-1 pt-1">
                         {homeLink}
                         {automationsLink}
+                        {formsLink}
                     </div>
                     <div className="min-h-0 flex-1 overflow-y-auto">{departmentTreeExpanded}</div>
                     <div className="shrink-0 border-t pt-2" style={{ borderColor: neutral.border }}>

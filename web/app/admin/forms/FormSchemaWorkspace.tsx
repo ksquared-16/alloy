@@ -4,9 +4,9 @@ import clsx from "clsx";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import PrimaryButton from "@/components/PrimaryButton";
-import StructuredFormSchemaEditor from "@/components/admin/forms/StructuredFormSchemaEditor";
 import { FormDocumentAuthoringShell } from "@/components/forms/workspace/FormDocumentAuthoringShell";
 import { emptyFormSchema } from "@/lib/forms/adminFormSchemaBuilder";
+import { resolveDocumentComposition, patchSchemaComposition } from "@/lib/forms/documentCompositionAuthoring";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
@@ -140,7 +140,9 @@ export default function FormSchemaWorkspace({
                 {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ schema_json: schema }),
+                    body: JSON.stringify({
+                        schema_json: patchSchemaComposition(schema, resolveDocumentComposition(schema)),
+                    }),
                 }
             );
             const json = await res.json().catch(() => ({}));
@@ -233,9 +235,11 @@ export default function FormSchemaWorkspace({
 
             {schema && draftVersionId ? (
                 <div className="mt-4 space-y-3">
-                    <FormDocumentAuthoringShell schema={schema} formName={formName}>
-                        <StructuredFormSchemaEditor schema={schema} onChange={setSchema} disabled={!canMutate || busy} />
-                    </FormDocumentAuthoringShell>
+                    <FormDocumentAuthoringShell
+                        schema={schema}
+                        onChange={setSchema}
+                        disabled={!canMutate || busy}
+                    />
                     <div className="flex flex-wrap gap-2">
                         <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={!canMutate || busy} onClick={() => void saveDraft()}>
                             Save draft

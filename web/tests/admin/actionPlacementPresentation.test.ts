@@ -16,7 +16,7 @@ describe("actionPlacementPresentation", () => {
     it("labels record section and workspace surfaces for operators", () => {
         expect(settingsSurfaceLabel("record_section")).toBe("Record section");
         expect(settingsSurfaceLabel("right_rail")).toContain("Workspace");
-        expect(settingsSurfaceLabel("queue_row")).toContain("Workspace");
+        expect(settingsSurfaceLabel("queue_row")).toBe("Workspace queue row");
     });
 
     it("requires section key only for record section", () => {

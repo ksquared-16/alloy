@@ -83,16 +83,15 @@ describe("OperationalReviewAssistBand / Card 2.1", () => {
         );
 
         expect(html).toContain("Review assist");
-        expect(html).toContain("Operational read");
-        expect(html).toContain(rec.render.drawer_strip.title);
         expect(html).toContain("Why now");
         expect(html).toContain("Do next");
         expect(html).toContain("Send a warm first response");
+        expect(html).not.toContain('data-review-assist-row="likely_outcome"');
+        expect(html).toContain('data-review-assist-compact="true"');
         expect(html).toContain('data-review-assist-row="operational_read"');
         expect(html).toContain('data-review-assist-row="why_now"');
         expect(html).toContain('data-review-assist-row="do_next"');
-        expect(html).toContain('data-testid="review-assist-urgency-chip"');
-        expect(html).toContain("Today");
+        expect(html).not.toContain('data-testid="review-assist-urgency-chip"');
         expect(html).not.toContain("Needs attention:");
         expect(html).not.toContain("Alloy suggestion");
         expect(html).not.toContain("AI recommendation");
@@ -108,6 +107,8 @@ describe("OperationalReviewAssistBand / Card 2.1", () => {
                     primary_label: "New inquiry is stale",
                     severity: "medium",
                     days: 2,
+                    intake_age_phrase: "2 days since the inquiry was created",
+                    urgency_reason_line: "2 days since the inquiry was created",
                 },
             }),
         );
@@ -121,7 +122,7 @@ describe("OperationalReviewAssistBand / Card 2.1", () => {
             />,
         );
         if (rec.likely_outcome?.trim()) {
-            expect(html).toContain('data-review-assist-row="likely_outcome"');
+            expect(html).not.toContain('data-review-assist-row="likely_outcome"');
         } else {
             expect(html).not.toContain('data-review-assist-row="likely_outcome"');
         }
@@ -182,7 +183,7 @@ describe("OperationalReviewAssistBand / Card 2.1", () => {
             />,
         );
         expect(html).toContain('data-testid="review-assist-supporting-detail"');
-        expect(html).toContain("Supporting detail · Based on");
+        expect(html).toContain("More detail ·");
         expect(html).not.toMatch(/\bopen\b/);
     });
 });
@@ -222,7 +223,7 @@ describe("OperationalReviewAssistBand / Card 2.4 supporting detail", () => {
         const html = renderBand({ _operational_recommendation: rec });
         expect(html).toContain("<details");
         expect(html).not.toContain("<details open");
-        expect(html).toMatch(/Supporting detail · Based on \d+ signal/);
+        expect(html).toMatch(/More detail · \d+ signal/);
     });
 
     it("expands to show signal labels and limits displayed signals to three", () => {
@@ -278,7 +279,7 @@ describe("OperationalReviewAssistBand / Card 2.4 supporting detail", () => {
                 variant="chrome"
             />,
         );
-        expect(html).toContain("Supporting detail · 1 factor");
+        expect(html).toContain("More detail · 1 factor");
         expect(html).toContain("New inquiry is stale");
         expect(html).not.toContain("stale_new_inquiry");
     });
@@ -340,7 +341,7 @@ describe("OperationalReviewAssistBand / Card 2.5 classification", () => {
         );
         const display = getRecommendationDrawerStrip({ _operational_recommendation: rec });
         const html = renderToStaticMarkup(
-            <OperationalReviewAssistBand display={display!} variant="chrome" />,
+            <OperationalReviewAssistBand display={display!} variant="panel" />,
         );
         expect(html).toContain('data-testid="review-assist-type-line"');
         expect(html).toContain("Type · Escalation");
@@ -354,7 +355,7 @@ describe("OperationalReviewAssistBand / Card 2.5 classification", () => {
         const rec = buildOperationalRecommendationV1(buildTestOperationalRecommendationInput());
         const display = getRecommendationDrawerStrip({ _operational_recommendation: rec });
         const html = renderToStaticMarkup(
-            <OperationalReviewAssistBand display={display!} variant="chrome" />,
+            <OperationalReviewAssistBand display={display!} variant="panel" />,
         );
         expect(html).toContain("Type · Communication");
         expect(html).not.toContain("Needs leadership review");
@@ -381,7 +382,7 @@ describe("OperationalAttentionHeaderStrip Card 2.1 integration", () => {
         expect(html).not.toContain("Operational attention: New inquiry is stale.");
         expect(html).not.toContain("Suggested next step");
         expect(html).toContain('data-drawer-slot="operational_review_assist"');
-        expect(html).toContain("Supporting detail · Based on");
+        expect(html).toContain("More detail ·");
     });
 
     it("legacy-only path still renders assist band without Needs attention headline", () => {
@@ -395,7 +396,7 @@ describe("OperationalAttentionHeaderStrip Card 2.1 integration", () => {
                 }}
             />,
         );
-        expect(html).toContain("Review assist");
+        expect(html).toContain('data-review-assist-row="operational_read"');
         expect(html).toContain("New inquiry is stale.");
         expect(html).toContain("Respond to new request");
         expect(html).not.toContain("Needs attention:");

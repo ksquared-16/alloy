@@ -14,6 +14,8 @@ Define **BOS** as Alloy’s unified **orchestration intelligence layer**: how as
 
 **UX coherence (May 2026 — partially implemented):** AdminV2 BOS surfaces unified in **`docs/sprints/05_2026/bos_ux_coherence_sprint.md`** (with **`bos_ux_coherence_design.md`**). **Shipped ~2026-05-20 → 2026-05-22:** shared **`OperationalProposalCardFrame`** on Task/Workflow/Config Assist proposal cards; execution receipts on apply outcomes; routing/governance denial copy improvements. **Still open:** full active operational context seeding, attention hierarchy cleanup, demo-path contract completion. **Not** autonomous agents or recommendation-intelligence expansion.
 
+**Operational assist closeout (May 2026 — shipped):** Deterministic **BOS assist routing**, **communication draft synthesis** (separate from recommendation copy), **channel-aware SMS/email** bodies in Task Assist review, Review Assist + drawer stability, native **Work with BOS** CTA — **`docs/sprints/06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`**. **Forward planning only:** **`docs/sprints/future/bos_operational_assist_phase2.md`**.
+
 | Category | Status |
 |----------|--------|
 | **Shipped BOS capabilities** | Orchestrator, Task Assist, Workflow Assist (narrow), Needs Attention insight, Config/Layout Assist foundation, legacy `admin/agent` config commits |
@@ -30,6 +32,30 @@ Define **BOS** as Alloy’s unified **orchestration intelligence layer**: how as
 | **Human operator** | Always the **delegating actor** for mutating applies; audit attributes `actor_user_id` + org. |
 
 **One-line doctrine (unchanged):** BOS **configures meaning and proposes operational drafts within guardrails**; the **platform** owns truth, authorization, workflows, ledger semantics, and execution.
+
+### Operational assist doctrine (May 2026 — explicit)
+
+#### Recommendations are not customer communication
+
+| Layer | Audience | Examples |
+|-------|----------|----------|
+| **Operational recommendation** | Operator (internal) | Review Assist “do next”, urgency, catalog action labels |
+| **Communication draft** | Family/contact (customer-facing) | SMS/email body from `generateOperationalDraft` → Task Assist propose |
+
+Recommendation strings must not be copied into outbound `draft_body` without synthesis. Human labels use `communicationObjectiveLabel()` — not raw objective keys in UI.
+
+#### Deterministic-first assist
+
+| Concern | Policy |
+|---------|--------|
+| Routing, workflow authority, operational state, recommendation logic | **Deterministic-first** (`bosAssistHandoffRouting`, resolver, catalog) |
+| Wording polish | Optional bounded enrich later — **review-first**, never auto-apply or auto-send |
+
+#### BOS is operational assistance, not chatbot AI
+
+Product posture: **operational narrator**, **guided reviewer**, **workflow copilot** — not open-ended chat, autonomous agent, or recommendation spam. Orchestrator routes; specialists propose; operators approve.
+
+**Closeout detail:** [`docs/sprints/06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`](../sprints/06_2026/completed/bos_assist_routing_communication_drafting_closeout.md).
 
 ### Hard prohibitions (system-enforced)
 

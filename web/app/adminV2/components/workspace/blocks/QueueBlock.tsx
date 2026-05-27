@@ -595,7 +595,7 @@ function queueStaleCueChipClass(): string {
   return "border-alloy-stone/28 bg-alloy-stone/10 text-alloy-midnight/58";
 }
 
-/** L0 queue operational read — one line, optional sequencing chip (BOS Phase 2 / Card 2.3). */
+/** L0 queue operational read — do-next + why lines; scan layout matches drawer read order. */
 function CrmCompactOperationalReadPreview({
   preview,
   layout = "scan",
@@ -603,41 +603,65 @@ function CrmCompactOperationalReadPreview({
   preview: NonNullable<CrmCompactRowSemanticSlots["operationalReadPreview"]>;
   layout?: "scan" | "full";
 }) {
+  const scan = layout === "scan";
+  const hasMetaChips = Boolean(preview.urgencyChipLabel || preview.typeCue || preview.staleCue);
+
   return (
     <div
       className={`adminv2-ws-crm-queue-preview__operational-read adminv2-ws-crm-queue-preview__operational-read--${layout}`}
       data-queue-preview-slot="operational_read"
+      data-queue-operational-read-layout={layout}
       title="Preview — open the record for full operational read."
     >
+      {hasMetaChips ? (
+        <div className="adminv2-ws-crm-queue-preview__operational-read-meta">
+          {preview.urgencyChipLabel ? (
+            <span
+              className={`adminv2-ws-crm-queue-preview__urgency-chip inline-flex shrink-0 items-center rounded-md border px-1 py-0.5 text-[9px] font-medium leading-tight ${queueUrgencyChipClass(preview.urgencyBand)}`}
+              data-testid="queue-operational-read-urgency-chip"
+              title={preview.priorityExplanation?.ariaLabel ?? preview.urgencyChipLabel}
+              aria-label={preview.priorityExplanation?.ariaLabel ?? preview.urgencyChipLabel}
+            >
+              {preview.urgencyChipLabel}
+            </span>
+          ) : null}
+          {preview.typeCue ? (
+            <span
+              className={`adminv2-ws-crm-queue-preview__type-cue inline-flex shrink-0 items-center rounded-md border px-1 py-0.5 text-[9px] font-medium leading-tight ${queueTypeCueChipClass()}`}
+              data-testid="queue-operational-read-type-cue"
+            >
+              {preview.typeCue}
+            </span>
+          ) : null}
+          {preview.staleCue ? (
+            <span
+              className={`adminv2-ws-crm-queue-preview__stale-cue inline-flex shrink-0 items-center rounded-md border px-1 py-0.5 text-[9px] font-medium leading-tight ${queueStaleCueChipClass()}`}
+              data-testid="queue-operational-read-stale-cue"
+            >
+              {preview.staleCue}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="adminv2-ws-crm-queue-preview__operational-read-lines min-w-0 w-full">
+        <div className="adminv2-ws-crm-queue-preview__operational-read-primary">
+          {!scan ? (
+            <span className="adminv2-ws-crm-queue-preview__operational-read-label">Operational read:</span>
+          ) : null}
+          <span className="adminv2-ws-crm-queue-preview__operational-read-text">{preview.operationalRead}</span>
+        </div>
+        {preview.whyNow?.trim() ? (
+          <div
+            className="adminv2-ws-crm-queue-preview__operational-read-why"
+            data-queue-preview-slot="operational_read_why"
+          >
+            {preview.whyNow.trim()}
+          </div>
+        ) : null}
+      </div>
       <span className="adminv2-ws-crm-queue-preview__operational-read-boundary">
         {preview.previewBoundary ?? QUEUE_PREVIEW_BOUNDARY_LABEL}
       </span>
-      {preview.urgencyChipLabel ? (
-        <span
-          className={`adminv2-ws-crm-queue-preview__urgency-chip inline-flex shrink-0 items-center rounded-md border px-1 py-0.5 text-[9px] font-medium leading-tight ${queueUrgencyChipClass(preview.urgencyBand)}`}
-          data-testid="queue-operational-read-urgency-chip"
-        >
-          {preview.urgencyChipLabel}
-        </span>
-      ) : null}
-      {preview.typeCue ? (
-        <span
-          className={`adminv2-ws-crm-queue-preview__type-cue inline-flex shrink-0 items-center rounded-md border px-1 py-0.5 text-[9px] font-medium leading-tight ${queueTypeCueChipClass()}`}
-          data-testid="queue-operational-read-type-cue"
-        >
-          {preview.typeCue}
-        </span>
-      ) : null}
-      {preview.staleCue ? (
-        <span
-          className={`adminv2-ws-crm-queue-preview__stale-cue inline-flex shrink-0 items-center rounded-md border px-1 py-0.5 text-[9px] font-medium leading-tight ${queueStaleCueChipClass()}`}
-          data-testid="queue-operational-read-stale-cue"
-        >
-          {preview.staleCue}
-        </span>
-      ) : null}
-      <span className="adminv2-ws-crm-queue-preview__operational-read-label">Operational read:</span>
-      <span className="adminv2-ws-crm-queue-preview__operational-read-text">{preview.operationalRead}</span>
     </div>
   );
 }
@@ -746,7 +770,7 @@ export function CrmCompactQueuePreview({
                 </span>
               ) : null}
             </div>
-            {slots.attentionReason?.trim() ? (
+            {slots.attentionReason?.trim() && !operationalRead?.operationalRead ? (
               <div className="adminv2-ws-crm-queue-preview__attention-headline">{slots.attentionReason.trim()}</div>
             ) : null}
             {slots.queuePriorityExplanation?.trim() ? (
@@ -826,7 +850,7 @@ export function CrmCompactQueuePreview({
           {commercial ? (
             <div className="adminv2-ws-crm-queue-preview__commercial">{commercial}</div>
           ) : null}
-          {slots.attentionReason?.trim() ? (
+          {slots.attentionReason?.trim() && !operationalRead?.operationalRead ? (
             <div className="adminv2-ws-crm-queue-preview__attention">{slots.attentionReason.trim()}</div>
           ) : null}
           {slots.queuePriorityExplanation?.trim() ? (

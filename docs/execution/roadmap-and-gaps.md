@@ -18,7 +18,7 @@ Phases are **planning buckets**. Dates are narrative, not contractual.
 
 - **Primary execution focus:** Close enrollment/forms loops (Phase 2 review MVP **in progress**), waitlist mutators, tour depth, settings **follow-ons** (Record Experience Builder, forms field parity), messaging reliability, reporting — **not** new autonomous agent personas or broad AdminV2 speed sprints.
 - **Shipped / stable foundations (carry-forward):** Communications V1; roles + department/site scope; resolver vs queue boundaries; enrollment **Needs Attention** + pipeline UX; **Tour Scheduling V1**; **Enrollment Packet E2E Phase 1**; **Settings + Record UX Parity V1** (May 18); **AdminV2 performance closeout** (May 20–24 — reveal gates, WU bootstrap, drawer pipeline, route-owned queue selection).
-- **BOS groundwork shipped (maintain, do not expand as default sprint work):** needs-attention + enrich draft; Orchestrator + Task Assist V1.1; Workflow Assist V1 (narrow); Config/Layout Assist **foundation** (proposals + partial apply); **BOS UX coherence partial** (`OperationalProposalCardFrame`, execution receipts) — **`docs/product/bos-foundation.md`**, **`docs/sprints/05_2026/bos_ux_coherence_sprint.md`**.
+- **BOS groundwork shipped (maintain, do not expand as default sprint work):** needs-attention + enrich draft; Orchestrator + Task Assist V1.1; Workflow Assist V1 (narrow); Config/Layout Assist **foundation** (proposals + partial apply); **BOS UX coherence partial** (`OperationalProposalCardFrame`, execution receipts); **operational assist closeout** (deterministic assist routing, communication draft synthesis, channel-aware SMS/email review, Review Assist + drawer stability) — **`docs/product/bos-foundation.md`**, **`docs/sprints/06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`**. **Forward planning only:** **`docs/sprints/future/bos_operational_assist_phase2.md`**.
 - **Waitlist placement priority V1** — **opt-in** engine shipped; promotion mutator still open.
 - **Partially implemented (near-term product):** Enrollment Packet Phase 2 (**P2-1–P2-4 review MVP shipped ~2026-05-21**; DCP, P2-5 BOS insight, UX hardening cards open); waitlist **`add_to_waitlist_placeholder`**; Reporting V1.
 - **Settings + Record UX Parity (May 2026 — complete):** Four-plane Settings control plane V1 — field policy UI + PATCH enforcement (opportunity/job enforceable subset), opportunity workflow v1 layout sections, org action placement editor, layout integrity panel, UX contract pass — **`docs/sprints/05_2026/settings_record_ux_parity_sprint.md`** §12–§13, **`docs/system/configuration-system.md`**. **Deferred:** Record Experience Builder, full `record_actions` migration, ops drawer mutate, `condition_config` editors, person/location field modal parity (linked-record inline PATCH **shipped** — **`linked_record_field_editing_v1.md`**).
@@ -82,6 +82,7 @@ Capabilities below exist in **`web/` / `supabase/`**; “complete” means **fou
 - **AdminV2 performance closeout** — **~2026-05-20 → 2026-05-24** — reveal doctrine + route gates (`routeShellPipeline`, `adminV2PrimarySurfaceGate`); generic drawer pipeline; WU operational bootstrap + session cache; sticky workspace site filter; drawer queue prev/next + adjacent prefetch; **route-owned WU queue selection** (`workUnitQueueSelection.ts`, `focus_queue` on bootstrap); WU queue pill prefetch + partial count hydration. Sprint **`docs/sprints/05_2026/completed/adminv2_performance_closeout.md`** — broad speed sprint **paused**; follow-ons scoped only.
 - **Enrollment Packet Phase 2 — review MVP slice (P2-1–P2-4)** — **~2026-05-21** — `GET …/packet-sessions/[id]/review-rollup` (`buildPacketReviewRollupV1`); packet session review console (`PacketReviewRollupView`, `/adminV2/forms/packets/[packetSessionId]`); opportunity drawer review modal hardening; document provenance + **`submitted_record`** synthetic rows for non-PDF steps. **Not shipped:** DCP, P2-5 deterministic BOS insight, UX hardening cards — **`forms_documents_phase_2_packet_review_mvp.md`**, **`enrollment_packet_phase_2.md`**.
 - **BOS UX coherence (partial)** — **~2026-05-20 → 2026-05-22** — shared **`OperationalProposalCardFrame`** on Task/Workflow/Config Assist cards; execution receipts + routing/governance copy; full sprint cards (active operational context, attention hierarchy) **partially implemented** — **`bos_ux_coherence_sprint.md`**.
+- **BOS operational assist (routing + communication drafting)** — **~2026-05-21 → 2026-05-26** — deterministic handoff routing, synthesized customer-facing drafts (separate from recommendation copy), SMS/email channel bodies in review card, Review Assist placement + drawer reveal doctrine, native Work with BOS CTA — **`docs/sprints/06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`**.
 
 ---
 
@@ -125,7 +126,7 @@ Before treating Alloy as **broadly customer-ready**, expect progress on:
 7. **Action button cleanup** — `executeAdminAction` registry, duplicates, permission gates.
 8. **Messaging hardening / integration setup** — worker, cron, bindings, scheduled sends, monitoring.
 9. **Reporting V1** — scoped reports/exports; not full BI.
-10. **AI production hardening (assistive only)** — policy/RBAC/env for **existing** surfaces; pilot training — **no** new agent personas or Config/Layout Assist expansion unless product re-opens pause.
+10. **AI production hardening (assistive only)** — policy/RBAC/env for **existing** surfaces; pilot training — **no** new agent personas or Config/Layout Assist expansion unless product re-opens pause. **BOS operational assist foundation shipped** — maintain; optional bounded improvements per **`docs/sprints/future/bos_operational_assist_phase2.md`** only after messaging (item 8).
 11. **Autonomous agents** — **later, not now** (enrollment, subsidy, director, monitoring personas).
 
 **Standing engineering hygiene** (parallel-friendly): emitEvent coverage, person-first inbound parity, Stripe webhook mapping — **Additional sprint cards** below.
@@ -148,6 +149,7 @@ Use this block for **velocity / stakeholder summaries**. Dates are **repo anchor
 | **Enrollment Packet Phase 2 — review MVP** | ~2026-05-21 | ~2026-05-21 | DCP + P2-5+ TBD | **Partially implemented** |
 | **AdminV2 performance closeout** | ~2026-05-19 | ~2026-05-24 | follow-ons scoped | **Implemented** (engineering) |
 | **BOS UX coherence (partial)** | ~2026-05-20 | ~2026-05-22 | full sprint TBD | **Partially implemented** |
+| **BOS operational assist (routing + comms drafting)** | ~2026-05-21 | ~2026-05-26 | Phase 2 planning only | **Implemented** (foundation) |
 | **Waitlist placement priority V1** | 2026-05-08 | ~2026-05-16 | TBD (mutator + V1.1) | **Partially implemented** |
 | **Tour Scheduling V1** | 2026-05-11 | 2026-05-12 | Phase 2 TBD | **Implemented** (V1) |
 | **AI — needs attention + enrich draft** | ~2026-05-15 | ~2026-05-16 (`20260520100000`) | — | **Implemented** (narrow) |
@@ -175,7 +177,7 @@ Use this block for **velocity / stakeholder summaries**. Dates are **repo anchor
 |------------|--------|------------------|
 | Needs-attention deterministic drafts + **Enhance draft** | **Implemented** (stub/OpenAI enrich route; copy-only preview) | Deeper personalization; org-tuned templates |
 | Operational summary / queue previews | **Implemented** (derived payloads; deterministic queue order) | Cross-entity insights; director dashboards |
-| Communication drafting (Task Assist) | **Implemented** (propose → approve → **`executeCommunicationsSend`**) | Bulk, multi-recipient, vertical tone packs |
+| Communication drafting (Task Assist) | **Implemented** (deterministic synthesis + channel-specific SMS/email bodies; propose → approve → **`executeCommunicationsSend`**) | Bounded AI wording provider; org tone; thread history — **`bos_operational_assist_phase2.md`** § A |
 | Waitlist / placement recommendations | **Partially implemented** (deterministic placement priority; **no** LLM ranking) | AI-suggested promotion rationale (**needs product design**) |
 | Document / intake extraction | **Not implemented** | Extraction assist on uploads (forms **P2-5+** / strategy) |
 | Packet review assist (deterministic) | **Not implemented** (P2-5 planned; rollup read model **shipped**) | Read-only BOS summary on rollup input |
@@ -231,6 +233,7 @@ Use this block for **velocity / stakeholder summaries**. Dates are **repo anchor
 | **AdminV2 performance closeout** | **~2026-05-19 → 2026-05-24** — dense commit window; reveal gates, WU bootstrap, drawer pipeline, queue selection fix on **2026-05-24**. |
 | **Enrollment Packet Phase 2 review MVP (P2-1–P2-4)** | **~2026-05-21** — rollup API + review console + drawer modal + provenance in one slice. |
 | **BOS UX coherence (partial)** | **~2026-05-20 → 2026-05-22** — shared proposal frame + execution receipts; full sprint still open. |
+| **BOS operational assist closeout** | **~2026-05-21 → 2026-05-26** — routing + synthesis + channel-aware drafts + drawer assist. |
 
 **Guardrail:** If a row above disagrees with **git history**, **git wins** — update this table in the same pass as release notes.
 

@@ -12,6 +12,7 @@ import {
     type ActionDefinitionCatalogEntry,
     filterCatalogDefinitionsForEntity,
     formatCatalogOptionLabel,
+    settingsActionCatalogDefinitions,
 } from "@/lib/admin/actions/actionButtonCreateUi";
 
 export type ActionButtonCreateSeed = {
@@ -89,7 +90,7 @@ export default function ActionButtonCreatePanel({
     }, [seed, onSeedConsumed]);
 
     const filteredCatalog = useMemo(
-        () => filterCatalogDefinitionsForEntity(catalog, entityType),
+        () => settingsActionCatalogDefinitions(catalog, entityType),
         [catalog, entityType]
     );
 

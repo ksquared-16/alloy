@@ -17,7 +17,7 @@ export default async function ConfigLayoutProposalsPage({
               ? sp.id
               : undefined;
     return (
-        <div className="w-full max-w-5xl space-y-4 pb-4">
+        <div className="w-full min-w-0 space-y-4 pb-4">
             <header>
                 <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">
                     Configuration proposals

@@ -28,6 +28,12 @@ function firstNameFromLabel(label: string | null | undefined): string | null {
     return firstTokenLooksLikeFirstName(first);
 }
 
+function labelLooksLikeHouseholdName(label: string | null | undefined): boolean {
+    const raw = label?.trim();
+    if (!raw) return false;
+    return /\bhousehold\b/i.test(raw) || /\bfamily\b/i.test(raw);
+}
+
 function householdGreetingFromLabel(label: string | null | undefined): string | null {
     const raw = label?.trim();
     if (!raw) return null;
@@ -96,16 +102,16 @@ export function resolveRecipientGreetingFromOverview(
                 ? overviewData.name
                 : null;
 
+    if (householdLabel && !labelLooksLikeHouseholdName(householdLabel)) {
+        const fromHouseholdLabel = firstNameFromLabel(householdLabel);
+        if (fromHouseholdLabel) {
+            return { firstName: fromHouseholdLabel, householdGreeting: null };
+        }
+    }
+
     const householdGreeting = householdGreetingFromLabel(householdLabel);
     if (householdGreeting && !/^family$/i.test(householdGreeting.trim())) {
         return { firstName: null, householdGreeting };
-    }
-
-    const fromName = firstNameFromLabel(
-        typeof overviewData.name === "string" ? overviewData.name : null
-    );
-    if (fromName) {
-        return { firstName: fromName, householdGreeting: null };
     }
 
     return { firstName: null, householdGreeting: null };

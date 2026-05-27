@@ -3,13 +3,18 @@
  * Does not create new execution handlers — org placement rows only.
  */
 
-export const ACTION_BUTTON_CREATE_TITLE = "Create button from existing action";
+import {
+    filterSettingsActionCatalogDefinitions as filterCatalogFromRegistry,
+    formatSettingsCatalogOptionLabel,
+} from "@/lib/admin/actions/actionDefinitionRegistry";
+
+export const ACTION_BUTTON_CREATE_TITLE = "Add action button";
 
 export const ACTION_BUTTON_CREATE_DESCRIPTION =
-    "Adds an org-owned placement for an approved platform or organization action. Custom execution logic is configured in Automations — not here.";
+    "Choose what the button does and where it appears. This does not change Automations — only where an existing action shows up.";
 
 export const ACTION_BUTTON_CREATE_DEFERRED_NOTE =
-    "Arbitrary new action handlers require the Workflow/Automation builder (deferred). This form only places buttons for actions that already exist in the catalog.";
+    "New automation types are added in Automations. Here you only place buttons for actions that already work in Alloy.";
 
 /** Record types operators may scope when creating a placement. */
 export const ACTION_PLACEMENT_ENTITY_TYPES = [
@@ -44,7 +49,20 @@ export function filterCatalogDefinitionsForEntity(
     return definitions.filter((d) => !d.entity_type || d.entity_type.toLowerCase() === et);
 }
 
+/** Hide internal placeholder keys from Settings action-button create dropdown. */
+export function filterSettingsActionCatalogDefinitions(
+    definitions: ActionDefinitionCatalogEntry[]
+): ActionDefinitionCatalogEntry[] {
+    return filterCatalogFromRegistry(definitions) as ActionDefinitionCatalogEntry[];
+}
+
+export function settingsActionCatalogDefinitions(
+    definitions: ActionDefinitionCatalogEntry[],
+    entityType: string
+): ActionDefinitionCatalogEntry[] {
+    return filterSettingsActionCatalogDefinitions(filterCatalogDefinitionsForEntity(definitions, entityType));
+}
+
 export function formatCatalogOptionLabel(def: ActionDefinitionCatalogEntry): string {
-    const owner = actionDefinitionOwnership(def) === "platform" ? "Built-in" : "Your org";
-    return `${def.label} (${def.key}) · ${owner}`;
+    return formatSettingsCatalogOptionLabel(def);
 }

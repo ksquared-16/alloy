@@ -9,7 +9,11 @@ import { palette, neutral, derived } from "@/styles/tokens/colors";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import MyTasksModal from "@/app/adminV2/components/MyTasksModal";
 import OperationalTasksNavBadge from "@/app/adminV2/components/OperationalTasksNavBadge";
-import QuickMessageModal from "@/app/adminV2/components/QuickMessageModal";
+import QuickMessageModal, { type QuickMessageModalSeed } from "@/app/adminV2/components/QuickMessageModal";
+import {
+    ADMINV2_OPEN_QUICK_MESSAGE_EVENT,
+    type QuickMessageLaunchSeed,
+} from "@/lib/adminV2/quickMessageLaunch";
 import AdminV2ProfileMenu from "@/app/adminV2/components/AdminV2ProfileMenu";
 import { MessageSquare } from "lucide-react";
 
@@ -96,7 +100,29 @@ function WorkspaceSiteFilterStrip({ normalizedPath }: { normalizedPath: string }
 export default function TopNavBar() {
   const pathname = usePathname();
   const [quickMessageOpen, setQuickMessageOpen] = useState(false);
+  const [quickMessageSeed, setQuickMessageSeed] = useState<QuickMessageModalSeed | null>(null);
   const [tasksModalOpen, setTasksModalOpen] = useState(false);
+
+  useEffect(() => {
+    const onLaunch = (ev: Event) => {
+      const detail = (ev as CustomEvent<QuickMessageLaunchSeed>).detail;
+      const personId = detail?.personId?.trim() || null;
+      const opportunityId = detail?.opportunityId?.trim() || null;
+      if (!personId && !opportunityId) return;
+      setQuickMessageSeed({
+        personId: personId ?? undefined,
+        opportunityId,
+        recordDisplayName: detail.recordDisplayName ?? detail.displayName ?? null,
+        displayName: detail.displayName,
+        email: detail.email,
+        phone: detail.phone,
+        contextualOnly: Boolean(opportunityId && !personId),
+      });
+      setQuickMessageOpen(true);
+    };
+    window.addEventListener(ADMINV2_OPEN_QUICK_MESSAGE_EVENT, onLaunch);
+    return () => window.removeEventListener(ADMINV2_OPEN_QUICK_MESSAGE_EVENT, onLaunch);
+  }, []);
 
   useEffect(() => {
     if (!isTaskAssistV1UiEnabled()) return;
@@ -156,7 +182,10 @@ export default function TopNavBar() {
           />
           <button
             type="button"
-            onClick={() => setQuickMessageOpen(true)}
+            onClick={() => {
+              setQuickMessageSeed(null);
+              setQuickMessageOpen(true);
+            }}
             className={HEADER_UTILITY_BTN}
             style={utilityBtnStyle(isMessaging || quickMessageOpen)}
             title="Send a quick email or SMS (opens modal)"
@@ -172,7 +201,14 @@ export default function TopNavBar() {
         <AdminV2ProfileMenu />
       </div>
 
-      <QuickMessageModal open={quickMessageOpen} onClose={() => setQuickMessageOpen(false)} />
+      <QuickMessageModal
+        open={quickMessageOpen}
+        seed={quickMessageSeed}
+        onClose={() => {
+          setQuickMessageOpen(false);
+          setQuickMessageSeed(null);
+        }}
+      />
       <MyTasksModal open={tasksModalOpen} onClose={() => setTasksModalOpen(false)} />
     </header>
   );

@@ -50,9 +50,14 @@ describe("operationalRecommendationCatalog", () => {
             primary_label: "New inquiry is stale",
             severity: "medium",
             days: 3,
+            intake_age_phrase: "3 days since the inquiry was created",
+            urgency_reason_line: "Response window exceeded · 3 days since the inquiry was created",
         });
         expect(rendered.title).toBe("New inquiry needs timely response");
-        expect(rendered.why_it_matters).toContain("3 days since intake");
+        expect(rendered.why_it_matters).toContain("3 days since the inquiry was created");
+        expect(rendered.why_it_matters).not.toContain("Families often engage");
+        expect(rendered.why_it_matters).not.toContain("past your window");
+        expect(rendered.urgency_reason).toContain("Response window exceeded");
         expect(rendered.recommended_action.label).toContain("warm first response");
         expect(rendered.likely_outcome).toContain("tour");
     });
@@ -78,6 +83,8 @@ describe("operationalRecommendationCatalog", () => {
             primary_label: "New inquiry is stale",
             severity: "medium",
             days: 2,
+            intake_age_phrase: "2 days since the inquiry was created",
+            urgency_reason_line: "2 days since the inquiry was created",
         });
         expect(rendered.recommended_action.label).not.toBe(LEGACY_STALE_NEW_INQUIRY_ACTION_LABEL);
         expect(BANNED_GENERIC_ACTION_LABELS).not.toContain(rendered.recommended_action.label);

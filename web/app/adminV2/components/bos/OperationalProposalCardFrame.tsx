@@ -31,6 +31,10 @@ export type OperationalProposalCardFrameProps = {
     status?: BosProposalStatus | null;
     presentationVariant?: OperationalProposalFrameVariant | null;
     entityContextLabel?: string | null;
+    /** When false, hides the "Operational proposal" eyebrow (communication drafts). */
+    showEyebrow?: boolean;
+    /** When false, hides "Using active record · …" context line. */
+    showActiveRecordContext?: boolean;
 
     /** Region 2 — optional routing / trigger */
     whyShown?: ReactNode | null;
@@ -116,8 +120,10 @@ export default function OperationalProposalCardFrame(props: OperationalProposalC
         capabilityKey,
         status,
         presentationVariant,
-        entityContextLabel,
-        whyShown,
+    entityContextLabel,
+    showEyebrow = true,
+    showActiveRecordContext = true,
+    whyShown,
         reasonLabel,
         reasonDetail,
         sourceLabel,
@@ -165,13 +171,15 @@ export default function OperationalProposalCardFrame(props: OperationalProposalC
             aria-labelledby={headerId}
         >
             <RegionBlock region="header" className="space-y-1">
-                <p
-                    className="text-[9px] font-semibold uppercase tracking-[0.12em]"
-                    style={{ color: CMD.textLabel }}
-                    data-operational-proposal-eyebrow="true"
-                >
-                    Operational proposal
-                </p>
+                {showEyebrow ? (
+                    <p
+                        className="text-[9px] font-semibold uppercase tracking-[0.12em]"
+                        style={{ color: CMD.textLabel }}
+                        data-operational-proposal-eyebrow="true"
+                    >
+                        Operational proposal
+                    </p>
+                ) : null}
                 <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                         <h3
@@ -200,7 +208,7 @@ export default function OperationalProposalCardFrame(props: OperationalProposalC
                         </span>
                     ) : null}
                 </div>
-                {entityContextLabel?.trim() ? (
+                {showActiveRecordContext && entityContextLabel?.trim() ? (
                     <p
                         className="text-[10px]"
                         style={{ color: CMD.textSupporting }}
@@ -209,6 +217,14 @@ export default function OperationalProposalCardFrame(props: OperationalProposalC
                         <span className="font-medium" style={{ color: CMD.textBody }}>
                             {OPERATIONAL_PROPOSAL_USING_ACTIVE_RECORD_PREFIX} ·{" "}
                         </span>
+                        {entityContextLabel.trim()}
+                    </p>
+                ) : showActiveRecordContext === false && entityContextLabel?.trim() ? (
+                    <p
+                        className="text-[10px] font-medium"
+                        style={{ color: CMD.textSupporting }}
+                        data-operational-proposal-context="true"
+                    >
                         {entityContextLabel.trim()}
                     </p>
                 ) : null}

@@ -312,7 +312,7 @@ export default function KpiPlacementsSettingsClient() {
     }
 
     return (
-        <div className="w-full max-w-5xl space-y-6 pb-8">
+        <div className="w-full min-w-0 space-y-6 pb-8">
             <header>
                 <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">Workspace KPI placements</h1>
                 <p className="mt-1 max-w-2xl text-xs leading-snug text-alloy-midnight/60">

@@ -9,6 +9,7 @@ import {
     INQUIRY_RIGHT_COLUMN_TASKS_BODY_CLASS,
     INQUIRY_SUMMARY_RIGHT_COLUMN_ROOT_CLASS,
 } from "@/lib/admin/drawer/opportunityInquiryRightColumnGeometry";
+import OperationalAttentionHeaderStrip from "@/components/admin/drawer/OperationalAttentionHeaderStrip";
 import OpportunityOperationalCompactStrip from "@/components/admin/opportunity/OpportunityOperationalCompactStrip";
 
 const CHIP =
@@ -32,6 +33,64 @@ function TaskRowSkeleton() {
             aria-hidden
             data-inquiry-summary-task-preview-skeleton="true"
         />
+    );
+}
+
+function ReviewAssistSkeleton() {
+    return (
+        <div
+            className="min-h-[5.5rem] rounded-md border border-alloy-stone/12 bg-alloy-stone/[0.06] skeleton-pulse"
+            data-review-assist-skeleton="true"
+            aria-hidden
+        />
+    );
+}
+
+function InquirySummaryReviewAssist({
+    overviewData,
+    assistLoading,
+    opportunityId,
+    opportunitySingular = "Inquiry",
+    reviewAssistReserved = true,
+}: {
+    overviewData: Record<string, unknown>;
+    assistLoading?: boolean;
+    opportunityId: string;
+    opportunitySingular?: string;
+    /** When true, slot stays in DOM even before BOS payload arrives (loading doctrine). */
+    reviewAssistReserved?: boolean;
+}) {
+    const hasAssist =
+        overviewData._operational_recommendation != null || overviewData._operational_attention != null;
+
+    if (!reviewAssistReserved && !assistLoading && !hasAssist) {
+        return null;
+    }
+
+    return (
+        <div
+            className="min-w-0 min-h-[5.5rem] shrink-0"
+            data-drawer-slot="inquiry_summary_review_assist"
+            data-review-assist-slot={hasAssist ? "ready" : assistLoading ? "skeleton" : "reserved"}
+        >
+            {assistLoading && !hasAssist ? (
+                <ReviewAssistSkeleton />
+            ) : hasAssist ? (
+                <OperationalAttentionHeaderStrip
+                    variant="chrome"
+                    overviewData={overviewData}
+                    suppressSectionBrandLabel
+                    bosAssistEntityId={opportunityId}
+                    opportunitySingular={opportunitySingular}
+                />
+            ) : (
+                <div
+                    className="min-h-[3rem] rounded-md border border-alloy-stone/12 bg-alloy-stone/[0.03]"
+                    data-review-assist-placeholder="reserved"
+                    aria-hidden
+                />
+            )}
+        </div>
     );
 }
 
@@ -85,6 +144,9 @@ export type OpportunityInquirySummaryRightColumnProps = {
     overviewData: Record<string, unknown>;
     entityLabel?: string | null;
     fetchEnabled?: boolean;
+    /** Reserve assist skeleton until primary payload includes BOS fields. */
+    reviewAssistLoading?: boolean;
+    opportunitySingular?: string;
 };
 
 function rightColumnModelEqual(
@@ -121,6 +183,8 @@ function OpportunityInquirySummaryRightColumnInner({
     overviewData,
     entityLabel = null,
     fetchEnabled = true,
+    reviewAssistLoading = false,
+    opportunitySingular = "Inquiry",
 }: OpportunityInquirySummaryRightColumnProps) {
     const record = useMemo(() => overviewData, [overviewData]);
 
@@ -129,6 +193,7 @@ function OpportunityInquirySummaryRightColumnInner({
             className={INQUIRY_SUMMARY_RIGHT_COLUMN_ROOT_CLASS}
             data-inquiry-summary-right-column="true"
             data-right-column-structure={[
+                "review_assist",
                 model.tasks.visible ? "tasks" : null,
                 model.reminders.visible ? "reminders" : null,
                 model.orchestrator_handoff.visible ? "orchestrator_handoff" : null,
@@ -136,6 +201,13 @@ function OpportunityInquirySummaryRightColumnInner({
                 .filter(Boolean)
                 .join(",")}
         >
+            <InquirySummaryReviewAssist
+                overviewData={record}
+                assistLoading={reviewAssistLoading}
+                opportunityId={opportunityId}
+                opportunitySingular={opportunitySingular}
+                reviewAssistReserved
+            />
             <TasksSection model={model.tasks} />
             <OpportunityOperationalCompactStrip
                 layout="inquiry_summary"
@@ -151,11 +223,24 @@ function OpportunityInquirySummaryRightColumnInner({
     );
 }
 
+function reviewAssistPayloadEqual(
+    a: Record<string, unknown>,
+    b: Record<string, unknown>
+): boolean {
+    return (
+        a._operational_recommendation === b._operational_recommendation &&
+        a._operational_attention === b._operational_attention &&
+        a._operational_attention_error === b._operational_attention_error
+    );
+}
+
 export const OpportunityInquirySummaryRightColumn = memo(
     OpportunityInquirySummaryRightColumnInner,
     (prev, next) =>
         prev.opportunityId === next.opportunityId &&
         prev.fetchEnabled === next.fetchEnabled &&
+        prev.reviewAssistLoading === next.reviewAssistLoading &&
         prev.entityLabel === next.entityLabel &&
+        reviewAssistPayloadEqual(prev.overviewData, next.overviewData) &&
         rightColumnModelEqual(prev.model, next.model)
 );

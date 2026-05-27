@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
+import { SETTINGS_PAGE_INTRO_CLASS, SETTINGS_PAGE_SHELL_CLASS } from "@/lib/adminV2/settingsPageLayout";
 import { SETTINGS_INDEX_SUBTITLE } from "@/lib/adminV2/settingsPageSubtitles";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +41,7 @@ function SettingsGroup({ label, children }: { label: string; children: ReactNode
     return (
         <section className="space-y-2.5">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/45">{label}</h2>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">{children}</div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">{children}</div>
         </section>
     );
 }
@@ -60,10 +61,10 @@ function DiagnosticLink({ href, title, children }: { href: string; title: string
 
 export default function AdminV2SettingsIndexPage() {
     return (
-        <div className="w-full max-w-6xl space-y-6 pb-6">
+        <div className={SETTINGS_PAGE_SHELL_CLASS}>
             <header>
                 <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">Settings</h1>
-                <p className="mt-0.5 max-w-2xl text-sm text-alloy-midnight/60">{SETTINGS_INDEX_SUBTITLE}</p>
+                <p className={`mt-0.5 ${SETTINGS_PAGE_INTRO_CLASS}`}>{SETTINGS_INDEX_SUBTITLE}</p>
             </header>
 
             <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(240px,280px)] lg:items-start">

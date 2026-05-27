@@ -17,6 +17,9 @@ describe("FormsWorkspaceShell OW-1", () => {
             </FormsWorkspaceChrome>
         );
         expect(html).toContain('data-testid="forms-workspace-chrome"');
+        expect(html).toContain('data-testid="forms-workspace-container"');
+        expect(html).toContain("max-w-[1600px]");
+        expect(html).not.toContain("max-w-5xl");
         expect(html).toContain('data-testid="forms-module-nav"');
         expect(html).toContain("Intake operations");
         expect(html).toContain("Page body");

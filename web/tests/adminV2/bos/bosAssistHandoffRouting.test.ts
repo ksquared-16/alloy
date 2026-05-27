@@ -190,8 +190,8 @@ describe("BOS assist CTA placement", () => {
     it("uses Work with BOS label and compact button inside Review Assist", () => {
         expect(BOS_ASSIST_CTA_DRAWER).toBe("Work with BOS");
         const cta = readFileSync(join(webRoot, "components/admin/drawer/BosDrawerAssistCta.tsx"), "utf8");
-        expect(cta).toContain("OPPORTUNITY_DRAWER_SECTION_SECONDARY_BUTTON_CLASS");
-        expect(cta).not.toContain("adminv2-bos-assist-cta");
+        expect(cta).toContain("OpportunityDrawerHeaderActionButton");
+        expect(cta).not.toContain("OPPORTUNITY_DRAWER_SECTION_SECONDARY_BUTTON_CLASS");
         expect(cta).toContain('data-bos-assist-button="true"');
         const strip = readFileSync(
             join(webRoot, "components/admin/drawer/OperationalAttentionHeaderStrip.tsx"),

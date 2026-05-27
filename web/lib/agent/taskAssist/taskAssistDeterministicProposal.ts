@@ -29,6 +29,12 @@ export function buildDeterministicTaskAssistSuggestionV1(params: {
     channel: TaskAssistV1SendChannel;
     instruction: string;
     context: TaskAssistOpportunityContextV1;
+    /** When set, use BOS communication synthesis instead of instruction-as-body. */
+    synthesizedDraft?: {
+        subject: string | null;
+        body: string;
+        sms_body?: string | null;
+    } | null;
 }): TaskAssistSuggestionV1 {
     const generated_at_iso = new Date().toISOString();
     const suggestion_id = createHash("sha256")
@@ -47,16 +53,30 @@ export function buildDeterministicTaskAssistSuggestionV1(params: {
     const statusLine = params.context.status_label ?? params.context.status_key ?? "unknown status";
     const context_summary = truncate(`${params.context.opportunity_label} · ${statusLine}`, 240);
 
-    const draftOpening = formatTaskAssistDraftOpening({
-        instruction: params.instruction,
-        channel: params.channel,
-        context: params.context,
-    });
+    const synthesizedEmailBody = params.synthesizedDraft?.body?.trim() ?? "";
+    const synthesizedSmsBody =
+        params.synthesizedDraft?.sms_body?.trim() || synthesizedEmailBody;
+
+    const draftOpening = params.synthesizedDraft
+        ? params.channel === "sms"
+            ? synthesizedSmsBody
+            : synthesizedEmailBody
+        : formatTaskAssistDraftOpening({
+              instruction: params.instruction,
+              channel: params.channel,
+              context: params.context,
+          });
 
     const draft_body = draftOpening.slice(0, 8000);
+    const draft_body_sms = params.synthesizedDraft ? synthesizedSmsBody.slice(0, 8000) : null;
+    const draft_body_email = params.synthesizedDraft ? synthesizedEmailBody.slice(0, 8000) : null;
 
     const draft_subject =
-        params.channel === "email" ? truncate(`Follow-up: ${params.context.opportunity_label}`, 200) : null;
+        params.channel === "email"
+            ? params.synthesizedDraft?.subject?.trim()
+                ? truncate(params.synthesizedDraft.subject.trim(), 200)
+                : truncate(`Follow-up: ${params.context.opportunity_label}`, 200)
+            : null;
 
     const warnings: string[] = [];
     if (params.context.recipient_candidates.length > 1) {
@@ -82,10 +102,14 @@ export function buildDeterministicTaskAssistSuggestionV1(params: {
         channel: params.channel,
         draft_subject,
         draft_body,
+        draft_body_sms,
+        draft_body_email,
         scheduled_for_iso: null,
         reminder_due_at_iso: null,
         assumptions: [
-            "Deterministic template draft (V1) — not from a live model.",
+            params.synthesizedDraft
+                ? "Communication draft synthesized from operational objective (deterministic)."
+                : "Deterministic template draft (V1) — not from a live model.",
             "Recipient SMS/email presence is based on person row hints; send route re-validates.",
         ],
         missing_inputs,

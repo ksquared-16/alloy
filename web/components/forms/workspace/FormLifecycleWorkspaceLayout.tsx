@@ -31,14 +31,11 @@ import { FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
 import { FORMS_TECHNICAL_DISCLOSURE } from "@/lib/forms/review/formsReviewTechnicalDisclosure";
 import FormSchemaWorkspace from "@/app/admin/forms/FormSchemaWorkspace";
 import {
-    opCaseFileCanvas,
     opGroupedRowInner,
     opGroupedSurface,
     opInsightSupport,
     opMetadata,
-    opOrientationSurface,
     opRegionSeparator,
-    opStackPage,
 } from "@/lib/operational/ui/operationalVisualTokens";
 
 type VersionRow = {
@@ -126,101 +123,84 @@ export function FormLifecycleWorkspaceLayout({
 
     return (
         <>
-            <div className={opOrientationSurface} data-testid="form-lifecycle-orientation">
-                <div className="flex flex-wrap items-center gap-2">
-                    <FormsReviewBadge label={publishSummary} tone={publishTone} />
-                    {detail.kind ?
-                        <span className={opMetadata}>{detail.kind.replace(/_/g, " ")}</span>
-                    :   null}
-                    {!detail.is_active ?
-                        <StatusBadge label="Inactive" variant="neutral" />
-                    :   null}
+            <div className="rounded-lg border border-alloy-midnight/[0.06] bg-alloy-stone/15 px-3 py-2" data-testid="form-lifecycle-orientation">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <FormsReviewBadge label={publishSummary} tone={publishTone} />
+                        {purposeLine ?
+                            <span className={clsx("max-w-md truncate", opMetadata)}>{purposeLine}</span>
+                        :   null}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                        <button
+                            type="button"
+                            className={intakeWorkspaceBtnPrimary}
+                            onClick={onPreview}
+                            disabled={previewBusy || creating || !canMutate || !hasPublished}
+                            data-testid="form-action-preview"
+                        >
+                            {previewBusy ? "Opening…" : "Preview"}
+                        </button>
+                        <button
+                            type="button"
+                            className={intakeWorkspaceBtnSecondary}
+                            onClick={onCreateLink}
+                            disabled={creating || !canMutate || !hasPublished}
+                            data-testid="form-action-create-link"
+                        >
+                            {creating ? "…" : "Share"}
+                        </button>
+                        <Link href={submissionsHref} className={intakeWorkspaceBtnSecondary} data-testid="form-action-submissions">
+                            Submissions{submissionCount > 0 ? ` (${submissionCount})` : ""}
+                        </Link>
+                    </div>
                 </div>
-                {purposeLine ?
-                    <p className={clsx("mt-2", opMetadata)}>{purposeLine}</p>
-                :   null}
-                <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                        type="button"
-                        className={intakeWorkspaceBtnPrimary}
-                        onClick={onPreview}
-                        disabled={previewBusy || creating || !canMutate || !hasPublished}
-                        data-testid="form-action-preview"
-                    >
-                        {previewBusy ? "Opening…" : "Preview recipient experience"}
-                    </button>
-                    <button
-                        type="button"
-                        className={intakeWorkspaceBtnSecondary}
-                        onClick={onCreateLink}
-                        disabled={creating || !canMutate || !hasPublished}
-                        data-testid="form-action-create-link"
-                    >
-                        {creating ? "Creating…" : "Share intake"}
-                    </button>
-                    <Link href={`#${FORM_LIFECYCLE_ANCHORS.design}`} className={intakeWorkspaceBtnSecondary}>
-                        New draft
-                    </Link>
-                    <Link href={submissionsHref} className={intakeWorkspaceBtnSecondary} data-testid="form-action-submissions">
-                        View submissions{submissionCount > 0 ? ` (${submissionCount})` : ""}
-                    </Link>
-                </div>
-                {!canMutate ?
-                    <p className={clsx("mt-2", opMetadata)}>Admin role required for preview and link actions.</p>
-                :   null}
-                {!hasPublished ?
-                    <p className={clsx("mt-2", opMetadata)}>Publish at least one version before preview or distribution.</p>
-                :   null}
                 {previewErr ?
-                    <p className="mt-2 text-sm text-alloy-ember">{previewErr}</p>
+                    <p className="mt-1.5 text-sm text-alloy-ember">{previewErr}</p>
+                : !hasPublished ?
+                    <p className={clsx("mt-1.5", opMetadata)}>Publish a version before sharing intake.</p>
                 :   null}
             </div>
 
-            <div className="mt-5">
+            <div className="mt-3">
                 <FormLifecycleRail steps={lifecycleSteps} />
             </div>
 
-            <div className={clsx(opCaseFileCanvas, "mt-5", opStackPage)} data-testid="form-lifecycle-workspace">
-                <IntakeWorkspaceRegion
-                    title="Build & design"
-                    lead="Draft fields, save, and publish when intake is ready."
-                    data-testid="form-region-design"
-                >
-                    <div id={FORM_LIFECYCLE_ANCHORS.design}>
-                        <FormSchemaWorkspace
-                            formId={formId}
-                            formName={detail.name}
-                            versions={detail.versions}
-                            onVersionsUpdated={onVersionsUpdated}
-                        />
-                    </div>
-                </IntakeWorkspaceRegion>
+            <div className="mt-4 space-y-4" data-testid="form-lifecycle-workspace">
+                <section id={FORM_LIFECYCLE_ANCHORS.design} data-testid="form-region-design">
+                    <FormSchemaWorkspace
+                        formId={formId}
+                        formName={detail.name}
+                        versions={detail.versions}
+                        onVersionsUpdated={onVersionsUpdated}
+                    />
+                </section>
 
                 <section id={FORM_LIFECYCLE_ANCHORS.publish} className={opRegionSeparator} data-testid="form-region-publish">
-                    <IntakeWorkspaceRegion title="Publish" lead="Version history and live publish state.">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h2 className="text-sm font-semibold text-alloy-midnight">Publish</h2>
                         {latestPublished ?
-                            <p className="text-sm text-alloy-midnight">
-                                Latest published:{" "}
-                                <span className="font-medium">v{latestPublished.version_number}</span>
+                            <span className={opMetadata}>
+                                Live v{latestPublished.version_number}
                                 {latestPublished.published_at ?
                                     <> · {formatDateTimeForUserDisplay(latestPublished.published_at, viewerTz)}</>
                                 :   null}
-                            </p>
-                        :   <p className={opMetadata}>No published version yet.</p>}
-                        {latestPublished ?
-                            <p className={clsx("mt-2", opMetadata)}>
-                                <FormsOperationalLink
-                                    href={`${ADMIN_FORMS_UI_BASE}/packet-definitions?addForm=${encodeURIComponent(detail.id)}`}
-                                >
-                                    Start a packet with this form
-                                </FormsOperationalLink>
-                                {" · "}
-                                <FormsOperationalLink href={FORMS_MODULE_ROUTES.packetDefinitions}>
-                                    Browse packets
-                                </FormsOperationalLink>
-                            </p>
-                        :   null}
-                        <ul className={clsx(opGroupedSurface, "mt-3")}>
+                            </span>
+                        :   <span className={opMetadata}>No published version</span>}
+                    </div>
+                    {latestPublished ?
+                        <p className={clsx("mt-1", opMetadata)}>
+                            <FormsOperationalLink
+                                href={`${ADMIN_FORMS_UI_BASE}/packet-definitions?addForm=${encodeURIComponent(detail.id)}`}
+                            >
+                                Start a packet
+                            </FormsOperationalLink>
+                            {" · "}
+                            <FormsOperationalLink href={FORMS_MODULE_ROUTES.packetDefinitions}>Browse packets</FormsOperationalLink>
+                        </p>
+                    :   null}
+                    <TechnicalDetailDisclosure title="Version history" helperText={`${detail.versions.length} versions`}>
+                        <ul className={clsx(opGroupedSurface, "mt-2")}>
                             {detail.versions.map((v) => (
                                 <li key={v.id} className={opGroupedRowInner}>
                                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -237,51 +217,60 @@ export function FormLifecycleWorkspaceLayout({
                                 </li>
                             ))}
                         </ul>
-                    </IntakeWorkspaceRegion>
+                    </TechnicalDetailDisclosure>
                 </section>
 
-                <section id={FORM_LIFECYCLE_ANCHORS.distribute} className={opRegionSeparator} data-testid="form-region-distribute">
-                    <IntakeWorkspaceRegion title="Distribution" lead="Send or publish this intake flow.">
-                        <FormDistributionPanel
-                            formKey={detail.key}
-                            canMutate={canMutate}
-                            creating={creating}
-                            createErr={createErr}
-                            links={links}
-                            createdOnce={createdOnce}
-                            copied={copied}
-                            copyWarn={copyWarn}
-                            viewerTz={viewerTz}
-                            onCreateLink={onCreateLink}
-                            onCopy={onCopy}
-                        />
-                    </IntakeWorkspaceRegion>
-                </section>
-
-                <section id={FORM_LIFECYCLE_ANCHORS.intake} className={opRegionSeparator} data-testid="form-region-intake">
-                    <IntakeWorkspaceRegion title="Intake activity" lead="Recent responses for this form.">
-                        <FormIntakePreviewPanel formId={formId} viewerTz={viewerTz} />
-                    </IntakeWorkspaceRegion>
+                <section
+                    id={FORM_LIFECYCLE_ANCHORS.distribute}
+                    className={opRegionSeparator}
+                    data-testid="form-region-distribute-intake"
+                >
+                    <div className="grid gap-3 lg:grid-cols-2">
+                        <div
+                            className="rounded-xl bg-white/95 px-4 py-3 ring-1 ring-alloy-midnight/[0.07]"
+                            data-testid="form-region-distribute"
+                        >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <h3 className="text-sm font-semibold text-alloy-midnight">Share intake</h3>
+                                <span className={opMetadata}>
+                                    {links.filter((l) => l.is_active).length} active link
+                                    {links.filter((l) => l.is_active).length === 1 ? "" : "s"}
+                                </span>
+                            </div>
+                            <TechnicalDetailDisclosure title="Distribution links" helperText="One-time URLs and link list">
+                                <FormDistributionPanel
+                                    formKey={detail.key}
+                                    canMutate={canMutate}
+                                    creating={creating}
+                                    createErr={createErr}
+                                    links={links}
+                                    createdOnce={createdOnce}
+                                    copied={copied}
+                                    copyWarn={copyWarn}
+                                    viewerTz={viewerTz}
+                                    onCreateLink={onCreateLink}
+                                    onCopy={onCopy}
+                                />
+                            </TechnicalDetailDisclosure>
+                        </div>
+                        <div data-testid="form-region-intake">
+                            <FormIntakePreviewPanel formId={formId} viewerTz={viewerTz} compact />
+                        </div>
+                    </div>
                 </section>
 
                 <section id={FORM_LIFECYCLE_ANCHORS.review} className={opRegionSeparator} data-testid="form-region-review">
-                    <IntakeWorkspaceRegion title="Review & submissions" lead="Open case-file review for submitted responses.">
-                        <p className={opMetadata}>
-                            {submissionCount > 0 ?
-                                `${submissionCount} response${submissionCount === 1 ? "" : "s"} in intake.`
-                            :   "No responses yet."}
-                        </p>
-                        <div className="mt-3 flex flex-wrap gap-3">
-                            <FormsOperationalLink href={submissionsHref}>Open intake inbox</FormsOperationalLink>
-                            {latestPublished ?
-                                <FormsOperationalLink
-                                    href={`${ADMIN_FORMS_UI_BASE}/packet-definitions?addForm=${encodeURIComponent(detail.id)}`}
-                                >
-                                    Use in a packet
-                                </FormsOperationalLink>
-                            :   null}
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <h2 className="text-sm font-semibold text-alloy-midnight">Review & submissions</h2>
+                            <p className={clsx("mt-0.5", opMetadata)}>
+                                {submissionCount > 0 ?
+                                    `${submissionCount} in intake inbox`
+                                :   "No responses yet"}
+                            </p>
                         </div>
-                    </IntakeWorkspaceRegion>
+                        <FormsOperationalLink href={submissionsHref}>Open inbox</FormsOperationalLink>
+                    </div>
                 </section>
 
                 <section id={FORM_LIFECYCLE_ANCHORS.documents} className={opRegionSeparator} data-testid="form-region-documents">

@@ -70,7 +70,7 @@ export const documentFieldRegionBlockSchema = documentBlockBaseSchema
         type: z.literal("field_region"),
         title: z.string().optional(),
         helper: z.string().optional(),
-        layout: z.enum(["one_column", "two_column", "inline_compact"]).optional().default("one_column"),
+        layout: z.enum(["one_column", "two_column", "three_column", "inline_compact"]).optional().default("one_column"),
         field_ids: z.array(z.string().min(1)),
     })
     .strict();

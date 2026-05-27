@@ -13,7 +13,13 @@ export type QueueUiRowPreviewField =
     | "program"
     | "desired_start_date"
     | "tour_date";
-export type QueueUiRowPreviewAction = "open" | "call" | "email";
+export type QueueUiRowPreviewAction =
+    | "open"
+    | "call"
+    | "email"
+    | "message"
+    | "orchestrator"
+    | "update_status";
 
 /** Default captions for CRM compact row groups; override via queue definition `ui.row_preview.field_labels`. */
 export const DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS: Record<string, string> = {

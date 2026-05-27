@@ -14,11 +14,21 @@ export function resolveUrgencyBand(args: {
 }): UrgencyBandV1 {
     const hasBreached = args.normalized_signals.some((s) => s.sla_tier === "breached");
     const hasCritical = args.normalized_signals.some((s) => s.severity === "critical");
-    if (hasBreached || hasCritical || args.catalog.catalog_key === "sla_breach") {
+    const hasHigh = args.normalized_signals.some((s) => s.severity === "high");
+    if (hasCritical || args.catalog.catalog_key === "sla_breach") {
         return "p0_urgent";
     }
-    if (args.catalog.default_urgency_band) return args.catalog.default_urgency_band;
-    return "p2_soon";
+    if (hasHigh && hasBreached) {
+        return "p0_urgent";
+    }
+    if (hasBreached) {
+        return "p1_today";
+    }
+    const defaultBand = args.catalog.default_urgency_band ?? "p2_soon";
+    if (defaultBand === "p1_today" && !hasBreached && !hasCritical && !hasHigh) {
+        return "p2_soon";
+    }
+    return defaultBand;
 }
 
 export function resolveConfidence(args: {

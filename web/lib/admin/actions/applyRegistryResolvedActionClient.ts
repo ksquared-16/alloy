@@ -1,5 +1,11 @@
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { ApplyRegistryResolvedActionResult } from "@/lib/admin/actions/applyRegistryResolvedActionResult";
+import {
+    invocationFromApplyRegistryHost,
+    launchContextualAskBos,
+    launchContextualQuickMessage,
+    type ContextualActionInvocation,
+} from "@/lib/admin/actions/contextualActionInvocation";
 import { invalidateCommunicationsDrawerPrefetch } from "@/lib/admin/communications/communicationsDrawerPrefetch";
 
 export type RegistryActionSurfaceContext = {
@@ -30,6 +36,8 @@ export type ApplyRegistryResolvedActionHost = {
     needsAttentionHref?: string | null;
     /** When set, used for mutating / open_drawer actions that target the current record. */
     entityId?: string | null;
+    /** Surface-authored runtime context (queue row, drawer, etc.). */
+    invocationContext?: ContextualActionInvocation | null;
     context: RegistryActionSurfaceContext;
 };
 
@@ -132,32 +140,48 @@ export async function applyRegistryResolvedActionClient(
             return { ok: true };
         }
         if (intent === "quick_message") {
+            const invocation = invocationFromApplyRegistryHost(host);
             const personId =
-                p.person_id != null
+                invocation?.person_id?.trim() ||
+                (p.person_id != null
                     ? String(p.person_id).trim()
                     : p.personId != null
                       ? String(p.personId).trim()
-                      : "";
-            if (!personId) {
-                window.alert(
-                    "No contact is linked to this record yet. Add a parent or contact on the record, then try Message again."
-                );
-                return { ok: true };
-            }
-            const { launchAdminV2QuickMessage } = await import("@/lib/adminV2/quickMessageLaunch");
-            launchAdminV2QuickMessage({
-                personId,
-                displayName: p.display_name != null ? String(p.display_name) : undefined,
-                email: p.email != null ? String(p.email) : null,
-                phone: p.phone != null ? String(p.phone) : null,
+                      : "");
+            const opportunityId = invocation?.opportunity_id?.trim() || host.entityId?.trim() || "";
+            if (!personId && !opportunityId) return { ok: true };
+            await launchContextualQuickMessage({
+                surface: invocation?.surface ?? "record_drawer",
+                record_id: opportunityId || personId,
+                entity_type: "opportunity",
+                opportunity_id: opportunityId || personId,
+                person_id: personId || null,
+                display_name:
+                    invocation?.display_name ??
+                    (p.display_name != null ? String(p.display_name) : null),
+                email: invocation?.email ?? (p.email != null ? String(p.email) : null),
+                phone: invocation?.phone ?? (p.phone != null ? String(p.phone) : null),
+                department_id: invocation?.department_id ?? host.departmentId ?? null,
+                work_unit_id: invocation?.work_unit_id ?? host.workUnitId ?? null,
+                bos_source_surface: invocation?.bos_source_surface,
             });
             return { ok: true };
         }
         if (intent === "ask_bos") {
-            const eid = host.entityId?.trim();
+            const invocation = invocationFromApplyRegistryHost(host);
+            const eid = invocation?.opportunity_id?.trim() || host.entityId?.trim();
             if (eid) {
-                const { launchAdminV2AskBos } = await import("@/lib/adminV2/bos/bosDrawerAssistHandoff");
-                launchAdminV2AskBos({ opportunity_id: eid });
+                await launchContextualAskBos({
+                    surface: invocation?.surface ?? "record_drawer",
+                    record_id: eid,
+                    entity_type: "opportunity",
+                    opportunity_id: eid,
+                    display_name: invocation?.display_name ?? null,
+                    queue_preview: invocation?.queue_preview ?? null,
+                    department_id: invocation?.department_id ?? host.departmentId ?? null,
+                    work_unit_id: invocation?.work_unit_id ?? host.workUnitId ?? null,
+                    bos_source_surface: invocation?.bos_source_surface ?? "opportunity_drawer",
+                });
             }
             return { ok: true };
         }

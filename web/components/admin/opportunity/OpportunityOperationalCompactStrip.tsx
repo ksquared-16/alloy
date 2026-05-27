@@ -5,10 +5,8 @@ import { ArrowRight } from "lucide-react";
 
 import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
-import {
-    buildOpportunityOperationalContext,
-    orchestratorHandoffSeedCommand,
-} from "@/lib/adminV2/bos/activeOperationalContext";
+import { buildOpportunityOperationalContext } from "@/lib/adminV2/bos/activeOperationalContext";
+import { buildBosAssistHandoffPackage } from "@/lib/adminV2/bos/bosAssistHandoffRouting";
 import {
     buildOperationalRecommendationHandoffCopy,
     hasStructuredOperationalHandoff,
@@ -410,11 +408,6 @@ export default function OpportunityOperationalCompactStrip({
         });
     }, [popoverTaskId, openTasks]);
 
-    const handoffSeedCommand = useMemo(
-        () => orchestratorHandoffSeedCommand({ entityLabel, overviewData }),
-        [entityLabel, overviewData]
-    );
-
     const handoffCopy = useMemo(
         () =>
             buildOperationalRecommendationHandoffCopy({
@@ -440,13 +433,19 @@ export default function OpportunityOperationalCompactStrip({
                 sourceSurface: "opportunity_drawer",
             })
         );
+        const handoff = buildBosAssistHandoffPackage({
+            entityLabel,
+            overviewData,
+        });
         globalAssistant.focusCommandBar({
             expandThread: true,
-            seedCommand: handoffSeedCommand,
+            seedCommand: handoff.seedCommand,
             preferMode: "task_assist",
             autoSubmitSeedCommand: true,
+            taskAssistHandoffIntent: handoff.taskAssistIntent,
+            taskAssistHandoffBootstrap: handoff.taskAssistBootstrap,
         });
-    }, [globalAssistant, opportunityId, entityLabel, overviewData, handoffSeedCommand]);
+    }, [globalAssistant, opportunityId, entityLabel, overviewData]);
 
     if (!v11) return null;
 
@@ -490,11 +489,8 @@ export default function OpportunityOperationalCompactStrip({
         atomicRightColumn ?
             rightColumnModel.reminders.visible
         :   hasReminderValues;
-    const showHandoffCard =
-        atomicRightColumn ?
-            rightColumnModel.orchestrator_handoff.visible &&
-            rightColumnModel.orchestrator_handoff.state === "ready"
-        :   true;
+    /** Orchestrator entry lives on record header actions (refinement pass). */
+    const showHandoffCard = false;
 
     const renderTaskChips = () =>
         openTasks.map((t) => {

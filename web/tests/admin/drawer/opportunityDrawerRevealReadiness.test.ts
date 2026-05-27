@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { opportunityInquiryDrawerShellStructurallyReady } from "@/lib/admin/drawer/opportunityDrawerFirstPaintContract";
 import {
     buildOpportunityDrawerRevealReadiness,
     opportunityDrawerBelowFoldEnrichmentReady,
@@ -61,7 +62,40 @@ describe("opportunityDrawerRevealReadiness", () => {
     });
 });
 
+describe("opportunityInquiryDrawerShellStructurallyReady", () => {
+    it("requires identity when family contacts are in summary", () => {
+        expect(
+            opportunityInquiryDrawerShellStructurallyReady({
+                shellContractPresent: true,
+                primaryContractSatisfied: true,
+                record: { id: "o1", _record_surface: "drawer_primary" },
+                familyContactsInSummary: true,
+            })
+        ).toBe(false);
+        expect(
+            opportunityInquiryDrawerShellStructurallyReady({
+                shellContractPresent: true,
+                primaryContractSatisfied: true,
+                record: {
+                    id: "o1",
+                    _record_surface: "drawer_primary",
+                    _identity: { household: { label: "Chen household" } },
+                },
+                familyContactsInSummary: true,
+            })
+        ).toBe(true);
+    });
+});
+
 describe("AdminEntityDrawer Card 2 contracts", () => {
+    it("gates overview reveal on inquiry structural readiness", () => {
+        const src = readDrawerSrc();
+        expect(src).toContain("opportunityDrawerInquiryStructuralReady");
+        expect(src).toMatch(
+            /opportunityDrawerOverviewRevealReady[\s\S]*opportunityDrawerInquiryStructuralReady/
+        );
+    });
+
     it("arms postDrawerVisible from primary contract without full hydrate", () => {
         const src = readDrawerSrc();
         expect(src).toContain("opportunityDrawerPostRevealMayOpen");

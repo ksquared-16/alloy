@@ -99,7 +99,7 @@ export default function TourAvailabilitySettingsClient() {
     };
 
     return (
-        <div className="mx-auto max-w-3xl space-y-4 p-4">
+        <div className="w-full min-w-0 space-y-4">
             <header>
                 <h1 className="text-lg font-semibold text-alloy-midnight">Tour availability</h1>
                 <p className="mt-1 text-xs text-alloy-midnight/60">

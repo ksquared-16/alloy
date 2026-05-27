@@ -52,9 +52,8 @@ const CATALOG_ENTRIES: OperationalRecommendationCatalogEntryV1[] = [
         trust_boundary: "insight_only",
         title_template: "New inquiry needs timely response",
         current_state_summary_template: "{{primary_label}} · new inquiry awaiting first staff response",
-        why_it_matters_template:
-            "New inquiries lose momentum when the first response is delayed past your window [[· {{days}} days since intake]]. Families often engage the first center that replies clearly.",
-        urgency_reason_template: "Response window exceeded · {{severity}} priority",
+        why_it_matters_template: "{{intake_age_phrase}}. Timely first contact keeps this inquiry active.",
+        urgency_reason_template: "{{urgency_reason_line}}",
         recommended_action: {
             key: "send_first_response",
             labelTemplate: "Send a warm first response and confirm the family's preferred next step",
@@ -78,7 +77,7 @@ const CATALOG_ENTRIES: OperationalRecommendationCatalogEntryV1[] = [
             template_key: null,
         },
         escalation_hints: null,
-        required_interpolation: ["primary_label", "severity"],
+        required_interpolation: ["primary_label", "intake_age_phrase", "urgency_reason_line"],
     }),
 
     entry({

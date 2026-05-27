@@ -3,33 +3,37 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { drawerOperationalStripReady } from "@/lib/adminV2/drawerPipeline/layoutLock";
+import { buildInquirySummaryRightColumnModel } from "@/lib/adminV2/drawerPipeline/adapters/opportunity/buildInquirySummaryRightColumn";
 import { buildDrawerEnrichmentState } from "@/lib/adminV2/drawerPipeline/enrichmentState";
 
 const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 describe("opportunity orchestrator handoff on drawer_primary", () => {
-    it("drawerOperationalStripReady is true for primary contract without full", () => {
+    it("drawer header no longer exposes Open in Orchestrator", () => {
+        const drawer = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
+        expect(drawer).not.toContain('data-drawer-action="open_in_orchestrator"');
+    });
+
+    it("inquiry right column no longer reserves orchestrator handoff slot", () => {
         const enrichment = buildDrawerEnrichmentState({
             record: { id: "opp-1", _record_surface: "drawer_primary" },
             drawer_id: "opp-1",
             background_full_failed: false,
         });
-        expect(enrichment.primary_loaded).toBe(true);
-        expect(enrichment.full_complete).toBe(false);
-        expect(drawerOperationalStripReady(true, false, enrichment)).toBe(true);
+        const model = buildInquirySummaryRightColumnModel({
+            record: { id: "opp-1" },
+            enrichment,
+            below_fold_enrichment_ready: true,
+            task_assist_enabled: true,
+        });
+        expect(model.orchestrator_handoff.visible).toBe(false);
     });
 
-    it("inquiry summary uses atomic right_column model for handoff on primary", () => {
-        const drawer = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(drawer).toContain("rightColumnModel");
-        expect(drawer).toContain("OpportunityInquirySummaryRightColumn");
+    it("compact strip does not render lower handoff card", () => {
         const strip = readFileSync(
             join(webRoot, "components/admin/opportunity/OpportunityOperationalCompactStrip.tsx"),
-            "utf8"
+            "utf8",
         );
-        expect(strip).toContain('data-drawer-slot="operational_orchestrator_handoff"');
-        expect(strip).toContain("Continue in Orchestrator");
-        expect(strip).toContain("showHandoffCard");
+        expect(strip).toContain("const showHandoffCard = false");
     });
 });

@@ -11,6 +11,13 @@ import {
 import { formatTaskAssistClientError } from "@/lib/agent/taskAssist/taskAssistClientErrorMessages";
 import type { TaskAssistSuggestionV1 } from "@/lib/agent/taskAssist/types";
 import {
+    channelDraftsFromProposal,
+    channelDraftsFromSynthesizedDraft,
+    draftBodyForChannel,
+    emailSubjectFromProposal,
+    type TaskAssistChannelDrafts,
+} from "@/lib/agent/taskAssist/taskAssistChannelDraftBodies";
+import {
     buildTaskAssistApplyRequestBody,
     buildTaskAssistProposeRequestBody,
     mergeForSendApplyPreview,
@@ -46,6 +53,7 @@ import {
     taskAssistDraftProposalSummary,
     taskAssistDraftProposalTitle,
     taskAssistDraftProposalTypeLabel,
+    taskAssistDraftRecipientContextLabel,
 } from "@/lib/adminV2/bos/taskAssistOperationalProposalPresentation";
 import { COMMAND_SURFACE_INTERACTIVE_CARD_CLASS } from "@/lib/adminV2/aiCommandSurface/commandSurfaceCardNavigation";
 
@@ -89,8 +97,12 @@ export default function TaskAssistCompactDraftCard({
     const [proposal, setProposal] = useState<TaskAssistSuggestionV1 | null>(null);
     const [proposalValid, setProposalValid] = useState(false);
     const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
-    const [finalBody, setFinalBody] = useState("");
-    const [finalSubject, setFinalSubject] = useState("");
+    const [channelDrafts, setChannelDrafts] = useState<TaskAssistChannelDrafts>(() =>
+        channelDraftsFromSynthesizedDraft(bootstrap.synthesized_draft)
+    );
+    const [finalSubject, setFinalSubject] = useState(
+        () => bootstrap.synthesized_draft?.subject?.trim() ?? ""
+    );
     const [proposeLoading, setProposeLoading] = useState(false);
     const [applyLoading, setApplyLoading] = useState(false);
     const [saveDraftLoading, setSaveDraftLoading] = useState(false);
@@ -103,7 +115,35 @@ export default function TaskAssistCompactDraftCard({
 
     const isScheduleIntent = bootstrap.intent_type === "schedule_message";
 
-    const onPropose = useCallback(async () => {
+    const finalBody = draftBodyForChannel(channelDrafts, channel);
+
+    const applyChannelDrafts = useCallback(
+        (drafts: TaskAssistChannelDrafts, nextChannel: "sms" | "email") => {
+            setChannelDrafts(drafts);
+            setChannel(nextChannel);
+        },
+        []
+    );
+
+    const onSelectChannel = useCallback(
+        (next: "sms" | "email") => {
+            if (next === channel) return;
+            setChannel(next);
+            if (proposal) {
+                const def =
+                    proposal.recipient_candidates.find((c) => c.has_sms && next === "sms") ||
+                    proposal.recipient_candidates.find((c) => c.has_email && next === "email") ||
+                    proposal.recipient_candidates[0];
+                if (def && recipientHasChannelHint(proposal.recipient_candidates, def.person_id, next)) {
+                    setSelectedPersonId(def.person_id);
+                }
+            }
+        },
+        [channel, proposal]
+    );
+
+    const onPropose = useCallback(async (proposeChannel?: "sms" | "email") => {
+        const activeChannel = proposeChannel ?? channel;
         if (!instruction.trim()) {
             setError("Add a message goal to draft.");
             setPhase("review");
@@ -116,7 +156,13 @@ export default function TaskAssistCompactDraftCard({
         setProposalValid(false);
         setSelectedPersonId(null);
         try {
-            const body = buildTaskAssistProposeRequestBody({ entityId, channel, instruction });
+            const body = buildTaskAssistProposeRequestBody({
+                entityId,
+                channel: activeChannel,
+                instruction,
+                communicationObjective: bootstrap.communication_objective ?? null,
+                synthesizedDraft: bootstrap.synthesized_draft ?? null,
+            });
             const res = await fetch("/api/admin/ai/task-assist/propose", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -135,8 +181,14 @@ export default function TaskAssistCompactDraftCard({
             }
             setProposal(json.proposal);
             setProposalValid(json.proposal_valid === true);
-            setFinalBody(String(json.proposal.draft_body ?? ""));
-            setFinalSubject(json.proposal.channel === "email" ? String(json.proposal.draft_subject ?? "") : "");
+            const mergedDrafts = channelDraftsFromProposal(
+                json.proposal,
+                channelDraftsFromSynthesizedDraft(bootstrap.synthesized_draft)
+            );
+            applyChannelDrafts(mergedDrafts, activeChannel);
+            setFinalSubject(
+                emailSubjectFromProposal(json.proposal, bootstrap.synthesized_draft?.subject ?? null)
+            );
             const hint = bootstrap.timing_hint_text ?? null;
             const needsExplicitSendTime =
                 bootstrap.intent_type === "schedule_message" &&
@@ -145,10 +197,10 @@ export default function TaskAssistCompactDraftCard({
                 !timingHintHasExplicitClock(hint);
             setScheduleNeedsExplicitTime(needsExplicitSendTime);
             const def =
-                json.proposal.recipient_candidates.find((c) => c.has_sms && channel === "sms") ||
-                json.proposal.recipient_candidates.find((c) => c.has_email && channel === "email") ||
+                json.proposal.recipient_candidates.find((c) => c.has_sms && activeChannel === "sms") ||
+                json.proposal.recipient_candidates.find((c) => c.has_email && activeChannel === "email") ||
                 json.proposal.recipient_candidates[0];
-            if (def && recipientHasChannelHint(json.proposal.recipient_candidates, def.person_id, channel)) {
+            if (def && recipientHasChannelHint(json.proposal.recipient_candidates, def.person_id, activeChannel)) {
                 setSelectedPersonId(def.person_id);
             }
             setPhase(needsExplicitSendTime ? "schedule_prompt" : "review");
@@ -158,13 +210,24 @@ export default function TaskAssistCompactDraftCard({
         } finally {
             setProposeLoading(false);
         }
-    }, [channel, entityId, instruction, bootstrap.intent_type, bootstrap.timing_hint_text]);
+    }, [
+        channel,
+        entityId,
+        instruction,
+        bootstrap.intent_type,
+        bootstrap.timing_hint_text,
+        bootstrap.synthesized_draft,
+        applyChannelDrafts,
+    ]);
 
     useEffect(() => {
         if (!autoPropose || !bootstrapKey) return;
         if (proposedRef.current === bootstrapKey) return;
         proposedRef.current = bootstrapKey;
-        setChannel(bootstrap.channel_hint === "email" ? "email" : "sms");
+        const initialChannel = bootstrap.channel_hint === "email" ? "email" : "sms";
+        setChannel(initialChannel);
+        setChannelDrafts(channelDraftsFromSynthesizedDraft(bootstrap.synthesized_draft));
+        setFinalSubject(bootstrap.synthesized_draft?.subject?.trim() ?? "");
         setInstruction(bootstrap.instruction?.trim() ?? "");
         setScheduleNeedsExplicitTime(false);
         const th = bootstrap.timing_hint_text ?? null;
@@ -175,7 +238,7 @@ export default function TaskAssistCompactDraftCard({
         }
         setScheduleTimingText("");
         setPhase("loading");
-        void onPropose();
+        void onPropose(initialChannel);
     }, [autoPropose, bootstrapKey, bootstrap, onPropose]);
 
     const sendDisabled = useMemo(
@@ -440,13 +503,18 @@ export default function TaskAssistCompactDraftCard({
         </div>
     );
 
+    const communicationDraft = Boolean(bootstrap.synthesized_draft);
     const frameCommon = {
         proposalTitle: taskAssistDraftProposalTitle(bootstrap),
         proposalTypeLabel: taskAssistDraftProposalTypeLabel(bootstrap),
         capabilityKey: "task_assist" as const,
-        entityContextLabel: entityLabel,
-        scope: entityScopeLabel,
-        sourceLabel: TASK_ASSIST_PROPOSAL_SOURCE_LABEL,
+        entityContextLabel: communicationDraft
+            ? taskAssistDraftRecipientContextLabel(entityLabel)
+            : entityLabel,
+        showEyebrow: !communicationDraft,
+        showActiveRecordContext: !communicationDraft,
+        scope: communicationDraft ? null : entityScopeLabel,
+        sourceLabel: communicationDraft ? null : TASK_ASSIST_PROPOSAL_SOURCE_LABEL,
         requiresApproval: true,
         mutationBoundaryCopy: taskAssistDraftMutationBoundaryCopy(bootstrap),
         stale: mutationsBlocked,
@@ -491,7 +559,7 @@ export default function TaskAssistCompactDraftCard({
                     {...frameCommon}
                     status="validated"
                     presentationVariant={mutationsBlocked ? undefined : "review_required"}
-                    summary={taskAssistDraftProposalSummary(channel, instruction)}
+                    summary={taskAssistDraftProposalSummary(channel, instruction, bootstrap)}
                     footer={
                         <div className="flex flex-wrap gap-1.5">
                             <button
@@ -547,7 +615,7 @@ export default function TaskAssistCompactDraftCard({
                 {...frameCommon}
                 status="validated"
                 presentationVariant={mutationsBlocked ? undefined : "review_required"}
-                summary={taskAssistDraftProposalSummary(channel, instruction)}
+                summary={taskAssistDraftProposalSummary(channel, instruction, bootstrap)}
                 validationErrors={
                     error ? [error]
                     : mergedPreviewErrors.length > 0 && selectedPersonId ? mergedPreviewErrors
@@ -586,7 +654,8 @@ export default function TaskAssistCompactDraftCard({
                     <input
                         type="radio"
                         checked={channel === "sms"}
-                        onChange={() => setChannel("sms")}
+                        onChange={() => onSelectChannel("sms")}
+                        data-task-assist-channel="sms"
                     />
                     SMS
                 </label>
@@ -594,7 +663,8 @@ export default function TaskAssistCompactDraftCard({
                     <input
                         type="radio"
                         checked={channel === "email"}
-                        onChange={() => setChannel("email")}
+                        onChange={() => onSelectChannel("email")}
+                        data-task-assist-channel="email"
                     />
                     Email
                 </label>
@@ -622,7 +692,10 @@ export default function TaskAssistCompactDraftCard({
                 <textarea
                     id={`ta-compact-body-${entityId}`}
                     value={finalBody}
-                    onChange={(e) => setFinalBody(e.target.value)}
+                    onChange={(e) =>
+                        setChannelDrafts((prev) => ({ ...prev, [channel]: e.target.value }))
+                    }
+                    data-task-assist-message-body={channel}
                     rows={4}
                     className="mt-0.5 w-full resize-y rounded-md border border-alloy-stone/25 bg-white px-2 py-1.5 text-[12px] leading-snug"
                 />

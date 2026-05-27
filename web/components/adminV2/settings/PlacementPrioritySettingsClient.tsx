@@ -179,7 +179,7 @@ export default function PlacementPrioritySettingsClient() {
     };
 
     return (
-        <div className="mx-auto w-full max-w-2xl space-y-5">
+        <div className="w-full min-w-0 space-y-5">
             <header>
                 <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">Waitlist priority</h1>
                 <p className="mt-1 max-w-2xl text-xs leading-snug text-alloy-midnight/60">

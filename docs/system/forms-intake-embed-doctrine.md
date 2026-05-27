@@ -1,7 +1,19 @@
 # Forms intake — embed / iframe doctrine
 
-**Status:** Active (FD-6 foundation)  
+**Status:** Active (FD-6 foundation · FD-12 clarification)  
 **Scope:** Architecture boundaries for embeddable intake — no public renderer redesign in this phase.
+
+---
+
+## What is NOT iframe
+
+| Surface | Runtime | Notes |
+|---------|---------|-------|
+| **AdminV2 form authoring** | Native React in Alloy shell | Document composition editor, field cards, live preview — never iframe |
+| **AdminV2 submission review** | Native Alloy case-file UI | Operator review, linkage, outputs — never iframe |
+| **AdminV2 composition preview** | Native React sidebar | Layout fidelity for operators; not the public embed |
+
+Iframe/embed is **only** for external/public distribution when intake runs outside the Alloy admin shell.
 
 ---
 
@@ -10,6 +22,18 @@
 - Allow partners and vertical sites to host intake in an iframe without breaking Alloy security or branding contracts.
 - Keep authoritative submission, prefill, and linkage paths on existing public APIs.
 - Isolate chrome, navigation, and org branding from the intake shell.
+
+---
+
+## Shared layout contract (staging)
+
+`document_composition` on form schema is the **common layout contract** across:
+
+1. **Admin native preview** (shipped — FD-12 live preview sidebar)
+2. **Public form runtime** (future staged pass — still reads `fields` today)
+3. **Embed / iframe runtime** (future — same renderer engine as public)
+
+Field semantics remain in `fields[]`; composition defines document structure and region layout only.
 
 ---
 
@@ -33,7 +57,7 @@ Host site
   └── iframe[src=/public/forms/embed/:token]
         └── IntakeEmbedShell
               ├── branding zone (logo, colors from link metadata)
-              ├── IntakeFormRenderer (existing)
+              ├── IntakeFormRenderer (shared with public runtime)
               └── footer / legal (optional, config-driven)
 ```
 
@@ -58,15 +82,17 @@ Host site
 
 | Stage | Deliverable |
 |-------|-------------|
-| FD-6 | This doctrine + shell component stub + metadata keys documented |
+| FD-6 | This doctrine + metadata keys documented |
+| FD-12 | Admin native preview; iframe clarified as external-only |
 | Next | Dedicated `/public/forms/embed/[token]` route with `IntakeEmbedShell` |
 | Next | CSP / `frame-ancestors` from org config |
-| Later | Optional `postMessage` completion contract for hosts |
+| Later | Public runtime reads `document_composition`; embed shares renderer |
 
 ---
 
-## Non-goals (FD-6)
+## Non-goals
 
-- Full public UI redesign
+- Full public UI redesign in doctrine-only phases
 - Custom CSS injection from untrusted hosts
 - Cross-origin CRM reads from the iframe parent
+- Iframe-wrapping AdminV2 authoring or review

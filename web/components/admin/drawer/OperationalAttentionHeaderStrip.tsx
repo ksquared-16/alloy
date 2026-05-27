@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 
+import BosDrawerAssistCta from "@/components/admin/drawer/BosDrawerAssistCta";
 import OperationalAttentionAnchoredDraftPopover from "@/components/admin/drawer/OperationalAttentionAnchoredDraftPopover";
 import OperationalAttentionEnhanceDraft from "@/components/admin/drawer/OperationalAttentionEnhanceDraft";
 import OperationalReviewAssistBand from "@/components/admin/drawer/OperationalReviewAssistBand";
@@ -15,6 +16,7 @@ import {
 } from "@/lib/opportunities/operationalAttentionExplain";
 import type { EnrollmentWaitBucket } from "@/lib/opportunities/attentionPlatformCatalog";
 import { isEnrollmentWaitBucket } from "@/lib/opportunities/attentionPlatformCatalog";
+import type { OpportunityQueuePreviewSeed } from "@/lib/adminV2/bos/activeOperationalContext";
 import {
     opIntelligenceSurface,
     opLabelCaps,
@@ -32,6 +34,10 @@ type Props = {
     variant?: "chrome" | "panel";
     /** When parent renders a section title (e.g. inquiry summary). */
     suppressSectionBrandLabel?: boolean;
+    /** When set, renders native BOS assist inside Review Assist (inquiry summary right column). */
+    bosAssistEntityId?: string | null;
+    opportunitySingular?: string;
+    queuePreviewSeed?: OpportunityQueuePreviewSeed | null;
 };
 
 /**
@@ -41,8 +47,12 @@ type Props = {
 export default function OperationalAttentionHeaderStrip({
     overviewData,
     variant = "panel",
-    suppressSectionBrandLabel = false,
+    suppressSectionBrandLabel: suppressSectionBrandLabelProp = false,
+    bosAssistEntityId = null,
+    opportunitySingular = "Inquiry",
+    queuePreviewSeed = null,
 }: Props) {
+    const suppressSectionBrandLabel = suppressSectionBrandLabelProp || variant === "chrome";
     const draftTriggerRef = useRef<HTMLButtonElement>(null);
     const [draftPopoverOpen, setDraftPopoverOpen] = useState(false);
     const payload = overviewData._operational_attention as OpportunityAttentionResult | null | undefined;
@@ -132,6 +142,16 @@ export default function OperationalAttentionHeaderStrip({
             </div>
         ) : null;
 
+        const bosAssistSlot =
+            bosAssistEntityId?.trim() ? (
+                <BosDrawerAssistCta
+                    entityId={bosAssistEntityId.trim()}
+                    overviewData={overviewData}
+                    opportunitySingular={opportunitySingular}
+                    queuePreviewSeed={queuePreviewSeed}
+                />
+            ) : null;
+
         return (
             <div
                 data-drawer-slot="operational_attention_header"
@@ -143,8 +163,11 @@ export default function OperationalAttentionHeaderStrip({
                     suppressSectionBrandLabel={suppressSectionBrandLabel}
                     readinessChrome={reviewAssist.readinessChrome}
                     supportingDetail={reviewAssist.supportingDetail}
+                    urgencyChipContext={reviewAssist.urgencyChipContext}
+                    priorityExplanation={reviewAssist.priorityExplanation}
                     draftSlot={draftSlot}
                     enhanceSlot={suggestion ? <OperationalAttentionEnhanceDraft suggestion={suggestion} /> : null}
+                    bosAssistSlot={bosAssistSlot}
                 />
             </div>
         );

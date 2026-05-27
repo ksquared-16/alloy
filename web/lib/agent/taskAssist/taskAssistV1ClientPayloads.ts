@@ -6,19 +6,39 @@ export type TaskAssistProposeRequestBodyV1 = {
     entity_id: string;
     channel: "sms" | "email";
     instruction: string;
+    communication_objective?: string | null;
+    synthesized_draft?: {
+        subject?: string | null;
+        body: string;
+        sms_body?: string | null;
+    } | null;
 };
 
 export function buildTaskAssistProposeRequestBody(params: {
     entityId: string;
     channel: "sms" | "email";
     instruction: string;
+    communicationObjective?: string | null;
+    synthesizedDraft?: TaskAssistProposeRequestBodyV1["synthesized_draft"];
 }): TaskAssistProposeRequestBodyV1 {
-    return {
+    const body: TaskAssistProposeRequestBodyV1 = {
         entity_type: "opportunities",
         entity_id: params.entityId.trim(),
         channel: params.channel,
         instruction: params.instruction.trim(),
     };
+    const objective = params.communicationObjective?.trim();
+    if (objective) body.communication_objective = objective;
+    const emailBody = params.synthesizedDraft?.body?.trim() ?? "";
+    const smsBody = params.synthesizedDraft?.sms_body?.trim() ?? "";
+    if (emailBody || smsBody) {
+        body.synthesized_draft = {
+            subject: params.synthesizedDraft?.subject ?? null,
+            body: emailBody || smsBody,
+            sms_body: smsBody || null,
+        };
+    }
+    return body;
 }
 
 export type TaskAssistApplyRequestBodyV1 = {

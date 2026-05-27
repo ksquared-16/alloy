@@ -40,7 +40,7 @@ describe("IntakeWorkspaceHubView FD-1", () => {
         expect(html).toContain('data-testid="intake-workspace-canvas"');
         expect(html).toContain('data-testid="intake-workload-filters"');
         expect(html).toContain("Enrollment");
-        expect(html).toContain('data-testid="intake-filter-panel-needs_review"');
+        expect(html).toContain("Forms");
         expect(html).not.toContain('data-testid="intake-form-library"');
         expect(html).not.toContain("<table");
     });
@@ -50,7 +50,7 @@ describe("IntakeWorkspaceHubView FD-1", () => {
             <IntakeWorkspaceHubView viewerTz="UTC" forms={[]} sessions={[]} packets={[]} submissions={[]} />
         );
 
-        expect(html).toContain("Intake workload is clear");
+        expect(html).toContain("Workload is clear");
         expect(html).toContain("No forms in this organization");
     });
 });

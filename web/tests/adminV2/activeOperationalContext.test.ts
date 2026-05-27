@@ -73,15 +73,14 @@ describe("activeOperationalContext", () => {
                 _attention_suggestion: { next_action: { label: "Send tour confirmation" } },
             },
         });
-        expect(seed).toContain("Mitchell Family");
-        expect(seed).toContain(rec.render.handoff.primary_recommendation);
-        expect(seed).toContain("Do next:");
+        expect(seed).toMatch(/^Draft a message to Mitchell Family/);
+        expect(seed).toContain(rec.recommended_action.label);
         expect(seed).toContain("Why now:");
         expect(seed).not.toContain("Send tour confirmation");
         expect(seed).not.toContain("Follow up with");
     });
 
-    it("orchestratorHandoffSeedCommand uses legacy suggestion with do-next vocabulary", () => {
+    it("orchestratorHandoffSeedCommand uses legacy suggestion with draft-oriented seed", () => {
         const seed = orchestratorHandoffSeedCommand({
             entityLabel: "Mitchell Family",
             overviewData: {
@@ -102,9 +101,8 @@ describe("activeOperationalContext", () => {
                 },
             },
         });
-        expect(seed).toContain("Mitchell Family");
+        expect(seed).toMatch(/^Draft a message to Mitchell Family/);
         expect(seed).toContain("Send tour confirmation");
-        expect(seed).toContain("Do next:");
         expect(seed).toContain("Why now:");
     });
 

@@ -28,7 +28,11 @@ export default function AskBosHandoffListener() {
                     entityLabel,
                     queuePreview: detail.queue_preview ?? null,
                 }),
+                queuePreviewSeed: detail.display_name?.trim()
+                    ? { title: detail.display_name.trim() }
+                    : null,
                 opportunitySingular: "Inquiry",
+                sourceSurface: detail.source_surface ?? "queue",
             });
         };
         window.addEventListener(ADMINV2_ASK_BOS_HANDOFF_EVENT, onHandoff);

@@ -38,6 +38,9 @@ export type KPIVm = {
 export type QueueItemQuickActionVm = {
   id: string;
   label: string;
+  /** Host dispatch id when distinct from `id` (e.g. queue row preview config actions). */
+  actionId?: string;
+  variant?: "primary" | "secondary" | "danger";
   /** Host may open mailto:/tel: or pass through to record actions. */
   payload?: Record<string, unknown>;
 };

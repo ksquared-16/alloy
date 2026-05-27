@@ -3,12 +3,14 @@ import {
     ACTION_BUTTON_CREATE_TITLE,
     actionDefinitionOwnership,
     filterCatalogDefinitionsForEntity,
+    filterSettingsActionCatalogDefinitions,
     formatCatalogOptionLabel,
+    settingsActionCatalogDefinitions,
 } from "@/lib/admin/actions/actionButtonCreateUi";
 
 describe("actionButtonCreateUi", () => {
     it("exposes create-from-catalog copy", () => {
-        expect(ACTION_BUTTON_CREATE_TITLE).toContain("existing action");
+        expect(ACTION_BUTTON_CREATE_TITLE).toContain("action button");
     });
 
     it("filters catalog by entity type when set", () => {
@@ -34,5 +36,18 @@ describe("actionButtonCreateUi", () => {
         ).toContain("Built-in");
         expect(actionDefinitionOwnership({ org_id: "org-1" })).toBe("org");
         expect(actionDefinitionOwnership({ org_id: null })).toBe("platform");
+    });
+
+    it("hides placeholder actions from Settings catalog", () => {
+        const defs = [
+            { id: "1", key: "open_record", label: "Open record", action_type: "open_drawer", entity_type: "opportunity", org_id: null },
+            { id: "2", key: "send_message_placeholder", label: "Message", action_type: "ui_intent", entity_type: "opportunity", org_id: null },
+            { id: "3", key: "add_to_waitlist_placeholder", label: "Add to waitlist", action_type: "ui_intent", entity_type: "opportunity", org_id: null },
+            { id: "4", key: "schedule_tour", label: "Schedule tour", action_type: "start_workflow", entity_type: "opportunity", org_id: null },
+        ];
+        const filtered = filterSettingsActionCatalogDefinitions(defs);
+        expect(filtered.map((d) => d.key)).toEqual(["open_record", "schedule_tour"]);
+        const forOpp = settingsActionCatalogDefinitions(defs, "opportunity");
+        expect(forOpp.map((d) => d.key)).toEqual(["open_record", "schedule_tour"]);
     });
 });

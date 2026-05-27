@@ -95,9 +95,12 @@ import {
     orchestratorHandoffSeedCommand,
 } from "@/lib/adminV2/bos/activeOperationalContext";
 import {
-    launchAdminV2AskBos,
-    queueBosHandoffPreviewFromOperationalRead,
-} from "@/lib/adminV2/bos/bosDrawerAssistHandoff";
+    buildQueueRowInvocation,
+    launchContextualAskBos,
+    launchContextualQuickMessage,
+    parseQueueRowActionPayload,
+} from "@/lib/admin/actions/contextualActionInvocation";
+import { queueBosHandoffPreviewFromOperationalRead } from "@/lib/adminV2/bos/bosDrawerAssistHandoff";
 import { resolveQueueOperationalReadSlot } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceViewModels";
 import { resolveQueueRowPreviewActionsForWorkUnit } from "@/lib/ui-v2/enrollmentQueueRowPreviewPolicy";
 import { mergeQueueRowQuickActions } from "@/lib/workspace/viewModels/mergeQueueRowQuickActions";
@@ -3224,21 +3227,39 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 action.actionId &&
                 action.itemId
             ) {
-                const resolved = queueRowResolvedByKey.get(action.actionId);
+                const rowPayload = parseQueueRowActionPayload(action.payload);
+                const registryLookupKey = rowPayload.registryKey?.trim() || action.actionId;
+                const resolved = queueRowResolvedByKey.get(registryLookupKey);
+                const queueItem = findQueuePreviewItemById(queueDisplayItemsRef.current, action.itemId);
+                const queuePreview = queueBosHandoffPreviewFromOperationalRead(
+                    queueItem?.semanticCrmCompact?.operationalReadPreview ?? null
+                );
+                const rowInvocation = buildQueueRowInvocation({
+                    itemId: action.itemId,
+                    payload: action.payload,
+                    departmentId,
+                    workUnitId: workUnit?.id ?? null,
+                    queueKey: selectedQueueKeyRef.current,
+                    queuePreview,
+                    displayNameFallback: queueItem?.title?.trim() ?? null,
+                });
                 if (
                     resolved?.key === "ask_bos" ||
+                    action.actionId === "ask_bos" ||
                     (resolved?.action_type === "ui_intent" &&
                         String(resolved.payload?.intent ?? "").trim() === "ask_bos")
                 ) {
-                    const queueItem = findQueuePreviewItemById(queueDisplayItemsRef.current, action.itemId);
-                    const queuePreview = queueBosHandoffPreviewFromOperationalRead(
-                        queueItem?.semanticCrmCompact?.operationalReadPreview ?? null
-                    );
-                    launchAdminV2AskBos({
-                        opportunity_id: action.itemId,
-                        display_name: queueItem?.title?.trim() ?? null,
-                        queue_preview: queuePreview,
-                    });
+                    await launchContextualAskBos(rowInvocation);
+                    return;
+                }
+                if (
+                    resolved?.key === "quick_message" ||
+                    resolved?.key === "send_message_placeholder" ||
+                    action.actionId === "quick_message" ||
+                    (resolved?.action_type === "ui_intent" &&
+                        String(resolved.payload?.intent ?? "").trim() === "quick_message")
+                ) {
+                    await launchContextualQuickMessage(rowInvocation);
                     return;
                 }
                 if (resolved?.action_type === "open_drawer") {
@@ -3259,6 +3280,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         workUnitId: workUnit?.id ?? null,
                         invalidate,
                         needsAttentionHref,
+                        invocationContext: rowInvocation,
                         context: {
                             surface: "queue_row",
                             department_id: departmentId,
@@ -3298,6 +3320,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         workUnitId: workUnit?.id ?? null,
                         invalidate,
                         needsAttentionHref,
+                        invocationContext: rowInvocation,
                         context: {
                             surface: "queue_row",
                             department_id: departmentId,
@@ -3375,51 +3398,43 @@ export default function AdminV2OpportunityWorkUnitPage() {
             }
             if (action.type === "queue.item.action" && action.actionId && action.itemId) {
                 if (action.actionId === "crm_message" || action.actionId === "quick_message") {
-                    const payload = action.payload as
-                        | {
-                              personId?: string | null;
-                              displayName?: string;
-                              email?: string | null;
-                              phone?: string | null;
-                          }
-                        | undefined;
-                    const personId = payload?.personId?.trim();
-                    if (!personId) {
-                        setActionSurfaceError(
-                            "No contact is linked to this inquiry yet. Open the record to add a parent or contact, then try Message again."
-                        );
-                        return;
-                    }
+                    const queueItem = findQueuePreviewItemById(queueDisplayItemsRef.current, action.itemId);
+                    const queuePreview = queueBosHandoffPreviewFromOperationalRead(
+                        queueItem?.semanticCrmCompact?.operationalReadPreview ?? null
+                    );
                     setActionSurfaceError(null);
-                    const { launchAdminV2QuickMessage } = await import("@/lib/adminV2/quickMessageLaunch");
-                    launchAdminV2QuickMessage({
-                        personId,
-                        displayName: payload?.displayName,
-                        email: payload?.email ?? null,
-                        phone: payload?.phone ?? null,
-                    });
+                    await launchContextualQuickMessage(
+                        buildQueueRowInvocation({
+                            itemId: action.itemId,
+                            payload: action.payload,
+                            departmentId,
+                            workUnitId: workUnit?.id ?? null,
+                            queueKey: selectedQueueKeyRef.current,
+                            queuePreview,
+                            displayNameFallback: queueItem?.title?.trim() ?? null,
+                        })
+                    );
                     return;
                 }
                 if (action.actionId === "ask_bos" || action.actionId === "crm_open_orchestrator") {
-                    const payload = action.payload as
-                        | {
-                              opportunityId?: string;
-                              displayName?: string;
-                          }
-                        | undefined;
-                    const opportunityId = payload?.opportunityId?.trim() ?? action.itemId;
+                    const opportunityId =
+                        parseQueueRowActionPayload(action.payload).opportunityId?.trim() ?? action.itemId;
                     if (!opportunityId) return;
                     const queueItem = findQueuePreviewItemById(queueDisplayItemsRef.current, opportunityId);
                     const queuePreview = queueBosHandoffPreviewFromOperationalRead(
                         queueItem?.semanticCrmCompact?.operationalReadPreview ?? null
                     );
-                    const { launchAdminV2AskBos: launchAskBos } = await import("@/lib/adminV2/bos/bosDrawerAssistHandoff");
-                    launchAskBos({
-                        opportunity_id: opportunityId,
-                        display_name:
-                            payload?.displayName?.trim() || queueItem?.title?.trim() || null,
-                        queue_preview: queuePreview,
-                    });
+                    await launchContextualAskBos(
+                        buildQueueRowInvocation({
+                            itemId: action.itemId,
+                            payload: action.payload,
+                            departmentId,
+                            workUnitId: workUnit?.id ?? null,
+                            queueKey: selectedQueueKeyRef.current,
+                            queuePreview,
+                            displayNameFallback: queueItem?.title?.trim() ?? null,
+                        })
+                    );
                     return;
                 }
                 if (action.actionId === "crm_mailto" || action.actionId === "crm_tel") {

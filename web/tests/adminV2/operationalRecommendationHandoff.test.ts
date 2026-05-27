@@ -173,8 +173,8 @@ describe("orchestratorHandoffSeedCommand parity", () => {
             },
         });
         expect(seed).toContain("Mitchell Family");
-        expect(seed).toContain(rec.render.handoff.primary_recommendation);
-        expect(seed).toContain("Do next:");
+        expect(seed).toMatch(/^Draft a message to Mitchell Family/);
+        expect(seed).toContain("Why now:");
         expect(seed).not.toContain("Send tour confirmation");
         expect(seed).not.toContain("Follow up with");
     });

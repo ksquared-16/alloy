@@ -1,82 +1,120 @@
 "use client";
 
 import clsx from "clsx";
-import type { ReactNode } from "react";
-import type { FormSchemaV1 } from "@/lib/forms/schema";
+import { useCallback, useMemo, useState } from "react";
+import { DocumentCompositionEditor } from "@/components/admin/forms/documentComposition/DocumentCompositionEditor";
+import { DocumentCompositionPreview } from "@/components/admin/forms/documentComposition/DocumentCompositionPreview";
+import type { DocumentComposition } from "@/lib/forms/documentComposition";
 import {
-    opAnswerSurface,
-    opCaseFileCanvas,
-    opMetadata,
-    opMutedMeta,
-    opOrientationSurface,
-} from "@/lib/operational/ui/operationalVisualTokens";
+    listFieldRegionBlocks,
+    moveFieldInRegion,
+    moveFieldToRegion,
+    patchSchemaComposition,
+    resolveDocumentComposition,
+} from "@/lib/forms/documentCompositionAuthoring";
+import type { FormSchemaV1 } from "@/lib/forms/schema";
+import { opMetadata } from "@/lib/operational/ui/operationalVisualTokens";
 
 type Props = {
-    schema: FormSchemaV1 | null;
+    schema: FormSchemaV1;
     formName: string;
-    children: ReactNode;
+    onChange: (next: FormSchemaV1) => void;
+    disabled?: boolean;
 };
 
 /**
- * Document-oriented framing for form schema authoring (OI-4).
- * Wraps the field editor without changing renderer contracts.
+ * Document authoring shell (FD-8 / FD-12 / FD-13).
+ * Native React admin surface — not iframe. See forms-intake-embed-doctrine for public embed boundaries.
  */
-export function FormDocumentAuthoringShell({ schema, formName, children }: Props) {
-    const docTitle = schema?.title?.trim() || formName;
-    const sectionTitle = schema?.sections[0]?.title?.trim() || "Intake questions";
-    const fieldCount = schema?.fields.length ?? 0;
+export function FormDocumentAuthoringShell({ schema, onChange, disabled = false }: Props) {
+    const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
+    const composition = useMemo(() => resolveDocumentComposition(schema), [schema]);
+
+    const applyComposition = useCallback(
+        (next: DocumentComposition) => {
+            onChange(patchSchemaComposition(schema, next));
+        },
+        [onChange, schema]
+    );
+
+    const focusField = useCallback((fieldId: string) => {
+        if (!fieldId) {
+            setSelectedFieldId(null);
+            return;
+        }
+        setSelectedFieldId(fieldId);
+        requestAnimationFrame(() => {
+            document.getElementById(`form-field-row-${fieldId}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        });
+    }, []);
+
+    const handleMoveFieldInRegion = useCallback(
+        (regionId: string, fieldId: string, dir: -1 | 1) => {
+            applyComposition(moveFieldInRegion(composition, regionId, fieldId, dir));
+        },
+        [applyComposition, composition]
+    );
+
+    const handleMoveFieldToRegion = useCallback(
+        (fieldId: string, _fromRegionId: string, toRegionId: string) => {
+            applyComposition(moveFieldToRegion(composition, fieldId, toRegionId));
+            focusField(fieldId);
+        },
+        [applyComposition, composition, focusField]
+    );
+
+    const handleMoveFieldToRegionFromEditor = useCallback(
+        (fieldId: string, toRegionId: string) => {
+            applyComposition(moveFieldToRegion(composition, fieldId, toRegionId));
+            focusField(fieldId);
+        },
+        [applyComposition, composition, focusField]
+    );
+
+    const regionOptions = useMemo(
+        () =>
+            listFieldRegionBlocks(composition).map((r, i) => ({
+                id: r.id,
+                label: r.title?.trim() || `Section ${i + 1}`,
+            })),
+        [composition]
+    );
 
     return (
-        <div className={clsx(opCaseFileCanvas, "space-y-4")} data-testid="form-document-authoring-shell">
-            <div className={opOrientationSurface}>
-                <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/50">Document design</p>
-                <p className="mt-1 text-sm font-semibold text-alloy-midnight">Design this intake like a document — not a database table.</p>
-                <p className={clsx("mt-1 max-w-2xl", opMetadata)}>
-                    Set the document title and section headers families see first. Fields below compose the body of the intake
-                    packet.
-                </p>
-            </div>
+        <div className="space-y-3" data-testid="form-document-authoring-shell">
+            <p className={opMetadata}>
+                Compose the intake document below. Preview updates as you edit — save draft to persist composition.
+            </p>
 
-            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(220px,280px)]">
-                <div className="min-w-0 space-y-4">
-                    <div className="rounded-xl bg-white/95 px-4 py-3 ring-1 ring-alloy-midnight/[0.07]">
-                        <p className={opMutedMeta}>Branding / header region</p>
-                        <p className={clsx("mt-1 text-sm font-medium text-alloy-midnight")}>{docTitle}</p>
-                        <p className={clsx("mt-2", opMetadata)}>
-                            Org branding and logo slots will attach here in a future release — title comes from the form name
-                            field below.
-                        </p>
-                    </div>
-                    {children}
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(420px,520px)] lg:items-start">
+                <div className="min-w-0">
+                    <DocumentCompositionEditor
+                        schema={schema}
+                        onChange={onChange}
+                        disabled={disabled}
+                        selectedFieldId={selectedFieldId}
+                        onSelectField={focusField}
+                        onMoveFieldInRegion={handleMoveFieldInRegion}
+                        onMoveFieldToRegion={handleMoveFieldToRegionFromEditor}
+                    />
                 </div>
 
                 <aside
-                    className="hidden lg:block"
+                    className="hidden lg:sticky lg:top-3 lg:block lg:max-h-[calc(100vh-2rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain"
                     data-testid="form-document-preview-frame"
-                    aria-label="Recipient preview framing"
+                    aria-label="Document composition preview"
                 >
-                    <p className={clsx("text-xs font-semibold uppercase tracking-wide opacity-60")}>Preview framing</p>
-                    <div className={clsx(opAnswerSurface, "mt-2 px-4 py-4")}>
-                        <p className="text-base font-semibold text-alloy-midnight">{docTitle}</p>
-                        <p className={clsx("mt-3 text-sm font-medium text-alloy-midnight/80")}>{sectionTitle}</p>
-                        <p className={clsx("mt-2", opMetadata)}>
-                            {fieldCount > 0 ?
-                                `${fieldCount} field${fieldCount === 1 ? "" : "s"} in this section`
-                            :   "Add fields to build the intake body"}
-                        </p>
-                        <div className="mt-4 space-y-2 border-t border-alloy-midnight/[0.06] pt-3">
-                            {(schema?.fields ?? []).slice(0, 4).map((f) => (
-                                <div key={f.id} className="rounded-md bg-white/80 px-2 py-1.5 ring-1 ring-alloy-midnight/[0.05]">
-                                    <p className="text-xs font-medium text-alloy-midnight">{f.label}</p>
-                                    <p className={opMutedMeta}>{f.required ? "Required" : "Optional"}</p>
-                                </div>
-                            ))}
-                            {fieldCount > 4 ?
-                                <p className={opMetadata}>+ {fieldCount - 4} more</p>
-                            :   null}
-                        </div>
-                    </div>
-                    <p className={clsx("mt-2", opMutedMeta)}>Preview recipient experience from the lifecycle toolbar when published.</p>
+                    <DocumentCompositionPreview
+                        schema={schema}
+                        selectedFieldId={selectedFieldId}
+                        regionOptions={regionOptions}
+                        onSelectField={focusField}
+                        onMoveFieldInRegion={handleMoveFieldInRegion}
+                        onMoveFieldToRegion={handleMoveFieldToRegion}
+                    />
+                    <p className={clsx("mt-2 text-xs", opMetadata)}>
+                        Recipient preview opens from the toolbar when published.
+                    </p>
                 </aside>
             </div>
         </div>

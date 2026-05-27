@@ -23,5 +23,8 @@ describe("TaskAssistCompactDraftCard", () => {
         expect(src).toContain("formatTaskAssistClientError");
         expect(src).toContain("/api/admin/ai/task-assist/propose");
         expect(src).toContain("STALE_OPERATIONAL_PROPOSAL_MESSAGE");
+        expect(src).toContain("onSelectChannel");
+        expect(src).toContain("channelDraftsFromSynthesizedDraft");
+        expect(src).toContain("draftBodyForChannel");
     });
 });

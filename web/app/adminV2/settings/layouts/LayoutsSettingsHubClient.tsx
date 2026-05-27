@@ -46,7 +46,7 @@ export default function LayoutsSettingsHubClient({ initialEntity }: { initialEnt
     const entityLabel = adminFieldEntitySingularLabel(labels, entity);
 
     return (
-        <div className="w-full max-w-6xl space-y-3">
+        <div className="w-full min-w-0 space-y-3">
             <SettingsEntityTabBar
                 tabs={entityTabs}
                 activeKey={entity}

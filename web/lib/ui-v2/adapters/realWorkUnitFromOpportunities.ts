@@ -6,6 +6,7 @@ import {
     buildEnrollmentWorkUnitActionsRail,
 } from "@/lib/workspace/viewModels/enrollmentWorkUnitViewModel";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
+import type { QueueUiRowPreviewAction } from "@/lib/ui-v2/queueUiConfig";
 import { mergeEnrollmentRightRailActions } from "@/lib/workspace/viewModels/enrollmentRightRailMerge";
 import { isEnrollmentLikeDepartmentKey } from "@/lib/workspace/enrollmentDepartmentKey";
 
@@ -127,9 +128,11 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
     deptName: string;
     departmentKey?: string | null;
     oq: WorkspaceOpportunityQueueRuntime;
-    /** When set (e.g. from GET /api/admin/actions?surface=queue_row), overrides per-row hardcoded quick actions. */
-    queueRowQuickActions?: QueueItemQuickActionVm[] | null;
-    /** Resolved `right_rail` placements (GET …/actions?surface=right_rail); merged ahead of hardcoded enrollment rail. */
+    /** Resolved `ui.row_preview.actions` from queue definition (config-driven row buttons). */
+    rowPreviewActions?: QueueUiRowPreviewAction[];
+    /** Resolved `queue_row` placements for this work unit. */
+    queueRowRegistryPlacements?: ResolvedActionForClient[] | null;
+    /** Resolved `right_rail` placements (GET …/actions?surface=right_rail). */
     rightRailResolved?: ResolvedActionForClient[] | null;
     /** Queue definition `ui.row_preview.field_labels` merged with defaults (CRM compact captions). */
     rowPreviewFieldLabels?: Record<string, string> | null;
@@ -143,11 +146,10 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
             ? buildEnrollmentOpportunityQueueItemVm(row, {
                   workUnitKey: input.workUnitKey,
                   rowPreviewFieldLabels: input.rowPreviewFieldLabels,
+                  previewActions: input.rowPreviewActions,
+                  queueRowRegistryPlacements: input.queueRowRegistryPlacements,
               })
             : defaultOpportunityQueueItemVm(row, input.workUnitKey);
-        if (input.queueRowQuickActions?.length) {
-            return { ...base, quickActions: input.queueRowQuickActions };
-        }
         return base;
     });
 
