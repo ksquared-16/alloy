@@ -65,6 +65,7 @@ export default function FormsSubmissionsHubClient() {
                 loading={loading}
                 error={error}
                 emptyMessage="No submissions yet. Distribute a form or packet link from the workspace."
+                onRefresh={() => void load()}
             />
         </FormsWorkspaceShell>
     );

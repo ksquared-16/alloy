@@ -39,9 +39,55 @@ describe("intakeWorkspaceFilters FD-1", () => {
     });
 
     it("defaults to needs_review when review count is positive", () => {
-        expect(defaultIntakeWorkspaceFilter({ needs_review: 2, needs_linking: 0, waiting: 0, forms: 1, packets: 0 })).toBe(
-            "needs_review"
-        );
+        expect(
+            defaultIntakeWorkspaceFilter({
+                needs_review: 2,
+                needs_linking: 0,
+                recent: 3,
+                waiting: 0,
+                forms: 1,
+                packets: 0,
+            })
+        ).toBe("needs_review");
+    });
+
+    it("defaults to recent when only recently submitted intake exists", () => {
+        expect(
+            defaultIntakeWorkspaceFilter({
+                needs_review: 0,
+                needs_linking: 0,
+                recent: 2,
+                waiting: 0,
+                forms: 1,
+                packets: 0,
+            })
+        ).toBe("recent");
+    });
+
+    it("builds recent panel with operational headlines", () => {
+        const panel = buildIntakeWorkspaceFilterPanel("recent", {
+            submissions: [
+                submission({
+                    id: "sub-recent",
+                    person_id: "p1",
+                    payload: {
+                        meta: {
+                            intake_resolution_path: "matched_email",
+                            intake_opportunity_match: "attached_existing",
+                            intake_needs_review: false,
+                        },
+                    },
+                }),
+            ],
+            sessions: [],
+            forms: [{ id: "form-1", name: "Medication demo" }],
+            packets: [],
+            formsById: { "form-1": "Medication demo" },
+        });
+
+        expect(panel.title).toBe("Recent intake");
+        expect(panel.items[0]?.title).toContain("Existing opportunity matched");
+        expect(panel.items[0]?.quickReview).toBe(true);
     });
 
     it("builds needs linking panel items", () => {
@@ -55,6 +101,6 @@ describe("intakeWorkspaceFilters FD-1", () => {
 
         expect(panel.title).toBe("Needs linking");
         expect(panel.items).toHaveLength(1);
-        expect(panel.items[0]?.cta).toBe("Link records");
+        expect(panel.items[0]?.cta).toBe("Link CRM records");
     });
 });

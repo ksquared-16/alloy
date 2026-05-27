@@ -16,6 +16,7 @@ import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 import { opMetadata, opOrientationSurface } from "@/lib/operational/ui/operationalVisualTokens";
+import { sortSubmissionsByActivity } from "@/lib/forms/submissionOperationalNarrative";
 
 type FormRow = IntakeWorkspaceFormRow & {
     key: string;
@@ -58,7 +59,7 @@ function sortSessionsForReview(rows: PacketSessionRow[]): IntakeWorkspaceSession
 export default function FormsHubClient() {
     const router = useRouter();
     const viewerTz = useAdminViewerTimezone();
-    const { canMutate } = useAdminAuth();
+    const { canMutate, orgId: activeOrgId } = useAdminAuth();
 
     const [forms, setForms] = useState<IntakeWorkspaceFormRow[]>([]);
     const [sessions, setSessions] = useState<IntakeWorkspaceSessionRow[]>([]);
@@ -83,7 +84,7 @@ export default function FormsHubClient() {
                 fetch("/api/admin/forms", { credentials: "include" }),
                 fetch("/api/admin/forms/packet-sessions", { credentials: "include" }),
                 fetch("/api/admin/forms/packet-definitions", { credentials: "include" }),
-                fetch("/api/admin/forms/submissions?limit=100", { credentials: "include" }),
+                fetch("/api/admin/forms/submissions?limit=200", { credentials: "include" }),
             ]);
 
             const formsJson = await formsRes.json().catch(() => ({}));
@@ -92,6 +93,9 @@ export default function FormsHubClient() {
             const subJson = await subRes.json().catch(() => ({}));
 
             if (!formsRes.ok) throw new Error((formsJson as { error?: string }).error ?? "Failed to load forms");
+            if (!subRes.ok) {
+                throw new Error((subJson as { error?: string }).error ?? "Failed to load submissions");
+            }
 
             const formRows = (formsJson as { data?: FormRow[] }).data ?? [];
             setForms(formRows);
@@ -108,7 +112,7 @@ export default function FormsHubClient() {
                 :   []
             );
             setSubmissions(
-                subRes.ok ?
+                sortSubmissionsByActivity(
                     ((subJson as { data?: IntakeWorkspaceSubmissionRow[] }).data ?? []).map((r) => ({
                         id: r.id,
                         status: r.status,
@@ -121,7 +125,7 @@ export default function FormsHubClient() {
                         opportunity_id: r.opportunity_id,
                         payload: r.payload,
                     }))
-                :   []
+                )
             );
         } catch (e) {
             setError((e as Error).message);
@@ -240,6 +244,8 @@ export default function FormsHubClient() {
             showCreate={showCreate}
             onToggleCreate={() => setShowCreate((v) => !v)}
             createPanel={createPanel}
+            onRefresh={() => void load()}
+            activeOrgId={activeOrgId}
         />
     );
 }

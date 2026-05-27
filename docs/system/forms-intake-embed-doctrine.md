@@ -96,3 +96,11 @@ Host site
 - Custom CSS injection from untrusted hosts
 - Cross-origin CRM reads from the iframe parent
 - Iframe-wrapping AdminV2 authoring or review
+
+---
+
+## Related
+
+- [forms-intake-runtime-phase.md](./forms-intake-runtime-phase.md) — phase operating model + Tests 2–5
+- [forms-intake-prefill-doctrine.md](./forms-intake-prefill-doctrine.md)
+- [forms-intake-runtime-validation.md](./forms-intake-runtime-validation.md)

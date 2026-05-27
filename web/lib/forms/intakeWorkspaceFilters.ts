@@ -1,12 +1,18 @@
 /**
- * Intake workspace operational filters (FD-1).
- * Client-side drill-in from KPI tiles — existing list data only.
+ * Intake workspace operational filters (FD-1 / OI-4).
+ * Client-side drill-in from workload pills — existing list data only.
  */
 
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 import { FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
 import {
+    deriveSubmissionOperationalNarrative,
+    sortSubmissionsByActivity,
+    submissionActivitySortKey,
+} from "@/lib/forms/submissionOperationalNarrative";
+import {
     groupSubmissionsIntoInboxLanes,
+    type SubmissionInboxLaneKey,
     type SubmissionInboxRow,
 } from "@/lib/forms/submissionInboxPresentation";
 import type { IntakeCommandCenterSessionRow } from "@/lib/forms/intakeCommandCenterPresentation";
@@ -14,6 +20,7 @@ import type { IntakeCommandCenterSessionRow } from "@/lib/forms/intakeCommandCen
 export type IntakeWorkspaceFilterKey =
     | "needs_review"
     | "needs_linking"
+    | "recent"
     | "waiting"
     | "forms"
     | "packets";
@@ -25,6 +32,7 @@ export const INTAKE_WORKSPACE_FILTERS: {
 }[] = [
     { id: "needs_review", label: "Needs review", shortLabel: "Review" },
     { id: "needs_linking", label: "Needs linking", shortLabel: "Linking" },
+    { id: "recent", label: "Recent intake", shortLabel: "Recent" },
     { id: "waiting", label: "Waiting on families", shortLabel: "Waiting" },
     { id: "forms", label: "Forms", shortLabel: "Forms" },
     { id: "packets", label: "Packets", shortLabel: "Packets" },
@@ -34,8 +42,14 @@ export type IntakeWorkspaceFilterItem = {
     id: string;
     title: string;
     meta: string;
+    formName?: string;
     href: string;
     cta: string;
+    /** Submission rows only — enables inline quick review */
+    submission?: SubmissionInboxRow;
+    submissionLane?: SubmissionInboxLaneKey;
+    sortKey: string;
+    quickReview?: boolean;
 };
 
 export type IntakeWorkspaceFilterPanel = {
@@ -54,6 +68,31 @@ function sessionNeedsReview(session: IntakeCommandCenterSessionRow): boolean {
     return review == null;
 }
 
+function submissionItem(
+    row: SubmissionInboxRow,
+    formsById: Record<string, string>,
+    lane: SubmissionInboxLaneKey
+): IntakeWorkspaceFilterItem {
+    const narrative = deriveSubmissionOperationalNarrative(row);
+    const formLabel = formsById[row.form_definition_id] ?? "Form";
+    return {
+        id: `sub-${row.id}`,
+        title: narrative.headline,
+        meta: narrative.detail,
+        formName: formLabel,
+        href: `${ADMIN_FORMS_UI_BASE}/${row.form_definition_id}/submissions/${row.id}`,
+        cta: narrative.operatorAction,
+        submission: row,
+        submissionLane: lane,
+        sortKey: submissionActivitySortKey(row),
+        quickReview: lane === "needsReview" || lane === "needsLinking" || lane === "recentlySubmitted",
+    };
+}
+
+function sortItems(items: IntakeWorkspaceFilterItem[]): IntakeWorkspaceFilterItem[] {
+    return [...items].sort((a, b) => b.sortKey.localeCompare(a.sortKey));
+}
+
 export function countIntakeWorkspaceFilters(params: {
     submissions: SubmissionInboxRow[];
     sessions: IntakeCommandCenterSessionRow[];
@@ -67,6 +106,7 @@ export function countIntakeWorkspaceFilters(params: {
     return {
         needs_review: lanes.needsReview.length + reviewSessions.length,
         needs_linking: lanes.needsLinking.length,
+        recent: lanes.recentlySubmitted.length,
         waiting: lanes.drafts.length + inProgress.length,
         forms: params.forms.length,
         packets: params.packets.length,
@@ -91,71 +131,67 @@ export function buildIntakeWorkspaceFilterPanel(
             for (const s of params.sessions.filter(sessionNeedsReview)) {
                 items.push({
                     id: `session-${s.id}`,
-                    title: s.packet_name,
-                    meta: "Packet ready for case-file review",
+                    title: "Packet ready for operator review",
+                    meta: `${s.packet_name} · Case file complete — approve or request corrections`,
                     href: `${FORMS_MODULE_ROUTES.packetSessions}/${encodeURIComponent(s.id)}`,
-                    cta: "Review",
+                    cta: "Review packet",
+                    sortKey: s.created_at,
                 });
             }
-            for (const row of lanes.needsReview) {
-                items.push({
-                    id: `sub-${row.id}`,
-                    title: params.formsById[row.form_definition_id] ?? "Form",
-                    meta: "Submitted — intake flagged",
-                    href: `${ADMIN_FORMS_UI_BASE}/${row.form_definition_id}/submissions/${row.id}`,
-                    cta: "Review",
-                });
+            for (const row of sortSubmissionsByActivity(lanes.needsReview)) {
+                items.push(submissionItem(row, params.formsById, "needsReview"));
             }
             return {
                 filter,
                 title: "Needs review",
-                lead: "Packets and submissions waiting for operator review.",
-                items: items.sort((a, b) => b.meta.localeCompare(a.meta)),
+                lead: "Intake flagged for human confirmation before outputs or enrollment workflows.",
+                items: sortItems(items),
                 empty: "Nothing needs review right now.",
             };
         }
         case "needs_linking": {
-            for (const row of lanes.needsLinking) {
-                items.push({
-                    id: `sub-${row.id}`,
-                    title: params.formsById[row.form_definition_id] ?? "Form",
-                    meta: "Link CRM records before outputs",
-                    href: `${ADMIN_FORMS_UI_BASE}/${row.form_definition_id}/submissions/${row.id}`,
-                    cta: "Link records",
-                });
+            for (const row of sortSubmissionsByActivity(lanes.needsLinking)) {
+                items.push(submissionItem(row, params.formsById, "needsLinking"));
             }
             return {
                 filter,
                 title: "Needs linking",
-                lead: "Submissions missing CRM attach targets or linkage confirmation.",
-                items,
+                lead: "Submitted intake missing CRM attach targets — link before document generation.",
+                items: sortItems(items),
                 empty: "No linkage flags in this inbox.",
+            };
+        }
+        case "recent": {
+            for (const row of sortSubmissionsByActivity(lanes.recentlySubmitted)) {
+                items.push(submissionItem(row, params.formsById, "recentlySubmitted"));
+            }
+            return {
+                filter,
+                title: "Recent intake",
+                lead: "Newest submitted intake cleared for review — generate documents or continue workflows.",
+                items: sortItems(items),
+                empty: "No recently submitted intake in this workload.",
             };
         }
         case "waiting": {
             for (const s of params.sessions.filter((x) => x.status === "in_progress")) {
                 items.push({
                     id: `session-${s.id}`,
-                    title: s.packet_name,
-                    meta: "Packet in progress",
+                    title: "Family completing packet",
+                    meta: `${s.packet_name} · In progress — monitor for completion`,
                     href: `${FORMS_MODULE_ROUTES.packetSessions}/${encodeURIComponent(s.id)}`,
                     cta: "Monitor",
+                    sortKey: s.created_at,
                 });
             }
-            for (const row of lanes.drafts) {
-                items.push({
-                    id: `sub-${row.id}`,
-                    title: params.formsById[row.form_definition_id] ?? "Form",
-                    meta: "Draft — not submitted",
-                    href: `${ADMIN_FORMS_UI_BASE}/${row.form_definition_id}/submissions/${row.id}`,
-                    cta: "Open",
-                });
+            for (const row of sortSubmissionsByActivity(lanes.drafts)) {
+                items.push(submissionItem(row, params.formsById, "drafts"));
             }
             return {
                 filter,
                 title: "Waiting on families",
                 lead: "In-progress packets and draft submissions.",
-                items,
+                items: sortItems(items),
                 empty: "No families are mid-intake right now.",
             };
         }
@@ -164,9 +200,10 @@ export function buildIntakeWorkspaceFilterPanel(
                 items.push({
                     id: `form-${f.id}`,
                     title: f.name,
-                    meta: f.has_published_version ? "Published" : "Needs publish",
+                    meta: f.has_published_version ? "Published — ready to distribute" : "Needs publish before distribution",
                     href: `${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(f.id)}`,
                     cta: "Open",
+                    sortKey: f.name,
                 });
             }
             return {
@@ -182,9 +219,10 @@ export function buildIntakeWorkspaceFilterPanel(
                 items.push({
                     id: `pkt-${p.id}`,
                     title: p.name,
-                    meta: "Packet workflow",
+                    meta: "Multi-step intake workflow definition",
                     href: `${FORMS_MODULE_ROUTES.packetDefinitions}/${encodeURIComponent(p.id)}`,
                     cta: "Builder",
+                    sortKey: p.name,
                 });
             }
             return {
@@ -201,6 +239,7 @@ export function buildIntakeWorkspaceFilterPanel(
 export function defaultIntakeWorkspaceFilter(counts: Record<IntakeWorkspaceFilterKey, number>): IntakeWorkspaceFilterKey {
     if (counts.needs_review > 0) return "needs_review";
     if (counts.needs_linking > 0) return "needs_linking";
+    if (counts.recent > 0) return "recent";
     if (counts.waiting > 0) return "waiting";
     return "forms";
 }

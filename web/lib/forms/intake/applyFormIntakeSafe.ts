@@ -12,6 +12,12 @@ import {
     phoneLookupVariants,
 } from "./intakePersonMatch";
 import { parseIntakeAutoCreateFlags } from "./parseIntakeAutoCreateFlags";
+import { parseIntakeLinkDefaults, resolveIntakeOpportunitySource } from "./parseIntakeLinkDefaults";
+import {
+    findExistingIntakeOpportunity,
+    findCustomerMemberIdOnOpportunity,
+    resolveIntakeWorkUnitId,
+} from "./intakeOpportunityDedup";
 
 async function listPersonIdsByEmail(
     supabase: SupabaseClient,
@@ -112,6 +118,8 @@ export async function applyFormIntakeSafe(
     input: ApplyFormIntakeSafeInput
 ): Promise<ApplyFormIntakeSafeResult> {
     const flags = parseIntakeAutoCreateFlags(input.linkMetadata);
+    const linkDefaults = parseIntakeLinkDefaults(input.linkMetadata);
+    const intakeSource = resolveIntakeOpportunitySource(input.linkMetadata);
     const meta = parseFormIntakeMeta(input.payload.meta) as FormIntakeMeta | null;
     const intake = meta ?? {};
 
@@ -285,47 +293,114 @@ export async function applyFormIntakeSafe(
         "Web intake";
     const status_key =
         (typeof oppHint.status_key === "string" && oppHint.status_key.trim()) ||
+        linkDefaults.default_opportunity_status_key ||
         input.defaultOpportunityStatusKey ||
         "new";
 
+    let opportunityDedupStrategy: "created" | "attached_existing" | "ambiguous" | "skipped" = "skipped";
+    let workUnitDepartmentMismatch = false;
+
     if (!opportunityId && flags.auto_create_opportunity) {
-        const oppPayload: Record<string, unknown> = {
-            org_id: input.orgId,
-            vertical_id: verticalId,
-            customer_id: customerId,
-            primary_person_id: personId,
-            primary_contact_id: null,
-            name: oppName,
-            status: "open",
-            source: "public_form",
-            status_key,
-            metadata: {
-                ...(typeof oppHint.metadata === "object" && oppHint.metadata ? oppHint.metadata : {}),
-                form_intake: true,
-                idempotency_key: intake.idempotency_key ?? null,
-            },
-        };
-        const stageId =
-            typeof oppHint.pipeline_stage_id === "string" && oppHint.pipeline_stage_id.trim()
-                ? oppHint.pipeline_stage_id.trim()
+        const childHint = intake.child;
+        const childFirst =
+            childHint && typeof childHint === "object" && typeof childHint.first_name === "string"
+                ? childHint.first_name
                 : null;
-        if (stageId) oppPayload.pipeline_stage_id = stageId;
+        const childLast =
+            childHint && typeof childHint === "object" && typeof childHint.last_name === "string"
+                ? childHint.last_name
+                : null;
 
-        await normalizeOpportunityWritePayload(supabase, oppPayload, "forms/applyFormIntakeSafe");
-
-        const { data: oppRow, error: oppErr } = await supabase.from("opportunities").insert(oppPayload).select("id").single();
-        if (oppErr || !oppRow) throw new Error(oppErr?.message ?? "Opportunity insert failed");
-        opportunityId = (oppRow as { id: string }).id;
-
-        const { error: opErr } = await supabase.from("opportunity_persons").insert({
-            org_id: input.orgId,
-            opportunity_id: opportunityId,
-            person_id: personId,
-            role_type: "family_member",
-            metadata: { source: "public_form_intake", role: "primary_guardian" },
+        const dedup = await findExistingIntakeOpportunity(supabase, {
+            orgId: input.orgId,
+            personId: personId!,
+            locationId: linkDefaults.default_location_id,
+            childFirst,
+            childLast,
         });
-        if (opErr && opErr.code !== "23505") {
-            throw new Error(`opportunity_persons insert failed: ${opErr.message}`);
+
+        if (dedup.kind === "ambiguous") {
+            return {
+                person_id: personId,
+                customer_id: customerId,
+                customer_member_id: customerMemberId,
+                opportunity_id: null,
+                outcomeMeta: outcomeBase({
+                    intake_resolution_path: "ambiguous_opportunity",
+                    intake_match_strategy: matchStrategy,
+                    intake_match_confidence: confidence,
+                    intake_needs_review: true,
+                    intake_review_reason:
+                        "Multiple open opportunities match this guardian, child, and location — link manually.",
+                    intake_opportunity_match: "ambiguous",
+                    intake_opportunity_candidate_ids: dedup.candidateIds,
+                    intake_candidate_email_count: emailCount,
+                    intake_candidate_phone_count: phoneCount,
+                }),
+            };
+        }
+
+        if (dedup.kind === "matched") {
+            opportunityId = dedup.opportunityId;
+            opportunityDedupStrategy = "attached_existing";
+        } else {
+            const workUnitResolved = await resolveIntakeWorkUnitId(
+                supabase,
+                input.orgId,
+                linkDefaults.default_work_unit_id,
+                linkDefaults.default_department_id
+            );
+            workUnitDepartmentMismatch = workUnitResolved.department_mismatch;
+
+            const oppPayload: Record<string, unknown> = {
+                org_id: input.orgId,
+                vertical_id: verticalId,
+                customer_id: customerId,
+                primary_person_id: personId,
+                primary_contact_id: null,
+                name: oppName,
+                status: "open",
+                source: intakeSource,
+                status_key,
+                metadata: {
+                    ...(typeof oppHint.metadata === "object" && oppHint.metadata ? oppHint.metadata : {}),
+                    form_intake: true,
+                    idempotency_key: intake.idempotency_key ?? null,
+                },
+            };
+            if (linkDefaults.default_location_id) {
+                oppPayload.location_id = linkDefaults.default_location_id;
+            }
+            if (workUnitResolved.work_unit_id) {
+                oppPayload.work_unit_id = workUnitResolved.work_unit_id;
+            }
+            const stageId =
+                typeof oppHint.pipeline_stage_id === "string" && oppHint.pipeline_stage_id.trim()
+                    ? oppHint.pipeline_stage_id.trim()
+                    : null;
+            if (stageId) oppPayload.pipeline_stage_id = stageId;
+
+            await normalizeOpportunityWritePayload(supabase, oppPayload, "forms/applyFormIntakeSafe");
+
+            const { data: oppRow, error: oppErr } = await supabase
+                .from("opportunities")
+                .insert(oppPayload)
+                .select("id")
+                .single();
+            if (oppErr || !oppRow) throw new Error(oppErr?.message ?? "Opportunity insert failed");
+            opportunityId = (oppRow as { id: string }).id;
+
+            const { error: opErr } = await supabase.from("opportunity_persons").insert({
+                org_id: input.orgId,
+                opportunity_id: opportunityId,
+                person_id: personId,
+                role_type: "family_member",
+                metadata: { source: "public_form_intake", role: "primary_guardian" },
+            });
+            if (opErr && opErr.code !== "23505") {
+                throw new Error(`opportunity_persons insert failed: ${opErr.message}`);
+            }
+            opportunityDedupStrategy = "created";
         }
     }
 
@@ -344,44 +419,63 @@ export async function applyFormIntakeSafe(
         !customerMemberId
     ) {
         const ch = child!;
-        const display =
-            (typeof ch.display_name === "string" && ch.display_name.trim()) ||
-            [ch.first_name, ch.last_name].filter((x) => typeof x === "string" && x.trim()).join(" ").trim() ||
-            "Child";
-        const cmPayload: Record<string, unknown> = {
-            org_id: input.orgId,
-            customer_id: customerId,
-            display_name: display,
-            first_name: typeof ch.first_name === "string" ? ch.first_name.trim() || null : null,
-            last_name: typeof ch.last_name === "string" ? ch.last_name.trim() || null : null,
-            dob: typeof ch.dob === "string" && /^\d{4}-\d{2}-\d{2}$/.test(ch.dob) ? ch.dob : null,
-            relationship: "child",
-            metadata: { source: "public_form_intake", needs_review: true },
-        };
+        const existingMemberId = await findCustomerMemberIdOnOpportunity(
+            supabase,
+            input.orgId,
+            opportunityId,
+            typeof ch.first_name === "string" ? ch.first_name : null,
+            typeof ch.last_name === "string" ? ch.last_name : null
+        );
+        if (existingMemberId) {
+            customerMemberId = existingMemberId;
+        } else {
+            const display =
+                (typeof ch.display_name === "string" && ch.display_name.trim()) ||
+                [ch.first_name, ch.last_name].filter((x) => typeof x === "string" && x.trim()).join(" ").trim() ||
+                "Child";
+            const cmPayload: Record<string, unknown> = {
+                org_id: input.orgId,
+                customer_id: customerId,
+                display_name: display,
+                first_name: typeof ch.first_name === "string" ? ch.first_name.trim() || null : null,
+                last_name: typeof ch.last_name === "string" ? ch.last_name.trim() || null : null,
+                dob: typeof ch.dob === "string" && /^\d{4}-\d{2}-\d{2}$/.test(ch.dob) ? ch.dob : null,
+                relationship: "child",
+                metadata: { source: "public_form_intake", needs_review: true },
+            };
 
-        const { data: cm, error: cmErr } = await supabase.from("customer_members").insert(cmPayload).select("id").single();
-        if (cmErr || !cm) throw new Error(cmErr?.message ?? "customer_members insert failed");
-        customerMemberId = (cm as { id: string }).id;
+            const { data: cm, error: cmErr } = await supabase
+                .from("customer_members")
+                .insert(cmPayload)
+                .select("id")
+                .single();
+            if (cmErr || !cm) throw new Error(cmErr?.message ?? "customer_members insert failed");
+            customerMemberId = (cm as { id: string }).id;
 
-        const { error: ocmErr } = await supabase.from("opportunity_customer_members").insert({
-            org_id: input.orgId,
-            opportunity_id: opportunityId,
-            customer_member_id: customerMemberId,
-            metadata: { source: "public_form_intake", needs_review: true },
-        });
-        if (ocmErr && ocmErr.code !== "23505") {
-            throw new Error(`opportunity_customer_members insert failed: ${ocmErr.message}`);
+            const { error: ocmErr } = await supabase.from("opportunity_customer_members").insert({
+                org_id: input.orgId,
+                opportunity_id: opportunityId,
+                customer_member_id: customerMemberId,
+                metadata: { source: "public_form_intake", needs_review: true },
+            });
+            if (ocmErr && ocmErr.code !== "23505") {
+                throw new Error(`opportunity_customer_members insert failed: ${ocmErr.message}`);
+            }
+            memberAutoCreated = true;
         }
-        memberAutoCreated = true;
     }
 
     const intakeNeedsReview =
         matchStrategy === "reuse_submission_person_id"
-            ? false
-            : personCreated || matchStrategy === "matched_phone" || memberAutoCreated;
+            ? workUnitDepartmentMismatch
+            : personCreated || matchStrategy === "matched_phone" || memberAutoCreated || workUnitDepartmentMismatch;
 
     let intakeReviewReason: string | undefined;
-    if (intakeNeedsReview) {
+    if (workUnitDepartmentMismatch) {
+        intakeReviewReason =
+            "Work unit does not belong to the configured department on this link — verify routing before generating documents.";
+    }
+    if (intakeNeedsReview && !intakeReviewReason) {
         if (personCreated) {
             intakeReviewReason =
                 "A new person record was created from this form — verify identity before generating documents.";
@@ -405,6 +499,8 @@ export async function applyFormIntakeSafe(
         intake_review_reason: intakeReviewReason,
         intake_candidate_email_count: emailCount,
         intake_candidate_phone_count: phoneCount,
+        ...(opportunityDedupStrategy !== "skipped" ? { intake_opportunity_match: opportunityDedupStrategy } : {}),
+        ...(workUnitDepartmentMismatch ? { intake_work_unit_department_mismatch: true } : {}),
     });
 
     return {

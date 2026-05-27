@@ -9,6 +9,14 @@ export type FormPublicLinkMetadata = {
     /** Required for intake — UUID of a row in `verticals`. */
     default_vertical_id?: string;
     default_opportunity_status_key?: string;
+    /** Optional CRM routing on opportunity create (Runtime Test 1A). */
+    default_location_id?: string;
+    default_work_unit_id?: string;
+    /** When set with work unit, work unit must belong to this department or it is omitted. */
+    default_department_id?: string;
+    /** Override opportunity source; otherwise `embed_mode: true` → `embed`. */
+    intake_opportunity_source?: "public_form" | "embed";
+    embed_mode?: boolean;
     /**
      * Maps `payload.values` field ids into guardian/child intake hints.
      * Defaults match common demo shapes (`guardian_email`, `child_first_name`, …).

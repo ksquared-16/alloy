@@ -2,7 +2,7 @@
 
 import clsx from "clsx";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { TechnicalDetailDisclosure } from "@/components/forms/review";
 import { FormsWorkspaceShell } from "@/components/forms/workspace";
@@ -11,7 +11,6 @@ import { IntakeWorkspaceFilterPanelView } from "@/components/forms/workspace/Int
 import { IntakeWorkloadFilterStrip } from "@/components/forms/workspace/IntakeWorkloadFilterStrip";
 import type { IntakeCommandCenterSessionRow } from "@/lib/forms/intakeCommandCenterPresentation";
 import { deriveIntakeCommandCenterSnapshot } from "@/lib/forms/intakeCommandCenterPresentation";
-import { FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
 import {
     buildIntakeWorkspaceFilterPanel,
     countIntakeWorkspaceFilters,
@@ -60,9 +59,13 @@ type Props = {
     showCreate?: boolean;
     onToggleCreate?: () => void;
     createPanel?: ReactNode;
+    onRefresh?: () => void;
+    /** Resolved CRM org — surfaced in operator notes for visibility debugging. */
+    activeOrgId?: string | null;
 };
 
 export function IntakeWorkspaceHubView({
+    viewerTz,
     forms,
     sessions,
     packets,
@@ -73,6 +76,8 @@ export function IntakeWorkspaceHubView({
     showCreate = false,
     onToggleCreate,
     createPanel,
+    onRefresh,
+    activeOrgId = null,
 }: Props) {
     const formsById = Object.fromEntries(forms.map((f) => [f.id, f.name]));
     const filterCounts = useMemo(
@@ -97,9 +102,21 @@ export function IntakeWorkspaceHubView({
         [submissions, sessions, forms, formsById]
     );
 
-    const [activeFilter, setActiveFilter] = useState<IntakeWorkspaceFilterKey>(() =>
-        defaultIntakeWorkspaceFilter(filterCounts)
-    );
+    const recommendedFilter = useMemo(() => defaultIntakeWorkspaceFilter(filterCounts), [filterCounts]);
+
+    const [activeFilter, setActiveFilter] = useState<IntakeWorkspaceFilterKey>(recommendedFilter);
+    const [filterPinnedByUser, setFilterPinnedByUser] = useState(false);
+
+    /** Workload data loads after mount — follow highest-priority filter once counts arrive. */
+    useEffect(() => {
+        if (loading || filterPinnedByUser) return;
+        setActiveFilter(recommendedFilter);
+    }, [loading, recommendedFilter, filterPinnedByUser]);
+
+    const handleSelectFilter = (filter: IntakeWorkspaceFilterKey) => {
+        setFilterPinnedByUser(true);
+        setActiveFilter(filter);
+    };
 
     const panel = useMemo(
         () =>
@@ -136,22 +153,13 @@ export function IntakeWorkspaceHubView({
                     <div className={opOrientationSurface} data-testid="intake-command-orientation">
                         <p className="text-sm font-semibold text-alloy-midnight">{commandCenter.urgencyHeadline}</p>
                         <p className={clsx("mt-1", opMetadata)}>{commandCenter.healthyLine}</p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                            {commandCenter.primaryCta ?
+                        {commandCenter.primaryCta ?
+                            <div className="mt-3">
                                 <Link href={commandCenter.primaryCta.href} className={intakeWorkspaceBtnPrimary}>
                                     {commandCenter.primaryCta.label}
                                 </Link>
-                            :   null}
-                            <Link href={FORMS_MODULE_ROUTES.submissionsHub} className={intakeWorkspaceBtnSecondary}>
-                                Submissions
-                            </Link>
-                            <Link href={FORMS_MODULE_ROUTES.packetSessions} className={intakeWorkspaceBtnSecondary}>
-                                Sessions
-                            </Link>
-                            <Link href={FORMS_MODULE_ROUTES.packetDefinitions} className={intakeWorkspaceBtnSecondary}>
-                                Packets
-                            </Link>
-                        </div>
+                            </div>
+                        :   null}
                     </div>
 
                     <IntakeCommandCenterKpiStrip kpis={commandCenter.kpis} />
@@ -160,10 +168,10 @@ export function IntakeWorkspaceHubView({
                         <IntakeWorkloadFilterStrip
                             counts={filterCounts}
                             selected={activeFilter}
-                            onSelect={setActiveFilter}
+                            onSelect={handleSelectFilter}
                         />
                         <div className="rounded-xl bg-white/95 px-4 py-3 shadow-[0_1px_3px_rgba(49,57,77,0.05)] ring-1 ring-alloy-midnight/[0.07]">
-                            <IntakeWorkspaceFilterPanelView panel={panel} />
+                            <IntakeWorkspaceFilterPanelView panel={panel} viewerTz={viewerTz} onRefresh={onRefresh} />
                         </div>
                     </div>
 
@@ -172,6 +180,14 @@ export function IntakeWorkspaceHubView({
                             Publish before distributing. Native admin authoring and review — iframe embed is for external
                             intake only.
                         </p>
+                        {!loading && activeOrgId ?
+                            <p className={clsx("mt-2 font-mono text-[11px]", opMetadata)} data-testid="intake-workspace-org">
+                                Active org: {activeOrgId}
+                                {submissions.length === 0 ?
+                                    " · No submissions returned for this org — confirm you are logged into Alloy Bend (7803388d…) if testing Runtime Test 1 fixtures."
+                                :   ` · ${submissions.length} submission row(s) loaded.`}
+                            </p>
+                        :   null}
                     </TechnicalDetailDisclosure>
                 </div>
             }

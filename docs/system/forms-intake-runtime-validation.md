@@ -1,9 +1,12 @@
 # Forms intake — runtime validation plan
 
-**Status:** Active (FD-14)  
+**Status:** Active — **Runtime Test 1 closed** on medication demo embed path (2026-05-27)  
 **Scope:** Manual QA path + configuration doctrine for public/embed/packet submission outcomes. **No OCR.** **No default opportunity creation.**
 
-Aligns with [forms-intake-prefill-doctrine.md](./forms-intake-prefill-doctrine.md) and [forms-intake-embed-doctrine.md](./forms-intake-embed-doctrine.md).
+**Completed:** [Runtime Test 1](../sprints/05_2026/forms_runtime_test_1_external_intake_opportunity.md) — embed intake → opportunity create + dedup attach.  
+**Next:** [forms-intake-runtime-phase.md](./forms-intake-runtime-phase.md) — operating model + Tests 2–5 plan.
+
+Aligns with [forms-intake-prefill-doctrine.md](./forms-intake-prefill-doctrine.md), [forms-intake-embed-doctrine.md](./forms-intake-embed-doctrine.md), and [../sprints/05_2026/forms_runtime_test_1_external_intake_opportunity.md](../sprints/05_2026/forms_runtime_test_1_external_intake_opportunity.md).
 
 ---
 
@@ -27,15 +30,57 @@ A submitted form **does not** automatically become a new Opportunity. CRM side e
 
 - Link metadata type: `FormPublicLinkMetadata` — `web/lib/public/forms/publicFormTypes.ts`
 - Auto-create flags parser: `parseIntakeAutoCreateFlags` — defaults **false** (production-safe)
+- Link routing defaults: `parseIntakeLinkDefaults`, `resolveIntakeOpportunitySource` — location, work unit, department, status, embed source
+- Opportunity dedup: `intakeOpportunityDedup` — open-opp match by person + optional location + child name; `intake_opportunity_match` outcome meta
 - Intake apply: `applyFormIntakeSafe` — runs on final submit when `linkRequiresLeadCapture(metadata)`
 - Operator debug: `buildPublicLinkIntakeDebug` — submission review technical panel
 
 **Not shipped (future config UI):**
 
 - First-class `submission_outcome: create_opportunity | attach_record | task | document_only` enum in admin distribution UI
-- Department / work unit mapping on intake outcome (today: vertical + status_key on metadata)
+- Visual admin editor for department / work unit / location routing on link mint (today: metadata JSON or seed/API patch)
 
 Until a dedicated UI ships, operators set outcomes via **public link metadata** at mint time (API or seed scripts).
+
+---
+
+## Runtime Test 1 — executed results (medication demo)
+
+**Fixture:** `medication_authorization_demo` on Alloy Bend staging — embed token `alloy_demo_medication_authorization_v1`.  
+Full IDs and link metadata: [forms_runtime_test_1_external_intake_opportunity.md § Step 5](../sprints/05_2026/forms_runtime_test_1_external_intake_opportunity.md).
+
+### Test 1C — first submit → create opportunity
+
+| Check | Result |
+|-------|--------|
+| submissionId | `c5e2e078-97ee-4e17-9d66-1527a9f0c46b` |
+| opportunityId | `d8452586-23ea-4862-894c-9f500f390f70` |
+| `intake_opportunity_match` | `created` |
+| `source` / `status_key` | `embed` / `new` |
+| `location_id` | `c3409d2d-0481-4e6b-939f-9c39d0a153a5` |
+| `work_unit_id` | `c2b640e5-e09a-4319-9d1b-d752ebb80122` |
+| `vertical_id` | `64cb7d29-ec79-494b-a4e7-d8e9b94f1fe2` |
+| Workload lane | **Needs review** (`intake_needs_review: true`, new person) |
+
+### Test 1D — duplicate submit → attach existing
+
+| Check | Result |
+|-------|--------|
+| submissionId | `50ac6911-5887-4934-9ae8-a221d61f81f6` |
+| opportunityId | `d8452586-23ea-4862-894c-9f500f390f70` (same as 1C) |
+| `intake_opportunity_match` | `attached_existing` |
+| New opportunity row | None |
+| Workload lane | **Recently submitted** (`intake_needs_review: false`, email match) |
+
+### Lane routing (inbox)
+
+| Lane | Trigger (submitted rows) |
+|------|--------------------------|
+| **Needs review** | `intake_needs_review: true` or linkage `needs_review` — e.g. new person on first cold submit |
+| **Recently submitted** | CRM FKs populated, no review flag — e.g. dedup attach on second submit |
+| **Needs linking** | Missing person/customer/opportunity FKs or explicit linking attention |
+
+Resolver: `resolveSubmissionInboxLane` — `web/lib/forms/submissionInboxPresentation.ts`.
 
 ---
 
@@ -49,6 +94,10 @@ Until a dedicated UI ships, operators set outcomes via **public link metadata** 
   "mode": "intake",
   "default_vertical_id": "<uuid>",
   "default_opportunity_status_key": "new",
+  "default_location_id": "<uuid>",
+  "default_work_unit_id": "<uuid>",
+  "default_department_id": "<uuid>",
+  "intake_opportunity_source": "embed",
   "intake_field_paths": { "child_first_name": "values.child_first_name", ... },
   "auto_create_person": true,
   "auto_create_customer": true,
@@ -68,12 +117,16 @@ Until a dedicated UI ships, operators set outcomes via **public link metadata** 
 | `lead_capture` / `intake` / `mode` | Gate `applyFormIntakeSafe` on final submit |
 | `default_vertical_id` | Required for opportunity create |
 | `default_opportunity_status_key` | Opportunity `status_key` when created |
+| `default_location_id` | Opportunity `location_id` when created |
+| `default_work_unit_id` | Opportunity `work_unit_id` when created (validated against department when both set) |
+| `default_department_id` | Validates work unit belongs to department; mismatch omits work unit + flags review |
+| `intake_opportunity_source` | Explicit opportunity `source` override (`embed` \| `public_form`) |
 | `intake_field_paths` | Maps `payload.values` → guardian/child intake hints |
 | `auto_create_*` | Fine-grained CRM row creation toggles |
 | `prefill_*` / `source_entity_*` | Existing-record hydration |
-| `embed_mode` | Embed chrome (renderer unchanged) |
+| `embed_mode` | Embed chrome; with `intake_opportunity_source` sets opportunity `source` |
 
-**Source labels:** Opportunity `source` is set server-side (`public_form` today in intake paths). Packet/embed distinction is via stamped `form_context_mode` and link provenance — not a separate hardcoded branch per form.
+**Source labels:** Opportunity `source` is set in `applyFormIntakeSafe` via `resolveIntakeOpportunitySource` — `intake_opportunity_source` override, else `embed_mode: true` → `embed`, else `public_form`. Packet/embed distinction also via stamped `form_context_mode` and link provenance.
 
 ---
 
@@ -124,15 +177,16 @@ Seed into a staging org via AdminV2 publish + link mint, or extend a org seed sc
 
 ### 4. Iframe / embed submission
 
+- [x] Medication demo: load `/forms/embed/alloy_demo_medication_authorization_v1` — **Test 1C/1D passed**
 - [ ] Mint link with `embed_mode` + allowed origin on `form_public_links.allowed_embed_origins`
 - [ ] Load `/forms/embed/[token]` in iframe host (or admin preview with `preview=1`)
 - [ ] Submit — same payload path as public; origin checks pass
 
 ### 5. Submission → opportunity creation (opt-in only)
 
+- [x] Medication demo link with intake metadata + routing defaults — person/customer/member/opportunity FKs on submit (**Test 1C**)
+- [x] Second submit same guardian + child + location — same opportunity, `attached_existing` (**Test 1D**)
 - [ ] Mint link with `INTAKE_RUNTIME_VALIDATION_LINK_METADATA_OPPORTUNITY_INTAKE` + valid `default_vertical_id`
-- [ ] Submit with guardian + child hints
-- [ ] Verify person/customer/member/opportunity FKs on submission row
 - [ ] Repeat with **standard** metadata — confirm **no** opportunity created
 
 ### 6. Enrollment packet run-through
@@ -167,10 +221,28 @@ Seed into a staging org via AdminV2 publish + link mint, or extend a org seed sc
 
 ---
 
+## Remaining known gaps (post Runtime Test 1)
+
+Validated on **embed + medication demo + opportunity create/dedup** only. Still open:
+
+| Gap | Notes |
+|-----|-------|
+| **Forms hub UI polish regression** | `/adminV2/forms` workload presentation needs follow-up polish |
+| **Rich text inline field tokens** | Not built — composition authoring does not emit inline tokens for public render |
+| **Public `document_composition`** | Embed/public renderer uses flat `schema_json`; admin preview reads composition blocks |
+| **Packet runtime** | Enrollment / minimal packet step intake not validated in Test 1 |
+| **Review / finalize flow** | Submission case-file approve → document generate not validated in Test 1 |
+
+Prefilled fields, blank/manual fields, standard (no CRM) link, and packet run-through checklist items remain **unchecked** for FD-14 fixture form.
+
+---
+
 ## Related
 
 - [forms-intake-prefill-doctrine.md](./forms-intake-prefill-doctrine.md)
 - [forms-intake-embed-doctrine.md](./forms-intake-embed-doctrine.md)
+- [forms-intake-runtime-phase.md](./forms-intake-runtime-phase.md)
+- [../sprints/05_2026/forms_runtime_test_1_external_intake_opportunity.md](../sprints/05_2026/forms_runtime_test_1_external_intake_opportunity.md)
 - [../product/documents-and-forms.md](../product/documents-and-forms.md)
 - [../sprints/05_2026/forms_intelligence_document_infrastructure.md](../sprints/05_2026/forms_intelligence_document_infrastructure.md)
 

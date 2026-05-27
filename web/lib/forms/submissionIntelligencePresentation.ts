@@ -15,6 +15,7 @@ import {
     type SubmissionInboxLaneKey,
     type SubmissionInboxRow,
 } from "@/lib/forms/submissionInboxPresentation";
+import { deriveSubmissionOperationalNarrative } from "@/lib/forms/submissionOperationalNarrative";
 
 export type SubmissionReadinessTone = "ready" | "attention" | "blocked" | "waiting" | "neutral";
 
@@ -200,6 +201,10 @@ function operationalSummary(params: {
     confidence: SubmissionLinkageConfidence;
     missing: string[];
 }): string {
+    const narrative = deriveSubmissionOperationalNarrative(params.row);
+    if (narrative.detail && narrative.detail !== narrative.headline) {
+        return narrative.detail;
+    }
     const m = metaRecord(params.row.payload?.meta);
     const reason =
         typeof m.intake_review_reason === "string" && m.intake_review_reason.trim() ?

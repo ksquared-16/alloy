@@ -15,6 +15,7 @@ type Props = {
     viewerTz: string;
     href: string;
     emphasize?: boolean;
+    onQuickReview?: () => void;
 };
 
 export function SubmissionInboxRowView(props: Props) {

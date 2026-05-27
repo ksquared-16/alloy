@@ -27,6 +27,7 @@ type Props = {
     viewerTz: string;
     href: string;
     emphasize?: boolean;
+    onQuickReview?: () => void;
 };
 
 /** Compressed operational intelligence card (FD-2). */
@@ -37,6 +38,7 @@ export function SubmissionIntelligenceCard({
     viewerTz,
     href,
     emphasize = false,
+    onQuickReview,
 }: Props) {
     const timestamp =
         row.submitted_at ?
@@ -71,13 +73,20 @@ export function SubmissionIntelligenceCard({
                         tone={READINESS_TONE[intelligence.readinessTone]}
                     />
                 </div>
-                <Link
-                    href={href}
-                    className={actionClass}
-                    data-testid={`submission-inbox-action-${row.id}`}
-                >
-                    {intelligence.accelerationCta.label}
-                </Link>
+                <div className="flex flex-shrink-0 flex-wrap gap-2">
+                    {onQuickReview ?
+                        <button type="button" className={intakeWorkspaceBtnPrimary} onClick={onQuickReview}>
+                            Quick review
+                        </button>
+                    :   null}
+                    <Link
+                        href={href}
+                        className={onQuickReview ? intakeWorkspaceBtnSecondary : actionClass}
+                        data-testid={`submission-inbox-action-${row.id}`}
+                    >
+                        {onQuickReview ? "Open" : intelligence.accelerationCta.label}
+                    </Link>
+                </div>
             </div>
 
             <p className={clsx("mt-1 line-clamp-2", opBody)}>{intelligence.operationalSummary}</p>

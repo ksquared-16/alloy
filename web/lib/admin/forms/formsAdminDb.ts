@@ -229,6 +229,7 @@ export async function dbListSubmissions(
         .from("form_submissions")
         .select("*")
         .eq("org_id", orgId)
+        .order("submitted_at", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
         .limit(filters.limit ?? 100);
     if (filters.form_definition_id) q = q.eq("form_definition_id", filters.form_definition_id);
