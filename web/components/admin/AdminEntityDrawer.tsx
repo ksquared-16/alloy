@@ -150,7 +150,8 @@ import {
 } from "@/lib/admin/drawer/inquiryChildrenDrawerRows";
 import { OpportunityInquirySummaryActivity } from "@/components/admin/opportunity/OpportunityInquirySummaryActivity";
 import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
-import { deriveTourMetadataMirrorFromBooking, TOUR_BOOKING_OPPORTUNITY_STATUS } from "@/lib/tours/opportunity/tourBookingOpportunityIntegration";
+import { TOUR_BOOKING_OPPORTUNITY_STATUS } from "@/lib/tours/opportunity/tourBookingOpportunityIntegration";
+import { patchOpportunityDrawerRecordAfterTourBooking } from "@/lib/admin/opportunityDrawerTourBookingRefresh";
 import { validateQueueDefinition, type QueueDefinitionV1, type QueueFilter } from "@/lib/config/queueDefinitionSchema";
 import {
     JobDrawerV2TabBar,
@@ -1406,7 +1407,7 @@ export default function AdminEntityDrawer() {
     const opportunityPrimaryHydrateDoneRef = useRef<string | null>(null);
     const opportunityBackgroundFullInFlightRef = useRef<string | null>(null);
     const opportunityBackgroundFullDoneRef = useRef<string | null>(null);
-    const runOpportunityBackgroundFullHydrateRef = useRef<(() => void) | null>(null);
+    const runOpportunityBackgroundFullHydrateRef = useRef<((opts?: { cacheBust?: boolean }) => Promise<void>) | null>(null);
     /** Lazy `surface=relationship_member_persons` after `full` when `_member_person_graph_pending`; no loader. */
     const memberPersonGraphOverlayInFlightRef = useRef<string | null>(null);
     const memberPersonGraphOverlayDoneRef = useRef<string | null>(null);
@@ -1903,8 +1904,7 @@ export default function AdminEntityDrawer() {
         ) {
             allowOpportunityDrawerFullRefetch(drawer.id);
             opportunityBackgroundFullDoneRef.current = null;
-            runOpportunityBackgroundFullHydrateRef.current?.();
-            return Promise.resolve();
+            return runOpportunityBackgroundFullHydrateRef.current?.({ cacheBust: true }) ?? Promise.resolve();
         }
         const url = buildAdminEntityFetchUrl(
             drawer.type,
@@ -2428,21 +2428,23 @@ export default function AdminEntityDrawer() {
             });
     }, [drawer.type, drawer.id, drawer.jobRecordSurface, opportunityRecordHydrationPending]);
 
-    const runOpportunityBackgroundFullHydrate = useCallback(() => {
+    const runOpportunityBackgroundFullHydrate = useCallback((opts?: { cacheBust?: boolean }): Promise<void> => {
         const hydrateId = resolveOpportunityHydrateId(drawer.type, drawer.id);
-        if (!hydrateId) return;
-        if (!tryBeginOpportunityDrawerHydrate(hydrateId, "full")) return;
-        const url = buildAdminEntityFetchUrl(drawer.type, hydrateId, drawer.jobRecordSurface, "full");
-        if (!url) {
+        if (!hydrateId) return Promise.resolve();
+        if (!tryBeginOpportunityDrawerHydrate(hydrateId, "full")) return Promise.resolve();
+        const baseUrl = buildAdminEntityFetchUrl(drawer.type, hydrateId, drawer.jobRecordSurface, "full");
+        if (!baseUrl) {
             finishOpportunityDrawerHydrate(hydrateId, "full", "abort");
             clearOpportunityDrawerBackgroundFullSchedule(hydrateId);
-            return;
+            return Promise.resolve();
         }
+        const url = opts?.cacheBust ? `${baseUrl}&_drawer_refresh=${Date.now()}` : baseUrl;
         opportunityBackgroundFullInFlightRef.current = hydrateId;
         if (typeof window !== "undefined" && typeof performance !== "undefined") {
             alloyPerfSet("drawer_opportunity_full_req", performance.now());
         }
-        dedupeAdminFetch(url, workspaceDataFetchInit())
+        const fetchFn = opts?.cacheBust ? fetch : dedupeAdminFetch;
+        return fetchFn(url, workspaceDataFetchInit())
             .then((res) => {
                 captureDrawerEntityResponsePerf(res);
                 if (!res.ok) throw new Error(res.status === 404 ? "Not found" : "Failed to load");
@@ -2490,6 +2492,7 @@ export default function AdminEntityDrawer() {
                 opportunityBackgroundFullDoneRef.current = hydrateId;
                 finishOpportunityDrawerHydrate(hydrateId, "full", "fail");
                 setOpportunityBackgroundFullHydrateFailed(true);
+                throw e;
             });
     }, [drawer.type, drawer.id, drawer.jobRecordSurface]);
     runOpportunityBackgroundFullHydrateRef.current = runOpportunityBackgroundFullHydrate;
@@ -14748,29 +14751,19 @@ export default function AdminEntityDrawer() {
                     if (!drawer.id || drawer.id === "new" || drawer.type !== "opportunities") return;
                     const booking = result?.booking;
                     const sk = booking && typeof booking.status_key === "string" ? booking.status_key : "";
-                    if (
-                        booking &&
-                        typeof booking.start_at === "string" &&
-                        typeof booking.timezone === "string" &&
-                        (sk === "confirmed" || sk === "rescheduled")
-                    ) {
+                    if (booking && typeof booking.start_at === "string" && typeof booking.timezone === "string") {
                         try {
-                            const mirror = deriveTourMetadataMirrorFromBooking(booking.start_at, booking.timezone);
                             setData((prev) => {
                                 if (!prev || typeof prev !== "object") return prev;
-                                const p = prev as Record<string, unknown>;
-                                const mdRaw = p.metadata;
-                                const md =
-                                    mdRaw && typeof mdRaw === "object" && !Array.isArray(mdRaw)
-                                        ? { ...(mdRaw as Record<string, unknown>) }
-                                        : {};
-                                return {
-                                    ...p,
-                                    metadata: { ...md, ...mirror },
-                                    status_key: TOUR_BOOKING_OPPORTUNITY_STATUS.scheduled,
-                                };
+                                return patchOpportunityDrawerRecordAfterTourBooking(prev as Record<string, unknown>, {
+                                    start_at: booking.start_at,
+                                    timezone: booking.timezone,
+                                    status_key: sk,
+                                });
                             });
-                            setFormData((prev) => ({ ...prev, status_key: TOUR_BOOKING_OPPORTUNITY_STATUS.scheduled }));
+                            if (sk === "confirmed" || sk === "rescheduled") {
+                                setFormData((prev) => ({ ...prev, status_key: TOUR_BOOKING_OPPORTUNITY_STATUS.scheduled }));
+                            }
                         } catch {
                             /* invalid start_at — rely on refetch */
                         }
@@ -14817,27 +14810,18 @@ export default function AdminEntityDrawer() {
                             if (
                                 booking &&
                                 typeof booking.start_at === "string" &&
-                                typeof booking.timezone === "string" &&
-                                (sk === "confirmed" || sk === "rescheduled" || sk === "pending_approval" || sk === "requested")
+                                typeof booking.timezone === "string"
                             ) {
+                                const startAt = booking.start_at;
+                                const timezone = booking.timezone;
                                 try {
-                                    const mirror = deriveTourMetadataMirrorFromBooking(booking.start_at, booking.timezone);
                                     setData((prev) => {
                                         if (!prev || typeof prev !== "object") return prev;
-                                        const p = prev as Record<string, unknown>;
-                                        const mdRaw = p.metadata;
-                                        const md =
-                                            mdRaw && typeof mdRaw === "object" && !Array.isArray(mdRaw)
-                                                ? { ...(mdRaw as Record<string, unknown>) }
-                                                : {};
-                                        return {
-                                            ...p,
-                                            metadata: { ...md, ...mirror },
-                                            status_key:
-                                                sk === "confirmed" || sk === "rescheduled"
-                                                    ? TOUR_BOOKING_OPPORTUNITY_STATUS.scheduled
-                                                    : p.status_key,
-                                        };
+                                        return patchOpportunityDrawerRecordAfterTourBooking(prev as Record<string, unknown>, {
+                                            start_at: startAt,
+                                            timezone,
+                                            status_key: sk,
+                                        });
                                     });
                                     if (sk === "confirmed" || sk === "rescheduled") {
                                         setFormData((prev) => ({ ...prev, status_key: TOUR_BOOKING_OPPORTUNITY_STATUS.scheduled }));

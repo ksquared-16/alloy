@@ -66,10 +66,11 @@ describe("Opportunity tour schedule UX alignment", () => {
         expect(drawer).toContain("useOpportunityActiveTourBookings");
     });
 
-    it("AdminEntityDrawer slot booking handler mirrors confirmed booking metadata, syncs tour_scheduled status, and awaits refetch", () => {
+    it("AdminEntityDrawer slot booking handler refreshes tour mirror, attention, and awaits cache-busted refetch", () => {
         const src = readFileSync(drawerPath, "utf8");
-        expect(src).toContain("deriveTourMetadataMirrorFromBooking");
+        expect(src).toContain("patchOpportunityDrawerRecordAfterTourBooking");
         expect(src).toContain("TOUR_BOOKING_OPPORTUNITY_STATUS.scheduled");
         expect(src).toContain("if (rf) await rf;");
+        expect(src).toContain("cacheBust: true");
     });
 });
