@@ -14,7 +14,7 @@ const schema: FormSchemaV1 = {
 describe("FormDocumentAuthoringShell FD-12 / FD-14.5", () => {
     it("renders composition editor and live preview pane", () => {
         const html = renderToStaticMarkup(
-            <FormDocumentAuthoringShell schema={schema} onChange={() => {}} />
+            <FormDocumentAuthoringShell schema={schema} formName="Medication authorization" onChange={() => {}} />
         );
 
         expect(html).toContain('data-testid="form-document-authoring-shell"');
@@ -26,7 +26,7 @@ describe("FormDocumentAuthoringShell FD-12 / FD-14.5", () => {
 
     it("allocates a wider preview column on desktop", () => {
         const html = renderToStaticMarkup(
-            <FormDocumentAuthoringShell schema={schema} onChange={() => {}} />
+            <FormDocumentAuthoringShell schema={schema} formName="Medication authorization" onChange={() => {}} />
         );
 
         expect(html).toContain("minmax(420px,520px)");

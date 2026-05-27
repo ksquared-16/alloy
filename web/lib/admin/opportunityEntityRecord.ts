@@ -11,6 +11,7 @@ import {
   fetchEffectiveStatusDefinitionsTagged,
   displayLabelsFromDefinitions,
   resolveDisplayFromLabelMap,
+  type EffectiveStatusDefinitionsPack,
 } from "@/lib/admin/statusDefinitionsResolve";
 import type { FieldRegistryAttachMeta } from "@/lib/admin/entityFieldRegistryAttach";
 import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
@@ -37,6 +38,22 @@ import { attachOpportunityAttentionSuggestionBundle } from "@/lib/admin/opportun
 import { applyPrimaryPersonMirrorValuesToHostRecord } from "@/lib/admin/drawer/linkedRecordFieldEditing";
 import { loadInquiryChildCustomFieldValuesByOcmId } from "@/lib/admin/drawer/inquiryChildCustomFieldValues";
 import { normalizeIsoDateOnly } from "@/lib/fields/inquiryChildFieldRegistry";
+
+const EMPTY_OPPORTUNITY_STATUS_DEFS_PACK: EffectiveStatusDefinitionsPack = {
+  rows: [],
+  processCacheHit: false,
+  combinedCacheHit: false,
+  telemetry: {
+    normalized_entity_type: "opportunities",
+    process_cache_hit: false,
+    next_cache_attempted: false,
+    next_cache_hit: false,
+    uncached_ms: 0,
+    overrides_ms: null,
+    defaults_ms: null,
+    merge_ms: null,
+  },
+};
 
 type AdminSupabase = ReturnType<typeof createAdminClient>;
 
@@ -1334,7 +1351,7 @@ export async function respondOpportunityEntityGet(
         ? fetchEffectiveStatusDefinitionsTagged(supabase, oppOrgIdForDefs, "opportunities", {
             activeOnly: true,
           })
-        : Promise.resolve({ rows: [] as StatusDefinitionRow[] }),
+        : Promise.resolve(EMPTY_OPPORTUNITY_STATUS_DEFS_PACK),
     ]);
     const deptMetaPrimary = await fetchDepartmentMetadataForActivity(
       supabase,

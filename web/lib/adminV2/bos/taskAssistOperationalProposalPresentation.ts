@@ -46,7 +46,11 @@ export function taskAssistDraftProposalSummary(
 ): string {
     const ch = channel === "email" ? "Email" : "SMS";
     if (bootstrap?.communication_objective) {
-        return `${ch} · ${communicationObjectiveLabel(bootstrap.communication_objective)}`;
+        const key = bootstrap.communication_objective.trim();
+        const label = (OPERATIONAL_COMMUNICATION_OBJECTIVES as readonly string[]).includes(key)
+            ? communicationObjectiveLabel(key as OperationalCommunicationObjective)
+            : key;
+        return `${ch} · ${label}`;
     }
     if (bootstrap?.synthesized_draft) {
         return `${ch} · Review before send`;

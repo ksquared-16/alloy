@@ -55,7 +55,7 @@ export function resolveQueueRowPreviewActionsForWorkUnit(input: {
     actions: QueueUiRowPreviewAction[] | undefined;
     enrollmentLike: boolean;
 }): QueueUiRowPreviewAction[] {
-    const raw = input.actions?.length ? [...input.actions] : ["open"];
+    const raw: QueueUiRowPreviewAction[] = input.actions?.length ? [...input.actions] : ["open"];
     const withoutPlacementAuthored = stripPlacementAuthoredPreviewTokens(raw);
     if (!input.enrollmentLike) {
         if (!withoutPlacementAuthored.includes("open")) {

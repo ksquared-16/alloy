@@ -73,7 +73,13 @@ export function DocumentCompositionEditor({
         const id = newBlockId(type);
         switch (type) {
             case "text":
-                block = { id, type: "text", content: "Add instruction text for families.", order: composition.blocks.length };
+                block = {
+                    id,
+                    type: "text",
+                    content: "Add instruction text for families.",
+                    format: "plain",
+                    order: composition.blocks.length,
+                };
                 break;
             case "heading":
                 block = { id, type: "heading", content: "Section title", level: "h2", order: composition.blocks.length };

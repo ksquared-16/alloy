@@ -237,6 +237,7 @@ export default function FormSchemaWorkspace({
                 <div className="mt-4 space-y-3">
                     <FormDocumentAuthoringShell
                         schema={schema}
+                        formName={formName}
                         onChange={setSchema}
                         disabled={!canMutate || busy}
                     />
