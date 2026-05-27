@@ -11,6 +11,11 @@ import type {
     PlacementOverrideKind,
 } from "@/lib/orchestration/placement/placementCandidateTypes";
 import { filterActivePlacementOverrides } from "@/lib/orchestration/placement/filterActivePlacementOverrides";
+import {
+    normalizeCustomerMemberNested,
+    normalizePlacementLinkMemberRow,
+    type NormalizedPlacementLinkMemberRow,
+} from "@/lib/orchestration/placement/normalizeSupabaseNestedRelation";
 import { resolvePlacementCandidateCohortForQueue } from "@/lib/orchestration/placement/resolvePlacementCandidateCohortForQueue";
 
 function asLinkMode(raw: unknown): PlacementLinkMode {
@@ -25,15 +30,7 @@ function asOverrideKind(raw: unknown): PlacementOverrideKind {
     return "temporary";
 }
 
-type MemberRow = {
-    placement_candidate_id: string;
-    placement_link_group_id: string;
-    placement_link_groups: {
-        id: string;
-        link_mode: string;
-        placement_link_group_members: Array<{ id: string }> | null;
-    } | null;
-};
+type MemberRow = NormalizedPlacementLinkMemberRow;
 
 type OverrideRow = {
     id: string;
@@ -83,24 +80,46 @@ export async function bulkLoadPlacementCandidatesByOpportunity(params: {
     }
 
     type Row = PlacementCandidateRow & {
-        customer_members: {
-            display_name: string | null;
-            person_id: string | null;
-            metadata?: Record<string, unknown> | null;
-            persons?: { date_of_birth?: string | null } | null;
-        } | null;
+        customer_members: ReturnType<typeof normalizeCustomerMemberNested>;
         opportunity_customer_members: {
             id: string;
             metadata: Record<string, unknown> | null;
             desired_program_type: string | null;
-            customer_members: {
-                display_name: string | null;
-                person_id: string | null;
-                metadata?: Record<string, unknown> | null;
-                persons?: { date_of_birth?: string | null } | null;
-            } | null;
+            customer_members: ReturnType<typeof normalizeCustomerMemberNested>;
         } | null;
     };
+
+    function normalizeCandidateRow(raw: unknown): Row {
+        const c = raw as Record<string, unknown>;
+        const ocmRaw = c.opportunity_customer_members as
+            | {
+                  id: string;
+                  metadata: Record<string, unknown> | null;
+                  desired_program_type: string | null;
+                  customer_members: unknown;
+              }
+            | Array<{
+                  id: string;
+                  metadata: Record<string, unknown> | null;
+                  desired_program_type: string | null;
+                  customer_members: unknown;
+              }>
+            | null
+            | undefined;
+        const ocmSingle = Array.isArray(ocmRaw) ? (ocmRaw[0] ?? null) : (ocmRaw ?? null);
+        return {
+            ...(c as PlacementCandidateRow),
+            customer_members: normalizeCustomerMemberNested(c.customer_members),
+            opportunity_customer_members: ocmSingle
+                ? {
+                      id: String(ocmSingle.id),
+                      metadata: ocmSingle.metadata ?? null,
+                      desired_program_type: ocmSingle.desired_program_type ?? null,
+                      customer_members: normalizeCustomerMemberNested(ocmSingle.customer_members),
+                  }
+                : null,
+        };
+    }
 
     function readMemberDob(
         member: {
@@ -119,7 +138,7 @@ export async function bulkLoadPlacementCandidatesByOpportunity(params: {
         return null;
     }
 
-    const candidates = (rawCandidates ?? []) as Row[];
+    const candidates = (rawCandidates ?? []).map(normalizeCandidateRow);
     const candidateIds = candidates.map((c) => c.id);
 
     const linkByCandidate = new Map<string, PlacementCandidateLinkGroupSummary>();
@@ -136,10 +155,11 @@ export async function bulkLoadPlacementCandidatesByOpportunity(params: {
             throw new Error(`placement_link_group_members bulk load failed: ${memErr.message}`);
         }
 
-        for (const row of (memberRows ?? []) as MemberRow[]) {
-            const grp = row.placement_link_groups;
+        for (const row of memberRows ?? []) {
+            const normalized = normalizePlacementLinkMemberRow(row);
+            const grp = normalized.placement_link_groups;
             if (!grp) continue;
-            linkByCandidate.set(row.placement_candidate_id, {
+            linkByCandidate.set(normalized.placement_candidate_id, {
                 id: grp.id,
                 link_mode: asLinkMode(grp.link_mode),
                 member_count: grp.placement_link_group_members?.length ?? 0,
@@ -187,8 +207,8 @@ export async function bulkLoadPlacementCandidatesByOpportunity(params: {
         const ocm = c.opportunity_customer_members;
         const memberForCohort = ocm?.customer_members ?? c.customer_members;
         const cohort = resolvePlacementCandidateCohortForQueue({
-            storedKey: c.program_room_cohort_key,
-            storedLabel: c.program_room_group_label,
+            storedKey: c.program_room_cohort_key ?? "",
+            storedLabel: c.program_room_group_label ?? "",
             candidateMetadata: meta,
             ocmMetadata:
                 ocm?.metadata != null && typeof ocm.metadata === "object" && !Array.isArray(ocm.metadata)

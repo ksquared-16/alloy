@@ -10,6 +10,7 @@ import {
 } from "@/lib/orchestration/placement/placementCandidateTypes";
 import { resolveProgramRoomCohort } from "@/lib/orchestration/placement/resolveProgramRoomCohort";
 import { resolvePlacementCandidateCohortFromMember } from "@/lib/orchestration/placement/resolvePlacementCandidateCohortForQueue";
+import { normalizeCustomerMemberNested } from "@/lib/orchestration/placement/normalizeSupabaseNestedRelation";
 
 export type PlacementCandidateBackfillOptions = {
     orgId: string;
@@ -126,6 +127,21 @@ export function buildPlacementCandidateSeedKey(params: {
     }
     const ocm = params.opportunityCustomerMemberId?.trim() || "missing_ocm";
     return `pc_v1:${params.opportunityId}:${ocm}:${cohort}`;
+}
+
+function normalizeOcmRow(raw: unknown): OcmRow {
+    const row = raw as Omit<OcmRow, "customer_members"> & {
+        customer_members?: OcmRow["customer_members"] | NonNullable<OcmRow["customer_members"]>[] | null;
+    };
+    const customerMembers = normalizeCustomerMemberNested(row.customer_members);
+    return {
+        id: String(row.id),
+        customer_member_id: String(row.customer_member_id),
+        desired_start_date: row.desired_start_date ?? null,
+        desired_program_type: row.desired_program_type ?? null,
+        metadata: row.metadata ?? null,
+        customer_members: customerMembers,
+    };
 }
 
 function buildCandidateRowsForOpportunity(
@@ -282,7 +298,7 @@ export async function runPlacementCandidateBackfill(
             continue;
         }
 
-        const ocmRows = (ocmData ?? []) as OcmRow[];
+        const ocmRows = (ocmData ?? []).map(normalizeOcmRow);
         const planned = buildCandidateRowsForOpportunity(opp, ocmRows, orgId, waitSinceFallbackCreatedAt);
 
         for (const row of planned) {

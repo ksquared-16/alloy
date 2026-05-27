@@ -13,6 +13,11 @@ import type {
     PlacementLinkMode,
     PlacementOverrideKind,
 } from "@/lib/orchestration/placement/placementCandidateTypes";
+import {
+    normalizeCustomerMemberNested,
+    normalizePlacementLinkMemberRow,
+    type NormalizedPlacementLinkMemberRow,
+} from "@/lib/orchestration/placement/normalizeSupabaseNestedRelation";
 
 function safeMeta(raw: unknown): Record<string, unknown> | null {
     if (raw != null && typeof raw === "object" && !Array.isArray(raw)) return raw as Record<string, unknown>;
@@ -37,15 +42,7 @@ function asOverrideKind(raw: unknown): PlacementOverrideKind {
     return "temporary";
 }
 
-type MemberRow = {
-    placement_candidate_id: string;
-    placement_link_group_id: string;
-    placement_link_groups: {
-        id: string;
-        link_mode: string;
-        placement_link_group_members: Array<{ id: string }> | null;
-    } | null;
-};
+type MemberRow = NormalizedPlacementLinkMemberRow;
 
 type OverrideRow = {
     id: string;
@@ -57,8 +54,16 @@ type OverrideRow = {
 };
 
 type CandidateQueryRow = PlacementCandidateRow & {
-    customer_members: { display_name: string | null; person_id: string | null } | null;
+    customer_members: ReturnType<typeof normalizeCustomerMemberNested>;
 };
+
+function normalizeCandidateQueryRow(raw: unknown): CandidateQueryRow {
+    const c = raw as Record<string, unknown>;
+    return {
+        ...(c as PlacementCandidateRow),
+        customer_members: normalizeCustomerMemberNested(c.customer_members),
+    };
+}
 
 export async function loadOpportunityPlacementCandidates(params: {
     supabase: SupabaseClient;
@@ -81,7 +86,7 @@ export async function loadOpportunityPlacementCandidates(params: {
         throw new Error(`placement_candidates load failed: ${candErr.message}`);
     }
 
-    const candidates = (rawCandidates ?? []) as CandidateQueryRow[];
+    const candidates = (rawCandidates ?? []).map(normalizeCandidateQueryRow);
     const candidateIds = candidates.map((c) => c.id);
 
     const linkByCandidate = new Map<string, PlacementCandidateLinkGroupSummary>();
@@ -98,10 +103,11 @@ export async function loadOpportunityPlacementCandidates(params: {
             throw new Error(`placement_link_group_members load failed: ${memErr.message}`);
         }
 
-        for (const row of (memberRows ?? []) as MemberRow[]) {
-            const grp = row.placement_link_groups;
+        for (const row of memberRows ?? []) {
+            const normalized = normalizePlacementLinkMemberRow(row);
+            const grp = normalized.placement_link_groups;
             if (!grp) continue;
-            linkByCandidate.set(row.placement_candidate_id, {
+            linkByCandidate.set(normalized.placement_candidate_id, {
                 id: grp.id,
                 link_mode: asLinkMode(grp.link_mode),
                 member_count: grp.placement_link_group_members?.length ?? 0,
