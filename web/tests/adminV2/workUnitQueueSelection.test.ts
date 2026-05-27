@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import { CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1 } from "@/lib/config/enrollmentPipelineQueueDefinitionV1";
+import { RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2 } from "@/lib/config/enrollmentPipelineQueueDefinitionV2";
 import {
     buildWorkUnitQueueSelectionHref,
+    findQueueSummaryForSelection,
     isExplicitWorkUnitQueueSelection,
     resolveAuthoritativeWorkUnitQueueKey,
+    resolveWorkUnitFetchQueueKeyFromPill,
+    resolveWorkUnitQueueCanonicalKey,
+    resolveWorkUnitQueueKey,
     workUnitActivePillKeyFromSelection,
     workUnitQueueSelectionFromLocation,
     workUnitQueueSelectionFromPillKey,
@@ -77,6 +82,50 @@ describe("WorkUnitQueueSelection", () => {
             attentionBucketKey: "",
         });
         expect(qs.get("queue")).toBe("tour_scheduled");
+    });
+
+    it("resolves v2 alias keys as defined on work unit", () => {
+        const wu = {
+            queue_definition: {
+                version: 2,
+                entity_type: "opportunity",
+                queues: [
+                    {
+                        key: "waitlist",
+                        label: "Waitlist",
+                        grain: "candidate",
+                        aliases: ["waitlisted"],
+                        filters: [{ type: "status", operator: "in", values: ["waitlisted"] }],
+                    },
+                    {
+                        key: "enrollment_offers",
+                        label: "Offers",
+                        grain: "child",
+                        aliases: ["ready_to_enroll"],
+                        filters: [{ type: "status", operator: "in", values: ["enrolling"] }],
+                    },
+                ],
+            },
+        };
+        expect(resolveWorkUnitQueueKey(wu, "waitlisted")).toMatchObject({
+            resolvedKey: "waitlist",
+            matchedBy: "alias",
+        });
+        expect(resolveWorkUnitQueueKey(wu, "ready_to_enroll")).toMatchObject({
+            resolvedKey: "enrollment_offers",
+            matchedBy: "alias",
+        });
+        expect(resolveAuthoritativeWorkUnitQueueKey(wu, [{ key: "waitlist" }], "waitlisted")).toBe("waitlisted");
+    });
+
+    it("resolves tour_scheduled alias to tours for fetch and summary lookup", () => {
+        const wu = { queue_definition: RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2 };
+        expect(resolveWorkUnitQueueCanonicalKey(wu, "tour_scheduled")).toBe("tours");
+        expect(
+            resolveWorkUnitFetchQueueKeyFromPill("tour_scheduled", "", wu)
+        ).toEqual({ queueKey: "tours" });
+        const summaries = [{ key: "tours", count: 3 }];
+        expect(findQueueSummaryForSelection(summaries, wu, "tour_scheduled")).toEqual(summaries[0]);
     });
 });
 

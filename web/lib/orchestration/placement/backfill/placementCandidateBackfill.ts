@@ -11,6 +11,11 @@ import {
 import { resolveProgramRoomCohort } from "@/lib/orchestration/placement/resolveProgramRoomCohort";
 import { resolvePlacementCandidateCohortFromMember } from "@/lib/orchestration/placement/resolvePlacementCandidateCohortForQueue";
 import { normalizeCustomerMemberNested } from "@/lib/orchestration/placement/normalizeSupabaseNestedRelation";
+import {
+    isChildWaitlistEligibleForPlacementCandidate,
+    isPlacementChildWaitlistEligibilityStrict,
+    type ChildWaitlistPlacementEligibilityResult,
+} from "@/lib/orchestration/placement/childWaitlistPlacementEligibility";
 
 export type PlacementCandidateBackfillOptions = {
     orgId: string;
@@ -28,6 +33,9 @@ export type PlacementCandidateBackfillCounts = {
     synthetic_candidates_created: number;
     skipped_existing: number;
     skipped_not_waitlist: number;
+    skipped_ineligible_child: number;
+    skipped_synthetic_opp_only_strict: number;
+    compat_opportunity_fallback: number;
     errors: number;
 };
 
@@ -52,6 +60,7 @@ export type PlacementCandidateBackfillRow = {
 type OcmRow = {
     id: string;
     customer_member_id: string;
+    outcome_status_key: string | null;
     desired_start_date: string | null;
     desired_program_type: string | null;
     metadata: Record<string, unknown> | null;
@@ -137,6 +146,10 @@ function normalizeOcmRow(raw: unknown): OcmRow {
     return {
         id: String(row.id),
         customer_member_id: String(row.customer_member_id),
+        outcome_status_key:
+            typeof row.outcome_status_key === "string" && row.outcome_status_key.trim()
+                ? row.outcome_status_key.trim()
+                : null,
         desired_start_date: row.desired_start_date ?? null,
         desired_program_type: row.desired_program_type ?? null,
         metadata: row.metadata ?? null,
@@ -148,18 +161,48 @@ function buildCandidateRowsForOpportunity(
     opp: OppRow,
     ocmRows: OcmRow[],
     orgId: string,
-    waitSinceFallbackCreatedAt: boolean
+    waitSinceFallbackCreatedAt: boolean,
+    options: { strictEligibility: boolean; counts: PlacementCandidateBackfillCounts }
 ): PlacementCandidateBackfillRow[] {
     const md = safeMeta(opp.metadata);
     const waitSince = resolveWaitSince(opp, waitSinceFallbackCreatedAt);
     const oppDesiredStart = resolveOppDesiredStart(md);
+    const compatMode = !options.strictEligibility;
 
     const cohortFromOpp = resolveProgramRoomCohort({
         metadata: md,
         program_label: typeof md.program_label === "string" ? md.program_label : null,
     });
 
-    if (!ocmRows.length) {
+    const eligibleOcmRows: Array<{ ocm: OcmRow; eligibility: ChildWaitlistPlacementEligibilityResult }> = [];
+    for (const ocm of ocmRows) {
+        const eligibility = isChildWaitlistEligibleForPlacementCandidate({
+            outcomeStatusKey: ocm.outcome_status_key,
+            opportunityStatusKey: opp.status_key,
+            compatMode,
+        });
+        if (eligibility.eligible) {
+            eligibleOcmRows.push({ ocm, eligibility });
+        } else {
+            options.counts.skipped_ineligible_child += 1;
+        }
+    }
+
+    if (!eligibleOcmRows.length && !ocmRows.length) {
+        const syntheticEligibility = isChildWaitlistEligibleForPlacementCandidate({
+            outcomeStatusKey: null,
+            opportunityStatusKey: opp.status_key,
+            compatMode,
+        });
+        if (!syntheticEligibility.eligible) {
+            if (syntheticEligibility.reason === "opportunity_only_strict") {
+                options.counts.skipped_synthetic_opp_only_strict += 1;
+            }
+            return [];
+        }
+        if (syntheticEligibility.compat_opportunity_fallback) {
+            options.counts.compat_opportunity_fallback += 1;
+        }
         return [
             {
                 org_id: orgId,
@@ -184,13 +227,22 @@ function buildCandidateRowsForOpportunity(
                     backfill_v1: true,
                     reason: "no_child_member_found",
                     cohort_resolution: cohortFromOpp,
+                    eligibility_reason: syntheticEligibility.reason,
+                    eligibility_compat_opportunity_fallback: syntheticEligibility.compat_opportunity_fallback === true,
                 },
             },
         ];
     }
 
+    if (!eligibleOcmRows.length) {
+        return [];
+    }
+
     const out: PlacementCandidateBackfillRow[] = [];
-    for (const ocm of ocmRows) {
+    for (const { ocm, eligibility } of eligibleOcmRows) {
+        if (eligibility.compat_opportunity_fallback) {
+            options.counts.compat_opportunity_fallback += 1;
+        }
         const ocmMd = safeMeta(ocm.metadata);
         const cohort = resolvePlacementCandidateCohortFromMember({
             ocmMetadata: ocmMd,
@@ -227,6 +279,8 @@ function buildCandidateRowsForOpportunity(
             metadata: {
                 backfill_v1: true,
                 cohort_resolution: cohort,
+                eligibility_reason: eligibility.reason,
+                eligibility_compat_opportunity_fallback: eligibility.compat_opportunity_fallback === true,
             },
         });
     }
@@ -250,6 +304,9 @@ export async function runPlacementCandidateBackfill(
         synthetic_candidates_created: 0,
         skipped_existing: 0,
         skipped_not_waitlist: 0,
+        skipped_ineligible_child: 0,
+        skipped_synthetic_opp_only_strict: 0,
+        compat_opportunity_fallback: 0,
         errors: 0,
     };
     const error_messages: string[] = [];
@@ -273,6 +330,8 @@ export async function runPlacementCandidateBackfill(
     const oppRows = (opps ?? []) as OppRow[];
     counts.opportunities_scanned = oppRows.length;
 
+    const strictEligibility = isPlacementChildWaitlistEligibilityStrict();
+
     for (const opp of oppRows) {
         const status = (opp.status_key ?? "").trim();
         if (
@@ -287,7 +346,7 @@ export async function runPlacementCandidateBackfill(
         const { data: ocmData, error: ocmErr } = await supabase
             .from("opportunity_customer_members")
             .select(
-                "id, customer_member_id, desired_start_date, desired_program_type, metadata, customer_members(person_id, display_name, metadata, persons(date_of_birth))"
+                "id, customer_member_id, outcome_status_key, desired_start_date, desired_program_type, metadata, customer_members(person_id, display_name, metadata, persons(date_of_birth))"
             )
             .eq("org_id", orgId)
             .eq("opportunity_id", opp.id);
@@ -299,7 +358,10 @@ export async function runPlacementCandidateBackfill(
         }
 
         const ocmRows = (ocmData ?? []).map(normalizeOcmRow);
-        const planned = buildCandidateRowsForOpportunity(opp, ocmRows, orgId, waitSinceFallbackCreatedAt);
+        const planned = buildCandidateRowsForOpportunity(opp, ocmRows, orgId, waitSinceFallbackCreatedAt, {
+            strictEligibility,
+            counts,
+        });
 
         for (const row of planned) {
             if (row.is_synthetic_fallback) counts.synthetic_candidates_proposed += 1;
@@ -337,3 +399,9 @@ export async function runPlacementCandidateBackfill(
 
     return { counts, error_messages };
 }
+
+/** @internal test export */
+export const __testing = {
+    buildCandidateRowsForOpportunity,
+    normalizeOcmRow,
+};

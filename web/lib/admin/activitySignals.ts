@@ -3,6 +3,7 @@
  * No persisted derived state; no hardcoded thresholds.
  */
 
+import { resolveCommunicationMessageEventTitle } from "@/lib/admin/activityMessageEventLabels";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type ActivitySignalSeverity = "low" | "medium" | "high";
@@ -104,12 +105,26 @@ export function parseActivitySignalRulesFromMetadata(metadata: unknown): Activit
 export function summarizeWorkflowEventForSignal(ev: WorkflowEventLike): string {
     const t = (ev.event_type ?? "").trim();
     const p = (ev.payload && typeof ev.payload === "object" ? ev.payload : {}) as Record<string, unknown>;
-    if (t === "message_received") return "SMS received";
-    if (t === "message_sent") return "SMS sent";
-    if (t === "opportunity_status_changed" || t === "entity_status_changed") {
-        const o = p.old_status_key != null ? String(p.old_status_key) : "—";
-        const n = p.new_status_key != null ? String(p.new_status_key) : "—";
-        return `Status: ${o} → ${n}`;
+    if (t === "message_received") {
+        return resolveCommunicationMessageEventTitle(t, p) ?? "Message received";
+    }
+    if (t === "message_sent") {
+        return resolveCommunicationMessageEventTitle(t, p) ?? "Message sent";
+    }
+    if (t === "opportunity_status_changed" || t === "entity_status_changed" || t === "child_lifecycle_status_changed") {
+        const o =
+            p.old_status_key != null
+                ? String(p.old_status_key)
+                : p.previous_status_key != null
+                  ? String(p.previous_status_key)
+                  : "—";
+        const n =
+            p.new_status_key != null
+                ? String(p.new_status_key)
+                : p.next_status_key != null
+                  ? String(p.next_status_key)
+                  : "—";
+        return t === "child_lifecycle_status_changed" ? `Child lifecycle: ${o} → ${n}` : `Status: ${o} → ${n}`;
     }
     if (t === "note_added") return "Note added";
     if (t === "action_executed") {

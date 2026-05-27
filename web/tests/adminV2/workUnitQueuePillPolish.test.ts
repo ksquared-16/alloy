@@ -148,4 +148,36 @@ describe("workUnitQueuePillPolish", () => {
         });
         expect(model.header.sections[0]?.chips[0]?.count).toBe("skeleton");
     });
+
+    it("waitlist candidate grain chip exposes children count unit", () => {
+        const model = buildWorkUnitAboveFoldRenderModel({
+            work_unit_shell_ready: true,
+            queue_summaries: [
+                {
+                    key: "waitlist",
+                    label: "Waitlist",
+                    priority: "standard",
+                    count: 18,
+                    grain: "candidate",
+                    domain: "waitlist",
+                },
+            ],
+            queue_summaries_error: null,
+            queue_pill_sections: null,
+            queue_tab_placeholders: null,
+            selected_queue_key: "waitlist",
+            attention_bucket_key: "",
+            lane_unmapped_only: false,
+            all_records_queue_key: null,
+            other_pill_section_key: null,
+            unmapped_pill_count: null,
+            enrollment_right_rail_resolved: null,
+            queue_items_loading: false,
+            queue_items_ready: true,
+            queue_items_error: null,
+        });
+        const chip = model.header.sections[0]?.chips[0];
+        expect(chip?.count_unit).toBe("children");
+        expect(chip?.count_aria_label).toContain("waitlist");
+    });
 });

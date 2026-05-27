@@ -4,6 +4,7 @@
  */
 
 import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
+import { resolveCommunicationMessageEventTitle } from "@/lib/admin/activityMessageEventLabels";
 import { UTC_FALLBACK_IANA } from "@/lib/admin/timezoneContract";
 
 export type ActivityTimelineEventInput = {
@@ -162,7 +163,14 @@ export function getActivityTimelineActorLabel(
     return "—";
 }
 
-function resolveEventTitle(eventType: string | null, options: ActivityTimelineFormatOptions): string {
+function resolveEventTitle(
+    eventType: string | null,
+    payload: Record<string, unknown>,
+    options: ActivityTimelineFormatOptions
+): string {
+    const channelTitle = resolveCommunicationMessageEventTitle(eventType, payload);
+    if (channelTitle) return channelTitle;
+
     const t = (eventType ?? "").trim();
     if (!t) return options.defaultEmptyEventTitle ?? "Event";
     const mapped = lookupMapLabel(options.eventTypeLabels, t);
@@ -183,8 +191,8 @@ function resolveEventDetail(event: ActivityTimelineEventInput, options: Activity
 
     const transitionTypes = toTypeSet(options.statusTransitionEventTypes);
     if (transitionTypes.size > 0 && transitionTypes.has(tLower)) {
-        const o = strOrEmpty(payload.old_status_key);
-        const n = strOrEmpty(payload.new_status_key);
+        const o = strOrEmpty(payload.old_status_key) || strOrEmpty(payload.previous_status_key);
+        const n = strOrEmpty(payload.new_status_key) || strOrEmpty(payload.next_status_key);
         const oL = o ? humanizeSnakeCaseToken(o, statusKeys) : "—";
         const nL = n ? humanizeSnakeCaseToken(n, statusKeys) : "—";
         return `${oL} → ${nL}`;
@@ -210,7 +218,7 @@ export function formatActivityTimelineEvent(
         event.payload && typeof event.payload === "object" && !Array.isArray(event.payload)
             ? event.payload
             : {};
-    const title = resolveEventTitle(event.event_type, options);
+    const title = resolveEventTitle(event.event_type, payload, options);
     const detail = resolveEventDetail({ ...event, payload }, options);
     const actorLabel = getActivityTimelineActorLabel(payload, event.event_type, options);
     return {

@@ -22,6 +22,8 @@
     "dev:seed:enrollment-demo-data": "tsx --tsconfig tsconfig.json scripts/seedEnrollmentPipelineDemoData.ts",
     "dev:seed:placement-priority-demo": "tsx --tsconfig tsconfig.json scripts/seedPlacementPriorityDemoPatch.ts",
     "dev:backfill:placement-candidates": "tsx --tsconfig tsconfig.json scripts/backfillPlacementCandidatesV1.ts",
+    "audit:ocm-lifecycle-strict": "tsx --tsconfig tsconfig.json scripts/auditOcmLifecycleStrictModeReadiness.ts",
+    "dev:backfill:ocm-lifecycle": "tsx --tsconfig tsconfig.json scripts/backfillOcmLifecycleFromRecommendations.ts",
     "qa:waitlist:v2": "tsx --tsconfig tsconfig.json scripts/qaWaitlistPlacementV2Gate.ts",
     "qa:waitlist:override": "tsx --tsconfig tsconfig.json scripts/qaWaitlistOverrideBrowserGate.ts",
     "qa:waitlist:trace": "tsx --tsconfig tsconfig.json scripts/debugWaitlistHayesRenderTrace.ts",

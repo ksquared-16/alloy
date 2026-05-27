@@ -32,6 +32,10 @@ export const WORKFLOW_EVENT_TYPES = [
     "form_submitted",
     "form_signed",
     "form_document_generated",
+    "intake_case_created",
+    "intake_case_operationalized",
+    "intake_case_review_required",
+    "intake_case_linked",
 ] as const;
 export type WorkflowEventType = (typeof WORKFLOW_EVENT_TYPES)[number];
 

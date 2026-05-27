@@ -8,6 +8,8 @@ import { readWorkUnitInitialLocationParams } from "@/lib/adminV2/workUnitInitial
 import {
     isExplicitWorkUnitQueueSelection,
     resolveAuthoritativeWorkUnitQueueKey,
+    findQueueSummaryForSelection,
+    resolveWorkUnitQueueCanonicalKey,
     workUnitActivePillKeyFromSelection,
     workUnitBootstrapOwnershipFromSelection,
     mergeWorkUnitQueueSummaryCounts,
@@ -115,6 +117,13 @@ import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { resolveKpisForWorkUnit } from "@/lib/kpi/resolver";
 import { buildDefaultWorkUnitKpis } from "@/lib/kpi/baseline";
 import { workUnitContextFromParts } from "@/lib/kpi/surfaceContext";
+import { normalizeQueueDefinitionDocument } from "@/lib/config/queueDefinitionV2Runtime";
+import type { QueueGrain } from "@/lib/config/queueDefinitionV2Runtime";
+import {
+    buildQueueCountBadgePresentation,
+    formatQueueCountLabel,
+    resolveQueueGrainPresentation,
+} from "@/lib/ui-v2/queueGrainPresentation";
 import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
 import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
 import { readWorkUnitPageCache, writeWorkUnitPageCache } from "@/lib/workspace/adminV2WorkspaceSessionCache";
@@ -217,6 +226,7 @@ import {
     parsePlacementWaitlistCandidateRowVm,
 } from "@/lib/ui-v2/queuePlacementWaitlistCandidatePresentation";
 import { readOpportunityIdFromQueueRow } from "@/lib/orchestration/placement/placementWaitlistCandidateRowProjection";
+import { parseQueueRowGrainContext } from "@/lib/queues/queueRowGrainContext";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
 
@@ -350,6 +360,9 @@ type QueueSummary = {
     count: number;
     preview: unknown[];
     counts_deferred?: boolean;
+    grain?: QueueGrain;
+    domain?: string;
+    overlay?: boolean;
 };
 
 type QueueItemsResult = {
@@ -442,6 +455,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [workUnit, setWorkUnit] = useState<WorkUnitRow | null>(null);
+    const workUnitRef = useRef<WorkUnitRow | null>(null);
+    workUnitRef.current = workUnit;
     const [dept, setDept] = useState<DeptRow | null>(null);
     const [oq, setOq] = useState<WorkspaceOpportunityQueueRuntime | null>(null);
     const [needsAttentionWorkUnitId, setNeedsAttentionWorkUnitId] = useState<string | null>(null);
@@ -548,6 +563,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
         if (!queueDef) return null;
         return getQueueUiConfig(queueDef);
     }, [queueDef]);
+
+    const normalizedQueueDef = useMemo(
+        () => (workUnit?.queue_definition ? normalizeQueueDefinitionDocument(workUnit.queue_definition) : null),
+        [workUnit?.queue_definition]
+    );
 
     const displayQueueSummaries = useMemo(
         () => (queueSummaries ? resolveOperatorQueueSummaryLabels(queueSummaries, entityLabels) : null),
@@ -1057,7 +1077,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 queueKey,
                 options?.attentionBucketOverride !== undefined
                     ? String(options.attentionBucketOverride ?? "").trim()
-                    : attentionBucketKeyRef.current
+                    : attentionBucketKeyRef.current,
+                workUnitRef.current ? { queue_definition: workUnitRef.current.queue_definition } : undefined
             );
             const apiQueueKey = resolvedFetch.queueKey;
             const logicalUm = options?.logicalUnmapped ?? laneUnmappedOnly;
@@ -1178,7 +1199,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 const stillSelectedPill = selectedQueueKeyRef.current?.trim() ?? "";
                 const stillSelectedFetch = resolveWorkUnitFetchQueueKeyFromPill(
                     stillSelectedPill,
-                    attentionBucketKeyRef.current
+                    attentionBucketKeyRef.current,
+                    workUnitRef.current ? { queue_definition: workUnitRef.current.queue_definition } : undefined
                 );
                 const stillSelected =
                     stillSelectedFetch.queueKey === apiQueueKey &&
@@ -2344,11 +2366,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
             return { authoritative_badge_for_selected_tab: undefined as number | undefined, reconcile_picker_count_zero: false };
         }
         const selectedFetchKey = selectedQueueKey
-            ? resolveWorkUnitFetchQueueKeyFromPill(selectedQueueKey, attentionBucketKey).queueKey
+            ? resolveWorkUnitFetchQueueKeyFromPill(
+                  selectedQueueKey,
+                  attentionBucketKey,
+                  workUnit ? { queue_definition: workUnit.queue_definition } : undefined
+              ).queueKey
             : null;
-        const activeSummary = selectedFetchKey
-            ? queueSummaries.find((q) => q.key === selectedFetchKey) ?? queueSummaries[0]
-            : queueSummaries[0];
+        const activeSummary = findQueueSummaryForSelection(queueSummaries, workUnit, selectedQueueKey) ?? queueSummaries[0];
         const tabNForSelected =
             activeSummary?.counts_deferred === true
                 ? undefined
@@ -2480,9 +2504,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
         if (!queueSummaries) return null;
 
-        const activeQueue = selectedQueueKey
-            ? queueSummaries.find((q) => q.key === selectedQueueKey) ?? queueSummaries[0]
-            : queueSummaries[0];
+        const activeQueue = findQueueSummaryForSelection(queueSummaries, workUnit, selectedQueueKey) ?? queueSummaries[0];
         const activeQueueKey = String(activeQueue?.key ?? "");
         const workUnitKeyLower = (workUnit.key ?? "").trim().toLowerCase();
         const queueItemsKey =
@@ -2637,10 +2659,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
                 const rowPrimaryIdentity = familyTitle;
                 const rowTitle = familyTitle;
+                const grainCtx = parseQueueRowGrainContext(r as Record<string, unknown>);
 
                 return {
                     id: listRowId,
                     opportunityId: rid,
+                    rowGrain: grainCtx.rowGrain,
+                    placementCandidateId:
+                        grainCtx.placementCandidateId ?? waitlistCandidate?.placementCandidateId,
+                    opportunityCustomerMemberId: grainCtx.opportunityCustomerMemberId,
+                    childLifecycleStatus: grainCtx.childLifecycleStatus,
                     title: rowTitle,
                     subtitle: previewCfg.variant === "basic" ? (basicSubtitleParts.filter(Boolean).join(" · ") || undefined) : undefined,
                     needsOperationalAttention: needsAttentionRow,
@@ -2711,6 +2739,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                       attentionReason: attentionReason || null,
                                       operationalReadPreview: operationalReadResolved,
                                       operationalNextHint: operationalNextHint || null,
+                                      childLifecycleSummary:
+                                          !waitlistCandidate &&
+                                          typeof (r as { _child_lifecycle_summary_display?: unknown })
+                                              ._child_lifecycle_summary_display === "string"
+                                              ? String(
+                                                    (r as { _child_lifecycle_summary_display: string })
+                                                        ._child_lifecycle_summary_display
+                                                ).trim() || null
+                                              : null,
                                       familyNote: note || null,
                                       familyNotePreview: notePreview,
                                       activityStale,
@@ -2743,8 +2780,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
             !queueItemsError &&
             !queueItemsLoading &&
             queueItems &&
-            selectedQueueKey &&
-            String(queueItems.queue.key ?? "") === String(selectedQueueKey)
+            activeQueueKey &&
+            String(queueItems.queue.key ?? "") === activeQueueKey
         ) {
             queueRowsBufferRef.current = liveVmItems.slice();
             queueRowsBufferWorkUnitIdRef.current = workUnitId;
@@ -2798,6 +2835,17 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     : queueItems.total
                 : tabCount;
         const rowTotalDisplay = effectiveRowTotal == null ? "—" : String(effectiveRowTotal);
+        const activeGrainPres = activeQueue
+            ? resolveQueueGrainPresentation(activeQueue, normalizedQueueDef)
+            : null;
+        const laneCountCaption =
+            effectiveRowTotal != null && activeGrainPres
+                ? formatQueueCountLabel(effectiveRowTotal, activeGrainPres)
+                : `${rowTotalDisplay} items`;
+        const queueCountBadgePresentation =
+            effectiveRowTotal != null && activeGrainPres
+                ? buildQueueCountBadgePresentation(effectiveRowTotal, activeQueue?.label, activeGrainPres)
+                : null;
 
         const placementDiagnostics: WorkUnitPlacementQueueDiagnostics | undefined =
             entity === "opportunity" &&
@@ -2837,7 +2885,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                   : "Refreshing queue…"
                               : queueItemsLoading
                                 ? "Loading queue items…"
-                                : `Queue: ${activeQueue?.key ?? "—"} · ${rowTotalDisplay} items`,
+                                : `Queue: ${activeQueue?.key ?? "—"} · ${laneCountCaption}`,
                           recommendedActionLine: "Open a row to view the record in the drawer.",
                       }
                     : null,
@@ -2849,6 +2897,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 title: "",
                 laneQueueLabel: activeQueue?.label?.trim() || activeQueue?.key || undefined,
                 countBadge: effectiveRowTotal,
+                countBadgeUnit: queueCountBadgePresentation?.countUnit,
+                countBadgeAriaLabel: queueCountBadgePresentation?.countAriaLabel,
                 items: displayItems,
                 sortCaption: errorLine
                     ? errorLine
@@ -2887,6 +2937,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         unmappedPillCount,
         viewerTz,
         opportunityQueueRowResolved,
+        normalizedQueueDef,
     ]);
 
     const showOtherBucketPill =
@@ -3010,6 +3061,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 label: q.label,
                 count: q.count,
                 counts_deferred: q.counts_deferred,
+                grain: q.grain,
+                domain: q.domain,
+                overlay: q.overlay,
             })) ?? null;
         const qi = queueItems
             ? {
@@ -3041,11 +3095,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
             queueItemsLoading,
             queueItemsError,
             legacyOpportunityListTotal,
+            normalizedQueueDefinition: normalizedQueueDef,
         });
     }, [
         departmentId,
         workUnit?.id,
         displayQueueSummaries,
+        normalizedQueueDef,
         queueSummariesError,
         selectedQueueKey,
         queueItems,
@@ -3660,21 +3716,44 @@ export default function AdminV2OpportunityWorkUnitPage() {
             queuePillSections?.map((sec) => ({
                 key: sec.key,
                 label: sec.label,
-                queues: sec.queues.map((q) => ({
+                queues: sec.queues.map((q) => {
+                    const summary = q as QueueSummary;
+                    const grainPres = resolveQueueGrainPresentation(summary, normalizedQueueDef);
+                    return {
+                        key: summary.key,
+                        label: summary.label,
+                        description: summary.description,
+                        priority: summary.priority,
+                        count: typeof summary.count === "number" ? summary.count : 0,
+                        counts_deferred: summary.counts_deferred,
+                        grain: grainPres.grain,
+                        domain: grainPres.domain,
+                        overlay: grainPres.overlay,
+                    };
+                }),
+            })) ?? null;
+
+        const queueSummariesForAboveFold =
+            queueSummaries?.map((q) => {
+                const grainPres = resolveQueueGrainPresentation(q, normalizedQueueDef);
+                return {
                     key: q.key,
                     label: q.label,
-                    description: (q as QueueSummary).description,
+                    description: q.description,
                     priority: q.priority,
-                    count: typeof (q as QueueSummary).count === "number" ? (q as QueueSummary).count : 0,
-                    counts_deferred: (q as QueueSummary).counts_deferred,
-                })),
-            })) ?? null;
+                    count: q.count,
+                    counts_deferred: q.counts_deferred,
+                    grain: grainPres.grain,
+                    domain: grainPres.domain,
+                    overlay: grainPres.overlay,
+                };
+            }) ?? null;
 
         return buildWorkUnitAboveFoldRenderModel({
             work_unit_shell_ready: true,
             department_key: dept?.key,
             reserve_actions_rail: reserveWorkUnitActionsRail,
-            queue_summaries: queueSummaries,
+            queue_summaries: queueSummariesForAboveFold,
             queue_summaries_error: queueSummariesError,
             queue_pill_sections: pillSectionsForModel,
             queue_tab_placeholders: queueTabPlaceholdersExpanded ?? queueTabPlaceholders,
@@ -3690,12 +3769,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
             queue_items_error: queueItemsError,
             authoritative_badge_for_selected_tab: workUnitChipBadgeContext.authoritative_badge_for_selected_tab,
             reconcile_picker_count_zero: workUnitChipBadgeContext.reconcile_picker_count_zero === true,
+            normalized_queue_definition: normalizedQueueDef,
         });
     }, [
         workUnitShellReady,
         dept?.key,
         reserveWorkUnitActionsRail,
         queueSummaries,
+        normalizedQueueDef,
         queueSummariesError,
         queuePillSections,
         queueTabPlaceholders,

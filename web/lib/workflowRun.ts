@@ -18,6 +18,8 @@ import { resolveScheduleStatusRowByKey } from "@/lib/admin/scheduleEffectiveStat
 import { isCommunicationCanonicalDualWriteEnabled } from "@/lib/communications/communicationsEnabled";
 import { enqueueCanonicalCommunicationMirror } from "@/lib/communications/mirrorQueuedMessage";
 import { logCommDualWrite, orgIdTail } from "@/lib/communications/mirrorObservation";
+import { assertWorkflowStatusMutationGrain } from "@/lib/admin/actions/resolveStatusMutationGrain";
+import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
 
 /** Standard event payload shape; all entity keys optional. Do not crash if missing. */
 export type WorkflowEventPayload = {
@@ -197,6 +199,8 @@ const ENTITY_TABLES: Record<string, string> = {
     locations: "locations",
     assignment: "assignments",
     assignments: "assignments",
+    opportunity_customer_member: "opportunity_customer_members",
+    opportunity_customer_members: "opportunity_customer_members",
 };
 
 type ConditionRow = {
@@ -2144,6 +2148,54 @@ export async function executeWorkflowRun(
                     for (const k of Object.keys(patch)) {
                         const v = patch[k];
                         patchResolved[k] = typeof v === "string" ? renderTemplate(v, payload) : v;
+                    }
+
+                    const grainGuard = assertWorkflowStatusMutationGrain({
+                        entityType,
+                        patch: patchResolved,
+                        payload: payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {},
+                    });
+                    if (!grainGuard.ok) {
+                        throw new Error(grainGuard.error);
+                    }
+
+                    if (
+                        table === "opportunity_customer_members" &&
+                        Object.prototype.hasOwnProperty.call(patchResolved, "outcome_status_key")
+                    ) {
+                        const { data: ocmRow, error: ocmLoadErr } = await supabase
+                            .from("opportunity_customer_members")
+                            .select("opportunity_id")
+                            .eq("id", entityId)
+                            .eq("org_id", orgIdResolved)
+                            .maybeSingle();
+                        if (ocmLoadErr) throw ocmLoadErr;
+                        if (!ocmRow) {
+                            throw new Error(
+                                `update_entity: opportunity_customer_members not found (id=${entityId}, org_id=${orgIdResolved})`
+                            );
+                        }
+                        const lifecycleResult = await updateOpportunityCustomerMemberLifecycleStatus({
+                            supabase,
+                            orgId: String(orgIdResolved),
+                            opportunityId: String((ocmRow as { opportunity_id: string }).opportunity_id),
+                            opportunityCustomerMemberId: entityId,
+                            nextStatusKey:
+                                patchResolved.outcome_status_key == null || patchResolved.outcome_status_key === ""
+                                    ? null
+                                    : String(patchResolved.outcome_status_key),
+                            source: "workflow:update_entity",
+                            metadata: {
+                                workflow_run_id: runId,
+                                row_grain: payload?.row_grain ?? null,
+                            },
+                        });
+                        if (lifecycleResult.error) {
+                            throw new Error(lifecycleResult.error.message);
+                        }
+                        actionOutputs = { updated: true, child_lifecycle: true };
+                        actionCompleted = true;
+                        break;
                     }
 
                     let patchToApply = patchResolved;

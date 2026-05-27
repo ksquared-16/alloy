@@ -1,4 +1,5 @@
 import type { OperationalTimezoneSource, UserDisplayTimezoneSource } from "@/lib/admin/timezoneContract";
+import type { QueueGrain } from "@/lib/config/queueDefinitionV2Runtime";
 import type { WorkUnitPlacementQueueDiagnostics } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
 import type { QueueServiceOpportunityNeedsAttentionSemantics } from "@/lib/workspace/opportunityAttentionCountSemantics";
 
@@ -32,6 +33,12 @@ export type QueueSummary = {
      * Explains bounded candidate fetch vs exhaustive org totals (`docs/system/workspace-system.md`).
      */
     opportunity_needs_attention_semantics?: QueueServiceOpportunityNeedsAttentionSemantics;
+    /** v2 queue config metadata (Card 4+) — does not change membership semantics. */
+    domain?: string;
+    grain?: QueueGrain;
+    overlay?: boolean;
+    requested_queue_key?: string;
+    resolved_queue_key?: string;
 };
 
 export type QueueItemsResult = {

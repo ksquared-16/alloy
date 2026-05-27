@@ -2,6 +2,7 @@ import type { WorkspaceRootMetrics } from "@/components/admin/workspace/Workspac
 import type { WorkspaceGrowthDeptSnapshot } from "@/lib/workspace/viewModels/workspaceRootRollup";
 import type { DeptWorkUnitRow } from "@/lib/kpi/baseline";
 import type { WuQueueItemsForKpi, WuQueueSummaryForKpi } from "@/lib/kpi/contextKpiMetrics";
+import type { NormalizedQueueDefinitionDocument } from "@/lib/config/queueDefinitionV2Runtime";
 
 /**
  * Code-level contract for workspace surface KPI reducers (Card 14).
@@ -33,6 +34,8 @@ export type WorkUnitKpiContext = {
     queueItemsLoading: boolean;
     queueItemsError: string | null;
     legacyOpportunityListTotal: number | null;
+    /** v2 queue_definition for grain labels when summary metadata is partial. */
+    normalizedQueueDefinition?: NormalizedQueueDefinitionDocument | null;
 };
 
 export function workUnitContextFromParts(params: {
@@ -45,6 +48,7 @@ export function workUnitContextFromParts(params: {
     queueItemsLoading: boolean;
     queueItemsError: string | null;
     legacyOpportunityListTotal: number | null;
+    normalizedQueueDefinition?: NormalizedQueueDefinitionDocument | null;
 }): WorkUnitKpiContext {
     return { ...params };
 }

@@ -1,6 +1,13 @@
 import { WORK_UNIT_ATTENTION_BUCKET_PILL_PREFIX } from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/aboveFoldTypes";
 import type { WorkUnitBootstrapOwnership } from "@/lib/adminV2/workUnitBootstrapClientSession";
 import { validateQueueDefinition, type QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
+import {
+    loadQueueDefinitionBundle,
+    normalizeQueueDefinitionDocument,
+    resolveQueueKeyFromDefinition,
+    type NormalizedQueueDefinitionDocument,
+    type QueueKeyResolution,
+} from "@/lib/config/queueDefinitionV2Runtime";
 import { getQueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
 import { findAllRecordsQueueKey } from "@/lib/workspace/workUnitQueueDerived";
 import { appendWorkspaceSiteToPath } from "@/lib/adminV2/workspaceSiteFilterClient";
@@ -181,10 +188,44 @@ export function workUnitQueuePillKeySelected(
     return selected === chip;
 }
 
+/** Resolve alias / legacy pill keys to canonical queue_definition queue key for fetch + count parity. */
+export function resolveWorkUnitQueueCanonicalKey(
+    wu: { queue_definition?: unknown },
+    pillOrQueueKey: string
+): string {
+    const pill = pillOrQueueKey.trim();
+    if (!pill) return pill;
+    const resolution = resolveWorkUnitQueueKey(wu, pill);
+    if (resolution.queue && resolution.resolvedKey.trim()) {
+        return resolution.resolvedKey.trim();
+    }
+    return pill;
+}
+
+export function findQueueSummaryForSelection<T extends { key: string }>(
+    summaries: T[] | null | undefined,
+    wu: { queue_definition?: unknown } | null | undefined,
+    selectedQueueKey: string | null | undefined
+): T | undefined {
+    if (!summaries?.length) return undefined;
+    const selected = (selectedQueueKey ?? "").trim();
+    if (!selected) return summaries[0];
+    const exact = summaries.find((q) => q.key === selected);
+    if (exact) return exact;
+    if (!wu?.queue_definition) return summaries[0];
+    const canonical = resolveWorkUnitQueueCanonicalKey(wu, selected);
+    if (canonical) {
+        const byCanonical = summaries.find((q) => q.key === canonical);
+        if (byCanonical) return byCanonical;
+    }
+    return summaries[0];
+}
+
 /** Resolve API queue key + attention bucket from pill strip key. */
 export function resolveWorkUnitFetchQueueKeyFromPill(
     pillOrQueueKey: string,
-    attentionBucketKey: string
+    attentionBucketKey: string,
+    wu?: { queue_definition?: unknown }
 ): { queueKey: string; attentionBucketOverride?: string } {
     const pill = pillOrQueueKey.trim();
     if (pill.startsWith(WORK_UNIT_ATTENTION_BUCKET_PILL_PREFIX)) {
@@ -200,7 +241,8 @@ export function resolveWorkUnitFetchQueueKeyFromPill(
             ? { queueKey: "needs_attention", attentionBucketOverride: bucket }
             : { queueKey: "needs_attention" };
     }
-    return { queueKey: pill };
+    const canonical = wu?.queue_definition ? resolveWorkUnitQueueCanonicalKey(wu, pill) : pill;
+    return { queueKey: canonical };
 }
 
 /** Merge partial summary counts into existing pills without reordering or clearing deferred stubs. */
@@ -291,11 +333,34 @@ export function queueKeyDefinedOnWorkUnit(
     const q = queueKey.trim();
     if (!q || !wu.queue_definition) return Boolean(q);
     try {
+        const normalized = normalizeQueueDefinitionDocument(wu.queue_definition);
+        if (normalized) {
+            const resolution = resolveQueueKeyFromDefinition(q, normalized.queues);
+            if (resolution.queue) return true;
+        }
         const def = validateQueueDefinition(wu.queue_definition);
         return def.queues.some((row) => row.key === q);
     } catch {
         return Boolean(q);
     }
+}
+
+export type WorkUnitQueueKeyResolution = QueueKeyResolution;
+
+/** Resolve legacy/alias queue keys against work unit config (exact → alias → fallback). */
+export function resolveWorkUnitQueueKey(
+    wu: { queue_definition?: unknown },
+    requestedQueueKey: string
+): WorkUnitQueueKeyResolution {
+    const requestedKey = requestedQueueKey.trim();
+    if (!requestedKey) {
+        return { requestedKey: "", resolvedKey: "", matchedBy: "fallback", queue: null };
+    }
+    const normalized = wu.queue_definition ? normalizeQueueDefinitionDocument(wu.queue_definition) : null;
+    if (normalized) {
+        return resolveQueueKeyFromDefinition(requestedKey, normalized.queues);
+    }
+    return { requestedKey, resolvedKey: requestedKey, matchedBy: "fallback", queue: null };
 }
 
 /**

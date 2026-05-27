@@ -21,6 +21,7 @@ import {
   prefetchOpportunityDrawerOnRowIntent,
   type OpportunityDrawerIntentContext,
 } from "@/lib/admin/opportunityDrawerIntentPrefetch";
+import { queueRowGrainActionPayload, queueRowGrainContextFromPreviewItem } from "@/lib/queues/queueRowGrainContext";
 import { DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS } from "@/lib/ui-v2/queueUiConfig";
 import { normalizePreviewLooseDateTokens } from "@/lib/adminFormatters";
 import { CRM_COMPACT_VALUE_DOT_SEP } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
@@ -68,13 +69,14 @@ function queueItemOpportunityId(item: QueueItemVm): string {
 
 function fireQueueRowOpenRecord(
   queue: QueueVm,
-  itemId: string,
+  item: QueueItemVm,
   onAction: WorkspaceActionHandler,
   surface: "card" | "keyboard" | "chip"
 ) {
+  const actionEntityId = queueItemOpportunityId(item);
   logAdminV2QueueRowClick({
     phase: "queue_row_click",
-    itemId,
+    itemId: actionEntityId,
     actionId: "open_record",
     queueId: queue.id,
     entityType: queue.queueEntityType ?? null,
@@ -83,9 +85,9 @@ function fireQueueRowOpenRecord(
   onAction({
     type: "queue.item.action",
     queueId: queue.id,
-    itemId,
+    itemId: actionEntityId,
     actionId: "open_record",
-    payload: mergeQueueActionPayload(queue),
+    payload: mergeQueueActionPayload(queue, queueRowGrainActionPayload(queueRowGrainContextFromPreviewItem(item))),
   });
 }
 
@@ -828,6 +830,14 @@ export function CrmCompactQueuePreview({
             {operationalRead?.operationalRead ? (
               <CrmCompactOperationalReadPreview preview={operationalRead} layout="scan" />
             ) : null}
+            {slots.childLifecycleSummary?.trim() ? (
+              <div
+                className="adminv2-ws-crm-queue-preview__child-lifecycle-summary text-[10px] leading-snug text-alloy-midnight/58"
+                data-child-lifecycle-summary="true"
+              >
+                {slots.childLifecycleSummary.trim()}
+              </div>
+            ) : null}
             {nextHint ? (
               <div className="adminv2-ws-crm-queue-preview__operational-next-scan">Next: {nextHint}</div>
             ) : null}
@@ -913,6 +923,14 @@ export function CrmCompactQueuePreview({
           ) : null}
           {operationalRead?.operationalRead ? (
             <CrmCompactOperationalReadPreview preview={operationalRead} layout="full" />
+          ) : null}
+          {slots.childLifecycleSummary?.trim() ? (
+            <div
+              className="adminv2-ws-crm-queue-preview__child-lifecycle-summary text-[11px] leading-snug text-alloy-midnight/58"
+              data-child-lifecycle-summary="true"
+            >
+              {slots.childLifecycleSummary.trim()}
+            </div>
           ) : null}
           {nextHint ? (
             <div className="adminv2-ws-crm-queue-preview__operational-next text-[11px] leading-snug text-alloy-midnight/58">
@@ -1096,8 +1114,14 @@ function WorkUnitQueueLane({
           <div className="adminv2-ws-queue-title-row">
             {queue.title?.trim() ? <h3 className="adminv2-ws-queue-title">{queue.title.trim()}</h3> : <span className="sr-only">Queue</span>}
             {queue.countBadge != null ? (
-              <span className="adminv2-ws-wu-queue-count-badge" aria-label={`${queue.countBadge} in queue`}>
+              <span
+                className="adminv2-ws-wu-queue-count-badge"
+                aria-label={queue.countBadgeAriaLabel ?? `${queue.countBadge} in queue`}
+              >
                 {queue.countBadge}
+                {queue.countBadgeUnit ? (
+                  <span className="adminv2-ws-wu-queue-count-unit">{queue.countBadgeUnit}</span>
+                ) : null}
               </span>
             ) : null}
           </div>
@@ -1239,11 +1263,11 @@ function WorkUnitQueueLane({
                 onMouseEnter={() => prefetchOpportunityQueueRowIntent(queue, actionEntityId, opportunityDrawerWorkspaceContext)}
                 onMouseDown={() => prefetchOpportunityQueueRowIntent(queue, actionEntityId, opportunityDrawerWorkspaceContext)}
                 onFocus={() => prefetchOpportunityQueueRowIntent(queue, actionEntityId, opportunityDrawerWorkspaceContext)}
-                onClick={() => fireQueueRowOpenRecord(queue, actionEntityId, onAction, "card")}
+                onClick={() => fireQueueRowOpenRecord(queue, item, onAction, "card")}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
-                    fireQueueRowOpenRecord(queue, actionEntityId, onAction, "keyboard");
+                    fireQueueRowOpenRecord(queue, item, onAction, "keyboard");
                   }
                 }}
               >

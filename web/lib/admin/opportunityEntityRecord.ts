@@ -21,6 +21,7 @@ import {
   mergeHouseholdActiveChildrenIntoInquiryChildren,
   type InquiryChildHydrateRow,
 } from "@/lib/admin/drawer/inquiryChildrenHydration";
+import { attachOpportunityChildLifecycleSummary } from "@/lib/opportunities/buildOpportunityChildLifecycleSummary";
 import { logDbTiming, withDbTiming } from "@/lib/admin/dbQueryTiming";
 import {
   perfDrawerFullHydrate,
@@ -615,6 +616,7 @@ export async function attachOpportunityInquiryChildrenShell(
 
   host._inquiry_children = inquiryChildrenOut;
   host._member_person_graph_pending = memList.some((m) => trimOrNull(m.person_id) != null);
+  attachOpportunityChildLifecycleSummary(host);
 }
 
 type OppPersonShellRow = {
@@ -1995,6 +1997,7 @@ export async function respondOpportunityEntityGet(
   let inquiryChildrenOut = applyInquiryChildrenMetadataFallbacks(inquiryChildrenMerged, oppMeta, id);
   inquiryChildrenOut = await attachInquiryChildRowCustomFields(supabase, orgId, inquiryChildrenOut);
   out._inquiry_children = inquiryChildrenOut;
+  attachOpportunityChildLifecycleSummary(out);
   if (process.env.NODE_ENV !== "production") {
     out._debug_inquiry_children = {
       opportunity_id: id,

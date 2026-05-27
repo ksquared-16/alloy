@@ -10,6 +10,7 @@ import {
     normalizeIsoDateOnly,
     partitionInquiryChildPatchBody,
 } from "@/lib/fields/inquiryChildFieldRegistry";
+import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
 
 export async function PATCH(
     request: NextRequest,
@@ -59,6 +60,16 @@ export async function PATCH(
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
+    const { data: existingOcm } = await supabase
+        .from("opportunity_customer_members")
+        .select("id, opportunity_id, outcome_status_key")
+        .eq("id", id)
+        .eq("org_id", ctx.orgId)
+        .maybeSingle();
+    if (!existingOcm) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
     if (hasCustom) {
         await upsertFieldValuesFromBody(
             supabase,
@@ -72,6 +83,32 @@ export async function PATCH(
 
     if (!hasNative) {
         return NextResponse.json({ id, updated: true });
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, "outcome_status_key")) {
+        const lifecycleOnly = Object.keys(updates).every((k) => k === "outcome_status_key");
+        const lifecycleResult = await updateOpportunityCustomerMemberLifecycleStatus({
+            supabase,
+            orgId: ctx.orgId,
+            opportunityId: String((existingOcm as { opportunity_id: string }).opportunity_id),
+            opportunityCustomerMemberId: id,
+            nextStatusKey:
+                updates.outcome_status_key == null || updates.outcome_status_key === ""
+                    ? null
+                    : String(updates.outcome_status_key),
+            actorUserId: ctx.userId,
+            source: "api:opportunity-customer-members:patch",
+        });
+        if (lifecycleResult.error) {
+            return NextResponse.json({ error: lifecycleResult.error.message }, { status: 400 });
+        }
+        if (lifecycleOnly) {
+            return NextResponse.json(lifecycleResult.after);
+        }
+        delete updates.outcome_status_key;
+        if (!Object.keys(updates).length) {
+            return NextResponse.json(lifecycleResult.after);
+        }
     }
 
     const { data, error } = await supabase

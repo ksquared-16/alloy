@@ -218,6 +218,8 @@ export type CrmCompactRowSemanticSlots = {
   operationalSummaryPreview?: { headline: string; risk_urgency_hint: "low" | "medium" | "high" } | null;
   /** Deterministic resolver-backed next-step hint (enrollment operational attention). */
   operationalNextHint?: string | null;
+  /** Read-only OCM lifecycle rollup (Card 11) — secondary to case `statusLabel`. */
+  childLifecycleSummary?: string | null;
   familyNote: string | null;
   /**
    * CRM queue footer: latest note only, split for typography (`timestamp` may be semibold; `body` regular).
@@ -280,10 +282,15 @@ export type QueueItemVm = {
   placementPriority?: QueueRowPlacementPriorityVm;
   /** Child-first placement preview from `_placement_priority_v2` (legacy family_row parse — API). */
   placementPriorityV2?: QueueRowPlacementPriorityV2Vm;
-  /** Card 4.6 — one waitlist list row per placement candidate. */
-  placementWaitlistCandidate?: QueueRowPlacementWaitlistCandidateVm;
-  /** Lifecycle entity for drawer/actions when `id` is a candidate-row composite key. */
-  opportunityId?: string;
+    /** Card 4.6 — one waitlist list row per placement candidate. */
+    placementWaitlistCandidate?: QueueRowPlacementWaitlistCandidateVm;
+    /** Lifecycle entity for drawer/actions when `id` is a candidate-row composite key. */
+    opportunityId?: string;
+    /** Card 9 — grain context for drawer/action intent. */
+    rowGrain?: "case" | "child" | "candidate";
+    placementCandidateId?: string;
+    opportunityCustomerMemberId?: string;
+    childLifecycleStatus?: string | null;
 };
 
 /** Candidate-row waitlist queue presentation (`_placement_waitlist_row`). */
@@ -384,6 +391,10 @@ export type QueueVm = {
   /** Work-unit drill list: server queue label (empty states, captions). */
   laneQueueLabel?: string;
   countBadge?: number;
+  /** Grain-aware count unit beside badge (Card 7), e.g. "children". */
+  countBadgeUnit?: string;
+  /** Accessible count phrase for lane header badge. */
+  countBadgeAriaLabel?: string;
   /** Primary drill list — preview projections only; authoritative fields live on entity GET / resolvers. */
   items: QueuePreviewItemVm[];
   viewAllActionId?: string;

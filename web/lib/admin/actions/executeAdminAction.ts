@@ -2,11 +2,16 @@ import { randomUUID } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
+import {
+    assertChildLifecycleMutationTarget,
+    resolveStatusMutationGrain,
+} from "@/lib/admin/actions/resolveStatusMutationGrain";
 import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 import { validateStatusTransition } from "@/lib/admin/statusTransitionRules";
 import { emitEvent } from "@/lib/emitEvent";
 import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
 import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
+import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import { accessScopeRestrictsData, assertEntityDrawerRecordReadable } from "@/lib/admin/accessScope";
@@ -46,6 +51,87 @@ function mergePayload(
     const a = schemaDefaults && typeof schemaDefaults === "object" ? schemaDefaults : {};
     const b = body && typeof body === "object" ? body : {};
     return { ...a, ...b };
+}
+
+async function executeChildLifecycleStatusUpdate(
+    supabase: SupabaseClient,
+    ctx: ExecuteAdminActionCtx,
+    correlationId: string,
+    actionKey: string,
+    entityTypeRaw: string,
+    entityId: string,
+    merged: Record<string, unknown>,
+    inputContext?: ExecuteAdminActionInput["context"]
+): Promise<ExecuteAdminActionResult> {
+    const grainCtx = resolveStatusMutationGrain(merged, entityId);
+    let ocmId = grainCtx.opportunityCustomerMemberId;
+    const opportunityId = grainCtx.opportunityId ?? entityId;
+
+    if (!ocmId && grainCtx.placementCandidateId) {
+        const { data: cand } = await supabase
+            .from("placement_candidates")
+            .select("opportunity_customer_member_id, opportunity_id")
+            .eq("id", grainCtx.placementCandidateId)
+            .eq("org_id", ctx.orgId)
+            .maybeSingle();
+        ocmId =
+            typeof (cand as { opportunity_customer_member_id?: unknown } | null)?.opportunity_customer_member_id ===
+            "string"
+                ? String((cand as { opportunity_customer_member_id: string }).opportunity_customer_member_id).trim()
+                : null;
+    }
+
+    const target = assertChildLifecycleMutationTarget({
+        ...grainCtx,
+        opportunityId,
+        opportunityCustomerMemberId: ocmId,
+    });
+    if (!target.ok) {
+        return { ok: false, correlation_id: correlationId, error: target.error, status: 400 };
+    }
+
+    const statusKey = merged.status_key != null ? String(merged.status_key).trim() : "";
+    if (!statusKey) {
+        return {
+            ok: false,
+            correlation_id: correlationId,
+            error: "update_status requires payload_schema.status_key",
+            status: 400,
+        };
+    }
+
+    const result = await updateOpportunityCustomerMemberLifecycleStatus({
+        supabase,
+        orgId: ctx.orgId,
+        opportunityId: target.opportunityId,
+        opportunityCustomerMemberId: target.opportunityCustomerMemberId,
+        nextStatusKey: statusKey,
+        actorUserId: ctx.userId,
+        source: "executeAdminAction:update_status",
+        reason: merged.reason != null ? String(merged.reason) : null,
+        rowGrain: grainCtx.grain === "candidate" ? "candidate" : "child",
+        placementCandidateId: grainCtx.placementCandidateId,
+        metadata: {
+            action_key: actionKey,
+            ...(inputContext?.surface ? { surface: inputContext.surface } : {}),
+        },
+    });
+
+    if (result.error) {
+        return { ok: false, correlation_id: correlationId, error: result.error.message, status: 400 };
+    }
+
+    return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
+        kind: "update_child_lifecycle_status",
+        entity: "opportunity_customer_members",
+        id: target.opportunityCustomerMemberId,
+        opportunity_id: target.opportunityId,
+        row_grain: grainCtx.grain,
+        before: result.before,
+        after: result.after,
+        event_emitted: result.eventEmitted,
+        placement_hook: result.placementHook ?? null,
+    });
 }
 
 async function findDefinitionForOrg(
@@ -688,6 +774,7 @@ export async function executeAdminAction(
                     const nextMd: Record<string, unknown> = { ...(md && typeof md === "object" ? md : {}) };
                     if (tourDate) nextMd.tour_date = tourDate;
                     if (tourTime) nextMd.tour_time = tourTime;
+                    nextMd.tour_schedule_source = "legacy_metadata_only";
                     const _tourMetadataPatch: Record<string, unknown> = { metadata: nextMd };
                     await normalizeOpportunityWritePayload(supabase, _tourMetadataPatch, "executeAdminAction:schedule_tour_metadata");
                     const { data: mdUpdated } = await supabase
@@ -789,6 +876,19 @@ export async function executeAdminAction(
         case "update_status": {
             if (table !== "opportunities") {
                 return { ok: false, correlation_id: correlationId, error: "update_status v1 supports opportunities only", status: 400 };
+            }
+            const grainCtx = resolveStatusMutationGrain(merged, entityId);
+            if (grainCtx.grain === "child" || grainCtx.grain === "candidate") {
+                return executeChildLifecycleStatusUpdate(
+                    supabase,
+                    ctx,
+                    correlationId,
+                    actionKey,
+                    entityTypeRaw,
+                    entityId,
+                    merged,
+                    input.context
+                );
             }
             if (!(await assertRowOrg(supabase, "opportunities", entityId, ctx.orgId)).ok) {
                 return { ok: false, correlation_id: correlationId, error: "Not found", status: 404 };

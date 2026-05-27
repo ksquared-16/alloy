@@ -74,7 +74,15 @@ export function departmentNeedsAttentionSumSafe(params: {
     return sum;
 }
 
-export type WuQueueSummaryForKpi = { key: string; label?: string; count: number; counts_deferred?: boolean };
+export type WuQueueSummaryForKpi = {
+    key: string;
+    label?: string;
+    count: number;
+    counts_deferred?: boolean;
+    grain?: import("@/lib/config/queueDefinitionV2Runtime").QueueGrain;
+    domain?: string;
+    overlay?: boolean;
+};
 
 export type WuQueueItemsForKpi = {
     queue: { key: string };

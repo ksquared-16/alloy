@@ -15,6 +15,7 @@ import {
     workUnitTotalInQueueFromContext,
 } from "@/lib/kpi/contextKpiMetrics";
 import type { WorkUnitKpiContext } from "@/lib/kpi/surfaceContext";
+import { resolveQueueGrainPresentation, resolveQueueCountUnit } from "@/lib/ui-v2/queueGrainPresentation";
 
 function formatInt(n: number | null | undefined): string {
     if (n == null || Number.isNaN(n)) return "—";
@@ -111,6 +112,7 @@ function formatMetricValue(n: number | null): string {
 export function buildDefaultWorkUnitKpis(context: WorkUnitKpiContext): KPIVm[] {
     if (context.queueSummariesLoading || context.queueSummariesError) return [];
 
+    const normalizedQueueDefinition = context.normalizedQueueDefinition ?? null;
     const items: KPIVm[] = [];
     const all = workUnitTotalInQueueFromContext({
         queueSummaries: context.queueSummaries,
@@ -125,12 +127,18 @@ export function buildDefaultWorkUnitKpis(context: WorkUnitKpiContext): KPIVm[] {
         });
     }
 
+    const activeSummary = context.selectedQueueKey
+        ? context.queueSummaries?.find((q) => q.key === context.selectedQueueKey) ?? context.queueSummaries?.[0]
+        : context.queueSummaries?.[0];
     const sel = workUnitSelectedTabFromContext(context);
-    if (sel != null) {
+    if (sel != null && activeSummary) {
+        const grainPres = resolveQueueGrainPresentation(activeSummary, normalizedQueueDefinition ?? null);
+        const countUnit = resolveQueueCountUnit(grainPres);
         items.push({
             id: "baseline.ctx.wu.selected_queue_count",
-            label: "This queue",
+            label: activeSummary.label?.trim() || "This queue",
             value: formatMetricValue(sel),
+            unit: countUnit.unit,
             lane: "business",
         });
     }
@@ -141,6 +149,7 @@ export function buildDefaultWorkUnitKpis(context: WorkUnitKpiContext): KPIVm[] {
             id: "baseline.ctx.wu.needs_attention_count",
             label: "Needs attention",
             value: formatMetricValue(needs),
+            unit: "items",
             lane: "business",
         });
     }

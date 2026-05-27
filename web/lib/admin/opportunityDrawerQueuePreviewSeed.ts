@@ -1,4 +1,5 @@
 import type { QueuePreviewItemVm } from "@/lib/ui-v2/workspace-types";
+import { queueRowGrainContextFromPreviewItem } from "@/lib/queues/queueRowGrainContext";
 
 /** Ephemeral header hints while opportunity drawer entity GET is in flight (queue row preview only). */
 export type OpportunityDrawerQueuePreviewSeed = {
@@ -17,6 +18,13 @@ export type OpportunityDrawerQueuePreviewSeed = {
     operTrustHeadline?: string | null;
     /** Queue row urgency echo (`low` | `medium` | `high`) when not using `urgencyTier` alone. */
     operTrustUrgency?: string | null;
+    /** Card 9 — child/candidate grain context from queue row (drawer/action follow-up). */
+    rowGrain?: "case" | "child" | "candidate";
+    placementCandidateId?: string;
+    opportunityCustomerMemberId?: string;
+    childLifecycleStatus?: string | null;
+    /** Card 11 — read-only child lifecycle rollup headline while entity GET loads. */
+    childLifecycleSummaryHeadline?: string | null;
 };
 
 function pickLocationLabel(crm: QueuePreviewItemVm["semanticCrmCompact"]): string | null {
@@ -56,6 +64,7 @@ export function opportunityDrawerSeedFromQueueItem(item: QueuePreviewItemVm): Op
     const summaryPreview = item.semanticCrmCompact?.operationalSummaryPreview;
     const operTrustHeadline = summaryPreview?.headline?.trim() || null;
     const operTrustUrgency = summaryPreview?.risk_urgency_hint?.trim() || null;
+    const grainCtx = queueRowGrainContextFromPreviewItem(item);
     return {
         title,
         subtitle,
@@ -68,6 +77,11 @@ export function opportunityDrawerSeedFromQueueItem(item: QueuePreviewItemVm): Op
         recordNumberHint,
         operTrustHeadline,
         operTrustUrgency,
+        rowGrain: grainCtx.rowGrain,
+        placementCandidateId: grainCtx.placementCandidateId,
+        opportunityCustomerMemberId: grainCtx.opportunityCustomerMemberId,
+        childLifecycleStatus: grainCtx.childLifecycleStatus,
+        childLifecycleSummaryHeadline: item.semanticCrmCompact?.childLifecycleSummary ?? null,
     };
 }
 

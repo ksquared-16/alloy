@@ -53,6 +53,10 @@ export function readOpportunityIdFromQueueRow(row: Record<string, unknown>): str
         const parts = id.split(":");
         if (parts.length >= 3) return parts[1]!;
     }
+    if (id.startsWith("ocmrow:")) {
+        const parts = id.split(":");
+        if (parts.length >= 3) return parts[1]!;
+    }
     return id;
 }
 

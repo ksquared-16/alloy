@@ -20,6 +20,7 @@ import {
     workUnitTotalInQueueFromContext,
 } from "@/lib/kpi/contextKpiMetrics";
 import type { WorkUnitKpiContext } from "@/lib/kpi/surfaceContext";
+import { resolveQueueGrainPresentation, resolveQueueCountUnit } from "@/lib/ui-v2/queueGrainPresentation";
 import { getMetricDefinition, isKnownMetricKey, validateMetricForSurface } from "@/lib/kpi/registry";
 import type { MetricKey, ResolveKpisResult, WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
 
@@ -283,9 +284,20 @@ export function resolveKpisForWorkUnit(params: {
                 );
                 break;
             case "ctx.wu.selected_queue_count":
-            case "wu.queue.selected_tab_count":
-                items.push(vmFromRow(mk, fmt(workUnitSelectedTabFromContext(ctx)), row));
+            case "wu.queue.selected_tab_count": {
+                const activeSummary = ctx.selectedQueueKey
+                    ? ctx.queueSummaries?.find((q) => q.key === ctx.selectedQueueKey) ?? ctx.queueSummaries?.[0]
+                    : ctx.queueSummaries?.[0];
+                const grainPres = activeSummary
+                    ? resolveQueueGrainPresentation(activeSummary, ctx.normalizedQueueDefinition ?? null)
+                    : null;
+                const countUnit = grainPres ? resolveQueueCountUnit(grainPres) : null;
+                const vm = vmFromRow(mk, fmt(workUnitSelectedTabFromContext(ctx)), row);
+                if (activeSummary?.label?.trim()) vm.label = activeSummary.label.trim();
+                if (countUnit) vm.unit = countUnit.unit;
+                items.push(vm);
                 break;
+            }
             case "ctx.wu.primary_lane_total":
             case "wu.queue.primary_lane_total":
                 items.push(vmFromRow(mk, fmt(workUnitPrimaryLaneTotal(ctx.queueSummaries)), row));

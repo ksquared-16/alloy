@@ -5,6 +5,12 @@ import type { ActionsVm } from "@/lib/ui-v2/workspace-types";
 import { ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT } from "@/lib/ui-v2/adminV2LoadingGeometry";
 import { workUnitQueuePillKeySelected } from "@/lib/adminV2/workUnitQueueSelection";
 import {
+    buildQueueCountBadgePresentation,
+    resolveQueueGrainPresentation,
+    type QueueGrainPresentationInput,
+} from "@/lib/ui-v2/queueGrainPresentation";
+import type { NormalizedQueueDefinitionDocument } from "@/lib/config/queueDefinitionV2Runtime";
+import {
     WORK_UNIT_ATTENTION_BUCKET_PILL_PREFIX,
     type WorkUnitAboveFoldChip,
     type WorkUnitAboveFoldChipSection,
@@ -19,6 +25,9 @@ export type WorkUnitQueueSummaryInput = {
     priority: "standard" | "attention" | "critical";
     count: number;
     counts_deferred?: boolean;
+    grain?: import("@/lib/config/queueDefinitionV2Runtime").QueueGrain;
+    domain?: string;
+    overlay?: boolean;
 };
 
 export type WorkUnitChipPlaceholderQueue = {
@@ -53,6 +62,8 @@ export type BuildWorkUnitAboveFoldRenderModelInput = {
     queue_items_error: string | null;
     authoritative_badge_for_selected_tab?: number;
     reconcile_picker_count_zero?: boolean;
+    /** v2 queue config for grain labels when summary metadata is partial (v1 compat execution). */
+    normalized_queue_definition?: NormalizedQueueDefinitionDocument | null;
 };
 
 const EMPTY_ACTIONS: ActionsVm = {
@@ -100,15 +111,28 @@ function chipCount(
     return typeof raw === "number" && Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : "emdash";
 }
 
+function chipGrainPresentation(q: WorkUnitQueueSummaryInput, input: BuildWorkUnitAboveFoldRenderModelInput): QueueGrainPresentationInput {
+    return resolveQueueGrainPresentation(q, input.normalized_queue_definition ?? null);
+}
+
 function buildChipFromSummary(q: WorkUnitQueueSummaryInput, input: BuildWorkUnitAboveFoldRenderModelInput): WorkUnitAboveFoldChip {
     const synth = q.key.startsWith(WORK_UNIT_ATTENTION_BUCKET_PILL_PREFIX);
+    const count = chipCount(q, input);
+    const grainPres = chipGrainPresentation(q, input);
+    const countUnit = buildQueueCountBadgePresentation(
+        typeof count === "number" ? count : null,
+        q.label,
+        grainPres
+    );
     return {
         key: q.key,
         label: q.label,
         priority: q.priority,
         selected: chipSelected(q.key, input),
-        count: chipCount(q, input),
+        count,
         counts_deferred: q.counts_deferred,
+        count_unit: countUnit?.countUnit,
+        count_aria_label: countUnit?.countAriaLabel,
         synthetic_attention_bucket: synth,
         attention_bucket_raw_key: synth
             ? q.key.slice(WORK_UNIT_ATTENTION_BUCKET_PILL_PREFIX.length) === "__all__"

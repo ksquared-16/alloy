@@ -31,7 +31,19 @@ function tierRing(tier: WorkUnitAboveFoldChip["priority"], selected: boolean): s
         : "border-admin-border bg-white/70 text-alloy-forge/80";
 }
 
-function CountBadge({ count, selected, countsDeferred }: { count: WorkUnitAboveFoldChipCount; selected: boolean; countsDeferred?: boolean }) {
+function CountBadge({
+    count,
+    selected,
+    countsDeferred,
+    countUnit,
+    countAriaLabel,
+}: {
+    count: WorkUnitAboveFoldChipCount;
+    selected: boolean;
+    countsDeferred?: boolean;
+    countUnit?: string;
+    countAriaLabel?: string;
+}) {
     if (count === "skeleton") {
         return (
             <span
@@ -43,12 +55,18 @@ function CountBadge({ count, selected, countsDeferred }: { count: WorkUnitAboveF
     const display = count === "emdash" ? "—" : count;
     return (
         <span
-            className={`tabular-nums rounded-full px-1 py-px text-[10px] font-bold ${
+            className={`inline-flex shrink-0 items-baseline gap-0.5 tabular-nums rounded-full px-1 py-px text-[10px] font-bold ${
                 selected ? "bg-alloy-forge/10 text-alloy-forge" : "bg-alloy-stone/15 text-alloy-forge/70"
             }`}
-            aria-label={countsDeferred && count === "emdash" ? "Count unavailable" : undefined}
+            aria-label={
+                countAriaLabel ??
+                (countsDeferred && count === "emdash" ? "Count unavailable" : undefined)
+            }
         >
-            {display}
+            <span>{display}</span>
+            {countUnit && count !== "emdash" ? (
+                <span className="font-semibold normal-case opacity-75">{countUnit}</span>
+            ) : null}
         </span>
     );
 }
@@ -113,13 +131,15 @@ export function WorkUnitAboveFoldHeaderChips({
                                     }}
                                     className={`${PILL_BASE} ${tierRing(chip.priority, chip.selected)}`}
                                     aria-pressed={chip.selected}
-                                    title={chip.description}
+                                    title={chip.count_aria_label ?? chip.description}
                                 >
                                     <span className="text-left">{chip.label}</span>
                                     <CountBadge
                                         count={chip.count}
                                         selected={chip.selected}
                                         countsDeferred={chip.counts_deferred}
+                                        countUnit={chip.count_unit}
+                                        countAriaLabel={chip.count_aria_label}
                                     />
                                 </button>
                             ))}
