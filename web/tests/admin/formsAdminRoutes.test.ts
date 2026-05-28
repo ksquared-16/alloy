@@ -493,6 +493,19 @@ describe("Admin forms routes", () => {
         expect(j.data.key).toBe("waitlist_intake");
     });
 
+    it("defaults kind to center when omitted on create", async () => {
+        const res = await createForm(
+            new NextRequest("http://x/api/admin/forms", {
+                method: "POST",
+                body: JSON.stringify({ name: "Website Inquiry" }),
+                headers: { "Content-Type": "application/json" },
+            })
+        );
+        expect(res.status).toBe(201);
+        const j = (await res.json()) as { data: { id: string; kind: string } };
+        expect(j.data.kind).toBe("center");
+    });
+
     it("allocates unique key when slug collides with existing form", async () => {
         const fid = crypto.randomUUID();
         storeRef.forms[fid] = {
@@ -591,6 +604,33 @@ describe("Admin forms routes", () => {
         expect(res.status).toBe(200);
         const j = (await res.json()) as { data: { status: string } };
         expect(j.data.status).toBe("published");
+    });
+
+    it("rejects publish when draft has no questions", async () => {
+        const fid = crypto.randomUUID();
+        const vid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        storeRef.versions[vid] = {
+            id: vid,
+            org_id: ORG,
+            form_definition_id: fid,
+            version_number: 1,
+            status: "draft",
+            schema_json: {
+                schema_version: 1,
+                title: "Empty",
+                sections: [{ id: "main", title: "Questions", field_ids: [] }],
+                fields: [],
+            },
+            pdf_mapping_json: null,
+            metadata: {},
+        };
+        const res = await publishVersion(new NextRequest("http://x"), {
+            params: Promise.resolve({ formId: fid, versionId: vid }),
+        });
+        expect(res.status).toBe(400);
+        const j = (await res.json()) as { error: string };
+        expect(j.error).toMatch(/at least one question/i);
     });
 
     it("rejects PATCH on published version", async () => {

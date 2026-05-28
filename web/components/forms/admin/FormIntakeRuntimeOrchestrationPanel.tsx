@@ -324,8 +324,12 @@ export function FormIntakeRuntimeOrchestrationPanel({
                         </label>
                     : operationalLinks.length === 0 ?
                         <div className="mt-2 flex flex-wrap gap-2">
-                            <p className={clsx("w-full", opMetadata)}>Get a share link to send this form to families.</p>
-                            {canMutate && onCreateLink ?
+                            <p className={clsx("w-full", opMetadata)}>
+                                {hasPublished ?
+                                    "Get a share link to send this form to families."
+                                :   "Publish your form before creating a share link."}
+                            </p>
+                            {canMutate && onCreateLink && hasPublished ?
                                 <button
                                     type="button"
                                     className={intakeWorkspaceBtnPrimary}
@@ -370,7 +374,7 @@ export function FormIntakeRuntimeOrchestrationPanel({
                     :   null}
 
                     <div className="mt-2 flex flex-wrap gap-2">
-                        {embedUrl ?
+                        {hasPublished && embedUrl ?
                             <>
                                 <a
                                     href={embedUrl}
@@ -390,22 +394,28 @@ export function FormIntakeRuntimeOrchestrationPanel({
                                     {copied === "orchestration-embed" ? "Copied" : "Copy link"}
                                 </button>
                             </>
+                        : !hasPublished ?
+                            <p className={clsx("w-full text-sm", opMetadata)} data-testid="orchestration-publish-first-hint">
+                                Publish your form before opening or sharing the public link.
+                            </p>
                         :   null}
-                        <button
-                            type="button"
-                            className={intakeWorkspaceBtnSecondary}
-                            data-testid="orchestration-refresh-test"
-                            disabled={loading}
-                            onClick={() => {
-                                void loadContext();
-                                onRefreshSubmissions?.();
-                            }}
-                        >
-                            Refresh test result
-                        </button>
+                        {hasPublished ?
+                            <button
+                                type="button"
+                                className={intakeWorkspaceBtnSecondary}
+                                data-testid="orchestration-refresh-test"
+                                disabled={loading}
+                                onClick={() => {
+                                    void loadContext();
+                                    onRefreshSubmissions?.();
+                                }}
+                            >
+                                Refresh test result
+                            </button>
+                        :   null}
                     </div>
 
-                    {embedUrl && embedSnippet ?
+                    {hasPublished && embedUrl && embedSnippet ?
                         <TechnicalDetailDisclosure
                             title="Embed on website"
                             helperText="Copy embed code for your site"

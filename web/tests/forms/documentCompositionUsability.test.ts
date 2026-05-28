@@ -11,7 +11,9 @@ import {
     moveFieldToRegion,
     patchSchemaComposition,
     removeCompositionBlock,
+    resolveDocumentComposition,
 } from "@/lib/forms/documentCompositionAuthoring";
+import { emptyFormSchema } from "@/lib/forms/adminFormSchemaBuilder";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 
 const baseSchema: FormSchemaV1 = {
@@ -127,7 +129,39 @@ describe("documentCompositionUsability FD-13", () => {
 
         const next = addFieldIdToRegion(comp, "r2", "f3");
         const r2 = listFieldRegionBlocks(next).find((r) => r.id === "r2");
-        expect(r2?.field_ids).toContain("f3");
+        expect(r2?.field_ids).toEqual(["f2", "f3"]);
         expect(listFieldRegionBlocks(next).find((r) => r.id === "r1")?.field_ids).not.toContain("f3");
+    });
+
+    it("appends fields in add order when simulating sequential add-question (A B C D)", () => {
+        let schema = emptyFormSchema("Order test") as FormSchemaV1;
+        let composition = resolveDocumentComposition(schema);
+        const regionId = listFieldRegionBlocks(composition)[0]!.id;
+        const labels = ["A", "B", "C", "D"];
+
+        for (const label of labels) {
+            const f = {
+                id: `field_${label.toLowerCase()}`,
+                type: "text" as const,
+                label,
+                required: false,
+                field_source: { entity_type: "custom" as const, field_key: "unmapped" },
+            };
+            const sec0 = schema.sections[0]!;
+            composition = addFieldIdToRegion(composition, regionId, f.id);
+            schema = patchSchemaComposition(
+                {
+                    ...schema,
+                    fields: [...schema.fields, f],
+                    sections: [{ ...sec0, field_ids: [...sec0.field_ids, f.id] }],
+                },
+                composition
+            );
+            composition = schema.document_composition ?? composition;
+        }
+
+        const region = listFieldRegionBlocks(composition)[0];
+        expect(region?.field_ids).toEqual(["field_a", "field_b", "field_c", "field_d"]);
+        expect(schema.sections[0]?.field_ids).toEqual(["field_a", "field_b", "field_c", "field_d"]);
     });
 });

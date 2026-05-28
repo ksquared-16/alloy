@@ -75,6 +75,7 @@ export default function FormsHubClient() {
     const [createErr, setCreateErr] = useState<string | null>(null);
     const [nfName, setNfName] = useState("");
     const [nfDesc, setNfDesc] = useState("");
+    const [showAdvancedCreate, setShowAdvancedCreate] = useState(false);
     const [nfKind, setNfKind] = useState<"center" | "state">("center");
     const [nfCategory, setNfCategory] = useState("");
 
@@ -159,8 +160,8 @@ export default function FormsHubClient() {
                 body: JSON.stringify({
                     name: nfName.trim(),
                     description: nfDesc.trim() || null,
-                    kind: nfKind,
-                    admin_category: nfCategory.trim() || undefined,
+                    ...(showAdvancedCreate ? { kind: nfKind } : {}),
+                    ...(showAdvancedCreate && nfCategory.trim() ? { admin_category: nfCategory.trim() } : {}),
                 }),
             });
             const json = await res.json().catch(() => ({}));
@@ -171,6 +172,7 @@ export default function FormsHubClient() {
             setNfName("");
             setNfDesc("");
             setNfCategory("");
+            setShowAdvancedCreate(false);
             router.push(`${ADMIN_FORMS_UI_BASE}/${id}`);
         } catch (e) {
             setCreateErr((e as Error).message);
@@ -201,26 +203,37 @@ export default function FormsHubClient() {
                             onChange={(e) => setNfDesc(e.target.value)}
                         />
                     </label>
-                    <label className="space-y-1">
-                        <span className={opMetadata}>Kind</span>
-                        <select
-                            className="w-full rounded-lg border border-alloy-midnight/10 bg-white px-3 py-2 text-sm"
-                            value={nfKind}
-                            onChange={(e) => setNfKind(e.target.value as "center" | "state")}
-                        >
-                            <option value="center">center</option>
-                            <option value="state">state</option>
-                        </select>
-                    </label>
-                    <label className="space-y-1">
-                        <span className={opMetadata}>Category</span>
-                        <input
-                            className="w-full rounded-lg border border-alloy-midnight/10 bg-white px-3 py-2 text-sm"
-                            value={nfCategory}
-                            onChange={(e) => setNfCategory(e.target.value)}
-                        />
-                    </label>
                 </div>
+                <details
+                    className="mt-3 rounded-lg border border-alloy-midnight/10 bg-white/60 px-3 py-2"
+                    open={showAdvancedCreate}
+                    onToggle={(e) => setShowAdvancedCreate((e.target as HTMLDetailsElement).open)}
+                    data-testid="intake-create-form-advanced"
+                >
+                    <summary className="cursor-pointer text-sm font-medium text-alloy-midnight/80">Advanced settings</summary>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <label className="space-y-1">
+                            <span className={opMetadata}>Kind (internal)</span>
+                            <select
+                                className="w-full rounded-lg border border-alloy-midnight/10 bg-white px-3 py-2 text-sm"
+                                value={nfKind}
+                                onChange={(e) => setNfKind(e.target.value as "center" | "state")}
+                            >
+                                <option value="center">Center</option>
+                                <option value="state">State</option>
+                            </select>
+                        </label>
+                        <label className="space-y-1">
+                            <span className={opMetadata}>Category (internal label)</span>
+                            <input
+                                className="w-full rounded-lg border border-alloy-midnight/10 bg-white px-3 py-2 text-sm"
+                                value={nfCategory}
+                                onChange={(e) => setNfCategory(e.target.value)}
+                            />
+                        </label>
+                    </div>
+                    <p className={clsx("mt-2", opMetadata)}>Not required for website inquiry or enrollment lead forms.</p>
+                </details>
                 {createErr ?
                     <p className="mt-2 text-sm text-alloy-ember">{createErr}</p>
                     : null}
@@ -234,7 +247,7 @@ export default function FormsHubClient() {
                 </PrimaryButton>
             </div>
         ),
-        [nfName, nfDesc, nfKind, nfCategory, createErr, createBusy]
+        [nfName, nfDesc, nfKind, nfCategory, createErr, createBusy, showAdvancedCreate]
     );
 
     return (

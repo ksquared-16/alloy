@@ -98,11 +98,11 @@ describe("formFieldFromRegistryEntry + FormSchemaV1", () => {
 });
 
 describe("emptyFormSchema", () => {
-    it("seeds first registry field, not arbitrary ids", () => {
-        const schema = emptyFormSchema("Waitlist Intake");
+    it("starts with an empty question section (no auto-seeded registry fields)", () => {
+        const schema = emptyFormSchema("Website Inquiry");
         const parsed = validateFormSchema(schema);
-        expect(parsed.fields).toHaveLength(1);
-        expect(parsed.fields[0]!.id).toBe(OPERATIONAL_FORM_SYSTEM_FIELDS[0]!.field_key);
-        expect(parsed.fields[0]!.field_source?.field_key).toBe(OPERATIONAL_FORM_SYSTEM_FIELDS[0]!.field_key);
+        expect(parsed.fields).toHaveLength(0);
+        expect(parsed.sections[0]?.field_ids).toEqual([]);
+        expect(parsed.title).toBe("Website Inquiry");
     });
 });

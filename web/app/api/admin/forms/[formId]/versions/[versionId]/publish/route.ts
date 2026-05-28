@@ -34,7 +34,10 @@ export async function POST(
     }
 
     try {
-        validateFormSchema(row.schema_json);
+        const parsed = validateFormSchema(row.schema_json);
+        if (parsed.fields.length === 0) {
+            return jsonError("Add at least one question before publishing", 400);
+        }
     } catch (e) {
         const resp = catchSchemaValidation(e);
         if (resp) return resp;

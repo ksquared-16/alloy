@@ -54,7 +54,8 @@ export async function POST(request: NextRequest) {
 
     const explicitKey = typeof body.key === "string" ? body.key.trim() : "";
     const name = typeof body.name === "string" ? body.name.trim() : "";
-    const kind = typeof body.kind === "string" ? body.kind.trim() : "";
+    const kindRaw = typeof body.kind === "string" ? body.kind.trim() : "";
+    const kind = kindRaw || "center";
     if (!name) return jsonError("name is required", 400);
     if (kind !== "state" && kind !== "center") return jsonError("kind must be state or center", 400);
 

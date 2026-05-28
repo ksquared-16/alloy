@@ -19,6 +19,10 @@ type VersionRow = {
     published_at: string | null;
 };
 
+function schemaPayload(schema: FormSchemaV1): FormSchemaV1 {
+    return patchSchemaComposition(schema, resolveDocumentComposition(schema));
+}
+
 export default function FormSchemaWorkspace({
     formId,
     formName,
@@ -94,7 +98,7 @@ export default function FormSchemaWorkspace({
                 body: JSON.stringify(body),
             });
             const json = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Could not create draft");
+            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Could not create form version");
             const id = (json as { data?: { id: string } }).data?.id;
             if (!id) throw new Error("Missing version id");
             onVersionsUpdated();
@@ -118,7 +122,7 @@ export default function FormSchemaWorkspace({
                 body: JSON.stringify({ clone_from_version_id: latestPublished.id }),
             });
             const json = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Could not create draft from published");
+            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Could not create version from published");
             const id = (json as { data?: { id: string } }).data?.id;
             if (!id) throw new Error("Missing version id");
             onVersionsUpdated();
@@ -130,36 +134,50 @@ export default function FormSchemaWorkspace({
         }
     };
 
-    const saveDraft = async () => {
-        if (!canMutate || !draftVersionId || !schema) return;
+    const persistDraft = useCallback(async (): Promise<boolean> => {
+        if (!canMutate || !draftVersionId || !schema) return false;
         setSaveErr(null);
-        setBusy(true);
         try {
             const res = await fetch(
                 `/api/admin/forms/${encodeURIComponent(formId)}/versions/${encodeURIComponent(draftVersionId)}`,
                 {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        schema_json: patchSchemaComposition(schema, resolveDocumentComposition(schema)),
-                    }),
+                    body: JSON.stringify({ schema_json: schemaPayload(schema) }),
                 }
             );
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Save failed");
             onVersionsUpdated();
+            return true;
         } catch (e) {
             setSaveErr((e as Error).message);
+            return false;
+        }
+    }, [canMutate, draftVersionId, formId, onVersionsUpdated, schema]);
+
+    const saveDraft = async () => {
+        if (!canMutate || !draftVersionId || !schema) return;
+        setBusy(true);
+        try {
+            await persistDraft();
         } finally {
             setBusy(false);
         }
     };
 
     const publishDraft = async () => {
-        if (!canMutate || !draftVersionId) return;
+        if (!canMutate || !draftVersionId || !schema) return;
+        if (schema.fields.length === 0) {
+            setSaveErr("Add at least one question before publishing.");
+            return;
+        }
         setSaveErr(null);
         setBusy(true);
         try {
+            const saved = await persistDraft();
+            if (!saved) return;
+
             const res = await fetch(
                 `/api/admin/forms/${encodeURIComponent(formId)}/versions/${encodeURIComponent(draftVersionId)}/publish`,
                 { method: "POST" }
@@ -188,7 +206,7 @@ export default function FormSchemaWorkspace({
                     className="rounded-lg bg-emerald-50/80 px-4 py-3 text-sm text-emerald-950 ring-1 ring-emerald-200/60"
                     role="status"
                 >
-                    <p className="font-medium">Published — this form can go into a packet.</p>
+                    <p className="font-medium">Published — families can open this form from your share link.</p>
                     <p className="mt-2 text-emerald-900">
                         <Link
                             href={`${ADMIN_FORMS_UI_BASE}/packet-definitions?addForm=${encodeURIComponent(formId)}`}
@@ -210,12 +228,12 @@ export default function FormSchemaWorkspace({
             {!draftMeta && canMutate ? (
                 <div className="space-y-3 text-sm text-alloy-midnight">
                     <p className={opMetadata}>
-                        Start a draft to add questions from the system field list, then publish. Published versions cannot be
-                        edited in place — use “new draft from published” to iterate.
+                        Add questions, then publish. Published versions cannot be edited in place — start a new version from
+                        published when you need to iterate.
                     </p>
                     <div className="flex flex-wrap gap-2" data-testid="form-new-draft-actions">
                         <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={busy} onClick={() => void startBlankDraft()}>
-                            New blank draft
+                            New form
                         </PrimaryButton>
                         {latestPublished ? (
                             <PrimaryButton
@@ -224,7 +242,7 @@ export default function FormSchemaWorkspace({
                                 disabled={busy}
                                 onClick={() => void startFromPublished()}
                             >
-                                New draft from published (v{latestPublished.version_number})
+                                New version from published (v{latestPublished.version_number})
                             </PrimaryButton>
                         ) : (
                             <span className={clsx("self-center text-xs", opMetadata)}>Publish a first version before you can clone.</span>
@@ -243,15 +261,15 @@ export default function FormSchemaWorkspace({
                     />
                     <div className="flex flex-wrap gap-2">
                         <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={!canMutate || busy} onClick={() => void saveDraft()}>
-                            Save draft
+                            Save
                         </PrimaryButton>
                         <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={!canMutate || busy} onClick={() => void publishDraft()}>
-                            Publish draft
+                            Publish form
                         </PrimaryButton>
                     </div>
                 </div>
             ) : draftMeta && busy && !schema ? (
-                <p className={opMetadata}>Loading draft…</p>
+                <p className={opMetadata}>Loading form…</p>
             ) : null}
         </div>
     );

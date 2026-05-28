@@ -202,7 +202,7 @@ export const formSchemaV1Schema = z
         schema_version: z.literal(1),
         title: z.string().min(1),
         sections: z.array(formSectionSchema),
-        fields: z.array(formFieldSchema).min(1),
+        fields: z.array(formFieldSchema),
         /** Optional document composition layer — ignored by public renderer until staged (FD-4). */
         document_composition: documentCompositionSchema.optional(),
     })
