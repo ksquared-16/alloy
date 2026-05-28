@@ -1,6 +1,6 @@
 /**
  * Document composition authoring helpers (FD-8 / FD-9).
- * Client-side default generation — public renderer ignores until staged.
+ * Client-side default generation — public runtime via FormEngineRenderer when composition is set.
  */
 
 import {

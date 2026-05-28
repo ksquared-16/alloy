@@ -116,7 +116,7 @@ public,communication_scheduled_sends_org_id_fkey,FOREIGN KEY,public,communicatio
 public,communication_scheduled_sends_pkey,PRIMARY KEY,public,communication_scheduled_sends,PRIMARY KEY (id),false,false
 public,communication_scheduled_sends_proposal_id_fkey,FOREIGN KEY,public,communication_scheduled_sends,FOREIGN KEY (proposal_id) REFERENCES task_assist_proposals(id) ON DELETE SET NULL,false,false
 public,communication_scheduled_sends_recipient_person_id_fkey,FOREIGN KEY,public,communication_scheduled_sends,FOREIGN KEY (recipient_person_id) REFERENCES persons(id) ON DELETE RESTRICT,false,false
-public,communication_scheduled_sends_source_check,CHECK,public,communication_scheduled_sends,CHECK (source = 'task_assist'::text),false,false
+public,communication_scheduled_sends_source_check,CHECK,public,communication_scheduled_sends,"CHECK (source = ANY (ARRAY['task_assist'::text, 'tour_scheduling'::text]))",false,false
 public,communication_scheduled_sends_status_check,CHECK,public,communication_scheduled_sends,"CHECK (status = ANY (ARRAY['pending'::text, 'claimed'::text, 'queued'::text, 'sent'::text, 'canceled'::text, 'failed'::text]))",false,false
 public,communication_threads_channel_check,CHECK,public,communication_threads,"CHECK (channel = ANY (ARRAY['sms'::text, 'email'::text, 'in_app'::text]))",false,false
 public,communication_threads_identity_uq,UNIQUE,public,communication_threads,"UNIQUE (org_id, primary_entity_type, primary_entity_id, channel, recipient_key)",false,false

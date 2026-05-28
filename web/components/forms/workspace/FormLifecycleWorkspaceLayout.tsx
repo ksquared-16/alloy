@@ -31,7 +31,9 @@ import { FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
 import { FORMS_TECHNICAL_DISCLOSURE } from "@/lib/forms/review/formsReviewTechnicalDisclosure";
 import FormSchemaWorkspace from "@/app/admin/forms/FormSchemaWorkspace";
 import { FormOutcomeConfigPanel } from "@/components/forms/admin/FormOutcomeConfigPanel";
+import { FormExistingRecordSendPanel } from "@/components/forms/admin/FormExistingRecordSendPanel";
 import { FormIntakeRuntimeOrchestrationPanel } from "@/components/forms/admin/FormIntakeRuntimeOrchestrationPanel";
+import { FormPacketContextPanel } from "@/components/forms/admin/FormPacketContextPanel";
 import {
     opGroupedRowInner,
     opGroupedSurface,
@@ -195,17 +197,6 @@ export function FormLifecycleWorkspaceLayout({
                             </span>
                         :   <span className={opMetadata}>No published version</span>}
                     </div>
-                    {latestPublished ?
-                        <p className={clsx("mt-1", opMetadata)}>
-                            <FormsOperationalLink
-                                href={`${ADMIN_FORMS_UI_BASE}/packet-definitions?addForm=${encodeURIComponent(detail.id)}`}
-                            >
-                                Start a packet
-                            </FormsOperationalLink>
-                            {" · "}
-                            <FormsOperationalLink href={FORMS_MODULE_ROUTES.packetDefinitions}>Browse packets</FormsOperationalLink>
-                        </p>
-                    :   null}
                     <TechnicalDetailDisclosure title="Version history" helperText={`${detail.versions.length} versions`}>
                         <ul className={clsx(opGroupedSurface, "mt-2")}>
                             {detail.versions.map((v) => (
@@ -248,6 +239,22 @@ export function FormLifecycleWorkspaceLayout({
                         creatingLink={creating}
                     />
                 </section>
+
+                {hasPublished ?
+                    <section className={opRegionSeparator} data-testid="form-region-packet-context">
+                        <FormPacketContextPanel formId={formId} formName={detail.name} hasPublished={hasPublished} />
+                    </section>
+                :   null}
+
+                {hasPublished ?
+                    <section className={opRegionSeparator} data-testid="form-region-existing-record-send">
+                        <FormExistingRecordSendPanel
+                            formId={formId}
+                            formName={detail.name}
+                            canMutate={canMutate}
+                        />
+                    </section>
+                :   null}
 
                 <section className={opRegionSeparator} data-testid="form-region-operational-outcome">
                     <FormOutcomeConfigPanel

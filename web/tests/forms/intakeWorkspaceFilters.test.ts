@@ -121,6 +121,7 @@ describe("intakeWorkspaceFilters IC-3", () => {
         expect(panel.items[0]?.submissionCount).toBe(2);
         expect(panel.items[0]?.caseKey).toBe(`opportunity:${OPP}`);
         expect(panel.items[0]?.operatorAction).toBe("Continue enrollment");
+        expect(panel.items[0]?.opportunityId).toBe(OPP);
     });
 
     it("builds recent panel with case-centric copy and recommended next action", () => {

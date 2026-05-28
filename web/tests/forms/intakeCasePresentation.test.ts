@@ -159,7 +159,7 @@ describe("intakeCasePresentation IC-2", () => {
 
         expect(rows[0]!.status_bucket).toBe("auto_operationalized");
         expect(rows[0]!.operationalized_state).toBe("attached_existing");
-        expect(rows[0]!.subtitle).toContain("Attached to existing family");
+        expect(rows[0]!.subtitle).toContain("Existing family update received");
         expect(rows[0]!.recommended_next_action).toBe("Continue enrollment");
     });
 

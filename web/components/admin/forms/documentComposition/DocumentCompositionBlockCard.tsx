@@ -7,11 +7,13 @@ import {
     COMPOSITION_BRANDING_LOGO_SRC,
     COMPOSITION_FOOTER_TEXT,
 } from "@/lib/forms/documentCompositionAuthoring";
+import { InlineFieldTokenAuthoringControls } from "@/components/forms/inline/InlineFieldTokenAuthoringControls";
+import type { FormSchemaV1 } from "@/lib/forms/schema";
 import { opContextLabel, opMetadata, opMutedMeta } from "@/lib/operational/ui/operationalVisualTokens";
 
 const BLOCK_KIND: Record<DocumentBlock["type"], { label: string; hint: string }> = {
     heading: { label: "Section heading", hint: "Title families see at this point in the document." },
-    text: { label: "Instruction text", hint: "Guidance, policy language, or context — rich text staging." },
+    text: { label: "Instruction text", hint: "Guidance or policy language — insert field references inline." },
     signature: { label: "Signature region", hint: "Capture area for drawn or typed signatures." },
     image: { label: "Header / logo", hint: "Branding slot — logo or letterhead image." },
     spacer: { label: "Vertical spacer", hint: "Breathing room between document sections." },
@@ -21,6 +23,7 @@ const BLOCK_KIND: Record<DocumentBlock["type"], { label: string; hint: string }>
 
 type Props = {
     block: DocumentBlock;
+    schema?: FormSchemaV1;
     disabled?: boolean;
     onChange: (block: DocumentBlock) => void;
     onRemove?: () => void;
@@ -39,6 +42,7 @@ const selectClass = "rounded-lg border border-alloy-midnight/10 bg-white px-2 py
 /** Authoring card for a single composition block (FD-10 / FD-13). */
 export function DocumentCompositionBlockCard({
     block,
+    schema,
     disabled = false,
     onChange,
     onRemove,
@@ -104,18 +108,28 @@ export function DocumentCompositionBlockCard({
             :   null}
 
             {block.type === "text" ?
-                <label className="mt-2 block space-y-0.5">
+                <div className="mt-2">
                     <span className={opContextLabel}>Instruction copy</span>
-                    <textarea
-                        className={clsx(inputClass, "min-h-[4rem]")}
-                        disabled={disabled}
-                        value={block.content}
-                        placeholder="Explain what families should do in this section…"
-                        onChange={(e) => onChange({ ...block, content: e.target.value })}
-                        data-testid={`document-block-text-content-${block.id}`}
-                    />
-                    <p className={opMetadata}>Rich text formatting ships in a later pass — plain text for now.</p>
-                </label>
+                    {schema ?
+                        <InlineFieldTokenAuthoringControls
+                            schema={schema}
+                            content={block.content}
+                            disabled={disabled}
+                            textareaClassName={clsx(inputClass, "mt-0.5 min-h-[4rem]")}
+                            placeholder="Explain what families should do in this section…"
+                            textareaTestId={`document-block-text-content-${block.id}`}
+                            onContentChange={(content) => onChange({ ...block, content })}
+                        />
+                    :   <textarea
+                            className={clsx(inputClass, "mt-0.5 min-h-[4rem]")}
+                            disabled={disabled}
+                            value={block.content}
+                            placeholder="Explain what families should do in this section…"
+                            onChange={(e) => onChange({ ...block, content: e.target.value })}
+                            data-testid={`document-block-text-content-${block.id}`}
+                        />
+                    }
+                </div>
             :   null}
 
             {block.type === "signature" ?

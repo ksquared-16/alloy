@@ -84,7 +84,7 @@ Alloy forms are one engine with three operator-facing modes — **enrollment is 
 | Mode | Primary truth | Review / documents pattern |
 |------|---------------|----------------------------|
 | Standalone operational form | `form_submissions` | Submission detail + optional PDF; provenance from form version |
-| Public lead / intake | `form_submissions` + public link metadata | Intake/linkage review; same labeled-answer patterns |
+| Public lead / intake | `form_submissions` + public link metadata | Intake/linkage review; **child site/cohort** on `opportunity_customer_members` when mapped (`intake_field_paths`, Card 4 — see **`waitlist_priority_fact_truth_child_scope.md`**) |
 | Multi-step packet | `form_packet_sessions` + items | Packet review rollup (`PacketReviewRollupV1`), `/adminV2/forms/packets/[id]` review console, opportunity Documents merge, operator review PATCH |
 
 Shared building blocks: versioned definitions, public links, prefill (`web/lib/forms/prefill/**`), `launch_context` / `crm_snapshot` on packets, `form_submission_documents`, Communications for delivery.
@@ -93,6 +93,7 @@ Shared building blocks: versioned definitions, public links, prefill (`web/lib/f
 
 - **Prefill** hydrates draft `payload.values` from CRM/context when link metadata allows (`prefill_enabled`, `prefill_field_map`, `form_context_mode` existing_record or anchored packet). See **`docs/forms/existing-record-public-link-contract.md`**.
 - **Submitted values** in `form_submissions.payload` remain intake truth until explicit intake/linkage/review paths promote CRM fields.
+- **Lead capture → CRM (May 2026):** `buildFormIntakeMetaFromPayload` + `applyFormIntakeSafe` write **`opportunity_customer_members.location_id`** and **`program_room_cohort_key`** when link `intake_field_paths` map child site/cohort (or per-child `children[]`). See **`docs/sprints/05_2026/waitlist_priority_fact_truth_child_scope.md`** (Card 4–5). **Org-level** cohort keys until site-scoped catalog (deferred — not a blocker for fact-truth sprint closeout).
 - **Packet `shared_values`** is a shallow cross-step scalar merge — not a full prefill store or CRM mirror.
 - Review UX should eventually distinguish **already known** (aligned with snapshot/context) vs **new or changed** (submitted differs) — Phase 2 rollup warnings are a first slice (name hints only).
 

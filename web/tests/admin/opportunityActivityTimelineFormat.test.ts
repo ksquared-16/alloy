@@ -26,6 +26,12 @@ describe("opportunityActivityTimelineFormat", () => {
         expect(getWorkflowActivityEventTitle("message_sent", payload)).toBe("Email sent");
     });
 
+    it("titles form intake lifecycle events", () => {
+        expect(getWorkflowActivityEventTitle("form_submitted")).toBe("Enrollment form submitted");
+        expect(getWorkflowActivityEventTitle("intake_case_operationalized")).toBe("Lead ready in pipeline");
+        expect(getWorkflowActivityEventTitle("intake_case_review_required")).toBe("Intake review required");
+    });
+
     it("titles use friendly labels", () => {
         expect(getWorkflowActivityEventTitle("opportunity_status_changed")).toBe("Status changed");
         expect(getWorkflowActivityEventTitle("action_executed")).toBe("Action completed");

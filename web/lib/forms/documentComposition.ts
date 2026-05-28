@@ -1,6 +1,6 @@
 /**
  * Document composition block model (FD-4 foundation).
- * Optional `document_composition` on form schema — public renderer ignores until staged.
+ * Optional `document_composition` on form schema — rendered by FormEngineRenderer when present.
  */
 
 import { z } from "zod";

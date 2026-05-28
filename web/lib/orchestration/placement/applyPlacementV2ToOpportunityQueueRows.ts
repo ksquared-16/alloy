@@ -18,6 +18,7 @@ import { computeFamilyPlacementRollup } from "@/lib/orchestration/placement/comp
 import { getPlacementProfileFromRegistry } from "@/lib/orchestration/placement/placementPresetRegistry";
 import { buildPlacementForecastPreview, resolvePlacementCandidateForecast } from "@/lib/orchestration/placement/placementForecastFactsProvider";
 import type { ResolvedPlacementQueueConfig } from "@/lib/orchestration/placement/resolvePlacementQueueConfig";
+import type { PlacementCandidateLoadDiagnostics } from "@/lib/orchestration/placement/placementCandidateLoadDiagnostics";
 
 export const PLACEMENT_QUEUE_SERVICE_V2_EVALUATOR_VERSION = "queueservice_placement_v2";
 
@@ -46,6 +47,8 @@ export type PlacementPriorityV2CandidatePreview = {
     forecast_facts_present?: string[];
     /** Dev/test — record sources for household priority flags when `ALLOY_PLACEMENT_FACT_SOURCES_DEBUG=1`. */
     fact_sources?: Record<string, { presence: string; source?: string }>;
+    /** Dev/test — load provenance when `ALLOY_PLACEMENT_LOAD_DIAGNOSTICS=1` or NODE_ENV=test. */
+    load_diagnostics?: PlacementCandidateLoadDiagnostics;
 };
 
 export type PlacementPriorityV2RowPreview = {
@@ -295,6 +298,7 @@ export function applyPlacementV2ToOpportunityQueueRows(params: {
                       }
                     : {}),
                 ...(factSourcesDebug ? { fact_sources: factSourcesDebug } : {}),
+                ...(bundle.load_diagnostics ? { load_diagnostics: bundle.load_diagnostics } : {}),
             });
 
             rollupInputs.push({

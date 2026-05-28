@@ -266,6 +266,8 @@ type OcmJoinRow = {
   id: string;
   customer_member_id: string;
   desired_start_date?: string | null;
+  location_id?: string | null;
+  program_room_cohort_key?: string | null;
   desired_program_type?: string | null;
   desired_schedule_type?: string | null;
   outcome_status_key?: string | null;
@@ -296,11 +298,39 @@ type InquiryHydrateChild = {
   fit_status: string | null;
   notes: string | null;
   desired_start_date: string | null;
+  location_id?: string | null;
+  location_label?: string | null;
+  program_room_cohort_key?: string | null;
+  program_room_cohort_label?: string | null;
   custom_fields: Record<string, unknown>;
   metadata: Record<string, unknown> | null;
   created_at: string | null;
   updated_at: string | null;
 };
+
+const OCM_INQUIRY_SELECT_COLUMNS =
+  "id, customer_member_id, desired_start_date, location_id, program_room_cohort_key, desired_program_type, desired_schedule_type, outcome_status_key, fit_status, notes, metadata, created_at, updated_at";
+
+async function batchLocationLabelsForOrg(
+  supabase: AdminSupabase,
+  orgId: string,
+  locationIds: string[],
+): Promise<Map<string, string>> {
+  const ids = [...new Set(locationIds.map((id) => id.trim()).filter(Boolean))];
+  const out = new Map<string, string>();
+  if (!ids.length) return out;
+  const { data } = await supabase
+    .from("locations")
+    .select("id, label, city")
+    .eq("org_id", orgId)
+    .in("id", ids);
+  for (const row of data ?? []) {
+    const r = row as { id: string; label?: string | null; city?: string | null };
+    const label = trimOrNull(r.label) ?? trimOrNull(r.city) ?? r.id.slice(0, 8);
+    out.set(String(r.id), label);
+  }
+  return out;
+}
 
 async function attachInquiryChildRowCustomFields(
   supabase: AdminSupabase,
@@ -323,6 +353,7 @@ function mapOcmJoinRowsToInquiryChildrenBlock(
   oppDefaultScheduleType: string | null,
   optionLabelMap: Awaited<ReturnType<typeof batchOptionItemLabelsForOrg>>,
   ocmStatusLabelByKey: Map<string, string>,
+  locationLabelById: Map<string, string>,
 ): InquiryHydrateChild[] {
   return jrowsIn.map((r) => {
     const m = memberMap.get(r.customer_member_id) ?? null;
@@ -355,6 +386,12 @@ function mapOcmJoinRowsToInquiryChildrenBlock(
       "childcare_schedule_type",
       desiredScheduleType,
     );
+    const locationId = trimOrNull(r.location_id);
+    const cohortKey = trimOrNull(r.program_room_cohort_key);
+    const cohortLabel =
+      cohortKey ?
+        (optionLabelFromBatchMap(optionLabelMap, "childcare_program_type", cohortKey) ?? cohortKey)
+      : null;
     const outcomeStatusLabel = outcomeStatusKey
       ? resolveDisplayFromLabelMap(ocmStatusLabelByKey, outcomeStatusKey, null)
       : null;
@@ -383,6 +420,10 @@ function mapOcmJoinRowsToInquiryChildrenBlock(
       fit_status: trimOrNull(r.fit_status),
       notes: trimOrNull(r.notes),
       desired_start_date: normalizeIsoDateOnly(r.desired_start_date),
+      location_id: locationId,
+      location_label: locationId ? (locationLabelById.get(locationId) ?? null) : null,
+      program_room_cohort_key: cohortKey,
+      program_room_cohort_label: cohortLabel,
       custom_fields: {},
       metadata: (r.metadata as Record<string, unknown>) ?? null,
       created_at: r.created_at ?? null,
@@ -528,7 +569,7 @@ export async function attachOpportunityInquiryChildrenShell(
   const ocmJoinP = supabase
     .from("opportunity_customer_members")
     .select(
-      "id, customer_member_id, desired_start_date, desired_program_type, desired_schedule_type, outcome_status_key, fit_status, notes, metadata, created_at, updated_at",
+      OCM_INQUIRY_SELECT_COLUMNS,
     )
     .eq("org_id", orgId)
     .eq("opportunity_id", opportunityId)
@@ -592,8 +633,18 @@ export async function attachOpportunityInquiryChildrenShell(
     if (desiredScheduleType) optionPairs.push({ setKey: "childcare_schedule_type", itemKey: desiredScheduleType });
   }
 
+  for (const r of jrows) {
+    const cohortKey = trimOrNull(r.program_room_cohort_key);
+    if (cohortKey) optionPairs.push({ setKey: "childcare_program_type", itemKey: cohortKey });
+  }
+
   const optionLabelMap = await batchOptionItemLabelsForOrg(supabase, orgId, optionPairs);
   const ocmStatusLabelByKey = displayLabelsFromDefinitions(ocmMemberDefsTaggedPack.rows);
+  const locationLabelById = await batchLocationLabelsForOrg(
+    supabase,
+    orgId,
+    jrows.map((r) => trimOrNull(r.location_id)).filter((id): id is string => Boolean(id)),
+  );
 
   let inquiryBlocks = mapOcmJoinRowsToInquiryChildrenBlock(
     jrows,
@@ -603,6 +654,7 @@ export async function attachOpportunityInquiryChildrenShell(
     oppDefaultScheduleType,
     optionLabelMap,
     ocmStatusLabelByKey,
+    locationLabelById,
   );
   let inquiryChildrenMerged = mergeHouseholdActiveChildrenIntoInquiryChildren(
     inquiryBlocks as InquiryChildHydrateRow[],
@@ -761,9 +813,7 @@ async function respondOpportunityRelationshipMemberOverlay(
     const t0 = Date.now();
     const r = await supabase
       .from("opportunity_customer_members")
-      .select(
-        "id, customer_member_id, desired_start_date, desired_program_type, desired_schedule_type, outcome_status_key, fit_status, notes, metadata, created_at, updated_at",
-      )
+      .select(OCM_INQUIRY_SELECT_COLUMNS)
       .eq("org_id", orgId)
       .eq("opportunity_id", opportunityId)
       .order("created_at", { ascending: true });
@@ -884,11 +934,18 @@ async function respondOpportunityRelationshipMemberOverlay(
         setKey: "childcare_schedule_type",
         itemKey: desiredScheduleType,
       });
+    const cohortKey = trimOrNull(r.program_room_cohort_key);
+    if (cohortKey) optionPairs.push({ setKey: "childcare_program_type", itemKey: cohortKey });
   }
 
-  const [ocmMemberDefsTaggedPack, optionLabelMap] = await Promise.all([
+  const [ocmMemberDefsTaggedPack, optionLabelMap, locationLabelById] = await Promise.all([
     ocmMemberDefsTaggedPackP,
     batchOptionItemLabelsForOrg(supabase, orgId, optionPairs),
+    batchLocationLabelsForOrg(
+      supabase,
+      orgId,
+      jrows.map((r) => trimOrNull(r.location_id)).filter((id): id is string => Boolean(id)),
+    ),
   ]);
 
   const ocmMemberStatusDefs = ocmMemberDefsTaggedPack.rows;
@@ -904,6 +961,7 @@ async function respondOpportunityRelationshipMemberOverlay(
     oppDefaultScheduleType,
     optionLabelMap,
     ocmStatusLabelByKey,
+    locationLabelById,
   );
   inquiryBlocks = mergeHouseholdActiveChildrenIntoInquiryChildren(
     inquiryBlocks as InquiryChildHydrateRow[],
@@ -1675,9 +1733,7 @@ export async function respondOpportunityEntityGet(
 
   const ocmJoinP = supabase
     .from("opportunity_customer_members")
-    .select(
-      "id, customer_member_id, desired_start_date, desired_program_type, desired_schedule_type, outcome_status_key, fit_status, notes, metadata, created_at, updated_at",
-    )
+    .select(OCM_INQUIRY_SELECT_COLUMNS)
     .eq("org_id", orgId)
     .eq("opportunity_id", id)
     .order("created_at", { ascending: true });
@@ -1845,18 +1901,7 @@ export async function respondOpportunityEntityGet(
   const joinRows = joinRes.data;
   markPhase("after_identity_parallel_fetch");
   lapSegment("identity_roles_and_ocm_join_parallel");
-  const jrows = (joinRows ?? []) as {
-    id: string;
-    customer_member_id: string;
-    desired_program_type?: string | null;
-    desired_schedule_type?: string | null;
-    outcome_status_key?: string | null;
-    fit_status?: string | null;
-    notes?: string | null;
-    metadata?: Record<string, unknown> | null;
-    created_at?: string | null;
-    updated_at?: string | null;
-  }[];
+  const jrows = (joinRows ?? []) as OcmJoinRow[];
   const memberIds = [
     ...new Set(jrows.map((r) => r.customer_member_id).filter(Boolean)),
   ] as string[];
@@ -1963,10 +2008,19 @@ export async function respondOpportunityEntityGet(
         setKey: "childcare_schedule_type",
         itemKey: desiredScheduleType,
       });
+    const cohortKey = trimOrNull(r.program_room_cohort_key);
+    if (cohortKey) optionPairs.push({ setKey: "childcare_program_type", itemKey: cohortKey });
   }
-  const [ocmMemberDefsTaggedPack, optionLabelMap] = await Promise.all([
+  const [ocmMemberDefsTaggedPack, optionLabelMap, locationLabelById] = await Promise.all([
     ocmMemberDefsTaggedPackP,
     batchOptionItemLabelsForOrg(supabase, orgId, optionPairs),
+    batchLocationLabelsForOrg(
+      supabase,
+      orgId,
+      (jrows as OcmJoinRow[])
+        .map((r) => trimOrNull(r.location_id))
+        .filter((id): id is string => Boolean(id)),
+    ),
   ]);
   const inquiryBatchMs = Date.now() - tInquiry0;
   enrichPhaseMs.inquiry_children_batch_ms = inquiryBatchMs;
@@ -1985,6 +2039,7 @@ export async function respondOpportunityEntityGet(
     oppDefaultScheduleType,
     optionLabelMap,
     ocmStatusLabelByKey,
+    locationLabelById,
   );
   let inquiryChildrenMerged = mergeHouseholdActiveChildrenIntoInquiryChildren(
     inquiryBlocks as InquiryChildHydrateRow[],

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 import { validateFormSchema } from "@/lib/forms/schema";
@@ -103,6 +103,12 @@ export function FormEmbedClient({
     const [packetAlreadyDone, setPacketAlreadyDone] = useState(false);
     const [packetFinalThankYou, setPacketFinalThankYou] = useState(false);
     const [advancingToNextPacketStep, setAdvancingToNextPacketStep] = useState(false);
+    const draftPersistSeqRef = useRef(0);
+    const submittedRef = useRef(false);
+
+    useEffect(() => {
+        submittedRef.current = submitted;
+    }, [submitted]);
 
     const encToken = useMemo(() => encodeURIComponent(token), [token]);
 
@@ -213,7 +219,8 @@ export function FormEmbedClient({
 
     const persistDraft = useCallback(
         async (next: FormPayload) => {
-            if (!submissionId || submitted || packetAlreadyDone) return;
+            if (!submissionId || submittedRef.current || packetAlreadyDone) return;
+            const seq = ++draftPersistSeqRef.current;
             const res = await fetch(`/api/public/forms/${encToken}/submissions/${submissionId}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
@@ -222,16 +229,13 @@ export function FormEmbedClient({
                     option_values_by_field_id: optionValuesByFieldId,
                 }),
             });
-            const json = (await res.json()) as ApiErr | { ok: true; data?: unknown };
+            if (seq !== draftPersistSeqRef.current || submittedRef.current) return;
             if (!res.ok) {
-                const err = json as ApiErr;
-                if (err.validation_errors?.length) {
-                    setValidationErrors(err.validation_errors);
-                    setMessage(err.error ?? "Could not save draft");
-                }
+                // Draft autosave validation is non-blocking — only submit surfaces field errors (IC-5.6).
+                return;
             }
         },
-        [encToken, optionValuesByFieldId, submissionId, submitted, packetAlreadyDone]
+        [encToken, optionValuesByFieldId, submissionId, packetAlreadyDone]
     );
 
     const handleSubmit = useCallback(async () => {

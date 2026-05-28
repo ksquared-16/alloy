@@ -23,6 +23,13 @@ export const OPPORTUNITY_ACTIVITY_STATUS_KEY_LABELS: Record<string, string> = {
 };
 
 const OPPORTUNITY_EVENT_TYPE_LABELS: Record<string, string> = {
+    form_submitted: "Enrollment form submitted",
+    form_signed: "Form signed",
+    form_document_generated: "Form document generated",
+    intake_case_created: "Intake case opened",
+    intake_case_operationalized: "Lead ready in pipeline",
+    intake_case_review_required: "Intake review required",
+    intake_case_linked: "Intake linked to family",
     opportunity_status_changed: "Status changed",
     entity_status_changed: "Status changed",
     child_lifecycle_status_changed: "Child lifecycle changed",
@@ -55,7 +62,40 @@ export const opportunityActivityTimelineOptions: ActivityTimelineFormatOptions =
 };
 
 export function formatOpportunityActivityTimelineEvent(event: ActivityTimelineEventInput) {
-    return formatActivityTimelineEvent(event, opportunityActivityTimelineOptions);
+    const payload =
+        event.payload && typeof event.payload === "object" && !Array.isArray(event.payload)
+            ? event.payload
+            : {};
+    const base = formatActivityTimelineEvent(event, opportunityActivityTimelineOptions);
+    const intakeDetail = resolveFormIntakeActivityDetail(event.event_type, payload);
+    return { ...base, detail: intakeDetail ?? base.detail };
+}
+
+function resolveFormIntakeActivityDetail(
+    eventType: string | null | undefined,
+    payload: Record<string, unknown>
+): string | null {
+    const t = (eventType ?? "").trim().toLowerCase();
+    if (!t) return null;
+
+    if (t === "form_submitted") {
+        return payload.intake_auto_operationalized === true
+            ? "New lead created — ready in enrollment pipeline"
+            : payload.intake_needs_review === true
+              ? "Submission captured — review required before enrollment continues"
+              : "Form submission captured";
+    }
+    if (t === "intake_case_operationalized") return "No manual review required — continue enrollment";
+    if (t === "intake_case_review_required") {
+        const reasons = payload.intake_review_reasons;
+        if (Array.isArray(reasons) && reasons.length > 0) {
+            return reasons.filter((r): r is string => typeof r === "string").join(" · ");
+        }
+        return "Review intake before enrollment workflows continue";
+    }
+    if (t === "intake_case_linked") return "Matched to existing family — no duplicate lead";
+    if (t === "intake_case_created") return "Intake evidence saved from public form";
+    return null;
 }
 
 export function getWorkflowActivityEventTitle(eventType: string | null, payload: Record<string, unknown> = {}): string {

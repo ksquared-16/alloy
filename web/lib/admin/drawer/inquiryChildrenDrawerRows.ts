@@ -31,6 +31,15 @@ export function mapRawInquiryChildrenToDrawerRows(raw: unknown[]): InquiryChildR
             notes: r.notes != null ? String(r.notes) : null,
             desired_start_date:
                 r.desired_start_date != null ? String(r.desired_start_date).slice(0, 10) : null,
+            location_id:
+                r.location_id != null && String(r.location_id).trim() ? String(r.location_id) : null,
+            location_label: r.location_label != null ? String(r.location_label) : null,
+            program_room_cohort_key:
+                r.program_room_cohort_key != null && String(r.program_room_cohort_key).trim()
+                    ? String(r.program_room_cohort_key)
+                    : null,
+            program_room_cohort_label:
+                r.program_room_cohort_label != null ? String(r.program_room_cohort_label) : null,
             custom_fields:
                 r.custom_fields && typeof r.custom_fields === "object"
                     ? (r.custom_fields as Record<string, unknown>)

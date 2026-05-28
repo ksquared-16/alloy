@@ -43,7 +43,7 @@ describe("submissionOperationalNarrative sprint closeout", () => {
             })
         );
 
-        expect(narrative.headline).toBe("New enrollment inquiry created");
+        expect(narrative.headline).toBe("New enrollment lead created");
         expect(narrative.operatorAction).toContain("Review intake");
         expect(narrative.statusLabel).toBe("Ready for enrollment review");
     });
@@ -68,7 +68,7 @@ describe("submissionOperationalNarrative sprint closeout", () => {
     it("builds family label and created summary for workload rows", () => {
         expect(submissionFamilyLabel(row())).toBe("Donald Duck");
         expect(submissionCreatedOrMatchedSummary(row())).toContain("Created:");
-        expect(submissionCreatedOrMatchedSummary(row())).toContain("Enrollment inquiry");
+        expect(submissionCreatedOrMatchedSummary(row())).toContain("Enrollment lead");
     });
 
     it("sorts by submitted_at descending", () => {

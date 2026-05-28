@@ -5,6 +5,8 @@
 
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 import { FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
+import { resolveWorkUnitWorkspaceHref } from "@/lib/forms/intakeRuntimeOrchestrationPresentation";
+import type { IntakeQuickReviewCaseContext } from "@/lib/forms/intakeQuickReviewPresentation";
 import {
     buildIntakeCasePresentationRows,
     type IntakeCasePresentationRow,
@@ -59,6 +61,12 @@ export type IntakeWorkspaceFilterItem = {
     hasGeneratedDocument?: boolean;
     attentionReasons?: string[];
     isCaseRow?: boolean;
+    opportunityId?: string | null;
+    intakeFileHref?: string;
+    quickReviewCaseContext?: IntakeQuickReviewCaseContext;
+    /** IC-5.7 — operational status chips for case rows */
+    operationalChips?: string[];
+    workUnitHref?: string | null;
 };
 
 export type IntakeWorkspaceFilterPanel = {
@@ -132,9 +140,20 @@ function primarySubmissionForCase(
     intakeCase: IntakeCasePresentationRow,
     byId: Map<string, SubmissionInboxRow>
 ): SubmissionInboxRow | undefined {
+    return latestSubmissionForCase(intakeCase, byId);
+}
+
+function latestSubmissionForCase(
+    intakeCase: IntakeCasePresentationRow,
+    byId: Map<string, SubmissionInboxRow>
+): SubmissionInboxRow | undefined {
     for (const id of intakeCase.submission_ids) {
         const row = byId.get(id);
-        if (row) return row;
+        if (!row) continue;
+        if (intakeCase.opportunity_id && !row.opportunity_id) {
+            return { ...row, opportunity_id: intakeCase.opportunity_id };
+        }
+        return row;
     }
     return undefined;
 }
@@ -145,9 +164,28 @@ function caseFilterItem(
     formsById: Record<string, string>,
     filter: IntakeWorkspaceFilterKey
 ): IntakeWorkspaceFilterItem {
-    const primarySubmission = primarySubmissionForCase(intakeCase, byId);
+    const primarySubmission = latestSubmissionForCase(intakeCase, byId);
     const primaryFormName =
         primarySubmission ? (formsById[primarySubmission.form_definition_id] ?? "Form") : undefined;
+
+    const quickReviewCaseContext: IntakeQuickReviewCaseContext | undefined =
+        primarySubmission ?
+            {
+                opportunityId: intakeCase.opportunity_id,
+                statusBucket: intakeCase.status_bucket,
+                operationalizedState: intakeCase.operationalized_state,
+                recommendedNextAction: intakeCase.recommended_next_action,
+                intakeFileHref: intakeCase.href,
+            }
+        :   undefined;
+
+    const operationalChips: string[] = [];
+    if (intakeCase.opportunity_id) operationalChips.push("Lead linked");
+    if (intakeCase.operationalized_state === "auto_operationalized") operationalChips.push("Auto-operationalized");
+    if (intakeCase.status_bucket === "review_required") operationalChips.push("Review required");
+    if (intakeCase.status_bucket === "needs_linking") operationalChips.push("Needs linking");
+
+    const workUnitHref = resolveIntakePipelineHref(primarySubmission, intakeCase.opportunity_id);
 
     return {
         id: `case-${intakeCase.case_key}`,
@@ -159,7 +197,7 @@ function caseFilterItem(
             :   primaryFormName,
         operatorAction: intakeCase.recommended_next_action,
         href: intakeCase.href,
-        cta: intakeCase.recommended_next_action,
+        cta: intakeCase.opportunity_id ? "Continue enrollment" : intakeCase.recommended_next_action,
         submission: primarySubmission,
         sortKey: intakeCase.sort_key,
         quickReview: filter === "needs_review" || filter === "needs_linking" || filter === "recent",
@@ -170,7 +208,33 @@ function caseFilterItem(
         hasGeneratedDocument: intakeCase.has_generated_document,
         attentionReasons: intakeCase.attention_reasons,
         isCaseRow: true,
+        opportunityId: intakeCase.opportunity_id,
+        intakeFileHref: intakeCase.href,
+        quickReviewCaseContext,
+        operationalChips: operationalChips.length > 0 ? operationalChips : undefined,
+        workUnitHref,
     };
+}
+
+function metaFromSubmission(row: SubmissionInboxRow | undefined): Record<string, unknown> {
+    if (!row?.payload?.meta || typeof row.payload.meta !== "object" || Array.isArray(row.payload.meta)) {
+        return {};
+    }
+    return row.payload.meta as Record<string, unknown>;
+}
+
+function resolveIntakePipelineHref(
+    submission: SubmissionInboxRow | undefined,
+    opportunityId: string | null
+): string | null {
+    if (!opportunityId) return null;
+    const meta = metaFromSubmission(submission);
+    const deptId =
+        typeof meta.intake_routing_department_id === "string" ? meta.intake_routing_department_id.trim() : "";
+    const workUnitId =
+        typeof meta.intake_routing_work_unit_id === "string" ? meta.intake_routing_work_unit_id.trim() : "";
+    if (!deptId || !workUnitId) return null;
+    return resolveWorkUnitWorkspaceHref(deptId, workUnitId, { highlightQueueKey: "new_leads" });
 }
 
 function sessionFilterItem(

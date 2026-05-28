@@ -3,7 +3,9 @@
 import clsx from "clsx";
 import Link from "next/link";
 import { useCallback, useState } from "react";
+import { StatusBadge } from "@/components/admin/StatusBadge";
 import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
+import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import type { IntakeWorkspaceFilterItem, IntakeWorkspaceFilterPanel } from "@/lib/forms/intakeWorkspaceFilters";
 import { SubmissionQuickReviewModal } from "@/components/forms/workspace/SubmissionQuickReviewModal";
 import {
@@ -45,8 +47,16 @@ function caseRowTestId(item: IntakeWorkspaceFilterItem): string {
 /** Inline contextual workload panel — intake-case oriented rows. */
 export function IntakeWorkspaceFilterPanelView({ panel, viewerTz, onRefresh }: Props) {
     const [quickReviewRow, setQuickReviewRow] = useState<(typeof panel.items)[number] | null>(null);
+    const { openDrawer } = useAdminDrawer();
 
     const closeModal = useCallback(() => setQuickReviewRow(null), []);
+
+    const openLead = useCallback(
+        (opportunityId: string) => {
+            openDrawer({ type: "opportunities", id: opportunityId, opportunityWorkspaceContext: null });
+        },
+        [openDrawer]
+    );
 
     return (
         <>
@@ -131,6 +141,16 @@ export function IntakeWorkspaceFilterPanelView({ panel, viewerTz, onRefresh }: P
                                                 Next: {item.operatorAction}
                                             </p>
                                         :   null}
+                                        {item.operationalChips && item.operationalChips.length > 0 ?
+                                            <div
+                                                className="flex flex-wrap gap-1.5 pt-0.5"
+                                                data-testid="intake-row-operational-chips"
+                                            >
+                                                {item.operationalChips.map((chip) => (
+                                                    <StatusBadge key={chip} label={chip} variant="info" />
+                                                ))}
+                                            </div>
+                                        :   null}
                                     </div>
                                     <div className="flex flex-shrink-0 flex-wrap gap-2">
                                         {item.quickReview && item.submission ?
@@ -143,8 +163,23 @@ export function IntakeWorkspaceFilterPanelView({ panel, viewerTz, onRefresh }: P
                                                 Quick review
                                             </button>
                                         :   null}
-                                        <Link href={item.href} className={intakeWorkspaceBtnSecondary}>
-                                            {item.quickReview ? "Open" : item.cta}
+                                        {item.opportunityId ?
+                                            <button
+                                                type="button"
+                                                className={intakeWorkspaceBtnSecondary}
+                                                data-testid={`intake-open-lead-${item.id}`}
+                                                onClick={() => openLead(item.opportunityId!)}
+                                            >
+                                                Open lead
+                                            </button>
+                                        :   null}
+                                        {item.workUnitHref ?
+                                            <Link href={item.workUnitHref} className={intakeWorkspaceBtnSecondary}>
+                                                View in pipeline
+                                            </Link>
+                                        :   null}
+                                        <Link href={item.intakeFileHref ?? item.href} className={intakeWorkspaceBtnSecondary}>
+                                            {item.opportunityId ? "Intake file" : item.quickReview ? "Open" : item.cta}
                                         </Link>
                                     </div>
                                 </li>
@@ -163,6 +198,7 @@ export function IntakeWorkspaceFilterPanelView({ panel, viewerTz, onRefresh }: P
                     viewerTz={viewerTz}
                     onUpdated={onRefresh}
                     submissionCount={quickReviewRow.submissionCount}
+                    caseContext={quickReviewRow.quickReviewCaseContext}
                 />
             :   null}
         </>

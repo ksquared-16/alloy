@@ -6,9 +6,14 @@ import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
 import type { FormIntakeMeta } from "./formLeadCaptureTypes";
 import { parseFormIntakeMeta } from "./formLeadCaptureTypes";
+import { normalizeIntakeOpportunityStatusKey } from "./normalizeIntakeOpportunityStatusKey";
+import { parseIntakeLinkDefaults } from "./parseIntakeLinkDefaults";
+import { applyIntakeChildToOpportunity } from "./applyIntakeChildToOpportunity";
+import { listIntakeChildrenFromMeta } from "./listIntakeChildrenFromMeta";
 
 export type ApplyFormLeadCaptureIntakeInput = {
     orgId: string;
+    linkMetadata?: Record<string, unknown> | undefined;
     defaultVerticalId?: string | null;
     defaultOpportunityStatusKey?: string | null;
     payload: FormPayload;
@@ -90,10 +95,11 @@ export async function applyFormLeadCaptureIntake(
         phone ||
         "Web intake";
 
-    const status_key =
+    const status_key = normalizeIntakeOpportunityStatusKey(
         (typeof oppHint.status_key === "string" && oppHint.status_key.trim()) ||
-        input.defaultOpportunityStatusKey ||
-        "new";
+            input.defaultOpportunityStatusKey ||
+            null
+    );
 
     if (!opportunityId) {
         const oppPayload: Record<string, unknown> = {
@@ -118,6 +124,11 @@ export async function applyFormLeadCaptureIntake(
                 : null;
         if (stageId) oppPayload.pipeline_stage_id = stageId;
 
+        const linkDefaults = parseIntakeLinkDefaults(input.linkMetadata);
+        if (linkDefaults.default_location_id) {
+            oppPayload.location_id = linkDefaults.default_location_id;
+        }
+
         await normalizeOpportunityWritePayload(supabase, oppPayload, "forms/applyFormLeadCaptureIntake");
 
         const { data: oppRow, error: oppErr } = await supabase.from("opportunities").insert(oppPayload).select("id").single();
@@ -137,42 +148,34 @@ export async function applyFormLeadCaptureIntake(
     }
 
     let customerMemberId = input.existingCustomerMemberId?.trim() || null;
-    const child = intake.child;
-    const hasChild =
-        child &&
-        typeof child === "object" &&
-        ((typeof child.display_name === "string" && child.display_name.trim()) ||
-            (typeof child.first_name === "string" && child.first_name.trim()));
+    const linkDefaults = parseIntakeLinkDefaults(input.linkMetadata);
+    const intakeChildren = listIntakeChildrenFromMeta(intake);
 
-    if (hasChild && customerId && opportunityId && !customerMemberId) {
-        const ch = child!;
-        const display =
-            (typeof ch.display_name === "string" && ch.display_name.trim()) ||
-            [ch.first_name, ch.last_name].filter((x) => typeof x === "string" && x.trim()).join(" ").trim() ||
-            "Child";
-        const cmPayload: Record<string, unknown> = {
-            org_id: input.orgId,
-            customer_id: customerId,
-            display_name: display,
-            first_name: typeof ch.first_name === "string" ? ch.first_name.trim() || null : null,
-            last_name: typeof ch.last_name === "string" ? ch.last_name.trim() || null : null,
-            dob: typeof ch.dob === "string" && /^\d{4}-\d{2}-\d{2}$/.test(ch.dob) ? ch.dob : null,
-            relationship: "child",
-            metadata: { source: "public_form_intake" },
-        };
+    let opportunityLocationId: string | null = linkDefaults.default_location_id;
+    if (opportunityId) {
+        const { data: oppLocRow } = await supabase
+            .from("opportunities")
+            .select("location_id")
+            .eq("id", opportunityId)
+            .eq("org_id", input.orgId)
+            .maybeSingle();
+        opportunityLocationId =
+            (oppLocRow as { location_id?: string | null } | null)?.location_id ?? opportunityLocationId;
+    }
 
-        const { data: cm, error: cmErr } = await supabase.from("customer_members").insert(cmPayload).select("id").single();
-        if (cmErr || !cm) throw new Error(cmErr?.message ?? "customer_members insert failed");
-        customerMemberId = (cm as { id: string }).id;
-
-        const { error: ocmErr } = await supabase.from("opportunity_customer_members").insert({
-            org_id: input.orgId,
-            opportunity_id: opportunityId,
-            customer_member_id: customerMemberId,
-            metadata: { source: "public_form_intake" },
-        });
-        if (ocmErr && ocmErr.code !== "23505") {
-            throw new Error(`opportunity_customer_members insert failed: ${ocmErr.message}`);
+    if (intakeChildren.length > 0 && customerId && opportunityId) {
+        for (let i = 0; i < intakeChildren.length; i++) {
+            const applied = await applyIntakeChildToOpportunity(supabase, {
+                orgId: input.orgId,
+                opportunityId,
+                customerId,
+                child: intakeChildren[i]!,
+                opportunityLocationId,
+                linkDefaultLocationId: linkDefaults.default_location_id,
+                reuseCustomerMemberId: i === 0 && intakeChildren.length === 1 ? customerMemberId : null,
+                needsReview: false,
+            });
+            if (applied && !customerMemberId) customerMemberId = applied.customer_member_id;
         }
     }
 

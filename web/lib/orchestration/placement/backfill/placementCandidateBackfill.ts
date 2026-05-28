@@ -254,19 +254,10 @@ function buildCandidateRowsForOpportunity(
             opportunityLocationId: opp.location_id,
         });
 
-        const cohortFromOcmKey = (ocm.program_room_cohort_key ?? "").trim();
-        const cohort = cohortFromOcmKey
-            ? {
-                  program_room_cohort_key: cohortFromOcmKey,
-                  program_room_group_label:
-                      typeof ocmMd.program_room_group_label === "string"
-                          ? ocmMd.program_room_group_label.trim()
-                          : cohortFromOcmKey,
-                  resolution_source: "ocm.program_room_cohort_key" as const,
-              }
-            : resolvePlacementCandidateCohortFromMember({
+        const cohort = resolvePlacementCandidateCohortFromMember({
                   ocmMetadata: ocmMd,
                   desiredProgramType: ocm.desired_program_type,
+                  programRoomCohortKey: ocm.program_room_cohort_key,
                   dateOfBirth:
                       ocm.customer_members?.persons?.date_of_birth ??
                       (typeof safeMeta(ocm.customer_members?.metadata).dob === "string"

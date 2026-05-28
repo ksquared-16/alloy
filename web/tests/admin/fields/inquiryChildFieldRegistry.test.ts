@@ -19,6 +19,8 @@ describe("inquiryChildFieldRegistry", () => {
         expect(isReservedInquiryChildFieldKey("desired_start_date")).toBe(true);
         expect(isReservedInquiryChildFieldKey("custom_note")).toBe(false);
         expect(INQUIRY_CHILD_NATIVE_OCM_FIELD_KEYS).toContain("desired_start_date");
+        expect(INQUIRY_CHILD_NATIVE_OCM_FIELD_KEYS).toContain("location_id");
+        expect(INQUIRY_CHILD_NATIVE_OCM_FIELD_KEYS).toContain("program_room_cohort_key");
     });
 
     it("partitions PATCH body into native and custom keys", () => {

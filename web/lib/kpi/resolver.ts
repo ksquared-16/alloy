@@ -10,6 +10,7 @@ import {
     buildDefaultWorkUnitKpis,
     type DeptWorkUnitRow,
 } from "@/lib/kpi/baseline";
+import { resolveDeptWorkUnitDisplayLabel } from "@/lib/workspace/workUnitShellDisplayTitle";
 import {
     departmentNeedsAttentionSumSafe,
     departmentSumWorkUnitTotals,
@@ -204,11 +205,7 @@ export function resolveKpisForDepartment(params: {
                         : summary
                           ? String(summary.total)
                           : "—";
-                const key = (wu.key ?? "").trim().toLowerCase();
-                const label =
-                    key === "enrollment_pipeline" || key === "pipeline_overview"
-                        ? "Active inquiries"
-                        : wu.name?.trim() || "Work unit";
+                const label = resolveDeptWorkUnitDisplayLabel(wu);
                 items.push({
                     id: `${mk}:${wu.id}`,
                     label,

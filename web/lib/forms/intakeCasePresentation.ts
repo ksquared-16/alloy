@@ -262,7 +262,7 @@ function buildSubtitle(
     if (!leadNarrative) return countLine;
 
     if (operationalized === "attached_existing") {
-        return `${countLine} · Attached to existing family`;
+        return `${countLine} · Existing family update received`;
     }
     if (operationalized === "auto_operationalized") {
         return `${countLine} · New lead created`;
@@ -345,6 +345,12 @@ function buildIntakeCaseFromGroup(params: {
     else if (status_bucket === "review_required") recommended_next_action = "Review intake and continue enrollment";
     else if (status_bucket === "packet_in_progress") recommended_next_action = "Monitor until packet completes";
     else if (review_state === "packet_review_pending") recommended_next_action = "Review completed packet";
+    else if (
+        (status_bucket === "auto_operationalized" || status_bucket === "recent") &&
+        opportunity_id
+    ) {
+        recommended_next_action = "Continue enrollment";
+    }
 
     return {
         case_key: params.caseKey,

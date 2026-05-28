@@ -2,6 +2,10 @@
  * Public link metadata defaults for CRM intake outcomes (Runtime Test 1A).
  */
 
+import { normalizeIntakeOpportunityStatusKey } from "./normalizeIntakeOpportunityStatusKey";
+
+export { normalizeIntakeOpportunityStatusKey } from "./normalizeIntakeOpportunityStatusKey";
+
 const UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -35,7 +39,10 @@ export function parseIntakeLinkDefaults(
         default_location_id: readUuid(m, "default_location_id"),
         default_work_unit_id: readUuid(m, "default_work_unit_id"),
         default_department_id: readUuid(m, "default_department_id"),
-        default_opportunity_status_key: readStatusKey(m),
+        default_opportunity_status_key: (() => {
+            const raw = readStatusKey(m);
+            return raw ? normalizeIntakeOpportunityStatusKey(raw) : null;
+        })(),
     };
 }
 

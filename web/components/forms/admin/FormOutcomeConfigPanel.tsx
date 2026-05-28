@@ -455,18 +455,6 @@ export function FormOutcomeConfigPanel({
                 </div>
             :   null}
 
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-                <button
-                    type="button"
-                    className={clsx(intakeWorkspaceBtnSecondary, "opacity-50 cursor-not-allowed")}
-                    disabled
-                    title="Coming soon"
-                    data-testid="form-outcome-copy-settings-planned"
-                >
-                    Copy outcome settings — coming soon
-                </button>
-            </div>
-
             <p className={clsx("mt-2", opMetadata)} data-testid="form-outcome-resolution-note">
                 {model.resolutionNote}
             </p>
@@ -615,17 +603,22 @@ export function FormOutcomeConfigPanel({
 
                     <div>
                         <h3 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/55">
-                            Automation
+                            Related workflows
                         </h3>
-                        <ul className={clsx(opGroupedSurface, "mt-2")}>
+                        <ul className={clsx(opGroupedSurface, "mt-2")} data-testid="form-outcome-related-workflows">
                             <li className={opGroupedRowInner}>
-                                <p className="text-sm text-alloy-midnight/75">Trigger workflow — coming soon</p>
+                                <p className="text-sm text-alloy-midnight/85">
+                                    Enrollment packets — send from an enrollment inquiry using{" "}
+                                    <span className="font-medium">Send enrollment packet</span> when this form is a
+                                    packet step.
+                                </p>
                             </li>
                             <li className={opGroupedRowInner}>
-                                <p className="text-sm text-alloy-midnight/75">Create task — coming soon</p>
-                            </li>
-                            <li className={opGroupedRowInner}>
-                                <p className="text-sm text-alloy-midnight/75">Send packet — coming soon</p>
+                                <p className="text-sm text-alloy-midnight/85">
+                                    Existing family updates — use{" "}
+                                    <span className="font-medium">Send form</span> from the inquiry drawer so responses
+                                    attach without creating a duplicate lead.
+                                </p>
                             </li>
                             <li className={opGroupedRowInner}>
                                 <p className="text-sm text-alloy-midnight/75">
@@ -634,6 +627,16 @@ export function FormOutcomeConfigPanel({
                                 </p>
                             </li>
                         </ul>
+                        <TechnicalDetailDisclosure
+                            title="Future automation (not in MVP)"
+                            helperText="Planned for a later phase"
+                        >
+                            <p className={opMutedMeta}>
+                                Trigger workflow, create task, and copy outcome settings across links are not available
+                                in this MVP. Configure each share link individually or use operational intent templates
+                                above.
+                            </p>
+                        </TechnicalDetailDisclosure>
                     </div>
 
                     {validation.warnings.length > 0 ?

@@ -2,7 +2,7 @@
 
 **Path:** `docs/sprints/05_2026/forms_intake_case_operational_model.md`  
 **Date:** May 2026  
-**Status:** IC-0.5 through IC-6 code shipped · **IC-5.5 browser validation in progress** — sprint closeout paused  
+**Status:** IC-0.5 through IC-6 code shipped · **IC-8 intake experience simplification in progress**  
 **Scope:** Shift operator work from raw submissions to **Intake Cases**; surface outcome configuration near form authoring; confidence-based review routing. **No OCR. No packet runtime rewrite. No large schema migration without approval.**
 
 **Validated baseline (Runtime Tests 1–2D):**
@@ -949,6 +949,25 @@ Embed token: `alloy_demo_enrollment_lead_capture_v1__org_93667019-bd28-49b5-a688
 
 - Copy outcome settings across distribution links / locations (planned; not built in IC-5.6)
 
+### IC-5.6 validation fixes (manual browser blockers)
+
+**Closeout still paused** — manual UI validation must be rerun after fixes below.
+
+| Blocker | Root cause | Fix |
+|---------|------------|-----|
+| **0 — Lead not visible / Open wrong target** | Case `href` always pointed at submission detail; opportunity drawer never opened; `opportunity_id` on list row sometimes missing while case had it | **Open lead** opens opportunity drawer; case row merges case `opportunity_id` onto submission for quick review; recommended action **Open lead** for auto-op cases |
+| **1 — Quick review mismatch** | Modal used submission-only meta; stale `skipped_missing_config` path checked before `opportunity_id`; case operationalized state ignored | Pass `quickReviewCaseContext` from case row; quick review prefers case auto-op + opportunity over stale skipped path |
+| **2 — Email validation flash** | Draft PATCH autosave surfaced pattern validation errors while typing; stale PATCH responses could race submit | Draft autosave no longer sets validation errors; submit-only error surfacing with seq guard |
+| **3 — Outcome panel too flat** | Full-width list rows | Compact story card + 2–3 column detail cards |
+| **4 — Create link refresh** | Background links refetch + outcome panel reloaded labels on `links.length` change | Optimistic link append only; removed quiet refetch; labels load once per form |
+
+**Re-run manual checklist + gates after deploy:**
+
+```bash
+cd web && npx tsx scripts/qaEnrollmentLeadOpportunityProof.ts
+cd web && npm run test -- tests/forms/intakeQuickReviewPresentation.test.ts tests/forms/formOutcomeConfigPanel.test.tsx
+```
+
 ## IC-5.5 — Browser/UI Validation Pass
 
 **Goal:** Validate operator flows in browser + live Demo Childcare Co before sprint closeout.
@@ -1058,14 +1077,102 @@ Auto-operationalization is proven separately via the **lead-only** gate path (`a
 
 ---
 
+# IC-5.7 — Intake Runtime Orchestration UX
+
+**Goal:** Make runtime context, outcome configuration, and operational proof obvious — without new schema or distribution-link architecture changes.
+
+## Shipped
+
+| Area | Change |
+|------|--------|
+| Guided orchestration rail | `FormIntakeRuntimeOrchestrationPanel` — configure → outcome → runtime → test step rail on form detail |
+| Active runtime card | Selected distribution link, intake type, embed token prefix, copy/open embed, refresh test |
+| Runtime mismatch prevention | Warn when latest submission used a different link; one-click switch to that link |
+| Runtime test confirmation | Latest submit outcome headline, lead created, Open lead drawer, View in pipeline link |
+| Outcome panel sync | Link selector owned by orchestration panel; outcome editor follows active runtime |
+| Intake workspace chips | Case rows show Lead linked / Auto-operationalized / Review required badges |
+| Session persistence | Active runtime link + per-link embed URL in sessionStorage after link create |
+
+## Key files
+
+- `web/lib/forms/intakeRuntimeOrchestrationPresentation.ts`
+- `web/lib/forms/intakeRuntimeOrchestrationStorage.ts`
+- `web/components/forms/admin/FormIntakeRuntimeOrchestrationPanel.tsx`
+- `web/components/forms/workspace/FormLifecycleWorkspaceLayout.tsx`
+- `web/tests/forms/intakeRuntimeOrchestrationPresentation.test.ts`
+
+## Manual validation (pending)
+
+- [ ] Enrollment Lead — Demo: “What this form does” panel shows intake process, test confirms lead, Open lead + New Leads pipeline link work
+- [ ] Medication Authorization: review-required path visible; public-form mismatch warning when wrong embed used
+- [ ] Intake workspace case rows show operational chips + Open lead
+
+# IC-8 — Intake Experience Simplification
+
+**Goal:** Shift operator UX from infrastructure configuration to business workflow setup. Architecture unchanged (form → distribution link → submission → opportunity → queue).
+
+## Root cause — enrollment pipeline visibility
+
+Form intake was creating opportunities with legacy status key **`new`**, while the enrollment pipeline **New Leads** queue filters on **`new_inquiry`** (and `open`). Leads were created and linkable in the drawer, but **invisible in the work unit queue**.
+
+| Fix | Detail |
+|-----|--------|
+| Write path | `normalizeIntakeOpportunityStatusKey` maps `new` → `new_inquiry`; default fallback is `new_inquiry` |
+| Queue compat | `new_leads` queue `filters_compat_v1` includes legacy `new` for existing rows |
+| Demo fixtures | Enrollment lead link metadata uses `new_inquiry` |
+| Proof gate | `qaEnrollmentLeadOpportunityProof.ts` asserts pipeline queue membership |
+
+## Operator language (IC-8)
+
+| Before | After |
+|--------|-------|
+| Intake runtime orchestration | **What this form does** |
+| Runtime link / distribution context | **Public form** |
+| Runtime test | **After submit** / test submission |
+| Operational Outcome (panel) | **What happens after submit** |
+| Share intake | **Share with families** |
+| Design / Distribute / Intake (rail) | **Build form / Share / Responses** |
+
+Infrastructure terms (embed token prefix, distribution links list) moved behind **Technical detail** disclosures.
+
+## Process templates (inferred, no schema)
+
+Intake process is inferred from link metadata + form key: enrollment lead, existing family update, waitlist, operational document, packet step, general intake. Shown as badges and step hints — not interactive preset cards yet.
+
+## Existing-record / prefilled direction (IC-8 proof hook)
+
+**Not built:** full packet runtime or persisted intake cases.
+
+**Direction documented:**
+
+- `form_context_mode: existing_record` on distribution link → **Existing family update** process (attach evidence, no duplicate lead)
+- Prefill via launch context per [`docs/system/forms-intake-prefill-doctrine.md`](../../system/forms-intake-prefill-doctrine.md)
+- Submissions stamp `opportunity_id` / session context when bound; intake dedup attaches instead of creating
+- UX placement: same “What this form does” rail; process template switches copy from “Creates lead” to “Updates existing record”
+
+**Follow-up:** interactive process picker, prefilled embed proof, outcome editor defaults per process template.
+
+## Manual validation (IC-8)
+
+```bash
+cd web && npx tsx scripts/prepareDemoChildcareEnrollmentLeadIntakeTest.ts
+cd web && npx tsx scripts/qaEnrollmentLeadOpportunityProof.ts
+cd web && npm run test -- tests/forms/intakeRuntimeOrchestrationPresentation.test.ts tests/forms/parseIntakeLinkDefaults.test.ts tests/config/enrollmentPipelineQueueDefinitionV2.test.ts
+```
+
+Browser checklist:
+
+1. Form detail → **What this form does** → open public form → submit → refresh → **Open lead** + **View in pipeline** (New Leads section)
+2. Work unit enrollment pipeline shows the new lead row
+3. Wrong public form submit shows mismatch warning with one-click switch
+4. Outcome panel follows selected public form without duplicate link selector
+
 # Stop line
 
-**IC-0.5 through IC-6 code shipped · IC-5.6 validation in progress — closeout paused.**
+**IC-8 code shipped · manual browser validation pending.**
 
 **Suggested commit message:**
 
 ```
-Simplify quick review modal for intake case doctrine and close sprint (IC-6).
-
-Operator-first modal sections with derived case context; no runtime changes.
+IC-8: simplify intake setup UX and fix enrollment pipeline lead visibility via status key alignment.
 ```

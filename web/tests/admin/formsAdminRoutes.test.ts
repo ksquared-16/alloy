@@ -938,6 +938,32 @@ describe("Admin forms routes", () => {
         expect(j.data.metadata.source_entity_type).toBe("person");
         expect(j.data.metadata.source_entity_id).toBe(pid);
         expect(j.data.metadata.prefill_enabled).toBe(true);
+        expect(j.data.metadata.lead_capture).toBe(true);
+        expect(j.data.metadata.intake).toBe(true);
+        expect(j.data.metadata.auto_create_opportunity).toBe(false);
+    });
+
+    it("POST public link launch_from_entity prefill_only skips intake", async () => {
+        const fid = crypto.randomUUID();
+        const pid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        storeRef.persons[pid] = { org_id: ORG };
+        const res = await createPublicLink(
+            new NextRequest("http://localhost:3000/api/x", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Host: "localhost:3000",
+                    "x-forwarded-proto": "http",
+                },
+                body: JSON.stringify({
+                    launch_from_entity: { entity_type: "person", entity_id: pid, prefill_only: true },
+                }),
+            }),
+            { params: Promise.resolve({ formId: fid }) }
+        );
+        expect(res.status).toBe(201);
+        const j = (await res.json()) as { data: { metadata: Record<string, unknown> } };
         expect(j.data.metadata.lead_capture).toBe(false);
         expect(j.data.metadata.intake).toBe(false);
     });

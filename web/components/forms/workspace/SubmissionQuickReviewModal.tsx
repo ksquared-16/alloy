@@ -6,9 +6,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import PrimaryButton from "@/components/PrimaryButton";
 import SecondaryButton from "@/components/SecondaryButton";
 import { FormsReviewBadge } from "@/components/forms/review/FormsReviewBadge";
-import { submissionDetailHref } from "@/components/forms/workspace/SubmissionInboxRowView";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
+import type { IntakeQuickReviewCaseContext } from "@/lib/forms/intakeQuickReviewPresentation";
 import { buildIntakeQuickReviewViewModel } from "@/lib/forms/intakeQuickReviewPresentation";
 import type { SubmissionInboxRow } from "@/lib/forms/submissionInboxPresentation";
 import {
@@ -26,8 +27,9 @@ type Props = {
     formName: string;
     viewerTz: string;
     onUpdated?: () => void;
-    /** When opened from a grouped intake case row (IC-3). */
+    /** When opened from a grouped intake case row (IC-3 / IC-5.6). */
     submissionCount?: number;
+    caseContext?: IntakeQuickReviewCaseContext;
 };
 
 function submitterLine(row: SubmissionInboxRow): string | null {
@@ -53,8 +55,10 @@ export function SubmissionQuickReviewModal({
     viewerTz,
     onUpdated,
     submissionCount,
+    caseContext,
 }: Props) {
     const { canMutate, role } = useAdminAuth();
+    const { openDrawer } = useAdminDrawer();
     const canConfirm = role === "admin" || role === "ops";
     const [confirmBusy, setConfirmBusy] = useState(false);
     const [confirmErr, setConfirmErr] = useState<string | null>(null);
@@ -81,8 +85,9 @@ export function SubmissionQuickReviewModal({
             formName,
             submittedAtLabel,
             submissionCount,
+            caseContext,
         });
-    }, [row, formName, submittedAtLabel, submissionCount]);
+    }, [row, formName, submittedAtLabel, submissionCount, caseContext]);
 
     const confirmMatch = useCallback(async () => {
         if (!row?.id) return;
@@ -105,9 +110,15 @@ export function SubmissionQuickReviewModal({
 
     if (!open || !row || !viewModel) return null;
 
-    const detailHref = submissionDetailHref(row.form_definition_id, row.id);
+    const detailHref = viewModel.intakeFileHref;
     const email = submitterLine(row);
     const who = viewModel.headerTitle;
+
+    const openLead = () => {
+        if (!viewModel.opportunityId) return;
+        openDrawer({ type: "opportunities", id: viewModel.opportunityId, opportunityWorkspaceContext: null });
+        onClose();
+    };
 
     const overlay = "fixed inset-0 z-[120] bg-black/20 backdrop-blur-[1px]";
     const panel =
@@ -242,9 +253,23 @@ export function SubmissionQuickReviewModal({
                 </div>
 
                 <div className="flex flex-wrap gap-2 border-t border-alloy-stone/15 px-5 py-4">
+                    {viewModel.opportunityId ?
+                        <PrimaryButton
+                            type="button"
+                            className="!px-3 !py-2 text-sm"
+                            data-testid="quick-review-open-lead"
+                            onClick={openLead}
+                        >
+                            {viewModel.primaryOpenLabel}
+                        </PrimaryButton>
+                    :   null}
                     <Link href={detailHref} className="inline-flex">
-                        <PrimaryButton type="button" className="!px-3 !py-2 text-sm">
-                            Open intake file
+                        <PrimaryButton
+                            type="button"
+                            className="!px-3 !py-2 text-sm"
+                            data-testid="quick-review-open-intake-file"
+                        >
+                            {viewModel.opportunityId ? "Open intake file" : viewModel.primaryOpenLabel}
                         </PrimaryButton>
                     </Link>
                     <SecondaryButton type="button" className="!px-3 !py-2 text-sm" onClick={onClose}>

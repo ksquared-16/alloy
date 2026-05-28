@@ -24,6 +24,11 @@ import {
     buildAfterSubmitPreviewLines,
     resolveEffectiveOperationalIntent,
 } from "@/lib/forms/operationalIntentTemplates";
+import {
+    buildEmbedOperatorNote,
+    buildFormEmbedIframeSnippet,
+    resolveFormShareHint,
+} from "@/lib/forms/formSharePresentation";
 import { FormOperationalIntentPicker } from "@/components/forms/admin/FormOperationalIntentPicker";
 import {
     readActiveRuntimeLinkId,
@@ -192,6 +197,21 @@ export function FormIntakeRuntimeOrchestrationPanel({
         [effectiveIntent, vm.storyBullets]
     );
 
+    const shareHint = useMemo(
+        () => resolveFormShareHint(effectiveIntent),
+        [effectiveIntent]
+    );
+
+    const embedOperatorNote = useMemo(
+        () => buildEmbedOperatorNote(effectiveIntent),
+        [effectiveIntent]
+    );
+
+    const embedSnippet = useMemo(
+        () => (embedUrl ? buildFormEmbedIframeSnippet(embedUrl, vm.activeRuntimeLabel ?? "Form") : null),
+        [embedUrl, vm.activeRuntimeLabel]
+    );
+
     return (
         <div
             className="rounded-xl bg-gradient-to-br from-alloy-stone/[0.08] via-white to-alloy-blue/[0.04] px-4 py-3.5 ring-1 ring-alloy-midnight/[0.08]"
@@ -281,6 +301,9 @@ export function FormIntakeRuntimeOrchestrationPanel({
                         {vm.activeRuntimeLabel ?? "No share link yet"}
                     </p>
                     <p className={clsx("mt-0.5", opMutedMeta)}>{vm.intakeTypeDescription}</p>
+                    <p className={clsx("mt-1.5", opMetadata)} data-testid="orchestration-share-hint">
+                        {shareHint}
+                    </p>
 
                     {operationalLinks.length > 1 ?
                         <label className="mt-2 block space-y-1">
@@ -381,6 +404,33 @@ export function FormIntakeRuntimeOrchestrationPanel({
                             Refresh test result
                         </button>
                     </div>
+
+                    {embedUrl && embedSnippet ?
+                        <TechnicalDetailDisclosure
+                            title="Embed on website"
+                            helperText="Copy embed code for your site"
+                        >
+                            <p className={opMutedMeta} data-testid="orchestration-embed-note">
+                                {embedOperatorNote}
+                            </p>
+                            <div className="mt-2">
+                                <code
+                                    className="block max-h-28 overflow-auto break-all rounded bg-alloy-stone/10 px-2 py-1.5 font-mono text-[11px] leading-relaxed text-alloy-midnight/85"
+                                    data-testid="orchestration-embed-snippet"
+                                >
+                                    {embedSnippet}
+                                </code>
+                                <button
+                                    type="button"
+                                    className="mt-2 text-xs font-semibold text-alloy-blue hover:underline"
+                                    data-testid="orchestration-copy-embed-code"
+                                    onClick={() => onCopy("orchestration-embed-code", embedSnippet)}
+                                >
+                                    {copied === "orchestration-embed-code" ? "Copied embed code" : "Copy embed code"}
+                                </button>
+                            </div>
+                        </TechnicalDetailDisclosure>
+                    :   null}
                 </div>
 
                 <div

@@ -35,7 +35,7 @@ export const OPERATIONAL_INTENT_CATALOG: OperationalIntentTemplate[] = [
         description: "Families submit interest — a new inquiry appears in your enrollment pipeline.",
         shareHint: "Share the public link on your website, email, or embed it on a landing page.",
         afterSubmitPreview: [
-            "A new enrollment inquiry will be created.",
+            "Families can complete this form from your website. A new enrollment inquiry will be created for staff review.",
             "The response will appear in Intake Review.",
             "Staff can continue enrollment from the lead drawer.",
         ],
@@ -46,8 +46,8 @@ export const OPERATIONAL_INTENT_CATALOG: OperationalIntentTemplate[] = [
         description: "Send this form to a family you already know — updates attach without creating a duplicate lead.",
         shareHint: "Send from an opportunity or family record so known fields can prefill.",
         afterSubmitPreview: [
-            "The submission attaches to the existing family or opportunity.",
-            "No duplicate lead is created.",
+            "This response will attach to the selected enrollment inquiry and will not create a new lead.",
+            "Known fields can prefill when sent from an opportunity.",
             "Activity appears on the opportunity timeline.",
         ],
     },
@@ -79,9 +79,9 @@ export const OPERATIONAL_INTENT_CATALOG: OperationalIntentTemplate[] = [
         description: "One step in a multi-form enrollment packet — completes as part of the packet session.",
         shareHint: "Usually sent as part of an enrollment packet from an opportunity.",
         afterSubmitPreview: [
-            "The response attaches to the active packet session.",
-            "Progress rolls up when the packet is complete.",
-            "Staff review the packet from the opportunity drawer.",
+            "This form will be completed as one step in the enrollment packet and attach to the active packet record.",
+            "Families see which step they are on and what comes next.",
+            "Staff review packet progress from the enrollment inquiry drawer.",
         ],
     },
     {

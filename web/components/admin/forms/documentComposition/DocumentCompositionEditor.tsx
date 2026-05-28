@@ -177,6 +177,7 @@ export function DocumentCompositionEditor({
                             <div key={block.id} data-testid={`document-field-region-${block.id}`}>
                                 <DocumentCompositionBlockCard
                                     block={block}
+                                    schema={schema}
                                     disabled={disabled}
                                     onChange={replaceBlock}
                                     canRemoveSection={canRemoveFieldRegion(block)}
@@ -279,6 +280,7 @@ export function DocumentCompositionEditor({
                         <DocumentCompositionBlockCard
                             key={block.id}
                             block={block}
+                            schema={schema}
                             disabled={disabled}
                             onChange={replaceBlock}
                             onRemove={() => applyComposition(removeCompositionBlock(composition, block.id))}

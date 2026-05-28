@@ -24,6 +24,7 @@ import {
 import { buildIntakeCasePresentationRows } from "@/lib/forms/intakeCasePresentation";
 import { buildIntakeQuickReviewViewModel } from "@/lib/forms/intakeQuickReviewPresentation";
 import { intakeCaseMatchesWorkspaceFilter } from "@/lib/forms/intakeWorkspaceFilters";
+import { opportunityMatchesEnrollmentNewLeadsQueue } from "@/lib/config/enrollmentPipelineQueueDefinitionV2";
 import { ENROLLMENT_LEAD_CAPTURE_DEMO_FORM_KEY } from "@/lib/forms/seeds/enrollmentLeadCaptureDemo";
 import type { SubmissionInboxRow } from "@/lib/forms/submissionInboxPresentation";
 
@@ -181,7 +182,12 @@ async function main() {
         .eq("id", row.opportunity_id!)
         .maybeSingle();
     assert(!!opportunity?.id, "opportunity row exists", errors);
-    assert(opportunity?.status_key === "new", `status_key new (got ${opportunity?.status_key})`, errors);
+    assert(opportunity?.status_key === "new_inquiry", `status_key new_inquiry (got ${opportunity?.status_key})`, errors);
+    assert(
+        opportunityMatchesEnrollmentNewLeadsQueue(opportunity?.status_key),
+        `lead visible in enrollment New Leads queue (status ${opportunity?.status_key})`,
+        errors
+    );
     assert(
         opportunity?.work_unit_id === DEMO_CHILDCARE_ENROLLMENT_WORK_UNIT_ID,
         "routed to enrollment work unit",

@@ -13,15 +13,14 @@ import {
 } from "./intakePersonMatch";
 import { parseIntakeAutoCreateFlags } from "./parseIntakeAutoCreateFlags";
 import { parseIntakeLinkDefaults, resolveIntakeOpportunitySource } from "./parseIntakeLinkDefaults";
+import { normalizeIntakeOpportunityStatusKey } from "./normalizeIntakeOpportunityStatusKey";
 import {
     intakeReviewDecisionToOutcomeMeta,
     resolveIntakeReviewDecision,
 } from "./resolveIntakeReviewDecision";
-import {
-    findExistingIntakeOpportunity,
-    findCustomerMemberIdOnOpportunity,
-    resolveIntakeWorkUnitId,
-} from "./intakeOpportunityDedup";
+import { findExistingIntakeOpportunity, resolveIntakeWorkUnitId } from "./intakeOpportunityDedup";
+import { applyIntakeChildToOpportunity } from "./applyIntakeChildToOpportunity";
+import { listIntakeChildrenFromMeta } from "./listIntakeChildrenFromMeta";
 
 async function listPersonIdsByEmail(
     supabase: SupabaseClient,
@@ -240,6 +239,19 @@ export async function applyFormIntakeSafe(
     let opportunityId = input.existingOpportunityId?.trim() || null;
     let customerMemberId = input.existingCustomerMemberId?.trim() || null;
 
+    let opportunityDedupStrategy: "created" | "attached_existing" | "ambiguous" | "skipped" = "skipped";
+    if (opportunityId && !flags.auto_create_opportunity) {
+        opportunityDedupStrategy = "attached_existing";
+        if (personId) {
+            matchStrategy = matchStrategy === "none" ? "launch_context" : matchStrategy;
+            confidence = "high";
+            resolutionPath = "linked_existing_submission";
+        }
+    }
+    let workUnitDepartmentMismatch = false;
+    let intakeRoutingWorkUnitId: string | null = linkDefaults.default_work_unit_id;
+    let intakeRoutingDepartmentId: string | null = linkDefaults.default_department_id;
+
     const { data: cpRow } = await supabase
         .from("customer_persons")
         .select("customer_id")
@@ -295,14 +307,12 @@ export async function applyFormIntakeSafe(
         emailNorm ||
         phoneNorm ||
         "Web intake";
-    const status_key =
+    const status_key = normalizeIntakeOpportunityStatusKey(
         (typeof oppHint.status_key === "string" && oppHint.status_key.trim()) ||
-        linkDefaults.default_opportunity_status_key ||
-        input.defaultOpportunityStatusKey ||
-        "new";
-
-    let opportunityDedupStrategy: "created" | "attached_existing" | "ambiguous" | "skipped" = "skipped";
-    let workUnitDepartmentMismatch = false;
+            linkDefaults.default_opportunity_status_key ||
+            input.defaultOpportunityStatusKey ||
+            null
+    );
 
     if (!opportunityId && flags.auto_create_opportunity) {
         const childHint = intake.child;
@@ -355,6 +365,7 @@ export async function applyFormIntakeSafe(
                 linkDefaults.default_department_id
             );
             workUnitDepartmentMismatch = workUnitResolved.department_mismatch;
+            intakeRoutingWorkUnitId = workUnitResolved.work_unit_id;
 
             const oppPayload: Record<string, unknown> = {
                 org_id: input.orgId,
@@ -408,64 +419,48 @@ export async function applyFormIntakeSafe(
         }
     }
 
-    const child = intake.child;
-    const hasChild =
-        child &&
-        typeof child === "object" &&
-        ((typeof child.display_name === "string" && child.display_name.trim()) ||
-            (typeof child.first_name === "string" && child.first_name.trim()));
+    const intakeChildren = listIntakeChildrenFromMeta(intake);
+    let opportunityLocationId: string | null = linkDefaults.default_location_id;
+    if (opportunityId) {
+        const { data: oppLocRow } = await supabase
+            .from("opportunities")
+            .select("location_id")
+            .eq("id", opportunityId)
+            .eq("org_id", input.orgId)
+            .maybeSingle();
+        opportunityLocationId =
+            (oppLocRow as { location_id?: string | null } | null)?.location_id ?? opportunityLocationId;
+    }
 
     if (
-        hasChild &&
+        intakeChildren.length > 0 &&
         flags.auto_create_customer_member &&
         customerId &&
-        opportunityId &&
-        !customerMemberId
+        opportunityId
     ) {
-        const ch = child!;
-        const existingMemberId = await findCustomerMemberIdOnOpportunity(
-            supabase,
-            input.orgId,
-            opportunityId,
-            typeof ch.first_name === "string" ? ch.first_name : null,
-            typeof ch.last_name === "string" ? ch.last_name : null
-        );
-        if (existingMemberId) {
-            customerMemberId = existingMemberId;
-        } else {
-            const display =
-                (typeof ch.display_name === "string" && ch.display_name.trim()) ||
-                [ch.first_name, ch.last_name].filter((x) => typeof x === "string" && x.trim()).join(" ").trim() ||
-                "Child";
-            const cmPayload: Record<string, unknown> = {
-                org_id: input.orgId,
-                customer_id: customerId,
-                display_name: display,
-                first_name: typeof ch.first_name === "string" ? ch.first_name.trim() || null : null,
-                last_name: typeof ch.last_name === "string" ? ch.last_name.trim() || null : null,
-                dob: typeof ch.dob === "string" && /^\d{4}-\d{2}-\d{2}$/.test(ch.dob) ? ch.dob : null,
-                relationship: "child",
-                metadata: { source: "public_form_intake", needs_review: true },
-            };
-
-            const { data: cm, error: cmErr } = await supabase
-                .from("customer_members")
-                .insert(cmPayload)
-                .select("id")
-                .single();
-            if (cmErr || !cm) throw new Error(cmErr?.message ?? "customer_members insert failed");
-            customerMemberId = (cm as { id: string }).id;
-
-            const { error: ocmErr } = await supabase.from("opportunity_customer_members").insert({
-                org_id: input.orgId,
-                opportunity_id: opportunityId,
-                customer_member_id: customerMemberId,
-                metadata: { source: "public_form_intake", needs_review: true },
+        const linkedMemberIds: string[] = [];
+        for (let i = 0; i < intakeChildren.length; i++) {
+            const ch = intakeChildren[i]!;
+            const reuseId =
+                i === 0 && intakeChildren.length === 1 ? customerMemberId : null;
+            const applied = await applyIntakeChildToOpportunity(supabase, {
+                orgId: input.orgId,
+                opportunityId,
+                customerId,
+                child: ch,
+                opportunityLocationId,
+                linkDefaultLocationId: linkDefaults.default_location_id,
+                reuseCustomerMemberId: reuseId,
+                needsReview: true,
             });
-            if (ocmErr && ocmErr.code !== "23505") {
-                throw new Error(`opportunity_customer_members insert failed: ${ocmErr.message}`);
-            }
-            memberAutoCreated = true;
+            if (!applied) continue;
+            linkedMemberIds.push(applied.customer_member_id);
+            if (applied.member_created) memberAutoCreated = true;
+        }
+        if (linkedMemberIds.length === 1) {
+            customerMemberId = linkedMemberIds[0]!;
+        } else if (linkedMemberIds.length > 1) {
+            customerMemberId = linkedMemberIds[0]!;
         }
     }
 
@@ -493,6 +488,9 @@ export async function applyFormIntakeSafe(
         intake_candidate_phone_count: phoneCount,
         ...(opportunityDedupStrategy !== "skipped" ? { intake_opportunity_match: opportunityDedupStrategy } : {}),
         ...(workUnitDepartmentMismatch ? { intake_work_unit_department_mismatch: true } : {}),
+        ...(intakeRoutingWorkUnitId ? { intake_routing_work_unit_id: intakeRoutingWorkUnitId } : {}),
+        ...(intakeRoutingDepartmentId ? { intake_routing_department_id: intakeRoutingDepartmentId } : {}),
+        ...(intakeChildren.length > 1 ? { intake_children_linked_count: intakeChildren.length } : {}),
         ...intakeReviewDecisionToOutcomeMeta(reviewDecision),
     });
 

@@ -12,6 +12,8 @@ export type InquiryChildIdentityPatch = {
 
 export type InquiryChildOcmPatch = {
     desired_start_date?: string | null;
+    location_id?: string | null;
+    program_room_cohort_key?: string | null;
     desired_program_type?: string | null;
     desired_schedule_type?: string | null;
     outcome_status_key?: string | null;

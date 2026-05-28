@@ -16,6 +16,7 @@ import {
 } from "@/lib/kpi/contextKpiMetrics";
 import type { WorkUnitKpiContext } from "@/lib/kpi/surfaceContext";
 import { resolveQueueGrainPresentation, resolveQueueCountUnit } from "@/lib/ui-v2/queueGrainPresentation";
+import { resolveDeptWorkUnitDisplayLabel } from "@/lib/workspace/workUnitShellDisplayTitle";
 
 function formatInt(n: number | null | undefined): string {
     if (n == null || Number.isNaN(n)) return "—";
@@ -94,9 +95,7 @@ export function buildDefaultDepartmentKpis(params: {
                 : summary
                   ? String(summary.total)
                   : "—";
-        const key = (wu.key ?? "").trim().toLowerCase();
-        const label =
-            key === "enrollment_pipeline" || key === "pipeline_overview" ? "Active inquiries" : wu.name?.trim() || "Work unit";
+        const label = resolveDeptWorkUnitDisplayLabel(wu);
         return { id: `wu_${wu.id}`, label, value, lane: "business" as const };
     });
 

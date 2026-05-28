@@ -16,7 +16,15 @@ import {
     normalizePlacementLinkMemberRow,
     type NormalizedPlacementLinkMemberRow,
 } from "@/lib/orchestration/placement/normalizeSupabaseNestedRelation";
-import { resolvePlacementCandidateCohortForQueue } from "@/lib/orchestration/placement/resolvePlacementCandidateCohortForQueue";
+import {
+    looksLikeCombinedProgramRoomCohort,
+    resolvePlacementCandidateCohortForQueue,
+} from "@/lib/orchestration/placement/resolvePlacementCandidateCohortForQueue";
+import {
+    placementLoadDiagnosticsEnabled,
+    resolvePlacementCandidateLoadDiagnostics,
+    type PlacementCandidateLoadDiagnostics,
+} from "@/lib/orchestration/placement/placementCandidateLoadDiagnostics";
 
 function asLinkMode(raw: unknown): PlacementLinkMode {
     const s = typeof raw === "string" ? raw.trim() : "";
@@ -47,6 +55,8 @@ export type PlacementCandidateQueueBundle = {
     link_mode: PlacementLinkMode;
     active_overrides: PlacementCandidateActiveOverrideSummary[];
     child_display_name: string | null;
+    /** Dev/test — site/cohort/household fact provenance when diagnostics enabled. */
+    load_diagnostics?: PlacementCandidateLoadDiagnostics;
 };
 
 export type PlacementCandidatesByOpportunityId = Map<string, PlacementCandidateQueueBundle[]>;
@@ -65,7 +75,7 @@ export async function bulkLoadPlacementCandidatesByOpportunity(params: {
     let q = params.supabase
         .from("placement_candidates")
         .select(
-            "id, org_id, opportunity_id, customer_id, opportunity_customer_member_id, customer_member_id, person_id, site_id, is_synthetic_fallback, program_room_cohort_key, program_room_group_label, wait_since, desired_start_date, status, seed_key, metadata, customer_members(display_name, person_id, metadata, persons(date_of_birth)), opportunity_customer_members(id, metadata, desired_program_type, customer_members(display_name, person_id, metadata, persons(date_of_birth)))"
+            "id, org_id, opportunity_id, customer_id, opportunity_customer_member_id, customer_member_id, person_id, site_id, is_synthetic_fallback, program_room_cohort_key, program_room_group_label, wait_since, desired_start_date, status, seed_key, metadata, customer_members(display_name, person_id, metadata, persons(date_of_birth)), opportunity_customer_members(id, location_id, program_room_cohort_key, metadata, desired_program_type, customer_members(display_name, person_id, metadata, persons(date_of_birth)))"
         )
         .eq("org_id", params.orgId)
         .in("opportunity_id", ids);
@@ -83,6 +93,8 @@ export async function bulkLoadPlacementCandidatesByOpportunity(params: {
         customer_members: ReturnType<typeof normalizeCustomerMemberNested>;
         opportunity_customer_members: {
             id: string;
+            location_id?: string | null;
+            program_room_cohort_key?: string | null;
             metadata: Record<string, unknown> | null;
             desired_program_type: string | null;
             customer_members: ReturnType<typeof normalizeCustomerMemberNested>;
@@ -94,12 +106,16 @@ export async function bulkLoadPlacementCandidatesByOpportunity(params: {
         const ocmRaw = c.opportunity_customer_members as
             | {
                   id: string;
+                  location_id?: string | null;
+                  program_room_cohort_key?: string | null;
                   metadata: Record<string, unknown> | null;
                   desired_program_type: string | null;
                   customer_members: unknown;
               }
             | Array<{
                   id: string;
+                  location_id?: string | null;
+                  program_room_cohort_key?: string | null;
                   metadata: Record<string, unknown> | null;
                   desired_program_type: string | null;
                   customer_members: unknown;
@@ -113,6 +129,12 @@ export async function bulkLoadPlacementCandidatesByOpportunity(params: {
             opportunity_customer_members: ocmSingle
                 ? {
                       id: String(ocmSingle.id),
+                      location_id:
+                          typeof ocmSingle.location_id === "string" ? ocmSingle.location_id : null,
+                      program_room_cohort_key:
+                          typeof ocmSingle.program_room_cohort_key === "string"
+                              ? ocmSingle.program_room_cohort_key
+                              : null,
                       metadata: ocmSingle.metadata ?? null,
                       desired_program_type: ocmSingle.desired_program_type ?? null,
                       customer_members: normalizeCustomerMemberNested(ocmSingle.customer_members),
@@ -221,6 +243,21 @@ export async function bulkLoadPlacementCandidatesByOpportunity(params: {
         const linkGroup = linkByCandidate.get(c.id) ?? null;
         const linkMode = linkGroup?.link_mode ?? "independent";
 
+        const cohortRepairedFromMember = looksLikeCombinedProgramRoomCohort(
+            c.program_room_cohort_key ?? "",
+            c.program_room_group_label ?? ""
+        );
+        const loadDiagnostics = placementLoadDiagnosticsEnabled()
+            ? resolvePlacementCandidateLoadDiagnostics({
+                  candidateSiteId: c.site_id,
+                  storedCohortKey: cohort.program_room_cohort_key,
+                  ocmLocationId: ocm?.location_id ?? null,
+                  ocmCohortKey: ocm?.program_room_cohort_key ?? null,
+                  candidateMetadata: meta,
+                  cohortRepairedFromMember,
+              })
+            : undefined;
+
         const bundle: PlacementCandidateQueueBundle = {
             candidate: {
                 id: c.id,
@@ -244,6 +281,7 @@ export async function bulkLoadPlacementCandidatesByOpportunity(params: {
             link_mode: linkMode,
             active_overrides: filterActivePlacementOverrides(overridesByCandidate.get(c.id) ?? [], Date.now()),
             child_display_name: displayName,
+            ...(loadDiagnostics ? { load_diagnostics: loadDiagnostics } : {}),
         };
 
         const list = out.get(c.opportunity_id) ?? [];

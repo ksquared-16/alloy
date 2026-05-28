@@ -86,6 +86,7 @@ import {
     resetDeptRevealGatePerf,
 } from "@/lib/adminV2/deptRevealGate";
 import { DeptPageLoadingGate } from "@/app/adminV2/components/workspace/DeptPageLoadingGate";
+import { resolveDeptWorkUnitDisplayLabel } from "@/lib/workspace/workUnitShellDisplayTitle";
 import { resolveDeptPipelineExecSurface } from "@/lib/workspace/resolveDeptPipelineExecSurface";
 import { WorkspaceOperIcon } from "@/components/admin/workspace/WorkspaceOperIcon";
 import { compareNeedsAttentionBuckets } from "@/lib/opportunities/needsAttentionBuckets";
@@ -1164,9 +1165,13 @@ export default function AdminV2WorkspaceDepartmentPage() {
             if (deptPipelineExecLoading) return;
             if (deptPipelineExecSurface?.lanes?.length) {
                 setDeptThroughputPresentation("pipeline_lanes");
-                setDeptOperPanelTitleLocked(
-                    deptPipelineExecSurface.panelTitle?.trim() || "Work Unit Queue"
+                const pipelineWu = (deptWorkUnits ?? []).find(
+                    (w) => w.id === deptPipelineExecSurface.workUnitId
                 );
+                const panelLabel = pipelineWu
+                    ? resolveDeptWorkUnitDisplayLabel(pipelineWu)
+                    : deptPipelineExecSurface.panelTitle?.trim() || "Work Unit Queue";
+                setDeptOperPanelTitleLocked(panelLabel);
                 return;
             }
             if (deptQueueSummariesLoading) return;
@@ -1568,7 +1573,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                             href={href}
                                             departmentId={departmentId}
                                             title={`${wu.name?.trim() || "Work unit"}. Total ${total ?? "—"}.`}
-                                            label={wu.name?.trim() || "Work unit"}
+                                            label={resolveDeptWorkUnitDisplayLabel(wu)}
                                             iconKey={null}
                                             total={total}
                                             countsDeferred={false}

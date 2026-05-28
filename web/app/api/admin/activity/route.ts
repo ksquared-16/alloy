@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { enrichActivityEventsWithCommunicationChannels } from "@/lib/admin/enrichActivityEventsWithCommunicationChannels";
+import { loadOpportunityActivityEvents } from "@/lib/admin/loadOpportunityRelatedActivityEvents";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 
@@ -34,16 +35,39 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = createAdminClient();
-    const { data: rows, error } = await supabase
-        .from("workflow_events")
-        .select("id, occurred_at, event_type, entity_type, entity_id, action_type, payload")
-        .eq("org_id", ctx.orgId)
-        .eq("entity_type", entityType)
-        .eq("entity_id", entityId)
-        .order("occurred_at", { ascending: false })
-        .limit(limit);
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    let rows: Awaited<ReturnType<typeof loadOpportunityActivityEvents>> | null = null;
+    if (entityType === "opportunities") {
+        rows = await loadOpportunityActivityEvents({
+            supabase,
+            orgId: ctx.orgId,
+            opportunityId: entityId,
+            limit,
+        });
+    } else {
+        const { data, error } = await supabase
+            .from("workflow_events")
+            .select("id, occurred_at, event_type, entity_type, entity_id, action_type, payload")
+            .eq("org_id", ctx.orgId)
+            .eq("entity_type", entityType)
+            .eq("entity_id", entityId)
+            .order("occurred_at", { ascending: false })
+            .limit(limit);
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+        rows =
+            data?.map((row) => ({
+                id: String(row.id),
+                occurred_at: String(row.occurred_at ?? ""),
+                event_type: row.event_type ?? null,
+                entity_type: row.entity_type ?? null,
+                entity_id: row.entity_id ?? null,
+                action_type: row.action_type ?? null,
+                payload:
+                    row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
+                        ? (row.payload as Record<string, unknown>)
+                        : null,
+            })) ?? [];
+    }
 
     const events = await enrichActivityEventsWithCommunicationChannels(supabase, ctx.orgId, rows ?? []);
 

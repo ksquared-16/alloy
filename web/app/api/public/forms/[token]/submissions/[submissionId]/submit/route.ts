@@ -267,6 +267,7 @@ export async function POST(
                 intake_match_strategy: "launch_context",
                 intake_match_confidence: "explicit",
                 intake_needs_review: false,
+                ...(opportunityId ? { intake_opportunity_match: "attached_existing" as const } : {}),
             },
         };
     }

@@ -27,6 +27,12 @@ describe("parseIntakeLinkDefaults Runtime Test 1A", () => {
         });
     });
 
+    it("normalizes legacy new status key to new_inquiry", () => {
+        expect(parseIntakeLinkDefaults({ default_opportunity_status_key: "new" }).default_opportunity_status_key).toBe(
+            "new_inquiry"
+        );
+    });
+
     it("ignores invalid UUIDs", () => {
         expect(parseIntakeLinkDefaults({ default_location_id: "not-a-uuid" }).default_location_id).toBeNull();
     });

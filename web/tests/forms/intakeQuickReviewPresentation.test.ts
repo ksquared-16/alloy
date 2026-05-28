@@ -110,7 +110,7 @@ describe("intakeQuickReviewPresentation IC-6", () => {
         const serialized = JSON.stringify(model);
         expect(serialized).not.toContain("intake_needs_review");
         expect(serialized).not.toContain("intake_resolution_path");
-        expect(model.intakeSummary.operationalLine).toContain("Attached to existing family");
+        expect(model.intakeSummary.operationalLine).toContain("Existing family update received");
     });
 
     it("flags confirm linkage when review required with links", () => {
@@ -123,5 +123,62 @@ describe("intakeQuickReviewPresentation IC-6", () => {
         });
 
         expect(model.showConfirmLinkage).toBe(true);
+    });
+
+    it("IC-5.6 — auto-operationalized lead with stale skipped path uses case context", () => {
+        const model = buildIntakeQuickReviewViewModel({
+            row: row({
+                opportunity_id: null,
+                payload: {
+                    values: { guardian_full_name: "Jordan Test" },
+                    meta: {
+                        intake_resolution_path: "skipped_missing_config",
+                        intake_needs_review: false,
+                    },
+                } as SubmissionInboxRow["payload"],
+            }),
+            formName: "Enrollment Lead — Demo",
+            submittedAtLabel: "May 27, 2026 6:09 PM",
+            caseContext: {
+                opportunityId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                statusBucket: "auto_operationalized",
+                operationalizedState: "auto_operationalized",
+                recommendedNextAction: "Open lead",
+            },
+        });
+
+        expect(model.intakeSummary.operationalLine).toBe("New lead created · Auto-operationalized");
+        expect(model.intakeSummary.statusLine).toBe("Auto-operationalized");
+        expect(model.needsAction.clearMessage).toBe("No manual review required.");
+        expect(model.needsAction.items).toHaveLength(0);
+        expect(model.opportunityId).toBe("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+        expect(model.primaryOpenLabel).toBe("Continue enrollment");
+    });
+
+    it("IC-5.6 — review-required medication path still shows needs action", () => {
+        const model = buildIntakeQuickReviewViewModel({
+            row: row({
+                customer_member_id: "cm1",
+                payload: {
+                    values: { guardian_full_name: "Jordan Test" },
+                    meta: {
+                        intake_needs_review: true,
+                        intake_auto_operationalized: false,
+                        intake_resolution_path: "created_records",
+                        intake_review_decision: { reasons: ["child_member_auto_created"] },
+                    },
+                } as SubmissionInboxRow["payload"],
+            }),
+            formName: "Medication Authorization — Demo",
+            submittedAtLabel: "May 27, 2026 6:09 PM",
+            caseContext: {
+                statusBucket: "review_required",
+                operationalizedState: "none",
+            },
+        });
+
+        expect(model.needsAction.items).toContain("Review required before enrollment continues");
+        expect(model.needsAction.clearMessage).toBeNull();
+        expect(model.intakeSummary.statusLine).toContain("Review required");
     });
 });

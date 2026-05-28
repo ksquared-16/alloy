@@ -11,6 +11,7 @@ import {
     partitionInquiryChildPatchBody,
 } from "@/lib/fields/inquiryChildFieldRegistry";
 import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
+import { validateInquiryChildPlacementPatch } from "@/lib/admin/drawer/inquiryChildPlacementScope";
 
 export async function PATCH(
     request: NextRequest,
@@ -46,6 +47,15 @@ export async function PATCH(
                 v === "" || v == null ? null : normalizeIsoDateOnly(typeof v === "string" ? v : String(v));
             continue;
         }
+        if (k === "location_id") {
+            updates.location_id = v === "" || v == null ? null : typeof v === "string" ? v.trim() || null : null;
+            continue;
+        }
+        if (k === "program_room_cohort_key") {
+            updates.program_room_cohort_key =
+                v === "" || v == null ? null : typeof v === "string" ? v.trim() || null : null;
+            continue;
+        }
         updates[k] = v === "" || v == null ? null : typeof v === "string" ? v.trim() || null : v;
     }
 
@@ -62,7 +72,9 @@ export async function PATCH(
 
     const { data: existingOcm } = await supabase
         .from("opportunity_customer_members")
-        .select("id, opportunity_id, outcome_status_key")
+        .select(
+            "id, opportunity_id, outcome_status_key, location_id, program_room_cohort_key, desired_program_type"
+        )
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
@@ -83,6 +95,33 @@ export async function PATCH(
 
     if (!hasNative) {
         return NextResponse.json({ id, updated: true });
+    }
+
+    const existing = existingOcm as {
+        location_id?: string | null;
+        program_room_cohort_key?: string | null;
+        desired_program_type?: string | null;
+    };
+    const placementValidation = validateInquiryChildPlacementPatch({
+        location_id:
+            "location_id" in updates ? (updates.location_id as string | null) : existing.location_id,
+        program_room_cohort_key:
+            "program_room_cohort_key" in updates
+                ? (updates.program_room_cohort_key as string | null)
+                : existing.program_room_cohort_key,
+        desired_program_type:
+            "desired_program_type" in updates
+                ? (updates.desired_program_type as string | null)
+                : existing.desired_program_type,
+    });
+    if (!placementValidation.ok) {
+        return NextResponse.json(
+            {
+                error: placementValidation.issues[0]?.message ?? "Invalid child placement scope",
+                placement_scope_issues: placementValidation.issues,
+            },
+            { status: 400 }
+        );
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, "outcome_status_key")) {
@@ -117,7 +156,7 @@ export async function PATCH(
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .select(
-            "id, org_id, opportunity_id, customer_member_id, desired_program_type, desired_schedule_type, desired_start_date, outcome_status_key, notes, updated_at"
+            "id, org_id, opportunity_id, customer_member_id, location_id, program_room_cohort_key, desired_program_type, desired_schedule_type, desired_start_date, outcome_status_key, notes, updated_at"
         )
         .single();
 

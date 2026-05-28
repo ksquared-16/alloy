@@ -2,6 +2,11 @@
 
 import { useCallback, useMemo, type FormEvent } from "react";
 import clsx from "clsx";
+import { InlineFieldTokenText } from "@/components/forms/inline/InlineFieldTokenText";
+import { sortDocumentBlocks, type DocumentBlock } from "@/lib/forms/documentComposition";
+import { fieldById as schemaFieldById, resolveDocumentComposition } from "@/lib/forms/documentCompositionAuthoring";
+import { fieldRegionPreviewLayoutClass, spacerPreviewHeight } from "@/lib/forms/documentCompositionPreviewPresentation";
+import { collectInlineFieldTokenWarnings, resolveInlineFieldTokens } from "@/lib/forms/inlineFieldTokens";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import type {
     FormPayload,
@@ -685,27 +690,117 @@ export function FormEngineRenderer({
         [onChange, payload, readonly, renderScalarControl, renderSignatureControl, schema, validationErrors]
     );
 
-    return (
-        <div className={clsx("mx-auto max-w-xl space-y-8", loose && "max-w-full px-3 py-4")}>
-            <header>
-                <h1 className={clsx("text-xl font-semibold text-neutral-900", loose && "text-lg")}>{schema.title}</h1>
-            </header>
-            {sectionModels.map(({ section, fields }) => (
-                <section key={section.id} className="space-y-4">
-                    {section.title ? (
-                        <h2 className={clsx("text-lg font-medium text-neutral-800", loose && "text-base")}>
-                            {section.title}
-                        </h2>
-                    ) : null}
-                    <div className="space-y-4">
-                        {chunkFieldsForHalfRowLayout(
-                            fields.filter((field) => evaluateFieldVisibility(field.id, schema, (id) => payload.values[id]))
-                        ).map((row, ri) => (
-                            <div
-                                key={`row-${ri}-${row.map((f) => f.id).join("-")}`}
-                                className={row.length === 2 ? "grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6" : "block"}
-                            >
-                                {row.map((field) => {
+    const documentComposition = useMemo(
+        () => (schema.document_composition ? resolveDocumentComposition(schema) : null),
+        [schema]
+    );
+
+    const inlineTokenWarnings = useMemo(() => {
+        if (!documentComposition || !readonly) return [];
+        return collectInlineFieldTokenWarnings(schema, payload, optionChoicesByFieldId);
+    }, [documentComposition, readonly, schema, payload, optionChoicesByFieldId]);
+
+    const renderFieldList = useCallback(
+        (fields: FormField[]) =>
+            chunkFieldsForHalfRowLayout(
+                fields.filter((field) => evaluateFieldVisibility(field.id, schema, (id) => payload.values[id]))
+            ).map((row, ri) => (
+                <div
+                    key={`row-${ri}-${row.map((f) => f.id).join("-")}`}
+                    className={row.length === 2 ? "grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6" : "block"}
+                >
+                    {row.map((field) => {
+                        if (field.type === "group") {
+                            return <div key={field.id}>{renderGroup(field)}</div>;
+                        }
+                        if (field.type === "signature") {
+                            const sig = payload.signatures?.[field.id];
+                            return (
+                                <div key={field.id}>
+                                    {renderSignatureControl(field, sig, (nextSig) =>
+                                        onChange(setSignature(payload, field.id, nextSig)), ["signatures", field.id]
+                                    )}
+                                </div>
+                            );
+                        }
+                        return (
+                            <div key={field.id}>
+                                {renderScalarControl(
+                                    field,
+                                    payload.values,
+                                    (fid, v) => {
+                                        onChange(setTopLevelValue(payload, fid, v));
+                                    },
+                                    ["values", field.id]
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )),
+        [onChange, payload, renderGroup, renderScalarControl, renderSignatureControl, schema]
+    );
+
+    const renderCompositionBlock = useCallback(
+        (block: DocumentBlock) => {
+            switch (block.type) {
+                case "heading": {
+                    const Tag = block.level === "h1" ? "h1" : block.level === "h3" ? "h3" : "h2";
+                    const size =
+                        block.level === "h1" ? "text-xl font-semibold"
+                        : block.level === "h3" ? "text-base font-semibold"
+                        : "text-lg font-medium";
+                    const resolution = resolveInlineFieldTokens(block.content, {
+                        schema,
+                        payload,
+                        optionChoicesByFieldId,
+                    });
+                    return (
+                        <Tag
+                            key={block.id}
+                            className={clsx(size, "text-neutral-900", loose && block.level !== "h1" && "text-base")}
+                            data-testid={`form-composition-heading-${block.id}`}
+                        >
+                            <InlineFieldTokenText resolution={resolution} mode="runtime" />
+                        </Tag>
+                    );
+                }
+                case "text": {
+                    const resolution = resolveInlineFieldTokens(block.content, {
+                        schema,
+                        payload,
+                        optionChoicesByFieldId,
+                    });
+                    return (
+                        <p
+                            key={block.id}
+                            className={clsx("text-sm leading-relaxed text-neutral-800", loose && "text-[13px]")}
+                            data-testid={`form-composition-text-${block.id}`}
+                        >
+                            <InlineFieldTokenText resolution={resolution} mode="runtime" />
+                        </p>
+                    );
+                }
+                case "field_region": {
+                    const layout = block.layout ?? "one_column";
+                    const fields = block.field_ids
+                        .map((fid) => schemaFieldById(schema, fid))
+                        .filter(Boolean) as FormField[];
+                    const visibleFields = fields.filter((field) =>
+                        evaluateFieldVisibility(field.id, schema, (id) => payload.values[id])
+                    );
+                    return (
+                        <section key={block.id} className="space-y-3" data-testid={`form-composition-region-${block.id}`}>
+                            {block.title ?
+                                <h2 className={clsx("text-lg font-medium text-neutral-800", loose && "text-base")}>
+                                    {block.title}
+                                </h2>
+                            :   null}
+                            {block.helper ?
+                                <p className={clsx("text-xs text-neutral-600", loose && "text-[12px]")}>{block.helper}</p>
+                            :   null}
+                            <div className={clsx("gap-4", fieldRegionPreviewLayoutClass(layout))}>
+                                {visibleFields.map((field) => {
                                     if (field.type === "group") {
                                         return <div key={field.id}>{renderGroup(field)}</div>;
                                     }
@@ -714,7 +809,10 @@ export function FormEngineRenderer({
                                         return (
                                             <div key={field.id}>
                                                 {renderSignatureControl(field, sig, (nextSig) =>
-                                                    onChange(setSignature(payload, field.id, nextSig)), ["signatures", field.id]
+                                                    onChange(setSignature(payload, field.id, nextSig)), [
+                                                        "signatures",
+                                                        field.id,
+                                                    ]
                                                 )}
                                             </div>
                                         );
@@ -733,7 +831,109 @@ export function FormEngineRenderer({
                                     );
                                 })}
                             </div>
-                        ))}
+                        </section>
+                    );
+                }
+                case "signature": {
+                    const boundField =
+                        block.field_id ? schemaFieldById(schema, block.field_id) : undefined;
+                    if (boundField?.type === "signature") {
+                        const sig = payload.signatures?.[boundField.id];
+                        return (
+                            <div key={block.id} data-testid={`form-composition-signature-${block.id}`}>
+                                {block.label ?
+                                    <p className="mb-1 text-sm font-medium text-neutral-800">{block.label}</p>
+                                :   null}
+                                {renderSignatureControl(boundField, sig, (nextSig) =>
+                                    onChange(setSignature(payload, boundField.id, nextSig)), ["signatures", boundField.id]
+                                )}
+                            </div>
+                        );
+                    }
+                    return (
+                        <div key={block.id} className="rounded border border-dashed border-neutral-300 px-3 py-4 text-sm text-neutral-500">
+                            {block.label ?? "Signature"}
+                        </div>
+                    );
+                }
+                case "divider":
+                    return (
+                        <hr
+                            key={block.id}
+                            className={clsx(
+                                "border-t",
+                                block.style === "dashed" ? "border-dashed border-neutral-300"
+                                : block.style === "brand" ? "border-blue-400"
+                                : "border-neutral-200"
+                            )}
+                            data-testid={`form-composition-divider-${block.id}`}
+                        />
+                    );
+                case "spacer":
+                    return (
+                        <div
+                            key={block.id}
+                            className={spacerPreviewHeight(block.size)}
+                            data-testid={`form-composition-spacer-${block.id}`}
+                            aria-hidden
+                        />
+                    );
+                case "image":
+                    return (
+                        <div
+                            key={block.id}
+                            className="flex h-12 items-center justify-center rounded border border-neutral-200 bg-neutral-50 text-xs text-neutral-500"
+                            data-testid={`form-composition-image-${block.id}`}
+                        >
+                            {block.alt ?? "Image"}
+                        </div>
+                    );
+                default:
+                    return null;
+            }
+        },
+        [loose, onChange, optionChoicesByFieldId, payload, renderGroup, renderScalarControl, renderSignatureControl, schema]
+    );
+
+    if (documentComposition) {
+        const blocks = sortDocumentBlocks(documentComposition.blocks);
+        return (
+            <div className={clsx("mx-auto max-w-xl space-y-8", loose && "max-w-full px-3 py-4")}>
+                <header>
+                    <h1 className={clsx("text-xl font-semibold text-neutral-900", loose && "text-lg")}>{schema.title}</h1>
+                </header>
+                {readonly && inlineTokenWarnings.length > 0 ?
+                    <div
+                        className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950"
+                        data-testid="form-inline-token-warnings"
+                    >
+                        <p className="font-semibold">Inline field references need attention</p>
+                        <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs">
+                            {inlineTokenWarnings.flatMap((row) =>
+                                row.warnings.map((w) => <li key={`${row.blockId}-${w}`}>{w}</li>)
+                            )}
+                        </ul>
+                    </div>
+                :   null}
+                <div className="space-y-6">{blocks.map((block) => renderCompositionBlock(block))}</div>
+            </div>
+        );
+    }
+
+    return (
+        <div className={clsx("mx-auto max-w-xl space-y-8", loose && "max-w-full px-3 py-4")}>
+            <header>
+                <h1 className={clsx("text-xl font-semibold text-neutral-900", loose && "text-lg")}>{schema.title}</h1>
+            </header>
+            {sectionModels.map(({ section, fields }) => (
+                <section key={section.id} className="space-y-4">
+                    {section.title ? (
+                        <h2 className={clsx("text-lg font-medium text-neutral-800", loose && "text-base")}>
+                            {section.title}
+                        </h2>
+                    ) : null}
+                    <div className="space-y-4">
+                        {renderFieldList(fields)}
                     </div>
                 </section>
             ))}

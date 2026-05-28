@@ -118,7 +118,9 @@ export async function GET(
             if (contact.person_id) {
                 const { data: personRow } = await supabase
                     .from("persons")
-                    .select("id, first_name, last_name, full_name, email, phone, created_at, updated_at")
+                    .select(
+                        "id, first_name, last_name, full_name, email, phone, is_employee, employee_id, employee_source, created_at, updated_at"
+                    )
                     .eq("id", contact.person_id)
                     .eq("org_id", orgId)
                     .maybeSingle();

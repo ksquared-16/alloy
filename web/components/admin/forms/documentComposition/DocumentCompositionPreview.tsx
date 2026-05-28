@@ -16,6 +16,8 @@ import {
     fieldRegionPreviewLayoutLabel,
     spacerPreviewHeight,
 } from "@/lib/forms/documentCompositionPreviewPresentation";
+import { resolveInlineFieldTokens } from "@/lib/forms/inlineFieldTokens";
+import { InlineFieldTokenText } from "@/components/forms/inline/InlineFieldTokenText";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import type { FieldRegionPreviewLayout } from "@/lib/forms/documentCompositionPreviewPresentation";
 import { opMetadata, opMutedMeta } from "@/lib/operational/ui/operationalVisualTokens";
@@ -167,18 +169,21 @@ function PreviewBlock({
                 block.level === "h1" ? "text-base font-semibold"
                 : block.level === "h3" ? "text-xs font-semibold"
                 : "text-sm font-semibold";
+            const resolution = resolveInlineFieldTokens(block.content, { schema });
             return (
                 <Tag className={clsx(size, "text-alloy-midnight")} data-testid={`preview-heading-${block.id}`}>
-                    {block.content}
+                    <InlineFieldTokenText resolution={resolution} mode="authoring" />
                 </Tag>
             );
         }
-        case "text":
+        case "text": {
+            const resolution = resolveInlineFieldTokens(block.content, { schema });
             return (
                 <p className={clsx("text-xs leading-relaxed", opMetadata)} data-testid={`preview-text-${block.id}`}>
-                    {block.content}
+                    <InlineFieldTokenText resolution={resolution} mode="authoring" />
                 </p>
             );
+        }
         case "image":
             return (
                 <div

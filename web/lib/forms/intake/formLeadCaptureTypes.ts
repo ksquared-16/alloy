@@ -14,6 +14,13 @@ export type FormIntakeChildHint = {
     first_name?: string | null;
     last_name?: string | null;
     dob?: string | null;
+    /** Child-level site (`opportunity_customer_members.location_id`). */
+    location_id?: string | null;
+    /** Waitlist cohort key (`opportunity_customer_members.program_room_cohort_key`). */
+    program_room_cohort_key?: string | null;
+    desired_program_type?: string | null;
+    desired_schedule_type?: string | null;
+    desired_start_date?: string | null;
 };
 
 export type FormIntakeOpportunityHint = {
@@ -27,6 +34,8 @@ export type FormIntakeMeta = {
     vertical_id?: string | null;
     guardian?: FormIntakeGuardianHint | null;
     child?: FormIntakeChildHint | null;
+    /** When set, each entry is a distinct child — do not duplicate into `child`. */
+    children?: FormIntakeChildHint[] | null;
     opportunity?: FormIntakeOpportunityHint | null;
     /** Caller-supplied stable key; combined with submission id for idempotency trace only */
     idempotency_key?: string | null;

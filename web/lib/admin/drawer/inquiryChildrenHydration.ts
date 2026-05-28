@@ -35,6 +35,10 @@ export type InquiryChildHydrateRow = {
     fit_status: string | null;
     notes: string | null;
     desired_start_date: string | null;
+    location_id?: string | null;
+    location_label?: string | null;
+    program_room_cohort_key?: string | null;
+    program_room_cohort_label?: string | null;
     custom_fields: Record<string, unknown>;
     metadata: Record<string, unknown> | null;
     created_at: string | null;
