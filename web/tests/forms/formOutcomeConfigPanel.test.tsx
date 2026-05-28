@@ -69,6 +69,7 @@ describe("FormOutcomeConfigPanel IC-1c", () => {
         expect(html).toContain("When this form is submitted");
         expect(html).toContain("Selected distribution link");
         expect(html).toContain('data-testid="form-outcome-copy-settings-planned"');
+        expect(html).toContain('data-testid="form-outcome-detail-card"');
     });
 
     it("shows edit button when canMutate", () => {

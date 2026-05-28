@@ -16,6 +16,12 @@ vi.mock("@/components/forms/workspace/FormIntakePreviewPanel", () => ({
     FormIntakePreviewPanel: () => <div data-testid="form-intake-preview-mock">Intake preview</div>,
 }));
 
+vi.mock("@/components/forms/admin/FormIntakeRuntimeOrchestrationPanel", () => ({
+    FormIntakeRuntimeOrchestrationPanel: () => (
+        <div data-testid="form-intake-runtime-orchestration-mock">Runtime orchestration</div>
+    ),
+}));
+
 const formId = "ffffffff-ffff-4fff-8fff-ffffffffffff";
 
 describe("FormLifecycleWorkspaceLayout OW-3", () => {
@@ -91,21 +97,26 @@ describe("FormLifecycleWorkspaceLayout OW-3", () => {
                 onCreateLink={() => {}}
                 onCopy={() => {}}
                 onVersionsUpdated={() => {}}
+                selectedRuntimeLinkId={null}
+                onSelectedRuntimeLinkChange={() => {}}
+                createdOnceLinkId={null}
+                openPublicEmbedUrl={null}
             />
         );
 
         expect(html).toContain('data-testid="form-lifecycle-rail"');
         expect(html).toContain('data-testid="form-action-preview"');
-        expect(html).toContain('data-testid="form-action-create-link"');
+        expect(html).not.toContain('data-testid="form-action-create-link"');
         expect(html).toContain('data-testid="form-action-submissions"');
-        expect(html).toContain("Create link");
-        expect(html).not.toContain(">Share<");
+        expect(html).not.toContain("Create link");
+        expect(html).toContain("Share form");
         expect(html).toContain("Draft in progress");
         expect(html).toContain("Submissions (3)");
         expect(html).toContain('data-testid="form-region-design"');
         expect(html).toContain('data-testid="form-region-operational-outcome"');
-        expect(html).toContain("Operational Outcome");
-        expect(html).toContain('data-testid="form-region-distribute"');
+        expect(html).toContain('data-testid="form-region-runtime-orchestration"');
+        expect(html).toContain("What happens after submit");
+        expect(html).not.toContain('data-testid="form-region-distribute"');
         expect(html).toContain('data-testid="form-region-intake"');
         expect(html).toContain('data-testid="form-region-review"');
         expect(html).toContain('data-testid="form-schema-workspace-mock"');
@@ -163,6 +174,10 @@ describe("FormLifecycleWorkspaceLayout OW-3", () => {
                 onCreateLink={() => {}}
                 onCopy={() => {}}
                 onVersionsUpdated={() => {}}
+                selectedRuntimeLinkId={null}
+                onSelectedRuntimeLinkChange={() => {}}
+                createdOnceLinkId={null}
+                openPublicEmbedUrl={null}
             />
         );
 

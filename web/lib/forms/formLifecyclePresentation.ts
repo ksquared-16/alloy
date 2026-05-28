@@ -32,6 +32,8 @@ export type FormLifecycleInput = {
     submissionCount: number;
     submittedCount: number;
     documentGenerationConfigured: boolean;
+    intentConfigured?: boolean;
+    outcomeConfigured?: boolean;
 };
 
 export const FORM_LIFECYCLE_ANCHORS: Record<FormLifecycleStepKey, string> = {
@@ -51,15 +53,17 @@ export function buildFormLifecycleSteps(input: FormLifecycleInput): FormLifecycl
         submissionCount,
         submittedCount,
         documentGenerationConfigured,
+        intentConfigured = false,
+        outcomeConfigured = false,
     } = input;
 
     const design: FormLifecycleStepView =
         hasDraft ?
             {
                 key: "design",
-                label: "Design",
+                label: "Build form",
                 statusLabel: hasPublished ? "Draft in progress" : "Draft started",
-                nextHint: hasPublished ? "Edit draft fields, then publish" : "Add fields and publish",
+                nextHint: hasPublished ? "Edit fields, then publish" : "Add fields and publish",
                 anchor: FORM_LIFECYCLE_ANCHORS.design,
                 state: "active",
                 tone: "info",
@@ -67,8 +71,8 @@ export function buildFormLifecycleSteps(input: FormLifecycleInput): FormLifecycl
         : hasPublished ?
             {
                 key: "design",
-                label: "Design",
-                statusLabel: "Published",
+                label: "Build form",
+                statusLabel: "Fields published",
                 nextHint: "Start a new draft to change fields",
                 anchor: FORM_LIFECYCLE_ANCHORS.design,
                 state: "complete",
@@ -76,7 +80,7 @@ export function buildFormLifecycleSteps(input: FormLifecycleInput): FormLifecycl
             }
         :   {
                 key: "design",
-                label: "Design",
+                label: "Build form",
                 statusLabel: "Not started",
                 nextHint: "Create a blank draft",
                 anchor: FORM_LIFECYCLE_ANCHORS.design,
@@ -119,26 +123,36 @@ export function buildFormLifecycleSteps(input: FormLifecycleInput): FormLifecycl
         activeLinkCount > 0 ?
             {
                 key: "distribute",
-                label: "Distribute",
-                statusLabel: `${activeLinkCount} active link${activeLinkCount === 1 ? "" : "s"}`,
-                nextHint: "Share links or create another",
+                label: "Share form",
+                statusLabel: `${activeLinkCount} live link${activeLinkCount === 1 ? "" : "s"}`,
+                nextHint: "Open or copy the share link",
                 anchor: FORM_LIFECYCLE_ANCHORS.distribute,
                 state: "complete",
                 tone: "success",
             }
-        : hasPublished ?
+        : hasPublished && outcomeConfigured ?
             {
                 key: "distribute",
-                label: "Distribute",
-                statusLabel: "No links yet",
-                nextHint: "Create a public link",
+                label: "Share form",
+                statusLabel: "Ready to share",
+                nextHint: "Get a share link below",
                 anchor: FORM_LIFECYCLE_ANCHORS.distribute,
                 state: "active",
                 tone: "warning",
             }
+        : hasPublished ?
+            {
+                key: "distribute",
+                label: "Share form",
+                statusLabel: intentConfigured ? "Configure outcome first" : "Choose purpose first",
+                nextHint: intentConfigured ? "Configure after submit" : "Choose what this form does",
+                anchor: FORM_LIFECYCLE_ANCHORS.distribute,
+                state: "pending",
+                tone: "neutral",
+            }
         :   {
                 key: "distribute",
-                label: "Distribute",
+                label: "Share form",
                 statusLabel: "Blocked",
                 nextHint: "Publish before sharing",
                 anchor: FORM_LIFECYCLE_ANCHORS.distribute,
@@ -150,9 +164,9 @@ export function buildFormLifecycleSteps(input: FormLifecycleInput): FormLifecycl
         submissionCount > 0 ?
             {
                 key: "intake",
-                label: "Intake",
+                label: "Review responses",
                 statusLabel: `${submissionCount} response${submissionCount === 1 ? "" : "s"}`,
-                nextHint: "Monitor new submissions",
+                nextHint: "Continue workflow in inbox",
                 anchor: FORM_LIFECYCLE_ANCHORS.intake,
                 state: "complete",
                 tone: "success",
@@ -160,18 +174,18 @@ export function buildFormLifecycleSteps(input: FormLifecycleInput): FormLifecycl
         : activeLinkCount > 0 ?
             {
                 key: "intake",
-                label: "Intake",
+                label: "Review responses",
                 statusLabel: "Awaiting responses",
-                nextHint: "Links are live — watch for intake",
+                nextHint: "Share link is live",
                 anchor: FORM_LIFECYCLE_ANCHORS.intake,
                 state: "active",
                 tone: "info",
             }
         :   {
                 key: "intake",
-                label: "Intake",
+                label: "Review responses",
                 statusLabel: "No activity",
-                nextHint: "Distribute a link first",
+                nextHint: "Share the form first",
                 anchor: FORM_LIFECYCLE_ANCHORS.intake,
                 state: "pending",
                 tone: "neutral",
@@ -181,7 +195,7 @@ export function buildFormLifecycleSteps(input: FormLifecycleInput): FormLifecycl
         submittedCount > 0 ?
             {
                 key: "review",
-                label: "Review",
+                label: "Continue workflow",
                 statusLabel: `${submittedCount} to review`,
                 nextHint: "Open intake inbox",
                 anchor: FORM_LIFECYCLE_ANCHORS.review,
@@ -191,7 +205,7 @@ export function buildFormLifecycleSteps(input: FormLifecycleInput): FormLifecycl
         : submissionCount > 0 ?
             {
                 key: "review",
-                label: "Review",
+                label: "Continue workflow",
                 statusLabel: "Draft responses only",
                 nextHint: "Wait for submitted responses",
                 anchor: FORM_LIFECYCLE_ANCHORS.review,
@@ -200,9 +214,9 @@ export function buildFormLifecycleSteps(input: FormLifecycleInput): FormLifecycl
             }
         :   {
                 key: "review",
-                label: "Review",
+                label: "Continue workflow",
                 statusLabel: "Nothing yet",
-                nextHint: "Submissions appear after intake",
+                nextHint: "Responses appear after families submit",
                 anchor: FORM_LIFECYCLE_ANCHORS.review,
                 state: "pending",
                 tone: "neutral",

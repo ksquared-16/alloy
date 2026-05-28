@@ -32,8 +32,18 @@ import {
     formLifecyclePurposeLine,
     formLifecyclePublishSummaryLabel,
 } from "@/lib/forms/formLifecyclePresentation";
+import {
+    isOutcomeConfiguredForIntent,
+    readStoredOperationalIntent,
+    resolveEffectiveOperationalIntent,
+} from "@/lib/forms/operationalIntentTemplates";
 import { formsWorkspaceBreadcrumbs, FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
 import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
+import {
+    readActiveRuntimeLinkId,
+    writeActiveRuntimeLinkId,
+    writeLinkEmbedUrl,
+} from "@/lib/forms/intakeRuntimeOrchestrationStorage";
 import { opMetadata } from "@/lib/operational/ui/operationalVisualTokens";
 
 type VersionRow = {
@@ -75,6 +85,8 @@ export default function FormDetailClient() {
     const [copyWarn, setCopyWarn] = useState<string | null>(null);
     const [previewBusy, setPreviewBusy] = useState(false);
     const [previewErr, setPreviewErr] = useState<string | null>(null);
+    const [selectedRuntimeLinkId, setSelectedRuntimeLinkId] = useState<string | null>(null);
+    const [createdOnceLinkId, setCreatedOnceLinkId] = useState<string | null>(null);
 
     const load = useCallback(async () => {
         if (!formId) return;
@@ -125,27 +137,6 @@ export default function FormDetailClient() {
         void load();
     }, [load]);
 
-    const loadLinksQuiet = useCallback(async () => {
-        if (!formId) return;
-        try {
-            const linksRes = await fetch(`/api/admin/forms/${encodeURIComponent(formId)}/public-links`);
-            const linksJson = await linksRes.json().catch(() => ({}));
-            if (linksRes.ok) {
-                const raw = (linksJson as { data?: Record<string, unknown>[] }).data ?? [];
-                setLinks(
-                    raw.map((row) => {
-                        const { token_hash: _h, plaintext_token: _p, ...rest } = row;
-                        void _h;
-                        void _p;
-                        return rest as FormPublicLinkRow;
-                    })
-                );
-            }
-        } catch {
-            /* keep existing links on background refresh failure */
-        }
-    }, [formId]);
-
     const copyText = async (key: string, text: string) => {
         setCopyWarn(null);
         try {
@@ -179,16 +170,23 @@ export default function FormDetailClient() {
                     Partial<FormPublicLinkRow> & { id?: string; created_at?: string; is_active?: boolean; metadata?: Record<string, unknown> };
             }).data;
             if (d?.plaintext_token && d.embed_path) {
+                const embedUrl =
+                    d.embed_url ??
+                    (typeof window !== "undefined" ? `${window.location.origin}${d.embed_path}` : null);
                 setCreatedOnce({
                     plaintext_token: d.plaintext_token,
                     embed_path: d.embed_path,
-                    embed_url:
-                        d.embed_url ??
-                        (typeof window !== "undefined" ? `${window.location.origin}${d.embed_path}` : null),
+                    embed_url: embedUrl,
                 });
+                if (d.id && embedUrl) {
+                    writeLinkEmbedUrl(d.id, embedUrl);
+                }
             }
             if (d?.id) {
                 const linkId = d.id;
+                setCreatedOnceLinkId(linkId);
+                setSelectedRuntimeLinkId(linkId);
+                writeActiveRuntimeLinkId(formId, linkId);
                 setLinks((prev) => {
                     if (prev.some((link) => link.id === linkId)) return prev;
                     const nextLink: FormPublicLinkRow = {
@@ -204,10 +202,9 @@ export default function FormDetailClient() {
             }
             if (typeof window !== "undefined") {
                 requestAnimationFrame(() => {
-                    document.getElementById("lifecycle-distribute")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    document.getElementById("lifecycle-orchestration")?.scrollIntoView({ behavior: "smooth", block: "start" });
                 });
             }
-            void loadLinksQuiet();
         } catch (e) {
             setCreateErr((e as Error).message);
         } finally {
@@ -218,6 +215,24 @@ export default function FormDetailClient() {
     const handleLinkMetadataSaved = useCallback((linkId: string, metadata: Record<string, unknown>) => {
         setLinks((prev) => prev.map((link) => (link.id === linkId ? { ...link, metadata } : link)));
     }, []);
+
+    const handleFormMetadataUpdated = useCallback((metadata: Record<string, unknown>) => {
+        setDetail((prev) => (prev ? { ...prev, metadata } : prev));
+    }, []);
+
+    const handleSelectedRuntimeLinkChange = useCallback(
+        (linkId: string) => {
+            setSelectedRuntimeLinkId(linkId);
+            writeActiveRuntimeLinkId(formId, linkId);
+        },
+        [formId]
+    );
+
+    useEffect(() => {
+        if (!formId || selectedRuntimeLinkId) return;
+        const stored = readActiveRuntimeLinkId(formId);
+        if (stored) setSelectedRuntimeLinkId(stored);
+    }, [formId, selectedRuntimeLinkId]);
 
     const handlePreviewForm = useCallback(async () => {
         if (!formId || !canMutate) return;
@@ -286,6 +301,41 @@ export default function FormDetailClient() {
     const hasPublished = Boolean(latestPublished);
     const activeLinkCount = links.filter((l) => l.is_active).length;
 
+    const selectedRuntimeLink = useMemo(() => {
+        const operational = links.filter((l) => {
+            const meta = l.metadata;
+            return meta && typeof meta === "object" && (meta as Record<string, unknown>).mode !== "preview";
+        });
+        if (selectedRuntimeLinkId) {
+            return operational.find((l) => l.id === selectedRuntimeLinkId) ?? operational[0] ?? null;
+        }
+        return operational[0] ?? null;
+    }, [links, selectedRuntimeLinkId]);
+
+    const intentConfigured = useMemo(() => {
+        if (!detail) return false;
+        return Boolean(
+            readStoredOperationalIntent(detail.metadata) ??
+                resolveEffectiveOperationalIntent({
+                    formMetadata: detail.metadata,
+                    linkMetadata: selectedRuntimeLink?.metadata ?? null,
+                    formKey: detail.key,
+                })
+        );
+    }, [detail, selectedRuntimeLink?.metadata]);
+
+    const outcomeConfigured = useMemo(() => {
+        if (!detail) return false;
+        const intent =
+            readStoredOperationalIntent(detail.metadata) ??
+            resolveEffectiveOperationalIntent({
+                formMetadata: detail.metadata,
+                linkMetadata: selectedRuntimeLink?.metadata ?? null,
+                formKey: detail.key,
+            });
+        return isOutcomeConfiguredForIntent(selectedRuntimeLink?.metadata ?? null, intent);
+    }, [detail, selectedRuntimeLink?.metadata]);
+
     const operatorContext = useMemo(() => parseOperatorContext(detail?.metadata), [detail?.metadata]);
 
     const documentGenerationConfigured = useMemo(
@@ -312,8 +362,10 @@ export default function FormDetailClient() {
                 submissionCount: submissionStats.total,
                 submittedCount: submissionStats.submitted,
                 documentGenerationConfigured,
+                intentConfigured,
+                outcomeConfigured,
             }),
-        [hasDraft, hasPublished, activeLinkCount, submissionStats, documentGenerationConfigured]
+        [hasDraft, hasPublished, activeLinkCount, submissionStats, documentGenerationConfigured, intentConfigured, outcomeConfigured]
     );
 
     const purposeLine = useMemo(() => {
@@ -411,6 +463,11 @@ export default function FormDetailClient() {
                     onCopy={(key, text) => void copyText(key, text)}
                     onVersionsUpdated={() => void load()}
                     onLinkMetadataSaved={handleLinkMetadataSaved}
+                    onFormMetadataUpdated={handleFormMetadataUpdated}
+                    selectedRuntimeLinkId={selectedRuntimeLinkId}
+                    onSelectedRuntimeLinkChange={handleSelectedRuntimeLinkChange}
+                    createdOnceLinkId={createdOnceLinkId}
+                    openPublicEmbedUrl={openPublicEmbedUrl}
                 />
             :   null}
         </FormsWorkspaceShell>

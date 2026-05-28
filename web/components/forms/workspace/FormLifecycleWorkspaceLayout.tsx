@@ -31,6 +31,7 @@ import { FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
 import { FORMS_TECHNICAL_DISCLOSURE } from "@/lib/forms/review/formsReviewTechnicalDisclosure";
 import FormSchemaWorkspace from "@/app/admin/forms/FormSchemaWorkspace";
 import { FormOutcomeConfigPanel } from "@/components/forms/admin/FormOutcomeConfigPanel";
+import { FormIntakeRuntimeOrchestrationPanel } from "@/components/forms/admin/FormIntakeRuntimeOrchestrationPanel";
 import {
     opGroupedRowInner,
     opGroupedSurface,
@@ -93,6 +94,11 @@ type Props = {
     onCopy: (key: string, text: string) => void;
     onVersionsUpdated: () => void;
     onLinkMetadataSaved?: (linkId: string, metadata: Record<string, unknown>) => void;
+    selectedRuntimeLinkId: string | null;
+    onSelectedRuntimeLinkChange: (linkId: string) => void;
+    createdOnceLinkId: string | null;
+    openPublicEmbedUrl: string | null;
+    onFormMetadataUpdated?: (metadata: Record<string, unknown>) => void;
 };
 
 /** Loaded-state lifecycle workspace layout (OW-3). */
@@ -123,6 +129,11 @@ export function FormLifecycleWorkspaceLayout({
     onCopy,
     onVersionsUpdated,
     onLinkMetadataSaved,
+    selectedRuntimeLinkId,
+    onSelectedRuntimeLinkChange,
+    createdOnceLinkId,
+    openPublicEmbedUrl,
+    onFormMetadataUpdated,
 }: Props) {
     const submissionsHref = `${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(formId)}/submissions`;
 
@@ -139,22 +150,12 @@ export function FormLifecycleWorkspaceLayout({
                     <div className="flex flex-wrap gap-1.5">
                         <button
                             type="button"
-                            className={intakeWorkspaceBtnPrimary}
+                            className={intakeWorkspaceBtnSecondary}
                             onClick={onPreview}
                             disabled={previewBusy || creating || !canMutate || !hasPublished}
                             data-testid="form-action-preview"
                         >
-                            {previewBusy ? "Opening…" : "Preview"}
-                        </button>
-                        <button
-                            type="button"
-                            className={intakeWorkspaceBtnSecondary}
-                            onClick={onCreateLink}
-                            disabled={creating || !canMutate || !hasPublished}
-                            data-testid="form-action-create-link"
-                            title="Creates a new intake link — copy the URL from Share intake below"
-                        >
-                            {creating ? "Creating link…" : "Create link"}
+                            {previewBusy ? "Opening…" : "Preview fields"}
                         </button>
                         <Link href={submissionsHref} className={intakeWorkspaceBtnSecondary} data-testid="form-action-submissions">
                             Submissions{submissionCount > 0 ? ` (${submissionCount})` : ""}
@@ -226,6 +227,28 @@ export function FormLifecycleWorkspaceLayout({
                     </TechnicalDetailDisclosure>
                 </section>
 
+                <section className={opRegionSeparator} data-testid="form-region-runtime-orchestration">
+                    <FormIntakeRuntimeOrchestrationPanel
+                        formId={formId}
+                        formKey={detail.key}
+                        formMetadata={detail.metadata}
+                        links={links}
+                        documentGenerationConfigured={documentGenerationConfigured}
+                        hasPublished={hasPublished}
+                        selectedLinkId={selectedRuntimeLinkId}
+                        onSelectedLinkChange={onSelectedRuntimeLinkChange}
+                        createdOnceEmbedUrl={openPublicEmbedUrl}
+                        createdOnceLinkId={createdOnceLinkId}
+                        onCopy={onCopy}
+                        copied={copied}
+                        canMutate={canMutate}
+                        onFormMetadataUpdated={onFormMetadataUpdated}
+                        onLinkMetadataSaved={onLinkMetadataSaved}
+                        onCreateLink={onCreateLink}
+                        creatingLink={creating}
+                    />
+                </section>
+
                 <section className={opRegionSeparator} data-testid="form-region-operational-outcome">
                     <FormOutcomeConfigPanel
                         formId={formId}
@@ -235,6 +258,9 @@ export function FormLifecycleWorkspaceLayout({
                         documentGenerationConfigured={documentGenerationConfigured}
                         canMutate={canMutate}
                         onLinkMetadataSaved={onLinkMetadataSaved}
+                        selectedLinkId={selectedRuntimeLinkId}
+                        onSelectedLinkChange={onSelectedRuntimeLinkChange}
+                        hideLinkSelector
                     />
                 </section>
 
@@ -244,43 +270,34 @@ export function FormLifecycleWorkspaceLayout({
                     data-testid="form-region-distribute-intake"
                 >
                     <div className="grid gap-3 lg:grid-cols-2">
-                        <div
-                            className="rounded-xl bg-white/95 px-4 py-3 ring-1 ring-alloy-midnight/[0.07]"
-                            data-testid="form-region-distribute"
-                        >
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                                <h3 className="text-sm font-semibold text-alloy-midnight">Share intake</h3>
-                                <span className={opMetadata}>
-                                    {links.filter((l) => l.is_active).length} active link
-                                    {links.filter((l) => l.is_active).length === 1 ? "" : "s"}
-                                </span>
-                            </div>
-                            <TechnicalDetailDisclosure title="Distribution links" helperText="One-time URLs and link list">
-                                <FormDistributionPanel
-                                    formKey={detail.key}
-                                    canMutate={canMutate}
-                                    creating={creating}
-                                    createErr={createErr}
-                                    links={links}
-                                    createdOnce={createdOnce}
-                                    copied={copied}
-                                    copyWarn={copyWarn}
-                                    viewerTz={viewerTz}
-                                    onCreateLink={onCreateLink}
-                                    onCopy={onCopy}
-                                />
-                            </TechnicalDetailDisclosure>
-                        </div>
                         <div data-testid="form-region-intake">
                             <FormIntakePreviewPanel formId={formId} viewerTz={viewerTz} compact />
                         </div>
+                        <TechnicalDetailDisclosure
+                            title="Manage all share links"
+                            helperText={`${links.length} link${links.length === 1 ? "" : "s"} — advanced`}
+                        >
+                            <FormDistributionPanel
+                                formKey={detail.key}
+                                canMutate={canMutate}
+                                creating={creating}
+                                createErr={createErr}
+                                links={links}
+                                createdOnce={createdOnce}
+                                copied={copied}
+                                copyWarn={copyWarn}
+                                viewerTz={viewerTz}
+                                onCreateLink={onCreateLink}
+                                onCopy={onCopy}
+                            />
+                        </TechnicalDetailDisclosure>
                     </div>
                 </section>
 
                 <section id={FORM_LIFECYCLE_ANCHORS.review} className={opRegionSeparator} data-testid="form-region-review">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
-                            <h2 className="text-sm font-semibold text-alloy-midnight">Review & submissions</h2>
+                            <h2 className="text-sm font-semibold text-alloy-midnight">Review & continue workflow</h2>
                             <p className={clsx("mt-0.5", opMetadata)}>
                                 {submissionCount > 0 ?
                                     `${submissionCount} in intake inbox`
