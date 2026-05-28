@@ -80,6 +80,7 @@ import { applyPlacementToOpportunityQueueRows } from "@/lib/orchestration/placem
 import type { WorkUnitPlacementQueueDiagnostics } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
 import { applyPlacementV2ToOpportunityQueueRows } from "@/lib/orchestration/placement/applyPlacementV2ToOpportunityQueueRows";
 import { bulkLoadPlacementCandidatesByOpportunity } from "@/lib/orchestration/placement/bulkLoadPlacementCandidatesByOpportunity";
+import { loadPlacementEvaluationHouseholdContext } from "@/lib/orchestration/placement/loadPlacementEvaluationHouseholdContext";
 import { expandOpportunityRowsToPlacementCandidateRows } from "@/lib/orchestration/placement/placementWaitlistCandidateRowProjection";
 import { sortPlacementCandidateQueueRows } from "@/lib/orchestration/placement/sortPlacementCandidateQueueRows";
 import { resolvePlacementQueueConfig } from "@/lib/orchestration/placement/resolvePlacementQueueConfig";
@@ -260,11 +261,17 @@ async function attachPlacementToEnrichedOpportunityItems(params: {
                 orgId: params.orgId,
                 opportunityIds: oppIds,
             }));
+        const householdFactsByCustomerId = await loadPlacementEvaluationHouseholdContext({
+            supabase: params.supabase,
+            orgId: params.orgId,
+            candidatesByOpportunityId,
+        });
         const out = applyPlacementV2ToOpportunityQueueRows({
             rows: params.enrichedRows,
             placement: { ...resolved, engine_version: "v2" },
             ctx,
             candidatesByOpportunityId,
+            householdFactsByCustomerId,
             v1FallbackForEmpty: true,
         });
         const expanded = expandOpportunityRowsToPlacementCandidateRows(out.rows);

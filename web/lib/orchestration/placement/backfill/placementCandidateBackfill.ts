@@ -10,6 +10,7 @@ import {
 } from "@/lib/orchestration/placement/placementCandidateTypes";
 import { resolveProgramRoomCohort } from "@/lib/orchestration/placement/resolveProgramRoomCohort";
 import { resolvePlacementCandidateCohortFromMember } from "@/lib/orchestration/placement/resolvePlacementCandidateCohortForQueue";
+import { resolvePlacementCandidateSiteId } from "@/lib/orchestration/placement/resolvePlacementCandidateSiteId";
 import { normalizeCustomerMemberNested } from "@/lib/orchestration/placement/normalizeSupabaseNestedRelation";
 import {
     isChildWaitlistEligibleForPlacementCandidate,
@@ -63,6 +64,8 @@ type OcmRow = {
     outcome_status_key: string | null;
     desired_start_date: string | null;
     desired_program_type: string | null;
+    location_id?: string | null;
+    program_room_cohort_key?: string | null;
     metadata: Record<string, unknown> | null;
     customer_members: {
         person_id: string | null;
@@ -152,6 +155,8 @@ function normalizeOcmRow(raw: unknown): OcmRow {
                 : null,
         desired_start_date: row.desired_start_date ?? null,
         desired_program_type: row.desired_program_type ?? null,
+        location_id: row.location_id ?? null,
+        program_room_cohort_key: row.program_room_cohort_key ?? null,
         metadata: row.metadata ?? null,
         customer_members: customerMembers,
     };
@@ -244,15 +249,30 @@ function buildCandidateRowsForOpportunity(
             options.counts.compat_opportunity_fallback += 1;
         }
         const ocmMd = safeMeta(ocm.metadata);
-        const cohort = resolvePlacementCandidateCohortFromMember({
-            ocmMetadata: ocmMd,
-            desiredProgramType: ocm.desired_program_type,
-            dateOfBirth:
-                ocm.customer_members?.persons?.date_of_birth ??
-                (typeof safeMeta(ocm.customer_members?.metadata).dob === "string"
-                    ? String(safeMeta(ocm.customer_members?.metadata).dob)
-                    : null),
+        const siteResolution = resolvePlacementCandidateSiteId({
+            ocmLocationId: ocm.location_id,
+            opportunityLocationId: opp.location_id,
         });
+
+        const cohortFromOcmKey = (ocm.program_room_cohort_key ?? "").trim();
+        const cohort = cohortFromOcmKey
+            ? {
+                  program_room_cohort_key: cohortFromOcmKey,
+                  program_room_group_label:
+                      typeof ocmMd.program_room_group_label === "string"
+                          ? ocmMd.program_room_group_label.trim()
+                          : cohortFromOcmKey,
+                  resolution_source: "ocm.program_room_cohort_key" as const,
+              }
+            : resolvePlacementCandidateCohortFromMember({
+                  ocmMetadata: ocmMd,
+                  desiredProgramType: ocm.desired_program_type,
+                  dateOfBirth:
+                      ocm.customer_members?.persons?.date_of_birth ??
+                      (typeof safeMeta(ocm.customer_members?.metadata).dob === "string"
+                          ? String(safeMeta(ocm.customer_members?.metadata).dob)
+                          : null),
+              });
 
         const desiredStart = parseDateOnly(ocm.desired_start_date) ?? oppDesiredStart;
 
@@ -263,7 +283,7 @@ function buildCandidateRowsForOpportunity(
             opportunity_customer_member_id: ocm.id,
             customer_member_id: ocm.customer_member_id,
             person_id: ocm.customer_members?.person_id ?? null,
-            site_id: opp.location_id,
+            site_id: siteResolution.site_id,
             is_synthetic_fallback: false,
             program_room_cohort_key: cohort.program_room_cohort_key,
             program_room_group_label: cohort.program_room_group_label,
@@ -279,6 +299,10 @@ function buildCandidateRowsForOpportunity(
             metadata: {
                 backfill_v1: true,
                 cohort_resolution: cohort,
+                site_resolution: siteResolution,
+                ...(siteResolution.used_opportunity_fallback
+                    ? { site_resolution_warning: "opportunity_location_fallback" }
+                    : {}),
                 eligibility_reason: eligibility.reason,
                 eligibility_compat_opportunity_fallback: eligibility.compat_opportunity_fallback === true,
             },
@@ -346,7 +370,7 @@ export async function runPlacementCandidateBackfill(
         const { data: ocmData, error: ocmErr } = await supabase
             .from("opportunity_customer_members")
             .select(
-                "id, customer_member_id, outcome_status_key, desired_start_date, desired_program_type, metadata, customer_members(person_id, display_name, metadata, persons(date_of_birth))"
+                "id, customer_member_id, outcome_status_key, desired_start_date, desired_program_type, location_id, program_room_cohort_key, metadata, customer_members(person_id, display_name, metadata, persons(date_of_birth))"
             )
             .eq("org_id", orgId)
             .eq("opportunity_id", opp.id);

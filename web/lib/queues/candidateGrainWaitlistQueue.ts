@@ -9,6 +9,7 @@ import type { NormalizedQueueEntry, NormalizedQueueDefinitionDocument } from "@/
 import { parseQueueFilterStub } from "@/lib/config/queueDefinitionV2Runtime";
 import { applyPlacementV2ToOpportunityQueueRows } from "@/lib/orchestration/placement/applyPlacementV2ToOpportunityQueueRows";
 import { bulkLoadPlacementCandidatesByOpportunity } from "@/lib/orchestration/placement/bulkLoadPlacementCandidatesByOpportunity";
+import { loadPlacementEvaluationHouseholdContext } from "@/lib/orchestration/placement/loadPlacementEvaluationHouseholdContext";
 import {
     expandOpportunityRowsToPlacementCandidateRows,
     type ExpandToPlacementCandidateRowsResult,
@@ -310,6 +311,12 @@ export async function loadWaitlistCandidateGrainQueueItems(params: {
         activeOnly: false,
     });
 
+    const householdFactsByCustomerId = await loadPlacementEvaluationHouseholdContext({
+        supabase: params.supabase,
+        orgId: params.orgId,
+        candidatesByOpportunityId,
+    });
+
     let shadowMode = true;
     let placementDiagnostics: WaitlistCandidateGrainLoadResult["placementDiagnostics"] = null;
     let expandedRows: Array<Record<string, unknown>> = [];
@@ -329,6 +336,7 @@ export async function loadWaitlistCandidateGrainQueueItems(params: {
                 nowMs: params.nowMs,
             },
             candidatesByOpportunityId,
+            householdFactsByCustomerId,
             v1FallbackForEmpty: true,
         });
         const expanded = expandOpportunityRowsToPlacementCandidateRows(v2Out.rows);

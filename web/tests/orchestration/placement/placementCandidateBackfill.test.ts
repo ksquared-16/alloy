@@ -39,6 +39,8 @@ function ocmRow(id: string, outcome: string | null) {
         outcome_status_key: outcome,
         desired_start_date: null,
         desired_program_type: null,
+        location_id: null as string | null,
+        program_room_cohort_key: null as string | null,
         metadata: {},
         customer_members: {
             person_id: `person_${id}`,
@@ -120,6 +122,37 @@ describe("placementCandidateBackfill", () => {
         });
         expect(synthetic).toHaveLength(0);
         expect(countsSynthetic.skipped_synthetic_opp_only_strict).toBe(1);
+    });
+
+    it("prefers OCM location_id over opportunity location_id for site_id", () => {
+        const counts = emptyCounts();
+        const row = ocmRow("ocm_wait", "waitlisted");
+        row.location_id = "site_child";
+        const rows = buildCandidateRowsForOpportunity(
+            baseOpp,
+            [row],
+            "org_a",
+            false,
+            { strictEligibility: false, counts }
+        );
+        expect(rows[0]?.site_id).toBe("site_child");
+        expect(rows[0]?.metadata.site_resolution).toMatchObject({
+            source: "ocm",
+            used_opportunity_fallback: false,
+        });
+    });
+
+    it("records opportunity fallback in metadata when OCM site is missing", () => {
+        const counts = emptyCounts();
+        const rows = buildCandidateRowsForOpportunity(
+            baseOpp,
+            [ocmRow("ocm_wait", "waitlisted")],
+            "org_a",
+            false,
+            { strictEligibility: false, counts }
+        );
+        expect(rows[0]?.site_id).toBe("site_a");
+        expect(rows[0]?.metadata.site_resolution_warning).toBe("opportunity_location_fallback");
     });
 
     it("does not delete or mutate existing candidates (planning only)", () => {

@@ -11,6 +11,9 @@ import {
 } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
 import { evaluatePlacementCandidate } from "@/lib/orchestration/placement/adapters/placementCandidateFacts";
 import type { PlacementCandidatesByOpportunityId } from "@/lib/orchestration/placement/bulkLoadPlacementCandidatesByOpportunity";
+import type { HouseholdPlacementFactContextByCustomerId } from "@/lib/orchestration/placement/bulkLoadHouseholdPlacementFactContext";
+import { extractHouseholdFactSources } from "@/lib/orchestration/placement/householdPlacementFacts";
+import { buildPlacementCandidateFacts } from "@/lib/orchestration/placement/adapters/placementCandidateFacts";
 import { computeFamilyPlacementRollup } from "@/lib/orchestration/placement/computeFamilyPlacementRollup";
 import { getPlacementProfileFromRegistry } from "@/lib/orchestration/placement/placementPresetRegistry";
 import { buildPlacementForecastPreview, resolvePlacementCandidateForecast } from "@/lib/orchestration/placement/placementForecastFactsProvider";
@@ -41,6 +44,8 @@ export type PlacementPriorityV2CandidatePreview = {
     /** Card 6 — informational forecast hints (no ordering impact by default). */
     forecast_hints?: string[];
     forecast_facts_present?: string[];
+    /** Dev/test — record sources for household priority flags when `ALLOY_PLACEMENT_FACT_SOURCES_DEBUG=1`. */
+    fact_sources?: Record<string, { presence: string; source?: string }>;
 };
 
 export type PlacementPriorityV2RowPreview = {
@@ -99,6 +104,7 @@ export function applyPlacementV2ToOpportunityQueueRows(params: {
     waitSinceFallbackCreatedAt?: boolean;
     /** When set, rows with no candidates use V1 apply on those rows only (merged into result). */
     v1FallbackForEmpty?: boolean;
+    householdFactsByCustomerId?: HouseholdPlacementFactContextByCustomerId;
 }): { rows: Array<Record<string, unknown>>; diagnostics: ApplyPlacementV2Diagnostics } {
     const { placement, ctx } = params;
     const shadow = placement.options.shadow_mode;
@@ -190,6 +196,11 @@ export function applyPlacementV2ToOpportunityQueueRows(params: {
         const rollupInputs: Parameters<typeof computeFamilyPlacementRollup>[0] = [];
 
         for (const bundle of bundles) {
+            const customerId = (bundle.candidate.customer_id ?? "").trim();
+            const household = customerId
+                ? params.householdFactsByCustomerId?.get(customerId) ?? null
+                : null;
+
             const result = evaluatePlacementCandidate({
                 candidate: bundle.candidate,
                 opportunity: { id: core.id, created_at: core.created_at, metadata: core.metadata },
@@ -204,6 +215,7 @@ export function applyPlacementV2ToOpportunityQueueRows(params: {
                 active_overrides: bundle.active_overrides,
                 evaluator_version: PLACEMENT_QUEUE_SERVICE_V2_EVALUATOR_VERSION,
                 wait_since_fallback_created_at: params.waitSinceFallbackCreatedAt,
+                household,
             });
 
             if (!result.ok) {
@@ -234,6 +246,20 @@ export function applyPlacementV2ToOpportunityQueueRows(params: {
                 opportunityMetadata: core.metadata,
             });
             const forecastPreview = buildPlacementForecastPreview(forecast);
+            const factSourcesDebug =
+                process.env.ALLOY_PLACEMENT_FACT_SOURCES_DEBUG === "1" ||
+                process.env.NODE_ENV === "test"
+                    ? extractHouseholdFactSources(
+                          buildPlacementCandidateFacts({
+                              candidate: bundle.candidate,
+                              opportunity: { id: core.id, created_at: core.created_at, metadata: core.metadata },
+                              link_mode: bundle.link_mode,
+                              active_overrides: bundle.active_overrides,
+                              wait_since_fallback_created_at: params.waitSinceFallbackCreatedAt,
+                              household,
+                          })
+                      )
+                    : undefined;
             candidatePreviews.push({
                 placement_candidate_id: bundle.candidate.id,
                 child_display_name: bundle.child_display_name,
@@ -268,6 +294,7 @@ export function applyPlacementV2ToOpportunityQueueRows(params: {
                           },
                       }
                     : {}),
+                ...(factSourcesDebug ? { fact_sources: factSourcesDebug } : {}),
             });
 
             rollupInputs.push({

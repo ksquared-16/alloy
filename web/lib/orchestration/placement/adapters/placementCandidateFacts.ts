@@ -29,12 +29,22 @@ import {
     mergePlacementForecastIntoFactBag,
     resolvePlacementCandidateForecast,
 } from "@/lib/orchestration/placement/placementForecastFactsProvider";
+import {
+    resolveHouseholdPlacementFactsForCandidate,
+    shouldUseRecordSourcedHouseholdPlacementFacts,
+    type HouseholdPlacementFactCandidateContext,
+    type HouseholdPlacementFactHouseholdSlice,
+} from "@/lib/orchestration/placement/householdPlacementFacts";
 
 export type BuildPlacementCandidateFactsInput = {
     candidate: Pick<
         PlacementCandidateRow,
         | "id"
         | "opportunity_id"
+        | "opportunity_customer_member_id"
+        | "customer_member_id"
+        | "person_id"
+        | "site_id"
         | "is_synthetic_fallback"
         | "program_room_cohort_key"
         | "program_room_group_label"
@@ -50,6 +60,7 @@ export type BuildPlacementCandidateFactsInput = {
     link_mode?: PlacementLinkMode | null;
     active_overrides?: PlacementCandidateActiveOverrideSummary[];
     wait_since_fallback_created_at?: boolean;
+    household?: HouseholdPlacementFactHouseholdSlice | null;
 };
 
 function factPresent(value: string | number | boolean, source: string): FactValue {
@@ -98,8 +109,20 @@ export function buildPlacementCandidateFacts(input: BuildPlacementCandidateFacts
         opportunityMetadata: input.opportunity.metadata ?? null,
     });
 
+    let householdFacts: ReturnType<typeof resolveHouseholdPlacementFactsForCandidate> | null = null;
+    if (input.household && shouldUseRecordSourcedHouseholdPlacementFacts()) {
+        const candidateCtx: HouseholdPlacementFactCandidateContext = {
+            placement_candidate_id: input.candidate.id,
+            opportunity_customer_member_id: input.candidate.opportunity_customer_member_id,
+            customer_member_id: input.candidate.customer_member_id,
+            person_id: input.candidate.person_id,
+            site_id: input.candidate.site_id,
+        };
+        householdFacts = resolveHouseholdPlacementFactsForCandidate(input.household, candidateCtx);
+    }
+
     const coreFacts = {
-        ...base,
+        ...(householdFacts ? { ...base, ...householdFacts } : base),
         [CHILDCARE_PLACEMENT_FACT_WAIT_SINCE]: waitSince,
         [CHILDCARE_PLACEMENT_FACT_DESIRED_START_DATE]: desiredStart,
         [CHILDCARE_PLACEMENT_V2_FACT_PROGRAM_ROOM_COHORT_KEY]: factPresent(
@@ -139,6 +162,7 @@ export type EvaluatePlacementCandidateParams = {
     evaluator_version?: string;
     locale?: string;
     wait_since_fallback_created_at?: boolean;
+    household?: HouseholdPlacementFactHouseholdSlice | null;
 };
 
 /** Pure helper — evaluate one placement candidate (Card 2; QueueService wiring is Card 3). */
@@ -151,6 +175,7 @@ export function evaluatePlacementCandidate(params: EvaluatePlacementCandidatePar
         link_mode: params.link_mode,
         active_overrides: activeOverrides,
         wait_since_fallback_created_at: params.wait_since_fallback_created_at,
+        household: params.household,
     });
 
     const policyResult = evaluatePlacementPriority({
