@@ -206,7 +206,7 @@ export default function WorkUnitWorkspace({
                     </div>
                   ) : null}
                   {recordFilterBar ? (
-                    <div className="adminv2-ws-wu-record-filter-bar-slot px-1">{recordFilterBar}</div>
+                    <div className="adminv2-ws-wu-record-filter-bar-slot">{recordFilterBar}</div>
                   ) : null}
                   <QueueBlock
                     queue={primaryQueue}

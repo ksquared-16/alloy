@@ -26,7 +26,10 @@ describe("enrollmentPipelineQueueDefinitionV2", () => {
         const v1NewInquiry = CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1.queues.find(
             (q) => q.key === "new_inquiry"
         )!.filters;
-        expect(def.queues.find((q) => q.key === "new_leads")?.filters).toEqual(v1NewInquiry);
+        expect(def.queues.find((q) => q.key === "new_leads")?.filters).toEqual([
+            { type: "status", operator: "in", values: ["new_inquiry", "new"] },
+        ]);
+        expect(v1NewInquiry).toEqual([{ type: "status", operator: "in", values: ["new_inquiry"] }]);
 
         const v1Waitlisted = CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1.queues.find(
             (q) => q.key === "waitlisted"
@@ -110,6 +113,7 @@ describe("enrollmentPipelineQueueDefinitionV2", () => {
         const flags = readQueueUiPresentationFlags(RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2);
         expect(flags.suppressOtherPill).toBe(true);
         expect(flags.suppressLifecyclePanel).toBe(true);
+        expect(flags.suppressActiveQueueDescription).toBe(true);
     });
 
     it("preserves legacy alias routes for old deep links", () => {

@@ -13,7 +13,7 @@ export type WorkUnitAboveFoldChip = {
     selected: boolean;
     count: WorkUnitAboveFoldChipCount;
     counts_deferred?: boolean;
-    /** Grain-aware count unit for aria / tooltip (Card 7). */
+    /** Grain-aware count unit for aria / tooltip only — not shown in pill badge (Card 7). */
     count_unit?: string;
     count_aria_label?: string;
     synthetic_attention_bucket?: boolean;

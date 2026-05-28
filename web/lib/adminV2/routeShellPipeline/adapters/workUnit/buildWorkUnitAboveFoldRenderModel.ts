@@ -64,6 +64,10 @@ export type BuildWorkUnitAboveFoldRenderModelInput = {
     reconcile_picker_count_zero?: boolean;
     /** v2 queue config for grain labels when summary metadata is partial (v1 compat execution). */
     normalized_queue_definition?: NormalizedQueueDefinitionDocument | null;
+    /** When true, hide derived unmapped "Other" pill (config-driven enrollment polish). */
+    suppress_other_pill?: boolean;
+    /** When true, omit lane description copy under header pills. */
+    suppress_active_queue_description?: boolean;
 };
 
 const EMPTY_ACTIONS: ActionsVm = {
@@ -237,6 +241,7 @@ export function buildWorkUnitAboveFoldRenderModel(
             : null;
 
     const showOtherPill =
+        !input.suppress_other_pill &&
         typeof input.unmapped_pill_count === "number" &&
         input.unmapped_pill_count > 0 &&
         Boolean(input.all_records_queue_key) &&
@@ -249,9 +254,11 @@ export function buildWorkUnitAboveFoldRenderModel(
             sections: buildHeaderSections(input),
             error_message: input.queue_summaries_error,
             active_queue_description:
-                headerState === "ready" && activeSummary?.description?.trim()
-                    ? activeSummary.description.trim()
-                    : null,
+                input.suppress_active_queue_description
+                    ? null
+                    : headerState === "ready" && activeSummary?.description?.trim()
+                      ? activeSummary.description.trim()
+                      : null,
             show_other_pill: showOtherPill,
             other_pill:
                 showOtherPill && input.all_records_queue_key

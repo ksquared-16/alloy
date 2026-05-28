@@ -19,6 +19,7 @@ export const RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2 = {
         primary_total_queue: "pipeline_total",
         suppress_other_pill: true,
         suppress_lifecycle_panel: true,
+        suppress_active_queue_description: true,
         sections: [
             { key: "new_leads", label: "New Leads", queue_keys: ["new_leads"] },
             { key: "tours", label: "Tours", queue_keys: ["tours"] },
@@ -71,8 +72,8 @@ export const RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2 = {
             domain: "new_leads",
             grain: "case",
             aliases: ["new_inquiry"],
-            filters: [{ type: "case_status", operator: "in", values: ["new_inquiry", "open"] }],
-            filters_compat_v1: [{ type: "status", operator: "in", values: ["new_inquiry"] }],
+            filters: [{ type: "case_status", operator: "in", values: ["new_inquiry", "open", "new"] }],
+            filters_compat_v1: [{ type: "status", operator: "in", values: ["new_inquiry", "new"] }],
             sort: [{ field: "updated_at", direction: "desc" }],
             limit: 50,
             priority: "standard",
@@ -290,6 +291,28 @@ export const ENROLLMENT_PIPELINE_V2_QUEUE_ALIASES: Record<string, string> = {
     enrolled: "enrollment_completed",
     lost: "case_closed",
 };
+
+/** Status keys that place an opportunity in the enrollment pipeline New Leads queue. */
+export function enrollmentPipelineNewLeadsStatusKeys(
+    raw: unknown = RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2
+): string[] {
+    if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return ["new_inquiry"];
+    const queues = (raw as { queues?: Array<{ key?: string; filters_compat_v1?: Array<{ values?: unknown[] }> }> })
+        .queues;
+    const entry = queues?.find((q) => q.key === "new_leads");
+    const compat = entry?.filters_compat_v1?.[0];
+    const values = Array.isArray(compat?.values) ?
+        compat.values.filter((v): v is string => typeof v === "string" && v.trim() !== "")
+    :   [];
+    return values.length > 0 ? values : ["new_inquiry"];
+}
+
+/** Whether an opportunity status_key should appear in enrollment New Leads. */
+export function opportunityMatchesEnrollmentNewLeadsQueue(statusKey: string | null | undefined): boolean {
+    const sk = typeof statusKey === "string" ? statusKey.trim().toLowerCase() : "";
+    if (!sk) return false;
+    return enrollmentPipelineNewLeadsStatusKeys().some((v) => v.toLowerCase() === sk);
+}
 
 /** Throughput section labels from config (excludes needs_attention). */
 export function enrollmentPipelineVisibleThroughputLabels(

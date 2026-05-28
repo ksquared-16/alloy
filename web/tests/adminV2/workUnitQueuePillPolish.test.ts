@@ -149,7 +149,7 @@ describe("workUnitQueuePillPolish", () => {
         expect(model.header.sections[0]?.chips[0]?.count).toBe("skeleton");
     });
 
-    it("waitlist candidate grain chip exposes children count unit", () => {
+    it("waitlist candidate grain chip keeps unit in aria only, not pill badge copy", () => {
         const model = buildWorkUnitAboveFoldRenderModel({
             work_unit_shell_ready: true,
             queue_summaries: [
@@ -179,5 +179,44 @@ describe("workUnitQueuePillPolish", () => {
         const chip = model.header.sections[0]?.chips[0];
         expect(chip?.count_unit).toBe("children");
         expect(chip?.count_aria_label).toContain("waitlist");
+    });
+
+    it("suppresses Other pill and active queue description when config flags set", () => {
+        const model = buildWorkUnitAboveFoldRenderModel({
+            work_unit_shell_ready: true,
+            queue_summaries: [
+                {
+                    key: "new_leads",
+                    label: "New Leads",
+                    description: "New families — first touch not yet completed.",
+                    priority: "standard",
+                    count: 18,
+                },
+            ],
+            queue_summaries_error: null,
+            queue_pill_sections: [
+                {
+                    key: "pipeline",
+                    label: "Work Units",
+                    queues: [{ key: "new_leads", label: "New Leads", priority: "standard", count: 18 }],
+                },
+            ],
+            queue_tab_placeholders: null,
+            selected_queue_key: "new_leads",
+            attention_bucket_key: "",
+            lane_unmapped_only: false,
+            all_records_queue_key: "pipeline_total",
+            other_pill_section_key: "pipeline",
+            unmapped_pill_count: 5,
+            enrollment_right_rail_resolved: null,
+            queue_items_loading: false,
+            queue_items_ready: true,
+            queue_items_error: null,
+            suppress_other_pill: true,
+            suppress_active_queue_description: true,
+        });
+        expect(model.header.show_other_pill).toBe(false);
+        expect(model.header.other_pill).toBeNull();
+        expect(model.header.active_queue_description).toBeNull();
     });
 });

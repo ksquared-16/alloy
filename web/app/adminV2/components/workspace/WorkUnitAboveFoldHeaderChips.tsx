@@ -13,7 +13,7 @@ export type WorkUnitAboveFoldHeaderHandlers = {
 };
 
 const PILL_BASE =
-    "inline-flex shrink-0 items-start gap-1.5 rounded-full border px-2 py-0.5 text-left text-[11px] font-semibold leading-snug transition-colors";
+    "adminv2-ws-queue-pill-chip inline-flex min-w-0 items-center justify-between gap-1.5 rounded-lg border px-2.5 py-1.5 text-left text-[11px] font-semibold leading-snug transition-colors";
 
 function tierRing(tier: WorkUnitAboveFoldChip["priority"], selected: boolean): string {
     if (tier === "critical") {
@@ -35,13 +35,11 @@ function CountBadge({
     count,
     selected,
     countsDeferred,
-    countUnit,
     countAriaLabel,
 }: {
     count: WorkUnitAboveFoldChipCount;
     selected: boolean;
     countsDeferred?: boolean;
-    countUnit?: string;
     countAriaLabel?: string;
 }) {
     if (count === "skeleton") {
@@ -64,9 +62,6 @@ function CountBadge({
             }
         >
             <span>{display}</span>
-            {countUnit && count !== "emdash" ? (
-                <span className="font-semibold normal-case opacity-75">{countUnit}</span>
-            ) : null}
         </span>
     );
 }
@@ -117,7 +112,11 @@ export function WorkUnitAboveFoldHeaderChips({
                                 {section.label}
                             </span>
                         ) : null}
-                        <div className="adminv2-ws-queue-pill-scroll" role="group" aria-label={section.label}>
+                        <div
+                            className="adminv2-ws-queue-pill-scroll adminv2-ws-queue-pill-scroll--distributed"
+                            role="group"
+                            aria-label={section.label}
+                        >
                             {section.chips.map((chip) => (
                                 <button
                                     key={chip.key}
@@ -133,12 +132,11 @@ export function WorkUnitAboveFoldHeaderChips({
                                     aria-pressed={chip.selected}
                                     title={chip.count_aria_label ?? chip.description}
                                 >
-                                    <span className="text-left">{chip.label}</span>
+                                    <span className="adminv2-ws-queue-pill-chip__label">{chip.label}</span>
                                     <CountBadge
                                         count={chip.count}
                                         selected={chip.selected}
                                         countsDeferred={chip.counts_deferred}
-                                        countUnit={chip.count_unit}
                                         countAriaLabel={chip.count_aria_label}
                                     />
                                 </button>
@@ -161,7 +159,7 @@ export function WorkUnitAboveFoldHeaderChips({
                                     }`}
                                     aria-pressed={slot.other_pill.selected}
                                 >
-                                    <span className="text-left">Other</span>
+                                    <span className="adminv2-ws-queue-pill-chip__label">Other</span>
                                     <span
                                         className={`tabular-nums rounded-full px-1 py-px text-[10px] font-bold ${
                                             slot.other_pill.selected
@@ -177,11 +175,6 @@ export function WorkUnitAboveFoldHeaderChips({
                     </div>
                 ))}
             </div>
-            {slot.active_queue_description ? (
-                <p className="m-0 text-[11px] leading-snug text-alloy-forge/60 line-clamp-2">
-                    {slot.active_queue_description}
-                </p>
-            ) : null}
             {slot.state === "ready" && lifecyclePanel ? (
                 <div className="min-w-0">{lifecyclePanel}</div>
             ) : null}
