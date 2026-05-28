@@ -6,6 +6,7 @@ Cover **opportunities**, pipeline status, CRM-adjacent admin behavior, and **sch
 
 ## Current state
 
+- **Case vs child lifecycle (May 2026):** **`opportunities`** = **household coordination case** (tours, comms, forms, follow-up). **`opportunity_customer_members.outcome_status_key`** = **per-child enrollment lifecycle SoT** (siblings may differ). **`opportunities.status_key`** remains in use for case-level pipeline filters and legacy lanes but **must not** be treated as authoritative for every child’s waitlist/enrollment state. Queue **grain** in `work_units.queue_definition` declares whether a lane lists **case** or **child/candidate** rows. Closeout: **`docs/sprints/05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`**.
 - **Table:** `opportunities` with org scoping, `customer_id`, `work_unit_id`, status keys, person/contact fields depending on migration age.
 - **Orchestrator + specialists (AdminV2 command bar):** Bottom **`AICommandSurfaceShell`** routes to **Task Assist**, **Workflow Assist**, and **Config/Layout Assist** (**partial** apply). **Assistive groundwork shipped; agent expansion paused** — see **`docs/product/bos-foundation.md`**, **`docs/execution/roadmap-and-gaps.md`**. **Does not execute** side effects itself. Drawer **communications** tab: **`TaskAssistOpportunityLauncher`** + threads. Flag: **`NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED`**. **`metadata.next_follow_up_at`** auto-sync from tasks is **not** in V1.1.
 - **Admin:** `GET/PATCH /api/admin/opportunities/[id]`, entity drawer type `opportunities`, status definitions include **`opportunities`** and related types (`web/lib/admin/statusDefinitionsAdminEntityTypes.ts`).
@@ -74,7 +75,7 @@ Cover **opportunities**, pipeline status, CRM-adjacent admin behavior, and **sch
 | Quote follow-up overdue | `stale_quote_followup` |
 | Tour date passed — follow up | `tour_date_passed` |
 
-**Execution vs overlay:** The **Enrollment Pipeline** work unit holds **lifecycle queue pills** (`work_units.queue_definition` — canonical shape in `web/lib/config/enrollmentPipelineQueueDefinitionV1.ts` and DB seeds). **Needs Attention** is the **`needs_attention` queue** and resolver overlay on the **same** opportunities — not a separate lifecycle pipeline or alternate work-unit engine.
+**Execution vs overlay:** The **Enrollment Pipeline** work unit holds **domain queue pills** (`work_units.queue_definition` v2 — `enrollmentPipelineQueueDefinitionV2.ts` + DB seeds). **Needs Attention** is the **`needs_attention` queue** and resolver overlay on the **same** opportunities — not a separate lifecycle pipeline or alternate work-unit engine. **Work units are execution domains, not lifecycle stages.**
 
 **Department execution lane (pipeline rows):** On **`/adminV2/workspace/dept/:id`**, when a work unit exposes **`ui.layout === pipeline_with_attention`** and a **`ui.sections`** entry with **`key === pipeline`**, the left paired panel lists **one compact row per `queue_keys` entry** (labels/icons from matching **`queues[]`** entries, including optional **`icon`**). Counts use **`GET /api/admin/work-units/:id/queues?summary_mode=all`**. This is still the **same** queue-definition engine — not a second pipeline.
 

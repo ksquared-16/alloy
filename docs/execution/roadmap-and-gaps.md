@@ -22,7 +22,7 @@ Phases are **planning buckets**. Dates are narrative, not contractual.
 - **Waitlist placement priority V1** — **opt-in** engine shipped; promotion mutator still open.
 - **Partially implemented (near-term product):** Enrollment Packet Phase 2 (**P2-1–P2-4 review MVP shipped ~2026-05-21**; DCP, P2-5 BOS insight, UX hardening cards open); waitlist **`add_to_waitlist_placeholder`**; Reporting V1.
 - **Settings + Record UX Parity (May 2026 — complete):** Four-plane Settings control plane V1 — field policy UI + PATCH enforcement (opportunity/job enforceable subset), opportunity workflow v1 layout sections, org action placement editor, layout integrity panel, UX contract pass — **`docs/sprints/05_2026/settings_record_ux_parity_sprint.md`** §12–§13, **`docs/system/configuration-system.md`**. **Deferred:** Record Experience Builder, full `record_actions` migration, ops drawer mutate, `condition_config` editors, person/location field modal parity (linked-record inline PATCH **shipped** — **`linked_record_field_editing_v1.md`**).
-- **Engineering audit (May 23 — no implementation):** Work Unit Runtime Consolidation V1 audit documents legacy multi-WU vs canonical `enrollment_pipeline` model — **`docs/sprints/05_2026/work_unit_runtime_consolidation_audit.md`**. Follow-on design/implementation **not started**.
+- **Child lifecycle + work-unit convergence (May 2026 — closed):** Grain-aware `enrollment_pipeline` v2, candidate-grain waitlist + child-grain enrollment runtime, read-only case rollups, WU filter UX, strict-mode readiness tooling — **`docs/sprints/05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`**. **Deferred follow-ons:** Settings Config Management (domain/NA presentation CRUD); strict-mode activation; server-side queue search; waitlist forecasting/capacity — see closeout § future sprints and **`waitlist_orchestration_phase2_architecture.md`**.
 
 ### Paused / deprioritized (explicit)
 
@@ -48,6 +48,10 @@ Phases are **planning buckets**. Dates are narrative, not contractual.
 
 ### Following phase (after operational core)
 
+- **Settings Config Management (enrollment WU presentation)** — Admin CRUD for domain labels, pill order, hide/show, Needs Attention bucket presentation — extend `queue_definition` + `opportunity_attention_rules` (**spec:** child-lifecycle closeout Card 15).
+- **Child lifecycle strict-mode activation** — Flip runtime gates after OCM/backfill QA (readiness tooling shipped; activation deferred).
+- **Server-side work-unit queue search/filters** — Replace client-only preview filtering when scale requires.
+- **Waitlist orchestration continuation** — Phase 2 pilot → production; forecasting/capacity engine — **`docs/sprints/05_2026/waitlist_orchestration_phase2_architecture.md`**.
 - **AI production hardening (assistive only)** — org **`ai_policy`**, RBAC, env gates, operator training for **existing** Orchestrator / Task Assist / attention enrich; **no** new agent personas.
 - **Communications phase 2** (guided setup, notifications bell).
 - **Placement priority V1.1** — workflow events, drawer mirror (sprint § Phase 2).
@@ -80,6 +84,7 @@ Capabilities below exist in **`web/` / `supabase/`**; “complete” means **fou
 - **Record + Orchestrator hardening (May 2026)** — Inquiry children drawer **horizontal row grid**; `EntityDrawerSection` **`contentLayout: "block"`** for custom bodies; command-surface **SSR/hydration** fix (session restore after mount); **`setWorkspaceScope`** loop guard; drawer hooks ordered before early return (`opportunityDrawerPreviewSubtitle`). See **`completed/settings_control_plane_closeout.md`** (follow-on shipped), **`linked_record_field_editing_v1.md`**, **`agent_interaction_layer_v1.md`**.
 - **Settings + Record UX Parity V1** — **2026-05-18** — four-plane control plane, field policy UI + PATCH enforcement (opportunity/job), layout integrity, action placement editor — sprint **`settings_record_ux_parity_sprint.md`** §12–§13.
 - **AdminV2 performance closeout** — **~2026-05-20 → 2026-05-24** — reveal doctrine + route gates (`routeShellPipeline`, `adminV2PrimarySurfaceGate`); generic drawer pipeline; WU operational bootstrap + session cache; sticky workspace site filter; drawer queue prev/next + adjacent prefetch; **route-owned WU queue selection** (`workUnitQueueSelection.ts`, `focus_queue` on bootstrap); WU queue pill prefetch + partial count hydration. Sprint **`docs/sprints/05_2026/completed/adminv2_performance_closeout.md`** — broad speed sprint **paused**; follow-ons scoped only.
+- **Child lifecycle + work-unit convergence** — **~2026-05-27 → May 2026 closeout** — `queue_definition` v2 domains/grains, OCM lifecycle doctrine, candidate waitlist runtime, child-grain enrollment lanes, client-side WU record filters, header/pill polish — **`docs/sprints/05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`**.
 - **Enrollment Packet Phase 2 — review MVP slice (P2-1–P2-4)** — **~2026-05-21** — `GET …/packet-sessions/[id]/review-rollup` (`buildPacketReviewRollupV1`); packet session review console (`PacketReviewRollupView`, `/adminV2/forms/packets/[packetSessionId]`); opportunity drawer review modal hardening; document provenance + **`submitted_record`** synthetic rows for non-PDF steps. **Not shipped:** DCP, P2-5 deterministic BOS insight, UX hardening cards — **`forms_documents_phase_2_packet_review_mvp.md`**, **`enrollment_packet_phase_2.md`**.
 - **BOS UX coherence (partial)** — **~2026-05-20 → 2026-05-22** — shared **`OperationalProposalCardFrame`** on Task/Workflow/Config Assist cards; execution receipts + routing/governance copy; full sprint cards (active operational context, attention hierarchy) **partially implemented** — **`bos_ux_coherence_sprint.md`**.
 - **BOS operational assist (routing + communication drafting)** — **~2026-05-21 → 2026-05-26** — deterministic handoff routing, synthesized customer-facing drafts (separate from recommendation copy), SMS/email channel bodies in review card, Review Assist placement + drawer reveal doctrine, native Work with BOS CTA — **`docs/sprints/06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`**.
@@ -141,7 +146,7 @@ Use this block for **velocity / stakeholder summaries**. Dates are **repo anchor
 |---------|--------|----------------------|------------------|--------|
 | **Communications V1** | 2026-04-30 | 2026-05-05 | — | **Implemented** (core) |
 | **Roles & permissions V1** | 2026-05-04 | 2026-05-05 | — | **Implemented** |
-| **Enrollment pipeline + waitlist lanes** | 2026-04-30 | 2026-04-30 | TBD | **Partially implemented** |
+| **Enrollment pipeline + waitlist lanes** | 2026-04-30 | 2026-04-30 | v2 domains May 2026 | **Partially implemented** (grain + v2 closeout) |
 | **Needs Attention** | 2026-04-30 | Apr–May 2026 | TBD | **Partially implemented** |
 | **Forms engine V1** | 2026-05-06 | 2026-05-10 | TBD | **Partially implemented** |
 | **Enrollment Packet E2E Phase 1** | 2026-05-07 | 2026-05-13 | — | **Implemented** |

@@ -26,8 +26,10 @@ Use these meanings in code review and prompts.
 | **Action (admin)** | Declarative admin operation handled by `executeAdminAction` (may start workflow, update entity, etc.). |
 | **Action link** | Tokenized link consumed via API → emits event → workflows (e.g. cancel/reschedule). |
 | **RRS / resolver** | Record resolution system (e.g. `web/lib/rrs/`) producing **flat** payload for jobs and selected entities. |
-| **Queue / queue definition** | Work-unit-level JSON (`queue_definition`, v1 schema) interpreted by `QueueService` for preview lists. |
-| **Work unit** | Scoped workspace unit under a department; carries queue config and operational ownership. |
+| **Queue / queue definition** | Work-unit-level JSON (`queue_definition`, v1 schema) interpreted by `QueueService` for preview lists. Queues may declare **`grain`** (`case` vs `candidate`/child-primary) for enrollment domains. |
+| **Work unit** | Scoped workspace unit under a department; carries queue config and operational ownership. **Execution domain** — not a lifecycle stage; enrollment uses one **`enrollment_pipeline`** WU with multiple domain queues inside `queue_definition`. |
+| **Child inquiry lifecycle** | **`opportunity_customer_members.outcome_status_key`** — per-child enrollment disposition (waitlisted, enrolling, enrolled, …). **SoT** for child enrollment state; distinct from case-level **`opportunities.status_key`**. |
+| **Case lifecycle (opportunity)** | **`opportunities.status_key`** — household coordination / pipeline case state (tours, follow-up, broad open/closed). **Not** a substitute for per-child enrollment truth. |
 | **Department** | Grouping of work units for Admin V2 workspace navigation. |
 | **Role key** | String on **`user_roles.role`** matching **`role_definitions.role_key`** — membership in an **org role**, one of several inputs to capability checks. |
 | **Permission key** | String granted via **`role_permission_grants`** (unioned into runtime **`permissionKeys`**) — preferred gate for **capabilities**. |

@@ -3919,6 +3919,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
             authoritative_badge_for_selected_tab: workUnitChipBadgeContext.authoritative_badge_for_selected_tab,
             reconcile_picker_count_zero: workUnitChipBadgeContext.reconcile_picker_count_zero === true,
             normalized_queue_definition: normalizedQueueDef,
+            suppress_other_pill: queueUiPresentationFlags.suppressOtherPill,
+            suppress_active_queue_description: queueUiPresentationFlags.suppressActiveQueueDescription,
         });
     }, [
         workUnitShellReady,
@@ -3942,6 +3944,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
         queueItemsError,
         oq,
         workUnitChipBadgeContext,
+        queueUiPresentationFlags.suppressOtherPill,
+        queueUiPresentationFlags.suppressActiveQueueDescription,
     ]);
 
     const workUnitRouteShellPlaceholder = useMemo(

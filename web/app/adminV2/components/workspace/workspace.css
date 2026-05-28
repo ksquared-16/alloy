@@ -7285,31 +7285,40 @@
   overflow-wrap: anywhere;
 }
 
-/* Queue / pipeline pills: wrap so labels + counts stay fully visible (no clipped “…” counts). */
+/* Queue / pipeline pills: equal-width distribution within each header section row. */
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-pill-scroll {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 0.25rem;
+  align-items: stretch;
+  gap: 0.35rem;
   overflow-x: visible;
   overflow-y: visible;
   min-width: 0;
-  padding-bottom: 2px;
+  width: 100%;
+  padding-bottom: 0;
   row-gap: 0.35rem;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-pill-scroll>button {
-  flex-shrink: 0;
-  max-width: min(100%, 22rem);
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-pill-scroll--distributed {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 6.75rem), 1fr));
+  gap: 0.35rem;
 }
 
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-pill-scroll>button,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-pill-chip {
+  flex-shrink: 0;
+  max-width: none;
+  width: 100%;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-pill-chip__label,
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-pill-scroll>button>span:first-child {
   flex: 1 1 auto;
   min-width: 0;
-  overflow: visible;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  hyphens: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-pill-scroll>button>span.tabular-nums {
@@ -9785,79 +9794,198 @@
   border-radius: 0.375rem 0.375rem 0 0;
 }
 
-/* Card 14B — work-unit queue record filter bar (client-side on loaded previews) */
-.adminv2-ws-wu-record-filter-bar {
-  margin: 0 0 12px;
-  padding: 10px 12px;
-  border-radius: var(--ws-zone-radius, 10px);
-  border: 1px solid var(--ws-zone-border, rgba(39, 63, 82, 0.14));
-  background: rgba(255, 255, 255, 0.85);
+/* Card 14B/14C — minimal work-unit queue record filters (client-side on loaded previews) */
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-record-filter-bar-slot {
+  margin: 0;
+  padding: 0 2px 2px;
+  flex: 0 0 auto;
 }
 
-.adminv2-ws-wu-record-filter-bar__row {
+.adminv2-ws-wu-record-filter-bar {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.adminv2-ws-wu-record-filter-bar--compact {
+  margin: 0 0 2px;
+}
+
+.adminv2-ws-wu-record-filter-bar__primary {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 10px 12px;
+  align-items: center;
+  gap: 4px 6px;
+  min-width: 0;
 }
 
-.adminv2-ws-wu-record-filter-bar__field {
+.adminv2-ws-wu-record-filter-bar__search {
+  flex: 1 1 14rem;
+  max-width: min(20rem, 42vw);
+  min-width: 11rem;
+  width: auto;
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+  line-height: 1.25;
+  border-radius: 5px;
+  border: 1px solid rgba(39, 63, 82, 0.1);
+  background: rgba(255, 255, 255, 0.78);
+  color: #273f52;
+  box-shadow: none;
+}
+
+.adminv2-ws-wu-record-filter-bar__search::placeholder {
+  color: rgba(39, 63, 82, 0.42);
+}
+
+.adminv2-ws-wu-record-filter-bar__search:focus {
+  outline: 1px solid rgba(0, 162, 131, 0.35);
+  outline-offset: 0;
+  border-color: rgba(0, 162, 131, 0.28);
+  background: #fff;
+}
+
+.adminv2-ws-wu-record-filter-bar__toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  margin-left: auto;
+  padding: 0 9px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  border-radius: 4px;
+  border: 1px solid rgba(39, 63, 82, 0.1);
+  background: rgba(39, 63, 82, 0.03);
+  color: rgba(39, 63, 82, 0.72);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.adminv2-ws-wu-record-filter-bar__toggle:hover:not(:disabled) {
+  background: rgba(39, 63, 82, 0.06);
+  color: rgba(39, 63, 82, 0.88);
+}
+
+.adminv2-ws-wu-record-filter-bar__toggle-badge {
+  display: inline-flex;
+  min-width: 0.875rem;
+  height: 0.875rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  background: rgba(0, 69, 140, 0.1);
+  color: #00458c;
+}
+
+.adminv2-ws-wu-record-filter-bar__advanced {
   display: flex;
   flex-direction: column;
+  gap: 3px;
+  margin-top: 3px;
+  padding: 0;
+  border: none;
+}
+
+.adminv2-ws-wu-record-filter-bar__advanced-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 0;
+}
+
+.adminv2-ws-wu-record-filter-bar__advanced-toolbar-spacer {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.adminv2-ws-wu-record-filter-bar__advanced-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 4px;
   min-width: 0;
 }
 
-.adminv2-ws-wu-record-filter-bar__field--search {
-  flex: 1 1 180px;
-  min-width: 160px;
-}
-
-.adminv2-ws-wu-record-filter-bar__label {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: rgba(39, 63, 82, 0.55);
-}
-
 .adminv2-ws-wu-record-filter-bar__input,
 .adminv2-ws-wu-record-filter-bar__select {
-  height: 32px;
-  padding: 0 8px;
-  font-size: 13px;
-  border-radius: 8px;
-  border: 1px solid rgba(39, 63, 82, 0.18);
-  background: #fff;
+  height: 26px;
+  padding: 0 7px;
+  font-size: 12px;
+  line-height: 1.2;
+  border-radius: 4px;
+  border: 1px solid rgba(39, 63, 82, 0.1);
+  background: rgba(255, 255, 255, 0.72);
   color: #273f52;
   min-width: 0;
+  max-width: 10rem;
+  flex: 1 1 7.25rem;
+}
+
+.adminv2-ws-wu-record-filter-bar__input[type="date"] {
+  flex: 1 1 6.75rem;
+  max-width: 8.5rem;
 }
 
 .adminv2-ws-wu-record-filter-bar__input:focus,
 .adminv2-ws-wu-record-filter-bar__select:focus {
-  outline: 2px solid rgba(0, 162, 131, 0.35);
-  outline-offset: 1px;
+  outline: 1px solid rgba(0, 162, 131, 0.35);
+  outline-offset: 0;
+  border-color: rgba(0, 162, 131, 0.28);
+  background: #fff;
 }
 
 .adminv2-ws-wu-record-filter-bar__clear {
-  height: 32px;
-  padding: 0 10px;
-  font-size: 12px;
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 26px;
+  padding: 0 4px;
+  font-size: 11px;
   font-weight: 500;
-  border-radius: 8px;
-  border: 1px solid rgba(39, 63, 82, 0.14);
-  background: rgba(39, 63, 82, 0.04);
-  color: rgba(39, 63, 82, 0.85);
+  line-height: 26px;
+  border: none;
+  background: transparent;
+  color: rgba(39, 63, 82, 0.5);
   cursor: pointer;
-  align-self: flex-end;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
 }
 
 .adminv2-ws-wu-record-filter-bar__clear:hover:not(:disabled) {
-  background: rgba(39, 63, 82, 0.08);
+  color: rgba(39, 63, 82, 0.82);
 }
 
 .adminv2-ws-wu-record-filter-bar__caption {
-  margin: 8px 0 0;
-  font-size: 11px;
-  color: rgba(39, 63, 82, 0.55);
+  margin-left: auto;
+  font-size: 10px;
+  line-height: 1.2;
+  color: rgba(39, 63, 82, 0.48);
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .adminv2-ws-wu-record-filter-bar__search {
+    flex: 1 1 100%;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .adminv2-ws-wu-record-filter-bar__toggle {
+    margin-left: 0;
+  }
+
+  .adminv2-ws-wu-record-filter-bar__input,
+  .adminv2-ws-wu-record-filter-bar__select {
+    flex: 1 1 calc(50% - 4px);
+    max-width: none;
+  }
 }
