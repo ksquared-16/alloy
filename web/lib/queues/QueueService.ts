@@ -72,6 +72,7 @@ import {
     buildOpportunityChildLifecycleSummary,
     childLifecycleMembersFromInquiryChildren,
 } from "@/lib/opportunities/buildOpportunityChildLifecycleSummary";
+import { logQueueLaneParityDebug } from "@/lib/queues/queueLaneParityDebug";
 import { DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1 } from "@/lib/workspace/opportunityAttentionRules";
 import { buildQueueServiceAttentionSemantics } from "@/lib/workspace/opportunityAttentionCountSemantics";
 import { findAllRecordsQueueKey, workUnitScopeTotalFromSummaries } from "@/lib/workspace/workUnitQueueDerived";
@@ -3351,6 +3352,7 @@ export async function getWorkUnitQueueItems(params: {
     }
 
     const { ops, sort, calendar_meta } = buildOpportunityPlan(q, refUtc, operationalDay);
+    const laneStatusFilterValues = opportunityQueueStatusKeysAllowed(q);
 
     if (executableQueueKey === "needs_attention" || q.key === "needs_attention") {
         const attentionConfigResolved = opportunityAttentionConfigResolved!;
@@ -3496,6 +3498,16 @@ export async function getWorkUnitQueueItems(params: {
             throw new QueueServiceError(error.message, 400, "DB_ERROR");
         }
         const itemRows = (raw ?? []) as OpportunityRowPreview[];
+        logQueueLaneParityDebug({
+            phase: "rows_before_enrichment",
+            org_id: params.orgId,
+            work_unit_id: params.workUnitId,
+            requested_queue_key: params.queueKey,
+            executable_queue_key: executableQueueKey,
+            status_filter_values: laneStatusFilterValues,
+            raw_row_count: itemRows.length,
+            sample_opportunity_ids: itemRows.slice(0, 5).map((r) => String(r.id ?? "")),
+        });
         const tEn0 = Date.now();
         const { rows: enrichedRows, queueListSubtimings } = await enrichOpportunityRows({
             supabase,
@@ -3515,6 +3527,16 @@ export async function getWorkUnitQueueItems(params: {
                 : undefined,
         });
         const enrichment_ms = Date.now() - tEn0;
+        logQueueLaneParityDebug({
+            phase: "rows_after_enrichment",
+            org_id: params.orgId,
+            work_unit_id: params.workUnitId,
+            requested_queue_key: params.queueKey,
+            executable_queue_key: executableQueueKey,
+            raw_row_count: itemRows.length,
+            enriched_row_count: enrichedRows.length,
+            sample_opportunity_ids: enrichedRows.slice(0, 5).map((r) => String(r.id ?? "")),
+        });
         const placementPackOmit = skipPlacementProjection
             ? { rows: enrichedRows as Array<Record<string, unknown>>, diagnostics: null }
             : await attachPlacementToEnrichedOpportunityItems({
@@ -3529,6 +3551,16 @@ export async function getWorkUnitQueueItems(params: {
                   workUnitMetadata,
                   nowMs: refUtc.getTime(),
               });
+        logQueueLaneParityDebug({
+            phase: "rows_after_placement",
+            org_id: params.orgId,
+            work_unit_id: params.workUnitId,
+            requested_queue_key: params.queueKey,
+            executable_queue_key: executableQueueKey,
+            raw_row_count: itemRows.length,
+            final_row_count: placementPackOmit.rows.length,
+            sample_opportunity_ids: placementPackOmit.rows.slice(0, 5).map((r) => String(r.id ?? "")),
+        });
         return finalize(
             {
                 queue: {
@@ -3588,6 +3620,16 @@ export async function getWorkUnitQueueItems(params: {
     const effectiveStatusDefs = statusPack.rows;
     const statusDefsCacheHit = statusPack.combinedCacheHit;
     const itemRows = (raw ?? []) as OpportunityRowPreview[];
+    logQueueLaneParityDebug({
+        phase: "rows_before_enrichment",
+        org_id: params.orgId,
+        work_unit_id: params.workUnitId,
+        requested_queue_key: params.queueKey,
+        executable_queue_key: executableQueueKey,
+        status_filter_values: laneStatusFilterValues,
+        raw_row_count: itemRows.length,
+        sample_opportunity_ids: itemRows.slice(0, 5).map((r) => String(r.id ?? "")),
+    });
     const tEn0 = Date.now();
     const { rows: enrichedRows, queueListSubtimings } = await enrichOpportunityRows({
         supabase,
@@ -3607,6 +3649,16 @@ export async function getWorkUnitQueueItems(params: {
             : undefined,
     });
     const enrichment_ms = Date.now() - tEn0;
+    logQueueLaneParityDebug({
+        phase: "rows_after_enrichment",
+        org_id: params.orgId,
+        work_unit_id: params.workUnitId,
+        requested_queue_key: params.queueKey,
+        executable_queue_key: executableQueueKey,
+        raw_row_count: itemRows.length,
+        enriched_row_count: enrichedRows.length,
+        sample_opportunity_ids: enrichedRows.slice(0, 5).map((r) => String(r.id ?? "")),
+    });
 
     const placementPackFull = skipPlacementProjection
         ? { rows: enrichedRows as Array<Record<string, unknown>>, diagnostics: null }
@@ -3622,6 +3674,17 @@ export async function getWorkUnitQueueItems(params: {
               workUnitMetadata,
               nowMs: refUtc.getTime(),
           });
+
+    logQueueLaneParityDebug({
+        phase: "rows_after_placement",
+        org_id: params.orgId,
+        work_unit_id: params.workUnitId,
+        requested_queue_key: params.queueKey,
+        executable_queue_key: executableQueueKey,
+        raw_row_count: itemRows.length,
+        final_row_count: placementPackFull.rows.length,
+        sample_opportunity_ids: placementPackFull.rows.slice(0, 5).map((r) => String(r.id ?? "")),
+    });
 
     return finalize(
         {

@@ -147,6 +147,11 @@ import {
 } from "@/lib/ui-v2/queueUiConfig";
 import { readQueueUiPresentationFlags } from "@/lib/ui-v2/readQueueUiPresentationFlags";
 import { applyWorkUnitQueueRecordFilters } from "@/lib/workspace/applyWorkUnitQueueRecordFilters";
+import {
+    clearLaneScopedWorkUnitRecordFilters,
+    resolveWorkUnitLaneStatusFilterValues,
+    sanitizeWorkUnitRecordFiltersForLane,
+} from "@/lib/workspace/workUnitQueueRecordFilterLaneScope";
 import { buildWorkUnitQueueRecordFilterFacets } from "@/lib/workspace/workUnitQueueRecordFilterConfig";
 import { extractWorkUnitQueueRecordFilterFacets } from "@/lib/workspace/extractWorkUnitQueueRecordFilterFacets";
 import {
@@ -559,6 +564,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [recordFilters, setRecordFilters] = useState<WorkUnitQueueRecordFilterState>(() =>
         readWorkUnitQueueRecordFiltersFromLocation()
     );
+    const recordFiltersRef = useRef(recordFilters);
+    recordFiltersRef.current = recordFilters;
     const handleRecordFiltersChange = useCallback((next: WorkUnitQueueRecordFilterState) => {
         setRecordFilters(next);
         replaceWorkUnitQueueRecordFiltersInLocation(next);
@@ -1490,6 +1497,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 alloyPerfSet("queue_tab_change_start", performance.now());
             }
             if (!sameQueue) {
+                queueRowsBufferRef.current = [];
+                queueRowsBufferWorkUnitIdRef.current = workUnitId;
+                const clearedFilters = clearLaneScopedWorkUnitRecordFilters(recordFiltersRef.current);
+                setRecordFilters(clearedFilters);
+                replaceWorkUnitQueueRecordFiltersInLocation(clearedFilters);
+            }
+            if (prevKey !== nextKey) {
                 setSelectedQueueKeyTraced("handleQueueTabChange", nextKey);
             }
             if (prevUnmapped !== unmappedActive) {
@@ -1526,6 +1540,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             if (workUnitId) {
                 suppressQueueFetchEffectOnceRef.current = true;
                 void fetchQueueItems(workUnitId, nextKey, null, {
+                    force: !sameQueue,
                     logicalUnmapped: unmappedActive,
                     ...(resolvedPill.attentionBucketOverride !== undefined
                         ? { attentionBucketOverride: resolvedPill.attentionBucketOverride }
@@ -2646,7 +2661,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
         const recordFilterResult = applyWorkUnitQueueRecordFilters(
             sourceRows as Record<string, unknown>[],
-            recordFilters
+            sanitizeWorkUnitRecordFiltersForLane(
+                recordFilters,
+                resolveWorkUnitLaneStatusFilterValues(workUnit, activeQueueKey || selectedQueueKey)
+            )
         );
         const filteredSourceRows = recordFilterResult.items;
 
@@ -2906,13 +2924,25 @@ export default function AdminV2OpportunityWorkUnitPage() {
             !queueItemsLoading &&
             queueItems &&
             activeQueueKey &&
-            String(queueItems.queue.key ?? "") === activeQueueKey
+            workUnitQueuePillKeysEquivalent(
+                workUnit ? { queue_definition: workUnit.queue_definition } : null,
+                String(queueItems.queue.key ?? ""),
+                activeQueueKey
+            )
         ) {
             queueRowsBufferRef.current = liveVmItems.slice();
             queueRowsBufferWorkUnitIdRef.current = workUnitId;
         }
 
         const hasBufferedRows = queueRowsBufferRef.current.length > 0;
+        const queueLaneMismatch =
+            queueItemsKey !== "" &&
+            activeQueueKey !== "" &&
+            !workUnitQueuePillKeysEquivalent(
+                workUnit ? { queue_definition: workUnit.queue_definition } : null,
+                queueItemsKey,
+                activeQueueKey
+            );
         const tabSwitchInFlight =
             Boolean(
                 queueItemsLoading &&
@@ -2921,8 +2951,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     selectedQueueKey &&
                     !queueItemsError &&
                     hasBufferedRows &&
-                    (queueItems === null ||
-                        (queueItemsKey !== "" && activeQueueKey !== "" && queueItemsKey !== activeQueueKey))
+                    (queueItems === null || queueLaneMismatch)
             );
         /** During lane transitions, always show buffered rows so we never flash another lane's hydrated list. */
         const rowsRefreshing = tabSwitchInFlight;
@@ -2976,7 +3005,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
             entity === "opportunity" &&
             queueItems &&
             !queueItemsError &&
-            String(queueItems.queue.key ?? "") === activeQueueKey
+            (String(queueItems.queue.key ?? "") === activeQueueKey ||
+                workUnitQueuePillKeysEquivalent(
+                    workUnit ? { queue_definition: workUnit.queue_definition } : null,
+                    String(queueItems.queue.key ?? ""),
+                    activeQueueKey
+                ))
                 ? queueItems.placement_projection_diagnostics
                 : undefined;
 
@@ -3149,9 +3183,29 @@ export default function AdminV2OpportunityWorkUnitPage() {
         const rawRows = ((queueItems.items ?? []) as unknown[])
             .filter((r) => typeof (r as { id?: unknown })?.id === "string")
             .map((r) => r as Record<string, unknown>);
-        const result = applyWorkUnitQueueRecordFilters(rawRows, recordFilters);
+        const result = applyWorkUnitQueueRecordFilters(
+            rawRows,
+            sanitizeWorkUnitRecordFiltersForLane(
+                recordFilters,
+                resolveWorkUnitLaneStatusFilterValues(
+                    workUnit,
+                    recordFilterContext?.queueKey ?? selectedQueueKey
+                )
+            )
+        );
         return { filteredCount: result.filteredCount, totalLoaded: result.totalLoaded };
-    }, [queueItems?.items, recordFilters]);
+    }, [queueItems?.items, recordFilters, recordFilterContext?.queueKey, selectedQueueKey, workUnit]);
+
+    useEffect(() => {
+        if (!workUnit || !selectedQueueKey?.trim()) return;
+        const allowed = resolveWorkUnitLaneStatusFilterValues(workUnit, selectedQueueKey);
+        setRecordFilters((prev) => {
+            const next = sanitizeWorkUnitRecordFiltersForLane(prev, allowed);
+            if (next === prev) return prev;
+            replaceWorkUnitQueueRecordFiltersInLocation(next);
+            return next;
+        });
+    }, [workUnit, selectedQueueKey]);
 
     const workUnitRecordFilterBar = useMemo(() => {
         if (!recordFilterContext || !recordFilterFacets || !queueModel) return null;
