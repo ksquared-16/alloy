@@ -1,5 +1,8 @@
-import { validateQueueDefinition } from "@/lib/config/queueDefinitionSchema";
-import { extractPipelineExecutionLanes } from "@/lib/workspace/extractPipelineExecutionLanes";
+import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
+import {
+    extractPipelineExecutionLanes,
+    resolvePipelineExecPanelTitle,
+} from "@/lib/workspace/extractPipelineExecutionLanes";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { mapWithConcurrency } from "@/lib/workspace/mapWithConcurrency";
 
@@ -57,18 +60,14 @@ export async function resolveDeptPipelineExecSurface(params: {
                 row = (await wuRes.json().catch(() => ({}))) as WorkUnitDetailSnapshot;
             }
             if (String(row.department_id ?? "").trim() !== departmentId) return null;
-            let def;
-            try {
-                def = validateQueueDefinition(row.queue_definition);
-            } catch {
-                return null;
-            }
+            const bundle = tryLoadWorkUnitQueueDefinitionBundle(row.queue_definition);
+            if (!bundle) return null;
+            const def = bundle.def;
             if (def.ui?.layout !== "pipeline_with_attention") return null;
             const lanes = extractPipelineExecutionLanes(def);
             if (!lanes.length) return null;
 
-            const pipeSection = def.ui?.sections?.find((s) => s.key === "pipeline");
-            const panelTitle = pipeSection?.label?.trim() || "Pipeline";
+            const panelTitle = resolvePipelineExecPanelTitle(def);
 
             const sumRes = await dedupeAdminFetch(
                 `/api/admin/work-units/${encodeURIComponent(wu.id)}/queues?include_previews=false&count_mode=exact&summary_mode=all&limit=3`,

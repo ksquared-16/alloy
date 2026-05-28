@@ -1,4 +1,4 @@
-import { validateQueueDefinition } from "@/lib/config/queueDefinitionSchema";
+import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
 import { extractPipelineExecutionLanes } from "@/lib/workspace/extractPipelineExecutionLanes";
 
 export type DeptPipelineWorkUnitPick = {
@@ -10,7 +10,7 @@ export type DeptPipelineWorkUnitPick = {
 };
 
 /**
- * First work unit with `pipeline_with_attention` layout (enrollment_pipeline preferred).
+ * First work unit with pipeline/domain execution layout (enrollment_pipeline preferred).
  * Used to skip redundant dept card summaries for the pipeline WU during bootstrap.
  */
 export function pickDeptPipelineWorkUnit(
@@ -36,21 +36,19 @@ export function pickDeptPipelineWorkUnit(
         if (key === "needs_attention") continue;
         const wuDept = String(w.department_id ?? "").trim();
         if (wuDept && wuDept !== departmentId) continue;
-        try {
-            const def = validateQueueDefinition(w.queue_definition);
-            if (def.ui?.layout !== "pipeline_with_attention") continue;
-            const lanes = extractPipelineExecutionLanes(def);
-            if (!lanes.length) continue;
-            return {
-                id: String(w.id),
-                key: w.key ?? null,
-                queue_definition: w.queue_definition,
-                department_id: wuDept || null,
-                metadata: w.metadata,
-            };
-        } catch {
-            continue;
-        }
+        const bundle = tryLoadWorkUnitQueueDefinitionBundle(w.queue_definition);
+        if (!bundle) continue;
+        const def = bundle.def;
+        if (def.ui?.layout !== "pipeline_with_attention") continue;
+        const lanes = extractPipelineExecutionLanes(def);
+        if (!lanes.length) continue;
+        return {
+            id: String(w.id),
+            key: w.key ?? null,
+            queue_definition: w.queue_definition,
+            department_id: wuDept || null,
+            metadata: w.metadata,
+        };
     }
     return null;
 }

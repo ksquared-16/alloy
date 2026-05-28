@@ -133,8 +133,14 @@ export function getQueueUiConfig(def: QueueDefinitionV1): QueueUiConfig {
               : null;
     const fieldLabels = mergeQueueRowPreviewFieldLabels(labelOverride);
 
+    const layoutRaw = ui.layout;
+    const layout: QueueUiLayout =
+        layoutRaw === "pipeline_with_attention" || layoutRaw === "domain_with_attention"
+            ? "pipeline_with_attention"
+            : "single_section";
+
     return {
-        layout: ui.layout === "pipeline_with_attention" ? "pipeline_with_attention" : "single_section",
+        layout,
         primary_total_label: ui.primary_total_label,
         primary_total_queue: ui.primary_total_queue,
         sections,

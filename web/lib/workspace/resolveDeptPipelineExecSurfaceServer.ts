@@ -1,5 +1,8 @@
-import { validateQueueDefinition } from "@/lib/config/queueDefinitionSchema";
-import { extractPipelineExecutionLanes } from "@/lib/workspace/extractPipelineExecutionLanes";
+import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
+import {
+    extractPipelineExecutionLanes,
+    resolvePipelineExecPanelTitle,
+} from "@/lib/workspace/extractPipelineExecutionLanes";
 import type { RecordScopeConstraints } from "@/lib/admin/accessScope";
 import {
     getWorkUnitQueueSummaries,
@@ -31,13 +34,14 @@ async function probePipelineWorkUnit(params: {
         params;
     try {
         if (String(wu.department_id ?? "").trim() !== departmentId) return null;
-        const def = validateQueueDefinition(wu.queue_definition);
+        const bundle = tryLoadWorkUnitQueueDefinitionBundle(wu.queue_definition);
+        if (!bundle) return null;
+        const def = bundle.def;
         if (def.ui?.layout !== "pipeline_with_attention") return null;
         const lanes = extractPipelineExecutionLanes(def);
         if (!lanes.length) return null;
 
-        const pipeSection = def.ui?.sections?.find((s) => s.key === "pipeline");
-        const panelTitle = pipeSection?.label?.trim() || "Pipeline";
+        const panelTitle = resolvePipelineExecPanelTitle(def);
         const laneKeySet = new Set(lanes.map((lane) => lane.key));
 
         const tLanes0 = Date.now();
