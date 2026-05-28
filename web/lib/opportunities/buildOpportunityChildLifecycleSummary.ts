@@ -28,6 +28,8 @@ export type OpportunityChildLifecycleSummary = {
     short_summary: string | null;
     /** Clarifier that case status is separate from child lifecycle. */
     case_status_secondary_note: string;
+    /** True when every listed child lacks enrollment lifecycle status — calmer drawer copy. */
+    all_enrollment_status_unset: boolean;
 };
 
 const DEFAULT_CHILD_LIFECYCLE_LABELS: Record<string, string> = {
@@ -43,6 +45,7 @@ const DEFAULT_CHILD_LIFECYCLE_LABELS: Record<string, string> = {
 };
 
 const MISSING_STATUS_KEY = "__missing__";
+const MISSING_STATUS_LABEL = "enrollment status not set";
 
 /** Stable UI ordering for mixed-state count fragments. */
 const STATUS_DISPLAY_ORDER: string[] = [
@@ -71,7 +74,7 @@ function statusLabel(
     memberLabel: string | null | undefined,
     labels: Record<string, string>
 ): string {
-    if (statusKey === MISSING_STATUS_KEY) return "status missing";
+    if (statusKey === MISSING_STATUS_KEY) return MISSING_STATUS_LABEL;
     const fromMember = memberLabel?.trim();
     if (fromMember) return fromMember;
     return labels[statusKey] ?? humanizeSnakeCaseToken(statusKey, labels);
@@ -122,6 +125,7 @@ export function buildOpportunityChildLifecycleSummary(params: {
         display_summary: null,
         short_summary: null,
         case_status_secondary_note: OPPORTUNITY_CHILD_LIFECYCLE_CASE_NOTE,
+        all_enrollment_status_unset: false,
     };
 
     if (!total) return base;
@@ -166,9 +170,9 @@ export function buildOpportunityChildLifecycleSummary(params: {
         headlineLabel = `Children: all ${label.toLowerCase()} (${total})`;
         shortSummary = `All ${label.toLowerCase()}`;
     } else if (missingCount === total) {
-        displaySummary = `${childWord} · status missing`;
-        headlineLabel = `Children: status missing (${total})`;
-        shortSummary = "Status missing";
+        displaySummary = total === 1 ? "1 child listed" : `${total} children listed`;
+        headlineLabel = displaySummary;
+        shortSummary = "Enrollment status not set";
     } else if (isMixed) {
         displaySummary = `${childWord} · ${fragments.join(", ")}`;
         headlineLabel = `Children: ${fragments.join(", ")}`;
@@ -192,6 +196,7 @@ export function buildOpportunityChildLifecycleSummary(params: {
         headline_label: headlineLabel,
         display_summary: displaySummary,
         short_summary: shortSummary,
+        all_enrollment_status_unset: missingCount === total && total > 0,
     };
 }
 

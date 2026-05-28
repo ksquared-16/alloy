@@ -61,23 +61,36 @@ describe("buildOpportunityChildLifecycleSummary", () => {
         expect(s.display_summary).toContain("3 children");
     });
 
-    it("counts missing child status quietly", () => {
+    it("counts missing child status with calm enrollment copy", () => {
         const s = buildOpportunityChildLifecycleSummary({
             opportunityId: "opp-1",
             members: [{ outcome_status_key: "waitlisted" }, { outcome_status_key: null }],
         });
         expect(s.is_mixed).toBe(true);
         expect(s.missing_status_count).toBe(1);
-        expect(s.display_summary).toBe("2 children · 1 waitlisted, 1 status missing");
+        expect(s.display_summary).toBe("2 children · 1 waitlisted, 1 enrollment status not set");
+        expect(s.all_enrollment_status_unset).toBe(false);
     });
 
-    it("handles all missing statuses", () => {
+    it("handles all missing statuses without implying child is missing", () => {
         const s = buildOpportunityChildLifecycleSummary({
             opportunityId: "opp-1",
             members: [{ outcome_status_key: null }, { outcome_status_key: undefined }],
         });
         expect(s.missing_status_count).toBe(2);
-        expect(s.display_summary).toBe("2 children · status missing");
+        expect(s.display_summary).toBe("2 children listed");
+        expect(s.headline_label).toBe("2 children listed");
+        expect(s.short_summary).toBe("Enrollment status not set");
+        expect(s.all_enrollment_status_unset).toBe(true);
+    });
+
+    it("handles single child with unset enrollment status", () => {
+        const s = buildOpportunityChildLifecycleSummary({
+            opportunityId: "opp-1",
+            members: [{ outcome_status_key: null, display_name: "Mia" }],
+        });
+        expect(s.display_summary).toBe("1 child listed");
+        expect(s.all_enrollment_status_unset).toBe(true);
     });
 
     it("does not include opportunity mutation fields", () => {

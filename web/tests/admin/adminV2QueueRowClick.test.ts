@@ -32,17 +32,22 @@ describe("work-unit queue row open contract", () => {
         expect(css).toContain("adminv2-ws-wu-queue-card-interactive");
     });
 
-    it("keeps work-unit queue records in a bounded scroll shell", () => {
+    it("keeps work-unit queue records in a bounded scroll shell above the command bar", () => {
         const css = readFileSync(workspaceCssPath, "utf8");
         const queueBlock = readFileSync(queueBlockPath, "utf8");
         expect(queueBlock).toContain("adminv2-ws-wu-queue-list-shell");
         expect(css).toContain("--ws-wu-queue-records-scroll-max-height");
+        expect(css).toContain("--ws-shell-bottom-safe");
+        expect(css).toMatch(
+            /--ws-wu-queue-records-scroll-max-height:[\s\S]*var\(--ws-shell-bottom-safe/,
+        );
         const scrollShellRule = css.match(
             /\[data-ws-surface="work_unit"\]\.adminv2-ws-work-unit\.adminv2-ws-wu-v2 \.adminv2-ws-wu-queue-list-shell\s*\{[^}]+\}/,
         )?.[0];
         expect(scrollShellRule).toBeDefined();
         expect(scrollShellRule).toContain("overflow-y: auto");
         expect(scrollShellRule).toContain("min-height: 0");
+        expect(scrollShellRule).toContain("padding-bottom:");
         const wuListRule = css.match(
             /\[data-ws-surface="work_unit"\]\.adminv2-ws-wu-v2 \.adminv2-ws-wu-queue-list\.adminv2-ws-queue-list\s*\{[^}]+\}/,
         )?.[0];

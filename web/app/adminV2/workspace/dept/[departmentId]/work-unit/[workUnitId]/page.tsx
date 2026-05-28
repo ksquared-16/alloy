@@ -146,6 +146,9 @@ import {
     type QueueUiRowPreviewField,
 } from "@/lib/ui-v2/queueUiConfig";
 import { readQueueUiPresentationFlags } from "@/lib/ui-v2/readQueueUiPresentationFlags";
+import {
+    resolveWorkUnitQueueRowsFetchLimit,
+} from "@/lib/adminV2/workUnitQueueRowsFetchLimit";
 import { applyWorkUnitQueueRecordFilters } from "@/lib/workspace/applyWorkUnitQueueRecordFilters";
 import {
     clearLaneScopedWorkUnitRecordFilters,
@@ -519,6 +522,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [actionSurfaceError, setActionSurfaceError] = useState<string | null>(null);
 
     const [queueSummaries, setQueueSummaries] = useState<QueueSummary[] | null>(null);
+    const queueSummariesRef = useRef<QueueSummary[] | null>(null);
+    queueSummariesRef.current = queueSummaries;
     const [queueSummariesError, setQueueSummariesError] = useState<string | null>(null);
     const [queueSummariesRoute, setQueueSummariesRoute] = useState<string | null>(null);
     const [selectedQueueKey, setSelectedQueueKey] = useState<string | null>(null);
@@ -1134,7 +1139,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 attentionBucketOverride?: string | null;
             }
         ) => {
-            void _summaries;
+            const summariesForLimit = _summaries ?? queueSummariesRef.current;
+            const summaryForLane =
+                summariesForLimit && workUnitRef.current
+                    ? findQueueSummaryForSelection(summariesForLimit, workUnitRef.current, queueKey)
+                    : null;
+            const searchActive = recordFiltersRef.current.search.trim().length > 0;
+            const fetchLimit = resolveWorkUnitQueueRowsFetchLimit(summaryForLane?.count, { searchActive });
             const resolvedFetch = resolveWorkUnitFetchQueueKeyFromPill(
                 queueKey,
                 options?.attentionBucketOverride !== undefined
@@ -1161,7 +1172,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 abSnap
             );
             const qs = new URLSearchParams({
-                limit: "20",
+                limit: String(fetchLimit),
                 offset: "0",
                 count_mode: "exact",
                 omit_total_count: "true",
@@ -1397,6 +1408,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
     const fetchQueueItemsRef = useRef(fetchQueueItems);
     fetchQueueItemsRef.current = fetchQueueItems;
+
+    useEffect(() => {
+        const q = recordFilters.search.trim();
+        if (!workUnitId || !selectedQueueKey || q.length < 2) return;
+        const timer = window.setTimeout(() => {
+            void fetchQueueItemsRef.current(workUnitId, selectedQueueKey, queueSummariesRef.current, {
+                force: true,
+            });
+        }, 320);
+        return () => window.clearTimeout(timer);
+    }, [recordFilters.search, selectedQueueKey, workUnitId]);
+
     const requestWorkUnitDeferredSupplementRef = useRef(requestWorkUnitDeferredSupplement);
     requestWorkUnitDeferredSupplementRef.current = requestWorkUnitDeferredSupplement;
     const markFirstUsefulPaintOnceRef = useRef(markFirstUsefulPaintOnce);
@@ -2442,9 +2465,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
         },
         [fetchQueueItems, fetchQueueSummaries, queueSummaries, selectedQueueKey, viewScopeFingerprint, workUnitId]
     );
-
-    const queueSummariesRef = useRef(queueSummaries);
-    queueSummariesRef.current = queueSummaries;
 
     useEffect(() => {
         if (!workUnitId || !selectedQueueKey) return;

@@ -23,7 +23,7 @@ export function OpportunityChildLifecycleSummaryStrip({ summary, showCaseNote = 
             {summary.display_summary && summary.display_summary !== summary.headline_label ? (
                 <p className="text-[10px] leading-snug text-alloy-midnight/55">{summary.display_summary}</p>
             ) : null}
-            {showCaseNote ? (
+            {showCaseNote && !summary.all_enrollment_status_unset ? (
                 <p className="mt-0.5 text-[10px] leading-snug text-alloy-midnight/45">{summary.case_status_secondary_note}</p>
             ) : null}
         </div>

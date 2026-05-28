@@ -88,8 +88,12 @@
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 {
-  /* Reserve header/control deck; records scroll inside `.adminv2-ws-wu-queue-list-shell`. */
-  --ws-wu-queue-records-scroll-max-height: min(calc(100vh - 20rem), 720px);
+  /* Reserve header/control deck + bottom BOS command bar; records scroll inside `.adminv2-ws-wu-queue-list-shell`. */
+  --ws-wu-queue-records-scroll-top-offset: 17rem;
+  --ws-wu-queue-records-scroll-max-height: min(
+    calc(100vh - var(--ws-wu-queue-records-scroll-top-offset) - var(--ws-shell-bottom-safe, 120px)),
+    640px
+  );
 }
 
 /* Work-unit route loading: subtle enrollment/dept pine accent (quieter than department cold shell). */
@@ -5971,6 +5975,8 @@
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
   -webkit-overflow-scrolling: touch;
+  padding-bottom: 6px;
+  scroll-padding-bottom: 8px;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-count-badge {
