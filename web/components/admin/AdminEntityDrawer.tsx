@@ -187,6 +187,7 @@ import { prefetchWorkspaceChildcareInquiryOptionSets } from "@/lib/workspace/wor
 import { adminEntityRefetchShouldBlockDrawerShell } from "@/lib/ui-v2/adminV2EntityDrawerLoading";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { useDrawerSectionIntersection } from "@/lib/admin/drawer/useDrawerSectionIntersection";
+import { peekDrawerEntitySnapshot, putDrawerEntitySnapshot } from "@/lib/admin/drawerEntitySnapshotCache";
 import {
     opportunityDrawerEnrichmentLayoutReady as computeOpportunityDrawerEnrichmentLayoutReady,
     opportunityDrawerFirstPaintActive as computeOpportunityDrawerFirstPaintActive,
@@ -1965,6 +1966,7 @@ export default function AdminEntityDrawer() {
                     setOpportunityBackgroundFullHydrateFailed(false);
                 }
                 setData(json);
+                putDrawerEntitySnapshot(drawer.type, drawer.id, json as Record<string, unknown>);
                 if (typeof window !== "undefined" && typeof performance !== "undefined") {
                     requestAnimationFrame(() => {
                         requestAnimationFrame(() => {
@@ -2210,6 +2212,18 @@ export default function AdminEntityDrawer() {
             return;
         }
         const entityOpenKey = `${drawer.type}:${drawer.id}`;
+        const cachedEntity = peekDrawerEntitySnapshot(drawer.type, drawer.id);
+        if (cachedEntity) {
+            setData(cachedEntity);
+            setLoading(false);
+            setError(null);
+            if (drawer.type === "opportunities" && drawer.id !== "new") {
+                opportunityDrawerBootstrapAppliedRef.current = drawer.id;
+                opportunityDrawerFirstPaintPreloadedRef.current = drawer.id;
+                setOpportunityBootstrapAppliedId(drawer.id);
+            }
+            return;
+        }
         if (
             drawer.type === "opportunities" &&
             drawer.id !== "new" &&
@@ -2281,6 +2295,7 @@ export default function AdminEntityDrawer() {
             );
             setOpportunityOperTrustPreview(boot.oper_trust_preview);
             setData(boot.entity);
+            putDrawerEntitySnapshot(drawer.type, drawer.id, boot.entity as Record<string, unknown>);
             if (boot.record_header_actions) {
                 setOpportunityResolvedHeaderActions(boot.record_header_actions);
                 opportunityHeaderResolvedSigRef.current = "bootstrap";
@@ -2322,21 +2337,7 @@ export default function AdminEntityDrawer() {
                         alloyPerfSet("drawer_entity_response", performance.now());
                     }
                     setData(json);
-                    if (typeof window !== "undefined" && typeof performance !== "undefined") {
-                        requestAnimationFrame(() => {
-                            requestAnimationFrame(() => {
-                                const t = performance.now();
-                                alloyPerfSet("drawer_entity_applied", t);
-                                if (
-                                    drawer.type === "opportunities" &&
-                                    (json as { _record_surface?: string })._record_surface === "drawer_visible"
-                                ) {
-                                    alloyPerfSet("drawer_opportunity_visible_applied", t);
-                                    reportDrawerVisibleApplied(String(drawer.id));
-                                }
-                            });
-                        });
-                    }
+                    putDrawerEntitySnapshot(drawer.type, drawer.id, json as Record<string, unknown>);
                 })
                 .catch((e) => setError(e.message))
                 .finally(() => setLoading(false));

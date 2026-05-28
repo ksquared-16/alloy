@@ -34,7 +34,6 @@ import {
     WAITLIST_DEMO_COHORT_KEYS,
     WAITLIST_DEMO_SCENARIO_ORDER,
     WAITLIST_DEMO_SCENARIO_SEED_KEYS,
-    WAITLIST_DEMO_SITE_SEED_KEYS,
     waitlistDemoFamilyLast,
     type WaitlistDemoScenarioId,
 } from "@/lib/orchestration/placement/waitlistDemoScenarios";
@@ -91,6 +90,43 @@ async function ensureSite(
         .single();
     if (error) throw new Error(`ensureSite ${seedKey}: ${error.message}`);
     return (created as { id: string }).id;
+}
+
+/** Reuse org campuses from realistic childcare demo — never create "Waitlist Demo — …" sites. */
+const SHARED_CAMPUS_SEED_KEYS = {
+    north: "site_north_campus",
+    south: "site_south_campus",
+} as const;
+
+const SHARED_CAMPUS_LABELS = {
+    north: "North Campus",
+    south: "South Campus",
+} as const;
+
+async function resolveSharedCampusSiteId(ctx: SeedCtx, campus: keyof typeof SHARED_CAMPUS_SEED_KEYS): Promise<string> {
+    const { supabase, orgId, dryRun } = ctx;
+    const seedKey = SHARED_CAMPUS_SEED_KEYS[campus];
+    const label = SHARED_CAMPUS_LABELS[campus];
+
+    const { data: bySeed } = await supabase
+        .from("locations")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("metadata->>seed_key", seedKey)
+        .maybeSingle();
+    if ((bySeed as { id?: string } | null)?.id) return (bySeed as { id: string }).id;
+
+    const { data: byLabel } = await supabase
+        .from("locations")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("location_type", "site")
+        .eq("label", label)
+        .maybeSingle();
+    if ((byLabel as { id?: string } | null)?.id) return (byLabel as { id: string }).id;
+
+    if (dryRun) return `dry-run-site-${seedKey}`;
+    return ensureSite(ctx, seedKey, label);
 }
 
 async function ensureCustomer(ctx: SeedCtx, seedKey: string, familyLast: string): Promise<string> {
@@ -237,7 +273,7 @@ async function upsertOpportunity(
 
     const row: Record<string, unknown> = {
         org_id: orgId,
-        name: `Waitlist demo — ${familyLast}`,
+        name: `${familyLast} Family`,
         status_key: "waitlisted",
         work_unit_id: workUnitId,
         customer_id: customerId,
@@ -494,8 +530,8 @@ async function main() {
         dryRun,
     };
 
-    ctx.siteNorthId = await ensureSite(ctx, WAITLIST_DEMO_SITE_SEED_KEYS.north, "Waitlist Demo — North Campus");
-    ctx.siteSouthId = await ensureSite(ctx, WAITLIST_DEMO_SITE_SEED_KEYS.south, "Waitlist Demo — South Campus");
+    ctx.siteNorthId = await resolveSharedCampusSiteId(ctx, "north");
+    ctx.siteSouthId = await resolveSharedCampusSiteId(ctx, "south");
 
     await patchWorkUnitV2(ctx);
 

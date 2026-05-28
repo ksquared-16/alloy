@@ -121,7 +121,7 @@ export default function LocationsHierarchySettingsClient() {
         <div className={SETTINGS_PAGE_SHELL_CLASS}>
             <SettingsPageHeader
                 title="Locations & hierarchy"
-                subtitle="Physical sites and classroom/room units for waitlist child-site testing. Org-level program/cohort keys are unchanged — site-scoped rates and billing are deferred."
+                subtitle="Physical sites and classroom/room units. Waitlist queue sections group by org-level program/category (Infant, Toddler, Preschool, Pre-K) — rooms belong under sites for future capacity and rates, not for waitlist section headers."
                 actions={
                     <div className="flex flex-wrap gap-2">
                         <button
@@ -145,8 +145,10 @@ export default function LocationsHierarchySettingsClient() {
                 <strong className="font-semibold text-alloy-midnight/75">Hierarchy model:</strong>{" "}
                 <span className="text-alloy-midnight/55">address/campus</span> →{" "}
                 <span className="text-alloy-midnight/55">site</span> (physical campus) →{" "}
-                <span className="text-alloy-midnight/55">unit</span> (classroom/room under a site). Child inquiry site
-                dropdowns use active <code className="text-[11px]">location_type=site</code> rows. Tuition rates and
+                <span className="text-alloy-midnight/55">unit</span> (classroom/room under a site).{" "}
+                <strong className="font-semibold text-alloy-midnight/75">Waitlist grouping</strong> uses org-level
+                program categories (Infant, Toddler, Preschool, Pre-K) — the same buckets at every site. Header location
+                filter narrows which candidates appear inside those sections. Tuition rates, classroom assignment, and
                 capacity are not configured here.
             </div>
 

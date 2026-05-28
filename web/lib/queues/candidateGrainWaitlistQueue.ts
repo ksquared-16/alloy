@@ -4,7 +4,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { applyRecordScopeConstraintsToQuery, type RecordScopeConstraints } from "@/lib/admin/accessScope";
+import type { RecordScopeConstraints } from "@/lib/admin/accessScope";
 import type { NormalizedQueueEntry, NormalizedQueueDefinitionDocument } from "@/lib/config/queueDefinitionV2Runtime";
 import { parseQueueFilterStub } from "@/lib/config/queueDefinitionV2Runtime";
 import { applyPlacementV2ToOpportunityQueueRows } from "@/lib/orchestration/placement/applyPlacementV2ToOpportunityQueueRows";
@@ -120,6 +120,7 @@ type CandidateQueryRow = {
     org_id: string;
     opportunity_id: string;
     status: string;
+    site_id: string | null;
     wait_since: string | null;
     program_room_cohort_key: string | null;
     program_room_group_label: string | null;
@@ -127,6 +128,31 @@ type CandidateQueryRow = {
     opportunities: CandidateOpportunityPreview | CandidateOpportunityPreview[];
     opportunity_customer_members: { outcome_status_key: string | null } | { outcome_status_key: string | null }[] | null;
 };
+
+/** Candidate-grain waitlist: filter by child/candidate `site_id`, opportunity `location_id` as fallback. */
+export function applyWaitlistCandidateLocationScopeToQuery(
+    q: any,
+    constraints: RecordScopeConstraints | null
+): any {
+    if (!constraints?.locationIds?.length) return q;
+    const ids = constraints.locationIds.filter((id) => id.trim()).join(",");
+    if (!ids) return q;
+    return q.or(`site_id.in.(${ids}),and(site_id.is.null,opportunities.location_id.in.(${ids}))`);
+}
+
+function passesWaitlistCandidateLocationScope(
+    row: CandidateQueryRow,
+    constraints: RecordScopeConstraints | null
+): boolean {
+    const locationIds = constraints?.locationIds;
+    if (!locationIds?.length) return true;
+    const allowed = new Set(locationIds);
+    const siteId = row.site_id?.trim() ?? "";
+    if (siteId) return allowed.has(siteId);
+    const opp = readCandidateOpportunity(row);
+    const oppLoc = opp.location_id?.trim() ?? "";
+    return oppLoc ? allowed.has(oppLoc) : false;
+}
 
 function readCandidateOpportunity(row: CandidateQueryRow): CandidateOpportunityPreview {
     const o = row.opportunities;
@@ -180,7 +206,7 @@ async function queryWaitlistCandidates(params: {
     let q = params.supabase
         .from("placement_candidates")
         .select(
-            `id, org_id, opportunity_id, status, wait_since, program_room_cohort_key, program_room_group_label, opportunity_customer_member_id,
+            `id, org_id, opportunity_id, status, site_id, wait_since, program_room_cohort_key, program_room_group_label, opportunity_customer_member_id,
             opportunities!inner (
                 id, name, title, status_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at
             ),
@@ -190,9 +216,7 @@ async function queryWaitlistCandidates(params: {
         .eq("opportunities.work_unit_id", params.workUnitId)
         .in("status", params.filters.candidate_statuses);
 
-    if (params.recordScopeConstraints) {
-        q = applyRecordScopeConstraintsToQuery(q, params.recordScopeConstraints);
-    }
+    q = applyWaitlistCandidateLocationScopeToQuery(q, params.recordScopeConstraints);
 
     const { data, error } = await q;
     if (error) {
@@ -200,7 +224,9 @@ async function queryWaitlistCandidates(params: {
     }
 
     const rows = (data ?? []) as unknown as CandidateQueryRow[];
-    return rows.filter((r) => passesChildLifecycleFilter(r, params.filters.child_lifecycle_statuses));
+    return rows
+        .filter((r) => passesChildLifecycleFilter(r, params.filters.child_lifecycle_statuses))
+        .filter((r) => passesWaitlistCandidateLocationScope(r, params.recordScopeConstraints));
 }
 
 export async function countWaitlistCandidateGrainItems(params: {
@@ -416,5 +442,6 @@ export const __testing = {
     parseWaitlistCandidateGrainFilters,
     resolveWaitlistCandidateGrainContext,
     passesChildLifecycleFilter,
+    passesWaitlistCandidateLocationScope,
     readOcmOutcomeStatus,
 };

@@ -125,7 +125,7 @@ describe("queuePlacementWaitlistCandidatePresentation", () => {
 });
 
 describe("buildPlacementWaitlistWorkUnitGroupHeaders", () => {
-    it("maps cohort keys to human section labels (not raw slugs)", () => {
+    it("maps cohort keys to org-level section labels (not room slugs)", () => {
         const headers = buildPlacementWaitlistWorkUnitGroupHeaders([
             {
                 groupKey: "preschool_3_4_years",
@@ -136,8 +136,8 @@ describe("buildPlacementWaitlistWorkUnitGroupHeaders", () => {
                 groupLabel: "Young Toddler — 18–24 months Waitlist",
             },
         ]);
-        expect(headers.preschool_3_4_years?.label).toBe("Preschool — 3–4 years Waitlist");
-        expect(headers.young_toddler_18_24_months?.label).not.toMatch(/^young_toddler/);
+        expect(headers.preschool?.label).toBe("Preschool waitlist");
+        expect(headers.toddler?.label).toBe("Toddler waitlist");
     });
 });
 
@@ -194,9 +194,9 @@ describe("Hayes multi-child waitlist presentation", () => {
 
         const sectionTitles = vms.map((v) => v!.cohortSectionTitle);
         expect(sectionTitles).toEqual([
-            "Pre-K — 4–5 years Waitlist",
-            "Preschool — 3–4 years Waitlist",
-            "Young Toddler — 18–24 months Waitlist",
+            "Pre-K waitlist",
+            "Preschool waitlist",
+            "Toddler waitlist",
         ]);
         expect(sectionTitles.every((t) => !t.includes("_"))).toBe(true);
 
@@ -232,7 +232,7 @@ describe("QueueRowPlacementCandidateMetaChips", () => {
             <QueueRowPlacementCandidateMetaChips row={sampleRow} siteLabel="Hayes Campus" />
         );
         expect(html).toContain("Standard family");
-        expect(html).toContain("Jan 1, 2024");
+        expect(html).toContain("Waitlisted since Jan 1, 2024");
         expect(html).toContain("Hayes Campus");
         expect(html).not.toContain("Program");
         expect(html).not.toContain("Preschool — 3–4 years");

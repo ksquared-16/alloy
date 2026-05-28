@@ -74,8 +74,8 @@ export function QueueRowPlacementCandidateMetaChips({ row, siteLabel }: MetaProp
                     {row.bucketLabel}
                 </span>
                 {row.waitSinceLabel ? (
-                    <span className="adminv2-ws-queue-placement-candidate__meta-chip" title="Waiting since">
-                        {row.waitSinceLabel}
+                    <span className="adminv2-ws-queue-placement-candidate__meta-chip" title="Waitlisted since">
+                        Waitlisted since {row.waitSinceLabel}
                     </span>
                 ) : null}
                 {site ? (

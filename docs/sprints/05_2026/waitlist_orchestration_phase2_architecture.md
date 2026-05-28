@@ -145,7 +145,7 @@ program_room_cohort_key = f(site_id, program_id | age_band_key, room_id?)
 
 **Display label** resolved via config registry — evaluator sorts on **stable key**, UI shows **operator label**.
 
-### 3.2 Pipeline model
+> **Pilot UI doctrine (May 2026):** Waitlist **queue section headers** group by **org-level program/category** (Infant, Toddler, Preschool, Pre-K) via `resolveOrgProgramCategoryForWaitlist` — not by individual classroom/room and not per-site section headers. **`site_id`** on `placement_candidates` + header location filter narrows which candidate rows appear inside those sections. Classrooms/units remain **location-level** under sites for future capacity, rates, and assignment. Stored `program_room_cohort_key` may still carry finer-grained slugs until a formal org program catalog lands; section grouping normalizes to org category at presentation time.
 
 ```mermaid
 flowchart TB

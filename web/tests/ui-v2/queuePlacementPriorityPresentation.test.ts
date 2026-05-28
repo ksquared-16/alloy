@@ -74,7 +74,7 @@ describe("queuePlacementPriorityPresentation", () => {
             evaluated_at_ms: 1,
         });
         expect(vm?.programGroupSectionTitle).toBe("Program / room not specified");
-        expect(vm?.waitlistProgramShortLabel).toBe("Program waitlist");
+        expect(vm?.waitlistProgramShortLabel).toBe("Unspecified category waitlist");
     });
 
     it("parses evaluate_error", () => {

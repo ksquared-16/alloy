@@ -5,7 +5,7 @@
 import type { PlacementWaitlistCandidateRowProjection } from "@/lib/orchestration/placement/placementWaitlistCandidateRowProjection";
 import { normalizePlacementWaitlistCohort } from "@/lib/orchestration/placement/normalizePlacementWaitlistCohort";
 import { formatPlacementBucketLabel } from "@/lib/ui-v2/queuePlacementPriorityV2Presentation";
-import { formatPlacementWaitlistSectionLabel } from "@/lib/ui-v2/queuePlacementPriorityPresentation";
+import { resolveWaitlistQueueSection } from "@/lib/orchestration/placement/waitlistQueueSectionPresentation";
 import { formatDateUtcAudit } from "@/lib/adminFormatters";
 import type { QueueRowPlacementWaitlistCandidateVm } from "@/lib/ui-v2/workspace-types";
 
@@ -31,6 +31,7 @@ export function parsePlacementWaitlistCandidateRowVm(
         o.program_room_cohort_key,
         o.program_room_group_label
     );
+    const waitlistSection = resolveWaitlistQueueSection({ cohortKey, cohortLabel });
     const bucketLabel = formatPlacementBucketLabel(o.bucket);
     const waitSince = formatWaitSince(o.wait_since);
     const linkMode = o.sibling_context?.link_mode ?? o.placement_priority_v2?.link_mode ?? "independent";
@@ -59,7 +60,7 @@ export function parsePlacementWaitlistCandidateRowVm(
         parentDisplayName: o.parent_display_name?.trim() || null,
         cohortKey,
         cohortLabel,
-        cohortSectionTitle: formatPlacementWaitlistSectionLabel(cohortLabel),
+        cohortSectionTitle: waitlistSection.sectionTitle,
         bucketLabel,
         waitSinceLabel: waitSince,
         linkModeLabel: linkLabel,
@@ -102,12 +103,17 @@ export type PlacementWaitlistGroupHeaderInput = {
 export function buildPlacementWaitlistWorkUnitGroupHeaders(
     items: ReadonlyArray<PlacementWaitlistGroupHeaderInput>
 ): Record<string, { label: string }> {
+    const sections = items.map((item) =>
+        resolveWaitlistQueueSection({
+            cohortKey: item.groupKey,
+            cohortLabel: item.groupLabel,
+            legacyProgramGroupLabel: item.groupLabel,
+        })
+    );
     const out: Record<string, { label: string }> = {};
-    for (const item of items) {
-        const key = item.groupKey?.trim();
-        const label = item.groupLabel?.trim();
-        if (!key || !label) continue;
-        if (!out[key]) out[key] = { label };
+    for (const s of sections) {
+        if (!s.sectionKey || !s.sectionTitle) continue;
+        if (!out[s.sectionKey]) out[s.sectionKey] = { label: s.sectionTitle };
     }
     return out;
 }

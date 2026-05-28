@@ -40,6 +40,7 @@ import {
     placementWaitlistGroupRowMode,
 } from "@/lib/ui-v2/queuePlacementPriorityPresentation";
 import { buildPlacementV2QueueHint } from "@/lib/ui-v2/queuePlacementPriorityV2Presentation";
+import { resolveWaitlistQueueSection } from "@/lib/orchestration/placement/waitlistQueueSectionPresentation";
 
 type Props = {
   queue: QueueVm;
@@ -211,7 +212,11 @@ function DepartmentRollupLane({ queue, onAction, variant }: RollupLaneProps) {
 }
 
 function workUnitSectionKey(item: QueueItemVm): string | undefined {
-  return item.groupKey?.trim() || item.groupLabel?.trim() || undefined;
+  const key = item.groupKey?.trim();
+  if (key) return key;
+  const label = item.groupLabel?.trim();
+  if (!label) return undefined;
+  return resolveWaitlistQueueSection({ legacyProgramGroupLabel: label }).sectionKey;
 }
 
 function queueQuickActionDispatchId(qa: QueueItemQuickActionVm): string {
@@ -1081,15 +1086,8 @@ function WorkUnitQueueLane({
 
   useLayoutEffect(() => {
     if (!hasV2PlacementRows || v2PlacementCollapseInitRef.current) return;
-    const keys = new Set<string>();
-    for (const item of queue.items) {
-      const k = workUnitSectionKey(item);
-      if (k) keys.add(k);
-    }
-    if (keys.size > 0) {
-      setCollapsedPlacementGroups(keys);
-      v2PlacementCollapseInitRef.current = true;
-    }
+    v2PlacementCollapseInitRef.current = true;
+    setCollapsedPlacementGroups(new Set());
   }, [hasV2PlacementRows, queue.items]);
 
   const placementLaneHint = useMemo(() => {

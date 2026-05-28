@@ -5,23 +5,32 @@
 
 import type { QueueRowPlacementPriorityVm } from "@/lib/ui-v2/workspace-types";
 import type { WorkUnitPlacementQueueDiagnostics } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
+import {
+    shouldShowPlacementPriorityReasonShort,
+    type HouseholdFactLoadSource,
+} from "@/lib/orchestration/placement/placementCandidateLoadDiagnostics";
+
+import {
+    formatWaitlistCategorySectionTitle,
+    UNSPECIFIED_WAITLIST_CATEGORY_LABEL,
+} from "@/lib/orchestration/placement/waitlistQueueSectionPresentation";
 
 export const UNSPECIFIED_PROGRAM_SECTION = "Program / room not specified";
 
 const MAX_REASON_LEN = 120;
 
-/** Section header text, e.g. `Toddler Waitlist`. */
+/** Section header text, e.g. `Toddler waitlist`. */
 export function formatPlacementWaitlistSectionLabel(programGroupSectionTitle: string): string {
     const t = programGroupSectionTitle.trim();
-    if (!t || t === UNSPECIFIED_PROGRAM_SECTION) return "Program waitlist";
-    return `${t} Waitlist`;
+    if (!t || t === UNSPECIFIED_PROGRAM_SECTION) {
+        return formatWaitlistCategorySectionTitle(UNSPECIFIED_WAITLIST_CATEGORY_LABEL);
+    }
+    return formatWaitlistCategorySectionTitle(t);
 }
 
 /** Compact subtitle next to `#n`, e.g. `Toddler waitlist`. */
 export function formatPlacementWaitlistProgramShortLabel(programGroupSectionTitle: string): string {
-    const t = programGroupSectionTitle.trim();
-    if (!t || t === UNSPECIFIED_PROGRAM_SECTION) return "Program waitlist";
-    return `${t} waitlist`;
+    return formatPlacementWaitlistSectionLabel(programGroupSectionTitle);
 }
 
 function truncateReason(s: string): string {
@@ -61,9 +70,21 @@ export function parseQueueRowPlacementPriorityVm(raw: unknown): QueueRowPlacemen
 
     const waitlistProgramShortLabel = formatPlacementWaitlistProgramShortLabel(programGroupSectionTitle);
 
+    const householdFactSource =
+        typeof o.household_fact_source === "string"
+            ? (o.household_fact_source as HouseholdFactLoadSource)
+            : undefined;
+    const evaluatorUsesCandidateFacts = o.evaluator_uses_candidate_facts === true;
+
     let priorityReasonShort: string | undefined;
     const reasons = o.reasons;
-    if (Array.isArray(reasons)) {
+    if (
+        Array.isArray(reasons) &&
+        shouldShowPlacementPriorityReasonShort({
+            householdFactSource,
+            evaluatorUsesCandidateFacts,
+        })
+    ) {
         for (const r of reasons) {
             if (r != null && typeof r === "object" && !Array.isArray(r)) {
                 const lab = typeof (r as { label?: unknown }).label === "string" ? (r as { label: string }).label.trim() : "";
@@ -121,11 +142,12 @@ export function buildPlacementProjectionQueueHint(
     return "Some records may be outside this loaded page.";
 }
 
-/** Section heading for work-unit waitlist groups, e.g. `Infant Waitlist (2)` (emoji optional). */
+/** Section header text, e.g. `Infant waitlist (2)` (emoji optional). */
 export function formatPlacementGroupHeaderTitle(params: { emoji?: string; label: string; count: number }): string {
     const e = params.emoji?.trim();
     const prefix = e ? `${e} ` : "";
-    return `${prefix}${params.label.trim()} (${params.count})`;
+    const label = params.label.trim();
+    return `${prefix}${label} (${params.count})`;
 }
 
 export type PlacementWaitlistGroupRowMode = "normal" | "header_only" | "skip_row";

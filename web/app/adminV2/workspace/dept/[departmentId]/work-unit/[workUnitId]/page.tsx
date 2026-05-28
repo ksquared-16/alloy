@@ -251,7 +251,6 @@ import {
 } from "@/lib/opportunities/needsAttentionBuckets";
 import type { WorkUnitPlacementQueueDiagnostics } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
 import {
-    formatPlacementWaitlistSectionLabel,
     parseQueueRowPlacementPriorityVm,
 } from "@/lib/ui-v2/queuePlacementPriorityPresentation";
 import { parseQueueRowPlacementPriorityV2Vm } from "@/lib/ui-v2/queuePlacementPriorityV2Presentation";
@@ -259,10 +258,39 @@ import {
     buildPlacementWaitlistWorkUnitGroupHeaders,
     parsePlacementWaitlistCandidateRowVm,
 } from "@/lib/ui-v2/queuePlacementWaitlistCandidatePresentation";
+import { resolveWaitlistQueueSection } from "@/lib/orchestration/placement/waitlistQueueSectionPresentation";
 import { readOpportunityIdFromQueueRow } from "@/lib/orchestration/placement/placementWaitlistCandidateRowProjection";
 import { parseQueueRowGrainContext } from "@/lib/queues/queueRowGrainContext";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
+
+function waitlistQueueItemGrouping(item: {
+    placementWaitlistCandidate?: { cohortKey: string; cohortLabel: string } | null;
+    placementPriorityV2?: { primaryCohortLabel?: string | null; primaryCohortSectionTitle?: string | null; showPlacementV2Badge?: boolean } | null;
+    placementPriority?: { programGroupSectionTitle?: string } | null;
+}): { groupKey: string; groupLabel: string } | Record<string, never> {
+    if (item.placementWaitlistCandidate) {
+        const s = resolveWaitlistQueueSection({
+            cohortKey: item.placementWaitlistCandidate.cohortKey,
+            cohortLabel: item.placementWaitlistCandidate.cohortLabel,
+        });
+        return { groupKey: s.sectionKey, groupLabel: s.sectionTitle };
+    }
+    if (item.placementPriorityV2?.showPlacementV2Badge) {
+        const s = resolveWaitlistQueueSection({
+            cohortLabel: item.placementPriorityV2.primaryCohortLabel,
+            legacyProgramGroupLabel: item.placementPriorityV2.primaryCohortSectionTitle,
+        });
+        return { groupKey: s.sectionKey, groupLabel: s.sectionTitle };
+    }
+    if (item.placementPriority?.programGroupSectionTitle) {
+        const s = resolveWaitlistQueueSection({
+            legacyProgramGroupLabel: item.placementPriority.programGroupSectionTitle,
+        });
+        return { groupKey: s.sectionKey, groupLabel: s.sectionTitle };
+    }
+    return {};
+}
 
 /** Synthetic queue keys in the pill strip — map to `queue=needs_attention` + `attention_bucket`. */
 const ATTENTION_BUCKET_PILL_PREFIX = "__attention_bucket:";
@@ -1520,7 +1548,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 alloyPerfSet("queue_tab_change_start", performance.now());
             }
             if (!sameQueue) {
-                queueRowsBufferRef.current = [];
                 queueRowsBufferWorkUnitIdRef.current = workUnitId;
                 const clearedFilters = clearLaneScopedWorkUnitRecordFilters(recordFiltersRef.current);
                 setRecordFilters(clearedFilters);
@@ -1563,7 +1590,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             if (workUnitId) {
                 suppressQueueFetchEffectOnceRef.current = true;
                 void fetchQueueItems(workUnitId, nextKey, null, {
-                    force: !sameQueue,
+                    force: false,
                     logicalUnmapped: unmappedActive,
                     ...(resolvedPill.attentionBucketOverride !== undefined
                         ? { attentionBucketOverride: resolvedPill.attentionBucketOverride }
@@ -2921,20 +2948,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     ...(waitlistCandidate ? { placementWaitlistCandidate: waitlistCandidate } : {}),
                     ...(placementPriorityV2 && usePlacementV2 ? { placementPriorityV2 } : {}),
                     ...(waitlistCandidate
-                        ? {
-                              groupKey: waitlistCandidate.cohortKey,
-                              groupLabel: waitlistCandidate.cohortSectionTitle,
-                          }
+                        ? waitlistQueueItemGrouping({ placementWaitlistCandidate: waitlistCandidate })
                         : usePlacementV2 && placementPriorityV2
-                          ? {
-                                groupLabel: placementPriorityV2.primaryCohortSectionTitle,
-                            }
+                          ? waitlistQueueItemGrouping({ placementPriorityV2 })
                           : placementPriority
-                            ? {
-                                  groupLabel: formatPlacementWaitlistSectionLabel(
-                                      placementPriority.programGroupSectionTitle
-                                  ),
-                              }
+                            ? waitlistQueueItemGrouping({ placementPriority })
                             : {}),
                 };
             });
@@ -3037,10 +3055,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
         const hasPlacementCandidateRows = liveVmItems.some((i) => i.placementWaitlistCandidate != null);
         const workUnitGroupHeaders = hasPlacementCandidateRows
             ? buildPlacementWaitlistWorkUnitGroupHeaders(
-                  liveVmItems.map((item) => ({
-                      groupKey: item.placementWaitlistCandidate?.cohortKey ?? undefined,
-                      groupLabel: item.placementWaitlistCandidate?.cohortSectionTitle ?? undefined,
-                  }))
+                  liveVmItems.map((item) => {
+                      const g = waitlistQueueItemGrouping(item);
+                      return {
+                          groupKey: "groupKey" in g ? g.groupKey : undefined,
+                          groupLabel: "groupLabel" in g ? g.groupLabel : undefined,
+                      };
+                  })
               )
             : undefined;
 
