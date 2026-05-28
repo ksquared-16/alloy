@@ -133,4 +133,20 @@ describe("intakeRuntimeOrchestrationPresentation", () => {
         expect(vm.createsLead).toBe(true);
         expect(vm.steps.find((s) => s.key === "share")?.hint).toBe("Link ready");
     });
+
+    it("does not require test submission for live readiness", () => {
+        const vm = buildIntakeRuntimeOrchestrationViewModel({
+            formKey: "website_inquiry",
+            formMetadata: { intake_intent: "enrollment_lead" },
+            links: [ENROLLMENT_LINK],
+            selectedLinkId: ENROLLMENT_LINK.id,
+            labelCatalog: null,
+            documentGenerationConfigured: false,
+            hasPublished: true,
+            latestSubmission: null,
+        });
+        expect(vm.liveReady).toBe(true);
+        expect(vm.steps.find((s) => s.key === "test")?.status).toBe("pending");
+        expect(vm.steps.find((s) => s.key === "test")?.hint).toMatch(/Optional/i);
+    });
 });

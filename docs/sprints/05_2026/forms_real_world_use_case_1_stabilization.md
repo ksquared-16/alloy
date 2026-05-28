@@ -103,6 +103,38 @@ cd web && npx tsx scripts/qaEnrollmentIntakeLifecycleCoherence.ts
 - No new configuration model; still form metadata + link metadata
 - Advanced outcome editor remains under Advanced disclosure
 
+## Final polish (May 2026)
+
+### Duplicate public title
+
+Root cause: composition mode rendered both the page header h1 and the composition doc-heading h1; legacy section mode could repeat section titles.
+
+Fix: suppress matching h1/h2 composition blocks; skip outer header when composition already includes the title; suppress section headings equal to form title.
+
+### Duplicate contact match doctrine
+
+Root cause: email match auto-operationalized without comparing submitted guardian name to the matched CRM person; existing opportunity dedup could attach silently.
+
+Fix: after email/phone match, compare names. On mismatch → review required, no auto-operationalize, skip opportunity dedup attach, operator copy shows submitted vs matched names.
+
+Rule: **any email/phone match requires review unless submitted name exactly matches the existing person record.**
+
+### Testing is optional
+
+Setup rail no longer treats Test as required. `liveReady` when publish + configured share link. Test panel is **Optional preview / test** with warning that submissions create real intake records.
+
+### Archive form (UI)
+
+**Archive form** in Form Detail (replaces hard delete in UI):
+
+- `POST /api/admin/forms/[formId]/archive`
+- Sets `is_active = false`, deactivates public links, preserves submissions
+- Hidden from default Forms list; public embed rejects archived forms
+
+### Lead routing display
+
+Primary setup shows **Lead routing**: school/site, pipeline, starting status.
+
 ## Related
 
 - Prior authoring blockers: [forms_authoring_stability.md](./forms_authoring_stability.md)

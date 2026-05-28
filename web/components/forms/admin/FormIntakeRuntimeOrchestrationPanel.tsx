@@ -227,7 +227,9 @@ export function FormIntakeRuntimeOrchestrationPanel({
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                     <StatusBadge label={vm.intakeTypeLabel} variant="info" />
-                    {vm.linkSetupIncomplete ?
+                    {vm.liveReady ?
+                        <StatusBadge label="Live" variant="success" />
+                    : vm.linkSetupIncomplete ?
                         <StatusBadge label="Setup incomplete" variant="warning" />
                     : vm.intakeEnabled && vm.linkOutcomeConfigured ?
                         <StatusBadge label="Intake active" variant="success" />
@@ -288,6 +290,22 @@ export function FormIntakeRuntimeOrchestrationPanel({
                         <li key={line}>· {line}</li>
                     ))}
                 </ul>
+                {vm.createsLead && (vm.leadRoutingLocationLabel || vm.leadRoutingWorkUnitLabel || vm.leadRoutingStatusLabel) ?
+                    <div className="mt-3 border-t border-alloy-midnight/[0.06] pt-2" data-testid="orchestration-lead-routing">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/65">Lead routing</p>
+                        <ul className={clsx("mt-1.5 space-y-0.5", opMetadata)}>
+                            {vm.leadRoutingLocationLabel ?
+                                <li>· School/site · {vm.leadRoutingLocationLabel}</li>
+                            :   null}
+                            {vm.leadRoutingWorkUnitLabel ?
+                                <li>· Pipeline · {vm.leadRoutingWorkUnitLabel}</li>
+                            :   null}
+                            {vm.leadRoutingStatusLabel ?
+                                <li>· Starting status · {vm.leadRoutingStatusLabel}</li>
+                            :   null}
+                        </ul>
+                    </div>
+                :   null}
             </div>
 
             <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
@@ -391,7 +409,7 @@ export function FormIntakeRuntimeOrchestrationPanel({
                                     className={intakeWorkspaceBtnPrimary}
                                     data-testid="orchestration-open-embed"
                                 >
-                                    Open form
+                                    Preview form
                                 </a>
                                 <button
                                     type="button"
@@ -456,7 +474,10 @@ export function FormIntakeRuntimeOrchestrationPanel({
                     data-testid="runtime-test-confirmation"
                 >
                     <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/65">
-                        After submit
+                        Optional preview / test
+                    </p>
+                    <p className={clsx("mt-1", opMutedMeta)} data-testid="orchestration-test-warning">
+                        Testing is optional. Submitting a test creates real intake records in this environment.
                     </p>
                     {loading ?
                         <p className={clsx("mt-2", opMetadata)}>Loading latest submission…</p>
@@ -496,7 +517,7 @@ export function FormIntakeRuntimeOrchestrationPanel({
                             </div>
                         </>
                     :   <p className={clsx("mt-2", opMetadata)}>
-                            No submitted responses yet. Open the form, submit a test, then refresh.
+                            No test submissions yet. You can go live without testing — use Preview form above if you want to try it.
                         </p>}
                 </div>
             </div>

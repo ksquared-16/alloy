@@ -63,7 +63,7 @@ export async function resolvePublicFormLinkByToken(
 
     const { data: formDef, error: formErr } = await supabase
         .from("form_definitions")
-        .select("id, key, name, kind")
+        .select("id, key, name, kind, is_active")
         .eq("id", row.form_definition_id)
         .eq("org_id", row.org_id)
         .maybeSingle();
@@ -72,7 +72,10 @@ export async function resolvePublicFormLinkByToken(
         return { ok: false, error: { code: "NOT_FOUND", message: "Form not found" } };
     }
 
-    const fd = formDef as { id: string; key: string; name: string; kind: string };
+    const fd = formDef as { id: string; key: string; name: string; kind: string; is_active: boolean };
+    if (fd.is_active === false) {
+        return { ok: false, error: { code: "INACTIVE", message: "This form is archived and no longer accepts submissions" } };
+    }
 
     let versionId: string | null = null;
     let schemaJson: unknown = null;

@@ -7,9 +7,11 @@ import type { FormIntakeMeta } from "./formLeadCaptureTypes";
 import { parseFormIntakeMeta } from "./formLeadCaptureTypes";
 import {
     decidePersonMatchFromIdLists,
+    formatPersonDisplayName,
     normalizeIntakeEmail,
     normalizeIntakePhone,
     phoneLookupVariants,
+    submittedIdentityMatchesPersonRecord,
 } from "./intakePersonMatch";
 import { parseIntakeAutoCreateFlags } from "./parseIntakeAutoCreateFlags";
 import { parseIntakeLinkDefaults, resolveIntakeOpportunitySource } from "./parseIntakeLinkDefaults";
@@ -153,6 +155,8 @@ export async function applyFormIntakeSafe(
     let emailCount = 0;
     let phoneCount = 0;
     let personCreated = false;
+    let identityNameMismatch = false;
+    let matchedPersonDisplayName: string | null = null;
 
     if (personId) {
         matchStrategy = "reuse_submission_person_id";
@@ -232,6 +236,32 @@ export async function applyFormIntakeSafe(
             matchStrategy = "created_person";
             confidence = "medium";
             resolutionPath = "created_records";
+        }
+    }
+
+    if (
+        personId &&
+        !personCreated &&
+        (matchStrategy === "matched_email" || matchStrategy === "matched_phone")
+    ) {
+        const { data: personRow } = await supabase
+            .from("persons")
+            .select("first_name, last_name")
+            .eq("org_id", input.orgId)
+            .eq("id", personId)
+            .maybeSingle();
+        const personFirst = (personRow as { first_name?: string | null } | null)?.first_name ?? null;
+        const personLast = (personRow as { last_name?: string | null } | null)?.last_name ?? null;
+        matchedPersonDisplayName = formatPersonDisplayName(personFirst, personLast);
+        identityNameMismatch = !submittedIdentityMatchesPersonRecord({
+            submittedFirstName: first_name,
+            submittedLastName: last_name,
+            personFirstName: personFirst,
+            personLastName: personLast,
+        });
+        if (identityNameMismatch) {
+            resolutionPath = "needs_human_review";
+            confidence = "low";
         }
     }
 
@@ -325,13 +355,16 @@ export async function applyFormIntakeSafe(
                 ? childHint.last_name
                 : null;
 
-        const dedup = await findExistingIntakeOpportunity(supabase, {
-            orgId: input.orgId,
-            personId: personId!,
-            locationId: linkDefaults.default_location_id,
-            childFirst,
-            childLast,
-        });
+        const dedup =
+            identityNameMismatch ?
+                ({ kind: "no_match" } as const)
+            :   await findExistingIntakeOpportunity(supabase, {
+                    orgId: input.orgId,
+                    personId: personId!,
+                    locationId: linkDefaults.default_location_id,
+                    childFirst,
+                    childLast,
+                });
 
         if (dedup.kind === "ambiguous") {
             return {
@@ -478,6 +511,7 @@ export async function applyFormIntakeSafe(
         hasOpportunity: !!opportunityId,
         hasCustomer: !!customerId,
         hasPerson: !!personId,
+        identityNameMismatchWithMatchedPerson: identityNameMismatch,
     });
 
     const outcomeMeta = outcomeBase({
@@ -486,6 +520,16 @@ export async function applyFormIntakeSafe(
         intake_match_confidence: confidence,
         intake_candidate_email_count: emailCount,
         intake_candidate_phone_count: phoneCount,
+        ...(identityNameMismatch ?
+            {
+                intake_identity_name_mismatch: true,
+                intake_submitted_guardian_first_name: first_name,
+                intake_submitted_guardian_last_name: last_name,
+                intake_matched_person_display_name: matchedPersonDisplayName,
+                intake_review_reason:
+                    "Email or phone matches an existing family, but the submitted name differs — confirm the match before continuing.",
+            }
+        :   {}),
         ...(opportunityDedupStrategy !== "skipped" ? { intake_opportunity_match: opportunityDedupStrategy } : {}),
         ...(workUnitDepartmentMismatch ? { intake_work_unit_department_mismatch: true } : {}),
         ...(intakeRoutingWorkUnitId ? { intake_routing_work_unit_id: intakeRoutingWorkUnitId } : {}),

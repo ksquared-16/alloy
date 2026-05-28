@@ -45,6 +45,36 @@ export type PersonMatchDecision =
     | { kind: "ambiguous_phone" }
     | { kind: "no_match" };
 
+function normalizeNamePart(value: string | null | undefined): string {
+    return typeof value === "string" ? value.trim().toLowerCase().replace(/\s+/g, " ") : "";
+}
+
+/** True when submitted guardian name exactly matches the matched person record (case-insensitive). */
+export function submittedIdentityMatchesPersonRecord(params: {
+    submittedFirstName: string | null | undefined;
+    submittedLastName: string | null | undefined;
+    personFirstName: string | null | undefined;
+    personLastName: string | null | undefined;
+}): boolean {
+    const submittedFirst = normalizeNamePart(params.submittedFirstName);
+    const submittedLast = normalizeNamePart(params.submittedLastName);
+    const personFirst = normalizeNamePart(params.personFirstName);
+    const personLast = normalizeNamePart(params.personLastName);
+
+    if (!submittedFirst && !submittedLast) return true;
+    if (!personFirst && !personLast) return true;
+
+    return submittedFirst === personFirst && submittedLast === personLast;
+}
+
+export function formatPersonDisplayName(
+    firstName: string | null | undefined,
+    lastName: string | null | undefined
+): string | null {
+    const label = [firstName?.trim(), lastName?.trim()].filter(Boolean).join(" ").trim();
+    return label || null;
+}
+
 /**
  * Decide match from full id lists (same org), after email-first then phone.
  * Rules: multiple email matches → ambiguous_email (do not consult phone). Else phone round.

@@ -774,6 +774,9 @@ export function FormEngineRenderer({
                     });
                     const headingText =
                         typeof block.content === "string" ? block.content.trim() : String(block.content ?? "").trim();
+                    if (block.level === "h1" && headingText && titlesEquivalent(headingText, schema.title ?? "")) {
+                        return null;
+                    }
                     if (block.level !== "h1" && headingText && titlesEquivalent(headingText, schema.title ?? "")) {
                         return null;
                     }
@@ -922,11 +925,22 @@ export function FormEngineRenderer({
 
     if (documentComposition) {
         const blocks = sortDocumentBlocks(documentComposition.blocks);
+        const compositionHasTitleHeading = blocks.some(
+            (block) =>
+                block.type === "heading" &&
+                block.level === "h1" &&
+                typeof block.content === "string" &&
+                titlesEquivalent(block.content, schema.title ?? "")
+        );
         return (
             <div className={clsx("mx-auto max-w-xl space-y-8", loose && "max-w-full px-3 py-4")}>
-                <header>
-                    <h1 className={clsx("text-xl font-semibold text-neutral-900", loose && "text-lg")}>{schema.title}</h1>
-                </header>
+                {!compositionHasTitleHeading ?
+                    <header>
+                        <h1 className={clsx("text-xl font-semibold text-neutral-900", loose && "text-lg")}>
+                            {schema.title}
+                        </h1>
+                    </header>
+                :   null}
                 {readonly && inlineTokenWarnings.length > 0 ?
                     <div
                         className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950"
@@ -952,7 +966,7 @@ export function FormEngineRenderer({
             </header>
             {sectionModels.map(({ section, fields }) => (
                 <section key={section.id} className="space-y-4">
-                    {section.title ? (
+                    {section.title && !titlesEquivalent(section.title, schema.title ?? "") ? (
                         <h2 className={clsx("text-lg font-medium text-neutral-800", loose && "text-base")}>
                             {section.title}
                         </h2>

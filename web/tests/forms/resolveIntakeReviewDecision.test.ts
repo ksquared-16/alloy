@@ -47,6 +47,22 @@ function baseInput(
 }
 
 describe("resolveIntakeReviewDecision IC-4", () => {
+    it("requires review when matched person identity differs from submitted name", () => {
+        const decision = resolveIntakeReviewDecision(
+            baseInput({
+                linkMetadata: { ...DEMO_ROUTING_LINK },
+                matchStrategy: "matched_email",
+                matchConfidence: "high",
+                personCreated: false,
+                opportunityDedupStrategy: "created",
+                identityNameMismatchWithMatchedPerson: true,
+            })
+        );
+        expect(decision.needsReview).toBe(true);
+        expect(decision.autoOperationalized).toBe(false);
+        expect(decision.reviewReason).toMatch(/submitted name differs/i);
+    });
+
     it("legacy/missing config still requires review for new person create", () => {
         const decision = resolveIntakeReviewDecision(baseInput({ linkMetadata: {} }));
         expect(decision.needsReview).toBe(true);

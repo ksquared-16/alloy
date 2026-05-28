@@ -61,6 +61,10 @@ export type IntakeRuntimeOrchestrationViewModel = {
     linkOutcomeConfigured: boolean;
     linkSetupIncomplete: boolean;
     linkSetupIncompleteMessage: string | null;
+    leadRoutingLocationLabel: string | null;
+    leadRoutingWorkUnitLabel: string | null;
+    leadRoutingStatusLabel: string | null;
+    liveReady: boolean;
     storyBullets: OutcomeStoryBullet[];
     routingSummary: string | null;
     runtimeMismatch: {
@@ -288,7 +292,21 @@ export function buildIntakeRuntimeOrchestrationViewModel(params: {
         linkOutcomeConfigured &&
         (createsLead || intakeType === "existing_family" || intakeType === "operational_document" || intakeType === "general");
     const shareComplete = !!selected?.is_active && (!storedIntentForOutcome || linkOutcomeConfigured);
+    const liveReady = shareComplete && outcomeComplete && !linkSetupIncomplete;
     const testComplete = lastTestConfirmation?.tone === "success" && (lastTestConfirmation.opportunityId || lastTestConfirmation.autoOperationalized);
+
+    const locationId = typeof linkMeta.default_location_id === "string" ? linkMeta.default_location_id : null;
+    const statusKey =
+        typeof linkMeta.default_opportunity_status_key === "string" ? linkMeta.default_opportunity_status_key.trim() : null;
+    const leadRoutingLocationLabel =
+        locationId && params.labelCatalog?.locations?.[locationId] ? params.labelCatalog.locations[locationId] : null;
+    const leadRoutingWorkUnitLabel = workUnitLabel;
+    const leadRoutingStatusLabel =
+        statusKey && params.labelCatalog?.opportunityStatusKeys?.[statusKey] ?
+            params.labelCatalog.opportunityStatusKeys[statusKey]
+        : statusKey ?
+            statusKey.replace(/_/g, " ")
+        :   null;
 
     const steps: OrchestrationStepView[] = [
         {
@@ -327,9 +345,12 @@ export function buildIntakeRuntimeOrchestrationViewModel(params: {
         },
         {
             key: "test",
-            label: "Test",
-            status: testComplete ? "complete" : shareComplete ? "active" : "pending",
-            hint: lastTestConfirmation?.headline ?? "Open form and submit a test",
+            label: "Preview / Test",
+            status: testComplete ? "complete" : "pending",
+            hint:
+                testComplete ?
+                    (lastTestConfirmation?.headline ?? "Test recorded")
+                :   "Optional — creates real intake records",
         },
     ];
 
@@ -353,6 +374,10 @@ export function buildIntakeRuntimeOrchestrationViewModel(params: {
         linkOutcomeConfigured,
         linkSetupIncomplete,
         linkSetupIncompleteMessage,
+        leadRoutingLocationLabel,
+        leadRoutingWorkUnitLabel,
+        leadRoutingStatusLabel,
+        liveReady,
         storyBullets,
         routingSummary,
         runtimeMismatch,

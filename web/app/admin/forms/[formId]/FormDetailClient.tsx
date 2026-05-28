@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     FormLifecycleWorkspaceLayout,
@@ -38,6 +38,7 @@ import {
     resolveEffectiveOperationalIntent,
 } from "@/lib/forms/operationalIntentTemplates";
 import { formsWorkspaceBreadcrumbs, FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
+import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
 import {
     readActiveRuntimeLinkId,
@@ -69,6 +70,7 @@ type FormDetail = {
 
 export default function FormDetailClient() {
     const params = useParams();
+    const router = useRouter();
     const formId = typeof params?.formId === "string" ? params.formId : "";
     const viewerTz = useAdminViewerTimezone();
     const { canMutate } = useAdminAuth();
@@ -87,6 +89,8 @@ export default function FormDetailClient() {
     const [previewErr, setPreviewErr] = useState<string | null>(null);
     const [selectedRuntimeLinkId, setSelectedRuntimeLinkId] = useState<string | null>(null);
     const [createdOnceLinkId, setCreatedOnceLinkId] = useState<string | null>(null);
+    const [deleteBusy, setDeleteBusy] = useState(false);
+    const [deleteErr, setDeleteErr] = useState<string | null>(null);
 
     const load = useCallback(async () => {
         if (!formId) return;
@@ -294,6 +298,26 @@ export default function FormDetailClient() {
         }
     }, [formId, canMutate, load]);
 
+    const handleArchiveForm = useCallback(async () => {
+        if (!formId || !canMutate || !detail) return;
+        const confirmed = window.confirm(
+            `Archive “${detail.name}”?\n\nThis hides the form from active use and keeps past submissions. Public share links will stop accepting new responses.`
+        );
+        if (!confirmed) return;
+        setDeleteErr(null);
+        setDeleteBusy(true);
+        try {
+            const res = await fetch(`/api/admin/forms/${encodeURIComponent(formId)}/archive`, { method: "POST" });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Could not archive form");
+            router.push(ADMIN_FORMS_UI_BASE);
+        } catch (e) {
+            setDeleteErr((e as Error).message);
+        } finally {
+            setDeleteBusy(false);
+        }
+    }, [canMutate, detail, formId, router]);
+
     const published = detail?.versions.filter((v) => v.status === "published") ?? [];
     const drafts = detail?.versions.filter((v) => v.status === "draft") ?? [];
     const latestPublished = published.sort((a, b) => b.version_number - a.version_number)[0];
@@ -374,12 +398,12 @@ export default function FormDetailClient() {
     }, [detail, operatorContext]);
 
     const openPublicEmbedUrl = useMemo(() => {
-        if (!createdOnce) return null;
+        if (!hasPublished || !createdOnce) return null;
         return (
             createdOnce.embed_url ??
             (typeof window !== "undefined" ? `${window.location.origin}${createdOnce.embed_path}` : null)
         );
-    }, [createdOnce]);
+    }, [createdOnce, hasPublished]);
 
     const publishSummary = formLifecyclePublishSummaryLabel(hasDraft, hasPublished);
     const publishTone = hasPublished ? "success" : hasDraft ? "info" : "neutral";
@@ -413,6 +437,17 @@ export default function FormDetailClient() {
                         <FormsOperationalLink href={FORMS_MODULE_ROUTES.packetDefinitions}>
                             Packets
                         </FormsOperationalLink>
+                        {canMutate && detail.is_active !== false ?
+                            <button
+                                type="button"
+                                className="text-xs font-semibold text-alloy-ember hover:underline disabled:opacity-50"
+                                disabled={deleteBusy}
+                                data-testid="form-action-archive"
+                                onClick={() => void handleArchiveForm()}
+                            >
+                                {deleteBusy ? "Archiving…" : "Archive form"}
+                            </button>
+                        :   null}
                     </div>
                 :   null
             }
@@ -423,7 +458,11 @@ export default function FormDetailClient() {
             : error ?
                 <p className="text-sm text-alloy-ember">{error}</p>
             : detail ?
-                <FormLifecycleWorkspaceLayout
+                <>
+                    {deleteErr ?
+                        <p className="mb-3 text-sm text-alloy-ember" role="alert">{deleteErr}</p>
+                    :   null}
+                    <FormLifecycleWorkspaceLayout
                     formId={formId}
                     detail={{
                         id: detail.id,
@@ -469,6 +508,7 @@ export default function FormDetailClient() {
                     createdOnceLinkId={createdOnceLinkId}
                     openPublicEmbedUrl={openPublicEmbedUrl}
                 />
+                </>
             :   null}
         </FormsWorkspaceShell>
     );

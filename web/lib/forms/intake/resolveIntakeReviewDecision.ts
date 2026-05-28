@@ -33,6 +33,8 @@ export type ResolveIntakeReviewDecisionInput = {
     hasOpportunity: boolean;
     hasCustomer: boolean;
     hasPerson: boolean;
+    /** Submitted guardian name differs from matched person on email/phone match. */
+    identityNameMismatchWithMatchedPerson?: boolean;
 };
 
 type ParsedIntakeReviewConfig = {
@@ -90,6 +92,7 @@ function isRoutingCompleteForAutoOperationalize(
 }
 
 function legacyBaselineNeedsReview(input: ResolveIntakeReviewDecisionInput): boolean {
+    if (input.identityNameMismatchWithMatchedPerson) return true;
     if (input.matchStrategy === "reuse_submission_person_id") {
         return input.workUnitDepartmentMismatch;
     }
@@ -112,6 +115,9 @@ function deriveMatchConfidence(input: ResolveIntakeReviewDecisionInput): IntakeR
 }
 
 function buildReviewReason(input: ResolveIntakeReviewDecisionInput, reasons: string[]): string | undefined {
+    if (input.identityNameMismatchWithMatchedPerson) {
+        return "Email or phone matches an existing family, but the submitted name differs — confirm the match before continuing.";
+    }
     if (input.workUnitDepartmentMismatch) {
         return "Work unit does not belong to the configured department on this link — verify routing before generating documents.";
     }
@@ -150,6 +156,10 @@ function canAutoOperationalize(
     }
     if (config.reviewRequiredExplicit) {
         reasons.push("explicit_review_required");
+        return { ok: false, reasons };
+    }
+    if (input.identityNameMismatchWithMatchedPerson) {
+        reasons.push("identity_name_mismatch");
         return { ok: false, reasons };
     }
     if (input.opportunityDedupStrategy === "ambiguous") {
@@ -210,6 +220,18 @@ export function resolveIntakeReviewDecision(input: ResolveIntakeReviewDecisionIn
     const confidence = deriveMatchConfidence(input);
     const reasons: string[] = [];
     const legacyNeedsReview = legacyBaselineNeedsReview(input);
+
+    if (input.identityNameMismatchWithMatchedPerson) {
+        reasons.push("identity_name_mismatch");
+        return {
+            needsReview: true,
+            reviewMode: config.reviewMode,
+            confidence: "low",
+            reasons,
+            autoOperationalized: false,
+            reviewReason: buildReviewReason(input, reasons),
+        };
+    }
 
     if (config.reviewMode === "required" || config.reviewRequiredExplicit) {
         if (legacyNeedsReview || config.reviewRequiredExplicit) {

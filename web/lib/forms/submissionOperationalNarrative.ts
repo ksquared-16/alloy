@@ -49,6 +49,9 @@ export function submissionCreatedOrMatchedSummary(row: SubmissionInboxRow): stri
     const path = typeof m.intake_resolution_path === "string" ? m.intake_resolution_path.trim() : "";
 
     if (match === "attached_existing" || path === "matched_email") {
+        if (m.intake_identity_name_mismatch === true) {
+            return "Needs review: Possible existing family match";
+        }
         return "Matched: Existing enrollment lead";
     }
     if (match === "ambiguous" || path === "ambiguous_opportunity" || path === "ambiguous_contact") {
@@ -107,7 +110,19 @@ export function deriveSubmissionOperationalNarrative(row: SubmissionInboxRow): S
         };
     }
 
-    if (path === "created_records" || (path === "matched_email" && match === "created")) {
+    if (m.intake_identity_name_mismatch === true) {
+        const submitted = submissionFamilyLabel(row);
+        const matched =
+            typeof m.intake_matched_person_display_name === "string" ?
+                m.intake_matched_person_display_name.trim()
+            :   null;
+        headline = "Possible existing family match";
+        detail =
+            submitted && matched ?
+                `Submitted as “${submitted}”, but email/phone matches “${matched}” in CRM — confirm before continuing.`
+            :   "Submitted name differs from the existing family on this email or phone — confirm before continuing.";
+        operatorAction = "Review family match";
+    } else if (path === "created_records" || (path === "matched_email" && match === "created")) {
         headline = "New enrollment lead created";
         detail = "Parent, family, and enrollment lead were set up from this submission.";
         operatorAction = needsReview ? "Review intake and continue enrollment" : "Continue enrollment";

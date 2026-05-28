@@ -4,6 +4,7 @@ import {
     normalizeIntakeEmail,
     normalizeIntakePhone,
     phoneLookupVariants,
+    submittedIdentityMatchesPersonRecord,
 } from "@/lib/forms/intake/intakePersonMatch";
 
 describe("intakePersonMatch", () => {
@@ -75,5 +76,32 @@ describe("intakePersonMatch", () => {
                 phoneMatchIds: [],
             }).kind
         ).toBe("no_match");
+    });
+
+    it("submittedIdentityMatchesPersonRecord requires exact name match when both sides present", () => {
+        expect(
+            submittedIdentityMatchesPersonRecord({
+                submittedFirstName: "Jane",
+                submittedLastName: "Doe",
+                personFirstName: "Jane",
+                personLastName: "Doe",
+            })
+        ).toBe(true);
+        expect(
+            submittedIdentityMatchesPersonRecord({
+                submittedFirstName: "Jane",
+                submittedLastName: "Smith",
+                personFirstName: "Jane",
+                personLastName: "Doe",
+            })
+        ).toBe(false);
+        expect(
+            submittedIdentityMatchesPersonRecord({
+                submittedFirstName: "Jane",
+                submittedLastName: "Doe",
+                personFirstName: "jane",
+                personLastName: "DOE",
+            })
+        ).toBe(true);
     });
 });

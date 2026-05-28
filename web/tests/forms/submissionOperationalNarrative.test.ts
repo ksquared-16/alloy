@@ -78,4 +78,22 @@ describe("submissionOperationalNarrative sprint closeout", () => {
         ]);
         expect(sorted[0]?.id).toBe("new");
     });
+
+    it("explains possible existing family match when submitted name differs", () => {
+        const narrative = deriveSubmissionOperationalNarrative(
+            row({
+                payload: {
+                    values: { guardian_full_name: "Jane Smith" },
+                    meta: {
+                        intake_identity_name_mismatch: true,
+                        intake_matched_person_display_name: "Jane Doe",
+                        intake_needs_review: true,
+                    },
+                },
+            })
+        );
+        expect(narrative.headline).toMatch(/Possible existing family match/i);
+        expect(narrative.detail).toContain("Jane Smith");
+        expect(narrative.detail).toContain("Jane Doe");
+    });
 });

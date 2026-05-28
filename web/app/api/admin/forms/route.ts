@@ -11,15 +11,17 @@ import { allocateUniqueKey, slugKeyFromDisplayName } from "@/lib/forms/adminGene
 import { jsonData, jsonError } from "@/lib/admin/forms/formsAdminResponses";
 
 /** GET /api/admin/forms — list form definitions for org. */
-export async function GET() {
+export async function GET(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+
+    const includeArchived = request.nextUrl.searchParams.get("include_archived") === "true";
 
     const supabase = createAdminClient();
     const { data, error } = await dbListFormDefinitions(supabase, ctx.orgId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    const forms = data ?? [];
+    const forms = (data ?? []).filter((row) => includeArchived || (row as { is_active?: boolean }).is_active !== false);
     if (forms.length === 0) {
         return jsonData([]);
     }
