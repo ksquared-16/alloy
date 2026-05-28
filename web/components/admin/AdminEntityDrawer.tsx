@@ -96,6 +96,7 @@ import {
     type EntityDrawerFieldConfig,
 } from "@/lib/entityPresentation";
 import { OpportunityIntakeSourceSection } from "@/components/admin/opportunity/OpportunityIntakeSourceSection";
+import PersonDrawerCompactOverview from "@/components/admin/entity/PersonDrawerCompactOverview";
 import PersonEmployeePlacementSection from "@/components/admin/entity/PersonEmployeePlacementSection";
 import { readPersonEmployeePlacementValues } from "@/lib/admin/personEmployeePlacementFields";
 import {
@@ -188,6 +189,7 @@ import { adminEntityRefetchShouldBlockDrawerShell } from "@/lib/ui-v2/adminV2Ent
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { useDrawerSectionIntersection } from "@/lib/admin/drawer/useDrawerSectionIntersection";
 import { peekDrawerEntitySnapshot, putDrawerEntitySnapshot } from "@/lib/admin/drawerEntitySnapshotCache";
+import { prefetchPersonDrawerSnapshot } from "@/lib/admin/prefetchPersonDrawerSnapshot";
 import {
     opportunityDrawerEnrichmentLayoutReady as computeOpportunityDrawerEnrichmentLayoutReady,
     opportunityDrawerFirstPaintActive as computeOpportunityDrawerFirstPaintActive,
@@ -1985,6 +1987,12 @@ export default function AdminEntityDrawer() {
             .catch((e) => setError(e.message))
             .finally(() => setLoading(false));
     }, [data, drawer.type, drawer.id, drawer.jobRecordSurface, error, timingEnabled, markTiming]);
+
+    useEffect(() => {
+        if (!drawer.type || !drawer.id || drawer.id === "new") return;
+        if (!data || (data as { _create?: boolean })._create) return;
+        putDrawerEntitySnapshot(drawer.type, drawer.id, data as Record<string, unknown>);
+    }, [drawer.type, drawer.id, data]);
 
     useEffect(() => {
         if (!timingEnabled) return;
@@ -6793,7 +6801,13 @@ export default function AdminEntityDrawer() {
                                                                 : drawer.type === "persons"
                                                                 ? (overviewData as { _create?: boolean })._create
                                                                     ? "New Person"
-                                                                    : `Person: ${(overviewData._person_name as string) || [overviewData.first_name, overviewData.last_name].filter(Boolean).join(" ") || (drawer.id ?? "").slice(0, 8) + "…"}`
+                                                                    : String(
+                                                                          (overviewData._person_name as string) ||
+                                                                              [overviewData.first_name, overviewData.last_name]
+                                                                                  .filter(Boolean)
+                                                                                  .join(" ") ||
+                                                                              "Person"
+                                                                      ).trim() || "Person"
                                                 : drawer.type === "documents"
                                                     ? `Document: ${String((overviewData as { name?: string | null }).name ?? "").trim() || String((overviewData as { original_filename?: string | null }).original_filename ?? "").trim() || `${(drawer.id ?? "").slice(0, 8)}…`}`
                                                     : drawer.type === "subscriptions"
@@ -7364,9 +7378,16 @@ export default function AdminEntityDrawer() {
         const defs = (overviewData._field_definitions as { is_visible_in_drawer?: boolean }[] | undefined) ?? [];
         return defs.some((d) => d.is_visible_in_drawer !== false);
     }, [overviewData]);
+    const usePersonCompactOverview =
+        drawer.type === "persons" &&
+        !!drawer.id &&
+        drawer.id !== "new" &&
+        overviewData != null &&
+        !(overviewData as { _create?: boolean })._create;
     const useConfigDrivenOverview =
         !!presentationType &&
         !(overviewData as { _create?: boolean })?._create &&
+        !usePersonCompactOverview &&
         (hasFieldDefsForOverview ||
             (!!presentationConfig?.drawer?.overviewSections?.length &&
                 presentationConfig.drawer.overviewSections.some((s) => s.fields && s.fields.length > 0)));
@@ -7411,18 +7432,7 @@ export default function AdminEntityDrawer() {
         // control-flow narrowing weirdness in very large files. Keep a widened local copy.
         const drawerType = drawer.type as AdminDrawerEntityType;
         if (drawer.type === "persons" && drawer.id && drawer.id !== "new" && !(d as { _create?: boolean })._create) {
-            return {
-                employee_placement: (
-                    <PersonEmployeePlacementSection
-                        personId={drawer.id}
-                        initialValues={readPersonEmployeePlacementValues(d)}
-                        canMutate={!!canMutate}
-                        onPersonUpdated={(json) => {
-                            setData((prev) => (prev ? { ...prev, ...json } : prev));
-                        }}
-                    />
-                ),
-            };
+            return {};
         }
         if (drawer.type === "contacts") {
             const customerId = d.customer_id as string | null | undefined;
@@ -8254,8 +8264,10 @@ export default function AdminEntityDrawer() {
                         onOpenChild={(row) => {
                             const cm = row.customer_member_id?.trim() ?? "";
                             if (!cm || cm.startsWith("metadata_child:")) return;
-                            if (row.person_id) openDrawer({ type: "persons", id: row.person_id });
-                            else openDrawer({ type: "customer_members", id: cm });
+                            if (row.person_id) {
+                                prefetchPersonDrawerSnapshot(row.person_id);
+                                openDrawer({ type: "persons", id: row.person_id });
+                            } else openDrawer({ type: "customer_members", id: cm });
                         }}
                     />
                 );
@@ -12854,6 +12866,21 @@ export default function AdminEntityDrawer() {
                                 {drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? opportunityIntakeSourceNode : null}
                                 {drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? opportunityQuoteSummaryNode : null}
                                 {drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? opportunityQuoteIntakeNode : null}
+                                {usePersonCompactOverview && drawer.id ? (
+                                    <PersonDrawerCompactOverview
+                                        personId={drawer.id}
+                                        data={entityDrawerOverviewData}
+                                        canMutate={!!canMutate}
+                                        relationshipsSlot={overviewCustomContent.relationships}
+                                        onPersonUpdated={(json) => {
+                                            setData((prev) => (prev ? { ...prev, ...json } : prev));
+                                            putDrawerEntitySnapshot("persons", drawer.id!, {
+                                                ...entityDrawerOverviewData,
+                                                ...json,
+                                            });
+                                        }}
+                                    />
+                                ) : (
                                 <EntityDrawerOverview
                                     entityType={presentationType}
                                     data={entityDrawerOverviewData}
@@ -12892,6 +12919,7 @@ export default function AdminEntityDrawer() {
                                     fieldPolicyChromeByKey={overviewFieldPolicyProps.fieldPolicyChromeByKey}
                                     fieldLabelByKey={overviewFieldPolicyProps.fieldLabelByKey}
                                 />
+                                )}
                                 {drawer.type === "opportunities" &&
                                     !opportunityInquiryWorkflowDrawer &&
                                     drawer.id &&

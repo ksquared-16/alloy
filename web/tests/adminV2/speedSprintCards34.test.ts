@@ -56,8 +56,9 @@ describe("AdminV2 speed sprint Cards 3–4", () => {
         expect(read("app/adminV2/workspace/dept/[departmentId]/page.tsx")).toContain("logPrefetchAdminV2");
     });
 
-    it("canonical WU bootstrap uses primary_row_limit 8", () => {
-        expect(read("lib/adminV2/workUnitBootstrapClientSession.ts")).toContain('primary_row_limit: "8"');
+    it("canonical WU bootstrap uses primary_row_limit aligned with queue fetch min", () => {
+        expect(read("lib/adminV2/workUnitBootstrapClientSession.ts")).toContain("WORK_UNIT_QUEUE_ROWS_FETCH_MIN");
+        expect(read("lib/adminV2/workUnitBootstrapClientSession.ts")).toContain("primary_row_limit: String(WORK_UNIT_QUEUE_ROWS_FETCH_MIN)");
     });
 
     it("WU bootstrap uses queue_reveal preview rows", () => {
@@ -76,7 +77,7 @@ describe("AdminV2 speed sprint Cards 3–4", () => {
         expect(read("app/api/admin/work-units/[id]/operational-bootstrap/route.ts")).toContain(
             "loadWorkUnitOperationalBootstrapCached"
         );
-        expect(read("lib/adminV2/workUnitBootstrapClientSession.ts")).toContain('primary_row_limit: "8"');
+        expect(read("lib/adminV2/workUnitBootstrapClientSession.ts")).toContain("WORK_UNIT_QUEUE_ROWS_FETCH_MIN");
     });
 
     it("queue rows route uses single admin route gate", () => {

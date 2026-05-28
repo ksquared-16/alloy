@@ -1,5 +1,7 @@
 "use client";
 
+import { prefetchPersonDrawerSnapshot } from "@/lib/admin/prefetchPersonDrawerSnapshot";
+
 import { formatDate } from "@/lib/adminFormatters";
 import {
     buildCustomerMemberPatch,
@@ -435,6 +437,21 @@ export default function OpportunityInquiryChildrenSection({
             const ocmId = await resolveOcmIdForRow(row);
             await patchOpportunityCustomerMemberFromInquiryChild(ocmId, patch);
             markRowSaveState(row.id, "saved");
+            const oppId = opportunityId?.trim() ?? "";
+            const affectsWaitlist = Object.keys(patch).some((k) =>
+                ["location_id", "program_room_cohort_key", "desired_program_type", "outcome_status_key"].includes(k)
+            );
+            if (oppId && affectsWaitlist && typeof window !== "undefined") {
+                window.dispatchEvent(
+                    new CustomEvent("adminv2:opportunity-updated", {
+                        detail: {
+                            id: oppId,
+                            action_key: "inquiry_child_placement_scope",
+                            affects_waitlist: true,
+                        },
+                    })
+                );
+            }
         } catch (e) {
             markRowSaveState(row.id, "error", (e as Error).message);
         }
@@ -1104,6 +1121,12 @@ export default function OpportunityInquiryChildrenSection({
                                     {onOpenChild ? (
                                         <button
                                             type="button"
+                                            onMouseEnter={() => {
+                                                if (r.person_id) prefetchPersonDrawerSnapshot(r.person_id);
+                                            }}
+                                            onFocus={() => {
+                                                if (r.person_id) prefetchPersonDrawerSnapshot(r.person_id);
+                                            }}
                                             onClick={() =>
                                                 onOpenChild({
                                                     person_id: r.person_id,

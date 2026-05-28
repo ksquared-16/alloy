@@ -1086,8 +1086,15 @@ function WorkUnitQueueLane({
 
   useLayoutEffect(() => {
     if (!hasV2PlacementRows || v2PlacementCollapseInitRef.current) return;
-    v2PlacementCollapseInitRef.current = true;
-    setCollapsedPlacementGroups(new Set());
+    const keys = new Set<string>();
+    for (const item of queue.items) {
+      const k = workUnitSectionKey(item);
+      if (k) keys.add(k);
+    }
+    if (keys.size > 0) {
+      setCollapsedPlacementGroups(keys);
+      v2PlacementCollapseInitRef.current = true;
+    }
   }, [hasV2PlacementRows, queue.items]);
 
   const placementLaneHint = useMemo(() => {

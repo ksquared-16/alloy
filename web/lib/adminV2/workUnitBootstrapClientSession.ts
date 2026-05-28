@@ -1,4 +1,5 @@
 import { appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClient";
+import { WORK_UNIT_QUEUE_ROWS_FETCH_MIN } from "@/lib/adminV2/workUnitQueueRowsFetchLimit";
 import { recordAdminV2JankBudgetRequest } from "@/lib/perf/adminV2JankBudget";
 import { logPrefetchAdminV2 } from "@/lib/adminV2/adminV2PrefetchInstrumentation";
 import { ADMINV2_ABOVE_FOLD_CACHE_TTL_MS } from "@/lib/adminV2/adminV2AboveFoldCacheContracts";
@@ -43,7 +44,7 @@ export function buildCanonicalWorkUnitOperationalBootstrapUrl(params: WorkUnitBo
         summary_mode: "all",
         limit: "3",
         omit_total_count: "true",
-        primary_row_limit: "8",
+        primary_row_limit: String(WORK_UNIT_QUEUE_ROWS_FETCH_MIN),
         defer_bundle: "false",
     });
     const focus = params.focusQueue?.trim();

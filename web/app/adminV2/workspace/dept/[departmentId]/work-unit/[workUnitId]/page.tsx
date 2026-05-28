@@ -2076,6 +2076,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                     count: pl.items.length,
                                     preview: [],
                                 };
+                                const pillCount =
+                                    typeof summaryForLane?.count === "number" && summaryForLane.count > 0
+                                        ? summaryForLane.count
+                                        : pl.items.length;
+                                const inlineIncomplete = pillCount > pl.items.length;
                                 const primaryPayload: QueueItemsResult = {
                                     queue: {
                                         key: queueMeta.key,
@@ -2086,16 +2091,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                         display: queueMeta.display,
                                     },
                                     items: pl.items,
-                                    total: pl.items.length,
-                                    limit: 20,
+                                    total: inlineIncomplete ? pillCount : pl.items.length,
+                                    limit: pillCount,
                                     offset: 0,
                                     ...(pl.total_omitted ? { total_omitted: true } : {}),
                                 };
                                 setQueueItems(primaryPayload);
                                 setQueueItemsError(null);
                                 setQueueItemsRoute(pl.route);
-                                setQueueItemsLoading(false);
-                                suppressQueueFetchEffectOnceRef.current = true;
+                                setQueueItemsLoading(inlineIncomplete);
+                                suppressQueueFetchEffectOnceRef.current = !inlineIncomplete;
                                 const primaryAb =
                                     authoritativePrimary.trim().toLowerCase() === "needs_attention"
                                         ? abInit
@@ -2110,6 +2115,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 );
                                 primaryLaneRowsSettledOnceRef.current = true;
                                 primaryLaneHydratedInline = true;
+                                if (inlineIncomplete) {
+                                    void fetchQueueItemsRef.current(workUnitId, pillKey, qs, {
+                                        ...(authoritativePrimary.trim().toLowerCase() === "needs_attention" &&
+                                        abInit
+                                            ? { attentionBucketOverride: abInit }
+                                            : {}),
+                                    });
+                                }
                                 if (typeof window !== "undefined" && typeof performance !== "undefined") {
                                     const laneAt = performance.now();
                                     alloyPerfSet("work_unit_primary_lane_ready", laneAt);
@@ -3003,6 +3016,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
         const tabCount =
             activeQueue?.counts_deferred === true ? undefined : typeof activeQueue?.count === "number" ? activeQueue.count : undefined;
+        const siteScopedLoadedTotal =
+            queueItems != null &&
+            !queueItemsError &&
+            !queueItemsLoading &&
+            queueItems.total_omitted !== true &&
+            typeof queueItems.total === "number"
+                ? queueItems.total
+                : undefined;
         const reconcileListEmptyVsTab =
             queueItems != null &&
             !queueItemsError &&
@@ -3021,11 +3042,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
             ? unmappedPillCount
             : reconcileListEmptyVsTab
               ? 0
-              : queueItems != null
-                ? queueItems.total_omitted === true
-                    ? tabCount
-                    : queueItems.total
-                : tabCount;
+              : siteScopedLoadedTotal != null
+                ? siteScopedLoadedTotal
+                : queueItems != null
+                  ? queueItems.total_omitted === true
+                      ? tabCount
+                      : queueItems.total
+                  : tabCount;
         const rowTotalDisplay = effectiveRowTotal == null ? "—" : String(effectiveRowTotal);
         const activeGrainPres = activeQueue
             ? resolveQueueGrainPresentation(activeQueue, normalizedQueueDef)
@@ -3141,6 +3164,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         opportunityQueueRowResolved,
         normalizedQueueDef,
         recordFilters,
+        selectedSiteId,
     ]);
 
     const queueUiPresentationFlags = useMemo(
