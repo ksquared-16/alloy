@@ -82,9 +82,14 @@
   --ws-type-dept-tile-desc-size: 11.5px;
 }
 
-/* Work-unit surface: tighter vertical rhythm. Queue list height follows content — `.adminv2-workspace-scroll-surface` owns scroll. */
+/* Work-unit surface: tighter vertical rhythm; queue records scroll inside lane shell on full route (`.adminv2-ws-work-unit`). */
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 {
   --ws-dept-section-gap: 12px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 {
+  /* Reserve header/control deck; records scroll inside `.adminv2-ws-wu-queue-list-shell`. */
+  --ws-wu-queue-records-scroll-max-height: min(calc(100vh - 20rem), 720px);
 }
 
 /* Work-unit route loading: subtle enrollment/dept pine accent (quieter than department cold shell). */
@@ -5946,8 +5951,26 @@
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-shell.adminv2-ws-dept-qsec--primary {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   border-bottom: none;
   padding-bottom: 6px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 .adminv2-ws-wu-queue-shell.adminv2-ws-dept-qsec--primary > :not(.adminv2-ws-wu-queue-list-shell) {
+  flex-shrink: 0;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 .adminv2-ws-wu-queue-list-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: var(--ws-wu-queue-records-scroll-max-height);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-count-badge {
@@ -6788,7 +6811,7 @@
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-list.adminv2-ws-queue-list {
-  max-height: var(--ws-dept-primary-queue-list-max-height);
+  max-height: none;
   overflow-y: visible;
   padding-right: 2px;
 }
@@ -8324,7 +8347,7 @@
 }
 
 /*
- * Work-unit route only (`.adminv2-ws-work-unit` shell): record-card typography; queue list height follows content (workspace scrollport scrolls).
+ * Work-unit route only (`.adminv2-ws-work-unit` shell): record-card typography + bounded records scroll shell (header/pills stable).
  * Next-step strip is slightly quieter than title/contact/body; other card copy one notch up vs previous pass.
  */
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-count-badge {

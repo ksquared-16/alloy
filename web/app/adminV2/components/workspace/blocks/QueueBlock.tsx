@@ -1119,9 +1119,6 @@ function WorkUnitQueueLane({
                 aria-label={queue.countBadgeAriaLabel ?? `${queue.countBadge} in queue`}
               >
                 {queue.countBadge}
-                {queue.countBadgeUnit ? (
-                  <span className="adminv2-ws-wu-queue-count-unit">{queue.countBadgeUnit}</span>
-                ) : null}
               </span>
             ) : null}
           </div>
@@ -1140,7 +1137,7 @@ function WorkUnitQueueLane({
       ) : null}
       <div
         ref={listShellRef}
-        className="relative min-h-0 min-w-0"
+        className="adminv2-ws-wu-queue-list-shell relative min-h-0 min-w-0"
         style={refreshMinHeightPx ? { minHeight: refreshMinHeightPx } : undefined}
       >
         {queue.rowsRefreshing ? (
