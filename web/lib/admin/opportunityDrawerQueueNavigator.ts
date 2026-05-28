@@ -1,6 +1,7 @@
 import type { WorkUnitQueueSelection } from "@/lib/adminV2/workUnitQueueSelection";
 import {
     workUnitActivePillKeyFromSelection,
+    workUnitQueuePillKeysEquivalent,
     workUnitQueueSelectionFetchQueueKey,
 } from "@/lib/adminV2/workUnitQueueSelection";
 import {
@@ -126,10 +127,13 @@ export function opportunityDrawerNavigatorMatchesWorkUnitSelection(params: {
     selected_pill_key: string | null;
     loaded_queue_key: string | null;
     attention_bucket_key: string;
+    work_unit?: { queue_definition?: unknown } | null;
 }): boolean {
+    const wu = params.work_unit ?? null;
     const pill = workUnitActivePillKeyFromSelection(params.selection);
-    if (params.selected_pill_key?.trim() !== pill) return false;
-    const fetchKey = workUnitQueueSelectionFetchQueueKey(params.selection);
+    const selectedPill = params.selected_pill_key?.trim() ?? "";
+    if (selectedPill !== pill && !workUnitQueuePillKeysEquivalent(wu, selectedPill, pill)) return false;
+    const fetchKey = workUnitQueueSelectionFetchQueueKey(params.selection, wu);
     if (params.loaded_queue_key?.trim() !== fetchKey) return false;
     if (fetchKey.toLowerCase() === "needs_attention") {
         return (params.attention_bucket_key ?? "").trim() === (params.selection.attentionBucketKey ?? "").trim();

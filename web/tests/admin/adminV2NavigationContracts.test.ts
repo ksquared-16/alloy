@@ -129,9 +129,9 @@ describe("AdminDrawerProvider pathname close", () => {
 });
 
 describe("Work-unit queue tab shallow routing", () => {
-    it("queue tabs are local state only (no shallow URL sync on work-unit page)", () => {
+    it("queue tabs sync lane query via shallow replaceState (no useSearchParams subscription)", () => {
         const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-        expect(page).not.toContain("scheduleWorkUnitLaneUrlSync");
+        expect(page).toContain("scheduleWorkUnitLaneUrlSync");
         expect(page).not.toMatch(/\buseSearchParams\s*\(/);
         expect(page).toContain("readWorkUnitInitialLocationParams");
     });

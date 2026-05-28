@@ -11,6 +11,9 @@ import {
     resolveWorkUnitQueueCanonicalKey,
     resolveWorkUnitQueueKey,
     workUnitActivePillKeyFromSelection,
+    workUnitQueuePillKeySelected,
+    workUnitQueuePillKeysEquivalent,
+    workUnitQueueSelectionFetchQueueKey,
     workUnitQueueSelectionFromLocation,
     workUnitQueueSelectionFromPillKey,
     workUnitQueueSelectionToSearchParams,
@@ -59,6 +62,12 @@ describe("WorkUnitQueueSelection", () => {
         const summaries = [{ key: "contact_attempted" }, { key: "new_inquiry" }];
         expect(resolveAuthoritativeWorkUnitQueueKey(wu, summaries, "enrolled")).toBe("enrolled");
         expect(resolveAuthoritativeWorkUnitQueueKey(wu, summaries, "tour_scheduled")).toBe("tour_scheduled");
+    });
+
+    it("resolves v2 alias URL queue to canonical lane key for bootstrap parity", () => {
+        const wu = { queue_definition: RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2 };
+        const summaries = [{ key: "tours" }, { key: "new_leads" }];
+        expect(resolveAuthoritativeWorkUnitQueueKey(wu, summaries, "tour_scheduled")).toBe("tours");
     });
 
     it("builds dept→WU href with queue and attention_bucket", () => {
@@ -115,7 +124,7 @@ describe("WorkUnitQueueSelection", () => {
             resolvedKey: "enrollment_offers",
             matchedBy: "alias",
         });
-        expect(resolveAuthoritativeWorkUnitQueueKey(wu, [{ key: "waitlist" }], "waitlisted")).toBe("waitlisted");
+        expect(resolveAuthoritativeWorkUnitQueueKey(wu, [{ key: "waitlist" }], "waitlisted")).toBe("waitlist");
     });
 
     it("resolves tour_scheduled alias to tours for fetch and summary lookup", () => {
@@ -126,6 +135,18 @@ describe("WorkUnitQueueSelection", () => {
         ).toEqual({ queueKey: "tours" });
         const summaries = [{ key: "tours", count: 3 }];
         expect(findQueueSummaryForSelection(summaries, wu, "tour_scheduled")).toEqual(summaries[0]);
+    });
+
+    it("treats alias and canonical pill keys as equivalent", () => {
+        const wu = { queue_definition: RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2 };
+        expect(workUnitQueuePillKeysEquivalent(wu, "tour_scheduled", "tours")).toBe(true);
+        expect(workUnitQueuePillKeySelected("tour_scheduled", "tours", "", wu)).toBe(true);
+        expect(
+            workUnitQueueSelectionFetchQueueKey(
+                { workUnitId: "wu-1", queueKey: "tour_scheduled", source: "dept_queue" },
+                wu
+            )
+        ).toBe("tours");
     });
 });
 

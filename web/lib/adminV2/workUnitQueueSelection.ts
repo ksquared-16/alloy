@@ -144,9 +144,15 @@ export function buildWorkUnitQueueSelectionHref(
     return appendWorkspaceSiteToPath(href, selectedSiteId ?? null);
 }
 
-/** API queue route key (never synthetic pill keys). */
-export function workUnitQueueSelectionFetchQueueKey(selection: WorkUnitQueueSelection): string {
-    return selection.queueKey.trim();
+/** API queue route key (never synthetic pill keys). Resolves v2 aliases to canonical lane keys. */
+export function workUnitQueueSelectionFetchQueueKey(
+    selection: Pick<WorkUnitQueueSelection, "queueKey">,
+    wu?: { queue_definition?: unknown } | null
+): string {
+    const q = selection.queueKey.trim();
+    if (!q || q.toLowerCase() === "needs_attention") return q;
+    if (wu?.queue_definition) return resolveWorkUnitQueueCanonicalKey(wu, q);
+    return q;
 }
 
 export type WorkUnitQueueSummaryCountPatch = {
@@ -161,11 +167,26 @@ export type WorkUnitQueueSummaryCountPatch = {
     preview?: unknown[];
 };
 
+/** True when two pill/queue keys refer to the same work-unit lane (exact or v2 alias). */
+export function workUnitQueuePillKeysEquivalent(
+    wu: { queue_definition?: unknown } | null | undefined,
+    a: string | null | undefined,
+    b: string | null | undefined
+): boolean {
+    const left = (a ?? "").trim();
+    const right = (b ?? "").trim();
+    if (!left || !right) return false;
+    if (left === right) return true;
+    if (!wu?.queue_definition) return false;
+    return resolveWorkUnitQueueCanonicalKey(wu, left) === resolveWorkUnitQueueCanonicalKey(wu, right);
+}
+
 /** Whether a header chip pill should render as selected (dept URL, WU pill, or legacy needs_attention + bucket). */
 export function workUnitQueuePillKeySelected(
     selectedPillKey: string | null,
     chipPillKey: string,
-    attentionBucketKey: string
+    attentionBucketKey: string,
+    wu?: { queue_definition?: unknown } | null
 ): boolean {
     const selected = (selectedPillKey ?? "").trim();
     const chip = chipPillKey.trim();
@@ -185,6 +206,7 @@ export function workUnitQueuePillKeySelected(
         return false;
     }
 
+    if (workUnitQueuePillKeysEquivalent(wu, selected, chip)) return true;
     return selected === chip;
 }
 
@@ -374,7 +396,7 @@ export function resolveAuthoritativeWorkUnitQueueKey(
 ): string | null {
     const qTrim = explicitQueueKey.trim();
     if (qTrim && queueKeyDefinedOnWorkUnit(wu, qTrim)) {
-        return qTrim;
+        return resolveWorkUnitQueueCanonicalKey(wu, qTrim);
     }
     if (qTrim && summaries?.some((x) => x.key === qTrim)) {
         return qTrim;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2 } from "@/lib/config/enrollmentPipelineQueueDefinitionV2";
 import { buildWorkUnitAboveFoldRenderModel } from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/buildWorkUnitAboveFoldRenderModel";
 import {
     mergeWorkUnitQueueSummaryCounts,
@@ -218,5 +219,35 @@ describe("workUnitQueuePillPolish", () => {
         expect(model.header.show_other_pill).toBe(false);
         expect(model.header.other_pill).toBeNull();
         expect(model.header.active_queue_description).toBeNull();
+    });
+
+    it("v2 alias pill renders selected when URL uses tour_scheduled", () => {
+        const wu = RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2;
+        const model = buildWorkUnitAboveFoldRenderModel({
+            work_unit_shell_ready: true,
+            queue_summaries: [
+                {
+                    key: "tours",
+                    label: "Tours",
+                    priority: "standard",
+                    count: 2,
+                },
+            ],
+            queue_summaries_error: null,
+            queue_pill_sections: null,
+            queue_tab_placeholders: null,
+            selected_queue_key: "tour_scheduled",
+            attention_bucket_key: "",
+            lane_unmapped_only: false,
+            all_records_queue_key: null,
+            other_pill_section_key: null,
+            unmapped_pill_count: null,
+            enrollment_right_rail_resolved: null,
+            queue_items_loading: false,
+            queue_items_ready: true,
+            queue_items_error: null,
+            queue_definition: wu,
+        });
+        expect(model.header.sections[0]?.chips[0]?.selected).toBe(true);
     });
 });

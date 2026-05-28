@@ -3,7 +3,10 @@ import { mergeEnrollmentRightRailActions } from "@/lib/workspace/viewModels/enro
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { ActionsVm } from "@/lib/ui-v2/workspace-types";
 import { ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT } from "@/lib/ui-v2/adminV2LoadingGeometry";
-import { workUnitQueuePillKeySelected } from "@/lib/adminV2/workUnitQueueSelection";
+import {
+    findQueueSummaryForSelection,
+    workUnitQueuePillKeySelected,
+} from "@/lib/adminV2/workUnitQueueSelection";
 import {
     buildQueueCountBadgePresentation,
     resolveQueueGrainPresentation,
@@ -62,6 +65,8 @@ export type BuildWorkUnitAboveFoldRenderModelInput = {
     queue_items_error: string | null;
     authoritative_badge_for_selected_tab?: number;
     reconcile_picker_count_zero?: boolean;
+    /** Raw work unit queue_definition for alias-aware pill selection. */
+    queue_definition?: unknown;
     /** v2 queue config for grain labels when summary metadata is partial (v1 compat execution). */
     normalized_queue_definition?: NormalizedQueueDefinitionDocument | null;
     /** When true, hide derived unmapped "Other" pill (config-driven enrollment polish). */
@@ -78,23 +83,31 @@ const EMPTY_ACTIONS: ActionsVm = {
 };
 
 function chipSelected(qKey: string, input: BuildWorkUnitAboveFoldRenderModelInput): boolean {
+    const wu = input.queue_definition ? { queue_definition: input.queue_definition } : null;
     if (
-        qKey.startsWith(WORK_UNIT_ATTENTION_BUCKET_PILL_PREFIX) ||
-        input.selected_queue_key?.startsWith(WORK_UNIT_ATTENTION_BUCKET_PILL_PREFIX) ||
-        input.selected_queue_key?.toLowerCase() === "needs_attention"
-    ) {
-        return workUnitQueuePillKeySelected(
+        !workUnitQueuePillKeySelected(
             input.selected_queue_key,
             qKey,
-            input.attention_bucket_key
-        );
+            input.attention_bucket_key,
+            wu
+        )
+    ) {
+        return false;
     }
-    return (
-        qKey === input.selected_queue_key &&
-        (!input.lane_unmapped_only ||
-            input.all_records_queue_key == null ||
-            qKey !== input.all_records_queue_key)
-    );
+    if (
+        input.lane_unmapped_only &&
+        input.all_records_queue_key != null &&
+        workUnitQueuePillKeySelected(
+            input.selected_queue_key,
+            input.all_records_queue_key,
+            input.attention_bucket_key,
+            wu
+        ) &&
+        workUnitQueuePillKeySelected(qKey, input.all_records_queue_key, input.attention_bucket_key, wu)
+    ) {
+        return false;
+    }
+    return true;
 }
 
 function chipCount(
@@ -235,9 +248,11 @@ export function buildWorkUnitAboveFoldRenderModel(
     const summaries = input.queue_summaries;
     const activeSummary =
         summaries && summaries.length > 0
-            ? (input.selected_queue_key
-                  ? summaries.find((q) => q.key === input.selected_queue_key) ?? summaries[0]
-                  : summaries[0])
+            ? findQueueSummaryForSelection(
+                  summaries,
+                  input.queue_definition ? { queue_definition: input.queue_definition } : null,
+                  input.selected_queue_key
+              ) ?? summaries[0]
             : null;
 
     const showOtherPill =

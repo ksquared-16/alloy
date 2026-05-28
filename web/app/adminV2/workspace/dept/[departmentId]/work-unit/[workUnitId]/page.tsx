@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useRouter } from "next/navigation";
-import { logAdminV2RouterNavigation } from "@/lib/adminV2/workUnitLaneQueryUrl";
+import { logAdminV2RouterNavigation, scheduleWorkUnitLaneUrlSync } from "@/lib/adminV2/workUnitLaneQueryUrl";
 import { readWorkUnitInitialLocationParams } from "@/lib/adminV2/workUnitInitialLocation";
 import {
     isExplicitWorkUnitQueueSelection,
@@ -14,8 +14,11 @@ import {
     workUnitBootstrapOwnershipFromSelection,
     mergeWorkUnitQueueSummaryCounts,
     resolveWorkUnitFetchQueueKeyFromPill,
+    resolveWorkUnitQueueKey,
+    workUnitQueuePillKeysEquivalent,
     workUnitQueueSelectionFromLocation,
     workUnitQueueSelectionFromPillKey,
+    workUnitQueueSelectionFetchQueueKey,
     type WorkUnitQueueSelection,
 } from "@/lib/adminV2/workUnitQueueSelection";
 import { logAdminV2NavDebug } from "@/lib/debug/adminV2NavDebug";
@@ -312,7 +315,11 @@ function resolveProvisionalQueueKey(wu: WorkUnitRow, qFromUrl: string): string |
         const ui = getQueueUiConfig(def);
         const keys = new Set(def.queues.map((q) => q.key));
         const qTrim = qFromUrl.trim();
-        if (qTrim && keys.has(qTrim)) return qTrim;
+        if (qTrim) {
+            const resolution = resolveWorkUnitQueueKey(wu, qTrim);
+            if (resolution.queue) return resolution.resolvedKey;
+            if (keys.has(qTrim)) return qTrim;
+        }
         const allKey = findAllRecordsQueueKey(def, ui);
         if (allKey && keys.has(allKey)) return allKey;
         const uiOrder = ui.sections.flatMap((s) => s.queue_keys);
@@ -342,7 +349,11 @@ function resolveNavTimeRowQueueKey(wu: WorkUnitRow, qFromUrl: string): string | 
         }
         const ui = getQueueUiConfig(def);
         const keys = new Set(def.queues.map((q) => q.key));
-        if (qTrim && keys.has(qTrim)) return qTrim;
+        if (qTrim) {
+            const resolution = resolveWorkUnitQueueKey(wu, qTrim);
+            if (resolution.queue) return resolution.resolvedKey;
+            if (keys.has(qTrim)) return qTrim;
+        }
         const fromDef = resolveProvisionalQueueKey(wu, "");
         if (fromDef && keys.has(fromDef)) return fromDef;
         if (keys.has(OPPORTUNITY_PIPELINE_TOTAL_FALLBACK_KEY)) return OPPORTUNITY_PIPELINE_TOTAL_FALLBACK_KEY;
@@ -1442,7 +1453,34 @@ export default function AdminV2OpportunityWorkUnitPage() {
             const unmappedActive = opts?.unmappedActive ?? false;
             const prevKey = selectedQueueKeyRef.current;
             const prevUnmapped = laneUnmappedOnlyRef.current;
-            if (prevKey === nextKey && prevUnmapped === unmappedActive) {
+            const wu = workUnitRef.current;
+            const sameQueue =
+                prevKey === nextKey ||
+                (wu?.queue_definition != null &&
+                    workUnitQueuePillKeysEquivalent(
+                        { queue_definition: wu.queue_definition },
+                        prevKey,
+                        nextKey
+                    ));
+            if (sameQueue && prevUnmapped === unmappedActive) {
+                if (prevKey !== nextKey && workUnitId) {
+                    setSelectedQueueKeyTraced("handleQueueTabChange", nextKey);
+                    routeQueueSelectionRef.current = workUnitQueueSelectionFromPillKey(workUnitId, nextKey);
+                    explicitRouteQueueLockedRef.current = false;
+                    const resolvedAlias = resolveWorkUnitFetchQueueKeyFromPill(
+                        nextKey,
+                        attentionBucketKeyRef.current,
+                        wu ? { queue_definition: wu.queue_definition } : undefined
+                    );
+                    const naAlias = resolvedAlias.queueKey.trim().toLowerCase() === "needs_attention";
+                    scheduleWorkUnitLaneUrlSync({
+                        queueKey: nextKey,
+                        unmappedActive,
+                        ...(naAlias ? { attentionBucket: attentionBucketKeyRef.current } : {}),
+                        caller: "handleQueueTabChange",
+                        workUnitId,
+                    });
+                }
                 return;
             }
             userLaneTouchedRef.current = true;
@@ -1451,14 +1489,24 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 pendingQueueTabPerfRef.current = true;
                 alloyPerfSet("queue_tab_change_start", performance.now());
             }
-            if (prevKey !== nextKey) {
+            if (!sameQueue) {
                 setSelectedQueueKeyTraced("handleQueueTabChange", nextKey);
             }
             if (prevUnmapped !== unmappedActive) {
                 setLaneUnmappedOnly(unmappedActive);
             }
-            const resolvedPill = resolveWorkUnitFetchQueueKeyFromPill(nextKey, attentionBucketKeyRef.current);
+            const resolvedPill = resolveWorkUnitFetchQueueKeyFromPill(
+                nextKey,
+                attentionBucketKeyRef.current,
+                wu ? { queue_definition: wu.queue_definition } : undefined
+            );
             const na = resolvedPill.queueKey.trim().toLowerCase() === "needs_attention";
+            const nextAttentionBucket =
+                resolvedPill.attentionBucketOverride !== undefined
+                    ? resolvedPill.attentionBucketOverride
+                    : na && !nextKey.startsWith(ATTENTION_BUCKET_PILL_PREFIX)
+                      ? ""
+                      : attentionBucketKeyRef.current;
             if (resolvedPill.attentionBucketOverride !== undefined) {
                 setAttentionBucketKey(resolvedPill.attentionBucketOverride);
             } else if (na && !nextKey.startsWith(ATTENTION_BUCKET_PILL_PREFIX)) {
@@ -1467,6 +1515,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
             if (workUnitId) {
                 routeQueueSelectionRef.current = workUnitQueueSelectionFromPillKey(workUnitId, nextKey);
                 explicitRouteQueueLockedRef.current = false;
+                scheduleWorkUnitLaneUrlSync({
+                    queueKey: nextKey,
+                    unmappedActive,
+                    ...(na ? { attentionBucket: nextAttentionBucket } : {}),
+                    caller: "handleQueueTabChange",
+                    workUnitId,
+                });
             }
             if (workUnitId) {
                 suppressQueueFetchEffectOnceRef.current = true;
@@ -1497,6 +1552,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
             setAttentionBucketKey(next);
             routeQueueSelectionRef.current = workUnitQueueSelectionFromPillKey(workUnitId, pillKey);
             explicitRouteQueueLockedRef.current = false;
+            scheduleWorkUnitLaneUrlSync({
+                queueKey: pillKey,
+                unmappedActive: false,
+                attentionBucket: next,
+                caller: "handleAttentionBucketSelect",
+                workUnitId,
+            });
             void fetchQueueItems(workUnitId, "needs_attention", null, {
                 attentionBucketOverride: next,
             });
@@ -1738,14 +1800,19 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     return;
                 }
                 bootstrapPrimaryRowKeyRef.current = primaryKey;
+                if (routeQueueSelectionRef.current) {
+                    routeQueueSelectionRef.current = {
+                        ...routeQueueSelectionRef.current,
+                        queueKey: primaryKey,
+                    };
+                }
                 const routeSel = routeQueueSelectionRef.current;
-                const pillKey =
-                    routeSel && routeSel.queueKey === primaryKey
-                        ? workUnitActivePillKeyFromSelection({
-                              ...routeSel,
-                              queueKey: primaryKey,
-                          })
-                        : primaryKey;
+                const pillKey = routeSel
+                    ? workUnitActivePillKeyFromSelection({
+                          ...routeSel,
+                          queueKey: primaryKey,
+                      })
+                    : primaryKey;
                 setSelectedQueueKeyTraced("bootstrapPrimaryLane", pillKey);
                 suppressQueueFetchEffectOnceRef.current = true;
                 const abForFetch = initialLocationRef.current.attentionBucket.trim();
@@ -1911,6 +1978,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
                         if (authoritativePrimary && !userLaneTouchedRef.current) {
                             bootstrapPrimaryRowKeyRef.current = authoritativePrimary;
+                            if (routeQueueSelectionRef.current) {
+                                routeQueueSelectionRef.current = {
+                                    ...routeQueueSelectionRef.current,
+                                    queueKey: authoritativePrimary,
+                                };
+                            }
                             const pillKey = routeQueueSelectionRef.current
                                 ? workUnitActivePillKeyFromSelection({
                                       ...routeQueueSelectionRef.current,
@@ -1926,7 +1999,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 Array.isArray(pl.items)
                             ) {
                                 bootstrapPrimaryRowFetchScheduledRef.current = true;
-                                const summaryForLane = qs.find((x) => x.key === authoritativePrimary);
+                                const summaryForLane =
+                                    findQueueSummaryForSelection(qs, wu, authoritativePrimary) ??
+                                    qs.find((x) => x.key === authoritativePrimary);
                                 const queueMeta = summaryForLane ?? {
                                     key: authoritativePrimary,
                                     label: authoritativePrimary,
@@ -3320,14 +3395,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 selected_pill_key: selectedQueueKeyRef.current,
                 loaded_queue_key: queueItems?.queue.key ?? null,
                 attention_bucket_key: attentionBucketKeyRef.current,
+                work_unit: workUnit ? { queue_definition: workUnit.queue_definition } : null,
             })
         ) {
             return null;
         }
-        const fetchQueueKey = selection.queueKey.trim();
+        const fetchQueueKey = workUnitQueueSelectionFetchQueueKey(
+            selection,
+            workUnit ? { queue_definition: workUnit.queue_definition } : null
+        );
         const summary =
-            queueSummaries?.find((q) => q.key === fetchQueueKey) ??
-            queueSummaries?.find((q) => q.key === selectedQueueKeyRef.current);
+            findQueueSummaryForSelection(queueSummaries, workUnit, selectedQueueKeyRef.current) ??
+            queueSummaries?.find((q) => q.key === fetchQueueKey);
         return buildOpportunityDrawerQueueNavigatorFromDisplayItems({
             work_unit_id: workUnit.id,
             department_id: departmentId,
@@ -3919,6 +3998,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             authoritative_badge_for_selected_tab: workUnitChipBadgeContext.authoritative_badge_for_selected_tab,
             reconcile_picker_count_zero: workUnitChipBadgeContext.reconcile_picker_count_zero === true,
             normalized_queue_definition: normalizedQueueDef,
+            queue_definition: workUnit?.queue_definition,
             suppress_other_pill: queueUiPresentationFlags.suppressOtherPill,
             suppress_active_queue_description: queueUiPresentationFlags.suppressActiveQueueDescription,
         });

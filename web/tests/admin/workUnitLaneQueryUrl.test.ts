@@ -3,6 +3,7 @@ import {
     buildWorkUnitLaneSearchParams,
     formatWorkUnitBrowserUrl,
     replaceWorkUnitBrowserSearch,
+    scheduleWorkUnitLaneUrlSync,
 } from "@/lib/adminV2/workUnitLaneQueryUrl";
 
 describe("workUnitLaneQueryUrl", () => {
@@ -44,5 +45,22 @@ describe("workUnitLaneQueryUrl", () => {
         const wrote = replaceWorkUnitBrowserSearch(sp, { caller: "test" });
         expect(wrote).toBe(true);
         expect(window.history.replaceState).toHaveBeenCalledWith({}, "", nextUrl);
+    });
+
+    it("scheduleWorkUnitLaneUrlSync persists tour_scheduled alias in address bar", () => {
+        vi.useFakeTimers();
+        scheduleWorkUnitLaneUrlSync({
+            queueKey: "tours",
+            unmappedActive: false,
+            caller: "test",
+            workUnitId: "w1",
+        });
+        vi.runAllTimers();
+        expect(window.history.replaceState).toHaveBeenCalledWith(
+            {},
+            "",
+            "/adminV2/workspace/dept/d1/work-unit/w1?queue=tours"
+        );
+        vi.useRealTimers();
     });
 });
