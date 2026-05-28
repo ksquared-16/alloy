@@ -404,4 +404,4 @@ Manual QA sign-off: **Tour Scheduling V1** is working as intended for the enroll
 
 ---
 
-Tour Scheduling V1 sprint **complete** (manual QA **May 2026**). **Phase 2 roadmap:** [`tour_scheduling_phase_2.md`](./tour_scheduling_phase_2.md).
+Tour Scheduling V1 sprint **complete** (manual QA **May 2026**). **Phase 2 Band A complete** (comms/reminders, May 2026): [`completed/tour_scheduling_phase2_band_a_closeout.md`](./completed/tour_scheduling_phase2_band_a_closeout.md). **Band B+ roadmap:** [`tour_scheduling_phase_2.md`](./tour_scheduling_phase_2.md).

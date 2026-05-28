@@ -1,6 +1,6 @@
 # Tour Scheduling Phase 2 — Band A Readiness (Implementation Lock)
 
-**Status:** Implementation-readiness audit — **no Band A code shipped by this document.**  
+**Status:** **CLOSED** — Band A shipped (Batches 1–6, May 2026). See **[`tour_scheduling_phase2_band_a_closeout.md`](./tour_scheduling_phase2_band_a_closeout.md)** for staging QA outcomes and operational learnings.  
 **Date:** 2026-05-27  
 **Parent:** [`tour_scheduling_phase2_foundation.md`](./tour_scheduling_phase2_foundation.md)  
 **Scope:** Band A only — Communications + Reminder Foundation (cards A1–A11).
@@ -727,7 +727,7 @@ void runTourCommsAfterBookingMutation(supabase, { booking, kind, previous }).cat
 
 ## Band A closeout (Batches 1–6 shipped)
 
-**Status:** Code complete — staging QA required before prod enable.
+**Status:** **Complete** — see **[`tour_scheduling_phase2_band_a_closeout.md`](./tour_scheduling_phase2_band_a_closeout.md)** for final QA outcomes, operational learnings, and Band B+ deferrals. Summary below retained for implementers.
 
 ### Shipped capabilities
 
@@ -845,7 +845,7 @@ Body/subject come from `body_snapshot` / `subject_snapshot` — **no template re
 
 **Prompt to start coding:**
 
-> Implement Tour Scheduling Phase 2 Band A **Batch 1** per `docs/sprints/05_2026/tour_scheduling_phase2_band_a_readiness.md` (A1, A2 migration). Do not hook `tourBookingService` until Batch 5.
+> Implement Tour Scheduling Phase 2 Band A **Batch 1** per `docs/sprints/05_2026/completed/tour_scheduling_phase2_band_a_readiness.md` (A1, A2 migration). Do not hook `tourBookingService` until Batch 5.
 
 ---
 
@@ -854,6 +854,7 @@ Body/subject come from `body_snapshot` / `subject_snapshot` — **no template re
 | Doc / path | Role |
 |------------|------|
 | [`tour_scheduling_phase2_foundation.md`](./tour_scheduling_phase2_foundation.md) | Band A scope + doctrine |
+| [`tour_scheduling_phase2_band_a_closeout.md`](./tour_scheduling_phase2_band_a_closeout.md) | Band A closeout + QA learnings |
 | [`docs/product/communications.md`](../../product/communications.md) | Canonical comms |
 | `web/lib/communications/communicationScheduledSendsService.ts` | Scheduled send processor |
 | `web/lib/communications/communicationScheduledSendProcessMetadata.ts` | Process-due metadata augment |
