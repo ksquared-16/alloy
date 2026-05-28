@@ -126,6 +126,7 @@ import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import { OpportunityInquiryTourDateBlock } from "@/components/admin/opportunity/tours/OpportunityInquiryTourDateBlock";
 import { FamilyContactsPanel, OppInquiryContactChannelsRow } from "@/components/admin/opportunity/FamilyContactsPanel";
 import EntityDrawerSection from "@/components/admin/entity/EntityDrawerSection";
+import EntityDrawerOverview from "@/components/admin/entity/EntityDrawerOverview";
 import JobPricingBreakdown from "@/components/admin/JobPricingBreakdown";
 import JobRrsOverviewTab from "@/components/admin/JobRrsOverviewTab";
 import { AdminDeleteConfirmModal } from "@/components/admin/AdminDeleteConfirmModal";

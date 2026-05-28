@@ -103,8 +103,22 @@ export function resolvePlacementCandidateCohortFromMember(input: {
     ocmMetadata?: Record<string, unknown> | null;
     candidateMetadata?: Record<string, unknown> | null;
     desiredProgramType?: string | null;
+    programRoomCohortKey?: string | null;
     dateOfBirth?: string | null;
 }): ResolveProgramRoomCohortResult {
+    const explicitCohort = (input.programRoomCohortKey ?? "").trim();
+    if (explicitCohort) {
+        const label =
+            (typeof safeMeta(input.ocmMetadata).program_room_group_label === "string" ?
+                String(safeMeta(input.ocmMetadata).program_room_group_label).trim()
+            :   "") || explicitCohort;
+        return {
+            program_room_cohort_key: explicitCohort,
+            program_room_group_label: label,
+            label_source: "ocm.program_room_cohort_key",
+            key_source: "ocm.program_room_cohort_key",
+        };
+    }
     return (
         resolveFromMemberSources(input) ??
         resolveProgramRoomCohort({
