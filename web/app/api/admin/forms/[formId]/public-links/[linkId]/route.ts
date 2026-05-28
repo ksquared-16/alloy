@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { dbGetPublicLinkForForm, dbGetVersion, dbUpdateFormPublicLinkForForm } from "@/lib/admin/forms/formsAdminDb";
+import { dbGetFormDefinition, dbGetPublicLinkForForm, dbGetVersion, dbUpdateFormPublicLinkForForm } from "@/lib/admin/forms/formsAdminDb";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
+import {
+    mergeRoutingDefaultsIntoMetadata,
+    resolveOrgIntakeRoutingDefaults,
+} from "@/lib/forms/intake/resolveOrgIntakeRoutingDefaults";
+import { readStoredOperationalIntent } from "@/lib/forms/operationalIntentTemplates";
+import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
 
 async function validatePinnedVersion(
     supabase: ReturnType<typeof createAdminClient>,
@@ -96,7 +102,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
                   ? body.name.trim()
                   : "";
         if (label) meta.label = label;
-        patch.metadata = meta;
+        const { data: form, error: formErr } = await dbGetFormDefinition(supabase, ctx.orgId, formId);
+        if (formErr) return NextResponse.json({ error: formErr.message }, { status: 500 });
+        const storedIntent = readStoredOperationalIntent(
+            (form as { metadata?: Record<string, unknown> } | null)?.metadata
+        );
+        if (storedIntent && storedIntent !== "custom" && linkRequiresLeadCapture(meta)) {
+            const routing = await resolveOrgIntakeRoutingDefaults(supabase, ctx.orgId, storedIntent);
+            patch.metadata = mergeRoutingDefaultsIntoMetadata(meta, routing);
+        } else {
+            patch.metadata = meta;
+        }
     } else {
         const labelOnly =
             typeof body.label === "string"

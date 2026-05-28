@@ -110,7 +110,7 @@ export async function mintPacketPublicLinkForAdmin(params: {
 
     const { data: formRow, error: formErr } = await supabase
         .from("form_definitions")
-        .select("id, key")
+        .select("id, key, metadata")
         .eq("id", first.form_definition_id)
         .eq("org_id", orgId)
         .maybeSingle();
@@ -118,6 +118,7 @@ export async function mintPacketPublicLinkForAdmin(params: {
     if (!formRow) return { ok: false, status: 404, message: "First packet step form not found" };
 
     const formKey = (formRow as { key: string }).key;
+    const formMetadata = (formRow as { metadata?: Record<string, unknown> }).metadata;
 
     let pinnedId: string | null | undefined = undefined;
     if (first.pinned_form_definition_version_id) {
@@ -164,7 +165,12 @@ export async function mintPacketPublicLinkForAdmin(params: {
             : {};
     delete clientMetadata.prefill_field_map;
 
-    const metadata = await mergePublicLinkMetadataForCreate(supabase, formKey, clientMetadata);
+    const metadata = await mergePublicLinkMetadataForCreate(supabase, {
+        orgId,
+        formKey,
+        formMetadata,
+        clientMetadata,
+    });
     metadata.form_context_mode = "packet";
     metadata.packet_definition_id = packetDefinitionId;
     if (metadata.packet_step_version_policy === undefined) {

@@ -59,6 +59,21 @@ describe("documentCompositionAuthoring FD-8/FD-9", () => {
         expect(baseSchema.document_composition).toBeUndefined();
     });
 
+    it("suppresses duplicate section heading when section title matches form title", () => {
+        const schema: FormSchemaV1 = {
+            ...baseSchema,
+            title: "Contact Us for More Details",
+            sections: [{ id: "main", title: "Contact Us for More Details", field_ids: ["child_first_name"] }],
+        };
+        const composition = buildDefaultDocumentComposition(schema);
+        const h2Blocks = composition.blocks.filter(
+            (b) => b.type === "heading" && b.level === "h2" && b.content === "Contact Us for More Details"
+        );
+        expect(h2Blocks.length).toBe(0);
+        const region = composition.blocks.find((b) => b.type === "field_region");
+        expect(region?.type === "field_region" && region.title).toBeUndefined();
+    });
+
     it("persists field_region in schema v1 parsing", () => {
         const composition = buildDefaultDocumentComposition(baseSchema);
         const parsed = formSchemaV1Schema.safeParse({

@@ -58,11 +58,16 @@ export async function mintExistingRecordFormLinkForAdmin(params: {
     if (formErr) return { ok: false, status: 500, message: formErr.message };
     if (!form) return { ok: false, status: 404, message: "Form not found" };
 
-    const formRow = form as { key: string };
+    const formRow = form as { key: string; metadata?: Record<string, unknown> };
     const clientMetadata = { ...(params.clientMetadata ?? {}) };
     delete clientMetadata.prefill_field_map;
 
-    let metadata = await mergePublicLinkMetadataForCreate(params.supabase, formRow.key, clientMetadata);
+    let metadata = await mergePublicLinkMetadataForCreate(params.supabase, {
+        orgId: params.orgId,
+        formKey: formRow.key,
+        formMetadata: formRow.metadata,
+        clientMetadata,
+    });
     metadata = mergeExistingRecordLaunchMetadata(metadata, {
         ...params.launch,
         entityId,

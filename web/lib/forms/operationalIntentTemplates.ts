@@ -161,11 +161,15 @@ export function isOutcomeConfiguredForIntent(
         return meta.mode === "packet" || meta.form_context_mode === "packet";
     }
     const flags = parseIntakeAutoCreateFlags(meta);
+    const verticalId =
+        typeof meta.default_vertical_id === "string" && /^[0-9a-f-]{36}$/i.test(meta.default_vertical_id.trim()) ?
+            meta.default_vertical_id.trim()
+        :   null;
     if (intent === "enrollment_lead" || intent === "waitlist") {
-        return flags.auto_create_opportunity && linkRequiresLeadCapture(meta);
+        return flags.auto_create_opportunity && linkRequiresLeadCapture(meta) && Boolean(verticalId);
     }
     if (intent === "operational_document") {
-        return linkRequiresLeadCapture(meta);
+        return linkRequiresLeadCapture(meta) && Boolean(verticalId);
     }
     return false;
 }

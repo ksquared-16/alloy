@@ -130,8 +130,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             : {};
     delete clientMetadata.prefill_field_map;
 
-    const formRow = form as { key: string };
-    const metadata = await mergePublicLinkMetadataForCreate(supabase, formRow.key, clientMetadata);
+    const formRow = form as { key: string; metadata?: Record<string, unknown> };
+    const metadata = await mergePublicLinkMetadataForCreate(supabase, {
+        orgId: ctx.orgId,
+        formKey: formRow.key,
+        formMetadata: formRow.metadata,
+        clientMetadata,
+    });
 
     const launchRaw = body.launch_from_entity;
     if (launchRaw !== undefined && launchRaw !== null) {

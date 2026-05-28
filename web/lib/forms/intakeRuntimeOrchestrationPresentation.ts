@@ -21,6 +21,7 @@ import {
     readStoredOperationalIntent,
     resolveEffectiveOperationalIntent,
     shouldPreserveEnrollmentLeadInference,
+    isOutcomeConfiguredForIntent,
 } from "@/lib/forms/operationalIntentTemplates";
 import { inferIntakeTypeFromLink, INTAKE_TYPE_CATALOG, type IntakeTypeKey } from "@/lib/forms/inferIntakeType";
 
@@ -56,6 +57,10 @@ export type IntakeRuntimeOrchestrationViewModel = {
     intakeEnabled: boolean;
     createsLead: boolean;
     requiresReview: boolean;
+    /** True when the selected share link matches the stored operational intent. */
+    linkOutcomeConfigured: boolean;
+    linkSetupIncomplete: boolean;
+    linkSetupIncompleteMessage: string | null;
     storyBullets: OutcomeStoryBullet[];
     routingSummary: string | null;
     runtimeMismatch: {
@@ -215,6 +220,13 @@ export function buildIntakeRuntimeOrchestrationViewModel(params: {
     const flags = parseIntakeAutoCreateFlags(linkMeta);
     const intakeEnabled = linkRequiresLeadCapture(linkMeta);
     const createsLead = flags.auto_create_opportunity && intakeEnabled;
+    const storedIntentForOutcome = storedIntent ?? (effectiveIntent && effectiveIntent !== "custom" ? effectiveIntent : null);
+    const linkOutcomeConfigured = isOutcomeConfiguredForIntent(linkMeta, storedIntentForOutcome);
+    const linkSetupIncomplete = Boolean(storedIntentForOutcome && selected && !linkOutcomeConfigured);
+    const linkSetupIncompleteMessage =
+        linkSetupIncomplete ?
+            "Setup incomplete — this share link will only save submissions."
+        :   null;
 
     const linkModel =
         selected ?
@@ -272,8 +284,10 @@ export function buildIntakeRuntimeOrchestrationViewModel(params: {
         linkMeta.review_mode === "always";
 
     const purposeComplete = Boolean(storedIntent ?? effectiveIntent) || intakeType !== "general";
-    const outcomeComplete = intakeEnabled && (createsLead || intakeType === "existing_family" || intakeType === "operational_document");
-    const shareComplete = !!selected?.is_active;
+    const outcomeComplete =
+        linkOutcomeConfigured &&
+        (createsLead || intakeType === "existing_family" || intakeType === "operational_document" || intakeType === "general");
+    const shareComplete = !!selected?.is_active && (!storedIntentForOutcome || linkOutcomeConfigured);
     const testComplete = lastTestConfirmation?.tone === "success" && (lastTestConfirmation.opportunityId || lastTestConfirmation.autoOperationalized);
 
     const steps: OrchestrationStepView[] = [
@@ -286,14 +300,30 @@ export function buildIntakeRuntimeOrchestrationViewModel(params: {
         {
             key: "outcome",
             label: "After submit",
-            status: outcomeComplete ? "complete" : purposeComplete ? "active" : "pending",
-            hint: createsLead ? "Creates lead" : intakeEnabled ? "Intake enabled" : "Configure below",
+            status:
+                linkSetupIncomplete ? "active"
+                : outcomeComplete ? "complete"
+                : purposeComplete ? "active"
+                :   "pending",
+            hint:
+                linkSetupIncomplete ? "Setup incomplete"
+                : createsLead && linkOutcomeConfigured ? "Creates lead"
+                : intakeEnabled && linkOutcomeConfigured ? "Intake enabled"
+                :   "Choose purpose above",
         },
         {
             key: "share",
             label: "Share form",
-            status: shareComplete ? "complete" : outcomeComplete ? "active" : "pending",
-            hint: selected ? "Link ready" : "Get a share link",
+            status:
+                linkSetupIncomplete && selected?.is_active ? "active"
+                : shareComplete ? "complete"
+                : outcomeComplete ? "active"
+                :   "pending",
+            hint:
+                linkSetupIncomplete && selected?.is_active ? "Finish setup first"
+                : selected?.is_active && linkOutcomeConfigured ? "Link ready"
+                : selected ? "Finish intake setup"
+                :   "Get a share link",
         },
         {
             key: "test",
@@ -318,8 +348,11 @@ export function buildIntakeRuntimeOrchestrationViewModel(params: {
         activeRuntimeLinkId: selected?.id ?? null,
         activeRuntimeLabel: selected ? distributionLinkLabel(selected, params.formKey) : null,
         intakeEnabled,
-        createsLead,
+        createsLead: createsLead && linkOutcomeConfigured,
         requiresReview,
+        linkOutcomeConfigured,
+        linkSetupIncomplete,
+        linkSetupIncompleteMessage,
         storyBullets,
         routingSummary,
         runtimeMismatch,

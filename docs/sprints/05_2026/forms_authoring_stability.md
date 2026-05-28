@@ -211,3 +211,9 @@ Fix Forms authoring blockers for website inquiry publish path.
 Save schema before publish, gate public open/copy until published,
 start new forms empty, and hide kind/category from basic create.
 ```
+
+---
+
+## Follow-up (intake configuration)
+
+See [`forms_real_world_use_case_1_stabilization.md`](./forms_real_world_use_case_1_stabilization.md) for the form-vs-link metadata split, share-link intent sync, truthful setup status, and public runtime polish.

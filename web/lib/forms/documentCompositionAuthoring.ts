@@ -47,10 +47,19 @@ function firstSignatureFieldId(schema: FormSchemaV1): string | undefined {
     return schema.fields.find((f) => f.type === "signature")?.id;
 }
 
+function titlesEquivalent(a: string | null | undefined, b: string | null | undefined): boolean {
+    const left = typeof a === "string" ? a.trim() : "";
+    const right = typeof b === "string" ? b.trim() : "";
+    if (!left || !right) return false;
+    return left.toLowerCase() === right.toLowerCase();
+}
+
 /** Safe default composition from an existing schema — backward-compatible. */
 export function buildDefaultDocumentComposition(schema: FormSchemaV1): DocumentComposition {
     const fieldIds = topLevelFieldIds(schema);
     const sectionTitle = schema.sections[0]?.title?.trim();
+    const formTitle = schema.title?.trim() ?? "";
+    const showSectionHeading = Boolean(sectionTitle) && !titlesEquivalent(sectionTitle, formTitle);
     const signatureFieldId = firstSignatureFieldId(schema);
 
     const blocks: DocumentBlock[] = [
@@ -71,7 +80,7 @@ export function buildDefaultDocumentComposition(schema: FormSchemaV1): DocumentC
         },
     ];
 
-    if (sectionTitle) {
+    if (showSectionHeading && sectionTitle) {
         blocks.push({
             id: "doc-section-heading",
             type: "heading",
@@ -84,7 +93,7 @@ export function buildDefaultDocumentComposition(schema: FormSchemaV1): DocumentC
     blocks.push({
         id: "doc-field-region-main",
         type: "field_region",
-        title: sectionTitle ?? "Intake questions",
+        title: showSectionHeading ? (sectionTitle ?? "Intake questions") : undefined,
         helper: "Questions families complete in this section.",
         layout: "one_column",
         field_ids: fieldIds,

@@ -1,9 +1,24 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { MEDICATION_AUTHORIZATION_DEMO_FORM_KEY } from "@/lib/forms/seeds/medicationAuthorizationDemo";
+import {
+    buildOperationalIntentLinkMetadataPatch,
+    readStoredOperationalIntent,
+} from "@/lib/forms/operationalIntentTemplates";
+import {
+    mergeRoutingDefaultsIntoMetadata,
+    resolveOrgIntakeRoutingDefaults,
+} from "@/lib/forms/intake/resolveOrgIntakeRoutingDefaults";
+
+export type MergePublicLinkMetadataParams = {
+    orgId: string;
+    formKey: string;
+    formMetadata?: Record<string, unknown> | null;
+    clientMetadata: Record<string, unknown>;
+};
 
 /**
  * Server-side defaults merged into `form_public_links.metadata` on POST create.
- * Client `metadata` overrides these keys when both set (spread order: defaults, then client).
+ * Spread order: form-key demo defaults → stored operational intent → org routing → client overrides.
  */
 export async function intakeDefaultsForFormPublicLink(
     supabase: SupabaseClient,
@@ -34,11 +49,35 @@ export async function intakeDefaultsForFormPublicLink(
     };
 }
 
+/** Apply stored form intent + org routing onto link metadata (create or PATCH). */
+export async function applyOperationalIntentToLinkMetadata(
+    supabase: SupabaseClient,
+    params: {
+        orgId: string;
+        formMetadata: Record<string, unknown> | null | undefined;
+        linkMetadata: Record<string, unknown>;
+    }
+): Promise<Record<string, unknown>> {
+    const storedIntent = readStoredOperationalIntent(params.formMetadata);
+    if (!storedIntent || storedIntent === "custom") {
+        return params.linkMetadata;
+    }
+
+    const intentPatch = buildOperationalIntentLinkMetadataPatch(storedIntent);
+    const routing = await resolveOrgIntakeRoutingDefaults(supabase, params.orgId, storedIntent);
+    const merged = { ...params.linkMetadata, ...intentPatch };
+    return mergeRoutingDefaultsIntoMetadata(merged, routing);
+}
+
 export async function mergePublicLinkMetadataForCreate(
     supabase: SupabaseClient,
-    formKey: string,
-    clientMetadata: Record<string, unknown>
+    params: MergePublicLinkMetadataParams
 ): Promise<Record<string, unknown>> {
-    const defaults = await intakeDefaultsForFormPublicLink(supabase, formKey);
-    return { ...defaults, ...clientMetadata };
+    const formDefaults = await intakeDefaultsForFormPublicLink(supabase, params.formKey);
+    const withIntent = await applyOperationalIntentToLinkMetadata(supabase, {
+        orgId: params.orgId,
+        formMetadata: params.formMetadata,
+        linkMetadata: formDefaults,
+    });
+    return { ...withIntent, ...params.clientMetadata };
 }

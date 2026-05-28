@@ -227,7 +227,9 @@ export function FormIntakeRuntimeOrchestrationPanel({
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                     <StatusBadge label={vm.intakeTypeLabel} variant="info" />
-                    {vm.intakeEnabled ?
+                    {vm.linkSetupIncomplete ?
+                        <StatusBadge label="Setup incomplete" variant="warning" />
+                    : vm.intakeEnabled && vm.linkOutcomeConfigured ?
                         <StatusBadge label="Intake active" variant="success" />
                     :   <StatusBadge label="Intake not set up" variant="warning" />}
                     {vm.createsLead ?
@@ -238,6 +240,12 @@ export function FormIntakeRuntimeOrchestrationPanel({
                     :   null}
                 </div>
             </div>
+
+            {vm.linkSetupIncompleteMessage ?
+                <p className="mt-2 rounded-lg border border-amber-100 bg-amber-50/80 px-3 py-2 text-sm text-amber-900" data-testid="link-setup-incomplete-banner">
+                    {vm.linkSetupIncompleteMessage}
+                </p>
+            :   null}
 
             <ol className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4" data-testid="orchestration-step-rail">
                 {vm.steps.map((step) => (

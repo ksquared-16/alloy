@@ -3,6 +3,7 @@ import {
     buildOperationalIntentFormMetadataPatch,
     buildOperationalIntentLinkMetadataPatch,
     inferOperationalIntentFromContext,
+    isOutcomeConfiguredForIntent,
     readStoredOperationalIntent,
     resolveEffectiveOperationalIntent,
 } from "@/lib/forms/operationalIntentTemplates";
@@ -20,6 +21,17 @@ describe("operationalIntentTemplates", () => {
         expect(patch.auto_create_opportunity).toBe(true);
         expect(patch.default_opportunity_status_key).toBe("new_inquiry");
         expect(patch.auto_create_customer_member).toBe(false);
+    });
+
+    it("requires vertical on link for enrollment lead outcome configured", () => {
+        const patch = buildOperationalIntentLinkMetadataPatch("enrollment_lead");
+        expect(
+            isOutcomeConfiguredForIntent(
+                { ...patch, default_vertical_id: "1000d719-2248-4816-8ff6-cbdeee8e91ce" },
+                "enrollment_lead"
+            )
+        ).toBe(true);
+        expect(isOutcomeConfiguredForIntent(patch, "enrollment_lead")).toBe(false);
     });
 
     it("builds existing family link defaults without create opportunity", () => {

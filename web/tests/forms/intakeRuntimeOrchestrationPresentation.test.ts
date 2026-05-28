@@ -92,4 +92,45 @@ describe("intakeRuntimeOrchestrationPresentation", () => {
         expect(confirmation?.headline).toContain("not configured");
         expect(confirmation?.intakeConfigured).toBe(false);
     });
+
+    it("flags link setup incomplete when form intent does not match share link", () => {
+        const vm = buildIntakeRuntimeOrchestrationViewModel({
+            formKey: "website_inquiry",
+            formMetadata: { intake_intent: "enrollment_lead" },
+            links: [
+                {
+                    id: "link-bare",
+                    is_active: true,
+                    created_at: "2026-05-01T00:00:00.000Z",
+                    metadata: {},
+                },
+            ],
+            selectedLinkId: "link-bare",
+            labelCatalog: null,
+            documentGenerationConfigured: false,
+            hasPublished: true,
+            latestSubmission: null,
+        });
+        expect(vm.linkSetupIncomplete).toBe(true);
+        expect(vm.linkSetupIncompleteMessage).toContain("only save submissions");
+        expect(vm.createsLead).toBe(false);
+        expect(vm.steps.find((s) => s.key === "share")?.hint).toContain("Finish");
+    });
+
+    it("marks share link ready when enrollment lead intent is configured on link", () => {
+        const vm = buildIntakeRuntimeOrchestrationViewModel({
+            formKey: "website_inquiry",
+            formMetadata: { intake_intent: "enrollment_lead" },
+            links: [ENROLLMENT_LINK],
+            selectedLinkId: ENROLLMENT_LINK.id,
+            labelCatalog: null,
+            documentGenerationConfigured: false,
+            hasPublished: true,
+            latestSubmission: null,
+        });
+        expect(vm.linkOutcomeConfigured).toBe(true);
+        expect(vm.linkSetupIncomplete).toBe(false);
+        expect(vm.createsLead).toBe(true);
+        expect(vm.steps.find((s) => s.key === "share")?.hint).toBe("Link ready");
+    });
 });

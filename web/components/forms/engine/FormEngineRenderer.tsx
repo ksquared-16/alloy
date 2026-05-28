@@ -16,6 +16,8 @@ import type {
 } from "@/lib/forms/validateSubmission";
 import { evaluateFieldVisibility } from "@/lib/forms/validateSubmission";
 import { chunkFieldsForHalfRowLayout } from "@/lib/forms/fieldLayoutChunks";
+import { isCustomUnmappedField } from "@/lib/forms/formFieldAuthoringPresentation";
+import { CUSTOM_UNMAPPED_FIELD_ADMIN_DESCRIPTION } from "@/lib/forms/systemFieldToFormField";
 import { emptyPayload, ensureGroupRows, setSignature, setTopLevelValue } from "./formEnginePayload";
 
 export type FormEngineOptionChoice = { value: string; label: string };
@@ -59,6 +61,24 @@ function fieldUsesPhoneShape(field: FormField & { type: "text" }): boolean {
     return id.includes("phone") || id.includes("mobile") || id.includes("tel");
 }
 
+function titlesEquivalent(a: string, b: string): boolean {
+    const left = a.trim();
+    const right = b.trim();
+    if (!left || !right) return false;
+    return left.toLowerCase() === right.toLowerCase();
+}
+
+function publicFieldDescription(field: FormField, variant: "default" | "embed"): string {
+    const desc =
+        "description" in field && typeof (field as { description?: unknown }).description === "string"
+            ? (field as { description?: string }).description!.trim()
+            : "";
+    if (!desc) return "";
+    if (variant === "embed" && isCustomUnmappedField(field)) return "";
+    if (variant === "embed" && desc === CUSTOM_UNMAPPED_FIELD_ADMIN_DESCRIPTION) return "";
+    return desc;
+}
+
 export function FormEngineRenderer({
     schema,
     payload,
@@ -97,10 +117,7 @@ export function FormEngineRenderer({
                     {field.required ? <span className="text-red-600"> *</span> : null}
                 </label>
             );
-            const desc =
-                "description" in field && typeof (field as { description?: unknown }).description === "string"
-                    ? (field as { description?: string }).description!.trim()
-                    : "";
+            const desc = publicFieldDescription(field, variant);
             const helpText = desc ? (
                 <p className={clsx("text-xs text-neutral-600", loose && "text-[12px]")}>{desc}</p>
             ) : null;
@@ -755,6 +772,11 @@ export function FormEngineRenderer({
                         payload,
                         optionChoicesByFieldId,
                     });
+                    const headingText =
+                        typeof block.content === "string" ? block.content.trim() : String(block.content ?? "").trim();
+                    if (block.level !== "h1" && headingText && titlesEquivalent(headingText, schema.title ?? "")) {
+                        return null;
+                    }
                     return (
                         <Tag
                             key={block.id}
@@ -789,9 +811,12 @@ export function FormEngineRenderer({
                     const visibleFields = fields.filter((field) =>
                         evaluateFieldVisibility(field.id, schema, (id) => payload.values[id])
                     );
+                    const regionTitle = block.title?.trim() ?? "";
+                    const showRegionTitle =
+                        Boolean(regionTitle) && !titlesEquivalent(regionTitle, schema.title ?? "");
                     return (
                         <section key={block.id} className="space-y-3" data-testid={`form-composition-region-${block.id}`}>
-                            {block.title ?
+                            {showRegionTitle ?
                                 <h2 className={clsx("text-lg font-medium text-neutral-800", loose && "text-base")}>
                                     {block.title}
                                 </h2>

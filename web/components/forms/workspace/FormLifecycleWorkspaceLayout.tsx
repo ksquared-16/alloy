@@ -29,6 +29,7 @@ import type { FormLifecycleStepView } from "@/lib/forms/formLifecyclePresentatio
 import { FORM_LIFECYCLE_ANCHORS } from "@/lib/forms/formLifecyclePresentation";
 import { FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
 import { FORMS_TECHNICAL_DISCLOSURE } from "@/lib/forms/review/formsReviewTechnicalDisclosure";
+import { readStoredOperationalIntent } from "@/lib/forms/operationalIntentTemplates";
 import FormSchemaWorkspace from "@/app/admin/forms/FormSchemaWorkspace";
 import { FormOutcomeConfigPanel } from "@/components/forms/admin/FormOutcomeConfigPanel";
 import { FormExistingRecordSendPanel } from "@/components/forms/admin/FormExistingRecordSendPanel";
@@ -138,6 +139,9 @@ export function FormLifecycleWorkspaceLayout({
     onFormMetadataUpdated,
 }: Props) {
     const submissionsHref = `${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(formId)}/submissions`;
+    const storedIntent = readStoredOperationalIntent(detail.metadata);
+    const showPacketPanel = storedIntent === "packet_step";
+    const showExistingRecordSend = storedIntent === "existing_family";
 
     return (
         <>
@@ -177,27 +181,24 @@ export function FormLifecycleWorkspaceLayout({
 
             <div className="mt-4 space-y-4" data-testid="form-lifecycle-workspace">
                 <section id={FORM_LIFECYCLE_ANCHORS.design} data-testid="form-region-design">
+                    <h2 className="mb-2 text-sm font-semibold text-alloy-midnight">Build form</h2>
                     <FormSchemaWorkspace
                         formId={formId}
                         formName={detail.name}
                         versions={detail.versions}
                         onVersionsUpdated={onVersionsUpdated}
                     />
-                </section>
-
-                <section id={FORM_LIFECYCLE_ANCHORS.publish} className={opRegionSeparator} data-testid="form-region-publish">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                        <h2 className="text-sm font-semibold text-alloy-midnight">Publish</h2>
-                        {latestPublished ?
-                            <span className={opMetadata}>
-                                Live v{latestPublished.version_number}
-                                {latestPublished.published_at ?
-                                    <> · {formatDateTimeForUserDisplay(latestPublished.published_at, viewerTz)}</>
-                                :   null}
-                            </span>
-                        :   <span className={opMetadata}>No published version</span>}
-                    </div>
-                    <TechnicalDetailDisclosure title="Version history" helperText={`${detail.versions.length} versions`}>
+                    <TechnicalDetailDisclosure title="Publish & version history" helperText="Publish and prior versions">
+                        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                            {latestPublished ?
+                                <span className={opMetadata}>
+                                    Live v{latestPublished.version_number}
+                                    {latestPublished.published_at ?
+                                        <> · {formatDateTimeForUserDisplay(latestPublished.published_at, viewerTz)}</>
+                                    :   null}
+                                </span>
+                            :   <span className={opMetadata}>No published version</span>}
+                        </div>
                         <ul className={clsx(opGroupedSurface, "mt-2")}>
                             {detail.versions.map((v) => (
                                 <li key={v.id} className={opGroupedRowInner}>
@@ -240,74 +241,13 @@ export function FormLifecycleWorkspaceLayout({
                     />
                 </section>
 
-                {hasPublished ?
-                    <section className={opRegionSeparator} data-testid="form-region-packet-context">
-                        <FormPacketContextPanel formId={formId} formName={detail.name} hasPublished={hasPublished} />
-                    </section>
-                :   null}
-
-                {hasPublished ?
-                    <section className={opRegionSeparator} data-testid="form-region-existing-record-send">
-                        <FormExistingRecordSendPanel
-                            formId={formId}
-                            formName={detail.name}
-                            canMutate={canMutate}
-                        />
-                    </section>
-                :   null}
-
-                <section className={opRegionSeparator} data-testid="form-region-operational-outcome">
-                    <FormOutcomeConfigPanel
-                        formId={formId}
-                        formMetadata={detail.metadata}
-                        links={links}
-                        formKey={detail.key}
-                        documentGenerationConfigured={documentGenerationConfigured}
-                        canMutate={canMutate}
-                        onLinkMetadataSaved={onLinkMetadataSaved}
-                        selectedLinkId={selectedRuntimeLinkId}
-                        onSelectedLinkChange={onSelectedRuntimeLinkChange}
-                        hideLinkSelector
-                    />
-                </section>
-
-                <section
-                    id={FORM_LIFECYCLE_ANCHORS.distribute}
-                    className={opRegionSeparator}
-                    data-testid="form-region-distribute-intake"
-                >
-                    <div className="grid gap-3 lg:grid-cols-2">
-                        <div data-testid="form-region-intake">
-                            <FormIntakePreviewPanel formId={formId} viewerTz={viewerTz} compact />
-                        </div>
-                        <TechnicalDetailDisclosure
-                            title="Manage all share links"
-                            helperText={`${links.length} link${links.length === 1 ? "" : "s"} — advanced`}
-                        >
-                            <FormDistributionPanel
-                                formKey={detail.key}
-                                canMutate={canMutate}
-                                creating={creating}
-                                createErr={createErr}
-                                links={links}
-                                createdOnce={createdOnce}
-                                copied={copied}
-                                copyWarn={copyWarn}
-                                viewerTz={viewerTz}
-                                onCreateLink={onCreateLink}
-                                onCopy={onCopy}
-                            />
-                        </TechnicalDetailDisclosure>
-                    </div>
-                </section>
-
                 <section id={FORM_LIFECYCLE_ANCHORS.review} className={opRegionSeparator} data-testid="form-region-review">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
-                            <h2 className="text-sm font-semibold text-alloy-midnight">Review & continue workflow</h2>
+                            <h2 className="text-sm font-semibold text-alloy-midnight">Recent responses</h2>
                             <p className={clsx("mt-0.5", opMetadata)}>
                                 {submissionCount > 0 ?
-                                    `${submissionCount} in intake inbox`
+                                    `${submissionCount} response${submissionCount === 1 ? "" : "s"}`
                                 :   "No responses yet"}
                             </p>
                         </div>
@@ -315,73 +255,135 @@ export function FormLifecycleWorkspaceLayout({
                     </div>
                 </section>
 
-                <section id={FORM_LIFECYCLE_ANCHORS.documents} className={opRegionSeparator} data-testid="form-region-documents">
-                    <IntakeWorkspaceRegion
-                        title="Documents & output"
-                        lead="PDF generation when mapping is configured on a published version."
-                    >
-                        {documentGenerationConfigured ?
-                            <p className="text-sm text-alloy-midnight">
-                                PDF mapping is configured on the latest published version. Generate documents from reviewed
-                                submissions in the intake inbox.
-                            </p>
-                        :   <p className={opMetadata}>
-                                No PDF mapping on the published version yet. Configure mapping when publishing to enable
-                                document output.
-                            </p>}
-                    </IntakeWorkspaceRegion>
-                </section>
-
                 <div className={opRegionSeparator}>
                     <TechnicalDetailDisclosure
-                        title="Operator context"
-                        helperText="Purpose, audience, and connected systems — collapsed by default."
+                        title="Advanced setup & debugging"
+                        helperText="Intake matrices, routing grids, share link management, and technical details"
                     >
-                        <div className={clsx("space-y-4", opInsightSupport)}>
-                            <div>
-                                <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/55">Purpose</p>
-                                <p className="mt-1">{operatorGuide.purpose}</p>
-                            </div>
-                            <div>
-                                <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/55">
-                                    Who completes
-                                </p>
-                                <p className="mt-1">{operatorGuide.whoCompletes}</p>
-                            </div>
-                            <div>
-                                <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/55">
-                                    After submission
-                                </p>
-                                <p className="mt-1">{operatorGuide.afterSubmission}</p>
-                            </div>
-                            <div>
-                                <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/55">
-                                    Connected systems
-                                </p>
-                                <ul className="mt-1 list-disc space-y-1 pl-5">
-                                    {operatorGuide.connectedBullets.map((b) => (
-                                        <li key={b.id}>{b.text}</li>
-                                    ))}
-                                </ul>
-                            </div>
+                        <div className="mt-3 space-y-4">
+                            {showPacketPanel && hasPublished ?
+                                <section data-testid="form-region-packet-context">
+                                    <FormPacketContextPanel formId={formId} formName={detail.name} hasPublished={hasPublished} />
+                                </section>
+                            :   null}
+
+                            {showExistingRecordSend && hasPublished ?
+                                <section data-testid="form-region-existing-record-send">
+                                    <FormExistingRecordSendPanel
+                                        formId={formId}
+                                        formName={detail.name}
+                                        canMutate={canMutate}
+                                    />
+                                </section>
+                            :   null}
+
+                            <section data-testid="form-region-operational-outcome">
+                                <FormOutcomeConfigPanel
+                                    formId={formId}
+                                    formMetadata={detail.metadata}
+                                    links={links}
+                                    formKey={detail.key}
+                                    documentGenerationConfigured={documentGenerationConfigured}
+                                    canMutate={canMutate}
+                                    onLinkMetadataSaved={onLinkMetadataSaved}
+                                    selectedLinkId={selectedRuntimeLinkId}
+                                    onSelectedLinkChange={onSelectedRuntimeLinkChange}
+                                    hideLinkSelector
+                                />
+                            </section>
+
+                            <section id={FORM_LIFECYCLE_ANCHORS.distribute} data-testid="form-region-distribute-intake">
+                                <div className="grid gap-3 lg:grid-cols-2">
+                                    <div data-testid="form-region-intake">
+                                        <FormIntakePreviewPanel formId={formId} viewerTz={viewerTz} compact />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/55">
+                                            Manage all share links
+                                        </p>
+                                        <FormDistributionPanel
+                                            formKey={detail.key}
+                                            canMutate={canMutate}
+                                            creating={creating}
+                                            createErr={createErr}
+                                            links={links}
+                                            createdOnce={createdOnce}
+                                            copied={copied}
+                                            copyWarn={copyWarn}
+                                            viewerTz={viewerTz}
+                                            onCreateLink={onCreateLink}
+                                            onCopy={onCopy}
+                                        />
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section id={FORM_LIFECYCLE_ANCHORS.documents} data-testid="form-region-documents">
+                                <IntakeWorkspaceRegion
+                                    title="Documents & output"
+                                    lead="PDF generation when mapping is configured on a published version."
+                                >
+                                    {documentGenerationConfigured ?
+                                        <p className="text-sm text-alloy-midnight">
+                                            PDF mapping is configured on the latest published version. Generate documents from
+                                            reviewed submissions in the intake inbox.
+                                        </p>
+                                    :   <p className={opMetadata}>
+                                            No PDF mapping on the published version yet. Configure mapping when publishing to enable
+                                            document output.
+                                        </p>}
+                                </IntakeWorkspaceRegion>
+                            </section>
+
+                            <TechnicalDetailDisclosure
+                                title="Operator context"
+                                helperText="Purpose, audience, and connected systems"
+                            >
+                                <div className={clsx("space-y-4", opInsightSupport)}>
+                                    <div>
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/55">Purpose</p>
+                                        <p className="mt-1">{operatorGuide.purpose}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/55">
+                                            Who completes
+                                        </p>
+                                        <p className="mt-1">{operatorGuide.whoCompletes}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/55">
+                                            After submission
+                                        </p>
+                                        <p className="mt-1">{operatorGuide.afterSubmission}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/55">
+                                            Connected systems
+                                        </p>
+                                        <ul className="mt-1 list-disc space-y-1 pl-5">
+                                            {operatorGuide.connectedBullets.map((b) => (
+                                                <li key={b.id}>{b.text}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                </div>
+                            </TechnicalDetailDisclosure>
+
+                            <TechnicalDetailDisclosure
+                                title={FORMS_TECHNICAL_DISCLOSURE.technicalDetails.title}
+                                helperText="Form definition id, internal key, and API metadata paths."
+                            >
+                                <TechnicalDetailFieldList>
+                                    <TechnicalDetailField label="Form definition id" fullWidth>
+                                        <TechnicalDetailMonospaceValue>{detail.id}</TechnicalDetailMonospaceValue>
+                                    </TechnicalDetailField>
+                                    <TechnicalDetailField label="Internal key" fullWidth>
+                                        <TechnicalDetailMonospaceValue>{detail.key}</TechnicalDetailMonospaceValue>
+                                    </TechnicalDetailField>
+                                </TechnicalDetailFieldList>
+                            </TechnicalDetailDisclosure>
                         </div>
                     </TechnicalDetailDisclosure>
-
-                    <div className="mt-4">
-                        <TechnicalDetailDisclosure
-                            title={FORMS_TECHNICAL_DISCLOSURE.technicalDetails.title}
-                            helperText="Form definition id, internal key, and API metadata paths."
-                        >
-                            <TechnicalDetailFieldList>
-                                <TechnicalDetailField label="Form definition id" fullWidth>
-                                    <TechnicalDetailMonospaceValue>{detail.id}</TechnicalDetailMonospaceValue>
-                                </TechnicalDetailField>
-                                <TechnicalDetailField label="Internal key" fullWidth>
-                                    <TechnicalDetailMonospaceValue>{detail.key}</TechnicalDetailMonospaceValue>
-                                </TechnicalDetailField>
-                            </TechnicalDetailFieldList>
-                        </TechnicalDetailDisclosure>
-                    </div>
                 </div>
             </div>
         </>

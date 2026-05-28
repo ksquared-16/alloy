@@ -64,6 +64,10 @@ export function formFieldFromRegistryEntry(entry: SystemFieldRegistryEntry, o: O
     }
 }
 
+/** Admin-only helper copy for custom unmapped fields — never shown on public embed runtime. */
+export const CUSTOM_UNMAPPED_FIELD_ADMIN_DESCRIPTION =
+    "Custom / unmapped — values are stored on the submission only; they are not automatically linked to CRM or enrollment entities.";
+
 /** Freeform text not tied to registry / CRM hints (explicitly labeled in UI). */
 export function customUnmappedTextField(): FormField {
     const suffix =
@@ -74,8 +78,7 @@ export function customUnmappedTextField(): FormField {
         type: "text",
         label: "Custom question",
         required: false,
-        description:
-            "Custom / unmapped — values are stored on the submission only; they are not automatically linked to CRM or enrollment entities.",
+        description: CUSTOM_UNMAPPED_FIELD_ADMIN_DESCRIPTION,
         field_source: { entity_type: "custom", field_key: "unmapped" },
     };
 }
