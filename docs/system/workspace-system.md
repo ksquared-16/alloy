@@ -159,3 +159,5 @@ Work-unit **CRM compact** queue rows show **Child** and **Program** columns usin
 ## When this doc must be updated
 
 When `queue_definition` schema version changes, department routing changes, perf overlay contract changes, or **CRM compact child/program enrichment** rules change.
+
+**Inquiry children + waitlist facts (May 2026):** Opportunity drawer edits per-child **Site** and **Room / cohort** on OCM. **`persons.is_employee`** on **Person drawer → Employee status** (generic person profile — not parent-only). Public **lead_capture** intake can map child site/cohort via `intake_field_paths`. Demo batch: **`npm run dev:seed:waitlist-demo`** / **`npm run qa:waitlist:demo`**. V2 ranking stays **`shadow_mode: true`** by default. Sprint: **`docs/sprints/05_2026/waitlist_demo_readiness_final_pass.md`**.

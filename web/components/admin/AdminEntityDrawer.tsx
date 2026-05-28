@@ -95,7 +95,9 @@ import {
     type EntityDrawerSectionConfig,
     type EntityDrawerFieldConfig,
 } from "@/lib/entityPresentation";
-import EntityDrawerOverview from "@/components/admin/entity/EntityDrawerOverview";
+import { OpportunityIntakeSourceSection } from "@/components/admin/opportunity/OpportunityIntakeSourceSection";
+import PersonEmployeePlacementSection from "@/components/admin/entity/PersonEmployeePlacementSection";
+import { readPersonEmployeePlacementValues } from "@/lib/admin/personEmployeePlacementFields";
 import {
     buildFieldLabelMapFromEntityData,
     buildDrawerFieldPolicyChromeFromEntityData,
@@ -278,6 +280,7 @@ import { formatActivityRelativeShort, type ActivitySignalResult } from "@/lib/ad
 import { formatOpportunityActivityTimelineEvent } from "@/lib/admin/opportunityActivityTimelineFormat";
 import OpportunityQuoteIntakeSection from "@/components/admin/quoteIntake/OpportunityQuoteIntakeSection";
 import OpportunityEnrollmentPacketModal from "@/components/admin/opportunity/OpportunityEnrollmentPacketModal";
+import SendFormToOpportunityModal from "@/components/admin/opportunity/SendFormToOpportunityModal";
 import { OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP } from "@/lib/adminV2/shellContracts/opportunityInquiryWorkflowTabs";
 import { compileOpportunityRecordDrawerShellFromEntity } from "@/lib/adminV2/shellContracts/compileOpportunityRecordDrawerShell";
 import type { RecordDrawerShellContract } from "@/lib/adminV2/shellContracts/types";
@@ -1489,6 +1492,7 @@ export default function AdminEntityDrawer() {
 
     const [oppQuoteIntakeOpen, setOppQuoteIntakeOpen] = useState(false);
     const [oppLaunchPacketOpen, setOppLaunchPacketOpen] = useState(false);
+    const [oppSendFormOpen, setOppSendFormOpen] = useState(false);
     const [oppDiscountOptions, setOppDiscountOptions] = useState<{ value: string; label: string }[] | null>(null);
     const [oppDiscountLoading, setOppDiscountLoading] = useState(false);
     const [oppDiscountSelection, setOppDiscountSelection] = useState<string>("");
@@ -6309,12 +6313,20 @@ export default function AdminEntityDrawer() {
                                       </>
                                   : null}
                                   {canMutate ? (
-                                      <OpportunityDrawerHeaderActionButton
-                                          label="Send enrollment packet"
-                                          inquiryWorkflow={opportunityInquiryWorkflowDrawer}
-                                          disabled={!!opportunityActionLoading}
-                                          onClick={() => setOppLaunchPacketOpen(true)}
-                                      />
+                                      <>
+                                          <OpportunityDrawerHeaderActionButton
+                                              label="Send form"
+                                              inquiryWorkflow={opportunityInquiryWorkflowDrawer}
+                                              disabled={!!opportunityActionLoading}
+                                              onClick={() => setOppSendFormOpen(true)}
+                                          />
+                                          <OpportunityDrawerHeaderActionButton
+                                              label="Send enrollment packet"
+                                              inquiryWorkflow={opportunityInquiryWorkflowDrawer}
+                                              disabled={!!opportunityActionLoading}
+                                              onClick={() => setOppLaunchPacketOpen(true)}
+                                          />
+                                      </>
                                   ) : null}
                               </>
                           );
@@ -6375,6 +6387,17 @@ export default function AdminEntityDrawer() {
         overviewData,
         opportunitySingular,
     ]);
+
+    const opportunityIntakeSourceNode =
+        drawer.type === "opportunities" && drawer.id && drawer.id !== "new" ?
+            <div className="mb-3">
+                <OpportunityIntakeSourceSection
+                    opportunityId={drawer.id}
+                    canMutate={!!canMutate}
+                    onSendForm={() => setOppSendFormOpen(true)}
+                />
+            </div>
+        :   null;
 
     const opportunityQuoteIntakeNode =
         drawer.type === "opportunities" && drawer.id && drawer.id !== "new" && oppQuoteIntakeOpen ? (
@@ -7385,12 +7408,28 @@ export default function AdminEntityDrawer() {
         // TS note: parts of this block return early for specific drawer types, which can cause
         // control-flow narrowing weirdness in very large files. Keep a widened local copy.
         const drawerType = drawer.type as AdminDrawerEntityType;
+        if (drawer.type === "persons" && drawer.id && drawer.id !== "new" && !(d as { _create?: boolean })._create) {
+            return {
+                employee_placement: (
+                    <PersonEmployeePlacementSection
+                        personId={drawer.id}
+                        initialValues={readPersonEmployeePlacementValues(d)}
+                        canMutate={!!canMutate}
+                        onPersonUpdated={(json) => {
+                            setData((prev) => (prev ? { ...prev, ...json } : prev));
+                        }}
+                    />
+                ),
+            };
+        }
         if (drawer.type === "contacts") {
             const customerId = d.customer_id as string | null | undefined;
             const vendorId = d.vendor_id as string | null | undefined;
             const customerName = d._linked_customer_name as string | null | undefined;
             const vendorName = d._linked_vendor_name as string | null | undefined;
             const primaryFor = d._primary_contact_for as string | null | undefined;
+            const linkedPersonId = (d._person_id as string | undefined)?.trim() || "";
+            const linkedPerson = (d._person as Record<string, unknown> | null | undefined) ?? null;
             return {
                 association: (
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -7452,6 +7491,33 @@ export default function AdminEntityDrawer() {
                         )}
                     </div>
                 ),
+                ...(linkedPersonId
+                    ? {
+                          employee_placement: (
+                              <PersonEmployeePlacementSection
+                                  personId={linkedPersonId}
+                                  initialValues={readPersonEmployeePlacementValues(linkedPerson ?? {})}
+                                  canMutate={!!canMutate}
+                                  saveHint="Saves to linked person record"
+                                  onPersonUpdated={(json) => {
+                                      setData((prev) =>
+                                          prev
+                                              ? {
+                                                    ...prev,
+                                                    _person: {
+                                                        ...(typeof prev._person === "object" && prev._person != null
+                                                            ? (prev._person as Record<string, unknown>)
+                                                            : {}),
+                                                        ...json,
+                                                    },
+                                                }
+                                              : prev
+                                      );
+                                  }}
+                              />
+                          ),
+                      }
+                    : {}),
             };
         }
         if (drawer.type === "customers") {
@@ -8266,6 +8332,7 @@ export default function AdminEntityDrawer() {
         recordChromeOpportunity.layout,
         opportunityDrawerShellContract,
         opportunityDrawerOverviewRevealReady,
+        setData,
     ]);
 
     const configDrivenOverviewSections = useMemo((): EntityDrawerSectionConfig[] => {
@@ -12782,6 +12849,7 @@ export default function AdminEntityDrawer() {
                                         {/* Enrollment direction: lifecycle is not a drawer section. */}
                                     </>
                                 ) : null}
+                                {drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? opportunityIntakeSourceNode : null}
                                 {drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? opportunityQuoteSummaryNode : null}
                                 {drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? opportunityQuoteIntakeNode : null}
                                 <EntityDrawerOverview
@@ -14610,6 +14678,20 @@ export default function AdminEntityDrawer() {
                         </>
                     )}
                 </div>
+            ) : null}
+            {drawer.type === "opportunities" && drawer.id && drawer.id !== "new" && oppSendFormOpen ? (
+                <SendFormToOpportunityModal
+                    open={oppSendFormOpen}
+                    opportunityId={String(drawer.id)}
+                    opportunityLabel={String((data as { name?: string } | null)?.name ?? "").trim() || "Opportunity"}
+                    familyLabel={
+                        typeof (data as { _customer_name?: string } | null)?._customer_name === "string"
+                            ? (data as { _customer_name: string })._customer_name.trim() || null
+                            : null
+                    }
+                    canMutate={!!canMutate}
+                    onDismiss={() => setOppSendFormOpen(false)}
+                />
             ) : null}
             {drawer.type === "opportunities" && drawer.id && drawer.id !== "new" && oppLaunchPacketOpen ? (
                 <OpportunityEnrollmentPacketModal

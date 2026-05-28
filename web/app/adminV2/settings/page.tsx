@@ -76,6 +76,9 @@ export default function AdminV2SettingsIndexPage() {
                         <SettingsLink href="/adminV2/settings/departments" title="Departments">
                             Teams, sites, and structure.
                         </SettingsLink>
+                        <SettingsLink href="/adminV2/settings/locations" title="Locations & hierarchy">
+                            Physical sites and classroom/room structure.
+                        </SettingsLink>
                         <SettingsLink href="/adminV2/settings/work-units" title="Work units & queues">
                             Queue lanes in the workspace.
                         </SettingsLink>

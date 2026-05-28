@@ -1385,7 +1385,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
       overviewSections: [
         {
           key: "basic_info",
-          title: "Basic Info",
+          title: "Profile",
           defaultExpanded: true,
           collapsible: true,
           gridCols: 2,
@@ -1394,10 +1394,20 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
             { key: "first_name", label: "First name", span: 1, renderHint: "text", locked: true },
             { key: "last_name", label: "Last name", span: 1, renderHint: "text", locked: true },
             { key: "email", label: "Email", span: 1, renderHint: "text", locked: true },
-            { key: "phone", label: "Phone", span: 1, renderHint: "phone", locked: true },
+            { key: "phone", label: "Phone", span: 1, renderHint: "text", locked: true },
             { key: "created_at", label: "Created", span: 1, renderHint: "datetime", locked: true },
             { key: "updated_at", label: "Updated", span: 1, renderHint: "datetime", locked: true },
           ],
+          locked: true,
+        },
+        {
+          key: "employee_placement",
+          title: "Employee status",
+          defaultExpanded: true,
+          collapsible: true,
+          gridCols: 1,
+          contentLayout: "block",
+          fields: [],
           locked: true,
         },
         {

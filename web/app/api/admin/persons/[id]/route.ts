@@ -3,8 +3,18 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
+import { parsePersonEmployeePlacementPatchBody } from "@/lib/admin/personEmployeePlacementFields";
 
-const PERSON_NATIVE_KEYS_IN_PATCH = ["first_name", "last_name", "email", "phone", "status_key"] as const;
+const PERSON_NATIVE_KEYS_IN_PATCH = [
+    "first_name",
+    "last_name",
+    "email",
+    "phone",
+    "status_key",
+    "is_employee",
+    "employee_id",
+    "employee_source",
+] as const;
 
 /** Keys never persisted via field_values (native columns, computed, or audit fields). */
 const PERSON_FIELD_VALUES_EXCLUDED_KEYS = [
@@ -87,6 +97,21 @@ export async function PATCH(
         }
         personUpdates.status_key = status_key;
     }
+
+    const employeePatch = parsePersonEmployeePlacementPatchBody(body);
+    if (!employeePatch.ok) {
+        return NextResponse.json({ error: employeePatch.error }, { status: 400 });
+    }
+    if (employeePatch.updates.is_employee !== undefined) {
+        personUpdates.is_employee = employeePatch.updates.is_employee;
+    }
+    if (employeePatch.updates.employee_id !== undefined) {
+        personUpdates.employee_id = employeePatch.updates.employee_id;
+    }
+    if (employeePatch.updates.employee_source !== undefined) {
+        personUpdates.employee_source = employeePatch.updates.employee_source;
+    }
+
     if (Object.keys(personUpdates).length > 0) {
         const fn = first_name !== undefined ? first_name : (existing as { first_name?: string | null }).first_name;
         const ln = last_name !== undefined ? last_name : (existing as { last_name?: string | null }).last_name;
@@ -108,7 +133,9 @@ export async function PATCH(
 
     const { data: updated } = await supabase
         .from("persons")
-        .select("id, org_id, first_name, last_name, full_name, email, phone, status_key, created_at, updated_at")
+        .select(
+            "id, org_id, first_name, last_name, full_name, email, phone, status_key, is_employee, employee_id, employee_source, created_at, updated_at"
+        )
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .single();
