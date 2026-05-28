@@ -9,6 +9,7 @@ const queueBlockPath = join(root, "../../app/adminV2/components/workspace/blocks
 const deptPagePath = join(root, "../../app/adminV2/workspace/dept/[departmentId]/page.tsx");
 const deptGridPath = join(root, "../../components/admin/workspace/WorkspaceRootDepartmentGrid.tsx");
 const workspaceCssPath = join(root, "../../app/adminV2/components/workspace/workspace.css");
+const workspaceProvidersPath = join(root, "../../app/adminV2/workspace/AdminV2WorkspaceClientProviders.tsx");
 
 describe("work-unit queue row open contract", () => {
     it("handles open_record before registry execute branch", () => {
@@ -30,6 +31,23 @@ describe("work-unit queue row open contract", () => {
     it("keeps queue rows clickable during lane refresh", () => {
         const css = readFileSync(workspaceCssPath, "utf8");
         expect(css).toContain("adminv2-ws-wu-queue-card-interactive");
+    });
+
+    it("defers work-unit queue list overflow to workspace scroll surface", () => {
+        const css = readFileSync(workspaceCssPath, "utf8");
+        expect(css).not.toMatch(
+            /--ws-dept-primary-queue-list-max-height:\s*min\(calc\(44vh/,
+        );
+        const wuListRule = css.match(
+            /\[data-ws-surface="work_unit"\]\.adminv2-ws-wu-v2 \.adminv2-ws-wu-queue-list\.adminv2-ws-queue-list\s*\{[^}]+\}/,
+        )?.[0];
+        expect(wuListRule).toBeDefined();
+        expect(wuListRule).toContain("max-height: var(--ws-dept-primary-queue-list-max-height)");
+        expect(wuListRule).toContain("overflow-y: visible");
+        expect(wuListRule).not.toContain("overflow-y: auto");
+        const providers = readFileSync(workspaceProvidersPath, "utf8");
+        expect(providers).toContain("adminv2-workspace-scroll-surface");
+        expect(providers).toContain("overflow-auto");
     });
 
     it("wires shared interactive affordance on operational click surfaces", () => {

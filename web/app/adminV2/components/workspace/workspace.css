@@ -82,14 +82,9 @@
   --ws-type-dept-tile-desc-size: 11.5px;
 }
 
-/* Work-unit surface: tighter vertical rhythm. Queue list max-height applies only on full work-unit route shell (`.adminv2-ws-work-unit`) so embedded department queues inherit `none`. */
+/* Work-unit surface: tighter vertical rhythm. Queue list height follows content — `.adminv2-workspace-scroll-surface` owns scroll. */
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 {
   --ws-dept-section-gap: 12px;
-}
-
-[data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 {
-  /* +15% vs prior cap so more rows fit; pushes Automations section down on typical layouts */
-  --ws-dept-primary-queue-list-max-height: min(calc(44vh * 1.15), calc((100vh - 18.5rem) * 1.15));
 }
 
 /* Work-unit route loading: subtle enrollment/dept pine accent (quieter than department cold shell). */
@@ -6794,8 +6789,7 @@
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-list.adminv2-ws-queue-list {
   max-height: var(--ws-dept-primary-queue-list-max-height);
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow-y: visible;
   padding-right: 2px;
 }
 
@@ -8330,7 +8324,7 @@
 }
 
 /*
- * Work-unit route only (`.adminv2-ws-work-unit` shell): record-card typography + list cap coexists with Automations.
+ * Work-unit route only (`.adminv2-ws-work-unit` shell): record-card typography; queue list height follows content (workspace scrollport scrolls).
  * Next-step strip is slightly quieter than title/contact/body; other card copy one notch up vs previous pass.
  */
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-count-badge {
