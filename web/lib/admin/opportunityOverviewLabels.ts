@@ -3,6 +3,7 @@
  * Do not rely on generic UUID heuristics for these keys.
  */
 import { opportunityDisplayLocationFromRecord } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
+import { displaySafeLabel, opportunityStatusDisplayLabelSafe } from "@/lib/admin/drawer/opportunityRawValueGuard";
 export const OPPORTUNITY_OVERVIEW_RELATIONSHIP_FIELD_KEYS = [
     "customer_id",
     "primary_person_id",
@@ -60,9 +61,9 @@ export function opportunityOverviewRelationshipReadLabel(
                 if (!hasNonEmptyFk(record, "location_id") && !hasNonEmptyFk(record, "_location_id")) {
                     return undefined;
                 }
-                return trimNonEmpty(record._location_label ?? record._location_name) ?? "";
+                return displaySafeLabel(record._location_label ?? record._location_name, { field: "location_id" }) ?? "";
             }
-            return resolved.label;
+            return displaySafeLabel(resolved.label, { field: "location_id" }) ?? "";
         }
         case "vertical_id":
             if (!hasNonEmptyFk(record, "vertical_id")) return undefined;
@@ -75,11 +76,7 @@ export function opportunityOverviewRelationshipReadLabel(
     }
 }
 
-/** Status / stage line: never show raw stage id as the primary label. */
+/** Status / stage line: never show raw stage id or internal status key as the primary label. */
 export function opportunityOverviewStatusBadgeLabel(record: Record<string, unknown>): string | null {
-    const disp = trimNonEmpty(record._status_display);
-    if (disp) return disp;
-    const stage = trimNonEmpty(record._pipeline_stage_name ?? record._stage_name);
-    if (stage) return stage;
-    return null;
+    return opportunityStatusDisplayLabelSafe(record);
 }

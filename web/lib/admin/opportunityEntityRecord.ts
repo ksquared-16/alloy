@@ -14,6 +14,7 @@ import {
 } from "@/lib/admin/statusDefinitionsResolve";
 import type { FieldRegistryAttachMeta } from "@/lib/admin/entityFieldRegistryAttach";
 import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
+import { resolveOpportunityStatusDisplay } from "@/lib/admin/drawer/opportunityStatusDisplayResolve";
 import { batchOptionItemLabelsForOrg, EMPTY_OPTION_LABEL_MAP, optionLabelFromBatchMap } from "@/lib/admin/optionItemLabelForOrg";
 import {
   isActiveChildCustomerMemberForInquiry,
@@ -1077,12 +1078,26 @@ export async function buildOpportunityDrawerVisiblePayload(
     phaseMs.status_defs_ms = Date.now() - t0;
     return rows;
   })();
-  const [wuDeptRowV, customerRowV, stRowV, primaryHydrV, opportunityDefsVisible] = await Promise.all([
+  const locP = (async () => {
+    const t0 = Date.now();
+    const row = opp.location_id
+      ? await supabase
+            .from("locations")
+            .select("label, address1, city, state, postal_code")
+            .eq("id", opp.location_id)
+            .eq("org_id", orgId)
+            .maybeSingle()
+      : { data: null };
+    phaseMs.location_lookup_ms = Date.now() - t0;
+    return row;
+  })();
+  const [wuDeptRowV, customerRowV, stRowV, primaryHydrV, opportunityDefsVisible, locRowV] = await Promise.all([
     wuDeptP,
     customerP,
     stageP,
     primaryHydrP,
     statusDefsP,
+    locP,
   ]);
   phaseMs.drawer_primary_parallel_ms = Date.now() - tParallel0;
   const vis: Record<string, unknown> = { ...data };
@@ -1104,9 +1119,23 @@ export async function buildOpportunityDrawerVisiblePayload(
   vis._discount_program_label = null;
   vis._vertical_name = null;
   if (opp.location_id) {
+    const l = locRowV.data as {
+      label?: string | null;
+      address1?: string | null;
+      city?: string | null;
+      state?: string | null;
+      postal_code?: string | null;
+    } | null;
+    const locLabel = l
+      ? l.label ||
+        [l.address1, l.city, l.state, l.postal_code]
+          .filter(Boolean)
+          .join(", ") ||
+        null
+      : null;
     vis._location_id = opp.location_id;
-    vis._location_name = null;
-    vis._location_label = null;
+    vis._location_name = locLabel;
+    vis._location_label = locLabel;
   } else {
     vis._location_id = null;
     vis._location_name = null;
@@ -1125,22 +1154,13 @@ export async function buildOpportunityDrawerVisiblePayload(
     vis._pipeline_stage_name != null && String(vis._pipeline_stage_name).trim() !== ""
       ? String(vis._pipeline_stage_name).trim()
       : null;
-  let oppStatusDisplayV: string | null = null;
-  if (
-    oppPipelineStageId &&
-    oppSkRawV &&
-    String(oppSkRawV) === String(oppPipelineStageId) &&
-    stageLabelV
-  ) {
-    oppStatusDisplayV = stageLabelV;
-  } else if (oppSkRawV && !isUuidLike(oppSkRawV)) {
-    oppStatusDisplayV = oppSkRawV;
-  } else if (stageLabelV) {
-    oppStatusDisplayV = stageLabelV;
-  } else {
-    oppStatusDisplayV = oppSkRawV;
-  }
-  vis._status_display = oppStatusDisplayV;
+  vis._status_display = resolveOpportunityStatusDisplay({
+    statusKey: oppSkRawV,
+    legacyStatus: oppLegacyStatusV,
+    statusDefs: opportunityDefsVisible,
+    pipelineStageId: oppPipelineStageId,
+    pipelineStageName: stageLabelV,
+  });
   const qtV = effectiveOpportunityQuoteDollars(opp as Parameters<typeof effectiveOpportunityQuoteDollars>[0]);
   vis._quote_total_display = qtV;
   Object.assign(
@@ -1557,7 +1577,6 @@ export async function respondOpportunityEntityGet(
   markPhase("after_primary_person_contact");
   const tFinShell = Date.now();
   const oppOrgId = oppOrgIdForDefs;
-  const oppStatusLabelByKey = displayLabelsFromDefinitions(opportunityDefs);
   const oppLegacyStatus = (opp as { status?: string | null }).status;
   const oppSkRaw =
     opp.status_key != null && String(opp.status_key).trim() !== ""
@@ -1570,31 +1589,14 @@ export async function respondOpportunityEntityGet(
     String(out._pipeline_stage_name).trim() !== ""
       ? String(out._pipeline_stage_name).trim()
       : null;
-  let oppStatusDisplay: string | null = null;
-  if (oppOrgId && oppSkRaw) {
-    const ci = opportunityDefs.find(
-      (d) => d.status_key.toLowerCase() === oppSkRaw.toLowerCase(),
-    );
-    if (ci?.status_label != null && String(ci.status_label).trim() !== "") {
-      oppStatusDisplay = String(ci.status_label).trim();
-    } else {
-      oppStatusDisplay = resolveDisplayFromLabelMap(
-        oppStatusLabelByKey,
-        oppSkRaw,
-        null,
-      );
-    }
-  } else {
-    oppStatusDisplay = oppSkRaw;
-  }
-  if (
-    oppPipelineStageId &&
-    oppSkRaw &&
-    String(oppSkRaw) === String(oppPipelineStageId) &&
-    stageLabel
-  ) {
-    oppStatusDisplay = stageLabel;
-  } else if (oppStatusDisplay != null && isUuidLike(String(oppStatusDisplay))) {
+  let oppStatusDisplay = resolveOpportunityStatusDisplay({
+    statusKey: oppSkRaw,
+    legacyStatus: oppLegacyStatus,
+    statusDefs: opportunityDefs,
+    pipelineStageId: oppPipelineStageId,
+    pipelineStageName: stageLabel,
+  });
+  if (oppStatusDisplay != null && isUuidLike(String(oppStatusDisplay))) {
     if (stageLabel) {
       oppStatusDisplay = stageLabel;
     } else if (isUuidLike(oppSkRaw)) {
@@ -1607,12 +1609,6 @@ export async function respondOpportunityEntityGet(
       if (nm != null && String(nm).trim() !== "")
         oppStatusDisplay = String(nm).trim();
     }
-  }
-  if (
-    (oppStatusDisplay == null || String(oppStatusDisplay).trim() === "") &&
-    stageLabel
-  ) {
-    oppStatusDisplay = stageLabel;
   }
   out._status_display = oppStatusDisplay;
   const qt = effectiveOpportunityQuoteDollars(opp);

@@ -210,7 +210,7 @@ export default function OpportunityRecordSectionRegistryActions({
     return (
         <div
             ref={mountRef}
-            className={`mt-2 ${compactActions ? "min-h-[2rem]" : actionsFetchEnabled ? "min-h-[2.25rem]" : "min-h-[2px]"}`}
+            className={`mt-2 ${compactActions ? "min-h-[2rem]" : "min-h-[2.25rem]"}`}
             data-opportunity-record-section-actions-root={sectionKey}
         >
             {!shouldLoad ? null : loading ? (

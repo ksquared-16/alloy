@@ -138,7 +138,20 @@ export function OpportunityTourBookingLifecycleBar(props: Props) {
     }
 
     if (loading) {
-        return <div className="mt-1 text-[11px] text-alloy-midnight/45">Loading tour booking…</div>;
+        return (
+            <div
+                className="mt-1.5 min-h-[2.25rem] space-y-1"
+                data-tour-booking-ui-state="loading"
+                aria-busy="true"
+            >
+                <div className="h-3 w-[min(12rem,55vw)] skeleton-pulse rounded bg-alloy-stone/10" aria-hidden />
+                <div className="flex min-h-[2.25rem] flex-wrap gap-1.5 pt-0.5">
+                    <div className="h-7 w-[5.5rem] skeleton-pulse rounded border border-alloy-stone/15 bg-alloy-stone/8" aria-hidden />
+                    <div className="h-7 w-[4.5rem] skeleton-pulse rounded border border-alloy-stone/15 bg-alloy-stone/8" aria-hidden />
+                    <div className="h-7 w-[5.25rem] skeleton-pulse rounded border border-alloy-stone/15 bg-alloy-stone/8" aria-hidden />
+                </div>
+            </div>
+        );
     }
     if (err) {
         return <div className="mt-1 text-[11px] text-red-700">{err}</div>;
@@ -176,7 +189,7 @@ export function OpportunityTourBookingLifecycleBar(props: Props) {
                     <span className="text-alloy-midnight/50"> · Inquiry tour date reflects this booking.</span>
                 ) : null}
             </p>
-            <div className="flex flex-wrap gap-1.5 pt-0.5">
+            <div className="flex min-h-[2.25rem] flex-wrap gap-1.5 pt-0.5">
                 <button
                     type="button"
                     className="rounded border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight disabled:opacity-50"

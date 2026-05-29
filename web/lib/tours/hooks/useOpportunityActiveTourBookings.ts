@@ -15,12 +15,15 @@ export function useOpportunityActiveTourBookings(
             : "";
 
     const [activeBookings, setActiveBookings] = useState<TourBookingRow[]>([]);
+    const [fetchSettled, setFetchSettled] = useState(!enabled);
 
     const load = useCallback(async () => {
         if (!enabled || !oid) {
             setActiveBookings([]);
+            setFetchSettled(true);
             return;
         }
+        setFetchSettled(false);
         try {
             const res = await fetch(`/api/admin/tours/opportunities/${encodeURIComponent(oid)}/bookings`, {
                 credentials: "include",
@@ -30,6 +33,8 @@ export function useOpportunityActiveTourBookings(
             setActiveBookings(j.active_bookings ?? []);
         } catch {
             setActiveBookings([]);
+        } finally {
+            setFetchSettled(true);
         }
     }, [enabled, oid]);
 
@@ -47,5 +52,5 @@ export function useOpportunityActiveTourBookings(
         return () => window.removeEventListener("adminv2:opportunity-updated", onEvt as EventListener);
     }, [oid, load]);
 
-    return { activeBookings, reload: load };
+    return { activeBookings, reload: load, fetchSettled };
 }

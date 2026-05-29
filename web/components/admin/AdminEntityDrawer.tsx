@@ -246,6 +246,12 @@ import {
 import { reportOpportunityDrawerHydrateLayoutStability } from "@/lib/admin/drawer/opportunityDrawerAboveFoldGeometry";
 import { INQUIRY_SUMMARY_RIGHT_COLUMN_SHELL_MIN_H_CLASS } from "@/lib/admin/drawer/opportunityInquiryRightColumnGeometry";
 import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
+import { assessOpportunityAboveFoldPresentationReady } from "@/lib/admin/drawer/opportunityAboveFoldPresentationReady";
+import {
+    opportunityLocationDisplayLabelSafe,
+    opportunityStatusDisplayLabelSafe,
+} from "@/lib/admin/drawer/opportunityRawValueGuard";
+import { logDrawerPresentationGate } from "@/lib/perf/drawerPresentationGatePerf";
 import {
     buildJobDrawerPipelineState,
     buildOpportunityDrawerPipelineState,
@@ -1451,10 +1457,8 @@ export default function AdminEntityDrawer() {
     const [opportunityTourBookingsId, setOpportunityTourBookingsId] = useState<string | null>(null);
     const [inquiryTourFetchArmed, setInquiryTourFetchArmed] = useState(false);
     const [inquirySummaryFetchArmed, setInquirySummaryFetchArmed] = useState(false);
-    const { activeBookings: opportunityRecordHeaderActiveTours } = useOpportunityActiveTourBookings(
-        opportunityTourBookingsId,
-        inquiryTourFetchArmed
-    );
+    const { activeBookings: opportunityRecordHeaderActiveTours, fetchSettled: opportunityTourBookingsFetchSettled } =
+        useOpportunityActiveTourBookings(opportunityTourBookingsId, inquiryTourFetchArmed);
     const opportunityInquiryTourBookingsForDisplay = useMemo((): TourBookingRow[] => {
         const optimistic = readOptimisticTourBookingFromOverview(
             data && typeof data === "object" ? (data as Record<string, unknown>) : null
@@ -1479,6 +1483,10 @@ export default function AdminEntityDrawer() {
             header: relabel(base.header ?? []),
         };
     }, [opportunityResolvedHeaderActions, opportunityInquiryTourBookingsForDisplay]);
+    const opportunityDrawerPresentationGateOpenedAtRef = useRef<number | null>(null);
+    const [opportunityDrawerPresentationGateTimedOut, setOpportunityDrawerPresentationGateTimedOut] =
+        useState(false);
+    const opportunityDrawerPresentationGateReportedRef = useRef<string | null>(null);
     /** After primary reveal + contract — arms post-reveal enrich queue (not gated on full). */
     const [postDrawerVisibleKey, setPostDrawerVisibleKey] = useState<string | null>(null);
     const postRevealEnrichEndReportedRef = useRef<string | null>(null);
@@ -6957,11 +6965,14 @@ export default function AdminEntityDrawer() {
 
     const opportunityHeaderLocationLabel = useMemo(() => {
         if (drawer.type !== "opportunities") return null;
+        const previewLoc = drawer.opportunityQueuePreviewSeed?.locationLabel?.trim();
         if (overviewData && !(overviewData as { _create?: boolean })._create) {
-            const label = opportunityDisplayLocationLabel(overviewData as Record<string, unknown>);
+            const label = opportunityLocationDisplayLabelSafe(
+                overviewData as Record<string, unknown>,
+                previewLoc
+            );
             if (label) return label;
         }
-        const previewLoc = drawer.opportunityQueuePreviewSeed?.locationLabel?.trim();
         if (drawerGateLoading && previewLoc) return previewLoc;
         return null;
     }, [drawer.type, overviewData, drawerGateLoading, drawer.opportunityQueuePreviewSeed?.locationLabel]);
@@ -7185,8 +7196,95 @@ export default function AdminEntityDrawer() {
         overviewData,
     ]);
 
+    const opportunityDrawerAboveFoldPresentationReport = useMemo(() => {
+        if (!opportunityInquiryWorkflowDrawer || !drawer.id || drawer.id === "new") {
+            return { ready: true, missing: [], skeleton_sections: [], raw_value_suppressed: [] };
+        }
+        const seed = drawer.opportunityQueuePreviewSeed;
+        const layoutCfg = (recordChromeOpportunity.layout?.config_json ?? null) as RecordLayoutConfigJson | null;
+        return assessOpportunityAboveFoldPresentationReady(
+            overviewData as Record<string, unknown> | null | undefined,
+            opportunityDrawerShellContract,
+            {
+                family_contacts_in_summary:
+                    opportunityDrawerShellContract?.geometry.family_contacts_in_summary === true ||
+                    recordOpportunityDrawerLayoutIncludesSection(layoutCfg, "family_contacts"),
+                summary_right_column_reserved:
+                    opportunityDrawerShellContract?.geometry.summary_right_column_reserved === true ||
+                    (opportunityInquiryWorkflowDrawer && isTaskAssistV1UiEnabled()),
+                what_matters_reserved: opportunityInquiryWorkflowDrawer,
+                inquiry_children_section_visible:
+                    opportunityDrawerShellContract?.section_slots.some((s) => s.section_key === "inquiry_children") ===
+                        true || recordOpportunityDrawerLayoutIncludesSection(layoutCfg, "inquiry_children"),
+                tour_bookings_fetch_armed: inquiryTourFetchArmed,
+                tour_bookings_fetch_settled: opportunityTourBookingsFetchSettled,
+            },
+            {
+                statusLabel: seed?.statusLabel ?? seed?.stageLabel ?? null,
+                locationLabel: seed?.locationLabel ?? null,
+                title: seed?.title ?? null,
+                childLifecycleSummaryHeadline: seed?.childLifecycleSummaryHeadline ?? null,
+            }
+        );
+    }, [
+        opportunityInquiryWorkflowDrawer,
+        drawer.id,
+        drawer.opportunityQueuePreviewSeed,
+        overviewData,
+        opportunityDrawerShellContract,
+        recordChromeOpportunity.layout?.config_json,
+        inquiryTourFetchArmed,
+        opportunityTourBookingsFetchSettled,
+    ]);
+
+    const opportunityDrawerAboveFoldPresentationReady =
+        opportunityDrawerAboveFoldPresentationReport.ready || opportunityDrawerPresentationGateTimedOut;
+
     const opportunityDrawerOverviewRevealReady =
-        opportunityDrawerCoordinatedRevealReady && opportunityDrawerInquiryStructuralReady;
+        opportunityDrawerCoordinatedRevealReady &&
+        opportunityDrawerInquiryStructuralReady &&
+        (!opportunityInquiryWorkflowDrawer || opportunityDrawerAboveFoldPresentationReady);
+
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
+            opportunityDrawerPresentationGateOpenedAtRef.current = null;
+            setOpportunityDrawerPresentationGateTimedOut(false);
+            opportunityDrawerPresentationGateReportedRef.current = null;
+            return;
+        }
+        const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+        opportunityDrawerPresentationGateOpenedAtRef.current = startedAt;
+        setOpportunityDrawerPresentationGateTimedOut(false);
+        opportunityDrawerPresentationGateReportedRef.current = null;
+        const timer = window.setTimeout(() => setOpportunityDrawerPresentationGateTimedOut(true), 1400);
+        return () => window.clearTimeout(timer);
+    }, [drawer.type, drawer.id]);
+
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        if (!opportunityDrawerAboveFoldPresentationReady) return;
+        const key = String(drawer.id);
+        if (opportunityDrawerPresentationGateReportedRef.current === key) return;
+        opportunityDrawerPresentationGateReportedRef.current = key;
+        const startedAt = opportunityDrawerPresentationGateOpenedAtRef.current;
+        const reveal_delay_ms =
+            startedAt != null
+                ? Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt)
+                : undefined;
+        logDrawerPresentationGate({
+            opportunity_id: key,
+            ready: opportunityDrawerAboveFoldPresentationReport.ready,
+            missing: opportunityDrawerAboveFoldPresentationReport.missing,
+            reveal_delay_ms,
+            raw_value_suppressed: opportunityDrawerAboveFoldPresentationReport.raw_value_suppressed,
+            skeleton_sections: opportunityDrawerAboveFoldPresentationReport.skeleton_sections,
+        });
+    }, [
+        drawer.type,
+        drawer.id,
+        opportunityDrawerAboveFoldPresentationReady,
+        opportunityDrawerAboveFoldPresentationReport,
+    ]);
 
     useLayoutEffect(() => {
         const nextKey = drawer.type && drawer.id ? `${drawer.type}:${drawer.id}` : "";
@@ -7715,12 +7813,12 @@ export default function AdminEntityDrawer() {
             setOpportunityTourBookingsId(null);
             return;
         }
-        if (!opportunityDrawerSecondaryReady) {
+        if (!opportunityDrawerPrimaryContractSatisfied) {
             setOpportunityTourBookingsId(null);
             return;
         }
         setOpportunityTourBookingsId(drawer.id);
-    }, [drawer.type, drawer.id, opportunityDrawerSecondaryReady]);
+    }, [drawer.type, drawer.id, opportunityDrawerPrimaryContractSatisfied]);
 
     const opportunityInquirySummaryEnrichmentGate = opportunityDrawerBelowFoldEnrichmentReady;
     const { ref: tourSectionRef, intersecting: tourSectionVisible } = useDrawerSectionIntersection(
@@ -7731,7 +7829,8 @@ export default function AdminEntityDrawer() {
         opportunityInquirySummaryEnrichmentGate,
         "80px"
     );
-    const tourBookingsFetchEnabled = opportunityInquirySummaryEnrichmentGate && tourSectionVisible;
+    const tourBookingsFetchEnabled =
+        opportunityDrawerPrimaryContractSatisfied && opportunityInquiryWorkflowDrawer;
     const inquirySummaryFetchEnabled = opportunityInquirySummaryEnrichmentGate && inquirySummaryRightVisible;
     const opportunityRegistrySectionActionsFetchEnabled =
         opportunityDrawerOverviewRevealReady &&
@@ -9640,6 +9739,34 @@ export default function AdminEntityDrawer() {
         if (!overviewData || (overviewData as { _create?: boolean })._create) return null;
         const d = overviewData as Record<string, unknown>;
         const currentStatus = String(formData.status_key ?? d.status_key ?? "").trim();
+        const statusDisplayLabel = opportunityStatusDisplayLabelSafe(
+            d,
+            drawer.opportunityQueuePreviewSeed?.statusLabel ?? drawer.opportunityQueuePreviewSeed?.stageLabel
+        );
+        if (!currentStatus) {
+            return (
+                <div className="flex min-w-0 max-w-[11rem] shrink flex-col gap-0.5 sm:max-w-[15rem]">
+                    <span className="sr-only">Opportunity status</span>
+                    <div
+                        className="h-9 w-full skeleton-pulse rounded-full border border-alloy-stone/20 bg-alloy-stone/8"
+                        aria-hidden
+                        data-opportunity-status-skeleton="true"
+                    />
+                </div>
+            );
+        }
+        if (!statusDisplayLabel || statusDefsLoading) {
+            return (
+                <div className="flex min-w-0 max-w-[11rem] shrink flex-col gap-0.5 sm:max-w-[15rem]">
+                    <span className="sr-only">Opportunity status</span>
+                    <div
+                        className="h-9 w-full skeleton-pulse rounded-full border border-alloy-stone/20 bg-alloy-stone/8"
+                        aria-hidden
+                        data-opportunity-status-skeleton="true"
+                    />
+                </div>
+            );
+        }
         let statusOptions =
             statusDefsForDrawer
                 ?.filter((s) => s.is_active !== false)
@@ -9647,7 +9774,7 @@ export default function AdminEntityDrawer() {
         if (currentStatus && !statusOptions.some((s) => s.status_key === currentStatus)) {
             statusOptions = [
                 ...statusOptions,
-                { status_key: currentStatus, status_label: currentStatus, sort_order: 9999, is_active: true },
+                { status_key: currentStatus, status_label: statusDisplayLabel, sort_order: 9999, is_active: true },
             ];
         }
         return (
@@ -9671,7 +9798,7 @@ export default function AdminEntityDrawer() {
                     <option value="">— None —</option>
                     {statusOptions.map((s) => (
                         <option key={s.status_key} value={s.status_key}>
-                            {s.status_label ?? s.status_key}
+                            {s.status_label ?? statusDisplayLabel}
                         </option>
                     ))}
                 </select>
@@ -9680,9 +9807,12 @@ export default function AdminEntityDrawer() {
     }, [
         opportunityInquiryWorkflowDrawer,
         drawer.type,
+        drawer.opportunityQueuePreviewSeed?.statusLabel,
+        drawer.opportunityQueuePreviewSeed?.stageLabel,
         overviewData,
         formData.status_key,
         statusDefsForDrawer,
+        statusDefsLoading,
         canMutate,
         nonJobFormDirty,
         saveEdit,
@@ -9886,14 +10016,9 @@ export default function AdminEntityDrawer() {
             <StatusBadge label={drawer.opportunityQueuePreviewSeed.statusLabel.trim()} variant="default" />
         ) : drawer.type === "opportunities" &&
           !opportunityInquiryWorkflowDrawer &&
-          (opportunityOverviewStatusBadgeLabel(overviewData as Record<string, unknown>) ||
-              (overviewData as { status_key?: string }).status_key) ? (
+          opportunityOverviewStatusBadgeLabel(overviewData as Record<string, unknown>) ? (
             <StatusBadge
-                label={
-                    opportunityOverviewStatusBadgeLabel(overviewData as Record<string, unknown>) ||
-                    getStatusLabel((overviewData as { status_key?: string }).status_key) ||
-                    String((overviewData as { status_key?: string }).status_key ?? "")
-                }
+                label={opportunityOverviewStatusBadgeLabel(overviewData as Record<string, unknown>)!}
                 variant="default"
             />
         ) : drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer && opportunityInquiryWorkflowHeaderStatus ? (
@@ -12840,19 +12965,12 @@ export default function AdminEntityDrawer() {
                                                 const childRel = String(ident?.primary_child?.relationship_label ?? "").trim();
                                                 const inquiryTitle =
                                                     String(ident?.inquiry?.title ?? "").trim() || "";
-                                                const stageLabel = (() => {
-                                                    const displaySeed = String(d._status_display ?? "").trim();
-                                                    if (opportunityDrawerLayoutFirstPaintGates && displaySeed) {
-                                                        return displaySeed;
-                                                    }
-                                                    const sk = String(formData.status_key ?? d.status_key ?? "").trim();
-                                                    if (!sk) return "—";
-                                                    const hit = (statusDefsForDrawer ?? []).find(
-                                                        (s) => String(s.status_key ?? "").trim() === sk
-                                                    );
-                                                    const label = hit ? String(hit.status_label ?? "").trim() : "";
-                                                    return label || sk;
-                                                })();
+                                                const stageLabel =
+                                                    opportunityStatusDisplayLabelSafe(
+                                                        d,
+                                                        drawer.opportunityQueuePreviewSeed?.statusLabel ??
+                                                            drawer.opportunityQueuePreviewSeed?.stageLabel
+                                                    ) ?? "—";
                                                 const nextStep = d._lifecycle_next_step as { title?: string; lines?: string[] } | undefined;
                                                 const nextStepText = (nextStep?.lines ?? [])
                                                     .map((l) => String(l).trim())
@@ -12939,6 +13057,9 @@ export default function AdminEntityDrawer() {
                                                         inqModel?.what_matters.show_tour_bookings_enrichment === true;
                                                     const showWhatMattersTourSlot =
                                                         showTourFromPrimaryOnly || showTourFromBookings;
+                                                    const tourDisplayReady =
+                                                        !showWhatMattersTourSlot ||
+                                                        (inquiryTourFetchArmed && opportunityTourBookingsFetchSettled);
                                                     const taskPreview = inqModel?.task_preview;
 
                                                     return (
@@ -13144,7 +13265,7 @@ export default function AdminEntityDrawer() {
                                                                             <div className={tinyLabel}>What matters for this inquiry</div>
                                                                             <div className="mt-1.5 space-y-2">
                                                                                 <div className="min-h-[1.75rem]">
-                                                                                    {showTourFromBookings ? (
+                                                                                    {tourDisplayReady ? (
                                                                                         <div ref={tourSectionRef}>
                                                                                             <OpportunityInquiryTourDateBlock
                                                                                                 opportunityId={drawer.id}
@@ -13168,32 +13289,15 @@ export default function AdminEntityDrawer() {
                                                                                                 fetchEnabled={false}
                                                                                             />
                                                                                         </div>
-                                                                                    ) : showTourFromPrimaryOnly ? (
-                                                                                        <>
-                                                                                            <div className={tinyLabel}>Tour date</div>
-                                                                                            <div
-                                                                                                className={oppInqReadonlyField}
-                                                                                                aria-label="Tour date (metadata)"
-                                                                                            >
-                                                                                                {(() => {
-                                                                                                    const md = (d.metadata ?? null) as Record<string, unknown> | null;
-                                                                                                    const siteTz =
-                                                                                                        md &&
-                                                                                                        typeof md.tour_timezone === "string" &&
-                                                                                                        md.tour_timezone.trim()
-                                                                                                            ? md.tour_timezone.trim()
-                                                                                                            : viewerTz;
-                                                                                                    const fmt = formatTourDateTime(md?.tour_date, md?.tour_time, {
-                                                                                                        displayTimeZoneIana: siteTz,
-                                                                                                    });
-                                                                                                    return fmt.display;
-                                                                                                })()}
-                                                                                            </div>
-                                                                                        </>
                                                                                     ) : (
                                                                                         <div aria-hidden data-shell-slot-placeholder="tour_date">
                                                                                             <div className={tinyLabel}>Tour date</div>
                                                                                             <div className="mt-0.5 h-[1.375rem] max-w-[14rem] skeleton-pulse rounded bg-alloy-stone/10" />
+                                                                                            <div className="mt-1.5 flex min-h-[2.25rem] flex-wrap gap-1.5">
+                                                                                                <div className="h-7 w-[5.5rem] skeleton-pulse rounded border border-alloy-stone/15 bg-alloy-stone/8" />
+                                                                                                <div className="h-7 w-[4.5rem] skeleton-pulse rounded border border-alloy-stone/15 bg-alloy-stone/8" />
+                                                                                                <div className="h-7 w-[5.25rem] skeleton-pulse rounded border border-alloy-stone/15 bg-alloy-stone/8" />
+                                                                                            </div>
                                                                                         </div>
                                                                                     )}
                                                                                 </div>

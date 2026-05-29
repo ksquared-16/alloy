@@ -25,6 +25,8 @@ vercel
 
 Or connect the repo in Vercel and set **Root Directory** to `demos/firefly-early-learning`.
 
+**Framework Preset:** Next.js (leave **Output Directory** empty — do not set it to `public`).
+
 No environment variables are required.
 
 ## Pages

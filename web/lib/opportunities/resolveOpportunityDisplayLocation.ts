@@ -1,3 +1,5 @@
+import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
+
 /**
  * Opportunity location display — child/member locations are canonical; opportunity.location_id is fallback.
  * @see docs/system/entity-model.md § Location semantics
@@ -59,9 +61,11 @@ function dedupeChildLocations(
         if (seen.has(dedupeKey)) continue;
         seen.add(dedupeKey);
 
+        const safeName = label ?? (id && !isUuidLike(id) ? id : null);
+        if (!safeName) continue;
         out.push({
             id,
-            name: label ?? id ?? "—",
+            name: safeName,
         });
     }
 
@@ -95,7 +99,12 @@ export function resolveOpportunityDisplayLocation(
     const opportunityLocationLabel = trimOrNull(input.opportunityLocationLabel);
 
     if (opportunityLocationId || opportunityLocationLabel) {
-        const name = opportunityLocationLabel ?? opportunityLocationId ?? "—";
+        const name =
+            opportunityLocationLabel ??
+            (opportunityLocationId && !isUuidLike(opportunityLocationId) ? opportunityLocationId : null);
+        if (!name) {
+            return { kind: "none", label: null, locations: [] };
+        }
         return {
             kind: "single",
             label: name,
