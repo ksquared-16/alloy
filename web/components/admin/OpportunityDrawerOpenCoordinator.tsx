@@ -37,7 +37,10 @@ export default function OpportunityDrawerOpenCoordinator() {
                     openingOpportunity.id,
                     openingOpportunity.opportunityWorkspaceContext ?? null,
                     { ...workspaceDataFetchInit(), signal: ac.signal },
-                    { overlayShownAt }
+                    {
+                        overlayShownAt,
+                        queuePreviewSeed: openingOpportunity.opportunityQueuePreviewSeed ?? null,
+                    }
                 );
                 if (gen !== runGenRef.current) return;
                 reportDrawerOpenCoordinatorCommit(openingOpportunity.id, metrics);

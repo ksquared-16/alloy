@@ -14,7 +14,7 @@ import {
 } from "@/lib/admin/statusDefinitionsResolve";
 import type { FieldRegistryAttachMeta } from "@/lib/admin/entityFieldRegistryAttach";
 import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
-import { batchOptionItemLabelsForOrg, optionLabelFromBatchMap } from "@/lib/admin/optionItemLabelForOrg";
+import { batchOptionItemLabelsForOrg, EMPTY_OPTION_LABEL_MAP, optionLabelFromBatchMap } from "@/lib/admin/optionItemLabelForOrg";
 import {
   isActiveChildCustomerMemberForInquiry,
   mergeHouseholdActiveChildrenIntoInquiryChildren,
@@ -534,6 +534,9 @@ function applyInquiryChildrenMetadataFallbacks(
 /**
  * Drawer shell / drawer_primary: resolve inquiry children rows for immediate section paint.
  * Skips bulk person lookup and custom-field attach (values hydrate on full surface or edit).
+ *
+ * Option-set label batch (`batchOptionItemLabelsForOrg`) is intentionally omitted here (~400–500ms):
+ * read-only rows use item_key fallbacks; editable dropdowns load option sets when edit mode arms.
  */
 export async function attachOpportunityInquiryChildrenShell(
   supabase: AdminSupabase,
@@ -609,20 +612,7 @@ export async function attachOpportunityInquiryChildrenShell(
   const memberMap = new Map(memList.map((m) => [m.id, m]));
   const pmap = new Map<string, WarmPersonRow>();
 
-  const optionPairs: { setKey: string; itemKey: string }[] = [];
-  for (const r of jrows) {
-    const desiredProgramType = trimOrNull(r.desired_program_type) ?? oppDefaultProgramType;
-    const desiredScheduleType = trimOrNull(r.desired_schedule_type) ?? oppDefaultScheduleType;
-    if (desiredProgramType) optionPairs.push({ setKey: "childcare_program_type", itemKey: desiredProgramType });
-    if (desiredScheduleType) optionPairs.push({ setKey: "childcare_schedule_type", itemKey: desiredScheduleType });
-  }
-
-  for (const r of jrows) {
-    const cohortKey = trimOrNull(r.program_room_cohort_key);
-    if (cohortKey) optionPairs.push({ setKey: "childcare_program_type", itemKey: cohortKey });
-  }
-
-  const optionLabelMap = await batchOptionItemLabelsForOrg(supabase, orgId, optionPairs);
+  const optionLabelMap = EMPTY_OPTION_LABEL_MAP as Map<string, string>;
   const ocmStatusLabelByKey = displayLabelsFromDefinitions(ocmMemberDefsTaggedPack.rows);
   const locationLabelById = await batchLocationLabelsForOrg(
     supabase,
@@ -902,35 +892,15 @@ async function respondOpportunityRelationshipMemberOverlay(
     }
   }
 
-  const optionPairs: { setKey: string; itemKey: string }[] = [];
-  for (const r of jrows) {
-    const desiredProgramType =
-      trimOrNull(r.desired_program_type) ?? oppDefaultProgramType;
-    const desiredScheduleType =
-      trimOrNull(r.desired_schedule_type) ?? oppDefaultScheduleType;
-    if (desiredProgramType)
-      optionPairs.push({
-        setKey: "childcare_program_type",
-        itemKey: desiredProgramType,
-      });
-    if (desiredScheduleType)
-      optionPairs.push({
-        setKey: "childcare_schedule_type",
-        itemKey: desiredScheduleType,
-      });
-    const cohortKey = trimOrNull(r.program_room_cohort_key);
-    if (cohortKey) optionPairs.push({ setKey: "childcare_program_type", itemKey: cohortKey });
-  }
-
-  const [ocmMemberDefsTaggedPack, optionLabelMap, locationLabelById] = await Promise.all([
+  const [ocmMemberDefsTaggedPack, locationLabelById] = await Promise.all([
     ocmMemberDefsTaggedPackP,
-    batchOptionItemLabelsForOrg(supabase, orgId, optionPairs),
     batchLocationLabelsForOrg(
       supabase,
       orgId,
       jrows.map((r) => trimOrNull(r.location_id)).filter((id): id is string => Boolean(id)),
     ),
   ]);
+  const optionLabelMap = EMPTY_OPTION_LABEL_MAP as Map<string, string>;
 
   const ocmMemberStatusDefs = ocmMemberDefsTaggedPack.rows;
   const ocmStatusTelemetry = ocmMemberDefsTaggedPack.telemetry;
@@ -1983,28 +1953,9 @@ export async function respondOpportunityEntityGet(
   lapSegment("customer_member_linked_person_lookup");
 
   const tInquiry0 = Date.now();
-  const optionPairs: { setKey: string; itemKey: string }[] = [];
-  for (const r of jrows) {
-    const desiredProgramType =
-      trimOrNull(r.desired_program_type) ?? oppDefaultProgramType;
-    const desiredScheduleType =
-      trimOrNull(r.desired_schedule_type) ?? oppDefaultScheduleType;
-    if (desiredProgramType)
-      optionPairs.push({
-        setKey: "childcare_program_type",
-        itemKey: desiredProgramType,
-      });
-    if (desiredScheduleType)
-      optionPairs.push({
-        setKey: "childcare_schedule_type",
-        itemKey: desiredScheduleType,
-      });
-    const cohortKey = trimOrNull(r.program_room_cohort_key);
-    if (cohortKey) optionPairs.push({ setKey: "childcare_program_type", itemKey: cohortKey });
-  }
-  const [ocmMemberDefsTaggedPack, optionLabelMap, locationLabelById] = await Promise.all([
+  // Option label batch deferred off full-hydrate first paint — see attachOpportunityInquiryChildrenShell.
+  const [ocmMemberDefsTaggedPack, locationLabelById] = await Promise.all([
     ocmMemberDefsTaggedPackP,
-    batchOptionItemLabelsForOrg(supabase, orgId, optionPairs),
     batchLocationLabelsForOrg(
       supabase,
       orgId,
@@ -2013,6 +1964,7 @@ export async function respondOpportunityEntityGet(
         .filter((id): id is string => Boolean(id)),
     ),
   ]);
+  const optionLabelMap = EMPTY_OPTION_LABEL_MAP as Map<string, string>;
   const inquiryBatchMs = Date.now() - tInquiry0;
   enrichPhaseMs.inquiry_children_batch_ms = inquiryBatchMs;
   lapSegment("inquiry_ocm_defs_options_opportunity_persons_rows");

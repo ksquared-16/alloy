@@ -1,7 +1,7 @@
 # Record, Person & Location Convergence Sprint — Card 0 Audit
 
 **Date:** 2026-05-29  
-**Status:** Card 0 audit complete · **Card 1 shipped (2026-05-29)** · **Card 2 shipped (2026-05-29)** · **Card 3 audit complete (2026-05-29)** · **Card 4 shipped (2026-05-29)** — person drawer control-plane convergence  
+**Status:** Card 0 audit complete · **Card 1 shipped (2026-05-29)** · **Card 2 shipped (2026-05-29)** · **Card 3 audit complete (2026-05-29)** · **Card 4 shipped (2026-05-29)** · **Card 5 shipped (2026-05-29)** — person identity + relationship visibility (read-only)  
 **Goal:** Architectural baseline for converging location, room, child inquiry, person drawer, relationships, record lifecycle, household terminology, and enrollment navigation into a coherent operator model.
 
 **Canonical references:** `docs/core/glossary.md`, `docs/system/entity-model.md`, `docs/system/record-system.md`, `docs/system/workspace-system.md`, `docs/system/configuration-system.md`, `docs/sprints/05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`, `docs/sprints/05_2026/waitlist_priority_fact_truth_child_scope.md`, `docs/sprints/05_2026/completed/settings_control_plane_closeout.md`
@@ -647,7 +647,7 @@ Department: Enrollment (key: enrollment)
 | 2 | Child location authority display resolver | ✅ Shipped |
 | 3 | Person drawer convergence audit + target architecture | ✅ Audit complete |
 | 4 | Person drawer layout control plane (see Card 3 § Recommended Card 4) | ✅ Shipped |
-| 5 | Relationship editor + profile resolver + enrollment mirror | Planned |
+| 5 | Person profile resolution + relationship visibility (read-only) | ✅ Shipped |
 | 6 | Person archive/deactivate governance | Planned |
 | 7 | Household → Customer/Family string pass | Backlog |
 | 8 | Queue child-location enrichment | Backlog |
@@ -1188,7 +1188,6 @@ AdminEntityDrawer (shared shell)
 - Global `record_layouts` migration seed for `entity_type = person` (runtime uses `entityPresentation` + field definitions).
 - `useRecordChromeConfig` hook for person (no `record_actions` / section order editing in Settings yet).
 - `field_placements_v1` for person.
-- `resolvePersonDrawerProfile` / profile badges / child enrollment mirror section.
 - Relationship CRUD, archive/delete, address field (no `persons` address column today).
 - Settings → Layouts section-order editor for person (tab visible; composition editor remains opportunity-only).
 
@@ -1206,6 +1205,79 @@ AdminEntityDrawer (shared shell)
 | Employee fields hidden from defs grid but still editable in placement section | Same `PersonEmployeePlacementSection` as compact path |
 | Settings → Layouts person tab shows skeleton only | Documented deferred; preview uses presentation template |
 | Perf regression vs compact overview | Same hydrate path; no extra record-layout fetch for person |
+
+---
+
+## Card 5 — Person Profile Resolution + Relationship Visibility (shipped 2026-05-29)
+
+**Doctrine:** Person drawer is **identity + visibility only**. Child enrollment remains on OCM; opportunity/enrollment inquiry remains operational authority. **No relationship CRUD, no enrollment editing.**
+
+### What changed
+
+**Part A — Profile resolver**
+- Added `resolvePersonDrawerProfile()` (`web/lib/admin/person/resolvePersonDrawerProfile.ts`) — presentation-only, no persistence.
+- Signals: `customer_members.relationship`, `customer_persons.role_type`, `person_relationships` edges, `persons.is_employee`, `opportunity_persons.role_type`.
+- Outputs: `child`, `parent`, `guardian`, `employee`, `emergency_contact`, `mixed`, `unknown` with documented precedence in module docstring.
+
+**Part B — Profile badges**
+- `PersonDrawerProfileBadges` in drawer header (alongside person status when set).
+- Multiple roles render as separate badges (e.g. `Parent` + `Employee`).
+
+**Part C — Relationships overview**
+- Replaced technical Customers/Locations/Opportunities dump with grouped read-only family sections: Parents, Guardians, Emergency contacts, Children, Siblings.
+- `buildPersonDrawerRelationshipGroups()` pure helper; click-through to person or customer member drawers.
+
+**Part D — Enrollment visibility mirror (children)**
+- `attachPersonDrawerVisibility()` on person GET projects read-only OCM rows via `customer_members.person_id` → `opportunity_customer_members`.
+- Overview **Enrollment** section shows opportunity link, inquiry status, location, program, room (when data exists).
+- Calm copy: placement managed on enrollment inquiry — no edit controls.
+
+**Part E — Opportunity visibility mirror (parents/guardians)**
+- Merges `opportunities.primary_person_id` + reverse `opportunity_persons` lookup into `_enrollment_opportunities`.
+- Overview **Enrollment activity** section — read-only list with status + role label; click-through to opportunity.
+
+**Part F — UX**
+- No operational editing added to person drawer.
+- Sections omitted when empty (no giant empty grids).
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `web/lib/admin/person/resolvePersonDrawerProfile.ts` | **New** — profile resolver |
+| `web/lib/admin/person/buildPersonDrawerRelationshipGroups.ts` | **New** — grouped relationships |
+| `web/lib/admin/person/attachPersonDrawerVisibility.ts` | **New** — GET attach (OCM mirror, opp roles, siblings) |
+| `web/lib/admin/person/personDrawerVisibilityTypes.ts` | **New** — shared types |
+| `web/components/admin/entity/PersonDrawerProfileBadges.tsx` | **New** — header badges |
+| `web/components/admin/entity/PersonDrawerVisibilitySections.tsx` | **New** — overview section renderers |
+| `web/app/api/admin/entity/[type]/[id]/route.ts` | Person GET calls visibility attach |
+| `web/components/admin/AdminEntityDrawer.tsx` | Badges, sections, overview custom content |
+| `web/tests/admin/personDrawerVisibility.test.ts` | **New** — resolver + relationship groups |
+| `docs/sprints/05_2026/record_person_location_convergence_audit.md` | Card 5 section |
+
+### Intentionally deferred (Card 6+)
+
+- Relationship CRUD API and editors.
+- Archive/delete governance.
+- `person_type` column or stored profile enum.
+- Profile-specific layout forks / section visibility rules in `record_drawer_layouts`.
+- Enrollment editing from person drawer (explicitly out of scope).
+- `opportunity_persons` editing; full activity/comms on person.
+
+### Validation
+
+- `cd web && npm run test -- tests/admin/personDrawerVisibility.test.ts tests/admin/personDrawerControlPlane.test.ts`
+- `cd web && npx eslint` on changed files
+- `cd web && npx tsc --noEmit`
+
+### Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Stale enrollment mirror vs live OCM | Read-only + deep-link; refetch on drawer open |
+| Sibling detection incomplete without shared customer | Uses household `customer_id` from member + customer_person links |
+| Multi-hat profile badges noisy | Lightweight chips; no layout fork |
+| Accidental mini-CRM creep in future cards | Card 6+ scoped to archive; relationship **management** remains deferred |
 
 ---
 

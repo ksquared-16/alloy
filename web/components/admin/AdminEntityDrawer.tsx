@@ -97,6 +97,12 @@ import {
 } from "@/lib/entityPresentation";
 import { OpportunityIntakeSourceSection } from "@/components/admin/opportunity/OpportunityIntakeSourceSection";
 import PersonEmployeePlacementSection from "@/components/admin/entity/PersonEmployeePlacementSection";
+import PersonDrawerProfileBadges from "@/components/admin/entity/PersonDrawerProfileBadges";
+import {
+    PersonDrawerEnrollmentMirror,
+    PersonDrawerEnrollmentOpportunitiesMirror,
+    PersonDrawerRelationshipsOverview,
+} from "@/components/admin/entity/PersonDrawerVisibilitySections";
 import { readPersonEmployeePlacementValues } from "@/lib/admin/personEmployeePlacementFields";
 import {
     buildFieldLabelMapFromEntityData,
@@ -232,6 +238,11 @@ import {
     opportunityDrawerSummaryLayoutMode,
     stabilizeOpportunityWorkflowOverviewSections,
 } from "@/lib/admin/drawer/opportunityDrawerLayoutStability";
+import {
+    applyOpportunityFullHydrateDeferredPatch,
+    mergeOpportunityFullHydrate,
+    mergeOpportunityFullHydrateStaged,
+} from "@/lib/admin/drawer/opportunityFullHydrateMerge";
 import { reportOpportunityDrawerHydrateLayoutStability } from "@/lib/admin/drawer/opportunityDrawerAboveFoldGeometry";
 import { INQUIRY_SUMMARY_RIGHT_COLUMN_SHELL_MIN_H_CLASS } from "@/lib/admin/drawer/opportunityInquiryRightColumnGeometry";
 import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
@@ -1126,15 +1137,37 @@ type OpportunityEntitySurface =
     | "drawer_primary"
     | "relationship_member_persons";
 
-/** Merge full opportunity hydrate without clobbering visible fields with null/empty from partial responses. */
-function mergeOpportunityFullHydrate(prev: Record<string, unknown>, full: Record<string, unknown>): Record<string, unknown> {
-    const o: Record<string, unknown> = { ...prev };
-    for (const [k, v] of Object.entries(full)) {
-        if (v === undefined) continue;
-        if ((v === null || v === "") && o[k] != null && o[k] !== "") continue;
-        o[k] = v;
+/** @deprecated import from opportunityFullHydrateMerge — kept as thin alias for in-file references. */
+const mergeOpportunityFullHydrateLocal = mergeOpportunityFullHydrate;
+
+function runOpportunityStagedFullHydrateMerge(
+    prev: Record<string, unknown>,
+    incoming: Record<string, unknown>,
+    ctx: {
+        opportunityId: string;
+        phase: string;
+        aboveFoldLocked: boolean;
+        sourceSurface: string;
+        deferredRef: React.MutableRefObject<Record<string, unknown> | null>;
     }
-    return o;
+): Record<string, unknown> {
+    const { merged, deferredPatch } = mergeOpportunityFullHydrateStaged(prev, incoming, {
+        aboveFoldLocked: ctx.aboveFoldLocked,
+    });
+    if (deferredPatch) {
+        ctx.deferredRef.current = { ...(ctx.deferredRef.current ?? {}), ...deferredPatch };
+    }
+    const changed = Object.keys(merged).filter(
+        (k) => JSON.stringify(prev[k]) !== JSON.stringify(merged[k])
+    );
+    if (changed.length > 0) {
+        reportOpportunityDrawerHydrateLayoutStability(ctx.opportunityId, ctx.phase, prev, merged, {
+            aboveFoldLocked: ctx.aboveFoldLocked,
+            fullHydrateApplied: true,
+            sourceSurface: ctx.sourceSurface,
+        });
+    }
+    return merged;
 }
 
 function appendOpportunityRecordHeaderHints(qs: URLSearchParams, data: Record<string, unknown> | null | undefined, drawerId: string): void {
@@ -1461,6 +1494,7 @@ export default function AdminEntityDrawer() {
     const memberPersonGraphOverlayInFlightRef = useRef<string | null>(null);
     const memberPersonGraphOverlayDoneRef = useRef<string | null>(null);
     const opportunityDrawerAboveFoldLockedRef = useRef(false);
+    const opportunityDeferredFullHydrateRef = useRef<Record<string, unknown> | null>(null);
 
     /** Coherent shell: entity row loaded (header actions may still resolve in parallel). */
     const drawerReady = useMemo(() => {
@@ -1513,6 +1547,7 @@ export default function AdminEntityDrawer() {
         opportunityBackgroundFullDoneRef.current = null;
         memberPersonGraphOverlayInFlightRef.current = null;
         memberPersonGraphOverlayDoneRef.current = null;
+        opportunityDeferredFullHydrateRef.current = null;
         if (drawer.type === "opportunities" && drawer.id && drawer.id !== "new") {
             resetOpportunityDrawerHydrateGuards(drawer.id);
         }
@@ -2177,12 +2212,18 @@ export default function AdminEntityDrawer() {
         setOpportunityBootstrapAppliedId(drawer.id);
         setOpportunityBootstrapLayoutRow(mapBootstrapLayoutToRecordLayoutRow(boot));
         setOpportunityOperTrustPreview(boot.oper_trust_preview);
-        let merged = mergeOpportunityFullHydrate(
+        let merged = mergeOpportunityFullHydrateLocal(
             boot.entity as Record<string, unknown>,
             preload.primaryEntity
         );
         if (preload.fullEntity) {
-            merged = mergeOpportunityFullHydrate(merged, preload.fullEntity);
+            merged = runOpportunityStagedFullHydrateMerge(merged, preload.fullEntity, {
+                opportunityId: drawer.id,
+                phase: "composed_open_full_merge",
+                aboveFoldLocked: opportunityDrawerAboveFoldLockedRef.current,
+                sourceSurface: "full",
+                deferredRef: opportunityDeferredFullHydrateRef,
+            });
             merged._record_surface = "full";
             markOpportunityDrawerHydrateDone(drawer.id, "full");
             opportunityBackgroundFullDoneRef.current = drawer.id;
@@ -2568,7 +2609,7 @@ export default function AdminEntityDrawer() {
                         fresh._record_surface = "drawer_primary";
                         return fresh;
                     }
-                    const merged = mergeOpportunityFullHydrate(prev as Record<string, unknown>, json as Record<string, unknown>);
+                    const merged = mergeOpportunityFullHydrateLocal(prev as Record<string, unknown>, json as Record<string, unknown>);
                     merged._record_surface = "drawer_primary";
                     const changed = Object.keys(merged).filter(
                         (k) => JSON.stringify((prev as Record<string, unknown>)[k]) !== JSON.stringify(merged[k])
@@ -2646,23 +2687,23 @@ export default function AdminEntityDrawer() {
                         fresh._record_surface = "full";
                         return fresh;
                     }
-                    const merged = mergeOpportunityFullHydrate(prev as Record<string, unknown>, json as Record<string, unknown>);
+                    const merged = runOpportunityStagedFullHydrateMerge(
+                        prev as Record<string, unknown>,
+                        json as Record<string, unknown>,
+                        {
+                            opportunityId: hydrateId,
+                            phase: "full_merge",
+                            aboveFoldLocked: opportunityDrawerAboveFoldLockedRef.current,
+                            sourceSurface: "full",
+                            deferredRef: opportunityDeferredFullHydrateRef,
+                        }
+                    );
                     merged._record_surface = "full";
                     const changed = Object.keys(merged).filter(
                         (k) => JSON.stringify((prev as Record<string, unknown>)[k]) !== JSON.stringify(merged[k])
                     );
                     if (changed.length > 0) {
                         reportDrawerFirstPaintHydrateWave(hydrateId, "full_merge", changed);
-                        reportOpportunityDrawerHydrateLayoutStability(
-                            hydrateId,
-                            "full_merge",
-                            prev as Record<string, unknown>,
-                            merged,
-                            {
-                                aboveFoldLocked: opportunityDrawerAboveFoldLockedRef.current,
-                                fullHydrateApplied: true,
-                            }
-                        );
                     }
                     return merged;
                 });
@@ -2761,7 +2802,7 @@ export default function AdminEntityDrawer() {
                     if (!prev || String((prev as { id?: unknown }).id ?? "") !== String(drawer.id)) {
                         return prev;
                     }
-                    const merged = mergeOpportunityFullHydrate(prev as Record<string, unknown>, json as Record<string, unknown>);
+                    const merged = mergeOpportunityFullHydrateLocal(prev as Record<string, unknown>, json as Record<string, unknown>);
                     const prevSurf = String((prev as { _record_surface?: string })._record_surface ?? "full").trim();
                     merged._record_surface = prevSurf || "full";
                     return merged;
@@ -7488,6 +7529,33 @@ export default function AdminEntityDrawer() {
         opportunityBackgroundFullHydrateFailed,
     ]);
 
+    useEffect(() => {
+        if (!opportunityDrawerBelowFoldRevealed) return;
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        const deferred = opportunityDeferredFullHydrateRef.current;
+        if (!deferred || Object.keys(deferred).length === 0) return;
+        opportunityDeferredFullHydrateRef.current = null;
+        setData((prev) => {
+            if (!prev || String((prev as { id?: unknown }).id ?? "") !== drawer.id) return prev;
+            const merged = applyOpportunityFullHydrateDeferredPatch(
+                prev as Record<string, unknown>,
+                deferred
+            );
+            reportOpportunityDrawerHydrateLayoutStability(
+                String(drawer.id),
+                "deferred_full_merge",
+                prev as Record<string, unknown>,
+                merged,
+                {
+                    aboveFoldLocked: false,
+                    fullHydrateApplied: true,
+                    sourceSurface: "deferred",
+                }
+            );
+            return merged;
+        });
+    }, [opportunityDrawerBelowFoldRevealed, drawer.type, drawer.id]);
+
     useLayoutEffect(() => {
         if (!opportunityDrawerLayoutFrozen || opportunityDrawerBelowFoldRevealed) return;
         const scrollRoot = document.querySelector("[data-adminv2-record-modal-scroll]");
@@ -8117,30 +8185,12 @@ export default function AdminEntityDrawer() {
         }
         if (drawer.type === "persons" && data && !(data as { _create?: boolean })._create) {
             const p = data as Record<string, unknown>;
-            const linkedLocs =
-                (p._linked_locations as {
-                    location_id: string;
-                    _location_label?: string | null;
-                    is_primary?: boolean;
-                    relationship_type?: string | null;
-                }[]) ?? [];
-            const opps =
-                (p._linked_opportunities as {
-                    id: string;
-                    name?: string | null;
-                    status_key?: string | null;
-                    quote_total?: number | null;
-                }[]) ?? [];
-            const custRows =
-                (p._customer_persons as {
-                    id: string;
-                    customer_id: string;
-                    _customer_name?: string | null;
-                    _role_label?: string | null;
-                    role_type?: string | null;
-                }[]) ?? [];
-            const subheading = "text-xs font-semibold tracking-wide text-alloy-midnight/50 mb-2";
             const personId = String(drawer.id ?? p.id ?? "").trim();
+            const enrollmentMirror = (p._enrollment_mirror as Parameters<typeof PersonDrawerEnrollmentMirror>[0]["rows"]) ?? [];
+            const enrollmentOpps =
+                (p._enrollment_opportunities as Parameters<typeof PersonDrawerEnrollmentOpportunitiesMirror>[0]["rows"]) ?? [];
+            const openPersonDrawer = (type: string, id: string) =>
+                openDrawer({ type: type as AdminDrawerEntityType, id });
             return {
                 ...(personId
                     ? {
@@ -8163,82 +8213,16 @@ export default function AdminEntityDrawer() {
                       }
                     : {}),
                 relationships: (
-                    <div className="space-y-5">
-                        <div>
-                            <h4 className={subheading}>Customers</h4>
-                            {custRows.length === 0 ? (
-                                <p className="text-sm text-alloy-midnight/60">No customer links.</p>
-                            ) : (
-                                <ul className="space-y-2 text-sm">
-                                    {custRows.map((cp) => (
-                                        <li key={cp.id}>
-                                            <button
-                                                type="button"
-                                                onClick={() => openDrawer({ type: "customers", id: cp.customer_id })}
-                                                className="text-alloy-blue hover:underline text-left"
-                                            >
-                                                {cp._customer_name?.trim() || cp.customer_id.slice(0, 8) + "…"}
-                                            </button>
-                                            {(cp._role_label ?? cp.role_type) ? (
-                                                <span className="text-alloy-muted ml-1">· {cp._role_label ?? cp.role_type}</span>
-                                            ) : null}
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </div>
-                        <div>
-                            <h4 className={subheading}>Locations</h4>
-                            {linkedLocs.length === 0 ? (
-                                <p className="text-sm text-alloy-midnight/60">No locations linked (person_locations).</p>
-                            ) : (
-                                <ul className="space-y-2 text-sm">
-                                    {linkedLocs.map((row) => (
-                                        <li key={row.location_id}>
-                                            <button
-                                                type="button"
-                                                onClick={() => openDrawer({ type: "locations", id: row.location_id })}
-                                                className="text-alloy-blue hover:underline text-left"
-                                            >
-                                                {row._location_label?.trim() || row.location_id.slice(0, 8) + "…"}
-                                            </button>
-                                            {row.is_primary ? <span className="text-alloy-muted ml-1">· Primary</span> : null}
-                                            {row.relationship_type ? (
-                                                <span className="text-alloy-muted ml-1">· {row.relationship_type}</span>
-                                            ) : null}
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </div>
-                        <div>
-                            <h4 className={subheading}>Opportunities</h4>
-                            {opps.length === 0 ? (
-                                <p className="text-sm text-alloy-midnight/60">No opportunities with this person as primary.</p>
-                            ) : (
-                                <ul className="space-y-2 text-sm">
-                                    {opps.map((o) => (
-                                        <li key={o.id}>
-                                            <button
-                                                type="button"
-                                                onClick={() => openDrawer({ type: "opportunities", id: o.id })}
-                                                className="text-alloy-blue hover:underline text-left"
-                                            >
-                                                {o.name?.trim() || o.id.slice(0, 8) + "…"}
-                                            </button>
-                                            {(o.status_key || o.quote_total != null) && (
-                                                <span className="text-alloy-muted ml-1">
-                                                    {o.status_key ? `· ${o.status_key}` : ""}
-                                                    {o.quote_total != null ? ` · ${formatMoneyFromDollars(Number(o.quote_total))}` : ""}
-                                                </span>
-                                            )}
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </div>
-                    </div>
+                    <PersonDrawerRelationshipsOverview record={p} onOpenDrawer={openPersonDrawer} />
                 ),
+                enrollment:
+                    enrollmentMirror.length > 0 ? (
+                        <PersonDrawerEnrollmentMirror rows={enrollmentMirror} onOpenDrawer={openPersonDrawer} />
+                    ) : undefined,
+                enrollment_opportunities:
+                    enrollmentOpps.length > 0 ? (
+                        <PersonDrawerEnrollmentOpportunitiesMirror rows={enrollmentOpps} onOpenDrawer={openPersonDrawer} />
+                    ) : undefined,
             };
         }
         if (drawer.type === "locations" && data && !(data as { _create?: boolean })._create) {
@@ -9153,9 +9137,33 @@ export default function AdminEntityDrawer() {
         const append: EntityDrawerSectionConfig[] = [];
         if (drawer.type === "persons" && overviewData && !(overviewData as { _create?: boolean })._create) {
             const personPres = (getEntityPresentation("persons").drawer?.overviewSections ?? []) as EntityDrawerSectionConfig[];
+            const enrollmentRows = ((overviewData as Record<string, unknown>)._enrollment_mirror as unknown[]) ?? [];
+            const enrollmentOpps = ((overviewData as Record<string, unknown>)._enrollment_opportunities as unknown[]) ?? [];
             if (!keys.has("employee_placement")) {
                 const emp = personPres.find((s) => s.key === "employee_placement");
                 if (emp) append.push(emp);
+            }
+            if (!keys.has("enrollment") && enrollmentRows.length > 0) {
+                append.push({
+                    key: "enrollment",
+                    title: "Enrollment",
+                    defaultExpanded: true,
+                    collapsible: true,
+                    gridCols: 1 as const,
+                    fields: [],
+                    contentLayout: "block",
+                });
+            }
+            if (!keys.has("enrollment_opportunities") && enrollmentOpps.length > 0) {
+                append.push({
+                    key: "enrollment_opportunities",
+                    title: "Enrollment activity",
+                    defaultExpanded: true,
+                    collapsible: true,
+                    gridCols: 1 as const,
+                    fields: [],
+                    contentLayout: "block",
+                });
             }
             if (!keys.has("relationships")) {
                 append.push({
@@ -9930,6 +9938,20 @@ export default function AdminEntityDrawer() {
                 }
                 variant="default"
             />
+        ) : drawer.type === "persons" && overviewData && !(overviewData as { _create?: boolean })._create ? (
+            <div className="flex flex-wrap items-center gap-2">
+                <PersonDrawerProfileBadges record={overviewData as Record<string, unknown>} />
+                {(overviewData as { status_key?: string }).status_key ? (
+                    <StatusBadge
+                        label={
+                            String((overviewData as { _status_display?: string | null })._status_display ?? "").trim() ||
+                            getStatusLabel((overviewData as { status_key: string }).status_key) ||
+                            String((overviewData as { status_key: string }).status_key)
+                        }
+                        variant={getStatusVariant((overviewData as { status_key: string }).status_key)}
+                    />
+                ) : null}
+            </div>
         ) : STATUS_ENTITY_TYPES.includes(drawer.type) &&
           !(drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer) &&
           (overviewData as { status_key?: string }).status_key ? (

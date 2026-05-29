@@ -94,10 +94,13 @@ export async function batchOptionItemLabelsForOrg(
     return out;
 }
 
-/** Read a label from {@link batchOptionItemLabelsForOrg}'s map (same semantics as single-key resolve). */
+/** Read a label from {@link batchOptionItemLabelsForOrg}'s map; falls back to item_key for read-only display. */
 export function optionLabelFromBatchMap(map: Map<string, string>, setKey: string, itemKey: string | null | undefined): string | null {
     const sk = String(setKey ?? "").trim();
     const ik = String(itemKey ?? "").trim();
     if (!sk || !ik) return null;
-    return map.get(batchCacheKey(sk, ik)) ?? null;
+    return map.get(batchCacheKey(sk, ik)) ?? ik;
 }
+
+/** Empty map — inquiry read paths use item_key labels; edit surfaces load option sets on demand. */
+export const EMPTY_OPTION_LABEL_MAP: ReadonlyMap<string, string> = new Map();

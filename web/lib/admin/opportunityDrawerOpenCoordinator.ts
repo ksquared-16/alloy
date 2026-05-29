@@ -5,6 +5,7 @@ import {
 } from "@/lib/admin/opportunityDrawerBootstrapClient";
 import type { OpportunityDrawerOperationalBootstrapResponse } from "@/lib/admin/opportunityDrawerOperationalBootstrapTypes";
 import type { OpportunityWorkspaceContext } from "@/contexts/AdminDrawerContext";
+import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
 import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { opportunityDrawerPrimaryContractReady } from "@/lib/admin/drawer/opportunityDrawerFirstPaintContract";
 import { markOpportunityDrawerHydrateDone } from "@/lib/admin/opportunityDrawerHydrateGuards";
@@ -107,7 +108,10 @@ export async function loadOpportunityDrawerComposedOpen(
     opportunityId: string,
     workspaceContext: OpportunityWorkspaceContext | null | undefined,
     init?: RequestInit,
-    opts?: { overlayShownAt?: number }
+    opts?: {
+        overlayShownAt?: number;
+        queuePreviewSeed?: OpportunityDrawerQueuePreviewSeed | null;
+    }
 ): Promise<{ preload: OpportunityDrawerOpenPreload; metrics: OpportunityDrawerOpenMetrics }> {
     const id = opportunityId.trim();
     if (!id) throw new Error("missing_opportunity_id");
@@ -146,7 +150,12 @@ export async function loadOpportunityDrawerComposedOpen(
 
     const primaryP = (async () => {
         const t0 = typeof performance !== "undefined" ? performance.now() : 0;
-        const entity = await fetchOpportunityDrawerPrimaryEntity(id, init, workspaceContext ?? null);
+        const entity = await fetchOpportunityDrawerPrimaryEntity(
+            id,
+            init,
+            workspaceContext ?? null,
+            opts?.queuePreviewSeed ?? null
+        );
         primaryMs = Math.round((typeof performance !== "undefined" ? performance.now() : 0) - t0);
         return entity;
     })();

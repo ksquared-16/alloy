@@ -327,6 +327,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                 work_unit_id: navigator.work_unit_id,
                 department_id: navigator.department_id,
             };
+            const seed = previewSeedForQueueNavigatorRecord(navigator, targetId) ?? null;
 
             const run = ++queueNavRunRef.current;
             const navT0 = typeof performance !== "undefined" ? performance.now() : 0;
@@ -363,7 +364,9 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
 
             if (primaryWarm && bootstrapWarm) {
                 logNav("warm_composed", false);
-                void loadOpportunityDrawerComposedOpen(targetId, workspace, workspaceDataFetchInit())
+                void loadOpportunityDrawerComposedOpen(targetId, workspace, workspaceDataFetchInit(), {
+                    queuePreviewSeed: seed,
+                })
                     .then(({ preload }) => {
                         if (run !== queueNavRunRef.current) return;
                         opportunityDrawerPreloadRef.current = preload;
@@ -376,7 +379,9 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
 
             setOpportunityQueueNavTargetId(targetId);
             logNav("cold_composed", true);
-            void loadOpportunityDrawerComposedOpen(targetId, workspace, workspaceDataFetchInit())
+            void loadOpportunityDrawerComposedOpen(targetId, workspace, workspaceDataFetchInit(), {
+                queuePreviewSeed: seed,
+            })
                 .then(({ preload }) => {
                     if (run !== queueNavRunRef.current) return;
                     opportunityDrawerPreloadRef.current = preload;

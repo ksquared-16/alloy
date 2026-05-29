@@ -3,6 +3,10 @@ import {
     opportunityInquiryFamilyBlockReadyOnPrimary,
     opportunityInquirySummaryRightPanelFromPrimaryOnly,
 } from "@/lib/admin/drawer/opportunityDrawerFirstPaintContract";
+import {
+    classifyOpportunityDrawerLayoutChanges,
+    type OpportunityDrawerLayoutChangeReport,
+} from "@/lib/admin/drawer/opportunityFullHydrateMerge";
 import { logDrawerLayoutStability } from "@/lib/perf/drawerLayoutStabilityPerf";
 
 /** Above-fold geometry signals that must not flip after first paint when layout is locked. */
@@ -44,21 +48,26 @@ export function reportOpportunityDrawerHydrateLayoutStability(
     params: {
         aboveFoldLocked: boolean;
         fullHydrateApplied: boolean;
+        sourceSurface?: string;
     }
-): void {
-    const changedSections = Object.keys(merged).filter(
-        (k) => JSON.stringify(prev[k]) !== JSON.stringify(merged[k])
-    );
+): OpportunityDrawerLayoutChangeReport {
     const geometryChanged = opportunityDrawerAboveFoldGeometryChanged(
         snapshotOpportunityDrawerAboveFoldGeometry(prev),
         snapshotOpportunityDrawerAboveFoldGeometry(merged)
     );
+    const layoutReport = classifyOpportunityDrawerLayoutChanges(prev, merged, geometryChanged);
+
     logDrawerLayoutStability({
         opportunity_id: opportunityId,
         phase,
-        above_fold_locked: params.aboveFoldLocked,
+        changed_sections: layoutReport.changed_sections,
+        above_fold_changed: layoutReport.above_fold_changed,
+        geometry_changed: layoutReport.geometry_changed,
+        text_only_change: layoutReport.text_only_change,
         full_hydrate_applied: params.fullHydrateApplied,
-        changed_sections: changedSections,
-        geometry_changed: geometryChanged,
+        above_fold_locked: params.aboveFoldLocked,
+        source_surface: params.sourceSurface,
     });
+
+    return layoutReport;
 }

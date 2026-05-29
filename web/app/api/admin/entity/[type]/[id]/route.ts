@@ -6,6 +6,7 @@ import { formatRecurrenceLabel } from "@/lib/adminFormatters";
 import { attachDirectFkRelationshipDisplays } from "@/lib/admin/relationshipDisplayAttach";
 import { computeScheduleHydratedDisplay } from "@/lib/admin/scheduleRecordSnapshot";
 import { attachFieldDefinitionsAndValues } from "@/lib/admin/entityFieldRegistryAttach";
+import { attachPersonDrawerVisibility } from "@/lib/admin/person/attachPersonDrawerVisibility";
 import { computeJobDisplayTotalCents, type JobPriceInput } from "@/lib/admin/jobDisplayPrice";
 import {
     fetchEffectiveStatusDefinitions,
@@ -1334,6 +1335,7 @@ export async function GET(
                 .limit(PERSON_LIMIT);
             out._linked_opportunities = oppRows ?? [];
 
+            await attachPersonDrawerVisibility(supabase, orgId, id, out);
             await attachFieldDefinitionsAndValues(supabase, out, "persons", id);
             await attachDirectFkRelationshipDisplays(supabase, orgId, "persons", out);
             return NextResponse.json(out);

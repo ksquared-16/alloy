@@ -36,8 +36,8 @@ describe("person drawer control-plane convergence (Card 4)", () => {
         );
         expect(block).toContain("employee_placement:");
         expect(block).toContain("PersonEmployeePlacementSection");
-        expect(block).toContain("relationships:");
-        expect(block).toContain("Customers");
+        expect(block).toContain("PersonDrawerRelationshipsOverview");
+        expect(block).toContain("PersonDrawerEnrollmentMirror");
         expect(block).not.toMatch(
             /drawer\.type === "persons"[\s\S]*return \{\};/
         );
@@ -70,5 +70,15 @@ describe("person drawer control-plane convergence (Card 4)", () => {
         );
         expect(shellBlock).toContain("loading");
         expect(shellBlock).not.toContain("drawerGateLoading");
+    });
+
+    it("wires Card 5 profile badges and visibility sections", () => {
+        const drawer = read("components/admin/AdminEntityDrawer.tsx");
+        expect(drawer).toContain("PersonDrawerProfileBadges");
+        expect(drawer).toContain("PersonDrawerRelationshipsOverview");
+        expect(drawer).toContain("PersonDrawerEnrollmentMirror");
+        expect(drawer).toContain("PersonDrawerEnrollmentOpportunitiesMirror");
+        expect(drawer).toContain('key: "enrollment"');
+        expect(drawer).not.toContain("No locations linked (person_locations)");
     });
 });
