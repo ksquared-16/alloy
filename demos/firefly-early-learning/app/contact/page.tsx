@@ -10,7 +10,7 @@ const ALLOY_FORM_EMBED_URL =
 export default function ContactPage() {
   return (
     <section className="bg-cream px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-[900px]">
         <h1 className="text-3xl font-semibold tracking-tight text-navy sm:text-4xl">
           Schedule a Tour
         </h1>
