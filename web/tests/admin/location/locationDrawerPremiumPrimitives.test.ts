@@ -23,6 +23,12 @@ describe("Location drawer premium primitives", () => {
         expect(drawer).toContain("locationRecordChromeBodyShell");
     });
 
+    it("AdminEntityDrawer loads location metadata select options from option sets", () => {
+        const drawer = read("components/admin/AdminEntityDrawer.tsx");
+        expect(drawer).toContain("loadLocationMetadataSelectOptionsForDrawer");
+        expect(drawer).toContain("locationMetadataSelectOptions");
+    });
+
     it("drawer field labels come from field_definitions not parallel registry", () => {
         expect(read("lib/admin/location/locationDrawerPresentation.ts")).not.toContain(
             "locationRoomMetadataFieldRegistry"

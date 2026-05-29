@@ -13,6 +13,10 @@ import {
     mergeLocationMetadataField,
     type LocationHierarchyRow,
 } from "@/lib/adminV2/locationsHierarchyTablePresentation";
+import {
+    fetchOptionSetItemsBySetKey,
+    mapOptionItemsToSelectOptions,
+} from "@/lib/admin/location/locationDrawerFieldOptions";
 
 type DeletionEligibility = { allowed: boolean; reason?: string | null };
 
@@ -25,6 +29,11 @@ const METADATA_EDIT_KEYS = [
     "student_teacher_ratio",
 ] as const;
 
+function metadataString(metadata: unknown, key: string): string {
+    if (metadata == null || typeof metadata !== "object" || Array.isArray(metadata)) return "";
+    return String((metadata as Record<string, unknown>)[key] ?? "").trim();
+}
+
 export default function LocationsHierarchySettingsClient() {
     const { openDrawer } = useAdminDrawer();
     const [rows, setRows] = useState<LocationHierarchyRow[]>([]);
@@ -35,8 +44,27 @@ export default function LocationsHierarchySettingsClient() {
     const [savingId, setSavingId] = useState<string | null>(null);
     const [removingId, setRemovingId] = useState<string | null>(null);
     const [deleteReasonById, setDeleteReasonById] = useState<Record<string, string>>({});
+    const [categorySelectOptions, setCategorySelectOptions] = useState<{ value: string; label: string }[]>([]);
+    const [ageUnitSelectOptions, setAgeUnitSelectOptions] = useState<{ value: string; label: string }[]>([]);
 
     const orgCategories = useMemo(() => listOrgProgramCategoriesForSettings(), []);
+
+    useEffect(() => {
+        let cancelled = false;
+        void (async () => {
+            const init = { credentials: "include" as const };
+            const [catItems, unitItems] = await Promise.all([
+                fetchOptionSetItemsBySetKey("childcare_program_type", init),
+                fetchOptionSetItemsBySetKey("location_age_range_unit", init),
+            ]);
+            if (cancelled) return;
+            setCategorySelectOptions(mapOptionItemsToSelectOptions(catItems));
+            setAgeUnitSelectOptions(mapOptionItemsToSelectOptions(unitItems));
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const fetchRows = useCallback(async () => {
         setLoading(true);
@@ -293,34 +321,32 @@ export default function LocationsHierarchySettingsClient() {
                                         <td className="px-2 py-2 text-xs text-alloy-midnight/70">{row.typeLabel}</td>
                                         <td className="px-2 py-2">
                                             {row.isRoom && source ? (
-                                                <input
+                                                <select
                                                     defaultValue={row.category ?? ""}
                                                     disabled={saving}
                                                     className={inputClass}
-                                                    onBlur={(e) => {
+                                                    onChange={(e) => {
                                                         const v = e.target.value;
-                                                        if ((row.category ?? "") === v.trim()) return;
+                                                        if ((row.category ?? "") === v) return;
                                                         void patchMetadataField(source, "category", v);
                                                     }}
-                                                />
+                                                >
+                                                    <option value="">—</option>
+                                                    {categorySelectOptions.map((o) => (
+                                                        <option key={o.value} value={o.value}>
+                                                            {o.label}
+                                                        </option>
+                                                    ))}
+                                                </select>
                                             ) : (
                                                 <span className="text-alloy-midnight/35">—</span>
                                             )}
                                         </td>
                                         <td className="px-2 py-2">
                                             {row.isRoom && source ? (
-                                                <div className="flex min-w-[7rem] items-center gap-1">
+                                                <div className="flex min-w-[9rem] flex-wrap items-center gap-1">
                                                     <input
-                                                        defaultValue={
-                                                            source.metadata &&
-                                                            typeof source.metadata === "object" &&
-                                                            !Array.isArray(source.metadata)
-                                                                ? String(
-                                                                      (source.metadata as Record<string, unknown>)
-                                                                          .age_range_from ?? ""
-                                                                  )
-                                                                : ""
-                                                        }
+                                                        defaultValue={metadataString(source.metadata, "age_range_from")}
                                                         disabled={saving}
                                                         className={`${inputClass} w-12`}
                                                         placeholder="From"
@@ -330,16 +356,7 @@ export default function LocationsHierarchySettingsClient() {
                                                     />
                                                     <span className="text-alloy-midnight/30">–</span>
                                                     <input
-                                                        defaultValue={
-                                                            source.metadata &&
-                                                            typeof source.metadata === "object" &&
-                                                            !Array.isArray(source.metadata)
-                                                                ? String(
-                                                                      (source.metadata as Record<string, unknown>)
-                                                                          .age_range_to ?? ""
-                                                                  )
-                                                                : ""
-                                                        }
+                                                        defaultValue={metadataString(source.metadata, "age_range_to")}
                                                         disabled={saving}
                                                         className={`${inputClass} w-12`}
                                                         placeholder="To"
@@ -347,6 +364,23 @@ export default function LocationsHierarchySettingsClient() {
                                                             void patchMetadataField(source, "age_range_to", e.target.value);
                                                         }}
                                                     />
+                                                    <select
+                                                        defaultValue={metadataString(source.metadata, "age_range_unit")}
+                                                        disabled={saving}
+                                                        className={`${inputClass} max-w-[5.5rem]`}
+                                                        onChange={(e) => {
+                                                            const v = e.target.value;
+                                                            if (metadataString(source.metadata, "age_range_unit") === v) return;
+                                                            void patchMetadataField(source, "age_range_unit", v);
+                                                        }}
+                                                    >
+                                                        <option value="">Unit</option>
+                                                        {ageUnitSelectOptions.map((o) => (
+                                                            <option key={o.value} value={o.value}>
+                                                                {o.label}
+                                                            </option>
+                                                        ))}
+                                                    </select>
                                                 </div>
                                             ) : (
                                                 <span className="text-alloy-midnight/35">—</span>

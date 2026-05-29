@@ -36,4 +36,11 @@ describe("LocationsHierarchySettingsClient pilot UX", () => {
         const src = read("components/adminV2/settings/LocationsHierarchySettingsClient.tsx");
         expect(src).not.toContain("locationRoomMetadataFieldRegistry");
     });
+
+    it("LocationsHierarchySettingsClient loads option sets for category and age unit selects", () => {
+        const src = read("components/adminV2/settings/LocationsHierarchySettingsClient.tsx");
+        expect(src).toContain("fetchOptionSetItemsBySetKey");
+        expect(src).toContain("categorySelectOptions");
+        expect(src).toContain("ageUnitSelectOptions");
+    });
 });

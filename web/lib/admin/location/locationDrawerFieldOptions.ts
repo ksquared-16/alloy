@@ -61,3 +61,40 @@ export function resolveLocationMetadataSelectOptionsByFieldKey(args: {
     }
     return out;
 }
+
+/** Fetch option_set_items for one org option set (admin API). */
+export async function fetchOptionSetItemsBySetKey(
+    setKey: string,
+    init?: RequestInit
+): Promise<Array<{ item_key?: string; label?: string | null }>> {
+    const sk = setKey.trim();
+    if (!sk) return [];
+    const res = await fetch(`/api/admin/option-sets/${encodeURIComponent(sk)}`, {
+        credentials: "include",
+        ...init,
+    });
+    const json = (await res.json().catch(() => ({}))) as {
+        items?: Array<{ item_key?: string; label?: string | null }>;
+    };
+    if (!res.ok) return [];
+    return json.items ?? [];
+}
+
+/** Hydrate location metadata select options from field_definitions + option_set_items. */
+export async function loadLocationMetadataSelectOptionsForDrawer(args: {
+    fieldDefs?: LocationFieldDefLike[];
+    init?: RequestInit;
+}): Promise<Record<string, { value: string; label: string }[]>> {
+    const setKeysByField = optionSetKeysForLocationMetadataFields(args.fieldDefs);
+    const uniqueSetKeys = [...new Set(Object.values(setKeysByField).filter(Boolean))];
+    const optionItemsBySetKey: Record<string, Array<{ item_key?: string; label?: string | null }>> = {};
+    await Promise.all(
+        uniqueSetKeys.map(async (setKey) => {
+            optionItemsBySetKey[setKey] = await fetchOptionSetItemsBySetKey(setKey, args.init);
+        })
+    );
+    return resolveLocationMetadataSelectOptionsByFieldKey({
+        fieldDefs: args.fieldDefs,
+        optionItemsBySetKey,
+    });
+}

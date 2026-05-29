@@ -121,7 +121,8 @@ import { mergeLocationMetadataPatch } from "@/lib/admin/location/locationMetadat
 import {
     mapOptionItemsToSelectOptions,
     optionSetKeysForLocationMetadataFields,
-    resolveLocationMetadataSelectOptionsByFieldKey,
+    loadLocationMetadataSelectOptionsForDrawer,
+    type LocationFieldDefLike,
 } from "@/lib/admin/location/locationDrawerFieldOptions";
 import { readPersonEmployeePlacementValues } from "@/lib/admin/personEmployeePlacementFields";
 import {
@@ -1465,6 +1466,9 @@ export default function AdminEntityDrawer() {
     const [oppVerticalOptions, setOppVerticalOptions] = useState<{ id: string; name: string }[]>([]);
     /** Opportunity drawer: labeled selects for relationship field_keys from field_definitions. */
     const [oppRefFieldSelectOptions, setOppRefFieldSelectOptions] = useState<Record<string, { value: string; label: string }[]>>({});
+    const [locationMetadataSelectOptions, setLocationMetadataSelectOptions] = useState<
+        Record<string, { value: string; label: string }[]>
+    >({});
     /** Pipeline stages for opportunity `pipeline_stage_id` overview select (full list + immediate label). */
     const [oppPipelineStageOptions, setOppPipelineStageOptions] = useState<{ value: string; label: string }[]>([]);
     const [workflowConditions, setWorkflowConditions] = useState<{ target_entity?: string; field_path: string; operator: string; value: string }[]>([]);
@@ -9651,6 +9655,26 @@ export default function AdminEntityDrawer() {
         setFieldValidationErrorsByKey({});
     }, [drawer.type, drawer.id]);
 
+    useEffect(() => {
+        if (drawer.type !== "locations" || !overviewData || (overviewData as { _create?: boolean })._create) {
+            setLocationMetadataSelectOptions({});
+            return undefined;
+        }
+        let cancelled = false;
+        const defs =
+            ((overviewData as Record<string, unknown>)._field_definitions as LocationFieldDefLike[] | undefined) ??
+            [];
+        void loadLocationMetadataSelectOptionsForDrawer({
+            fieldDefs: defs,
+            init: workspaceDataFetchInit(),
+        }).then((opts) => {
+            if (!cancelled) setLocationMetadataSelectOptions(opts);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [drawer.type, drawer.id, overviewData]);
+
     const overviewSelectOptionsByFieldKey = useMemo((): Record<string, { value: string; label: string }[]> => {
         const out: Record<string, { value: string; label: string }[]> = {};
         if (drawer.type === "opportunities" && overviewData) {
@@ -9815,16 +9839,13 @@ export default function AdminEntityDrawer() {
             out.primary_person_id = pOpts;
         }
         if (drawer.type === "locations" && overviewData) {
-            const defs =
-                ((overviewData as Record<string, unknown>)._field_definitions as Parameters<
-                    typeof resolveLocationMetadataSelectOptionsByFieldKey
-                >[0]["fieldDefs"]) ?? [];
-            Object.assign(out, resolveLocationMetadataSelectOptionsByFieldKey({ fieldDefs: defs }));
+            Object.assign(out, locationMetadataSelectOptions);
         }
         return out;
     }, [
         drawer.type,
         overviewData,
+        locationMetadataSelectOptions,
         oppVerticalOptions,
         oppRefFieldSelectOptions,
         oppPipelineStageOptions,
