@@ -78,6 +78,15 @@ export const ACTION_BUTTON_LIBRARY: ActionRegistryEntry[] = [
         defaultSlot: "secondary",
     },
     {
+        key: "send_form",
+        label: "Send form",
+        category: "workflow",
+        settingsConfigurable: true,
+        description: "Open the send-form composer to share an intake or update form with this family.",
+        defaultSurface: "record_header",
+        defaultSlot: "secondary",
+    },
+    {
         key: "send_enrollment_packet",
         label: "Send enrollment packet",
         category: "workflow",

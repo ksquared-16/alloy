@@ -77,19 +77,12 @@ export function isInquiryChildPlacementProgramFieldDisabled(siteId: string | nul
     return !(siteId ?? "").trim();
 }
 
-/** Dev-only hint when child site/cohort missing for waitlist priority facts (Card 3). */
-export function inquiryChildPlacementScopeDiagnosticHint(params: {
+/** Dev-only hint when child site/cohort missing for waitlist priority facts (Card 3). Hidden from operator drawer UX. */
+export function inquiryChildPlacementScopeDiagnosticHint(_params: {
     locationId?: string | null;
     programRoomCohortKey?: string | null;
 }): string | null {
-    if (process.env.NODE_ENV === "production") return null;
-    const missingSite = !(params.locationId ?? "").trim();
-    const missingCohort = !(params.programRoomCohortKey ?? "").trim();
-    if (!missingSite && !missingCohort) return null;
-    const parts: string[] = [];
-    if (missingSite) parts.push("site");
-    if (missingCohort) parts.push("room/cohort");
-    return `Missing child ${parts.join(" and ")} — same-site sibling priority will not apply until set.`;
+    return null;
 }
 
 export type InquiryChildPlacementPatchValidation = {

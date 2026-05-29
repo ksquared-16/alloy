@@ -185,6 +185,13 @@ export async function applyRegistryResolvedActionClient(
             }
             return { ok: true };
         }
+        if (intent === "send_form") {
+            const eid = host.entityId?.trim();
+            if (eid && typeof window !== "undefined") {
+                window.dispatchEvent(new CustomEvent("adminv2:open-send-form", { detail: { opportunity_id: eid } }));
+            }
+            return { ok: true };
+        }
         if (intent === "send_enrollment_packet") {
             const eid = host.entityId?.trim();
             if (eid && typeof window !== "undefined") {

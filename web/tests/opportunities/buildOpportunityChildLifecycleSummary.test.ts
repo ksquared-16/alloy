@@ -72,9 +72,7 @@ describe("buildOpportunityChildLifecycleSummary", () => {
         expect(s.is_mixed).toBe(true);
         expect(s.missing_status_count).toBe(1);
         expect(s.headline_label).toBe("2 children");
-        expect(s.display_summary).toBe(
-            "Family status: 1 waitlisted, 1 enrollment status not set"
-        );
+        expect(s.display_summary).toBe("Family status: 1 waitlisted");
         expect(s.all_enrollment_status_unset).toBe(false);
     });
 
@@ -85,8 +83,8 @@ describe("buildOpportunityChildLifecycleSummary", () => {
         });
         expect(s.missing_status_count).toBe(2);
         expect(s.headline_label).toBe("2 children");
-        expect(s.display_summary).toBe("Family status: Not set");
-        expect(s.short_summary).toBe("Not set");
+        expect(s.display_summary).toBeNull();
+        expect(s.short_summary).toBeNull();
         expect(s.all_enrollment_status_unset).toBe(true);
     });
 
@@ -96,7 +94,7 @@ describe("buildOpportunityChildLifecycleSummary", () => {
             members: [{ outcome_status_key: null, display_name: "Mia" }],
         });
         expect(s.headline_label).toBe("1 child");
-        expect(s.display_summary).toBe("Family status: Not set");
+        expect(s.display_summary).toBeNull();
         expect(s.all_enrollment_status_unset).toBe(true);
     });
 

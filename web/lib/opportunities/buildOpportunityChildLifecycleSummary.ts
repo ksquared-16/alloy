@@ -160,25 +160,37 @@ export function buildOpportunityChildLifecycleSummary(params: {
     const fragments = buildCountFragments(counts, labelByKey);
     const childWord = total === 1 ? "1 child" : `${total} children`;
 
-    let familyStatusLine: string;
+    let familyStatusLine: string | null = null;
     if (primaryStatusKey) {
         const label = labelByKey.get(primaryStatusKey) ?? primaryStatusKey;
         familyStatusLine = `Family status: ${label}`;
     } else if (missingCount === total) {
-        familyStatusLine = "Family status: Not set";
+        familyStatusLine = null;
     } else if (isMixed) {
-        const uniqueLabels = nonMissingKeys.map((k) => labelByKey.get(k) ?? k);
-        familyStatusLine =
-            uniqueLabels.length > 1
-                ? `Family status: ${uniqueLabels.join(" + ")}`
-                : `Family status: ${fragments.join(", ")}`;
+        const displayCounts = new Map(counts);
+        displayCounts.delete(MISSING_STATUS_KEY);
+        if (displayCounts.size === 0) {
+            familyStatusLine = null;
+        } else if (missingCount === 0) {
+            const uniqueLabels = nonMissingKeys.map((k) => labelByKey.get(k) ?? k);
+            familyStatusLine =
+                uniqueLabels.length > 1
+                    ? `Family status: ${uniqueLabels.join(" + ")}`
+                    : `Family status: ${uniqueLabels[0] ?? ""}`;
+        } else {
+            const displayFragments = buildCountFragments(displayCounts, labelByKey);
+            familyStatusLine = displayFragments.length ? `Family status: ${displayFragments.join(", ")}` : null;
+        }
     } else {
-        familyStatusLine = `Family status: ${fragments.join(", ")}`;
+        const displayCounts = new Map(counts);
+        displayCounts.delete(MISSING_STATUS_KEY);
+        const displayFragments = buildCountFragments(displayCounts, labelByKey);
+        familyStatusLine = displayFragments.length ? `Family status: ${displayFragments.join(", ")}` : null;
     }
 
     const headlineLabel = childWord;
     const displaySummary = familyStatusLine;
-    const shortSummary = familyStatusLine.replace(/^Family status:\s*/, "");
+    const shortSummary = familyStatusLine?.replace(/^Family status:\s*/, "") ?? null;
 
     return {
         ...base,

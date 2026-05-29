@@ -366,7 +366,8 @@ export function FamilyContactsPanel(props: {
                                         openDrawer={openDrawer}
                                         roleLabel={formatRoleTypeLabel(r.role_type)}
                                         roleBadgeClassName={roleBadge}
-                                        saveHint="Edits save to linked person · not this opportunity"
+                                        saveHint=""
+                                        saveTrigger={variant === "summary" ? "explicit" : "blur"}
                                         dataCardKind="linked"
                                         phoneHref={(raw) => normalizePhone(raw) ?? raw.replace(/\D/g, "")}
                                         onPersonUpdated={(person) => onLinkedPersonUpdated?.(personId, person)}

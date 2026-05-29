@@ -55,6 +55,8 @@ export type EditablePersonContactCardProps = {
     roleLabel?: string | null;
     roleBadgeClassName?: string;
     saveHint?: string;
+    /** Summary Lead Summary uses explicit Save; default drawer body keeps blur save. */
+    saveTrigger?: "blur" | "explicit";
     dataCardKind?: "primary" | "linked";
     className?: string;
     phoneHref?: (raw: string) => string | null;
@@ -73,6 +75,7 @@ export default function EditablePersonContactCard({
     roleLabel,
     roleBadgeClassName,
     saveHint = "Edits save to linked person · not this opportunity",
+    saveTrigger = "blur",
     dataCardKind = "linked",
     className = "",
     phoneHref,
@@ -162,6 +165,8 @@ export default function EditablePersonContactCard({
     }, []);
 
     const dirty = useMemo(() => isPersonContactCardDirty(draft, baselineRef.current), [draft]);
+
+    const useExplicitSave = saveTrigger === "explicit" && variant === "summary";
 
     const cancelScheduledSave = useCallback(() => {
         if (saveTimerRef.current) {
@@ -300,7 +305,7 @@ export default function EditablePersonContactCard({
             data-editable-person-contact-card={dataCardKind}
             data-editable={anyEditable ? "true" : "false"}
             data-person-id={pid || undefined}
-            onBlur={anyEditable ? handleCardBlur : undefined}
+            onBlur={anyEditable && !useExplicitSave ? handleCardBlur : undefined}
         >
             <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="flex min-w-0 flex-1 items-start gap-1">
@@ -410,8 +415,24 @@ export default function EditablePersonContactCard({
                         </div>
                     </div>
                     <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
-                        <p className="text-[10px] text-alloy-midnight/45">{saveHint}</p>
-                        {cardStatus}
+                        {saveHint?.trim() && !useExplicitSave ? (
+                            <p className="text-[10px] text-alloy-midnight/45">{saveHint}</p>
+                        ) : (
+                            <span />
+                        )}
+                        <div className="flex flex-wrap items-center gap-2">
+                            {useExplicitSave && dirty && canMutate ? (
+                                <button
+                                    type="button"
+                                    disabled={saving}
+                                    onClick={() => void persistCard()}
+                                    className="rounded-md border border-alloy-blue/35 bg-alloy-blue/[0.08] px-2 py-0.5 text-[10px] font-semibold text-alloy-blue hover:bg-alloy-blue/10 disabled:opacity-60"
+                                >
+                                    {saving ? "Saving…" : "Save"}
+                                </button>
+                            ) : null}
+                            {cardStatus}
+                        </div>
                     </div>
                 </div>
             ) : (

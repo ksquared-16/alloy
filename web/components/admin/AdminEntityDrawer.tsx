@@ -3660,6 +3660,10 @@ export default function AdminEntityDrawer() {
             if (a.action_type === "ui_intent") {
                 const p = a.payload && typeof a.payload === "object" ? (a.payload as Record<string, unknown>) : {};
                 const intent = p.intent != null ? String(p.intent).trim() : "";
+                if (intent === "send_form") {
+                    setOppSendFormOpen(true);
+                    return;
+                }
                 if (intent === "send_enrollment_packet") {
                     setOppLaunchPacketOpen(true);
                     return;
@@ -3827,14 +3831,24 @@ export default function AdminEntityDrawer() {
     }, [drawer.type, drawer.id]);
 
     useEffect(() => {
+        const onOpenSendForm = (ev: Event) => {
+            const ce = ev as CustomEvent<{ opportunity_id?: string }>;
+            const id = typeof ce.detail?.opportunity_id === "string" ? ce.detail.opportunity_id.trim() : "";
+            if (!id || drawer.type !== "opportunities" || drawer.id !== id) return;
+            setOppSendFormOpen(true);
+        };
         const onOpenEnrollmentPacket = (ev: Event) => {
             const ce = ev as CustomEvent<{ opportunity_id?: string }>;
             const id = typeof ce.detail?.opportunity_id === "string" ? ce.detail.opportunity_id.trim() : "";
             if (!id || drawer.type !== "opportunities" || drawer.id !== id) return;
             setOppLaunchPacketOpen(true);
         };
+        window.addEventListener("adminv2:open-send-form", onOpenSendForm as EventListener);
         window.addEventListener("adminv2:open-enrollment-packet", onOpenEnrollmentPacket as EventListener);
-        return () => window.removeEventListener("adminv2:open-enrollment-packet", onOpenEnrollmentPacket as EventListener);
+        return () => {
+            window.removeEventListener("adminv2:open-send-form", onOpenSendForm as EventListener);
+            window.removeEventListener("adminv2:open-enrollment-packet", onOpenEnrollmentPacket as EventListener);
+        };
     }, [drawer.type, drawer.id]);
 
     useEffect(() => {
@@ -13528,54 +13542,6 @@ export default function AdminEntityDrawer() {
                                                                             )}
                                                                         </>
                                                                     )}
-                                                                    {showWhatMattersSection ? (
-                                                                        <div
-                                                                            className="mt-2.5 min-h-[3.25rem] border-t border-alloy-stone/10 pt-2"
-                                                                            data-shell-slot="what_matters"
-                                                                        >
-                                                                            <div className={tinyLabel}>What matters for this inquiry</div>
-                                                                            <div className="mt-1.5 space-y-2">
-                                                                                <div className="min-h-[1.75rem]">
-                                                                                    {tourDisplayReady ? (
-                                                                                        <div ref={tourSectionRef}>
-                                                                                            <OpportunityInquiryTourDateBlock
-                                                                                                opportunityId={drawer.id}
-                                                                                                locationId={String((d.location_id as string | null | undefined) ?? "").trim()}
-                                                                                                statusKey={
-                                                                                                    typeof d.status_key === "string"
-                                                                                                        ? d.status_key
-                                                                                                        : null
-                                                                                                }
-                                                                                                metadata={d.metadata}
-                                                                                                viewerTimezone={viewerTz}
-                                                                                                canMutate={!!canMutate}
-                                                                                                onRefresh={refetch}
-                                                                                                labelClassName={tinyLabel}
-                                                                                                readonlyFieldClassName={oppInqReadonlyField}
-                                                                                                sharedActiveBookings={
-                                                                                                    inquiryTourFetchArmed
-                                                                                                        ? opportunityInquiryTourBookingsForDisplay
-                                                                                                        : undefined
-                                                                                                }
-                                                                                                fetchEnabled={false}
-                                                                                            />
-                                                                                        </div>
-                                                                                    ) : (
-                                                                                        <div aria-hidden data-shell-slot-placeholder="tour_date">
-                                                                                            <div className={tinyLabel}>Tour date</div>
-                                                                                            <div className="mt-0.5 h-[1.375rem] max-w-[14rem] skeleton-pulse rounded bg-alloy-stone/10" />
-                                                                                            <div className="mt-1.5 flex min-h-[2.25rem] flex-wrap gap-1.5">
-                                                                                                <div className="h-7 w-[5.5rem] skeleton-pulse rounded border border-alloy-stone/15 bg-alloy-stone/8" />
-                                                                                                <div className="h-7 w-[4.5rem] skeleton-pulse rounded border border-alloy-stone/15 bg-alloy-stone/8" />
-                                                                                                <div className="h-7 w-[5.25rem] skeleton-pulse rounded border border-alloy-stone/15 bg-alloy-stone/8" />
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    )}
-                                                                                </div>
-                                                                            </div>
-                                                                        </div>
-                                                                    ) : null}
-
                                                                 </div>
                                                                 {showInquirySummaryRightColumn ? (
                                                                 <div

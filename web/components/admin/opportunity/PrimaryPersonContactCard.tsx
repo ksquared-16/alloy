@@ -50,7 +50,8 @@ export default function PrimaryPersonContactCard({
             variant={variant}
             openDrawer={openDrawer}
             onPersonUpdated={onPersonUpdated}
-            saveHint="Edits save to primary person · not this opportunity"
+            saveHint=""
+            saveTrigger={variant === "summary" ? "explicit" : "blur"}
             dataCardKind="primary"
             className="mt-1"
         />

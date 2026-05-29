@@ -8,9 +8,9 @@ const SECTION_HEADER_CLASS =
 
 /** Pine accent — aligned with inquiry workflow snapshot header cards. */
 const PREMIUM_SECTION =
-  "rounded-lg border border-alloy-stone/20 border-l-[3px] border-l-[rgb(0,162,131)] bg-gradient-to-br from-emerald-50/35 via-white/95 to-white shadow-sm shadow-alloy-stone/10 ring-1 ring-alloy-stone/10 overflow-hidden";
+  "rounded-lg border border-alloy-stone/[0.1] border-l-[3px] border-l-[rgb(0,162,131)] bg-white/[0.97] shadow-sm ring-1 ring-alloy-stone/[0.06] overflow-hidden";
 const PREMIUM_HEADER_STATIC =
-  "border-b border-alloy-stone/15 bg-alloy-stone/[0.05] px-2.5 py-1.5 text-[10px] font-semibold tracking-[0.1em] text-alloy-forge/80";
+  "border-b border-alloy-stone/10 bg-emerald-50/20 px-1.5 py-1 text-[8px] font-semibold tracking-[0.12em] text-alloy-midnight/45";
 
 interface EntityDrawerSectionProps {
   config: EntityDrawerSectionConfig;
@@ -51,7 +51,7 @@ export default function EntityDrawerSection({
     <section
       className={`${
         isPremium
-          ? `mb-3.5 ${PREMIUM_SECTION} ${isCollapsible && !expanded ? "shadow-md shadow-alloy-stone/15" : ""}`
+          ? `mb-0 ${PREMIUM_SECTION} ${isCollapsible && !expanded ? "shadow-md shadow-alloy-stone/15" : ""}`
           : "mb-6"
       } ${className}`}
       data-entity-section

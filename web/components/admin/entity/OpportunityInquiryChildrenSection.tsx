@@ -4,9 +4,9 @@ import { prefetchPersonDrawerSnapshot } from "@/lib/admin/prefetchPersonDrawerSn
 
 import { formatDate } from "@/lib/adminFormatters";
 import {
-    buildCustomerMemberPatch,
+    buildInquiryChildOcmPatchFromEditorLocal,
     ensureOpportunityCustomerMemberLink,
-    inquiryChildIdentityDraftFromPatch,
+    inquiryChildEditorRowIsDirty,
     inquiryChildIdentityHasChanges,
     patchInquiryChildIdentityFromDrawer,
     patchOpportunityCustomerMemberFromInquiryChild,
@@ -38,7 +38,7 @@ import {
     type InquiryChildFieldDefLike,
 } from "@/lib/fields/inquiryChildFieldRegistry";
 import { User } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 /** Literal Tailwind classes (must not be composed at runtime). DOB column compact; Desired Start wider. */
 const INQUIRY_CHILD_DESKTOP_GRID_7 =
@@ -161,46 +161,6 @@ function ViewPersonIconButton({
             <User className="h-3 w-3" aria-hidden />
         </button>
     );
-}
-
-function useDebouncedPatch(ms: number) {
-    const timers = useRef(new Map<string, number>());
-    const queue = useRef(new Map<string, Record<string, unknown>>());
-
-    const schedule = (id: string, patch: Record<string, unknown>, run: (id: string, patch: Record<string, unknown>) => void) => {
-        const next = { ...(queue.current.get(id) ?? {}), ...patch };
-        queue.current.set(id, next);
-        const existing = timers.current.get(id);
-        if (existing) window.clearTimeout(existing);
-        const t = window.setTimeout(() => {
-            timers.current.delete(id);
-            const p = queue.current.get(id);
-            if (!p) return;
-            queue.current.delete(id);
-            run(id, p);
-        }, ms);
-        timers.current.set(id, t);
-    };
-
-    const flush = (id: string, run: (id: string, patch: Record<string, unknown>) => void) => {
-        const existing = timers.current.get(id);
-        if (existing) window.clearTimeout(existing);
-        timers.current.delete(id);
-        const p = queue.current.get(id);
-        if (!p) return;
-        queue.current.delete(id);
-        run(id, p);
-    };
-
-    useEffect(() => {
-        return () => {
-            for (const t of timers.current.values()) window.clearTimeout(t);
-            timers.current.clear();
-            queue.current.clear();
-        };
-    }, []);
-
-    return { schedule, flush };
 }
 
 type IdentityLocal = { first_name: string; last_name: string; dob: string };
@@ -459,8 +419,6 @@ export default function OpportunityInquiryChildrenSection({
         [statusItems]
     );
 
-    const debounced = useDebouncedPatch(600);
-
     const resolveOcmIdForRow = async (row: InquiryChildRow): Promise<string> => {
         const cached = ocmIdByRowKey[row.id];
         if (cached) return cached;
@@ -494,32 +452,90 @@ export default function OpportunityInquiryChildrenSection({
     };
 
     const saveOcmPatch = async (row: InquiryChildRow, patch: InquiryChildOcmPatch) => {
+        const ocmId = await resolveOcmIdForRow(row);
+        await patchOpportunityCustomerMemberFromInquiryChild(ocmId, patch);
+        const oppId = opportunityId?.trim() ?? "";
+        const affectsWaitlist = Object.keys(patch).some((k) =>
+            ["location_id", "program_room_cohort_key", "desired_program_type", "outcome_status_key"].includes(k)
+        );
+        if (oppId && affectsWaitlist && typeof window !== "undefined") {
+            window.dispatchEvent(
+                new CustomEvent("adminv2:opportunity-updated", {
+                    detail: {
+                        id: oppId,
+                        action_key: "inquiry_child_placement_scope",
+                        affects_waitlist: true,
+                    },
+                })
+            );
+        }
+    };
+
+    const identityBaselineForRow = (row: InquiryChildRow) => {
+        const display = (row.display_name ?? "").trim();
+        let first = (row.first_name ?? "").trim();
+        let last = (row.last_name ?? "").trim();
+        if (!first && !last && display) {
+            const parts = display.split(/\s+/).filter(Boolean);
+            first = parts[0] ?? "";
+            last = parts.length > 1 ? parts.slice(1).join(" ") : "";
+        }
+        return {
+            first_name: first,
+            last_name: last,
+            dob: row.dob ? String(row.dob).slice(0, 10) : "",
+        };
+    };
+
+    const saveInquiryChildRow = async (row: InquiryChildRow) => {
+        const st = local[row.id];
+        const identityDraft = identityLocal[row.id];
+        if (!st || !identityDraft) return;
+        const identityBaseline = identityBaselineForRow(row);
+        const customFieldKeys = customDrawerDefs.map((d) => d.field_key);
+        if (
+            !inquiryChildEditorRowIsDirty({
+                row,
+                local: st,
+                identityDraft,
+                identityBaseline,
+                opportunityDesiredStartDate,
+                customFieldKeys,
+            })
+        ) {
+            return;
+        }
+
         markRowSaveState(row.id, "saving");
         try {
-            const ocmId = await resolveOcmIdForRow(row);
-            await patchOpportunityCustomerMemberFromInquiryChild(ocmId, patch);
-            markRowSaveState(row.id, "saved");
-            const oppId = opportunityId?.trim() ?? "";
-            const affectsWaitlist = Object.keys(patch).some((k) =>
-                ["location_id", "program_room_cohort_key", "desired_program_type", "outcome_status_key"].includes(k)
-            );
-            if (oppId && affectsWaitlist && typeof window !== "undefined") {
-                window.dispatchEvent(
-                    new CustomEvent("adminv2:opportunity-updated", {
-                        detail: {
-                            id: oppId,
-                            action_key: "inquiry_child_placement_scope",
-                            affects_waitlist: true,
-                        },
-                    })
-                );
+            const isMetadataOnly = (row.customer_member_id ?? "").startsWith("metadata_child:");
+            if (
+                canEdit &&
+                !isMetadataOnly &&
+                row.customer_member_id &&
+                inquiryChildIdentityHasChanges(identityDraft, identityBaseline)
+            ) {
+                await patchInquiryChildIdentityFromDrawer({
+                    row: { customer_member_id: row.customer_member_id, person_id: row.person_id },
+                    draft: identityDraft,
+                    baseline: identityBaseline,
+                });
             }
+            const ocmPatch = buildInquiryChildOcmPatchFromEditorLocal({
+                row,
+                local: st,
+                opportunityDesiredStartDate,
+                customFieldKeys,
+            });
+            if (Object.keys(ocmPatch).length > 0) {
+                await saveOcmPatch(row, ocmPatch);
+            }
+            markRowSaveState(row.id, "saved");
+            onChildrenMutated?.();
         } catch (e) {
             markRowSaveState(row.id, "error", (e as Error).message);
         }
     };
-
-    const debouncedIdentity = useDebouncedPatch(600);
 
     useEffect(() => {
         logInquiryChildrenDebug("OpportunityInquiryChildrenSection.render", {
@@ -538,34 +554,6 @@ export default function OpportunityInquiryChildrenSection({
             ),
         });
     }, [rows]);
-
-    const scheduleIdentitySave = (row: InquiryChildRow) => {
-        const isMetadataOnly = (row.customer_member_id ?? "").startsWith("metadata_child:");
-        if (!canEdit || isMetadataOnly || !row.customer_member_id) return;
-        const draft = identityLocal[row.id];
-        if (!draft) return;
-        const baseline = {
-            first_name: (row.first_name ?? "").trim(),
-            last_name: (row.last_name ?? "").trim(),
-            dob: row.dob ? String(row.dob).slice(0, 10) : "",
-        };
-        const patch = buildCustomerMemberPatch(draft, baseline);
-        if (!inquiryChildIdentityHasChanges(draft, baseline)) return;
-        debouncedIdentity.schedule(`${row.id}:identity`, patch, async (_id, p) => {
-            markRowSaveState(row.id, "saving");
-            try {
-                await patchInquiryChildIdentityFromDrawer({
-                    row: { customer_member_id: row.customer_member_id, person_id: row.person_id },
-                    draft: inquiryChildIdentityDraftFromPatch(baseline, p),
-                    baseline,
-                });
-                markRowSaveState(row.id, "saved");
-                onChildrenMutated?.();
-            } catch (e) {
-                markRowSaveState(row.id, "error", (e as Error).message);
-            }
-        });
-    };
 
     const reservedRowCount = Math.max(shellReservedRowCount, recordDetailPending ? 1 : 0);
 
@@ -710,6 +698,17 @@ export default function OpportunityInquiryChildrenSection({
                         last_name: "",
                         dob: r.dob ? String(r.dob).slice(0, 10) : "",
                     };
+                    const identityBaseline = identityBaselineForRow(r);
+                    const rowDirty =
+                        rowCanEdit &&
+                        inquiryChildEditorRowIsDirty({
+                            row: r,
+                            local: st,
+                            identityDraft: identity,
+                            identityBaseline,
+                            opportunityDesiredStartDate,
+                            customFieldKeys: customDrawerDefs.map((d) => d.field_key),
+                        });
                     const displayName =
                         [identity.first_name, identity.last_name].filter(Boolean).join(" ").trim() || name;
                     const fallbackProgram =
@@ -794,7 +793,6 @@ export default function OpportunityInquiryChildrenSection({
                                                             ...p,
                                                             [r.id]: { ...identity, first_name: e.target.value },
                                                         }));
-                                                        scheduleIdentitySave(r);
                                                     }}
                                                     className={fieldInput}
                                                     placeholder="First"
@@ -808,7 +806,6 @@ export default function OpportunityInquiryChildrenSection({
                                                             ...p,
                                                             [r.id]: { ...identity, last_name: e.target.value },
                                                         }));
-                                                        scheduleIdentitySave(r);
                                                     }}
                                                     className={fieldInput}
                                                     placeholder="Last"
@@ -851,7 +848,6 @@ export default function OpportunityInquiryChildrenSection({
                                                         ...p,
                                                         [r.id]: { ...identity, dob: e.target.value },
                                                     }));
-                                                    scheduleIdentitySave(r);
                                                 }}
                                                 className={`${fieldInput} w-[6.5rem] shrink-0`}
                                                 aria-label={`Date of birth for ${displayName}`}
@@ -889,15 +885,6 @@ export default function OpportunityInquiryChildrenSection({
                                                             ...p,
                                                             [r.id]: { ...st, desired_start_edit: v },
                                                         }));
-                                                        const oppNorm = normalizeIsoDateOnly(opportunityDesiredStartDate);
-                                                        const patchVal = !v.trim() || v === oppNorm ? null : v;
-                                                        debounced.schedule(
-                                                            r.id,
-                                                            { desired_start_date: patchVal },
-                                                            (_id, patch) => {
-                                                                void saveOcmPatch(r, patch as InquiryChildOcmPatch);
-                                                            }
-                                                        );
                                                     }}
                                                     aria-label={`${desiredStartLabel} for ${displayName}`}
                                                 />
@@ -943,13 +930,6 @@ export default function OpportunityInquiryChildrenSection({
                                                                     custom: { ...st.custom, [def.field_key]: v },
                                                                 },
                                                             }));
-                                                    debounced.schedule(
-                                                        r.id,
-                                                        { [def.field_key]: v || null },
-                                                        (_id, patch) => {
-                                                            void saveOcmPatch(r, patch as InquiryChildOcmPatch);
-                                                        }
-                                                    );
                                                         }}
                                                     />
                                                 ) : (
@@ -967,13 +947,6 @@ export default function OpportunityInquiryChildrenSection({
                                                                     custom: { ...st.custom, [def.field_key]: v },
                                                                 },
                                                             }));
-                                                    debounced.schedule(
-                                                        r.id,
-                                                        { [def.field_key]: v || null },
-                                                        (_id, patch) => {
-                                                            void saveOcmPatch(r, patch as InquiryChildOcmPatch);
-                                                        }
-                                                    );
                                                         }}
                                                     />
                                                 )
@@ -1010,18 +983,6 @@ export default function OpportunityInquiryChildrenSection({
                                                         program_room_cohort_key: nextCohort,
                                                     },
                                                 }));
-                                                debounced.schedule(
-                                                    r.id,
-                                                    {
-                                                        location_id: v || null,
-                                                        ...(nextCohort !== st.program_room_cohort_key ?
-                                                            { program_room_cohort_key: nextCohort || null }
-                                                        :   {}),
-                                                    },
-                                                    (_id, patch) => {
-                                                        void saveOcmPatch(r, patch as InquiryChildOcmPatch);
-                                                    }
-                                                );
                                             }}
                                             className={fieldSelect}
                                             aria-label={`${locationLabel} for ${displayName}`}
@@ -1053,13 +1014,6 @@ export default function OpportunityInquiryChildrenSection({
                                                         desired_program_type: v,
                                                     },
                                                 }));
-                                                debounced.schedule(
-                                                    r.id,
-                                                    { desired_program_type: v || null },
-                                                    (_id, p) => {
-                                                        void saveOcmPatch(r, p as InquiryChildOcmPatch);
-                                                    }
-                                                );
                                             }}
                                             className={fieldSelect}
                                             aria-label={`${programLabel} for ${displayName}`}
@@ -1092,13 +1046,6 @@ export default function OpportunityInquiryChildrenSection({
                                                     ...p,
                                                     [r.id]: { ...st, program_room_cohort_key: v },
                                                 }));
-                                                debounced.schedule(
-                                                    r.id,
-                                                    { program_room_cohort_key: v || null },
-                                                    (_id, patch) => {
-                                                        void saveOcmPatch(r, patch as InquiryChildOcmPatch);
-                                                    }
-                                                );
                                             }}
                                             className={fieldSelect}
                                             aria-label={`${roomLabel} for ${displayName}`}
@@ -1125,9 +1072,6 @@ export default function OpportunityInquiryChildrenSection({
                                             onChange={(e) => {
                                                 const v = e.target.value;
                                                 setLocal((p) => ({ ...p, [r.id]: { ...st, desired_schedule_type: v } }));
-                                                debounced.schedule(r.id, { desired_schedule_type: v || null }, (_id, patch) => {
-                                                    void saveOcmPatch(r, patch as InquiryChildOcmPatch);
-                                                });
                                             }}
                                             className={fieldSelect}
                                             aria-label={`${scheduleLabel} for ${displayName}`}
@@ -1152,9 +1096,6 @@ export default function OpportunityInquiryChildrenSection({
                                             onChange={(e) => {
                                                 const v = e.target.value;
                                                 setLocal((p) => ({ ...p, [r.id]: { ...st, outcome_status_key: v } }));
-                                                debounced.schedule(r.id, { outcome_status_key: v || null }, (_id, patch) => {
-                                                    void saveOcmPatch(r, patch as InquiryChildOcmPatch);
-                                                });
                                             }}
                                             className={`${fieldSelectStatus} ${outcomeSelectAttention}`}
                                             aria-label={`${statusLabel} for ${displayName}`}
@@ -1170,7 +1111,19 @@ export default function OpportunityInquiryChildrenSection({
                                         <span className={`${readOnlyText} text-xs`}>{fallbackOutcome}</span>
                                     )}
                                     {rowCanEdit ? (
-                                        <div className="mt-0.5 min-h-[0.75rem] leading-none">{rowStatus(r.id)}</div>
+                                        <div className="mt-0.5 flex min-h-[0.75rem] flex-wrap items-center gap-1.5 leading-none">
+                                            {rowDirty ? (
+                                                <button
+                                                    type="button"
+                                                    disabled={saving}
+                                                    onClick={() => void saveInquiryChildRow(r)}
+                                                    className="rounded border border-alloy-blue/35 bg-alloy-blue/[0.08] px-1.5 py-0.5 text-[9px] font-semibold text-alloy-blue hover:bg-alloy-blue/10 disabled:opacity-60"
+                                                >
+                                                    {saving ? "Saving…" : "Save"}
+                                                </button>
+                                            ) : null}
+                                            {rowStatus(r.id)}
+                                        </div>
                                     ) : null}
                                 </div>
                         </div>

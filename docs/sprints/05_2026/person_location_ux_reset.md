@@ -274,6 +274,52 @@ cd web && npx tsc --noEmit
 
 ---
 
+## Demo readiness cleanup (2026-05-29)
+
+### Person drawer visual parity
+
+- Overview body wrapped in `oppInqLeadSummaryShellClassName` with per-section `oppInqInnerCardCompact` cards.
+- Premium section headers use inquiry eyebrow tokens and tighter pine-accent surfaces (`EntityDrawerSection`, `EntityDrawerOverview`).
+
+### Person ↔ Opportunity contact data path
+
+| Direction | Write | Read |
+|-----------|-------|------|
+| Opportunity Lead Summary → Person | `PATCH /api/admin/persons/:id` via `EditablePersonContactCard` / `patchLinkedPersonFromOpportunityDrawer` | Person drawer header metadata + overview fields from person GET |
+| Person drawer → Opportunity Family & Contacts | Same person PATCH from overview inline edits | Opportunity hydration refetch (`applyPersonPatchToOpportunityHydration`, `applyPersonPatchToOpportunityPersonList`) + queue preview event |
+
+Canonical identity owner for linked contacts is always **`persons`** (never the opportunity row). Children inquiry fields write **`opportunity_customer_members`** / person identity per `inquiryChildFieldEdit.ts`.
+
+### Lead Summary / Children save behavior
+
+| Surface | Fields | Before | After |
+|---------|--------|--------|-------|
+| Family & contacts (summary) | name, email, phone | Blur autosave (350ms) | Explicit **Save** when dirty |
+| Inquiry children grid | identity + OCM placement | Debounced/onChange autosave (600ms) | Explicit per-row **Save** when dirty |
+
+Global drawer form autosave unchanged.
+
+### Opportunity copy removed
+
+- Save hints on primary/linked contact cards
+- “What matters for this inquiry” band (left summary column)
+- Family status secondary line in header strip (`display_summary`)
+- Child room/cohort placement diagnostic hint in drawer
+- Queue preview omits unset family status (`display_summary` null when no useful enrollment status)
+
+### Validation (demo readiness)
+
+```bash
+cd web && npm run test -- tests/admin/actions/configuredDrawerActions.test.ts
+cd web && npm run test -- tests/admin/drawer/demoReadinessCleanup.test.ts
+cd web && npm run test -- tests/opportunities/buildOpportunityChildLifecycleSummary.test.ts
+cd web && npm run test -- tests/admin/person/personDrawerPremiumPrimitives.test.ts
+cd web && npm run test -- tests/admin/drawer/opportunityFamilyContactsOrdering.test.ts
+cd web && npx tsc --noEmit
+```
+
+---
+
 ## Suggested commit message
 
 ```

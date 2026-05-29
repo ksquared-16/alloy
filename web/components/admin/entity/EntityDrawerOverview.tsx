@@ -11,7 +11,12 @@ import { formatDate, formatDateTime, formatMoney, formatMoneyFromCents, formatPh
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import EntityDrawerSection from "./EntityDrawerSection";
 import EntityDrawerField, { INPUT_ERROR_CLASS } from "./EntityDrawerField";
-import { oppInqFieldInput } from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
+import {
+  oppInqEyebrow,
+  oppInqFieldInput,
+  oppInqInnerCardCompact,
+  oppInqLeadSummaryShellClassName,
+} from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
 import type { DrawerFieldPolicyChrome } from "@/lib/admin/drawer/fieldEditabilityInDrawer";
 import {
     OPPORTUNITY_PRIMARY_PERSON_MIRROR_FIELD_KEYS,
@@ -815,14 +820,18 @@ export default function EntityDrawerOverview({
     );
   };
 
+  const personPremiumOverview = entityType === "persons" && sectionSurface === "premium";
+
   return (
     <div
       className={`${
-        sectionSurface === "premium"
-          ? entityType === "persons"
-            ? "space-y-0 pt-2 pb-0"
-            : "space-y-0 pt-4 pb-1"
-          : `space-y-0 ${entityType === "schedules" ? "pt-2 [&_section[data-entity-section]]:mb-3" : "pt-4"}`
+        personPremiumOverview
+          ? `${oppInqLeadSummaryShellClassName} space-y-1 px-1 py-1`
+          : sectionSurface === "premium"
+            ? entityType === "persons"
+              ? "space-y-0 pt-2 pb-0"
+              : "space-y-0 pt-4 pb-1"
+            : `space-y-0 ${entityType === "schedules" ? "pt-2 [&_section[data-entity-section]]:mb-3" : "pt-4"}`
       }`}
       data-entity-drawer-overview
       data-section-surface={sectionSurface}
@@ -977,11 +986,18 @@ export default function EntityDrawerOverview({
         const customContent = customSectionContent[section.key];
         const headerRight = customSectionHeaderRight[section.key];
 
-        const gridInner = section.gridCols === 2 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1";
+        const gridInner =
+          section.gridCols === 2
+            ? personPremiumOverview
+              ? "grid-cols-1 gap-x-2 gap-y-1 sm:grid-cols-2"
+              : "grid-cols-1 md:grid-cols-2"
+            : "grid-cols-1";
 
         const subsectionTitleClass =
           sectionSurface === "premium"
-            ? "text-[10px] font-semibold tracking-[0.1em] text-alloy-midnight/50 border-b border-alloy-stone/15 pb-1.5 mb-2.5"
+            ? personPremiumOverview
+              ? oppInqEyebrow
+              : "text-[10px] font-semibold tracking-[0.1em] text-alloy-midnight/50 border-b border-alloy-stone/15 pb-1.5 mb-2.5"
             : "text-xs font-semibold tracking-wider text-alloy-forge/80 border-b border-admin-border pb-2 mb-3";
 
         const children: ReactNode =
@@ -1001,12 +1017,16 @@ export default function EntityDrawerOverview({
             section.fields!.map((f) => renderOverviewField(f))
           ) : null);
 
+        const sectionWrapperClass = personPremiumOverview ? `${oppInqInnerCardCompact} mb-1 min-h-0` : "";
+
         if (!hasFields && !customContent) return null;
 
         return (
-          <EntityDrawerSection key={section.key} config={section} surface={sectionSurface} headerRight={headerRight}>
+          <div key={section.key} className={sectionWrapperClass}>
+          <EntityDrawerSection config={section} surface={sectionSurface} headerRight={headerRight}>
             {children}
           </EntityDrawerSection>
+          </div>
         );
       })}
     </div>

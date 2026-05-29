@@ -18,13 +18,18 @@ Underlying modals and API routes are unchanged.
 - Opportunity drawer header actions render **only** from `resolveActionsForContext` (`record_header` placements).
 - **Send enrollment packet** is a platform `action_definitions` row (`ui_intent` → `send_enrollment_packet`) addable from `/adminV2/settings/actions`.
 - Clicking the configured action opens the existing enrollment packet modal via `send_enrollment_packet` intent handling (drawer direct + `adminv2:open-enrollment-packet` event for registry client paths).
-- **Send form** is removed from the header; restore it by adding a future configured action (not seeded in this pass).
+- **Send form** is a platform `action_definitions` row (`ui_intent` → `send_form`) addable from `/adminV2/settings/actions`. Opens `SendFormToOpportunityModal` via drawer intent + `adminv2:open-send-form` event. Not placed by default — operators enable via Settings.
 
 ## Migration
 
-**Yes** — `supabase/migrations/20260529180000_send_enrollment_packet_action.sql`
+**Yes** — two idempotent global action seeds:
 
-Seeds global `send_enrollment_packet` (`ui_intent`, priority 78). No new columns; ordering uses existing `action_placements.order_index`.
+| Migration | Action key |
+|-----------|------------|
+| `20260529180000_send_enrollment_packet_action.sql` | `send_enrollment_packet` (priority 78) |
+| `20260529200000_send_form_action.sql` | `send_form` (priority 77) |
+
+No new columns; ordering uses existing `action_placements.order_index`.
 
 ## Ordering
 
@@ -42,8 +47,10 @@ Seeds global `send_enrollment_packet` (`ui_intent`, priority 78). No new columns
 | File | Change |
 |------|--------|
 | `supabase/migrations/20260529180000_send_enrollment_packet_action.sql` | Platform action seed |
-| `web/components/admin/AdminEntityDrawer.tsx` | Remove hardcoded buttons; intent + event listener |
-| `web/lib/admin/actions/applyRegistryResolvedActionClient.ts` | `send_enrollment_packet` intent |
+| `supabase/migrations/20260529200000_send_form_action.sql` | Send form platform action seed |
+| `web/lib/admin/actions/actionDefinitionRegistry.ts` | Registry entries for Settings UI |
+| `web/components/admin/AdminEntityDrawer.tsx` | Remove hardcoded buttons; send_form + send_enrollment_packet intents |
+| `web/lib/admin/actions/applyRegistryResolvedActionClient.ts` | `send_form` + `send_enrollment_packet` intents |
 | `web/components/adminV2/settings/ActionPlacementGuidedEditor.tsx` | Modal editor, label edit, slot seed fix |
 | `web/components/adminV2/settings/ActionPlacementsSettingsClient.tsx` | Edit scroll, reorder |
 | `web/components/adminV2/settings/ConfiguredActionPlacementsList.tsx` | Order display + move controls |
@@ -64,7 +71,7 @@ Verify seed idempotently:
 ```sql
 SELECT key, action_type, entity_type, is_active
 FROM action_definitions
-WHERE key = 'send_enrollment_packet' AND org_id IS NULL;
+WHERE key IN ('send_enrollment_packet', 'send_form') AND org_id IS NULL;
 ```
 
 ## Validation
