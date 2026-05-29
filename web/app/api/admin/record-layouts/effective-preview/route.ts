@@ -9,7 +9,7 @@ import {
 } from "@/lib/recordChrome/effectiveDrawerLayoutPreview";
 import type { EntityPresentationType } from "@/lib/entityPresentation";
 
-const ALLOWED = new Set(["job", "schedule", "opportunity"]);
+const ALLOWED = new Set(["job", "schedule", "opportunity", "person"]);
 
 function presentationEntityForLayoutEntity(entityType: string): EntityPresentationType | null {
     switch (entityType) {
@@ -19,6 +19,8 @@ function presentationEntityForLayoutEntity(entityType: string): EntityPresentati
             return "jobs";
         case "schedule":
             return "schedules";
+        case "person":
+            return "persons";
         default:
             return null;
     }
@@ -37,7 +39,7 @@ export async function GET(request: NextRequest) {
 
     const entityType = (request.nextUrl.searchParams.get("entity_type") ?? "").trim().toLowerCase();
     if (!entityType || !ALLOWED.has(entityType)) {
-        return NextResponse.json({ error: "entity_type must be job, schedule, or opportunity" }, { status: 400 });
+        return NextResponse.json({ error: "entity_type must be job, schedule, opportunity, or person" }, { status: 400 });
     }
 
     const presentationEntityType = presentationEntityForLayoutEntity(entityType);
@@ -53,6 +55,31 @@ export async function GET(request: NextRequest) {
 
     const layout = resolved.layout;
     if (!layout) {
+        if (entityType === "person") {
+            const preview = buildEffectiveDrawerLayoutPreview({
+                presentationEntityType: "persons",
+                config: {},
+            });
+            return NextResponse.json({
+                entity_type: entityType,
+                surface: "drawer",
+                layout_resolution: {
+                    source: "presentation_template",
+                    record_drawer_layout_id: null,
+                    record_layout_id: null,
+                    layout_key: "default",
+                    global_template_count: 0,
+                },
+                workflow: {
+                    inquiry_drawer_mode: null,
+                    workflow_v1_configured: false,
+                    workflow_v1_body_transform_active: false,
+                },
+                preview_fidelity: preview.fidelity,
+                sections: preview.sections,
+                empty_reason: null,
+            });
+        }
         return NextResponse.json({
             entity_type: entityType,
             surface: "drawer",

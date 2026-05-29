@@ -96,7 +96,6 @@ import {
     type EntityDrawerFieldConfig,
 } from "@/lib/entityPresentation";
 import { OpportunityIntakeSourceSection } from "@/components/admin/opportunity/OpportunityIntakeSourceSection";
-import PersonDrawerCompactOverview from "@/components/admin/entity/PersonDrawerCompactOverview";
 import PersonEmployeePlacementSection from "@/components/admin/entity/PersonEmployeePlacementSection";
 import { readPersonEmployeePlacementValues } from "@/lib/admin/personEmployeePlacementFields";
 import {
@@ -198,6 +197,11 @@ import {
     putDrawerEntitySnapshot,
 } from "@/lib/admin/drawerEntitySnapshotCache";
 import { openViewPersonFromOpportunity } from "@/lib/admin/drawer/openViewPersonFromOpportunity";
+import {
+    buildPersonDrawerSeedRecord,
+    isPersonDrawerSeedRecord,
+    personDrawerSeedFromOpportunityRecord,
+} from "@/lib/admin/drawer/personDrawerOpenSeed";
 import { entityDataMatchesDrawer } from "@/lib/admin/drawer/entityDataMatchesDrawer";
 import { isPersonDrawerSnapshotWarm } from "@/lib/admin/prefetchPersonDrawerSnapshot";
 import { installPersonDrawerDevDirectOpen } from "@/lib/admin/drawer/personDrawerDevDirectOpen";
@@ -228,6 +232,7 @@ import {
     opportunityDrawerSummaryLayoutMode,
     stabilizeOpportunityWorkflowOverviewSections,
 } from "@/lib/admin/drawer/opportunityDrawerLayoutStability";
+import { reportOpportunityDrawerHydrateLayoutStability } from "@/lib/admin/drawer/opportunityDrawerAboveFoldGeometry";
 import { INQUIRY_SUMMARY_RIGHT_COLUMN_SHELL_MIN_H_CLASS } from "@/lib/admin/drawer/opportunityInquiryRightColumnGeometry";
 import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
 import {
@@ -1455,6 +1460,7 @@ export default function AdminEntityDrawer() {
     /** Lazy `surface=relationship_member_persons` after `full` when `_member_person_graph_pending`; no loader. */
     const memberPersonGraphOverlayInFlightRef = useRef<string | null>(null);
     const memberPersonGraphOverlayDoneRef = useRef<string | null>(null);
+    const opportunityDrawerAboveFoldLockedRef = useRef(false);
 
     /** Coherent shell: entity row loaded (header actions may still resolve in parallel). */
     const drawerReady = useMemo(() => {
@@ -2274,17 +2280,21 @@ export default function AdminEntityDrawer() {
         }
         const entityOpenKey = `${drawer.type}:${drawer.id}`;
         const cachedEntity = peekDrawerEntitySnapshot(drawer.type, drawer.id);
+        const personSeedSnapshot =
+            drawer.type === "persons" &&
+            cachedEntity != null &&
+            isPersonDrawerSeedRecord(cachedEntity as Record<string, unknown>);
         if (cachedEntity && entityDataMatchesDrawer(cachedEntity, drawer.id, drawer.type)) {
             if (drawer.type === "persons") {
                 logPersonDrawerFetch({
-                    phase: "cache_hit",
+                    phase: personSeedSnapshot ? "seed_cache_hit" : "cache_hit",
                     url: buildAdminEntityFetchUrl(drawer.type, drawer.id, drawer.jobRecordSurface),
                     drawerId: drawer.id,
                     cachedId: (cachedEntity as { id?: unknown }).id ?? null,
                     cachedKeys: Object.keys(cachedEntity).slice(0, 24),
                 });
                 logPersonDrawerHydrate({
-                    phase: "cache_apply",
+                    phase: personSeedSnapshot ? "seed_cache_apply" : "cache_apply",
                     dataMatchesDrawer: true,
                     cachedId: (cachedEntity as { id?: unknown }).id ?? null,
                 });
@@ -2302,7 +2312,9 @@ export default function AdminEntityDrawer() {
                     setOpportunityDrawerSecondaryReady(true);
                 }
             }
-            return;
+            if (!personSeedSnapshot) {
+                return;
+            }
         }
         if (cachedEntity) {
             clearDrawerEntitySnapshot(drawer.type, drawer.id);
@@ -2563,6 +2575,16 @@ export default function AdminEntityDrawer() {
                     );
                     if (changed.length > 0) {
                         reportDrawerFirstPaintHydrateWave(hydrateId, "primary_merge", changed);
+                        reportOpportunityDrawerHydrateLayoutStability(
+                            hydrateId,
+                            "primary_merge",
+                            prev as Record<string, unknown>,
+                            merged,
+                            {
+                                aboveFoldLocked: opportunityDrawerAboveFoldLockedRef.current,
+                                fullHydrateApplied: false,
+                            }
+                        );
                     }
                     return merged;
                 });
@@ -2631,6 +2653,16 @@ export default function AdminEntityDrawer() {
                     );
                     if (changed.length > 0) {
                         reportDrawerFirstPaintHydrateWave(hydrateId, "full_merge", changed);
+                        reportOpportunityDrawerHydrateLayoutStability(
+                            hydrateId,
+                            "full_merge",
+                            prev as Record<string, unknown>,
+                            merged,
+                            {
+                                aboveFoldLocked: opportunityDrawerAboveFoldLockedRef.current,
+                                fullHydrateApplied: true,
+                            }
+                        );
                     }
                     return merged;
                 });
@@ -6116,6 +6148,12 @@ export default function AdminEntityDrawer() {
         drawer.type === "locations" &&
         !!drawer.id &&
         drawer.id !== "new";
+    /** Centered record modal for persons — same frame as opportunity when drilling from inquiry. */
+    const isPersonRecordModalTarget =
+        drawerShellVariant === "adminV2" &&
+        drawer.type === "persons" &&
+        !!drawer.id &&
+        drawer.id !== "new";
     const opportunityDrawerQueueBootstrap =
         opportunityDrawerBootstrapPending ||
         (drawer.type === "opportunities" &&
@@ -6138,6 +6176,7 @@ export default function AdminEntityDrawer() {
             isScheduleRecordModalTarget ||
             isOpportunityRecordModalTarget ||
             isLocationRecordModalTarget ||
+            isPersonRecordModalTarget ||
             stack.length > 0);
     const hasServerJobPaymentSummary = !!jobPaymentSummaryFromApi;
     const paymentStatusLabel = hasServerJobPaymentSummary
@@ -6857,11 +6896,15 @@ export default function AdminEntityDrawer() {
         (drawerGateLoading ||
             opportunityRecordChromePending ||
             !!(overviewData && !(overviewData as { _create?: boolean })._create));
+    const personRecordChromeBodyShell =
+        isPersonRecordModalTarget &&
+        (drawerGateLoading ||
+            !!(overviewData && !(overviewData as { _create?: boolean })._create));
     /** Matches hydrated record body wrappers so height/width rails stay stable gate → ready. */
     const drawerRecordBodyRootClassName = `${
         isJobRecordModalTarget && drawer.type === "jobs"
             ? "space-y-3 max-w-none"
-            : scheduleRecordChromeBodyShell || opportunityRecordChromeBodyShell
+            : scheduleRecordChromeBodyShell || opportunityRecordChromeBodyShell || personRecordChromeBodyShell
               ? "space-y-3 max-w-none"
               : "space-y-6"
     }${opportunityRecordChromeBodyShell ? " pb-32 sm:pb-36 overflow-anchor-none" : ""}`;
@@ -7117,7 +7160,7 @@ export default function AdminEntityDrawer() {
             const prev = splitTargetKey(prevKey);
             const next = splitTargetKey(nextKey);
 
-            if (prev.type === "opportunities" && prev.id && next.type === "persons") {
+            if (prev.type === "opportunities" && prev.id && next.type === "persons" && next.id) {
                 if (data && entityDataMatchesDrawer(data, prev.id, "opportunities")) {
                     putDrawerEntitySnapshot("opportunities", prev.id, data as Record<string, unknown>);
                     putDrawerStackRestoreSnapshot("opportunities", prev.id, {
@@ -7129,6 +7172,23 @@ export default function AdminEntityDrawer() {
                         opportunityDrawerFirstPaintPreloaded:
                             opportunityDrawerFirstPaintPreloadedRef.current === prev.id,
                     });
+                }
+                const personCached = peekDrawerEntitySnapshot("persons", next.id);
+                if (personCached && entityDataMatchesDrawer(personCached, next.id, "persons")) {
+                    setData(personCached);
+                    setLoading(false);
+                    setError(null);
+                } else if (data && entityDataMatchesDrawer(data, prev.id, "opportunities")) {
+                    const seed =
+                        personDrawerSeedFromOpportunityRecord(data as Record<string, unknown>, next.id) ??
+                        drawer.personDrawerOpenSeed;
+                    if (seed) {
+                        const seedRecord = buildPersonDrawerSeedRecord(seed);
+                        putDrawerEntitySnapshot("persons", next.id, seedRecord);
+                        setData(seedRecord);
+                        setLoading(false);
+                        setError(null);
+                    }
                 }
             }
 
@@ -7228,6 +7288,7 @@ export default function AdminEntityDrawer() {
         drawer.type,
         drawer.id,
         drawer.openSource,
+        drawer.personDrawerOpenSeed,
         data,
         drawerTab,
         opportunityBootstrapAppliedId,
@@ -7280,6 +7341,7 @@ export default function AdminEntityDrawer() {
         () => opportunityDrawerAboveFoldLayoutLocked(opportunityDrawerLayoutFrozen, opportunityDrawerBelowFoldRevealed),
         [opportunityDrawerLayoutFrozen, opportunityDrawerBelowFoldRevealed]
     );
+    opportunityDrawerAboveFoldLockedRef.current = opportunityDrawerAboveFoldLocked;
 
     const opportunityDrawerSecondaryWindowOpen = useMemo(
         () => computeSecondaryWindowOpen(drawer.type, drawer.id, postDrawerVisibleKey),
@@ -7693,16 +7755,9 @@ export default function AdminEntityDrawer() {
         const defs = (overviewData._field_definitions as { is_visible_in_drawer?: boolean }[] | undefined) ?? [];
         return defs.some((d) => d.is_visible_in_drawer !== false);
     }, [overviewData]);
-    const usePersonCompactOverview =
-        drawer.type === "persons" &&
-        !!drawer.id &&
-        drawer.id !== "new" &&
-        overviewData != null &&
-        !(overviewData as { _create?: boolean })._create;
     const useConfigDrivenOverview =
         !!presentationType &&
         !(overviewData as { _create?: boolean })?._create &&
-        !usePersonCompactOverview &&
         (hasFieldDefsForOverview ||
             (!!presentationConfig?.drawer?.overviewSections?.length &&
                 presentationConfig.drawer.overviewSections.some((s) => s.fields && s.fields.length > 0)));
@@ -7713,7 +7768,7 @@ export default function AdminEntityDrawer() {
         drawer.id !== "new" &&
         drawerReady &&
         dataMatchesDrawer &&
-        usePersonCompactOverview;
+        useConfigDrivenOverview;
     const personDrawerShowLoadingShell =
         drawer.type === "persons" &&
         !!drawer.id &&
@@ -7730,9 +7785,7 @@ export default function AdminEntityDrawer() {
             drawerBodyGateLoading && !error ?
                 "person_loading_shell"
             : drawerReady && data && dm ?
-                usePersonCompactOverview ?
-                    "person_compact_overview"
-                : useConfigDrivenOverview ?
+                useConfigDrivenOverview ?
                     "config_driven_overview"
                 :   "hydrated_no_person_overview_branch"
             : error ?
@@ -7748,7 +7801,6 @@ export default function AdminEntityDrawer() {
             dataMatchesDrawer: dm,
             dataId: (data as { id?: unknown } | null)?.id ?? null,
             overviewDataPresent: overviewData != null,
-            usePersonCompactOverview,
             useConfigDrivenOverview,
             personBodyBranch,
         });
@@ -7762,7 +7814,6 @@ export default function AdminEntityDrawer() {
         drawerBodyGateLoading,
         data,
         overviewData,
-        usePersonCompactOverview,
         useConfigDrivenOverview,
     ]);
 
@@ -7805,9 +7856,6 @@ export default function AdminEntityDrawer() {
         // TS note: parts of this block return early for specific drawer types, which can cause
         // control-flow narrowing weirdness in very large files. Keep a widened local copy.
         const drawerType = drawer.type as AdminDrawerEntityType;
-        if (drawer.type === "persons" && drawer.id && drawer.id !== "new" && !(d as { _create?: boolean })._create) {
-            return {};
-        }
         if (drawer.type === "contacts") {
             const customerId = d.customer_id as string | null | undefined;
             const vendorId = d.vendor_id as string | null | undefined;
@@ -8092,7 +8140,28 @@ export default function AdminEntityDrawer() {
                     role_type?: string | null;
                 }[]) ?? [];
             const subheading = "text-xs font-semibold tracking-wide text-alloy-midnight/50 mb-2";
+            const personId = String(drawer.id ?? p.id ?? "").trim();
             return {
+                ...(personId
+                    ? {
+                          employee_placement: (
+                              <PersonEmployeePlacementSection
+                                  personId={personId}
+                                  initialValues={readPersonEmployeePlacementValues(p)}
+                                  canMutate={!!canMutate}
+                                  onPersonUpdated={(json) => {
+                                      setData((prev) => (prev ? { ...prev, ...json } : prev));
+                                      if (drawer.id) {
+                                          putDrawerEntitySnapshot("persons", drawer.id, {
+                                              ...(entityDrawerOverviewData ?? {}),
+                                              ...json,
+                                          });
+                                      }
+                                  }}
+                              />
+                          ),
+                      }
+                    : {}),
                 relationships: (
                     <div className="space-y-5">
                         <div>
@@ -8645,6 +8714,10 @@ export default function AdminEntityDrawer() {
                                     personId: row.person_id,
                                     opportunityId: drawer.id ?? "",
                                     source: "opportunity_inquiry_child",
+                                    openSeed: {
+                                        personId: row.person_id,
+                                        display_name: row.display_name ?? undefined,
+                                    },
                                 });
                             } else openDrawer({ type: "customer_members", id: cm });
                         }}
@@ -8773,6 +8846,11 @@ export default function AdminEntityDrawer() {
             visible = visible.filter((d) => d.field_key !== "status_key" && d.field_key !== "status");
             visible = visible.filter((d) => d.field_key !== "schedule_status_id");
         }
+        if (drawer.type === "persons") {
+            visible = visible.filter(
+                (d) => !new Set(["is_employee", "employee_id", "employee_source"]).has(d.field_key)
+            );
+        }
         if (drawer.type === "locations" && overviewData) {
             visible = visible.filter(
                 (d) => !locationCustomDefShadowedByCanonical(d.field_key, overviewData as Record<string, unknown>)
@@ -8824,7 +8902,10 @@ export default function AdminEntityDrawer() {
             const presentationFallback =
                 overviewData &&
                 !(overviewData as { _create?: boolean })._create &&
-                (drawer.type === "jobs" || drawer.type === "locations" || drawer.type === "schedules");
+                (drawer.type === "jobs" ||
+                    drawer.type === "locations" ||
+                    drawer.type === "schedules" ||
+                    drawer.type === "persons");
             if (!presentationFallback) {
                 return [];
             }
@@ -9051,6 +9132,13 @@ export default function AdminEntityDrawer() {
             }
         }
 
+        if (drawer.type === "persons") {
+            const personPres = (getEntityPresentation("persons").drawer?.overviewSections ?? []) as EntityDrawerSectionConfig[];
+            if (fromDefs.length === 0) {
+                sectionBlocks = [...personPres];
+            }
+        }
+
         if (drawer.type === "jobs" && fromDefs.length > 0) {
             const jobPres = (getEntityPresentation("jobs").drawer?.overviewSections ?? []) as EntityDrawerSectionConfig[];
             const ps = jobPres.find((s) => s.key === "property_service");
@@ -9063,15 +9151,22 @@ export default function AdminEntityDrawer() {
 
         const keys = new Set(sectionBlocks.map((s) => s.key));
         const append: EntityDrawerSectionConfig[] = [];
-        if (drawer.type === "persons" && overviewData && !(overviewData as { _create?: boolean })._create && !keys.has("relationships")) {
-            append.push({
-                key: "relationships",
-                title: "Relationships",
-                defaultExpanded: false,
-                collapsible: true,
-                gridCols: 1 as const,
-                fields: [],
-            });
+        if (drawer.type === "persons" && overviewData && !(overviewData as { _create?: boolean })._create) {
+            const personPres = (getEntityPresentation("persons").drawer?.overviewSections ?? []) as EntityDrawerSectionConfig[];
+            if (!keys.has("employee_placement")) {
+                const emp = personPres.find((s) => s.key === "employee_placement");
+                if (emp) append.push(emp);
+            }
+            if (!keys.has("relationships")) {
+                append.push({
+                    key: "relationships",
+                    title: "Relationships",
+                    defaultExpanded: false,
+                    collapsible: true,
+                    gridCols: 1 as const,
+                    fields: [],
+                });
+            }
         }
         if (drawer.type === "locations" && overviewData && !(overviewData as { _create?: boolean })._create) {
             const loc = overviewData as { customer_id?: string | null };
@@ -10248,7 +10343,7 @@ export default function AdminEntityDrawer() {
           : drawerHeaderActions;
 
     const recordCleaningV2Eligible =
-        showJobRecordModalV2 || scheduleRecordChromeBodyShell || opportunityRecordChromeBodyShell;
+        showJobRecordModalV2 || scheduleRecordChromeBodyShell || opportunityRecordChromeBodyShell || personRecordChromeBodyShell;
 
     return (
         <Drawer
@@ -13326,21 +13421,7 @@ export default function AdminEntityDrawer() {
                         })()}
                     {drawerTab === "overview" && !useConfigDrivenOverview && (
                         <>
-                            {drawer.type === "persons" && usePersonCompactOverview && drawer.id ? (
-                                <PersonDrawerCompactOverview
-                                    personId={drawer.id}
-                                    data={entityDrawerOverviewData}
-                                    canMutate={!!canMutate}
-                                    relationshipsSlot={overviewCustomContent.relationships}
-                                    onPersonUpdated={(json) => {
-                                        setData((prev) => (prev ? { ...prev, ...json } : prev));
-                                        putDrawerEntitySnapshot("persons", drawer.id!, {
-                                            ...entityDrawerOverviewData,
-                                            ...json,
-                                        });
-                                    }}
-                                />
-                            ) : drawer.type === "persons" && (data as { _create?: boolean })?._create ? (
+                            {drawer.type === "persons" && (data as { _create?: boolean })?._create ? (
                                 <div className="space-y-4">
                                     {personCreateError && <p className="text-sm text-red-600">{personCreateError}</p>}
                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">First name</label><input value={String(personCreateForm.first_name ?? "")} onChange={(e) => setPersonCreateForm((f) => ({ ...f, first_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" placeholder="Optional" /></div>

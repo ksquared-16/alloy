@@ -1,7 +1,7 @@
 # Record, Person & Location Convergence Sprint — Card 0 Audit
 
 **Date:** 2026-05-29  
-**Status:** Card 0 audit complete · **Card 1 shipped (2026-05-29)** · **Card 2 shipped (2026-05-29)** · **Card 3 audit complete (2026-05-29)** — person drawer convergence design  
+**Status:** Card 0 audit complete · **Card 1 shipped (2026-05-29)** · **Card 2 shipped (2026-05-29)** · **Card 3 audit complete (2026-05-29)** · **Card 4 shipped (2026-05-29)** — person drawer control-plane convergence  
 **Goal:** Architectural baseline for converging location, room, child inquiry, person drawer, relationships, record lifecycle, household terminology, and enrollment navigation into a coherent operator model.
 
 **Canonical references:** `docs/core/glossary.md`, `docs/system/entity-model.md`, `docs/system/record-system.md`, `docs/system/workspace-system.md`, `docs/system/configuration-system.md`, `docs/sprints/05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`, `docs/sprints/05_2026/waitlist_priority_fact_truth_child_scope.md`, `docs/sprints/05_2026/completed/settings_control_plane_closeout.md`
@@ -646,7 +646,7 @@ Department: Enrollment (key: enrollment)
 | 1b | Location hierarchy API (`parent_location_id`) + settings UX | Deferred |
 | 2 | Child location authority display resolver | ✅ Shipped |
 | 3 | Person drawer convergence audit + target architecture | ✅ Audit complete |
-| 4 | Person drawer layout control plane (see Card 3 § Recommended Card 4) | Planned |
+| 4 | Person drawer layout control plane (see Card 3 § Recommended Card 4) | ✅ Shipped |
 | 5 | Relationship editor + profile resolver + enrollment mirror | Planned |
 | 6 | Person archive/deactivate governance | Planned |
 | 7 | Household → Customer/Family string pass | Backlog |
@@ -1140,6 +1140,72 @@ AdminEntityDrawer (shared shell)
 4. **Avatar / profile photo** — defer to media infrastructure sprint?
 5. **Retire `PersonFieldsClient` legacy route** vs migrate fully to Settings → Fields hub (`entity=person`)?
 6. **Sibling relationship type** — add to `person_relationship_type_settings` or keep implicit?
+
+---
+
+## Card 4 — Person Drawer Control-Plane Convergence (shipped 2026-05-29)
+
+### What changed
+
+**Part A — Control plane path**
+- Added `person` to `LAYOUT_SETTINGS_ENTITY_ORDER` (`layoutsSettingsEntities.ts`) and `GET /api/admin/record-layouts/effective-preview` allowlist.
+- Person layout preview uses `entityPresentation.persons` presentation template when no `record_layouts` row exists (no migration — code fallback only).
+- Extended `buildEffectiveDrawerLayoutPreview` to support `persons` presentation skeleton.
+
+**Part B — Retire compact overview as shipped path**
+- Removed `usePersonCompactOverview` gate from `AdminEntityDrawer.tsx`.
+- Existing person records now render through `EntityDrawerOverview` + `configDrivenOverviewSections` (same branch as opportunity/job/schedule config-driven path).
+- `PersonDrawerCompactOverview.tsx` retained in repo but no longer mounted from the drawer shell.
+
+**Part C — Settings → Person Fields in drawer**
+- `configDrivenOverviewSections` builds overview from `_field_definitions` when present (grouped by `section_key`, labels from `_field_sections`).
+- When no visible field definitions exist, falls back to `entityPresentation.persons.drawer.overviewSections` (Profile, Contact, Record Info).
+- Employee fields (`is_employee`, `employee_id`, `employee_source`) stripped from field-definition grids — rendered via `employee_placement` custom section (`PersonEmployeePlacementSection`) to avoid duplicates.
+
+**Part D — Relationships overview bug fix**
+- Removed `overviewCustomContent` early `return {}` for existing persons.
+- Relationships section (Customers, Locations, Opportunities) now renders in overview via `overviewCustomContent.relationships`.
+- Related tab unchanged.
+
+**Part E — UX alignment**
+- Person overview uses shared `EntityDrawerOverview` section chrome (collapsible sections, grid fields) consistent with other record drawers.
+- No new tabs; drawer shell and entry points preserved.
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `web/components/admin/AdminEntityDrawer.tsx` | Config-driven person overview; employee + relationships custom content; remove compact path |
+| `web/lib/adminV2/layoutsSettingsEntities.ts` | Add `person` to layout settings entity order |
+| `web/app/api/admin/record-layouts/effective-preview/route.ts` | Allow `person`; presentation fallback when no DB layout |
+| `web/lib/recordChrome/effectiveDrawerLayoutPreview.ts` | `persons` presentation skeleton preview |
+| `web/tests/admin/personDrawerControlPlane.test.ts` | **New** — control-plane path, fields, relationships, compact retired |
+| `web/tests/admin/personDrawerCompactOverview.test.ts` | **Removed** — superseded |
+| `docs/sprints/05_2026/record_person_location_convergence_audit.md` | Card 4 shipped section |
+
+### Intentionally deferred
+
+- Global `record_layouts` migration seed for `entity_type = person` (runtime uses `entityPresentation` + field definitions).
+- `useRecordChromeConfig` hook for person (no `record_actions` / section order editing in Settings yet).
+- `field_placements_v1` for person.
+- `resolvePersonDrawerProfile` / profile badges / child enrollment mirror section.
+- Relationship CRUD, archive/delete, address field (no `persons` address column today).
+- Settings → Layouts section-order editor for person (tab visible; composition editor remains opportunity-only).
+
+### Validation
+
+- `cd web && npm run test -- tests/admin/personDrawerControlPlane.test.ts`
+- `cd web && npx eslint` on changed files (or `npm run lint`)
+- `cd web && npx tsc --noEmit`
+
+### Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Orgs with heavy person field customization see section order differ from compact layout | Field definitions drive order; presentation fallback matches prior canonical sections |
+| Employee fields hidden from defs grid but still editable in placement section | Same `PersonEmployeePlacementSection` as compact path |
+| Settings → Layouts person tab shows skeleton only | Documented deferred; preview uses presentation template |
+| Perf regression vs compact overview | Same hydrate path; no extra record-layout fetch for person |
 
 ---
 

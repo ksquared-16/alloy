@@ -1,6 +1,6 @@
 /** Layout settings hub — entity tabs (matches effective-preview API support). */
 
-export const LAYOUT_SETTINGS_ENTITY_ORDER = ["opportunity", "job", "schedule"] as const;
+export const LAYOUT_SETTINGS_ENTITY_ORDER = ["opportunity", "job", "schedule", "person"] as const;
 
 export type LayoutSettingsEntityKey = (typeof LAYOUT_SETTINGS_ENTITY_ORDER)[number];
 

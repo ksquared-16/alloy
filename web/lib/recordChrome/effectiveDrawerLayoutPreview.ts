@@ -474,7 +474,11 @@ export function buildEffectiveDrawerLayoutPreview(params: {
     if (params.presentationEntityType === "opportunities") {
         return buildOpportunityPreview(params.config, defs, labels);
     }
-    if (params.presentationEntityType === "jobs" || params.presentationEntityType === "schedules") {
+    if (
+        params.presentationEntityType === "jobs" ||
+        params.presentationEntityType === "schedules" ||
+        params.presentationEntityType === "persons"
+    ) {
         return buildPresentationOrderedSkeleton(params.presentationEntityType, params.config);
     }
     return { fidelity: "presentation_ordered_skeleton", sections: [] };
