@@ -89,7 +89,7 @@ export function buildLinkageReviewCalloutReasons(payloadMeta: unknown, attachRow
     }
 
     if (strategy === "created_person" && m.intake_needs_review === true) {
-        reasons.push("A new CRM profile may have been created from this form — verify it belongs with the right household.");
+        reasons.push("A new CRM profile may have been created from this form — verify it belongs with the right family.");
     }
 
     const seen = new Set<string>();

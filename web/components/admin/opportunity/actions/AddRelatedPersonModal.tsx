@@ -55,7 +55,7 @@ export function AddRelatedPersonModal(props: {
                     <div className="min-w-0">
                         <div className="text-sm font-semibold text-alloy-midnight">{title}</div>
                         <div className="mt-0.5 text-[12px] text-alloy-midnight/60">
-                            Adds a person to the household and links them for this account.
+                            Adds a person to the customer account and links them for this case.
                         </div>
                     </div>
                     <button

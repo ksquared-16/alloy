@@ -224,7 +224,7 @@ async function searchCustomerMembers(
             {
                 id: m.id,
                 label,
-                subtitle: [cn ? `Household: ${cn}` : null, m.dob ? `DOB ${m.dob}` : null].filter(Boolean).join(" · ") || null,
+                subtitle: [cn ? `Customer: ${cn}` : null, m.dob ? `DOB ${m.dob}` : null].filter(Boolean).join(" · ") || null,
             },
         ];
     }
@@ -275,7 +275,7 @@ async function searchCustomerMembers(
         return {
             id: m.id,
             label,
-            subtitle: [cn ? `Household: ${cn}` : null, m.dob ? `DOB ${m.dob}` : null].filter(Boolean).join(" · ") || null,
+            subtitle: [cn ? `Customer: ${cn}` : null, m.dob ? `DOB ${m.dob}` : null].filter(Boolean).join(" · ") || null,
         };
     });
 }

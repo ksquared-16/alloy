@@ -101,10 +101,10 @@ export async function fetchOpportunityDrawerEmailRecipients(
                     r.role_type === "primary_contact"
                         ? "Primary contact"
                         : r.is_primary
-                          ? "Primary on household"
+                          ? "Primary on account"
                           : r.role_type != null
                             ? String(r.role_type)
-                            : "Household member"
+                            : "Family member"
                 );
             }
         }
@@ -231,7 +231,7 @@ export async function fetchJobDrawerEmailRecipients(
                         ? "Primary contact role"
                         : r.is_primary
                           ? "Primary on customer"
-                          : "Household member"
+                          : "Family member"
                 );
         }
     }

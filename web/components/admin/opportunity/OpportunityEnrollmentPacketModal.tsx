@@ -230,7 +230,7 @@ export default function OpportunityEnrollmentPacketModal({
             try {
                 const res = await fetch(`/api/admin/customer-members?customer_id=${encodeURIComponent(customerId)}`);
                 const json = (await res.json().catch(() => ({}))) as { members?: HouseholdMemberRow[]; error?: string };
-                if (!res.ok) throw new Error(json.error ?? "Could not load household members");
+                if (!res.ok) throw new Error(json.error ?? "Could not load family members");
                 const rows = Array.isArray(json.members) ? json.members : [];
                 if (!cancelled) {
                     setMembers(rows);
@@ -397,7 +397,7 @@ export default function OpportunityEnrollmentPacketModal({
         const parsed = parseEnrollmentEmailTemplatesFromPacketMetadata(packetDefMetadata);
         const subjTemplate = parsed?.subject ?? DEFAULT_ENROLLMENT_EMAIL_SUBJECT_TEMPLATE;
         const bodyTemplate = parsed?.body ?? DEFAULT_ENROLLMENT_EMAIL_BODY_TEMPLATE;
-        const household = (householdName ?? opportunityLabel).trim() || "your household";
+        const household = (householdName ?? opportunityLabel).trim() || "your family";
         const vars: Record<string, string> = {
             household_name: household,
             recipient_name: recipientPreviewLabel,
@@ -428,7 +428,7 @@ export default function OpportunityEnrollmentPacketModal({
 
     const enrolleeSummaryLabel =
         selectedMembers.length === 0
-            ? "Household"
+            ? "Family"
             : selectedMembers.length === 1
               ? memberLabel(selectedMembers[0]!)
               : `${selectedMembers.length} children`;
@@ -667,15 +667,15 @@ export default function OpportunityEnrollmentPacketModal({
                                 </div>
 
                                 <div>
-                                    <label className="text-xs font-medium text-alloy-midnight/70">Children / household</label>
+                                    <label className="text-xs font-medium text-alloy-midnight/70">Children / account</label>
                                     {!customerId ? (
-                                        <p className="mt-1 text-xs text-amber-800">No household linked — household-level link only.</p>
+                                        <p className="mt-1 text-xs text-amber-800">No customer linked — account-level link only.</p>
                                     ) : membersLoading ? (
                                         <p className="mt-1 text-xs text-alloy-midnight/50">Loading…</p>
                                     ) : membersErr ? (
                                         <p className="mt-1 text-xs text-red-600">{membersErr}</p>
                                     ) : members.length === 0 ? (
-                                        <p className="mt-1 text-xs text-alloy-midnight/55">No children on file — use household link.</p>
+                                        <p className="mt-1 text-xs text-alloy-midnight/55">No children on file — use account-level link.</p>
                                     ) : (
                                         <div className="mt-2 flex flex-wrap items-center gap-1.5">
                                             <button
@@ -684,7 +684,7 @@ export default function OpportunityEnrollmentPacketModal({
                                                 className={pillClass(householdLinkOnly)}
                                                 onClick={() => setHouseholdOnly()}
                                             >
-                                                Household
+                                                Family
                                             </button>
                                             {members.map((m) => {
                                                 const on = selectedMemberIds.includes(m.id);
@@ -810,7 +810,7 @@ export default function OpportunityEnrollmentPacketModal({
                                     <summary className="cursor-pointer font-medium text-alloy-midnight/75">Preview</summary>
                                     <ul className="mt-2 space-y-0.5 pl-3 text-alloy-midnight/70">
                                         <li>Opp: {opportunityLabel}</li>
-                                        <li>Household: {(householdName ?? customerId) || "—"}</li>
+                                        <li>Customer: {(householdName ?? customerId) || "—"}</li>
                                         <li>Links for: {enrolleeSummaryLabel}</li>
                                         <li>Recipient: {recipientPreviewLabel}</li>
                                         <li>Packet: {detailName || "—"}</li>

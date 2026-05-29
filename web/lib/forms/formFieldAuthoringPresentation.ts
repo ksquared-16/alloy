@@ -50,7 +50,7 @@ export function entityTypeLabel(entityType: string): string {
         child: "Child",
         guardian: "Guardian",
         opportunity: "Opportunity",
-        customer: "Customer / household",
+        customer: "Customer",
         associate: "Associate",
         enrollment: "Enrollment",
         custom: "Custom",

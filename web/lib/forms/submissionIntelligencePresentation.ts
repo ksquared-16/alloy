@@ -151,7 +151,7 @@ function accelerationCta(params: {
 function entitySummary(attachRow: SubmissionAttachRow): string | null {
     const parts: string[] = [];
     if (attachRow.person_id) parts.push("Person linked");
-    if (attachRow.customer_id) parts.push("Household linked");
+    if (attachRow.customer_id) parts.push("Customer linked");
     if (attachRow.customer_member_id) parts.push("Member linked");
     if (attachRow.opportunity_id) parts.push("Opportunity linked");
     if (parts.length === 0) return "No CRM records linked";

@@ -79,7 +79,7 @@ export function OpportunityHouseholdPeoplePanel(props: {
                 credentials: "include",
             });
             const json = (await res.json().catch(() => ({}))) as { people?: PersonRow[]; error?: string };
-            if (!res.ok) throw new Error(json.error ?? "Failed to load household people");
+            if (!res.ok) throw new Error(json.error ?? "Failed to load family members");
             setPeople(Array.isArray(json.people) ? json.people : []);
             if (timingEnabled) {
                 console.info("[timing][drawer]", {
@@ -91,7 +91,7 @@ export function OpportunityHouseholdPeoplePanel(props: {
             }
         } catch (e) {
             setPeople([]);
-            setError(e instanceof Error ? e.message : "Failed to load household people");
+            setError(e instanceof Error ? e.message : "Failed to load family members");
         } finally {
             setLoading(false);
         }
@@ -115,9 +115,9 @@ export function OpportunityHouseholdPeoplePanel(props: {
     return (
         <div className="space-y-2">
             <div>
-                <div className={tinyLabel}>Household people</div>
+                <div className={tinyLabel}>Family members</div>
                 <div className="mt-1 text-xs text-alloy-forge/60">
-                    People linked to this household (via customer_persons).
+                    People linked to this customer account.
                 </div>
             </div>
 
@@ -142,12 +142,12 @@ export function OpportunityHouseholdPeoplePanel(props: {
             ) : null}
 
             {loading ? (
-                <DrawerRelationshipPanelSkeleton rows={2} label="Loading household people" />
+                <DrawerRelationshipPanelSkeleton rows={2} label="Loading family members" />
             ) : rows.length === 0 && householdEmptyAwaitingFull ? (
-                <DrawerRelationshipPanelSkeleton rows={2} label="Merging household links" />
+                <DrawerRelationshipPanelSkeleton rows={2} label="Loading family links" />
             ) : rows.length === 0 && opportunityFullHydrateFailed ? (
                 <div className="rounded-lg border border-amber-200/80 bg-amber-50/60 px-3 py-2 text-sm text-amber-950">
-                    Full record did not load. Household links may be incomplete — try refreshing the drawer.
+                    Full record did not load. Family links may be incomplete — try refreshing the drawer.
                 </div>
             ) : rows.length === 0 ? (
                 <div className="text-sm text-alloy-forge/60">No linked people yet.</div>

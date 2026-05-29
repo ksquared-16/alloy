@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     const memberCustomerId = (member as { customer_id?: string | null } | null)?.customer_id ?? null;
     if (!oppCustomerId || !memberCustomerId || oppCustomerId !== memberCustomerId) {
         return NextResponse.json(
-            { error: "Child member must belong to the opportunity household" },
+            { error: "Child member must belong to the opportunity customer account" },
             { status: 400 }
         );
     }

@@ -107,7 +107,7 @@ export function buildEntityConnectionRows(sub: {
         {
             key: "customer",
             label: "Customer",
-            hint: "Household / bill-to account in CRM.",
+            hint: "Customer / bill-to account in CRM.",
             recordId: sub.customer_id,
         },
         {
@@ -214,7 +214,7 @@ export function buildIntakeOperatorSummary(payloadMeta: unknown): IntakeOperator
     }
 
     if (path === "ambiguous_contact") {
-        detailLines.push("Do not generate a document until the correct person or household is linked manually.");
+        detailLines.push("Do not generate a document until the correct person or customer account is linked manually.");
     }
 
     if (

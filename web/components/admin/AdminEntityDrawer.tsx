@@ -13088,7 +13088,7 @@ export default function AdminEntityDrawer() {
                                                                                 )
                                                                             ) : opportunityBackgroundFullHydrateFailed ? (
                                                                                 <div className={`mt-1 ${oppInqMutedEmpty}`}>
-                                                                                    Household could not be confirmed — try refreshing the drawer.
+                                                                                    Customer account could not be confirmed — try refreshing the drawer.
                                                                                 </div>
                                                                             ) : opportunityInquiryAwaitingFullEnrichment &&
                                                                               !opportunityInquiryFamilyBlockReadyOnPrimary(d) ? (
@@ -13097,7 +13097,7 @@ export default function AdminEntityDrawer() {
                                                                                     aria-hidden
                                                                                 />
                                                                             ) : !household && !primaryContactLabelLine ? (
-                                                                                <div className={`mt-1 ${oppInqMutedEmpty}`}>No household on file.</div>
+                                                                                <div className={`mt-1 ${oppInqMutedEmpty}`}>No customer account on file.</div>
                                                                             ) : null}
                                                                             <div className={`${tinyLabel} mt-2.5`}>
                                                                                 {commRoleLabel ? `Primary contact (${commRoleLabel})` : "Primary contact"}
@@ -13295,7 +13295,7 @@ export default function AdminEntityDrawer() {
                                                             </div>
                                                             <div className="mt-0.5 text-[12px] font-medium text-alloy-midnight/70 truncate">
                                                                 {[
-                                                                    household ? `Household: ${household}` : null,
+                                                                    household ? `Customer: ${household}` : null,
                                                                     primaryPerson ? `${primaryPersonRole || "Primary person"}: ${primaryPerson}` : null,
                                                                     !primaryPerson && primaryContact ? `Primary contact: ${primaryContact}` : null,
                                                                 ]

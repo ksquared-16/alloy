@@ -128,8 +128,8 @@ function formatMatchReasonLine(c: TaskAssistEntitySearchCandidate): string | nul
     }
     const byField: Record<string, string> = {
         "opportunity_name": "Matched name",
-        "customer_family": "Matched household",
-        "customer_members.name": "Matched household member",
+        "customer_family": "Matched customer",
+        "customer_members.name": "Matched family member",
         "primary_person_id": "Matched contact",
         "primary_contact_id": "Matched contact",
         "uuid_match": "Matched record id",
@@ -137,8 +137,8 @@ function formatMatchReasonLine(c: TaskAssistEntitySearchCandidate): string | nul
     for (const f of c.matched_fields) {
         if (byField[f]) return byField[f];
     }
-    if (c.source === "customer_family") return "Matched household";
-    if (c.source === "customer_member") return "Matched household member";
+    if (c.source === "customer_family") return "Matched customer";
+    if (c.source === "customer_member") return "Matched family member";
     if (c.source === "primary_person" || c.source === "primary_contact") return "Matched contact";
     return c.matched_fields.length ? "Matched search" : null;
 }

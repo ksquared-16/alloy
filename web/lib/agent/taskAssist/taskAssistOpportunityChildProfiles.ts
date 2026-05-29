@@ -80,8 +80,8 @@ function mergeProfile(into: TaskAssistChildProfileV1[], next: TaskAssistChildPro
 export function summarizeChildrenFromProfiles(profiles: TaskAssistChildProfileV1[]): string | null {
     const n = profiles.length;
     if (n === 0) return null;
-    if (n === 1) return "One child profile is linked for this household.";
-    return `${n} child profiles are linked for this household.`;
+    if (n === 1) return "One child profile is linked for this family.";
+    return `${n} child profiles are linked for this family.`;
 }
 
 /**

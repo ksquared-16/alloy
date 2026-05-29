@@ -154,7 +154,7 @@ function nextStepForReasonCode(code: OpportunityAttentionReasonCode): string {
         case "stale_quote_followup":
             return "Check in on the pending decision.";
         case "missing_identity":
-            return "Link household contact before proceeding.";
+            return "Link family contact before proceeding.";
         case "high_value_stale":
             return "Re-engage this high-value inquiry.";
         case "mid_funnel_stale":

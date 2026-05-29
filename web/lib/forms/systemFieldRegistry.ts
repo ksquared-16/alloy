@@ -231,7 +231,7 @@ export const OPERATIONAL_FORM_SYSTEM_FIELDS: readonly SystemFieldRegistryEntry[]
         entity_type: "customer",
         field_key: "customer_account_name",
         crm_mapping_key: "customer.display_name",
-        default_label: "Account / household name",
+        default_label: "Account name",
         default_required: false,
         suggested_kind: "text",
         public_intake_safe: false,

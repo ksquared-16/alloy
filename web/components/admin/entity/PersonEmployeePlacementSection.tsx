@@ -92,7 +92,7 @@ export default function PersonEmployeePlacementSection({
         <div className="space-y-3" data-person-employee-placement="true">
             <p className="text-xs text-alloy-midnight/55 leading-snug">
                 Person records are generic identity profiles (parent, employee, emergency contact, payer, staff, and
-                more). Employee status drives waitlist employee-family priority when this person is on a household.
+                more). Employee status drives waitlist employee-family priority when this person is on a family account.
                 Child enrollment and waitlist scope stay on the opportunity child section — not here.
             </p>
             <label className="flex items-center gap-2 text-sm text-alloy-midnight/85">

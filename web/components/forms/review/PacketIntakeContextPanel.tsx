@@ -27,7 +27,7 @@ export function PacketIntakeContextPanel({ rollup }: Props) {
             <ul className={opContextValue}>
                 {ctx.opportunity_label ?
                     <li>
-                        <span className={opContextLabel}>Household / opportunity:</span> {ctx.opportunity_label}
+                        <span className={opContextLabel}>Customer / case:</span> {ctx.opportunity_label}
                     </li>
                 : null}
                 {ctx.customer_label ?

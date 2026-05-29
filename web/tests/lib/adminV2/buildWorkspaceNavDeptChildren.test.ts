@@ -6,6 +6,7 @@ import {
     workspaceNavChildHref,
 } from "@/lib/adminV2/navigation/buildWorkspaceNavDeptChildren";
 import type { WorkspaceNavTreeWu } from "@/lib/adminV2/navigation/workspaceNavTreeCache";
+import { RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2 } from "@/lib/config/enrollmentPipelineQueueDefinitionV2";
 
 const ENROLLMENT_PIPELINE_QD = {
     version: 1,
@@ -47,6 +48,29 @@ describe("buildWorkspaceNavDeptChildren", () => {
         expect(children.map((c) => c.label)).toEqual(["New Inquiry", "Enrolling"]);
         expect(children.every((c) => c.kind === "configured_queue")).toBe(true);
         expect(children[0]?.queueKey).toBe("new_inquiry");
+    });
+
+    it("expands enrollment_pipeline v2 domain_with_attention into configured lane labels", () => {
+        const wus: WorkspaceNavTreeWu[] = [
+            {
+                id: "wu-pipe",
+                department_id: "dept-enrollment",
+                key: "enrollment_pipeline",
+                name: "Enrollment Pipeline",
+                queue_definition: RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2,
+            },
+        ];
+        const children = buildWorkspaceNavDeptChildren("dept-enrollment", wus);
+        expect(children.map((c) => c.label)).toEqual([
+            "New Leads",
+            "Tours",
+            "Follow Up",
+            "Waitlist",
+            "Enrolling",
+            "Enrolled",
+        ]);
+        expect(children.every((c) => c.kind === "configured_queue")).toBe(true);
+        expect(children[0]?.queueKey).toBe("new_leads");
     });
 
     it("falls back to work unit rows when no pipeline execution surface", () => {

@@ -61,7 +61,7 @@ const STATUS_DISPLAY_ORDER: string[] = [
 ];
 
 export const OPPORTUNITY_CHILD_LIFECYCLE_CASE_NOTE =
-    "Case status reflects household coordination; child summary reflects enrollment lifecycle.";
+    "Case status reflects family coordination; child summary reflects enrollment lifecycle.";
 
 function normalizeKey(raw: unknown): string | null {
     if (raw == null || raw === "") return null;

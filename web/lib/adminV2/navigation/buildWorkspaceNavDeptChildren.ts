@@ -1,4 +1,4 @@
-import { validateQueueDefinition } from "@/lib/config/queueDefinitionSchema";
+import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
 import { extractPipelineExecutionLanes } from "@/lib/workspace/extractPipelineExecutionLanes";
 import { pickDeptPipelineWorkUnit } from "@/lib/workspace/pickDeptPipelineWorkUnit";
 import type { WorkspaceNavTreeWu } from "@/lib/adminV2/navigation/workspaceNavTreeCache";
@@ -49,9 +49,9 @@ export function buildWorkspaceNavDeptChildren(
 
     const pipelineWu = pickDeptPipelineWorkUnit(forDept, departmentId);
     if (pipelineWu) {
-        try {
-            const def = validateQueueDefinition(pipelineWu.queue_definition);
-            const lanes = extractPipelineExecutionLanes(def);
+        const bundle = tryLoadWorkUnitQueueDefinitionBundle(pipelineWu.queue_definition);
+        if (bundle) {
+            const lanes = extractPipelineExecutionLanes(bundle.def);
             if (lanes.length) {
                 return lanes.map((lane) => ({
                     rowKey: `${pipelineWu.id}:${lane.key}`,
@@ -61,8 +61,6 @@ export function buildWorkspaceNavDeptChildren(
                     kind: "configured_queue" as const,
                 }));
             }
-        } catch {
-            /* fall through to per–work-unit rows */
         }
     }
 

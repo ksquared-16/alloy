@@ -1,7 +1,7 @@
 # Record, Person & Location Convergence Sprint — Card 0 Audit
 
 **Date:** 2026-05-29  
-**Status:** Card 0 audit complete · **Card 1 shipped (2026-05-29)** · **Card 2 shipped (2026-05-29)** · **Card 3 audit complete (2026-05-29)** · **Card 4 shipped (2026-05-29)** · **Card 5 shipped (2026-05-29)** — person identity + relationship visibility (read-only)  
+**Status:** Card 0 audit complete · **Card 1 shipped (2026-05-29)** · **Card 2 shipped (2026-05-29)** · **Card 3 audit complete (2026-05-29)** · **Card 4 shipped (2026-05-29)** · **Card 5 shipped (2026-05-29)** · **Card 6 shipped (2026-05-29)** — sprint closeout (terminology, enrollment nav, Phase 2 governance)  
 **Goal:** Architectural baseline for converging location, room, child inquiry, person drawer, relationships, record lifecycle, household terminology, and enrollment navigation into a coherent operator model.
 
 **Canonical references:** `docs/core/glossary.md`, `docs/system/entity-model.md`, `docs/system/record-system.md`, `docs/system/workspace-system.md`, `docs/system/configuration-system.md`, `docs/sprints/05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`, `docs/sprints/05_2026/waitlist_priority_fact_truth_child_scope.md`, `docs/sprints/05_2026/completed/settings_control_plane_closeout.md`
@@ -648,10 +648,12 @@ Department: Enrollment (key: enrollment)
 | 3 | Person drawer convergence audit + target architecture | ✅ Audit complete |
 | 4 | Person drawer layout control plane (see Card 3 § Recommended Card 4) | ✅ Shipped |
 | 5 | Person profile resolution + relationship visibility (read-only) | ✅ Shipped |
-| 6 | Person archive/deactivate governance | Planned |
-| 7 | Household → Customer/Family string pass | Backlog |
+| 6 | Sprint closeout: household terminology, enrollment nav, Phase 2 doc | ✅ Shipped |
+| 7 | Archive / deactivate / delete governance (see Phase 2 doc) | Planned |
 | 8 | Queue child-location enrichment | Backlog |
 | 9 | Add child modal persistence + placement fields | Backlog |
+
+**Superseded backlog rows:** former cards 6–7 (archive governance, household string pass) are folded into Card 6 + `person_location_convergence_phase2.md`.
 
 ---
 
@@ -1278,6 +1280,92 @@ AdminEntityDrawer (shared shell)
 | Sibling detection incomplete without shared customer | Uses household `customer_id` from member + customer_person links |
 | Multi-hat profile badges noisy | Lightweight chips; no layout fork |
 | Accidental mini-CRM creep in future cards | Card 6+ scoped to archive; relationship **management** remains deferred |
+
+---
+
+## Card 6 — Sprint Closeout: Language, Navigation, and Phase 2 Governance (shipped 2026-05-29)
+
+**Doctrine:** Operator-facing copy uses **Customer**, **Family**, and **Case** per glossary — not "Household". Enrollment sidebar reflects **department → configured work-unit lanes** where queue definitions support it. Archive/delete and rich person/location work remain **Phase 2 only**.
+
+### What changed
+
+**Part A — Operator-facing household terminology**
+- Replaced visible "Household" strings in drawers, forms, packets, intake review, CRM search subtitles, communications recipient hints, task-assist match labels, and validation/error copy.
+- Preferred replacements: **Family** (people on an account / enrollment family), **Customer** (billing/account), **Case** (intake/opportunity context).
+- Marketing offer copy: "per household/address" → "per address".
+
+**Part B — Enrollment navigation convergence**
+- **Root cause:** `buildWorkspaceNavDeptChildren` validated raw `queue_definition` with v1-only `validateQueueDefinition`, so stored v2 `domain_with_attention` enrollment pipeline fell back to a single "Enrollment Pipeline" work-unit row.
+- **Fix:** Load execution lanes through `tryLoadWorkUnitQueueDefinitionBundle` (same path as `pickDeptPipelineWorkUnit`), expanding configured throughput labels under the Enrollment department.
+- **Result:** Sidebar shows New Leads, Tours, Follow Up, Waitlist, Enrolling, Enrolled (from config) with existing `?queue=` routing preserved.
+
+**Part C — Phase 2 governance doc**
+- Added `docs/sprints/05_2026/person_location_convergence_phase2.md` — archive/delete, person, location, and navigation enhancements explicitly marked **not implemented**.
+
+### Files changed
+
+| Area | Files |
+|------|--------|
+| Nav | `web/lib/adminV2/navigation/buildWorkspaceNavDeptChildren.ts`, `web/tests/lib/adminV2/buildWorkspaceNavDeptChildren.test.ts` |
+| Drawer / opportunity UI | `web/components/admin/AdminEntityDrawer.tsx`, `OpportunityHouseholdPeoplePanel.tsx`, `OpportunityEnrollmentPacketModal.tsx`, `AddRelatedPersonModal.tsx`, `PersonEmployeePlacementSection.tsx` |
+| Forms / intake | `PacketIntakeContextPanel.tsx`, `SubmissionIntakeCaseFileContent.tsx`, `systemFieldRegistry.ts`, `formFieldAuthoringPresentation.ts`, `submissionIntelligencePresentation.ts`, `submissionOutcomeSummary.ts`, `submissionLinkageReviewUx.ts`, `resolveIntakeReviewDecision.ts`, `opportunityPacketLaunchValidation.ts` |
+| API copy | `enrollment-packet-launch/route.ts`, `crm-entity-search/route.ts`, `opportunity-customer-members/route.ts` |
+| Comms / ops / assist | `drawerEmailRecipients.ts`, `buildOpportunityChildLifecycleSummary.ts`, `operationalAttentionExplain.ts`, `taskAssistEntitySearchDisambiguation.ts`, `taskAssistOpportunityChildProfiles.ts`, `taskAssistEntitySearchService.ts` |
+| Marketing | `FirstFree4x120TermsPlaceholder.tsx` |
+| Docs | `record_person_location_convergence_audit.md`, `person_location_convergence_phase2.md` (new) |
+
+### Intentionally unchanged (internal / compatibility)
+
+| Item | Reason |
+|------|--------|
+| DB tables, columns, API field names (`customer_id`, `_identity.household`, `household_name` template vars) | Compatibility — not operator-facing |
+| Component/file names (`OpportunityHouseholdPeoplePanel`, `householdPlacementFacts`, `waitlistHouseholdContext` slot key) | Internal identifiers |
+| Seed/demo customer names ending in "household" | Fixture data, not product copy |
+| `stripHouseholdWording` / greeting parsers that strip "household" from legacy labels | Ingest/display normalization |
+| Placement fact modules (`householdPlacementFacts`, diagnostics keys) | Internal orchestration |
+| Comments in non-user-facing code | Out of card scope |
+
+### Deferred to Phase 2
+
+See `docs/sprints/05_2026/person_location_convergence_phase2.md`:
+
+- Archive / deactivate / delete governance
+- Person profile mutation (relationship CRUD, medical, photos, etc.)
+- Location admin API + drawer runtime enhancements
+- Fully config-driven nav grouping in Settings
+
+### Validation
+
+- Household operator-copy grep on changed UI/API/lib copy paths — no remaining visible "Household" labels in scoped surfaces (fixture data and internal keys excluded).
+- `cd web && npm run test -- tests/lib/adminV2/buildWorkspaceNavDeptChildren.test.ts`
+- `cd web && npx eslint` on changed files (where practical)
+- `cd web && npx tsc --noEmit` — report pre-existing repo failures separately from Card 6 files
+
+### Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Operators trained on "Household" pill in packet modal | Now "Family" / "Customer" — same behavior |
+| Orgs with custom error-message integrations parsing old strings | Low; messages are human-readable only |
+| Nav cache shows stale single WU until tree refresh | Existing session cache; hard refresh or nav reload picks up lanes |
+| Full tenant nav config still code-backed | Documented Phase 2; Card 6 fixes v2 bundle load only |
+
+---
+
+## Sprint status summary (Cards 1–6 complete)
+
+| Item | Status |
+|------|--------|
+| Location semantics | ✅ Card 1 |
+| Child inquiry label/order cleanup | ✅ Card 1 |
+| Child-location authority resolver | ✅ Card 2 |
+| Person drawer control-plane convergence | ✅ Card 4 |
+| Person identity / relationship / enrollment visibility (read-only) | ✅ Card 5 |
+| Household operator-language cleanup | ✅ Card 6 |
+| Enrollment navigation convergence | ✅ Card 6 (v2 bundle lane expansion) |
+| Phase 2 governance doc | ✅ Card 6 |
+
+**No schema changes in Card 6. No archive/delete behavior implemented.**
 
 ---
 

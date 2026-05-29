@@ -439,7 +439,7 @@ export function SubmissionIntakeCaseFileContent({
                                 Use <strong className={opContextLabel}>Confirm</strong> when the CRM rows in &quot;Records
                                 connected&quot; are already correct. Use{" "}
                                 <strong className={opContextLabel}>Correct linked records</strong> when intake attached
-                                the wrong person, household, child, or opportunity.
+                                the wrong person, customer account, child, or opportunity.
                             </p>
 
                             {needsConfirmLinkage ?
@@ -496,7 +496,7 @@ export function SubmissionIntakeCaseFileContent({
                                                 disabled={manualBusy}
                                             />
                                             <CrmEntitySearchPicker
-                                                label="Customer (household)"
+                                                label="Customer"
                                                 entityType="customer"
                                                 picked={pickCustomer}
                                                 onPick={(h) => onPickCustomer({ id: h.id, label: h.label })}

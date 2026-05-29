@@ -128,7 +128,7 @@ function buildReviewReason(input: ResolveIntakeReviewDecisionInput, reasons: str
         return "Person was matched by phone only — verify identity before generating documents.";
     }
     if (input.memberAutoCreated) {
-        return "A child customer member was auto-created — verify household linkage before generating documents.";
+        return "A child customer member was auto-created — verify customer linkage before generating documents.";
     }
     if (reasons.includes("routing_incomplete")) {
         return "Required intake routing is incomplete on this link — verify location and work unit before continuing.";

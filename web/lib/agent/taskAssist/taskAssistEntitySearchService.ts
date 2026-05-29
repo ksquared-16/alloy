@@ -359,7 +359,7 @@ async function fetchCustomerIdsByMemberNamePatterns(
                 const label =
                     (row.display_name ?? "").trim() ||
                     [row.first_name, row.last_name].filter(Boolean).join(" ").trim() ||
-                    "household member";
+                    "family member";
                 const list = byCustomer.get(row.customer_id) ?? [];
                 if (!list.includes(label)) list.push(label);
                 byCustomer.set(row.customer_id, list);

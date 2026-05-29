@@ -42,7 +42,7 @@ export async function resolveOpportunityEnrollmentSelection(
     const midRaw = typeof raw?.customer_member_id === "string" ? raw.customer_member_id.trim() : "";
     if (midRaw && UUID_RE.test(midRaw)) {
         if (!customerId) {
-            return { ok: false, message: "Opportunity has no household customer — cannot attach a member" };
+            return { ok: false, message: "Opportunity has no customer account — cannot attach a member" };
         }
         const { data: mem, error: mErr } = await supabase
             .from("customer_members")
@@ -53,7 +53,7 @@ export async function resolveOpportunityEnrollmentSelection(
         if (mErr) return { ok: false, message: mErr.message };
         const mc = (mem as { customer_id?: string } | null)?.customer_id;
         if (!mem || mc !== customerId) {
-            return { ok: false, message: "Selected member is not part of this opportunity's household" };
+            return { ok: false, message: "Selected member is not part of this opportunity's customer account" };
         }
         selectedMember = midRaw;
     }
@@ -121,7 +121,7 @@ export async function resolveOpportunityEnrollmentSelection(
         if (!allowed.has(rpRaw)) {
             return {
                 ok: false,
-                message: "Recipient must be the opportunity primary person, household primary contact person, or the selected member's linked person",
+                message: "Recipient must be the opportunity primary person, customer primary contact person, or the selected member's linked person",
             };
         }
         recipientPerson = rpRaw;

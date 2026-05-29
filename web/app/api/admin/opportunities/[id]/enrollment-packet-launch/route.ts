@@ -162,11 +162,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
                 enrolleeLabel = dn || fn || null;
             }
         } else {
-            enrolleeLabel = "Household";
+            enrolleeLabel = "Family";
         }
 
         const labelBase = oppName || "Opportunity";
-        const label = mid ? `${labelBase} · ${enrolleeLabel ?? "Enrollee"}` : `${labelBase} · Household`;
+        const label = mid ? `${labelBase} · ${enrolleeLabel ?? "Enrollee"}` : `${labelBase} · Family`;
 
         const meta: Record<string, unknown> = {};
         if (internalNote) meta.internal_operator_note = internalNote;
@@ -284,7 +284,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
                                 rawEmailSubject || metaTemplates?.subject || DEFAULT_ENROLLMENT_EMAIL_SUBJECT_TEMPLATE;
                             const operatorBody = rawEmailBody || metaTemplates?.body || DEFAULT_ENROLLMENT_EMAIL_BODY_TEMPLATE;
 
-                            let householdDisplay = oppName || "your household";
+                            let householdDisplay = oppName || "your family";
                             const custId =
                                 oppRow && typeof (oppRow as { customer_id?: string | null }).customer_id === "string"
                                     ? (oppRow as { customer_id: string }).customer_id.trim()
