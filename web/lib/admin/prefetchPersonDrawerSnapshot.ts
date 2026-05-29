@@ -8,7 +8,7 @@ export function prefetchPersonDrawerSnapshot(personId: string): void {
     if (!id) return;
     if (inflight.has(id)) return;
 
-    const p = fetch(`/api/admin/persons/${encodeURIComponent(id)}`)
+    const p = fetch(`/api/admin/entity/persons/${encodeURIComponent(id)}`)
         .then(async (res) => {
             if (!res.ok) return;
             const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;

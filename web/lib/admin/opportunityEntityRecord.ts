@@ -11,7 +11,6 @@ import {
   fetchEffectiveStatusDefinitionsTagged,
   displayLabelsFromDefinitions,
   resolveDisplayFromLabelMap,
-  type EffectiveStatusDefinitionsPack,
 } from "@/lib/admin/statusDefinitionsResolve";
 import type { FieldRegistryAttachMeta } from "@/lib/admin/entityFieldRegistryAttach";
 import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
@@ -36,25 +35,10 @@ import {
 } from "@/lib/admin/loadOpportunityActivitySignal";
 import { attachOpportunityInquirySummaryTaskPreview } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
 import { attachOpportunityAttentionSuggestionBundle } from "@/lib/admin/opportunityAttentionSuggestionAttachment";
+import { readOpportunityDrawerOpenerHints } from "@/lib/admin/opportunityDrawerOpenerHints";
 import { applyPrimaryPersonMirrorValuesToHostRecord } from "@/lib/admin/drawer/linkedRecordFieldEditing";
 import { loadInquiryChildCustomFieldValuesByOcmId } from "@/lib/admin/drawer/inquiryChildCustomFieldValues";
 import { normalizeIsoDateOnly } from "@/lib/fields/inquiryChildFieldRegistry";
-
-const EMPTY_OPPORTUNITY_STATUS_DEFS_PACK: EffectiveStatusDefinitionsPack = {
-  rows: [],
-  processCacheHit: false,
-  combinedCacheHit: false,
-  telemetry: {
-    normalized_entity_type: "opportunities",
-    process_cache_hit: false,
-    next_cache_attempted: false,
-    next_cache_hit: false,
-    uncached_ms: 0,
-    overrides_ms: null,
-    defaults_ms: null,
-    merge_ms: null,
-  },
-};
 
 type AdminSupabase = ReturnType<typeof createAdminClient>;
 
@@ -1336,7 +1320,21 @@ export async function respondOpportunityEntityGet(
     const enrichStartedAt = Date.now();
     const enrichPhaseMs: Record<string, number> = {};
     const tPrimary0 = Date.now();
-    const out = await buildOpportunityDrawerVisiblePayload(supabase, orgId, data);
+    // Queue opener hints (display-only): trust the department hint to skip the work_units lookup only
+    // when the hint's work_unit matches this opportunity's actual work_unit. `surface=full` always
+    // recomputes department/work-unit from the DB, so a stale hint self-corrects on enrichment.
+    const openerHints = readOpportunityDrawerOpenerHints(request.nextUrl.searchParams);
+    const oppWorkUnitId = trimOrNull((opp as { work_unit_id?: string | null }).work_unit_id ?? null);
+    const trustedHintDepartmentId =
+      openerHints.departmentId &&
+      openerHints.workUnitId &&
+      oppWorkUnitId &&
+      openerHints.workUnitId === oppWorkUnitId
+        ? openerHints.departmentId
+        : null;
+    const out = await buildOpportunityDrawerVisiblePayload(supabase, orgId, data, {
+      hintDepartmentId: trustedHintDepartmentId,
+    });
     enrichPhaseMs.drawer_primary_build_ms = Date.now() - tPrimary0;
     const primaryPhases = (out._drawer_primary_phase_ms ?? {}) as Record<string, number>;
     Object.assign(enrichPhaseMs, primaryPhases);
@@ -1391,49 +1389,10 @@ export async function respondOpportunityEntityGet(
         : JSON.stringify({ total_ms: enrichTotalMsPrimary, phases_ms: {} });
     const serverRouteMsPrimary = Date.now() - opportunityRouteStartedAt;
     const primaryDeptId = trimOrNull(out._work_unit_department_id as string | null);
-    const oppSkRawPrimary =
-      out.status_key != null && String(out.status_key).trim() !== ""
-        ? String(out.status_key).trim()
-        : opp.status != null && String(opp.status).trim() !== ""
-          ? String(opp.status).trim()
-          : null;
-    const tAttnPrimary0 = Date.now();
-    const [wuDeptRowPrimary, opportunityDefsPrimary] = await Promise.all([
-      wuidForDept
-        ? supabase
-            .from("work_units")
-            .select("metadata, department_id")
-            .eq("id", wuidForDept)
-            .eq("org_id", orgId)
-            .maybeSingle()
-        : Promise.resolve({ data: null }),
-      oppOrgIdForDefs
-        ? fetchEffectiveStatusDefinitionsTagged(supabase, oppOrgIdForDefs, "opportunities", {
-            activeOnly: true,
-          })
-        : Promise.resolve(EMPTY_OPPORTUNITY_STATUS_DEFS_PACK),
-    ]);
-    const deptMetaPrimary = await fetchDepartmentMetadataForActivity(
-      supabase,
-      orgId,
-      (wuDeptRowPrimary.data as { department_id?: string | null } | null)?.department_id,
-    );
-    const attnPrimary = await attachOpportunityAttentionSuggestionBundle({
-      supabase,
-      orgId,
-      opportunityRow: out,
-      defs: opportunityDefsPrimary.rows ?? [],
-      attentionConfigMetadata: (wuDeptRowPrimary.data as { metadata?: unknown } | null)?.metadata ?? null,
-      workUnitId: wuidForDept,
-      statusKey: oppSkRawPrimary,
-      preloadedActivityOrgMetadata: {
-        workUnitMetadata: (wuDeptRowPrimary.data as { metadata?: unknown } | null)?.metadata ?? null,
-        departmentMetadata: deptMetaPrimary,
-      },
-      nowMs: Date.now(),
-    });
-    Object.assign(out, attnPrimary);
-    enrichPhaseMs.operational_attention_primary_ms = Date.now() - tAttnPrimary0;
+    // Operational attention is intentionally deferred off the drawer_primary critical path; the
+    // attention bundle is recomputed on `surface=full`. Resolving it here re-ran the resolver plus
+    // extra work_unit / status-def / department lookups synchronously, slowing first paint.
+    out._operational_attention_deferred = true;
     if (process.env.NODE_ENV !== "production" || enrichTotalMsPrimary > 200) {
       timingOpportunityDrawerPrimary({
         opportunity_id: id,

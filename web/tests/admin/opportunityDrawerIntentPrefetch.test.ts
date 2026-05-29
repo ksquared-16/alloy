@@ -55,7 +55,7 @@ describe("prefetchOpportunityDrawerOnRowIntent", () => {
             null,
             expect.anything()
         );
-        expect(prefetchOpportunityDrawerPrimary).toHaveBeenCalledWith("opp-abc", expect.anything());
+        expect(prefetchOpportunityDrawerPrimary).toHaveBeenCalledWith("opp-abc", expect.anything(), null);
         expect(prefetchOpportunityDrawerFull).toHaveBeenCalledWith("opp-abc", expect.anything());
     });
 

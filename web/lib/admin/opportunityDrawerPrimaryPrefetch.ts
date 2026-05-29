@@ -1,4 +1,6 @@
 import { opportunityDrawerPrimaryContractReady } from "@/lib/admin/drawer/opportunityDrawerFirstPaintContract";
+import { appendOpportunityDrawerOpenerHintsToUrl } from "@/lib/admin/opportunityDrawerOpenerHints";
+import type { OpportunityWorkspaceContext } from "@/contexts/AdminDrawerContext";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
@@ -11,8 +13,12 @@ type DrawerPrimaryCacheEntry = {
 /** Coalesces intent prefetch + coordinator open for the same opportunity id. */
 const drawerPrimaryByOpportunityId = new Map<string, DrawerPrimaryCacheEntry>();
 
-export function buildOpportunityDrawerPrimaryUrl(opportunityId: string): string {
-    return `/api/admin/entity/opportunities/${encodeURIComponent(opportunityId.trim())}?surface=drawer_primary`;
+export function buildOpportunityDrawerPrimaryUrl(
+    opportunityId: string,
+    workspaceContext?: OpportunityWorkspaceContext | null
+): string {
+    const base = `/api/admin/entity/opportunities/${encodeURIComponent(opportunityId.trim())}?surface=drawer_primary`;
+    return appendOpportunityDrawerOpenerHintsToUrl(base, workspaceContext ?? null);
 }
 
 function drawerPrimaryCacheKey(opportunityId: string): string {
@@ -27,16 +33,18 @@ export function isOpportunityDrawerPrimaryWarm(opportunityId: string): boolean {
 /** Intent + open — shares in-flight/resolved primary GET with coordinator. */
 export function prefetchOpportunityDrawerPrimary(
     opportunityId: string,
-    init?: RequestInit
+    init?: RequestInit,
+    workspaceContext?: OpportunityWorkspaceContext | null
 ): void {
-    void fetchOpportunityDrawerPrimaryEntity(opportunityId, init).catch(() => {
+    void fetchOpportunityDrawerPrimaryEntity(opportunityId, init, workspaceContext).catch(() => {
         /* non-fatal */
     });
 }
 
 export async function fetchOpportunityDrawerPrimaryEntity(
     opportunityId: string,
-    init?: RequestInit
+    init?: RequestInit,
+    workspaceContext?: OpportunityWorkspaceContext | null
 ): Promise<Record<string, unknown>> {
     const cacheKey = drawerPrimaryCacheKey(opportunityId);
     if (!cacheKey) {
@@ -48,7 +56,7 @@ export async function fetchOpportunityDrawerPrimaryEntity(
         return cached.promise;
     }
 
-    const url = buildOpportunityDrawerPrimaryUrl(cacheKey);
+    const url = buildOpportunityDrawerPrimaryUrl(cacheKey, workspaceContext ?? null);
     const promise = dedupeAdminFetch(url, init ?? workspaceDataFetchInit())
         .then(async (res) => {
             if (!res.ok) {

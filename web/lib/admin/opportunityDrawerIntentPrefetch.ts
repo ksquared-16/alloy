@@ -46,7 +46,7 @@ export function prefetchOpportunityDrawerOnRowIntent(
     void fetchOpportunityDrawerOperationalBootstrap(id, workspaceContext ?? null, init).catch(() => {
         /* non-fatal — drawer open will reuse in-flight or retry */
     });
-    prefetchOpportunityDrawerPrimary(id, init);
+    prefetchOpportunityDrawerPrimary(id, init, workspaceContext ?? null);
     prefetchOpportunityDrawerFull(id, init);
 }
 

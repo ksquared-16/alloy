@@ -73,13 +73,16 @@ describe("queue operational read display (fix pass 2)", () => {
 });
 
 describe("drawer primary BOS payload", () => {
-    it("drawer_primary attaches operational attention bundle before response", () => {
+    it("drawer_primary defers operational attention off the critical path", () => {
         const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../..");
         const src = readFileSync(join(webRoot, "lib/admin/opportunityEntityRecord.ts"), "utf8");
-        const primaryBlock = src.slice(src.indexOf('surfaceParamEarly === "drawer_primary"'));
-        expect(primaryBlock).toContain("attachOpportunityAttentionSuggestionBundle");
-        expect(primaryBlock.indexOf("attachOpportunityAttentionSuggestionBundle")).toBeLessThan(
-            primaryBlock.indexOf('return NextResponse.json(out')
+        const primaryStart = src.indexOf('surfaceParamEarly === "drawer_primary"');
+        const primaryBlock = src.slice(
+            primaryStart,
+            src.indexOf("return NextResponse.json(out", primaryStart)
         );
+        // Attention bundle must NOT run synchronously in drawer_primary; it attaches on surface=full.
+        expect(primaryBlock).not.toContain("attachOpportunityAttentionSuggestionBundle");
+        expect(primaryBlock).toContain("_operational_attention_deferred = true");
     });
 });

@@ -22,7 +22,7 @@ describe("prefetchPersonDrawerSnapshot", () => {
         prefetchPersonDrawerSnapshot("p1");
         await new Promise((r) => setTimeout(r, 0));
 
-        expect(fetchMock).toHaveBeenCalledWith("/api/admin/persons/p1");
+        expect(fetchMock).toHaveBeenCalledWith("/api/admin/entity/persons/p1");
         const cached = peekDrawerEntitySnapshot("persons", "p1");
         expect(cached?.first_name).toBe("Ada");
     });

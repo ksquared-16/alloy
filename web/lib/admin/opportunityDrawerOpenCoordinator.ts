@@ -146,7 +146,7 @@ export async function loadOpportunityDrawerComposedOpen(
 
     const primaryP = (async () => {
         const t0 = typeof performance !== "undefined" ? performance.now() : 0;
-        const entity = await fetchOpportunityDrawerPrimaryEntity(id, init);
+        const entity = await fetchOpportunityDrawerPrimaryEntity(id, init, workspaceContext ?? null);
         primaryMs = Math.round((typeof performance !== "undefined" ? performance.now() : 0) - t0);
         return entity;
     })();
