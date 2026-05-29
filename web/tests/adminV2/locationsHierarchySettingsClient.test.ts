@@ -22,10 +22,18 @@ describe("LocationsHierarchySettingsClient pilot UX", () => {
         expect(src).toContain("Org program categories");
     });
 
-    it("supports controlled demo archive via PATCH is_active", () => {
+    it("renders canonical locations table editor with inline metadata patch", () => {
         const src = read("components/adminV2/settings/LocationsHierarchySettingsClient.tsx");
+        expect(src).toContain('data-locations-editor-table="true"');
         expect(src).toContain('method: "PATCH"');
-        expect(src).toContain("is_active: false");
-        expect(src).toContain("isDemoLocation");
+        expect(src).toContain("patchMetadataField");
+        expect(src).toContain("student_teacher_ratio");
+        expect(src).not.toContain('href="/admin/locations"');
+        expect(src).toContain("/api/admin/deletion-eligibility");
+    });
+
+    it("does not reference parallel location metadata registry", () => {
+        const src = read("components/adminV2/settings/LocationsHierarchySettingsClient.tsx");
+        expect(src).not.toContain("locationRoomMetadataFieldRegistry");
     });
 });

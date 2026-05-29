@@ -97,12 +97,32 @@ import {
 } from "@/lib/entityPresentation";
 import { OpportunityIntakeSourceSection } from "@/components/admin/opportunity/OpportunityIntakeSourceSection";
 import PersonEmployeePlacementSection from "@/components/admin/entity/PersonEmployeePlacementSection";
-import PersonDrawerProfileBadges from "@/components/admin/entity/PersonDrawerProfileBadges";
+import PersonDrawerContextPanel from "@/components/admin/entity/PersonDrawerContextPanel";
+import LocationDrawerContextPanel from "@/components/admin/entity/LocationDrawerContextPanel";
+import LocationDrawerDeactivateAction from "@/components/admin/entity/LocationDrawerDeactivateAction";
+import { RecordDrawerHeaderStatusSelect } from "@/components/admin/entity/RecordDrawerHeaderStatusSelect";
 import {
     PersonDrawerEnrollmentMirror,
     PersonDrawerEnrollmentOpportunitiesMirror,
     PersonDrawerRelationshipsOverview,
 } from "@/components/admin/entity/PersonDrawerVisibilitySections";
+import { resolvePersonDrawerProfileFromRecord } from "@/components/admin/entity/PersonDrawerProfileBadges";
+import {
+    applyPersonDrawerPresentationProfile,
+    personDrawerShouldShowEmployeePlacement,
+} from "@/lib/admin/person/personDrawerPresentationProfile";
+import {
+    applyLocationDrawerPresentation,
+    locationCustomContentKeysForKind,
+    locationMetadataFormValues,
+    LOCATION_DRAWER_METADATA_FORM_KEYS,
+} from "@/lib/admin/location/locationDrawerPresentation";
+import { mergeLocationMetadataPatch } from "@/lib/admin/location/locationMetadataFields";
+import {
+    mapOptionItemsToSelectOptions,
+    optionSetKeysForLocationMetadataFields,
+    resolveLocationMetadataSelectOptionsByFieldKey,
+} from "@/lib/admin/location/locationDrawerFieldOptions";
 import { readPersonEmployeePlacementValues } from "@/lib/admin/personEmployeePlacementFields";
 import {
     buildFieldLabelMapFromEntityData,
@@ -4809,6 +4829,7 @@ export default function AdminEntityDrawer() {
                 status_key: (locData.status_key as string) ?? "",
             };
             mergeConfiguredFieldFormValues(locBase, locData, (data._field_definitions as FieldDefRow[] | undefined) ?? []);
+            Object.assign(locBase, locationMetadataFormValues(locData));
             for (const k of LOCATION_CUSTOM_DEF_KEYS_SHADOWED_BY_CANONICAL) {
                 if (locationCustomDefShadowedByCanonical(k, locData)) {
                     delete locBase[k];
@@ -5259,6 +5280,7 @@ export default function AdminEntityDrawer() {
             };
             const locDefs = (data._field_definitions as FieldDefRow[] | undefined) ?? [];
             mergeConfiguredFieldFormValues(next, locData, locDefs);
+            Object.assign(next, locationMetadataFormValues(locData));
             setFormData((prev) => ({ ...prev, ...next }));
         }
     }, [drawer.type, drawer.id, data]);
@@ -5567,6 +5589,16 @@ export default function AdminEntityDrawer() {
                     if (!d.is_system && formData[d.field_key] !== undefined) {
                         (locPayload as Record<string, unknown>)[d.field_key] = formData[d.field_key];
                     }
+                }
+                const metadataPatch: Partial<Record<(typeof LOCATION_DRAWER_METADATA_FORM_KEYS)[number], string | null>> =
+                    {};
+                for (const k of LOCATION_DRAWER_METADATA_FORM_KEYS) {
+                    if (formData[k] === undefined) continue;
+                    const v = formData[k];
+                    metadataPatch[k] = typeof v === "string" ? v.trim() || null : v == null ? null : String(v).trim() || null;
+                }
+                if (Object.keys(metadataPatch).length > 0) {
+                    locPayload.metadata = mergeLocationMetadataPatch(data?.metadata, metadataPatch);
                 }
                 // PATCH: do not send null/empty location_type or location_type_id (status-only saves used to null NOT NULL location_type).
                 if (locPayload.location_type === null || locPayload.location_type === "") {
@@ -6959,11 +6991,18 @@ export default function AdminEntityDrawer() {
         isPersonRecordModalTarget &&
         (drawerGateLoading ||
             !!(overviewData && !(overviewData as { _create?: boolean })._create));
+    const locationRecordChromeBodyShell =
+        isLocationRecordModalTarget &&
+        (drawerGateLoading ||
+            !!(overviewData && !(overviewData as { _create?: boolean })._create));
     /** Matches hydrated record body wrappers so height/width rails stay stable gate → ready. */
     const drawerRecordBodyRootClassName = `${
         isJobRecordModalTarget && drawer.type === "jobs"
             ? "space-y-3 max-w-none"
-            : scheduleRecordChromeBodyShell || opportunityRecordChromeBodyShell || personRecordChromeBodyShell
+            : scheduleRecordChromeBodyShell ||
+                opportunityRecordChromeBodyShell ||
+                personRecordChromeBodyShell ||
+                locationRecordChromeBodyShell
               ? "space-y-3 max-w-none"
               : "space-y-6"
     }${opportunityRecordChromeBodyShell ? " pb-32 sm:pb-36 overflow-anchor-none" : ""}`;
@@ -8000,6 +8039,9 @@ export default function AdminEntityDrawer() {
 
     const entityDrawerOverviewData = useMemo((): Record<string, unknown> => {
         const base = (overviewData ?? {}) as Record<string, unknown>;
+        if (drawer.type === "locations" && overviewData && !(overviewData as { _create?: boolean })._create) {
+            return { ...base, ...locationMetadataFormValues(base) };
+        }
         if (drawer.type !== "jobs" || !overviewData || (overviewData as { _create?: boolean })._create) {
             return base;
         }
@@ -8339,20 +8381,23 @@ export default function AdminEntityDrawer() {
             };
         }
         if (drawer.type === "locations" && data && !(data as { _create?: boolean })._create) {
-            const locDefs = (
-                (data._field_definitions as {
-                    field_key: string;
-                    field_type: string;
-                    label: string | null;
-                    is_system: boolean;
-                    is_visible_in_drawer?: boolean;
-                    sort_order: number;
-                }[]) ?? []
-            )
-                .filter((d) => d.is_visible_in_drawer !== false)
-                .filter((d) => !locationCustomDefShadowedByCanonical(d.field_key, data as Record<string, unknown>))
-                .sort((a, b) => a.sort_order - b.sort_order);
             const locRec = data as Record<string, unknown>;
+            const customKeys = locationCustomContentKeysForKind(locRec.location_type as string | null);
+            const locDefs = customKeys.custom_property_fields
+                ? (
+                      (data._field_definitions as {
+                          field_key: string;
+                          field_type: string;
+                          label: string | null;
+                          is_system: boolean;
+                          is_visible_in_drawer?: boolean;
+                          sort_order: number;
+                      }[]) ?? []
+                  )
+                      .filter((d) => d.is_visible_in_drawer !== false)
+                      .filter((d) => !locationCustomDefShadowedByCanonical(d.field_key, data as Record<string, unknown>))
+                      .sort((a, b) => a.sort_order - b.sort_order)
+                : [];
             const customerId = locRec.customer_id as string | null | undefined;
             const customerName = (locRec._customer_name as string | null | undefined)?.trim();
             const linkedPersons =
@@ -8458,47 +8503,59 @@ export default function AdminEntityDrawer() {
                     </div>
                 ) : null;
             return {
-                customer: customerId ? (
-                    <div className="py-1">
-                        <span className="text-alloy-slate text-sm font-medium">Customer: </span>
-                        <button
-                            type="button"
-                            onClick={() => openDrawer({ type: "customers", id: customerId })}
-                            className="text-alloy-blue hover:underline text-sm"
-                        >
-                            {customerName || "Open customer"}
-                        </button>
-                    </div>
-                ) : (
-                    <p className="text-sm text-alloy-midnight/60">No customer on this location.</p>
-                ),
-                relationships: (
-                    <div className="space-y-2">
-                        <h4 className={locSubheading}>People (person_locations)</h4>
-                        {linkedPersons.length === 0 ? (
-                            <p className="text-sm text-alloy-midnight/60">No people linked to this location.</p>
-                        ) : (
-                            <ul className="space-y-2 text-sm">
-                                {linkedPersons.map((row) => (
-                                    <li key={row.person_id}>
-                                        <button
-                                            type="button"
-                                            onClick={() => openDrawer({ type: "persons", id: row.person_id })}
-                                            className="text-alloy-blue hover:underline text-left"
-                                        >
-                                            {row._person_name?.trim() || row.person_id.slice(0, 8) + "…"}
-                                        </button>
-                                        {row.is_primary ? <span className="text-alloy-muted ml-1">· Primary</span> : null}
-                                        {row.relationship_type ? (
-                                            <span className="text-alloy-muted ml-1">· {row.relationship_type}</span>
-                                        ) : null}
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </div>
-                ),
-                ...(customPropertyGrid ? { custom_property_fields: customPropertyGrid } : {}),
+                ...(customKeys.customer
+                    ? {
+                          customer: customerId ? (
+                              <div className="py-1">
+                                  <span className="text-alloy-slate text-sm font-medium">Customer: </span>
+                                  <button
+                                      type="button"
+                                      onClick={() => openDrawer({ type: "customers", id: customerId })}
+                                      className="text-alloy-blue hover:underline text-sm"
+                                  >
+                                      {customerName || "Open customer"}
+                                  </button>
+                              </div>
+                          ) : (
+                              <p className="text-sm text-alloy-midnight/60">No customer on this location.</p>
+                          ),
+                      }
+                    : {}),
+                ...(customKeys.relationships
+                    ? {
+                          relationships: (
+                              <div className="space-y-2">
+                                  <h4 className={locSubheading}>People (person_locations)</h4>
+                                  {linkedPersons.length === 0 ? (
+                                      <p className="text-sm text-alloy-midnight/60">No people linked to this location.</p>
+                                  ) : (
+                                      <ul className="space-y-2 text-sm">
+                                          {linkedPersons.map((row) => (
+                                              <li key={row.person_id}>
+                                                  <button
+                                                      type="button"
+                                                      onClick={() => openDrawer({ type: "persons", id: row.person_id })}
+                                                      className="text-alloy-blue hover:underline text-left"
+                                                  >
+                                                      {row._person_name?.trim() || row.person_id.slice(0, 8) + "…"}
+                                                  </button>
+                                                  {row.is_primary ? (
+                                                      <span className="text-alloy-muted ml-1">· Primary</span>
+                                                  ) : null}
+                                                  {row.relationship_type ? (
+                                                      <span className="text-alloy-muted ml-1">· {row.relationship_type}</span>
+                                                  ) : null}
+                                              </li>
+                                          ))}
+                                      </ul>
+                                  )}
+                              </div>
+                          ),
+                      }
+                    : {}),
+                ...(customPropertyGrid && customKeys.custom_property_fields
+                    ? { custom_property_fields: customPropertyGrid }
+                    : {}),
             };
         }
         if (drawer.type === "vendors" && drawer.id && drawer.id !== "new") {
@@ -9253,8 +9310,9 @@ export default function AdminEntityDrawer() {
             const enrollmentRows = ((overviewData as Record<string, unknown>)._enrollment_mirror as unknown[]) ?? [];
             const enrollmentOpps = ((overviewData as Record<string, unknown>)._enrollment_opportunities as unknown[]) ?? [];
             if (!keys.has("employee_placement")) {
+                const profile = resolvePersonDrawerProfileFromRecord(overviewData as Record<string, unknown>);
                 const emp = personPres.find((s) => s.key === "employee_placement");
-                if (emp) append.push(emp);
+                if (emp && personDrawerShouldShowEmployeePlacement(profile)) append.push(emp);
             }
             if (!keys.has("enrollment") && enrollmentRows.length > 0) {
                 append.push({
@@ -9290,11 +9348,12 @@ export default function AdminEntityDrawer() {
             }
         }
         if (drawer.type === "locations" && overviewData && !(overviewData as { _create?: boolean })._create) {
-            const loc = overviewData as { customer_id?: string | null };
-            if (!keys.has("customer") && loc.customer_id) {
+            const loc = overviewData as { customer_id?: string | null; location_type?: string | null };
+            const customKeys = locationCustomContentKeysForKind(loc.location_type);
+            if (!keys.has("customer") && loc.customer_id && customKeys.customer) {
                 append.push({ key: "customer", title: "Customer", defaultExpanded: false, collapsible: true, gridCols: 1 as const, fields: [] });
             }
-            if (!keys.has("relationships")) {
+            if (!keys.has("relationships") && customKeys.relationships) {
                 append.push({
                     key: "relationships",
                     title: "Relationships",
@@ -9313,7 +9372,7 @@ export default function AdminEntityDrawer() {
                     ...result,
                     {
                         key: "inquiry_children",
-                        title: `${opportunitySingular} children`,
+                        title: "Children",
                         defaultExpanded: true,
                         collapsible: true,
                         gridCols: 1,
@@ -9514,6 +9573,30 @@ export default function AdminEntityDrawer() {
             );
             overviewSections = applyPolicyChromeToOverviewSections(overviewSections, chrome);
         }
+        if (drawer.type === "persons" && overviewData && !(overviewData as { _create?: boolean })._create) {
+            const profile = resolvePersonDrawerProfileFromRecord(overviewData as Record<string, unknown>);
+            const fieldTypesByKey: Record<string, string> = {};
+            for (const d of ((overviewData as Record<string, unknown>)._field_definitions as { field_key: string; field_type: string }[] | undefined) ?? []) {
+                fieldTypesByKey[d.field_key] = d.field_type;
+            }
+            overviewSections = applyPersonDrawerPresentationProfile(overviewSections, profile, fieldTypesByKey);
+        }
+        if (drawer.type === "locations" && overviewData && !(overviewData as { _create?: boolean })._create) {
+            const locRec = overviewData as Record<string, unknown>;
+            const locDefs =
+                (locRec._field_definitions as Parameters<typeof applyLocationDrawerPresentation>[2]) ?? [];
+            overviewSections = applyLocationDrawerPresentation(
+                overviewSections,
+                locRec.location_type as string | null,
+                locDefs
+            );
+        }
+        if (
+            (drawer.type === "persons" || drawer.type === "locations") &&
+            statusDefsForDrawer.length > 0
+        ) {
+            overviewSections = overviewSections.filter((s) => s.key !== "__unified_status");
+        }
         if (drawer.type === "opportunities" && oppInquiryWorkflowV1) {
             overviewSections = stabilizeOpportunityWorkflowOverviewSections(overviewSections, {
                 aboveFoldLocked: opportunityDrawerAboveFoldLocked,
@@ -9535,6 +9618,7 @@ export default function AdminEntityDrawer() {
         opportunityDrawerLayoutFirstPaintGates,
         opportunityDrawerEnrichmentLayoutReady,
         opportunityDrawerEnrichmentHeld,
+        statusDefsForDrawer,
     ]);
 
     const overviewFieldPolicyProps = useMemo(() => {
@@ -9729,6 +9813,13 @@ export default function AdminEntityDrawer() {
                 pOpts.push({ value: pid, label: String(d._primary_person_name ?? "").trim() || `${pid.slice(0, 8)}…` });
             }
             out.primary_person_id = pOpts;
+        }
+        if (drawer.type === "locations" && overviewData) {
+            const defs =
+                ((overviewData as Record<string, unknown>)._field_definitions as Parameters<
+                    typeof resolveLocationMetadataSelectOptionsByFieldKey
+                >[0]["fieldDefs"]) ?? [];
+            Object.assign(out, resolveLocationMetadataSelectOptionsByFieldKey({ fieldDefs: defs }));
         }
         return out;
     }, [
@@ -10078,19 +10169,60 @@ export default function AdminEntityDrawer() {
                 variant="default"
             />
         ) : drawer.type === "persons" && overviewData && !(overviewData as { _create?: boolean })._create ? (
-            <div className="flex flex-wrap items-center gap-2">
-                <PersonDrawerProfileBadges record={overviewData as Record<string, unknown>} />
-                {(overviewData as { status_key?: string }).status_key ? (
-                    <StatusBadge
-                        label={
-                            String((overviewData as { _status_display?: string | null })._status_display ?? "").trim() ||
-                            getStatusLabel((overviewData as { status_key: string }).status_key) ||
-                            String((overviewData as { status_key: string }).status_key)
-                        }
-                        variant={getStatusVariant((overviewData as { status_key: string }).status_key)}
-                    />
-                ) : null}
-            </div>
+            <RecordDrawerHeaderStatusSelect
+                entityLabel="Person"
+                currentStatus={String((overviewData as { status_key?: string }).status_key ?? formData.status_key ?? "")}
+                statusDisplayLabel={
+                    String((overviewData as { _status_display?: string | null })._status_display ?? "").trim() || null
+                }
+                statusDefs={statusDefsForDrawer}
+                disabled={!canMutate || saving}
+                onChange={(nextKey) => {
+                    setFormData((prev) => ({ ...prev, status_key: nextKey }));
+                    if (!drawer.id || drawer.id === "new" || !canMutate) return;
+                    void fetch(`/api/admin/persons/${encodeURIComponent(drawer.id)}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ status_key: nextKey.trim() || null }),
+                    })
+                        .then(async (res) => {
+                            const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+                            if (!res.ok) throw new Error(String(json.error ?? "Save failed"));
+                            setData((prev) => (prev ? { ...prev, ...json } : prev));
+                            refetch();
+                        })
+                        .catch((e) => setSaveError((e as Error).message));
+                }}
+            />
+        ) : drawer.type === "locations" && overviewData && !(overviewData as { _create?: boolean })._create ? (
+            <RecordDrawerHeaderStatusSelect
+                entityLabel="Location"
+                currentStatus={String((overviewData as { status_key?: string }).status_key ?? formData.status_key ?? "")}
+                statusDisplayLabel={
+                    String((overviewData as { _status_display?: string | null })._status_display ?? "").trim() || null
+                }
+                statusDefs={statusDefsForDrawer}
+                disabled={!canMutate || saving}
+                onChange={(nextKey) => {
+                    setFormData((prev) => ({ ...prev, status_key: nextKey }));
+                    if (!drawer.id || drawer.id === "new" || !canMutate) return;
+                    void fetch(`/api/admin/locations/${encodeURIComponent(drawer.id)}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ status_key: nextKey.trim() || null }),
+                    })
+                        .then(async (res) => {
+                            const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+                            if (!res.ok) throw new Error(String(json.error ?? "Save failed"));
+                            setData((prev) => (prev ? { ...prev, ...json } : prev));
+                            refetch();
+                            window.dispatchEvent(
+                                new CustomEvent("admin-entity-saved", { detail: { type: "locations", id: drawer.id } })
+                            );
+                        })
+                        .catch((e) => setSaveError((e as Error).message));
+                }}
+            />
         ) : STATUS_ENTITY_TYPES.includes(drawer.type) &&
           !(drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer) &&
           (overviewData as { status_key?: string }).status_key ? (
@@ -10171,8 +10303,47 @@ export default function AdminEntityDrawer() {
             {drawer.type === "schedules" && canMutate && !(data as { _create?: boolean })?._create && <button type="button" onClick={() => { setSetLocationEntity("schedule"); const sid = (data?.location_id as string) ?? (data?._location_id as string) ?? null; setSetLocationSelectedId(sid); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{((data?.location_id as string) ?? (data?._location_id as string)) ? "Change location" : "Set location"}</button>}
             {drawer.type === "locations" && canMutate && !(data as { _create?: boolean })?._create && (
                 <>
-                    <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
-                    <button type="button" onClick={() => { startEdit(); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
+                    <OpportunityDrawerHeaderActionButton
+                        label={saving ? "Saving…" : "Save"}
+                        inquiryWorkflow
+                        disabled={saving}
+                        onClick={() => void saveEdit()}
+                    />
+                    <OpportunityDrawerHeaderActionButton
+                        label="Cancel"
+                        inquiryWorkflow
+                        onClick={() => {
+                            startEdit();
+                            setSaveError(null);
+                        }}
+                    />
+                    <LocationDrawerDeactivateAction
+                        canMutate={!!canMutate}
+                        isActive={(data as { is_active?: boolean }).is_active !== false}
+                        onDeactivate={async () => {
+                            if (!drawer.id) return;
+                            const res = await fetch(`/api/admin/locations/${encodeURIComponent(drawer.id)}`, {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ is_active: false }),
+                            });
+                            const json = (await res.json().catch(() => ({}))) as { error?: string };
+                            if (!res.ok) throw new Error(json.error ?? "Deactivate failed");
+                            setData((prev) => (prev ? { ...prev, ...json } : prev));
+                            refetch();
+                            window.dispatchEvent(
+                                new CustomEvent("admin-entity-saved", { detail: { type: "locations", id: drawer.id } })
+                            );
+                        }}
+                        onDelete={
+                            deletionEligibility?.allowed
+                                ? () => setDeleteConfirmOpen(true)
+                                : undefined
+                        }
+                        deleteBlockedReason={
+                            deletionEligibility && !deletionEligibility.allowed ? deletionEligibility.reason ?? null : null
+                        }
+                    />
                 </>
             )}
             {(drawer.type === "subscriptions" || drawer.type === "documents") && canMutate && drawer.id && drawer.id !== "new" && !(data as { _create?: boolean })?._create && (
@@ -10474,6 +10645,29 @@ export default function AdminEntityDrawer() {
             </div>
         ) : isJobDrawerV2 ? (
             <DrawerAboveFoldRenderer model={jobDrawerPipeline?.above_fold} />
+        ) : drawer.type === "persons" &&
+          overviewData &&
+          !(overviewData as { _create?: boolean })._create &&
+          !drawerGateLoading ? (
+            <PersonDrawerContextPanel
+                record={overviewData as Record<string, unknown>}
+                backLink={
+                    canGoBack && previousDrawer
+                        ? {
+                              label: `Back to ${getEntityLabel(labels, previousDrawer.type, "singular")}`,
+                              onClick: goBack,
+                          }
+                        : null
+                }
+            />
+        ) : drawer.type === "locations" &&
+          overviewData &&
+          !(overviewData as { _create?: boolean })._create &&
+          !drawerGateLoading ? (
+            <LocationDrawerContextPanel
+                record={overviewData as Record<string, unknown>}
+                onOpenDrawer={(type, id) => openDrawer({ type: type as AdminDrawerEntityType, id })}
+            />
         ) : (
             opportunityInquiryWorkflowHeaderTimeline
         )
@@ -10504,7 +10698,11 @@ export default function AdminEntityDrawer() {
           : drawerHeaderActions;
 
     const recordCleaningV2Eligible =
-        showJobRecordModalV2 || scheduleRecordChromeBodyShell || opportunityRecordChromeBodyShell || personRecordChromeBodyShell;
+        showJobRecordModalV2 ||
+        scheduleRecordChromeBodyShell ||
+        opportunityRecordChromeBodyShell ||
+        personRecordChromeBodyShell ||
+        locationRecordChromeBodyShell;
 
     return (
         <Drawer
@@ -13532,7 +13730,13 @@ export default function AdminEntityDrawer() {
                                     statusDefs={statusDefsForDrawer}
                                     getStatusLabel={getStatusLabel}
                                     onOpenDrawer={(type, id) => openDrawer({ type: type as AdminDrawerEntityType, id })}
-                                    sectionSurface={opportunityInquiryWorkflowDrawer ? "premium" : "default"}
+                                    sectionSurface={
+                                        opportunityInquiryWorkflowDrawer ||
+                                        (drawerShellVariant === "adminV2" &&
+                                            (drawer.type === "persons" || drawer.type === "locations"))
+                                            ? "premium"
+                                            : "default"
+                                    }
                                     fieldErrorsByKey={overviewFieldPolicyProps.fieldErrorsByKey}
                                     fieldPolicyChromeByKey={overviewFieldPolicyProps.fieldPolicyChromeByKey}
                                     fieldLabelByKey={overviewFieldPolicyProps.fieldLabelByKey}

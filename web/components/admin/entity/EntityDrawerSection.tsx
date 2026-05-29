@@ -39,7 +39,12 @@ export default function EntityDrawerSection({
   const isCollapsible = config.collapsible ?? false;
   const [expanded, setExpanded] = useState(defaultExpanded ?? config.defaultExpanded ?? false);
   const showContent = !isCollapsible || expanded;
-  const gridCols = config.gridCols === 2 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1";
+  const gridCols =
+    config.gridCols === 3
+      ? "grid-cols-1 md:grid-cols-3"
+      : config.gridCols === 2
+        ? "grid-cols-1 md:grid-cols-2"
+        : "grid-cols-1";
   const blockContent = config.contentLayout === "block";
 
   return (

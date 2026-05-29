@@ -28,6 +28,7 @@ import {
   scheduleSectionsAfterRowExtraction,
 } from "@/lib/admin/scheduleOverviewRows";
 import { getScheduleOverviewFieldTier, type ScheduleFieldVisualTier } from "@/lib/admin/scheduleFieldPresentation";
+import { labelForLocationMetadataSelectValue } from "@/lib/admin/location/locationDrawerFieldOptions";
 import {
   getScheduleSnapshot,
   scheduleOverviewValueFromSnapshot,
@@ -441,6 +442,26 @@ function renderFieldEditNode(
     );
   }
 
+  if (refOpts && refOpts.length > 0 && presentationEntityType === "locations") {
+    return (
+      <select
+        value={String(value ?? "")}
+        onChange={(e) => onFieldChange(key, e.target.value || null)}
+        onBlur={onBlur}
+        onKeyDown={onKeyDown}
+        disabled={disabled}
+        className={selectClass}
+      >
+        <option value="">—</option>
+        {refOpts.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
   if (hint === "status" && statusDefs && statusDefs.length > 0) {
     const valStr = String(value ?? "").trim();
     const scheduleCanceled =
@@ -678,6 +699,10 @@ export default function EntityDrawerOverview({
         })()
       : rawForRead;
     let displayValue = formatFieldValue(rawValue, field, getStatusLabel, record, onOpenDrawer, entityType);
+    if (!showFieldEdit && selectOptionsByFieldKey?.[key]?.length) {
+        const labeled = labelForLocationMetadataSelectValue(key, rawValue, selectOptionsByFieldKey[key]);
+        if (labeled) displayValue = labeled;
+    }
     if (!showFieldEdit && (displayValue === null || displayValue === undefined || displayValue === "")) {
       displayValue = "—";
     }

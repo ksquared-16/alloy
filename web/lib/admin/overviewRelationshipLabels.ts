@@ -81,6 +81,8 @@ function labelForRelationshipKey(record: Record<string, unknown>, k: string): st
             return nonEmpty(record._linked_vendor_name ?? record._vendor_name ?? record._assigned_vendor_name);
         case "customer_subscription_id":
             return nonEmpty(record._customer_subscription_label);
+        case "parent_location_id":
+            return nonEmpty(record._parent_location_label);
         case "vertical_id":
             return nonEmpty(record._vertical_name);
         case "pipeline_stage_id":

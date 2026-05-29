@@ -35,17 +35,18 @@ import {
     resolveInquiryChildDesiredStartDisplay,
     type InquiryChildFieldDefLike,
 } from "@/lib/fields/inquiryChildFieldRegistry";
+import { User } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 /** Literal Tailwind classes (must not be composed at runtime). */
-const INQUIRY_CHILD_DESKTOP_GRID_8 =
-    "grid grid-cols-[220px_120px_140px_130px_130px_150px_150px_130px_minmax(200px,1fr)_70px] items-center gap-2";
 const INQUIRY_CHILD_DESKTOP_GRID_7 =
-    "grid grid-cols-[220px_120px_130px_130px_150px_150px_130px_minmax(200px,1fr)_70px] items-center gap-2";
+    "grid grid-cols-[minmax(0,1.2fr)_minmax(0,0.68fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,1.05fr)] items-center gap-x-1.5 gap-y-1";
+const INQUIRY_CHILD_DESKTOP_GRID_8 =
+    "grid grid-cols-[minmax(0,1.1fr)_minmax(0,0.62fr)_minmax(0,0.62fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,1.05fr)] items-center gap-x-1.5 gap-y-1";
 const INQUIRY_CHILD_DESKTOP_GRID_8_CUSTOM_1 =
-    "grid grid-cols-[220px_120px_140px_120px_150px_150px_130px_minmax(200px,1fr)_70px] items-center gap-2";
+    "grid grid-cols-[minmax(0,1.1fr)_minmax(0,0.62fr)_minmax(0,0.62fr)_minmax(0,0.72fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,1.05fr)] items-center gap-x-1.5 gap-y-1";
 const INQUIRY_CHILD_DESKTOP_GRID_8_CUSTOM_2 =
-    "grid grid-cols-[220px_120px_140px_120px_120px_150px_150px_130px_minmax(180px,1fr)_70px] items-center gap-2";
+    "grid grid-cols-[minmax(0,1.05fr)_minmax(0,0.58fr)_minmax(0,0.58fr)_minmax(0,0.68fr)_minmax(0,0.68fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,1.05fr)] items-center gap-x-1.5 gap-y-1";
 
 function inquiryChildDesktopGridClass(showDesiredStart: boolean, customColumnCount: number): string {
     if (customColumnCount >= 2) return INQUIRY_CHILD_DESKTOP_GRID_8_CUSTOM_2;
@@ -118,6 +119,43 @@ function inquiryChildRowAttention(args: {
         /no_?fit|no_classroom|blocked|enrollment_?block/i.test(k) ||
         /no fit|no classroom|blocked enrollment|enrollment block/i.test(l);
     return waitlisted || missingDob || missingProgram || missingSchedule || noFitOrBlocked;
+}
+
+function ViewPersonIconButton({
+    personId,
+    displayName,
+    onOpenChild,
+    row,
+}: {
+    personId: string | null;
+    displayName: string;
+    onOpenChild?: (row: Pick<InquiryChildRow, "person_id" | "customer_member_id" | "display_name">) => void;
+    row: InquiryChildRow;
+}) {
+    if (!onOpenChild) return null;
+    return (
+        <button
+            type="button"
+            title={personId ? "View person" : "View child"}
+            aria-label={personId ? `View person for ${displayName}` : `View child ${displayName}`}
+            onMouseEnter={() => {
+                if (personId) prefetchPersonDrawerSnapshot(personId);
+            }}
+            onFocus={() => {
+                if (personId) prefetchPersonDrawerSnapshot(personId);
+            }}
+            onClick={() =>
+                onOpenChild({
+                    person_id: row.person_id,
+                    customer_member_id: row.customer_member_id,
+                    display_name: row.display_name,
+                })
+            }
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-alloy-stone/25 text-alloy-blue hover:border-alloy-blue/35 hover:bg-alloy-blue/5"
+        >
+            <User className="h-3 w-3" aria-hidden />
+        </button>
+    );
 }
 
 function useDebouncedPatch(ms: number) {
@@ -534,8 +572,8 @@ export default function OpportunityInquiryChildrenSection({
                 data-inquiry-children-shell-placeholder="true"
                 data-inquiry-children-placeholder-count={reservedRowCount}
             >
-                <div className={`${listWrap} overflow-x-auto`} role="region" aria-label="Inquiry children">
-                    <div className="min-w-[1100px]">
+                <div className={`${listWrap} w-full`} role="region" aria-label="Inquiry children">
+                    <div className="w-full">
                         <div
                             className={`${placeholderGrid} sticky left-0 z-[1] border-b border-alloy-stone/15 bg-alloy-stone/[0.04] px-3 py-2`}
                             data-inquiry-children-header-row="true"
@@ -547,8 +585,6 @@ export default function OpportunityInquiryChildrenSection({
                             <div className={INQUIRY_CHILD_COL_HDR}>{roomLabel}</div>
                             <div className={INQUIRY_CHILD_COL_HDR}>{scheduleLabel}</div>
                             <div className={INQUIRY_CHILD_COL_HDR}>{statusLabel}</div>
-                            <div className={INQUIRY_CHILD_COL_HDR}>Notes</div>
-                            <div className={`${INQUIRY_CHILD_COL_HDR} text-right`}>View</div>
                         </div>
                         <div className="divide-y divide-alloy-stone/10">
                             {Array.from({ length: reservedRowCount }, (_, i) => (
@@ -564,7 +600,6 @@ export default function OpportunityInquiryChildrenSection({
                                     <div className="h-5 w-24 skeleton-pulse rounded bg-alloy-stone/10" />
                                     <div className="h-5 w-16 skeleton-pulse rounded bg-alloy-stone/10" />
                                     <div className="h-5 w-full skeleton-pulse rounded bg-alloy-stone/8" />
-                                    <div className="h-5 w-10 skeleton-pulse rounded bg-alloy-stone/10 justify-self-end" />
                                 </div>
                             ))}
                         </div>
@@ -588,6 +623,7 @@ export default function OpportunityInquiryChildrenSection({
     const fieldInput =
         "h-7 w-full min-w-0 rounded border border-alloy-stone/35 bg-white px-1.5 py-0 text-[11px] leading-tight text-alloy-midnight/85 disabled:opacity-60";
     const fieldSelect = `${fieldInput} pr-5`;
+    const fieldSelectStatus = `${fieldInput} pr-5 text-xs leading-snug`;
     const readOnlyText = "block truncate text-[11px] leading-tight text-alloy-midnight/70";
 
     const rowStatus = (rowId: string) => {
@@ -605,19 +641,8 @@ export default function OpportunityInquiryChildrenSection({
             data-inquiry-children-section="OpportunityInquiryChildrenSection"
         >
             {loadErr ? <p className="mb-2 text-sm text-red-700">{loadErr}</p> : null}
-            {opportunityDisplayLocationKind === "multiple" ? (
-                <p
-                    className="mb-2 text-[10px] leading-snug text-alloy-midnight/50"
-                    data-inquiry-children-multi-location="true"
-                >
-                    Children on this inquiry may have different locations. Set location per child below.
-                </p>
-            ) : null}
-            {enrichmentFetchEnabled && canEdit ? (
-                <p className="mb-2 text-[10px] leading-snug text-alloy-midnight/50">{INQUIRY_CHILD_PLACEMENT_SCOPE_LIMITATION}</p>
-            ) : null}
-            <div className={`${listWrap} overflow-x-auto`} role="region" aria-label="Inquiry children">
-                <div className="min-w-[1100px]" data-inquiry-children-desktop-table="true">
+            <div className={`${listWrap} w-full`} role="region" aria-label="Inquiry children">
+                <div className="w-full" data-inquiry-children-desktop-table="true">
                 <div
                     className={`${desktopGridClass} sticky left-0 z-[1] border-b border-alloy-stone/15 bg-alloy-stone/[0.04] px-3 py-2`}
                     data-inquiry-children-header-row="true"
@@ -636,8 +661,6 @@ export default function OpportunityInquiryChildrenSection({
                     <div className={INQUIRY_CHILD_COL_HDR}>{roomLabel}</div>
                     <div className={INQUIRY_CHILD_COL_HDR}>{scheduleLabel}</div>
                     <div className={INQUIRY_CHILD_COL_HDR}>{statusLabel}</div>
-                    <div className={INQUIRY_CHILD_COL_HDR}>Notes</div>
-                    <div className={`${INQUIRY_CHILD_COL_HDR} text-right`}>View</div>
                 </div>
                 <div>
                 {rows.map((r) => {
@@ -732,7 +755,7 @@ export default function OpportunityInquiryChildrenSection({
                         >
                             {!r.linked_on_inquiry && rowCanEdit ? (
                                 <p className="col-span-full pb-0.5 text-[9px] font-medium leading-tight text-alloy-midnight/45">
-                                    Not on inquiry — saving program, schedule, status, or notes links this child.
+                                    Not on inquiry — saving program, schedule, or status links this child.
                                 </p>
                             ) : null}
                             {placementScopeHint ? (
@@ -745,56 +768,64 @@ export default function OpportunityInquiryChildrenSection({
                             ) : null}
                                 <div className={INQUIRY_CHILD_CELL}>
                                     <div className={INQUIRY_CHILD_MOBILE_LABEL}>Child</div>
-                                    {rowCanEdit ? (
-                                        <div className="flex min-w-0 gap-1">
-                                            <input
-                                                value={identity.first_name}
-                                                disabled={saving}
-                                                onChange={(e) => {
-                                                    setIdentityLocal((p) => ({
-                                                        ...p,
-                                                        [r.id]: { ...identity, first_name: e.target.value },
-                                                    }));
-                                                    scheduleIdentitySave(r);
-                                                }}
-                                                className={fieldInput}
-                                                placeholder="First"
-                                                aria-label={`First name for ${displayName}`}
-                                            />
-                                            <input
-                                                value={identity.last_name}
-                                                disabled={saving}
-                                                onChange={(e) => {
-                                                    setIdentityLocal((p) => ({
-                                                        ...p,
-                                                        [r.id]: { ...identity, last_name: e.target.value },
-                                                    }));
-                                                    scheduleIdentitySave(r);
-                                                }}
-                                                className={fieldInput}
-                                                placeholder="Last"
-                                                aria-label={`Last name for ${displayName}`}
-                                            />
-                                        </div>
-                                    ) : onOpenChild && displayName !== "—" && !isMetadataOnly ? (
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                onOpenChild({
-                                                    person_id: r.person_id,
-                                                    customer_member_id: r.customer_member_id,
-                                                    display_name: r.display_name,
-                                                })
-                                            }
-                                            className="truncate text-left text-[11px] font-semibold text-alloy-blue hover:underline"
-                                        >
-                                            {displayName}
-                                        </button>
-                                    ) : (
-                                        <span className={`${readOnlyText} font-semibold text-alloy-midnight/85`}>
-                                            {displayName}
-                                        </span>
-                                    )}
+                                    <div className="flex min-w-0 items-center gap-1">
+                                        <ViewPersonIconButton
+                                            personId={r.person_id}
+                                            displayName={displayName}
+                                            onOpenChild={onOpenChild && !isMetadataOnly ? onOpenChild : undefined}
+                                            row={r}
+                                        />
+                                        {rowCanEdit ? (
+                                            <>
+                                                <input
+                                                    value={identity.first_name}
+                                                    disabled={saving}
+                                                    onChange={(e) => {
+                                                        setIdentityLocal((p) => ({
+                                                            ...p,
+                                                            [r.id]: { ...identity, first_name: e.target.value },
+                                                        }));
+                                                        scheduleIdentitySave(r);
+                                                    }}
+                                                    className={fieldInput}
+                                                    placeholder="First"
+                                                    aria-label={`First name for ${displayName}`}
+                                                />
+                                                <input
+                                                    value={identity.last_name}
+                                                    disabled={saving}
+                                                    onChange={(e) => {
+                                                        setIdentityLocal((p) => ({
+                                                            ...p,
+                                                            [r.id]: { ...identity, last_name: e.target.value },
+                                                        }));
+                                                        scheduleIdentitySave(r);
+                                                    }}
+                                                    className={fieldInput}
+                                                    placeholder="Last"
+                                                    aria-label={`Last name for ${displayName}`}
+                                                />
+                                            </>
+                                        ) : onOpenChild && displayName !== "—" && !isMetadataOnly ? (
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    onOpenChild({
+                                                        person_id: r.person_id,
+                                                        customer_member_id: r.customer_member_id,
+                                                        display_name: r.display_name,
+                                                    })
+                                                }
+                                                className="truncate text-left text-[11px] font-semibold text-alloy-blue hover:underline"
+                                            >
+                                                {displayName}
+                                            </button>
+                                        ) : (
+                                            <span className={`${readOnlyText} font-semibold text-alloy-midnight/85`}>
+                                                {displayName}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className={INQUIRY_CHILD_CELL}>
                                     <div className={INQUIRY_CHILD_MOBILE_LABEL}>
@@ -1116,7 +1147,7 @@ export default function OpportunityInquiryChildrenSection({
                                                     void saveOcmPatch(r, patch as InquiryChildOcmPatch);
                                                 });
                                             }}
-                                            className={`${fieldSelect} ${outcomeSelectAttention}`}
+                                            className={`${fieldSelectStatus} ${outcomeSelectAttention}`}
                                             aria-label={`${statusLabel} for ${displayName}`}
                                         >
                                             <option value="">—</option>
@@ -1127,63 +1158,10 @@ export default function OpportunityInquiryChildrenSection({
                                             ))}
                                         </select>
                                     ) : (
-                                        <span className={readOnlyText}>{fallbackOutcome}</span>
+                                        <span className={`${readOnlyText} text-xs`}>{fallbackOutcome}</span>
                                     )}
-                                </div>
-                                <div className={INQUIRY_CHILD_CELL}>
-                                    <div className={INQUIRY_CHILD_MOBILE_LABEL}>
-                                        Notes
-                                    </div>
                                     {rowCanEdit ? (
-                                        <input
-                                            value={st.notes}
-                                            disabled={saving}
-                                            onChange={(e) => {
-                                                const v = e.target.value;
-                                                setLocal((p) => ({ ...p, [r.id]: { ...st, notes: v } }));
-                                                debounced.schedule(r.id, { notes: v }, (_id, patch) => {
-                                                    void saveOcmPatch(r, patch as InquiryChildOcmPatch);
-                                                });
-                                            }}
-                                            onBlur={() =>
-                                                debounced.flush(r.id, (_id, patch) => {
-                                                    void saveOcmPatch(r, patch as InquiryChildOcmPatch);
-                                                })
-                                            }
-                                            className={fieldInput}
-                                            placeholder="Notes…"
-                                            aria-label={`Notes for ${displayName}`}
-                                        />
-                                    ) : (
-                                        <span className={readOnlyText}>
-                                            {normalizeKey(r.notes) ? String(r.notes).trim() : "—"}
-                                        </span>
-                                    )}
-                                </div>
-                                <div className={`${INQUIRY_CHILD_CELL} flex flex-col items-end justify-center gap-0`}>
-                                    {onOpenChild ? (
-                                        <button
-                                            type="button"
-                                            onMouseEnter={() => {
-                                                if (r.person_id) prefetchPersonDrawerSnapshot(r.person_id);
-                                            }}
-                                            onFocus={() => {
-                                                if (r.person_id) prefetchPersonDrawerSnapshot(r.person_id);
-                                            }}
-                                            onClick={() =>
-                                                onOpenChild({
-                                                    person_id: r.person_id,
-                                                    customer_member_id: r.customer_member_id,
-                                                    display_name: r.display_name,
-                                                })
-                                            }
-                                            className="shrink-0 whitespace-nowrap text-[10px] font-semibold text-alloy-blue hover:underline"
-                                        >
-                                            {r.person_id ? "View person" : "View child"}
-                                        </button>
-                                    ) : null}
-                                    {rowCanEdit ? (
-                                        <div className="min-h-[0.75rem] text-right leading-none">{rowStatus(r.id)}</div>
+                                        <div className="mt-0.5 min-h-[0.75rem] leading-none">{rowStatus(r.id)}</div>
                                     ) : null}
                                 </div>
                         </div>

@@ -2,6 +2,8 @@
 
 import type { ReactNode } from "react";
 import { buildPersonDrawerRelationshipGroups } from "@/lib/admin/person/buildPersonDrawerRelationshipGroups";
+import { personDrawerRelationshipPresentation } from "@/lib/admin/person/personDrawerPresentationProfile";
+import { resolvePersonDrawerProfileFromRecord } from "@/components/admin/entity/PersonDrawerProfileBadges";
 import type {
     PersonEnrollmentMirrorRow,
     PersonEnrollmentOpportunityRow,
@@ -89,6 +91,9 @@ export function PersonDrawerRelationshipsOverview({
         person_relationships: (record._person_relationships as Parameters<typeof buildPersonDrawerRelationshipGroups>[0]["person_relationships"]) ?? [],
         sibling_links: (record._sibling_links as PersonSiblingLinkRow[]) ?? [],
     });
+    const { hideEmergency, hideSiblings, siblingsGroupTitle } = personDrawerRelationshipPresentation(
+        resolvePersonDrawerProfileFromRecord(record)
+    );
 
     const openPerson = (id: string) => onOpenDrawer("persons", id);
     const openMember = (id: string) => onOpenDrawer("customer_members", id);
@@ -96,9 +101,9 @@ export function PersonDrawerRelationshipsOverview({
     const hasAny =
         groups.parents.length > 0 ||
         groups.guardians.length > 0 ||
-        groups.emergency_contacts.length > 0 ||
+        (!hideEmergency && groups.emergency_contacts.length > 0) ||
         groups.children.length > 0 ||
-        groups.siblings.length > 0;
+        (!hideSiblings && groups.siblings.length > 0);
 
     if (!hasAny) {
         return <p className="text-sm text-alloy-midnight/60">No family relationships on file.</p>;
@@ -116,7 +121,7 @@ export function PersonDrawerRelationshipsOverview({
                     <RelationshipList items={groups.guardians} onOpenPerson={openPerson} emptyCopy="" />
                 </GroupBlock>
             ) : null}
-            {groups.emergency_contacts.length > 0 ? (
+            {groups.emergency_contacts.length > 0 && !hideEmergency ? (
                 <GroupBlock title="Emergency contacts">
                     <RelationshipList items={groups.emergency_contacts} onOpenPerson={openPerson} emptyCopy="" />
                 </GroupBlock>
@@ -131,8 +136,8 @@ export function PersonDrawerRelationshipsOverview({
                     />
                 </GroupBlock>
             ) : null}
-            {groups.siblings.length > 0 ? (
-                <GroupBlock title="Siblings">
+            {groups.siblings.length > 0 && !hideSiblings ? (
+                <GroupBlock title={siblingsGroupTitle}>
                     <RelationshipList
                         items={groups.siblings}
                         onOpenPerson={openPerson}

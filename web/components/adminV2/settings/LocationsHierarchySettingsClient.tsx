@@ -5,41 +5,25 @@ import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import SettingsPageHeader from "@/components/adminV2/settings/SettingsPageHeader";
 import { SETTINGS_PAGE_SHELL_CLASS } from "@/lib/adminV2/settingsPageLayout";
 import { listOrgProgramCategoriesForSettings } from "@/lib/orchestration/placement/orgProgramCategoryRegistry";
+import {
+    buildLocationHierarchyTree,
+    buildLocationTableRows,
+    isDemoLocation,
+    LOCATIONS_EDITOR_TABLE_COLUMNS,
+    mergeLocationMetadataField,
+    type LocationHierarchyRow,
+} from "@/lib/adminV2/locationsHierarchyTablePresentation";
 
-type LocationHierarchyRow = {
-    id: string;
-    label: string | null;
-    location_type: string | null;
-    parent_location_id: string | null;
-    is_active: boolean;
-    city: string | null;
-    state: string | null;
-    metadata?: unknown;
-};
+type DeletionEligibility = { allowed: boolean; reason?: string | null };
 
-function typeLabel(type: string | null): string {
-    switch ((type ?? "").trim()) {
-        case "site":
-            return "Physical site";
-        case "unit":
-            return "Classroom / room";
-        case "address":
-            return "Address / campus";
-        default:
-            return type ?? "Location";
-    }
-}
-
-function isDemoLocation(row: LocationHierarchyRow): boolean {
-    const label = (row.label ?? "").trim().toLowerCase();
-    if (label.startsWith("waitlist demo —") || label.startsWith("placement demo —")) return true;
-    const md = row.metadata;
-    if (md != null && typeof md === "object" && !Array.isArray(md)) {
-        const m = md as Record<string, unknown>;
-        return m.demo_batch_key != null || m.is_demo_data === true;
-    }
-    return false;
-}
+const METADATA_EDIT_KEYS = [
+    "category",
+    "age_range_from",
+    "age_range_to",
+    "age_range_unit",
+    "capacity",
+    "student_teacher_ratio",
+] as const;
 
 export default function LocationsHierarchySettingsClient() {
     const { openDrawer } = useAdminDrawer();
@@ -47,7 +31,10 @@ export default function LocationsHierarchySettingsClient() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [search, setSearch] = useState("");
-    const [archivingId, setArchivingId] = useState<string | null>(null);
+    const [collapsedSites, setCollapsedSites] = useState<Set<string>>(new Set());
+    const [savingId, setSavingId] = useState<string | null>(null);
+    const [removingId, setRemovingId] = useState<string | null>(null);
+    const [deleteReasonById, setDeleteReasonById] = useState<Record<string, string>>({});
 
     const orgCategories = useMemo(() => listOrgProgramCategoriesForSettings(), []);
 
@@ -96,34 +83,49 @@ export default function LocationsHierarchySettingsClient() {
         });
     }, [rows, search]);
 
-    const tree = useMemo(() => {
-        const byParent = new Map<string | null, LocationHierarchyRow[]>();
-        for (const row of filteredRows) {
-            const key = row.parent_location_id ?? null;
-            const list = byParent.get(key) ?? [];
-            list.push(row);
-            byParent.set(key, list);
-        }
-        for (const list of byParent.values()) {
-            list.sort((a, b) => (a.label ?? "").localeCompare(b.label ?? ""));
-        }
-        const roots = (byParent.get(null) ?? []).filter((r) => r.location_type !== "unit");
-        return { roots, byParent };
-    }, [filteredRows]);
+    const tree = useMemo(() => buildLocationHierarchyTree(filteredRows), [filteredRows]);
+    const tableRows = useMemo(() => buildLocationTableRows(tree.roots, tree.byParent), [tree]);
 
-    const archiveLocation = async (row: LocationHierarchyRow) => {
-        if (!isDemoLocation(row)) {
-            window.alert("Archive is limited to demo-tagged or legacy demo-named locations in this pilot.");
-            return;
-        }
-        const label = row.label ?? "this location";
-        if (!window.confirm(`Archive (deactivate) ${label}? This hides it from active lists.`)) return;
-        setArchivingId(row.id);
+    const visibleTableRows = useMemo(() => {
+        const hiddenRoomParentIds = collapsedSites;
+        return tableRows.filter((row) => {
+            if (row.isSite) return true;
+            if (!row.parentSiteId) return true;
+            return !hiddenRoomParentIds.has(row.parentSiteId);
+        });
+    }, [tableRows, collapsedSites]);
+
+    useEffect(() => {
+        const demoRows = rows.filter(isDemoLocation);
+        if (demoRows.length === 0) return;
+        let cancelled = false;
+        void (async () => {
+            const next: Record<string, string> = {};
+            for (const row of demoRows) {
+                try {
+                    const res = await fetch(
+                        `/api/admin/deletion-eligibility?entity_type=locations&id=${encodeURIComponent(row.id)}`
+                    );
+                    const json = (await res.json()) as DeletionEligibility;
+                    if (!json.allowed && json.reason) next[row.id] = json.reason;
+                } catch {
+                    /* ignore */
+                }
+            }
+            if (!cancelled) setDeleteReasonById(next);
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [rows]);
+
+    const patchLocation = async (id: string, body: Record<string, unknown>) => {
+        setSavingId(id);
         try {
-            const res = await fetch(`/api/admin/locations/${encodeURIComponent(row.id)}`, {
+            const res = await fetch(`/api/admin/locations/${encodeURIComponent(id)}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ is_active: false }),
+                body: JSON.stringify(body),
             });
             const json = (await res.json().catch(() => ({}))) as { error?: string };
             if (!res.ok) throw new Error(json.error ?? `Failed (${res.status})`);
@@ -131,63 +133,48 @@ export default function LocationsHierarchySettingsClient() {
         } catch (e) {
             window.alert((e as Error).message);
         } finally {
-            setArchivingId(null);
+            setSavingId(null);
         }
     };
 
-    const renderNode = (row: LocationHierarchyRow, depth: number) => {
-        const children = tree.byParent.get(row.id) ?? [];
-        const demo = isDemoLocation(row);
-        return (
-            <li key={row.id} className="space-y-1">
-                <div
-                    className="flex flex-wrap items-center gap-2 rounded-md border border-alloy-forge/10 bg-white/70 px-3 py-2"
-                    style={{ marginLeft: depth * 16 }}
-                >
-                    <button
-                        type="button"
-                        onClick={() => openDrawer({ type: "locations", id: row.id })}
-                        className="text-left text-sm font-medium text-alloy-blue hover:underline"
-                    >
-                        {row.label ?? "Untitled location"}
-                    </button>
-                    <span className="rounded bg-alloy-stone/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
-                        {typeLabel(row.location_type)}
-                    </span>
-                    {!row.is_active ? (
-                        <span className="text-[10px] font-medium text-alloy-midnight/45">Inactive</span>
-                    ) : null}
-                    {demo ? (
-                        <span className="text-[10px] font-medium text-alloy-midnight/45">Demo</span>
-                    ) : null}
-                    {(row.city || row.state) && (
-                        <span className="text-xs text-alloy-midnight/45">
-                            {[row.city, row.state].filter(Boolean).join(", ")}
-                        </span>
-                    )}
-                    {row.is_active && demo ? (
-                        <button
-                            type="button"
-                            disabled={archivingId === row.id}
-                            onClick={() => void archiveLocation(row)}
-                            className="ml-auto text-[11px] font-medium text-red-700/80 hover:text-red-800 disabled:opacity-50"
-                        >
-                            {archivingId === row.id ? "Archiving…" : "Archive demo"}
-                        </button>
-                    ) : null}
-                </div>
-                {children.length > 0 ? (
-                    <ul className="space-y-1">{children.map((c) => renderNode(c, depth + 1))}</ul>
-                ) : null}
-            </li>
-        );
+    const patchMetadataField = async (row: LocationHierarchyRow, fieldKey: string, value: string) => {
+        const metadata = mergeLocationMetadataField(row.metadata, fieldKey, value.trim() || null);
+        await patchLocation(row.id, { metadata });
     };
+
+    const deactivateLocation = async (row: LocationHierarchyRow) => {
+        if (!isDemoLocation(row)) {
+            const reason = deleteReasonById[row.id];
+            window.alert(reason ?? "This location cannot be removed from the active list.");
+            return;
+        }
+        const label = row.label ?? "this location";
+        if (!window.confirm(`Deactivate ${label}? This hides it from active lists.`)) return;
+        setRemovingId(row.id);
+        try {
+            await patchLocation(row.id, { is_active: false });
+        } finally {
+            setRemovingId(null);
+        }
+    };
+
+    const toggleSite = (siteId: string) => {
+        setCollapsedSites((prev) => {
+            const next = new Set(prev);
+            if (next.has(siteId)) next.delete(siteId);
+            else next.add(siteId);
+            return next;
+        });
+    };
+
+    const inputClass =
+        "w-full min-w-0 rounded border border-alloy-forge/15 bg-white px-1.5 py-1 text-xs text-alloy-midnight/85 disabled:opacity-60";
 
     return (
         <div className={SETTINGS_PAGE_SHELL_CLASS}>
             <SettingsPageHeader
-                title="Locations & hierarchy"
-                subtitle="Physical sites and classroom/room units. Waitlist queue sections group by org-level program/category — rooms belong under sites for future capacity and rates, not for waitlist section headers."
+                title="Locations"
+                subtitle="Sites and rooms for org configuration. Edit room metadata inline; open a row for full site or room details."
                 actions={
                     <button
                         type="button"
@@ -198,16 +185,6 @@ export default function LocationsHierarchySettingsClient() {
                     </button>
                 }
             />
-
-            <div className="mb-4 rounded-lg border border-alloy-forge/12 bg-alloy-stone/[0.06] px-3 py-2 text-xs leading-relaxed text-alloy-midnight/60">
-                <strong className="font-semibold text-alloy-midnight/75">Hierarchy model:</strong>{" "}
-                <span className="text-alloy-midnight/55">address/campus</span> →{" "}
-                <span className="text-alloy-midnight/55">site</span> (physical campus) →{" "}
-                <span className="text-alloy-midnight/55">unit</span> (classroom/room under a site).{" "}
-                <strong className="font-semibold text-alloy-midnight/75">Waitlist grouping</strong> uses org-level
-                program categories below. Header location filter narrows candidates inside those sections. Rates and
-                classroom assignment are out of scope.
-            </div>
 
             <section className="mb-4 rounded-lg border border-alloy-forge/10 bg-white/70 px-3 py-2.5">
                 <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-alloy-midnight/50">
@@ -223,9 +200,6 @@ export default function LocationsHierarchySettingsClient() {
                         </li>
                     ))}
                 </ul>
-                <p className="mt-2 text-[11px] text-alloy-midnight/45">
-                    Pilot: platform defaults. Full org configuration is a follow-up.
-                </p>
             </section>
 
             <div className="mb-3">
@@ -246,14 +220,214 @@ export default function LocationsHierarchySettingsClient() {
                 <p className="text-sm text-alloy-midnight/50">Loading locations…</p>
             ) : error ? (
                 <p className="text-sm text-red-700">{error}</p>
-            ) : tree.roots.length === 0 ? (
+            ) : visibleTableRows.length === 0 ? (
                 <p className="text-sm text-alloy-midnight/50">
-                    {search.trim()
-                        ? "No locations match your search."
-                        : "No org locations yet. Add a site or run npm run dev:seed:waitlist-demo for demo campuses."}
+                    {search.trim() ? "No locations match your search." : "No org locations yet."}
                 </p>
             ) : (
-                <ul className="space-y-2">{tree.roots.map((r) => renderNode(r, 0))}</ul>
+                <div className="overflow-x-auto rounded-lg border border-alloy-forge/12 bg-white/80">
+                    <table
+                        className="w-full border-collapse text-sm"
+                        data-locations-editor-table="true"
+                    >
+                        <thead>
+                            <tr className="divide-x divide-alloy-stone/15 border-b border-alloy-stone/20 bg-alloy-stone/[0.05] text-left text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/50">
+                                {LOCATIONS_EDITOR_TABLE_COLUMNS.map((col) => (
+                                    <th key={col} className="px-2 py-2">
+                                        {col}
+                                    </th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-alloy-stone/12">
+                            {visibleTableRows.map((row) => {
+                                const source = rows.find((r) => r.id === row.id);
+                                const demo = source ? isDemoLocation(source) : false;
+                                const saving = savingId === row.id;
+                                const removing = removingId === row.id;
+                                const blockedReason = deleteReasonById[row.id];
+                                const siteCollapsed = row.isSite && collapsedSites.has(row.id);
+                                const childCount = tree.byParent.get(row.id)?.length ?? 0;
+                                return (
+                                    <tr key={row.id} className="divide-x divide-alloy-stone/15 align-middle">
+                                        <td className="px-2 py-2">
+                                            {row.isSite ? (
+                                                <div className="flex items-center gap-1">
+                                                    {childCount > 0 ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleSite(row.id)}
+                                                            className="text-alloy-midnight/45 hover:text-alloy-midnight/70"
+                                                            aria-label={siteCollapsed ? "Expand rooms" : "Collapse rooms"}
+                                                        >
+                                                            {siteCollapsed ? "▸" : "▾"}
+                                                        </button>
+                                                    ) : (
+                                                        <span className="w-3" />
+                                                    )}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openDrawer({ type: "locations", id: row.id })}
+                                                        className="text-left font-medium text-alloy-blue hover:underline"
+                                                    >
+                                                        {row.siteLabel ?? "Untitled site"}
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <span className="text-alloy-midnight/35">—</span>
+                                            )}
+                                        </td>
+                                        <td className="px-2 py-2">
+                                            {row.isRoom ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openDrawer({ type: "locations", id: row.id })}
+                                                    className="text-left font-medium text-alloy-blue hover:underline"
+                                                >
+                                                    {row.roomLabel ?? "Untitled room"}
+                                                </button>
+                                            ) : (
+                                                <span className="text-alloy-midnight/35">—</span>
+                                            )}
+                                        </td>
+                                        <td className="px-2 py-2 text-xs text-alloy-midnight/70">{row.typeLabel}</td>
+                                        <td className="px-2 py-2">
+                                            {row.isRoom && source ? (
+                                                <input
+                                                    defaultValue={row.category ?? ""}
+                                                    disabled={saving}
+                                                    className={inputClass}
+                                                    onBlur={(e) => {
+                                                        const v = e.target.value;
+                                                        if ((row.category ?? "") === v.trim()) return;
+                                                        void patchMetadataField(source, "category", v);
+                                                    }}
+                                                />
+                                            ) : (
+                                                <span className="text-alloy-midnight/35">—</span>
+                                            )}
+                                        </td>
+                                        <td className="px-2 py-2">
+                                            {row.isRoom && source ? (
+                                                <div className="flex min-w-[7rem] items-center gap-1">
+                                                    <input
+                                                        defaultValue={
+                                                            source.metadata &&
+                                                            typeof source.metadata === "object" &&
+                                                            !Array.isArray(source.metadata)
+                                                                ? String(
+                                                                      (source.metadata as Record<string, unknown>)
+                                                                          .age_range_from ?? ""
+                                                                  )
+                                                                : ""
+                                                        }
+                                                        disabled={saving}
+                                                        className={`${inputClass} w-12`}
+                                                        placeholder="From"
+                                                        onBlur={(e) => {
+                                                            void patchMetadataField(source, "age_range_from", e.target.value);
+                                                        }}
+                                                    />
+                                                    <span className="text-alloy-midnight/30">–</span>
+                                                    <input
+                                                        defaultValue={
+                                                            source.metadata &&
+                                                            typeof source.metadata === "object" &&
+                                                            !Array.isArray(source.metadata)
+                                                                ? String(
+                                                                      (source.metadata as Record<string, unknown>)
+                                                                          .age_range_to ?? ""
+                                                                  )
+                                                                : ""
+                                                        }
+                                                        disabled={saving}
+                                                        className={`${inputClass} w-12`}
+                                                        placeholder="To"
+                                                        onBlur={(e) => {
+                                                            void patchMetadataField(source, "age_range_to", e.target.value);
+                                                        }}
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <span className="text-alloy-midnight/35">—</span>
+                                            )}
+                                        </td>
+                                        <td className="px-2 py-2">
+                                            {row.isRoom && source ? (
+                                                <input
+                                                    defaultValue={row.capacity ?? ""}
+                                                    disabled={saving}
+                                                    className={`${inputClass} max-w-[4rem]`}
+                                                    onBlur={(e) => {
+                                                        void patchMetadataField(source, "capacity", e.target.value);
+                                                    }}
+                                                />
+                                            ) : (
+                                                <span className="text-alloy-midnight/35">—</span>
+                                            )}
+                                        </td>
+                                        <td className="px-2 py-2">
+                                            {row.isRoom && source ? (
+                                                <input
+                                                    defaultValue={row.studentTeacherRatio ?? ""}
+                                                    disabled={saving}
+                                                    className={`${inputClass} max-w-[5rem]`}
+                                                    onBlur={(e) => {
+                                                        void patchMetadataField(source, "student_teacher_ratio", e.target.value);
+                                                    }}
+                                                />
+                                            ) : (
+                                                <span className="text-alloy-midnight/35">—</span>
+                                            )}
+                                        </td>
+                                        <td className="px-2 py-2 text-xs">
+                                            <span className={row.isActive ? "text-alloy-midnight/75" : "text-amber-800/80"}>
+                                                {row.statusLabel ?? (row.isActive ? "Active" : "Inactive")}
+                                            </span>
+                                        </td>
+                                        <td className="px-2 py-2">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openDrawer({ type: "locations", id: row.id })}
+                                                    className="text-[11px] font-medium text-alloy-blue hover:underline"
+                                                >
+                                                    Open
+                                                </button>
+                                                {demo && row.isActive ? (
+                                                    blockedReason && !isDemoLocation(source!) ? (
+                                                        <span
+                                                            className="max-w-[8rem] truncate text-[10px] text-alloy-midnight/50"
+                                                            title={blockedReason}
+                                                        >
+                                                            {blockedReason}
+                                                        </span>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            disabled={removing || saving}
+                                                            onClick={() => source && void deactivateLocation(source)}
+                                                            className="text-[11px] font-medium text-red-700/80 hover:text-red-800 disabled:opacity-50"
+                                                        >
+                                                            {removing ? "Removing…" : "Remove"}
+                                                        </button>
+                                                    )
+                                                ) : demo && !row.isActive && blockedReason ? (
+                                                    <span
+                                                        className="max-w-[8rem] truncate text-[10px] text-alloy-midnight/50"
+                                                        title={blockedReason}
+                                                    >
+                                                        {blockedReason}
+                                                    </span>
+                                                ) : null}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
             )}
         </div>
     );

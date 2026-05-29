@@ -81,8 +81,8 @@ export interface EntityDrawerSectionConfig {
   /** Default expanded state. */
   defaultExpanded?: boolean;
   collapsible?: boolean;
-  /** Grid columns for this section (1 or 2). */
-  gridCols?: 1 | 2;
+  /** Grid columns for this section (1, 2, or 3). */
+  gridCols?: 1 | 2 | 3;
   /**
    * `block` — section body is not wrapped in the default field grid (custom tables, inquiry children).
    * `fields-grid` (default) — children laid out with `gridCols`.
