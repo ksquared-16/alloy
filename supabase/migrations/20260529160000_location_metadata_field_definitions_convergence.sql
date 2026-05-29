@@ -2,51 +2,37 @@
 -- Values persist on locations.metadata via config.storage = "metadata".
 -- Fix-forward from 20260529153000: labels, capacity type, site fields.
 
-INSERT INTO public.option_sets (org_id, set_key, label, description, is_system, is_active, created_at, updated_at)
+INSERT INTO public.option_sets (org_id, set_key, label, sort_order)
 SELECT
     o.id,
     v.set_key,
     v.label,
-    v.description,
-    true,
-    true,
-    now(),
-    now()
+    v.ord
 FROM public.orgs o
 CROSS JOIN (
     VALUES
-        (
-            'location_age_range_unit'::text,
-            'Location age range unit'::text,
-            'Months or years for room age range metadata'::text
-        )
-) AS v (set_key, label, description)
+        ('location_age_range_unit'::text, 'Location age range unit'::text, 70::int)
+) AS v (set_key, label, ord)
 ON CONFLICT (org_id, set_key) DO UPDATE SET
     label = EXCLUDED.label,
-    description = EXCLUDED.description,
-    updated_at = now();
+    sort_order = EXCLUDED.sort_order;
 
-INSERT INTO public.option_set_items (option_set_id, item_key, label, sort_order, is_active, metadata, created_at, updated_at)
+INSERT INTO public.option_set_items (option_set_id, item_key, label, sort_order)
 SELECT
     os.id,
     v.item_key,
     v.label,
-    v.sort_order,
-    true,
-    '{}'::jsonb,
-    now(),
-    now()
+    v.ord
 FROM public.option_sets os
 JOIN (
     VALUES
         ('location_age_range_unit', 'months', 'Months', 10),
         ('location_age_range_unit', 'years', 'Years', 20)
-) AS v (set_key, item_key, label, sort_order)
+) AS v (set_key, item_key, label, ord)
     ON os.set_key = v.set_key
 ON CONFLICT (option_set_id, item_key) DO UPDATE SET
     label = EXCLUDED.label,
-    sort_order = EXCLUDED.sort_order,
-    updated_at = now();
+    sort_order = EXCLUDED.sort_order;
 
 INSERT INTO public.field_section_definitions (org_id, entity_type, section_key, label, description, sort_order, updated_at)
 SELECT
