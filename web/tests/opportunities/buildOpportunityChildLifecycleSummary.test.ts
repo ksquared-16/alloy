@@ -28,8 +28,9 @@ describe("buildOpportunityChildLifecycleSummary", () => {
         });
         expect(s.is_mixed).toBe(false);
         expect(s.primary_status_key).toBe("enrolled");
-        expect(s.display_summary).toBe("3 children · all enrolled");
-        expect(s.headline_label).toBe("Children: all enrolled (3)");
+        expect(s.headline_label).toBe("3 children");
+        expect(s.display_summary).toBe("Family status: Enrolled");
+        expect(s.short_summary).toBe("Enrolled");
     });
 
     it("summarizes mixed sibling statuses", () => {
@@ -42,8 +43,9 @@ describe("buildOpportunityChildLifecycleSummary", () => {
         });
         expect(s.is_mixed).toBe(true);
         expect(s.primary_status_key).toBeNull();
-        expect(s.display_summary).toBe("2 children · 1 enrolled, 1 waitlisted");
-        expect(s.short_summary).toBe("Mixed: enrolled + waitlisted");
+        expect(s.headline_label).toBe("2 children");
+        expect(s.display_summary).toBe("Family status: Enrolled + Waitlisted");
+        expect(s.short_summary).toBe("Enrolled + Waitlisted");
         expect(s.counts_by_status_key).toEqual({ enrolled: 1, waitlisted: 1 });
     });
 
@@ -58,7 +60,8 @@ describe("buildOpportunityChildLifecycleSummary", () => {
         });
         expect(s.is_mixed).toBe(true);
         expect(s.total_children).toBe(3);
-        expect(s.display_summary).toContain("3 children");
+        expect(s.headline_label).toBe("3 children");
+        expect(s.display_summary).toContain("Family status:");
     });
 
     it("counts missing child status with calm enrollment copy", () => {
@@ -68,7 +71,10 @@ describe("buildOpportunityChildLifecycleSummary", () => {
         });
         expect(s.is_mixed).toBe(true);
         expect(s.missing_status_count).toBe(1);
-        expect(s.display_summary).toBe("2 children · 1 waitlisted, 1 enrollment status not set");
+        expect(s.headline_label).toBe("2 children");
+        expect(s.display_summary).toBe(
+            "Family status: 1 waitlisted, 1 enrollment status not set"
+        );
         expect(s.all_enrollment_status_unset).toBe(false);
     });
 
@@ -78,9 +84,9 @@ describe("buildOpportunityChildLifecycleSummary", () => {
             members: [{ outcome_status_key: null }, { outcome_status_key: undefined }],
         });
         expect(s.missing_status_count).toBe(2);
-        expect(s.display_summary).toBe("2 children listed");
-        expect(s.headline_label).toBe("2 children listed");
-        expect(s.short_summary).toBe("Enrollment status not set");
+        expect(s.headline_label).toBe("2 children");
+        expect(s.display_summary).toBe("Family status: Not set");
+        expect(s.short_summary).toBe("Not set");
         expect(s.all_enrollment_status_unset).toBe(true);
     });
 
@@ -89,8 +95,18 @@ describe("buildOpportunityChildLifecycleSummary", () => {
             opportunityId: "opp-1",
             members: [{ outcome_status_key: null, display_name: "Mia" }],
         });
-        expect(s.display_summary).toBe("1 child listed");
+        expect(s.headline_label).toBe("1 child");
+        expect(s.display_summary).toBe("Family status: Not set");
         expect(s.all_enrollment_status_unset).toBe(true);
+    });
+
+    it("maps new_inquiry to operator-facing New lead label", () => {
+        const s = buildOpportunityChildLifecycleSummary({
+            opportunityId: "opp-1",
+            members: [{ outcome_status_key: "new_inquiry" }],
+        });
+        expect(s.headline_label).toBe("1 child");
+        expect(s.display_summary).toBe("Family status: New lead");
     });
 
     it("does not include opportunity mutation fields", () => {
@@ -110,7 +126,8 @@ describe("buildOpportunityChildLifecycleSummary", () => {
                 { outcome_status_key: "enrolling" },
             ],
         });
-        expect(s.display_summary).toBe("2 children · 1 offer pending, 1 enrolling");
+        expect(s.headline_label).toBe("2 children");
+        expect(s.display_summary).toBe("Family status: Offer pending + Enrolling");
     });
 });
 

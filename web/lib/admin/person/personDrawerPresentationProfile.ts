@@ -65,8 +65,6 @@ const HIDDEN_FIELD_KEYS_PARENT = new Set([
     "date_of_birth",
     "dob",
     "status_key",
-    "email",
-    "phone",
 ]);
 
 const HIDDEN_FIELD_KEYS_EMERGENCY = new Set([...HIDDEN_FIELD_KEYS_ALL, "date_of_birth", "dob", "status_key"]);
@@ -127,6 +125,36 @@ function applyConsentFieldPresentation(
     };
 }
 
+function mergeParentContactFieldsIntoBasicInfo(
+    sections: EntityDrawerSectionConfig[],
+    sourceSections: EntityDrawerSectionConfig[]
+): EntityDrawerSectionConfig[] {
+    const basicSource = sourceSections.find((s) => s.key === "basic_info")?.fields ?? [];
+    const contactFields = sourceSections.find((s) => s.key === "contact_info")?.fields ?? [];
+    const preferredField = basicSource.find((f) => f.key === "preferred_name");
+    const emailField = contactFields.find((f) => f.key === "email");
+    const phoneField = contactFields.find((f) => f.key === "phone");
+    if (!preferredField && !emailField && !phoneField) return sections;
+
+    return sections.map((section) => {
+        if (section.key !== "basic_info") return section;
+        const existing = section.fields ?? [];
+        const next = [...existing];
+        for (const field of [
+            preferredField ? { ...preferredField, editable: true, locked: false } : null,
+            emailField ? { ...emailField, editable: true, locked: false } : null,
+            phoneField
+                ? { ...phoneField, label: "Mobile", renderHint: "phone" as const, editable: true, locked: false }
+                : null,
+        ]) {
+            if (!field) continue;
+            if (next.some((f) => f.key === field.key)) continue;
+            next.push(field);
+        }
+        return { ...section, fields: next };
+    });
+}
+
 export function applyPersonDrawerPresentationProfile(
     sections: EntityDrawerSectionConfig[],
     profile: PersonDrawerProfileResult,
@@ -136,7 +164,7 @@ export function applyPersonDrawerPresentationProfile(
     const parentLike = isParentLikeProfile(profile) && !child;
     const emergency = isEmergencyContactProfile(profile);
 
-    return sections
+    const result = sections
         .filter((section) => {
             if (child && HIDDEN_SECTION_KEYS_CHILD.has(section.key)) return false;
             if (parentLike && HIDDEN_SECTION_KEYS_PARENT.has(section.key)) return false;
@@ -176,6 +204,11 @@ export function applyPersonDrawerPresentationProfile(
             if (isConsentSection(section.key) && (section.fields?.length ?? 0) === 0) return false;
             return true;
         });
+
+    if (parentLike) {
+        return mergeParentContactFieldsIntoBasicInfo(result, sections);
+    }
+    return result;
 }
 
 export function personDrawerAboveFoldShowsContact(profile: PersonDrawerProfileResult): boolean {

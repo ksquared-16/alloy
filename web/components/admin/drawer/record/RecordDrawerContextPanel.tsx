@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { oppInqLeadSummaryShellClassName } from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
 
 /** Pine-accent premium context panel — shared by Opportunity inquiry slots, Person, and Location drawers. */
 export const RECORD_DRAWER_CONTEXT_PANEL_CLASS =
@@ -10,18 +11,24 @@ type Props = {
     children: ReactNode;
     className?: string;
     "data-record-drawer-context"?: string;
+    /** lead-summary: Opportunity inquiry summary shell; card: default bordered surface. */
+    variant?: "card" | "lead-summary";
 };
 
 export default function RecordDrawerContextPanel({
     children,
     className,
     "data-record-drawer-context": dataRecordDrawerContext,
+    variant = "card",
 }: Props) {
+    const surfaceClass = variant === "lead-summary" ? oppInqLeadSummaryShellClassName : RECORD_DRAWER_CONTEXT_PANEL_CLASS;
+
     return (
         <div
-            className={[RECORD_DRAWER_CONTEXT_PANEL_CLASS, className].filter(Boolean).join(" ")}
+            className={[surfaceClass, className].filter(Boolean).join(" ")}
             data-record-drawer-context-panel="true"
             data-record-drawer-context={dataRecordDrawerContext}
+            data-record-drawer-context-variant={variant}
         >
             {children}
         </div>

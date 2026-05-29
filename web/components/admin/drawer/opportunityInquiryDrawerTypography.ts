@@ -56,3 +56,11 @@ export const oppInqReadonlyField =
 /** Role chip — overview body (non-summary) family panel */
 export const oppDrawerRolePillComfortable =
     "inline-flex max-w-[11rem] items-center rounded-full border border-alloy-blue/20 bg-alloy-blue/[0.07] px-2.5 py-0.5 text-[11px] font-semibold text-alloy-midnight/85";
+
+/** Person drawer title-rail role pills — aligned with Opportunity header chip weight. */
+export const personDrawerRolePillClassName =
+    "inline-flex max-w-[12rem] items-center rounded-full border border-alloy-blue/30 bg-alloy-blue/[0.08] px-3 py-1 text-[11px] font-semibold leading-none text-alloy-midnight/85 shadow-sm";
+
+/** Lead summary outer shell — Opportunity inquiry summary + person operational context. */
+export const oppInqLeadSummaryShellClassName =
+    "rounded-xl border border-alloy-stone/15 border-l-[3px] border-l-[rgb(0,162,131)] bg-gradient-to-br from-emerald-50/45 via-white to-white px-2 py-1.5 shadow-md ring-1 ring-alloy-stone/10";

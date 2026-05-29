@@ -325,7 +325,7 @@ export function FamilyContactsPanel(props: {
                             <DrawerRelationshipPanelSkeleton density="comfortable" rows={1} />
                         )
                     ) : shellReservedAdditionalCount > 0 && sorted.length === 0 ? (
-                        <ul className={`${variant === "summary" ? "space-y-2" : "space-y-2.5"} mt-1 list-none`}>
+                        <ul className={`${variant === "summary" ? "space-y-1" : "space-y-2.5"} mt-0.5 list-none`}>
                             {Array.from({ length: shellReservedAdditionalCount }).map((_, i) => (
                                 <li
                                     key={`additional-contact-shell-${i}`}
@@ -343,13 +343,13 @@ export function FamilyContactsPanel(props: {
                         <div
                             className={
                                 variant === "summary" ?
-                                    "mt-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/45"
+                                    "mt-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/45"
                                 :   "mt-2.5 text-[11px] font-semibold tracking-wide text-alloy-forge/55"
                             }
                         >
                             Additional contacts
                         </div>
-                        <ul className={`${variant === "summary" ? "space-y-2" : "space-y-2.5"} mt-1 list-none`}>
+                        <ul className={`${variant === "summary" ? "space-y-1" : "space-y-2.5"} mt-0.5 list-none`}>
                         {sorted.map((r) => {
                             const personId = String(r.person_id ?? "").trim();
                             const initialValues = personContactCardValuesFromOpportunityPersonRow(r);

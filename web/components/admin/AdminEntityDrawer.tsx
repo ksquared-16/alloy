@@ -98,6 +98,10 @@ import {
 import { OpportunityIntakeSourceSection } from "@/components/admin/opportunity/OpportunityIntakeSourceSection";
 import PersonEmployeePlacementSection from "@/components/admin/entity/PersonEmployeePlacementSection";
 import PersonDrawerContextPanel from "@/components/admin/entity/PersonDrawerContextPanel";
+import PersonDrawerHeaderMetadata, {
+    PersonDrawerHeaderContactMeta,
+} from "@/components/admin/entity/PersonDrawerHeaderMetadata";
+import PersonDrawerProfileBadges from "@/components/admin/entity/PersonDrawerProfileBadges";
 import LocationDrawerContextPanel from "@/components/admin/entity/LocationDrawerContextPanel";
 import LocationDrawerDeactivateAction from "@/components/admin/entity/LocationDrawerDeactivateAction";
 import { RecordDrawerHeaderStatusSelect } from "@/components/admin/entity/RecordDrawerHeaderStatusSelect";
@@ -341,6 +345,7 @@ import {
     oppInqEyebrow,
     oppInqFieldInput,
     oppInqInnerCard,
+    oppInqLeadSummaryShellClassName,
     oppInqMutedEmpty,
     oppInqNameLink,
     oppInqReadonlyField,
@@ -10253,7 +10258,14 @@ export default function AdminEntityDrawer() {
 
     const drawerHeaderActions = (
         <div className="flex flex-wrap items-center justify-end gap-2">
-            {canGoBack && previousDrawer && (
+            {canGoBack &&
+                previousDrawer &&
+                !(
+                    personRecordChromeBodyShell &&
+                    drawer.type === "persons" &&
+                    overviewData &&
+                    !(overviewData as { _create?: boolean })._create
+                ) && (
                 <button type="button" onClick={goBack} className="shrink-0 px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30 text-alloy-midnight/90">
                     ← Back to {getEntityLabel(labels, previousDrawer.type, "singular")}
                 </button>
@@ -10489,7 +10501,11 @@ export default function AdminEntityDrawer() {
             if (previewSub) return previewSub;
             if (recordHint) return recordHint;
         }
-        return jobV2MetaSubtitle ?? drawerHeaderRecordSubtitle ?? undefined;
+        return jobV2MetaSubtitle ??
+            (personRecordChromeBodyShell && drawer.type === "persons"
+                ? undefined
+                : drawerHeaderRecordSubtitle) ??
+            undefined;
     })();
     const workflowCompactRecordNum =
         drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer && typeof headerSubtitleBase === "string"
@@ -10516,7 +10532,7 @@ export default function AdminEntityDrawer() {
                 </div>
                 <OpportunityChildLifecycleSummaryStrip
                     summary={opportunityChildLifecycleSummary}
-                    showCaseNote
+                    showCaseNote={false}
                     className="mt-0.5"
                 />
                 {opportunityActivityHeaderLine}
@@ -10548,11 +10564,26 @@ export default function AdminEntityDrawer() {
                 ) : null}
                 <OpportunityChildLifecycleSummaryStrip
                     summary={opportunityChildLifecycleSummary}
-                    showCaseNote
+                    showCaseNote={false}
                     className="mt-0.5"
                 />
                 {opportunityActivityHeaderLine}
             </div>
+        ) : drawer.type === "persons" &&
+          personRecordChromeBodyShell &&
+          overviewData &&
+          !(overviewData as { _create?: boolean })._create ? (
+            <PersonDrawerHeaderMetadata
+                record={overviewData as Record<string, unknown>}
+                backLink={
+                    canGoBack && previousDrawer
+                        ? {
+                              label: `Back to ${getEntityLabel(labels, previousDrawer.type, "singular")}`,
+                              onClick: goBack,
+                          }
+                        : null
+                }
+            />
         ) : (
             headerSubtitleBase
         );
@@ -10637,6 +10668,21 @@ export default function AdminEntityDrawer() {
             <DrawerWorkflowHeaderQuickActionsSkeleton />
         );
 
+    const personHeaderTitleRailRight =
+        personRecordChromeBodyShell &&
+        drawer.type === "persons" &&
+        overviewData &&
+        !(overviewData as { _create?: boolean })._create ? (
+            <div className="flex flex-col items-end gap-1">
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                    <PersonDrawerProfileBadges record={overviewData as Record<string, unknown>} />
+                    {drawerStatusBadge}
+                    {drawerHeaderActions}
+                </div>
+                <PersonDrawerHeaderContactMeta record={overviewData as Record<string, unknown>} />
+            </div>
+        ) : undefined;
+
     const headerTitleRightForDrawer = opportunityDrawerHeaderCalmLoading ? null : (
         opportunityTitleRailActive && !opportunityDrawerOverviewRevealReady ? (
             <DrawerWorkflowHeaderQuickActionsSkeleton />
@@ -10644,6 +10690,8 @@ export default function AdminEntityDrawer() {
             <DrawerWorkflowHeaderQuickActionsSkeleton />
         ) : opportunityTitleRailActive ? (
             opportunityHeaderTitleRailRight
+        ) : personHeaderTitleRailRight ? (
+            personHeaderTitleRailRight
         ) : (
             workflowHeaderTitleRight
         )
@@ -10672,14 +10720,7 @@ export default function AdminEntityDrawer() {
           !drawerGateLoading ? (
             <PersonDrawerContextPanel
                 record={overviewData as Record<string, unknown>}
-                backLink={
-                    canGoBack && previousDrawer
-                        ? {
-                              label: `Back to ${getEntityLabel(labels, previousDrawer.type, "singular")}`,
-                              onClick: goBack,
-                          }
-                        : null
-                }
+                onOpenDrawer={(type, id) => openDrawer({ type: type as AdminDrawerEntityType, id })}
             />
         ) : drawer.type === "locations" &&
           overviewData &&
@@ -13297,7 +13338,7 @@ export default function AdminEntityDrawer() {
 
                                                     return (
                                                         <div
-                                                            className="rounded-xl border border-alloy-stone/15 border-l-[3px] border-l-[rgb(0,162,131)] bg-gradient-to-br from-emerald-50/45 via-white to-white px-2 py-2 shadow-md ring-1 ring-alloy-stone/10"
+                                                            className={oppInqLeadSummaryShellClassName}
                                                             data-opportunity-inquiry-summary="true"
                                                             data-opportunity-inquiry-summary-layout="hardcoded_v1"
                                                             data-opportunity-drawer-first-paint={
@@ -13316,7 +13357,7 @@ export default function AdminEntityDrawer() {
                                                                 opportunityFullRecordHydrateApplied ? "true" : "false"
                                                             }
                                                         >
-                                                            <div className="flex flex-wrap items-end justify-between gap-2 border-b border-alloy-stone/12 pb-1.5">
+                                                            <div className="flex flex-wrap items-end justify-between gap-1.5 border-b border-alloy-stone/12 pb-1">
                                                                 <span className={tinyLabel}>{opportunitySingular} summary</span>
                                                                 {stageLabel && stageLabel !== "—" ? (
                                                                     <span className="text-[10px] font-medium tracking-[0.08em] text-alloy-midnight/40">
@@ -13325,7 +13366,7 @@ export default function AdminEntityDrawer() {
                                                                 ) : null}
                                                             </div>
                                                             <div
-                                                                className={`mt-1.5 grid grid-cols-1 gap-1.5 ${inquirySummaryColumnMode === "two" ? "lg:grid-cols-2 lg:items-stretch" : ""} lg:gap-2.5`}
+                                                                className={`mt-1 grid grid-cols-1 gap-1 ${inquirySummaryColumnMode === "two" ? "lg:grid-cols-2 lg:items-stretch" : ""} lg:gap-2`}
                                                                 data-opportunity-inquiry-summary-columns={inquirySummaryColumnMode}
                                                             >
                                                                 <div className={`${oppInqInnerCard} min-h-0`}>

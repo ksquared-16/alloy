@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { formatPersonDrawerRecordNumber } from "@/components/admin/entity/PersonDrawerHeaderMetadata";
 
 const webRoot = resolve(__dirname, "../../..");
 
@@ -9,19 +10,39 @@ function read(rel: string): string {
 }
 
 describe("Person drawer premium primitives", () => {
-    it("PersonDrawerContextPanel uses shared header and restores back link slot", () => {
-        const src = read("components/admin/entity/PersonDrawerContextPanel.tsx");
-        expect(src).toContain("RecordDrawerContextPanel");
-        expect(src).toContain("RecordDrawerPremiumHeader");
-        expect(src).toContain("backLink");
-        expect(src).not.toContain("PersonDrawerAboveFoldSnapshot");
+    it("uses Opportunity-parity header composition with pills on title rail", () => {
+        const drawer = read("components/admin/AdminEntityDrawer.tsx");
+        expect(drawer).toContain("PersonDrawerHeaderMetadata");
+        expect(drawer).toContain("personHeaderTitleRailRight");
+        expect(drawer).toContain("PersonDrawerProfileBadges");
+        expect(drawer).toMatch(/personHeaderTitleRailRight[\s\S]*PersonDrawerProfileBadges/);
     });
 
-    it("AdminEntityDrawer wires person context panel with back link", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("PersonDrawerContextPanel");
-        expect(drawer).toContain("Back to");
-        expect(drawer).toContain("personRecordChromeBodyShell");
+    it("PersonDrawerHeaderMetadata renders compact record number without Person prefix", () => {
+        expect(formatPersonDrawerRecordNumber({ person_number: 67 })).toBe("#67");
+        const meta = read("components/admin/entity/PersonDrawerHeaderMetadata.tsx");
+        expect(meta).not.toContain("Person #");
+        expect(meta).toContain("data-record-drawer-back-link");
+    });
+
+    it("PersonDrawerContextPanel is operational-only lead summary", () => {
+        const src = read("components/admin/entity/PersonDrawerContextPanel.tsx");
+        expect(src).toContain('variant="lead-summary"');
+        expect(src).toContain("PersonDrawerEnrollmentOpportunitiesMirror");
+        expect(src).toContain("CompactAssociatedPeople");
+        expect(src).not.toContain("<PersonDrawerProfileBadges");
+        expect(src).not.toContain("backLink");
+    });
+
+    it("PersonDrawerProfileBadges use substantial title-rail role pills", () => {
+        const src = read("components/admin/entity/PersonDrawerProfileBadges.tsx");
+        expect(src).toContain("personDrawerRolePillClassName");
+    });
+
+    it("PersonDrawerHeaderMetadata splits contact meta from record number row", () => {
+        const meta = read("components/admin/entity/PersonDrawerHeaderMetadata.tsx");
+        expect(meta).toContain("PersonDrawerHeaderContactMeta");
+        expect(meta).toContain("data-record-drawer-back-link");
     });
 
     it("uses premium section surface for adminV2 person drawer", () => {

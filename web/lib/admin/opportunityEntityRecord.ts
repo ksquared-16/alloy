@@ -19,6 +19,7 @@ import { batchOptionItemLabelsForOrg, EMPTY_OPTION_LABEL_MAP, optionLabelFromBat
 import {
   isActiveChildCustomerMemberForInquiry,
   mergeHouseholdActiveChildrenIntoInquiryChildren,
+  resolveInquiryChildIdentityFields,
   type InquiryChildHydrateRow,
 } from "@/lib/admin/drawer/inquiryChildrenHydration";
 import { attachOpportunityChildLifecycleSummary } from "@/lib/opportunities/buildOpportunityChildLifecycleSummary";
@@ -344,11 +345,12 @@ function mapOcmJoinRowsToInquiryChildrenBlock(
     const m = memberMap.get(r.customer_member_id) ?? null;
     const pid = trimOrNull(m?.person_id);
     const p = pid ? (pmap.get(pid) ?? null) : null;
-    const dob = p?.date_of_birth
-      ? String(p.date_of_birth)
-      : m?.dob
-        ? String(m.dob)
-        : null;
+    const identity = resolveInquiryChildIdentityFields({
+      personId: pid,
+      person: p,
+      member: m,
+    });
+    const dob = identity.dob;
     const age = ageFromDobIso(dob);
     const desiredProgramType =
       trimOrNull(r.desired_program_type) ?? oppDefaultProgramType;
@@ -380,14 +382,14 @@ function mapOcmJoinRowsToInquiryChildrenBlock(
     const outcomeStatusLabel = outcomeStatusKey
       ? resolveDisplayFromLabelMap(ocmStatusLabelByKey, outcomeStatusKey, null)
       : null;
-    const first_name = trimOrNull(m?.first_name) ?? trimOrNull(p?.first_name);
-    const last_name = trimOrNull(m?.last_name) ?? trimOrNull(p?.last_name);
+    const first_name = identity.first_name;
+    const last_name = identity.last_name;
     return {
       id: r.id,
       customer_member_id: r.customer_member_id,
       person_id: pid,
       display_name:
-        m?.display_name ??
+        identity.display_name ??
         (pid ? warmPersonDisplayName(p) : null) ??
         r.customer_member_id.slice(0, 8) + "…",
       first_name,

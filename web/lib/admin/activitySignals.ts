@@ -3,6 +3,7 @@
  * No persisted derived state; no hardcoded thresholds.
  */
 
+import { humanizeSnakeCaseToken } from "@/lib/admin/activityTimelineFormat";
 import { resolveCommunicationMessageEventTitle } from "@/lib/admin/activityMessageEventLabels";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -128,8 +129,8 @@ export function summarizeWorkflowEventForSignal(ev: WorkflowEventLike): string {
     }
     if (t === "note_added") return "Note added";
     if (t === "action_executed") {
-        const k = p.action_key != null ? String(p.action_key) : "";
-        return k ? `Action: ${k}` : "Action executed";
+        const k = p.action_key != null ? String(p.action_key).trim() : "";
+        return k ? humanizeSnakeCaseToken(k) : "Action taken";
     }
     if (
         t === "opportunity_enrollment_packet_created" ||

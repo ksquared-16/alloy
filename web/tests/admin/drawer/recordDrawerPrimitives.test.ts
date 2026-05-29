@@ -36,8 +36,8 @@ describe("record drawer premium primitives", () => {
         const person = read("components/admin/entity/PersonDrawerContextPanel.tsx");
         const location = read("components/admin/entity/LocationDrawerContextPanel.tsx");
         expect(person).toContain("RecordDrawerContextPanel");
-        expect(person).toContain("RecordDrawerPremiumHeader");
+        expect(person).toContain('variant="lead-summary"');
+        expect(person).toContain("person-operational");
         expect(location).toContain("RecordDrawerContextPanel");
-        expect(location).toContain("RecordDrawerPremiumHeader");
     });
 });

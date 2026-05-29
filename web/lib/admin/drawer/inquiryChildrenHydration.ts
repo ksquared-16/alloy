@@ -71,6 +71,55 @@ function warmPersonDisplayName(p: WarmPersonRow | null): string | null {
     return joined || null;
 }
 
+export type InquiryChildIdentityMemberSource = {
+    first_name?: string | null;
+    last_name?: string | null;
+    dob?: string | null;
+    display_name?: string | null;
+};
+
+export type InquiryChildIdentityPersonSource = {
+    first_name?: string | null;
+    last_name?: string | null;
+    full_name?: string | null;
+    date_of_birth?: string | null;
+};
+
+/**
+ * Resolve inquiry child identity for display/edit.
+ * When `customer_members.person_id` is set, `persons` is canonical for name + DOB.
+ */
+export function resolveInquiryChildIdentityFields(args: {
+    personId: string | null;
+    person: InquiryChildIdentityPersonSource | null;
+    member: InquiryChildIdentityMemberSource | null;
+}): {
+    first_name: string | null;
+    last_name: string | null;
+    dob: string | null;
+    display_name: string | null;
+} {
+    const pid = trimOrNull(args.personId);
+    const p = args.person;
+    const m = args.member;
+
+    if (pid && p) {
+        return {
+            first_name: trimOrNull(p.first_name) ?? trimOrNull(m?.first_name),
+            last_name: trimOrNull(p.last_name) ?? trimOrNull(m?.last_name),
+            dob: p.date_of_birth ? String(p.date_of_birth) : m?.dob ? String(m.dob) : null,
+            display_name: warmPersonDisplayName(p as WarmPersonRow) ?? trimOrNull(m?.display_name),
+        };
+    }
+
+    return {
+        first_name: trimOrNull(m?.first_name),
+        last_name: trimOrNull(m?.last_name),
+        dob: m?.dob ? String(m.dob) : null,
+        display_name: trimOrNull(m?.display_name),
+    };
+}
+
 function ageFromDobIso(dobIso: string | null | undefined): { label: string } | null {
     const raw = String(dobIso ?? "").trim();
     if (!raw) return null;
@@ -132,12 +181,16 @@ export function mergeHouseholdActiveChildrenIntoInquiryChildren(
 
         const pid = trimOrNull(m.person_id);
         const p = pid ? (pmap.get(pid) ?? null) : null;
-        const dob = p?.date_of_birth ? String(p.date_of_birth) : m.dob ? String(m.dob) : null;
+        const identity = resolveInquiryChildIdentityFields({
+            personId: pid,
+            person: p,
+            member: m,
+        });
+        const dob = identity.dob;
         const age = ageFromDobIso(dob);
-        const first_name = trimOrNull(m.first_name) ?? trimOrNull(p?.first_name);
-        const last_name = trimOrNull(m.last_name) ?? trimOrNull(p?.last_name);
-        const display_name =
-            trimOrNull(m.display_name) ?? warmPersonDisplayName(p) ?? `${cmId.slice(0, 8)}…`;
+        const first_name = identity.first_name;
+        const last_name = identity.last_name;
+        const display_name = identity.display_name ?? `${cmId.slice(0, 8)}…`;
 
         const desiredProgramType = oppDefaultProgramType;
         const desiredScheduleType = oppDefaultScheduleType;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getActivitySignalForEntity, type ActivitySignalRule } from "@/lib/admin/activitySignals";
+import { getActivitySignalForEntity, summarizeWorkflowEventForSignal, type ActivitySignalRule } from "@/lib/admin/activitySignals";
 
 describe("getActivitySignalForEntity", () => {
     const rules: ActivitySignalRule[] = [
@@ -65,5 +65,17 @@ describe("getActivitySignalForEntity", () => {
             nowMs: Date.UTC(2026, 0, 15, 12, 0, 0),
         });
         expect(out.stale_signal).toBeNull();
+    });
+});
+
+describe("summarizeWorkflowEventForSignal", () => {
+    it("humanizes action_executed keys for operator-facing copy", () => {
+        expect(
+            summarizeWorkflowEventForSignal({
+                occurred_at: new Date().toISOString(),
+                event_type: "action_executed",
+                payload: { action_key: "add_family_member" },
+            })
+        ).toBe("Add Family Member");
     });
 });

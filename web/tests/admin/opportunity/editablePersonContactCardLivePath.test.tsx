@@ -53,6 +53,7 @@ describe("EditablePersonContactCard live View Person path", () => {
 
         expect(html).toContain('data-testid="view-person-drawer-open"');
         expect(html).toContain(`data-view-person-target-id="${PERSON_ID}"`);
+        expect(html).toContain('aria-label="View person for Ada Lovelace"');
         expect(html).not.toContain("onMouseDown");
     });
 
@@ -92,7 +93,7 @@ describe("EditablePersonContactCard live View Person path", () => {
         );
 
         expect(html).toContain(`data-view-person-target-id="${PERSON_ID}"`);
-        expect(html).toContain("View person");
+        expect(html).toContain('aria-label="View person for Ada Lovelace"');
     });
 
     it("wires click handler without duplicate mousedown open", () => {

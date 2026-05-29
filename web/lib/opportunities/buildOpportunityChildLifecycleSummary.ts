@@ -38,7 +38,7 @@ const DEFAULT_CHILD_LIFECYCLE_LABELS: Record<string, string> = {
     offer_pending: "Offer pending",
     enrolling: "Enrolling",
     interested: "Interested",
-    new_inquiry: "New inquiry",
+    new_inquiry: "New lead",
     not_enrolling: "Not enrolling",
     withdrawn: "Withdrawn",
     deferred: "Deferred",
@@ -160,32 +160,25 @@ export function buildOpportunityChildLifecycleSummary(params: {
     const fragments = buildCountFragments(counts, labelByKey);
     const childWord = total === 1 ? "1 child" : `${total} children`;
 
-    let displaySummary: string;
-    let headlineLabel: string;
-    let shortSummary: string;
-
+    let familyStatusLine: string;
     if (primaryStatusKey) {
         const label = labelByKey.get(primaryStatusKey) ?? primaryStatusKey;
-        displaySummary = `${childWord} · all ${label.toLowerCase()}`;
-        headlineLabel = `Children: all ${label.toLowerCase()} (${total})`;
-        shortSummary = `All ${label.toLowerCase()}`;
+        familyStatusLine = `Family status: ${label}`;
     } else if (missingCount === total) {
-        displaySummary = total === 1 ? "1 child listed" : `${total} children listed`;
-        headlineLabel = displaySummary;
-        shortSummary = "Enrollment status not set";
+        familyStatusLine = "Family status: Not set";
     } else if (isMixed) {
-        displaySummary = `${childWord} · ${fragments.join(", ")}`;
-        headlineLabel = `Children: ${fragments.join(", ")}`;
         const uniqueLabels = nonMissingKeys.map((k) => labelByKey.get(k) ?? k);
-        shortSummary =
+        familyStatusLine =
             uniqueLabels.length > 1
-                ? `Mixed: ${uniqueLabels.map((l) => l.toLowerCase()).join(" + ")}`
-                : fragments.join(", ");
+                ? `Family status: ${uniqueLabels.join(" + ")}`
+                : `Family status: ${fragments.join(", ")}`;
     } else {
-        displaySummary = `${childWord} · ${fragments.join(", ")}`;
-        headlineLabel = `Children: ${fragments.join(", ")}`;
-        shortSummary = fragments.join(", ");
+        familyStatusLine = `Family status: ${fragments.join(", ")}`;
     }
+
+    const headlineLabel = childWord;
+    const displaySummary = familyStatusLine;
+    const shortSummary = familyStatusLine.replace(/^Family status:\s*/, "");
 
     return {
         ...base,

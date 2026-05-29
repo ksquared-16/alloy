@@ -21,13 +21,13 @@ import {
     logViewPersonClickLive,
     viewPersonLiveDiagAttrs,
 } from "@/lib/admin/drawer/viewPersonClickLiveDiagnostics";
+import ViewPersonDrawerIconButton from "@/components/admin/drawer/ViewPersonDrawerIconButton";
 import {
     oppInqContactChannelLink,
     oppInqContactRow,
     oppInqContactSep,
     oppInqFieldInput,
     oppInqMutedEmpty,
-    oppInqNameLink,
 } from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
 
 const FIELD_LABEL: Record<PersonContactCardFieldKey, string> = {
@@ -247,7 +247,19 @@ export default function EditablePersonContactCard({
     const displayName =
         [draft.first_name, draft.last_name].filter(Boolean).join(" ").trim() ||
         draft.display_name ||
-        "View person";
+        "—";
+
+    const viewPersonIcon =
+        pid ? (
+            <ViewPersonDrawerIconButton
+                personId={pid}
+                displayName={displayName}
+                extraAttrs={viewPersonDiagAttrs}
+                onMouseEnter={() => prefetchViewPersonOnHover(pid)}
+                onPointerDown={() => prefetchViewPersonOnPointerDown(pid)}
+                onClick={handleViewPersonClick}
+            />
+        ) : null;
 
     const cardStatus = saveError ? (
         <span className="text-[11px] font-medium text-alloy-ember" role="alert">
@@ -291,8 +303,10 @@ export default function EditablePersonContactCard({
             onBlur={anyEditable ? handleCardBlur : undefined}
         >
             <div className="flex flex-wrap items-start justify-between gap-2">
-                {anyEditable ? (
-                    <div className="grid min-w-0 flex-1 grid-cols-2 gap-1.5">
+                <div className="flex min-w-0 flex-1 items-start gap-1">
+                    {viewPersonIcon}
+                    {anyEditable ? (
+                        <div className="grid min-w-0 flex-1 grid-cols-2 gap-1.5">
                         <div>
                             <span className="sr-only">{FIELD_LABEL.first_name}</span>
                             {gates.first_name.editable ? (
@@ -331,46 +345,18 @@ export default function EditablePersonContactCard({
                                 </span>
                             )}
                         </div>
-                    </div>
-                ) : (
-                    <div className="min-w-0 flex-1">
-                        {pid ? (
-                            <button
-                                type="button"
-                                data-testid="view-person-drawer-open"
-                                {...viewPersonDiagAttrs}
-                                onMouseEnter={() => prefetchViewPersonOnHover(pid)}
-                                onPointerDown={() => prefetchViewPersonOnPointerDown(pid)}
-                                onClick={handleViewPersonClick}
-                                className={`block w-full truncate text-left ${oppInqNameLink}`}
-                            >
-                                {displayName !== "—" ? displayName : "View person"}
-                            </button>
-                        ) : (
-                            <span className="text-[13px] font-semibold text-alloy-midnight/85">
-                                {displayName !== "—" ? displayName : "—"}
-                            </span>
-                        )}
-                    </div>
-                )}
+                        </div>
+                    ) : (
+                        <span className="min-w-0 truncate text-[13px] font-semibold text-alloy-midnight/85">
+                            {displayName !== "—" ? displayName : "—"}
+                        </span>
+                    )}
+                </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-1.5">
                     {roleLabel ? (
                         <span className={roleBadgeClassName ?? ""} title={roleLabel}>
                             {roleLabel}
                         </span>
-                    ) : null}
-                    {pid ? (
-                        <button
-                            type="button"
-                            data-testid="view-person-drawer-open"
-                            {...viewPersonDiagAttrs}
-                            onMouseEnter={() => prefetchViewPersonOnHover(pid)}
-                            onPointerDown={() => prefetchViewPersonOnPointerDown(pid)}
-                            onClick={handleViewPersonClick}
-                            className="text-[11px] font-semibold text-alloy-blue hover:underline underline-offset-2"
-                        >
-                            View person
-                        </button>
                     ) : null}
                 </div>
             </div>

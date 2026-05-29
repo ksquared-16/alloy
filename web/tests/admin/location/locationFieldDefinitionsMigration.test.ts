@@ -27,6 +27,13 @@ describe("location metadata field_definitions migration", () => {
     });
 
     it("uses metadata storage and option sets for selects", () => {
+        const optionSetsBlock =
+            sql.match(
+                /INSERT INTO public\.option_sets \(org_id, set_key, label, sort_order\)[\s\S]*?sort_order = EXCLUDED\.sort_order;/
+            )?.[0] ?? "";
+        expect(optionSetsBlock).toContain("INSERT INTO public.option_sets (org_id, set_key, label, sort_order)");
+        expect(optionSetsBlock).not.toContain("description");
+        expect(sql).toContain("INSERT INTO public.option_set_items (option_set_id, item_key, label, sort_order)");
         expect(sql).toContain('"storage":"metadata"');
         expect(sql).toContain('"option_set_key":"childcare_program_type"');
         expect(sql).toContain('"option_set_key":"location_age_range_unit"');

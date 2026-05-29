@@ -1,7 +1,9 @@
 /**
- * Inquiry child row inline edits — PATCH true source records (customer_member / person / OCM join).
+ * Inquiry child row inline edits — PATCH canonical identity records (person when linked, else customer_member).
+ * OCM join fields PATCH opportunity_customer_members only.
  */
 
+import { patchLinkedPersonFromOpportunityDrawer } from "@/lib/admin/drawer/linkedRecordFieldEditing";
 import { isUnlinkedInquiryChildRowId } from "@/lib/admin/drawer/inquiryChildrenHydration";
 
 export type InquiryChildIdentityPatch = {
@@ -20,6 +22,21 @@ export type InquiryChildOcmPatch = {
     notes?: string | null;
     [key: string]: string | null | undefined;
 };
+
+export type InquiryChildIdentityWriteTarget = "person" | "customer_member";
+
+function trimId(v: unknown): string | null {
+    if (v == null) return null;
+    const s = String(v).trim();
+    return s || null;
+}
+
+/** Canonical write owner for child identity fields on an inquiry row. */
+export function resolveInquiryChildIdentityWriteTarget(row: {
+    person_id?: string | null;
+}): InquiryChildIdentityWriteTarget {
+    return trimId(row.person_id) ? "person" : "customer_member";
+}
 
 export function buildCustomerMemberPatch(
     draft: InquiryChildIdentityPatch,
@@ -41,6 +58,54 @@ export function buildCustomerMemberPatch(
     return patch;
 }
 
+/** Person PATCH body for inquiry child identity (DOB stored as date_of_birth field value). */
+export function buildPersonIdentityPatch(
+    draft: InquiryChildIdentityPatch,
+    baseline: InquiryChildIdentityPatch
+): Record<string, unknown> {
+    const patch: Record<string, unknown> = {};
+    for (const key of ["first_name", "last_name"] as const) {
+        const next = draft[key] ?? "";
+        const prev = baseline[key] ?? "";
+        if (String(next).trim() !== String(prev).trim()) {
+            patch[key] = String(next).trim() || null;
+        }
+    }
+    const nextDob = draft.dob ?? "";
+    const prevDob = baseline.dob ?? "";
+    if (String(nextDob).trim() !== String(prevDob).trim()) {
+        patch.date_of_birth = String(nextDob).trim() || null;
+    }
+    return patch;
+}
+
+/** Reconstruct full identity draft from row baseline + accumulated debounced patch keys. */
+export function inquiryChildIdentityDraftFromPatch(
+    baseline: InquiryChildIdentityPatch,
+    patch: Record<string, unknown>
+): InquiryChildIdentityPatch {
+    return {
+        first_name:
+            patch.first_name !== undefined ? String(patch.first_name ?? "") : (baseline.first_name ?? ""),
+        last_name: patch.last_name !== undefined ? String(patch.last_name ?? "") : (baseline.last_name ?? ""),
+        dob:
+            patch.dob !== undefined ?
+                patch.dob ? String(patch.dob).slice(0, 10)
+                :   ""
+            :   (baseline.dob ?? ""),
+    };
+}
+
+export function inquiryChildIdentityHasChanges(
+    draft: InquiryChildIdentityPatch,
+    baseline: InquiryChildIdentityPatch
+): boolean {
+    for (const key of ["first_name", "last_name", "dob"] as const) {
+        if (String(draft[key] ?? "").trim() !== String(baseline[key] ?? "").trim()) return true;
+    }
+    return false;
+}
+
 export async function patchCustomerMemberFromInquiryChild(
     customerMemberId: string,
     patch: Record<string, unknown>
@@ -53,6 +118,46 @@ export async function patchCustomerMemberFromInquiryChild(
     const json = (await res.json().catch(() => ({}))) as Record<string, unknown> & { error?: string };
     if (!res.ok) throw new Error(json.error ?? "Save failed");
     return json;
+}
+
+/**
+ * PATCH canonical child identity from Inquiry Children inline edits.
+ * Linked person rows write `persons` (+ field_values for DOB); unlinked rows write `customer_members`.
+ */
+export async function patchInquiryChildIdentityFromDrawer(args: {
+    row: { customer_member_id: string; person_id?: string | null };
+    draft: InquiryChildIdentityPatch;
+    baseline: InquiryChildIdentityPatch;
+    fetchFn?: typeof fetch;
+}): Promise<{ writeTarget: InquiryChildIdentityWriteTarget; patch: Record<string, unknown> }> {
+    const fetchImpl = args.fetchFn ?? fetch;
+    const personId = trimId(args.row.person_id);
+    if (personId) {
+        const patch = buildPersonIdentityPatch(args.draft, args.baseline);
+        if (Object.keys(patch).length === 0) {
+            return { writeTarget: "person", patch: {} };
+        }
+        const result = await patchLinkedPersonFromOpportunityDrawer({
+            personId,
+            body: patch,
+            fetchFn: fetchImpl,
+        });
+        if (!result.ok) throw new Error(result.error);
+        return { writeTarget: "person", patch };
+    }
+
+    const patch = buildCustomerMemberPatch(args.draft, args.baseline);
+    if (Object.keys(patch).length === 0) {
+        return { writeTarget: "customer_member", patch: {} };
+    }
+    const res = await fetchImpl(`/api/admin/customer-members/${encodeURIComponent(args.row.customer_member_id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+    });
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown> & { error?: string };
+    if (!res.ok) throw new Error(json.error ?? "Save failed");
+    return { writeTarget: "customer_member", patch };
 }
 
 export async function ensureOpportunityCustomerMemberLink(args: {

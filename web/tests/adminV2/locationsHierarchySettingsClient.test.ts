@@ -42,5 +42,22 @@ describe("LocationsHierarchySettingsClient pilot UX", () => {
         expect(src).toContain("fetchOptionSetItemsBySetKey");
         expect(src).toContain("categorySelectOptions");
         expect(src).toContain("ageUnitSelectOptions");
+        expect(src).toContain("mapOptionItemsToSelectOptions");
+    });
+
+    it("uses compact column widths for category, age range, capacity, and ratio", () => {
+        const presentation = read("lib/adminV2/locationsHierarchyTablePresentation.ts");
+        expect(presentation).toContain("LOCATIONS_EDITOR_TABLE_COLUMN_CLASS");
+        expect(presentation).toContain("max-w-[160px]");
+        expect(presentation).toContain("LOCATIONS_EDITOR_AGE_RANGE_INPUT_CLASS");
+        expect(presentation).toContain("w-[70px]");
+        expect(presentation).toContain("LOCATIONS_EDITOR_AGE_RANGE_UNIT_CLASS");
+        expect(presentation).toContain("w-[95px]");
+
+        const src = read("components/adminV2/settings/LocationsHierarchySettingsClient.tsx");
+        expect(src).toContain("LOCATIONS_EDITOR_TABLE_COLUMN_CLASS");
+        expect(src).toContain("LOCATIONS_EDITOR_AGE_RANGE_INPUT_CLASS");
+        expect(src).toContain("table-fixed");
+        expect(src).not.toContain("min-w-[9rem]");
     });
 });

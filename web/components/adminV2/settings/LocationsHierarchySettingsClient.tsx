@@ -9,6 +9,9 @@ import {
     buildLocationHierarchyTree,
     buildLocationTableRows,
     isDemoLocation,
+    LOCATIONS_EDITOR_AGE_RANGE_INPUT_CLASS,
+    LOCATIONS_EDITOR_AGE_RANGE_UNIT_CLASS,
+    LOCATIONS_EDITOR_TABLE_COLUMN_CLASS,
     LOCATIONS_EDITOR_TABLE_COLUMNS,
     mergeLocationMetadataField,
     type LocationHierarchyRow,
@@ -255,13 +258,16 @@ export default function LocationsHierarchySettingsClient() {
             ) : (
                 <div className="overflow-x-auto rounded-lg border border-alloy-forge/12 bg-white/80">
                     <table
-                        className="w-full border-collapse text-sm"
+                        className="w-full table-fixed border-collapse text-sm"
                         data-locations-editor-table="true"
                     >
                         <thead>
                             <tr className="divide-x divide-alloy-stone/15 border-b border-alloy-stone/20 bg-alloy-stone/[0.05] text-left text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/50">
                                 {LOCATIONS_EDITOR_TABLE_COLUMNS.map((col) => (
-                                    <th key={col} className="px-2 py-2">
+                                    <th
+                                        key={col}
+                                        className={["px-2 py-2", LOCATIONS_EDITOR_TABLE_COLUMN_CLASS[col]].filter(Boolean).join(" ")}
+                                    >
                                         {col}
                                     </th>
                                 ))}
@@ -319,12 +325,12 @@ export default function LocationsHierarchySettingsClient() {
                                             )}
                                         </td>
                                         <td className="px-2 py-2 text-xs text-alloy-midnight/70">{row.typeLabel}</td>
-                                        <td className="px-2 py-2">
+                                        <td className={["px-2 py-2", LOCATIONS_EDITOR_TABLE_COLUMN_CLASS.Category].filter(Boolean).join(" ")}>
                                             {row.isRoom && source ? (
                                                 <select
                                                     defaultValue={row.category ?? ""}
                                                     disabled={saving}
-                                                    className={inputClass}
+                                                    className={`${inputClass} w-full max-w-full`}
                                                     onChange={(e) => {
                                                         const v = e.target.value;
                                                         if ((row.category ?? "") === v) return;
@@ -342,13 +348,13 @@ export default function LocationsHierarchySettingsClient() {
                                                 <span className="text-alloy-midnight/35">—</span>
                                             )}
                                         </td>
-                                        <td className="px-2 py-2">
+                                        <td className={["px-2 py-2", LOCATIONS_EDITOR_TABLE_COLUMN_CLASS["Age Range"]].filter(Boolean).join(" ")}>
                                             {row.isRoom && source ? (
-                                                <div className="flex min-w-[9rem] flex-wrap items-center gap-1">
+                                                <div className="flex flex-nowrap items-center gap-1">
                                                     <input
                                                         defaultValue={metadataString(source.metadata, "age_range_from")}
                                                         disabled={saving}
-                                                        className={`${inputClass} w-12`}
+                                                        className={`${inputClass} ${LOCATIONS_EDITOR_AGE_RANGE_INPUT_CLASS}`}
                                                         placeholder="From"
                                                         onBlur={(e) => {
                                                             void patchMetadataField(source, "age_range_from", e.target.value);
@@ -358,7 +364,7 @@ export default function LocationsHierarchySettingsClient() {
                                                     <input
                                                         defaultValue={metadataString(source.metadata, "age_range_to")}
                                                         disabled={saving}
-                                                        className={`${inputClass} w-12`}
+                                                        className={`${inputClass} ${LOCATIONS_EDITOR_AGE_RANGE_INPUT_CLASS}`}
                                                         placeholder="To"
                                                         onBlur={(e) => {
                                                             void patchMetadataField(source, "age_range_to", e.target.value);
@@ -367,7 +373,7 @@ export default function LocationsHierarchySettingsClient() {
                                                     <select
                                                         defaultValue={metadataString(source.metadata, "age_range_unit")}
                                                         disabled={saving}
-                                                        className={`${inputClass} max-w-[5.5rem]`}
+                                                        className={`${inputClass} ${LOCATIONS_EDITOR_AGE_RANGE_UNIT_CLASS}`}
                                                         onChange={(e) => {
                                                             const v = e.target.value;
                                                             if (metadataString(source.metadata, "age_range_unit") === v) return;
@@ -386,12 +392,12 @@ export default function LocationsHierarchySettingsClient() {
                                                 <span className="text-alloy-midnight/35">—</span>
                                             )}
                                         </td>
-                                        <td className="px-2 py-2">
+                                        <td className={["px-2 py-2", LOCATIONS_EDITOR_TABLE_COLUMN_CLASS.Capacity].filter(Boolean).join(" ")}>
                                             {row.isRoom && source ? (
                                                 <input
                                                     defaultValue={row.capacity ?? ""}
                                                     disabled={saving}
-                                                    className={`${inputClass} max-w-[4rem]`}
+                                                    className={`${inputClass} w-full max-w-full`}
                                                     onBlur={(e) => {
                                                         void patchMetadataField(source, "capacity", e.target.value);
                                                     }}
@@ -400,12 +406,19 @@ export default function LocationsHierarchySettingsClient() {
                                                 <span className="text-alloy-midnight/35">—</span>
                                             )}
                                         </td>
-                                        <td className="px-2 py-2">
+                                        <td
+                                            className={[
+                                                "px-2 py-2",
+                                                LOCATIONS_EDITOR_TABLE_COLUMN_CLASS["Student:Teacher Ratio"],
+                                            ]
+                                                .filter(Boolean)
+                                                .join(" ")}
+                                        >
                                             {row.isRoom && source ? (
                                                 <input
                                                     defaultValue={row.studentTeacherRatio ?? ""}
                                                     disabled={saving}
-                                                    className={`${inputClass} max-w-[5rem]`}
+                                                    className={`${inputClass} w-full max-w-full`}
                                                     onBlur={(e) => {
                                                         void patchMetadataField(source, "student_teacher_ratio", e.target.value);
                                                     }}

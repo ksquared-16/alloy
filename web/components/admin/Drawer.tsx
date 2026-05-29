@@ -326,7 +326,7 @@ export default function Drawer({
                 {headerSignals != null && headerSignals !== false && (
                     <div
                         data-adminv2-record-modal-signals-wrap
-                        className={`px-6 ${cleaningRecordModalTone ? "pb-1.5 pt-0.5" : "pb-3"}`}
+                        className={`px-6 ${cleaningRecordModalTone ? "pb-1 pt-0" : "pb-3"}`}
                         style={
                             isV2
                                 ? {
@@ -346,7 +346,7 @@ export default function Drawer({
                 {headerExtra != null && headerExtra !== false && (
                     <div
                         data-adminv2-record-modal-tabs-wrap
-                        className={`px-6 ${cleaningRecordModalTone ? "pb-2 pt-1" : "pb-1 pt-0"} ${cleaningRecordModalTone ? "border-t border-solid" : `border-t ${isV2 ? "" : "border-admin-border border-t-alloy-blue/30"}`}`}
+                        className={`px-6 ${cleaningRecordModalTone ? "pb-1.5 pt-0.5" : "pb-1 pt-0"} ${cleaningRecordModalTone ? "border-t border-solid" : `border-t ${isV2 ? "" : "border-admin-border border-t-alloy-blue/30"}`}`}
                         style={
                             isV2
                                 ? {

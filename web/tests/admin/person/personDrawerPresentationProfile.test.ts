@@ -6,7 +6,11 @@ const baseSections = [
     {
         key: "basic_info",
         title: "Profile",
-        fields: [{ key: "first_name" }, { key: "full_name" }, { key: "date_of_birth" }],
+        fields: [
+            { key: "first_name" },
+            { key: "last_name" },
+            { key: "preferred_name" },
+        ],
     },
     { key: "contact_info", title: "Contact", fields: [{ key: "email" }, { key: "phone" }] },
     { key: "medical", title: "Medical", fields: [{ key: "allergies" }] },
@@ -25,7 +29,7 @@ describe("personDrawerPresentationProfile", () => {
         };
         const out = applyPersonDrawerPresentationProfile(baseSections, profile);
         expect(out.map((s) => s.key)).toEqual(["basic_info", "medical"]);
-        expect(out[0]?.fields?.map((f) => f.key)).toEqual(["first_name"]);
+        expect(out[0]?.fields?.map((f) => f.key)).toEqual(["first_name", "last_name", "preferred_name"]);
     });
 
     it("hides medical and emergency for parent-like profiles and keeps messaging consent toggles", () => {
@@ -38,6 +42,15 @@ describe("personDrawerPresentationProfile", () => {
         expect(out.map((s) => s.key)).not.toContain("contact_info");
         expect(out.map((s) => s.key)).not.toContain("medical");
         expect(out.map((s) => s.key)).not.toContain("emergency");
+        const basic = out.find((s) => s.key === "basic_info");
+        expect(basic?.fields?.map((f) => f.key)).toEqual([
+            "first_name",
+            "last_name",
+            "preferred_name",
+            "email",
+            "phone",
+        ]);
+        expect(basic?.fields?.find((f) => f.key === "phone")?.label).toBe("Mobile");
         const consent = out.find((s) => s.key === "consent");
         expect(consent?.fields?.map((f) => f.key)).toEqual(["sms_consent"]);
         expect(consent?.fields?.[0]?.renderHint).toBe("primary_yes_no");

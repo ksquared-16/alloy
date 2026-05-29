@@ -35,6 +35,9 @@ export type LocationTableRow = {
     depth: number;
 };
 
+export const LOCATIONS_EDITOR_AGE_RANGE_INPUT_CLASS = "w-[70px] max-w-[70px]";
+export const LOCATIONS_EDITOR_AGE_RANGE_UNIT_CLASS = "w-[95px] max-w-[95px]";
+
 export const LOCATIONS_EDITOR_TABLE_COLUMNS = [
     "Site",
     "Room",
@@ -46,6 +49,15 @@ export const LOCATIONS_EDITOR_TABLE_COLUMNS = [
     "Status",
     "Actions",
 ] as const;
+
+export const LOCATIONS_EDITOR_TABLE_COLUMN_CLASS: Partial<
+    Record<(typeof LOCATIONS_EDITOR_TABLE_COLUMNS)[number], string>
+> = {
+    Category: "max-w-[160px] w-[160px]",
+    "Age Range": "w-[235px] max-w-[235px]",
+    Capacity: "max-w-[80px] w-[80px]",
+    "Student:Teacher Ratio": "max-w-[120px] w-[120px]",
+};
 
 export function isDemoLocation(row: LocationHierarchyRow): boolean {
     const label = (row.label ?? "").trim().toLowerCase();

@@ -1,29 +1,97 @@
 # Person & Location UX Reset
 
 **Date:** 2026-05-29  
-**Status:** Implemented (correction pass complete; uncommitted)  
+**Status:** Implemented (drawer visual parity + opportunity density pass)
+
+---
+
+## Inquiry Children data integrity (2026-05-29)
+
+### Canonical child identity ownership
+
+| Question | Answer |
+|----------|--------|
+| **A. Which table owns child identity?** | When `customer_members.person_id` is set → **`persons`** (first/last name native columns; DOB in `field_values` as `date_of_birth`). When no person link → **`customer_members`** (`first_name`, `last_name`, `dob`, `display_name`). |
+| **B. Which table does Opportunity Inquiry Children update?** | Same canonical owner via `patchInquiryChildIdentityFromDrawer`: **`PATCH /api/admin/persons/{id}`** when linked; else **`PATCH /api/admin/customer-members/{id}`**. OCM-only fields (program, status, desired start, location, notes) still **`PATCH /api/admin/opportunity-customer-members/{ocmId}`**. |
+| **C. Which table does Person drawer read?** | **`persons`** (+ attached field values) via **`GET /api/admin/entity/persons/{id}`**. Header DOB uses `date_of_birth` / `_age`; Profile shows first/last/preferred name. |
+
+### Divergence fixed
+
+Previously Inquiry Children always PATCHed `customer_members` while hydration **read DOB from `persons`** when linked — edits could appear to save but Person drawer and inquiry re-hydrate showed stale person data.
+
+**Fix:** write path routes to the same canonical record as read path; hydration uses `resolveInquiryChildIdentityFields` (person-first when linked for name + DOB).
+
+### DOB column layout
+
+Inquiry Children DOB column uses a fixed min width and `DOB · Age` read copy (e.g. `10/06/2020 · 5y`) without truncation.
+
+---
+
+## Drawer visual parity + opportunity density (2026-05-29)
+
+| Area | Change |
+|------|--------|
+| **Person header** | Shell title = person name; role pills on `headerTitleRight` via `personDrawerRolePillClassName`; adult email/phone or child DOB/age in `PersonDrawerHeaderContactMeta` under pills; `#67` + single back link in `PersonDrawerHeaderMetadata` |
+| **Person context panel** | Operational-only (`PersonDrawerContextPanel`) in `RecordDrawerContextPanel` `variant="lead-summary"` — same pine accent / gradient shell as Opportunity Lead Summary (`oppInqLeadSummaryShellClassName`) |
+| **Person body** | Premium `EntityDrawerSection` + `oppInqFieldInput` for adult Profile (first/last/preferred name, email, mobile); header metadata reads saved `overviewData` |
+| **Opportunity header meta** | Child lifecycle: `1 child` / `N children` headline; `Family status: …` display line; `new_inquiry` → **New lead**; no `Children: all …` or duplicate count lines; `action_executed` humanized (e.g. **Add family member**) |
+| **Opportunity density** | Tighter header→tabs gap (`Drawer.tsx`); Lead Summary uses shared shell with reduced padding/gaps; `showCaseNote={false}` on lifecycle strip; reduced Family & Contacts summary min-heights and list spacing |
+| **Family & Contacts** | Text “View person” replaced with shared `ViewPersonDrawerIconButton` (Children section pattern) |
+| **Locations table** | `table-fixed` + compact columns (Category 160px; age From/To 70px + Unit 95px; Capacity 80px; Ratio 120px); dropdowns wired to option sets |
+
+Opportunity open coordinator, queue/performance paths, migrations/schema, and broad drawer architecture were **not** modified.
+
+### Option-set configuration (UI today)
+
+Category and age-range unit dropdown values are **UI-configurable** via the existing option-set admin:
+
+| Route | Sets |
+|-------|------|
+| **`/adminV2/settings/option-sets`** | Admin V2 chrome wrapper |
+| **`/admin/system/option-sets`** | Legacy path (same client) |
+| Detail: `/adminV2/settings/option-sets/{setKey}` or `/admin/system/option-sets/{setKey}` | Edit items |
+
+Relevant set keys:
+
+- **`childcare_program_type`** — room **Category** (`field_definitions` default for `category`)
+- **`location_age_range_unit`** — **Age range unit** (`months`, `years`, etc.)
+
+No new option-set editor was added in this pass; reuse `OptionSetsClient` / `OptionSetDetailClient`.
+
+---
+
+## Opportunity-parity person drawer (2026-05-29, earlier)
+
+| Area | Visual parity change |
+|------|---------------------|
+| **Title row** | Shell title = person name; role pills on `headerTitleRight` title rail; status + save actions share the rail |
+| **Metadata row** | `PersonDrawerHeaderMetadata`: `#67` (not Person #67), single Back link |
+| **Context panel** | Operational-only (latest inquiry, enrollment activity, associated people) — no identity repetition |
+| **Body sections** | Premium `EntityDrawerSection` cards; person fields use compact density + `oppInqFieldInput` styling |
+| **Adult Profile basic** | Editable first/last/preferred name, email, mobile (phone labeled **Mobile**); header metadata reads saved `overviewData` |
+
+---
+
+## Header + locations table correction (2026-05-29)  
 **Audit:** `docs/sprints/05_2026/person_location_polish_reset_audit.md`
 
 ## Summary
 
 Person and Location drawers now have distinct product identities without restarting the Opportunity drawer architecture. Person is **identity + relationships**; Location is **admin configuration**. The canonical locations admin surface is **`/adminV2/settings/locations`**.
 
-Opportunity drawer coordinator, queue fetch, performance gates, and work-unit queue loading were **not** modified.
-
 ---
 
-## Correction pass (2026-05-29)
-
-Focused fixes applied after initial reset:
+## Correction pass (2026-05-29, earlier)
 
 | Area | Fix |
 |------|-----|
-| **Location metadata fields** | Seeded/configured `category`, `age_range_from`, `age_range_to`, `age_range_unit`, `capacity`, `student_teacher_ratio` on `locations.metadata` via `field_definitions` migration + registry defaults |
-| **Location drawer** | Compact header (no body duplication); parent site shows resolved label; category + age unit as selects; age from/to/unit on one row; capacity + Student:Teacher ratio on one row; Save/Cancel/More actions use `OpportunityDrawerHeaderActionButton` |
-| **Locations table** | Column renamed **Student:Teacher Ratio**; inline PATCH uses `student_teacher_ratio` (legacy `ratio` read fallback only) |
-| **Children section** | Title **Children**; notes column removed from UI; view-person icon immediately left of name; wider status column (`text-xs`); proportional grid without horizontal scroll |
-| **Person drawer** | Opportunity-style above-fold card; duplicate Back to Lead removed; parent profiles hide siblings group (show children only); meaningless status hidden when no defs |
-| **Buttons** | Location Save/Cancel/More actions + person contextual actions aligned to Opportunity drawer action-button styling |
+| **Location metadata fields** | Seeded/configured via `field_definitions` migration + DB-backed defs |
+| **Location drawer** | Compact header; parent site label; category + age unit selects; Save/Cancel/More via shared action rail |
+| **Locations table** | Column **Student:Teacher Ratio**; inline PATCH on `student_teacher_ratio` |
+| **Children section** | View-person icon left of name; wider status column |
+| **Drawer doctrine** | Shared `RecordDrawer*` primitives; deleted bespoke above-fold snapshots |
+
+Migration: `supabase/migrations/20260529160000_location_metadata_field_definitions_convergence.sql`
 
 ---
 
@@ -32,7 +100,7 @@ Focused fixes applied after initial reset:
 | Route | Component | Role |
 |-------|-----------|------|
 | **`/adminV2/settings/locations`** | `LocationsHierarchySettingsClient.tsx` | **Canonical** table editor for sites/rooms |
-| `/admin/locations` | `LocationsClient.tsx` | Legacy list (unchanged; not target of this pass) |
+| `/admin/locations` | `LocationsClient.tsx` | Legacy list (unchanged) |
 
 ---
 
@@ -40,95 +108,32 @@ Focused fixes applied after initial reset:
 
 ### Room metadata (`locations.metadata` + `field_definitions`)
 
-| Field key | UI control | Notes |
-|-----------|------------|-------|
-| `category` | Dropdown | Default option set `childcare_program_type`; org program categories |
-| `age_range_from` | Text/number | Editable in drawer + settings table |
-| `age_range_to` | Text/number | Paired with from |
-| `age_range_unit` | Dropdown | `months` / `years` via `location_age_range_unit` option set |
-| `capacity` | Text/number | Same row as ratio in drawer |
-| `student_teacher_ratio` | Text | Label **Student:Teacher ratio**; clears legacy `ratio` keys on save |
+| Field key | UI control | Option set |
+|-----------|------------|------------|
+| `category` | Dropdown | `childcare_program_type` |
+| `age_range_from` | Text/number | — |
+| `age_range_to` | Text/number | — |
+| `age_range_unit` | Dropdown | `location_age_range_unit` |
+| `capacity` | Text/number | — |
+| `student_teacher_ratio` | Text | — |
 
-Migration: `supabase/migrations/20260529153000_location_room_metadata_field_definitions.sql`
-
-Registry/helpers: `locationRoomMetadataFieldRegistry.ts`, `locationMetadataFields.ts`, `locationDrawerFieldOptions.ts`
-
-### Site metadata (unchanged)
-
-`director_name`, `director_email`, `site_phone` on `locations.metadata`.
-
----
-
-## What changed (initial reset + correction)
-
-### Person drawer
-
-- **`PersonDrawerAboveFoldSnapshot`** — compact Opportunity-style card: avatar, name, role badges, contact (parent) or DOB/age (child); no nested stat cards; no duplicate back link.
-- **`RecordDrawerHeaderStatusSelect`** — status in header when org status definitions exist; hidden when none configured.
-- **`personDrawerPresentationProfile.ts`** — profile-aware section filtering; parent relationship presentation hides emergency + **siblings** (children group only).
-- Body hides header-duplicated fields by profile.
-
-### Location drawer
-
-- **`LocationDrawerAboveFoldSnapshot`** — type chip, name, parent site link (label not UUID), room count for sites only; no category/capacity/ratio in header.
-- **`locationDrawerPresentation.ts`** — site = site details + address; room = 3-col grid with metadata; property/customer/relationship sections suppressed for site/unit.
-- Metadata merged into form state; PATCH on save via `mergeLocationMetadataPatch`.
-- **`LocationDrawerDeactivateAction`** — More actions (inactive/delete) with Opportunity action-button styling.
-
-### Admin V2 settings locations
-
-- Table columns: Site, Room, Type, Category, Age Range, Capacity, **Student:Teacher Ratio**, Status, Actions.
-- Inline metadata edit for room rows; open drawer for full edit.
-- Demo/BrightStart removal via deactivate; deletion eligibility reason when hard delete blocked; no visible “Demo” label.
-
-### Children section
-
-- Section title **`Children`**.
-- Notes field removed from grid UI (OCM `notes` still in API; not editable in grid).
-- View person icon immediately left of child name.
-- Proportional grid; status uses larger `text-xs` select; no `min-w-[1100px]` horizontal scroll.
-
----
-
-## Config-driven choices
-
-| Behavior | Driver |
-|----------|--------|
-| Person profile sections | `resolvePersonDrawerProfile` + `applyPersonDrawerPresentationProfile` |
-| Person status in header | Org `status_definitions` |
-| Location site/room shape | `location_type` + `applyLocationDrawerPresentation` |
-| Room category / age unit selects | `field_definitions` option sets + registry defaults |
-| Location metadata storage | `locations.metadata` JSON |
-| BrightStart/demo removal | `isDemoLocation` + `/api/admin/deletion-eligibility` |
-
----
-
-## Fields hidden vs deleted
-
-**Hidden (presentation only)** — still in DB/API:
-
-- Person child: contact, employee, DOB in body (shown in header), full name, person #, notes in consent.
-- Person parent: medical, emergency, DOB, siblings group (children shown instead).
-- Location site/unit: home type, beds/baths, pets, customer, relationships, property custom fields.
-
-**Not deleted** — metadata migration adds field definitions; no new location columns.
+Helpers: `locationDrawerFieldOptions.ts`, `locationMetadataFields.ts`, `locationMetadataFieldKeys.ts`
 
 ---
 
 ## Validation
 
-Targeted tests:
-
 ```bash
-cd web && npm run test -- tests/admin/location/locationRoomMetadataFieldRegistry.test.ts
-cd web && npm run test -- tests/admin/location/locationDrawerPresentation.test.ts
-cd web && npm run test -- tests/admin/location/locationListPresentation.test.ts
-cd web && npm run test -- tests/admin/location/locationsClientTable.test.ts
-cd web && npm run test -- tests/adminV2/locationsHierarchySettingsClient.test.ts
+cd web && npm run test -- tests/admin/drawer/inquiryChildFieldEdit.test.ts
+cd web && npm run test -- tests/admin/person/personDrawerPremiumPrimitives.test.ts
 cd web && npm run test -- tests/admin/person/personDrawerPresentationProfile.test.ts
-cd web && npm run test -- tests/admin/person/recordDrawerHeaderStatusSelect.test.tsx
-cd web && npm run test -- tests/admin/personDrawerVisibility.test.ts
-cd web && npm run test -- tests/admin/drawer/inquiryChildrenDrawerShell.test.ts
+cd web && npm run test -- tests/admin/drawer/recordDrawerPrimitives.test.ts
+cd web && npm run test -- tests/admin/opportunity/opportunityDrawerHeaderActionButton.test.ts
+cd web && npm run test -- tests/admin/opportunity/viewPersonDrawerIcon.test.tsx
+cd web && npm run test -- tests/admin/opportunity/editablePersonContactCardLivePath.test.tsx
+cd web && npm run test -- tests/opportunities/buildOpportunityChildLifecycleSummary.test.ts
+cd web && npm run test -- tests/admin/activitySignals.test.ts
+cd web && npm run test -- tests/adminV2/locationsHierarchySettingsClient.test.ts
 cd web && npx tsc --noEmit
 ```
 
@@ -136,19 +141,16 @@ cd web && npx tsc --noEmit
 
 ## Remaining limitations
 
-- Category options depend on org program categories / option-set hydration; free-text metadata still works when sets are empty.
-- Legacy `ratio` / `ratio_licensing_notes` keys are read for display but cleared when saving `student_teacher_ratio`.
-- Children OCM `notes` remain in API but are not editable in the inquiry children grid (intentional for this pass).
-- Person `record_drawer_layouts` / full record chrome convergence — deferred.
 - Legacy `/admin/locations` unchanged.
-- Settings table still hand-rolls editor (not yet wired to `entityPresentation.locations.table`).
+- Org program categories banner on settings page is read-only context (separate from option-set items).
+- Children OCM `notes` remain in API but are not editable in the inquiry children grid.
 
 ---
 
 ## Suggested commit message
 
 ```
-Fix Person/Location drawer UX correction pass; canonicalize room metadata fields.
+Align person drawer with Opportunity styling and tighten opportunity drawer density.
 
-Student:Teacher ratio metadata, compact headers, Opportunity action buttons, children grid cleanup, adminV2 locations table — without touching Opportunity/queue paths.
+Lead-summary context panel, operator-facing lifecycle copy, compact Family & Contacts spacing, and fixed-width locations table columns.
 ```

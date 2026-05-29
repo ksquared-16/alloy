@@ -11,6 +11,7 @@ import { formatDate, formatDateTime, formatMoney, formatMoneyFromCents, formatPh
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import EntityDrawerSection from "./EntityDrawerSection";
 import EntityDrawerField, { INPUT_ERROR_CLASS } from "./EntityDrawerField";
+import { oppInqFieldInput } from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
 import type { DrawerFieldPolicyChrome } from "@/lib/admin/drawer/fieldEditabilityInDrawer";
 import {
     OPPORTUNITY_PRIMARY_PERSON_MIRROR_FIELD_KEYS,
@@ -322,8 +323,9 @@ function renderFieldEditNode(
   hasValidationError?: boolean
 ): ReactNode {
   const errorInputClass = hasValidationError ? INPUT_ERROR_CLASS : "";
-  const inputClass = `${INLINE_EDIT_INPUT} ${errorInputClass}`.trim();
-  const selectClass = `${INLINE_EDIT_SELECT} ${errorInputClass}`.trim();
+  const usePersonPremiumInput = presentationEntityType === "persons";
+  const inputClass = `${usePersonPremiumInput ? oppInqFieldInput : INLINE_EDIT_INPUT} ${errorInputClass}`.trim();
+  const selectClass = `${usePersonPremiumInput ? oppInqFieldInput : INLINE_EDIT_SELECT} ${errorInputClass}`.trim();
   const key = field.key;
   const formVal = formData[key];
   const formHasMeaningful =
@@ -722,7 +724,8 @@ export default function EntityDrawerOverview({
         )
       : undefined;
     const scheduleSnapRow = !!(opts?.row && entityType === "schedules");
-    const density: "default" | "compact" = opts?.row ? "compact" : "default";
+    const usePremiumPersonFields = entityType === "persons" && sectionSurface === "premium";
+    const density: "default" | "compact" = scheduleSnapRow || usePremiumPersonFields ? "compact" : "default";
     const tier = opts?.scheduleFieldTier;
     const fieldProps = {
       label: scheduleSnapRow ? "" : field.label,

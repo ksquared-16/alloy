@@ -6,7 +6,9 @@ import { formatDate } from "@/lib/adminFormatters";
 import {
     buildCustomerMemberPatch,
     ensureOpportunityCustomerMemberLink,
-    patchCustomerMemberFromInquiryChild,
+    inquiryChildIdentityDraftFromPatch,
+    inquiryChildIdentityHasChanges,
+    patchInquiryChildIdentityFromDrawer,
     patchOpportunityCustomerMemberFromInquiryChild,
     resolveInquiryChildOcmId,
     type InquiryChildOcmPatch,
@@ -38,15 +40,15 @@ import {
 import { User } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-/** Literal Tailwind classes (must not be composed at runtime). */
+/** Literal Tailwind classes (must not be composed at runtime). DOB column uses min width so dates never truncate. */
 const INQUIRY_CHILD_DESKTOP_GRID_7 =
-    "grid grid-cols-[minmax(0,1.2fr)_minmax(0,0.68fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,1.05fr)] items-center gap-x-1.5 gap-y-1";
+    "grid grid-cols-[minmax(0,1.2fr)_minmax(8.75rem,0.95fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,1.05fr)] items-center gap-x-1.5 gap-y-1";
 const INQUIRY_CHILD_DESKTOP_GRID_8 =
-    "grid grid-cols-[minmax(0,1.1fr)_minmax(0,0.62fr)_minmax(0,0.62fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,1.05fr)] items-center gap-x-1.5 gap-y-1";
+    "grid grid-cols-[minmax(0,1.1fr)_minmax(8.75rem,0.9fr)_minmax(0,0.62fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,1.05fr)] items-center gap-x-1.5 gap-y-1";
 const INQUIRY_CHILD_DESKTOP_GRID_8_CUSTOM_1 =
-    "grid grid-cols-[minmax(0,1.1fr)_minmax(0,0.62fr)_minmax(0,0.62fr)_minmax(0,0.72fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,1.05fr)] items-center gap-x-1.5 gap-y-1";
+    "grid grid-cols-[minmax(0,1.1fr)_minmax(8.75rem,0.9fr)_minmax(0,0.62fr)_minmax(0,0.72fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,1.05fr)] items-center gap-x-1.5 gap-y-1";
 const INQUIRY_CHILD_DESKTOP_GRID_8_CUSTOM_2 =
-    "grid grid-cols-[minmax(0,1.05fr)_minmax(0,0.58fr)_minmax(0,0.58fr)_minmax(0,0.68fr)_minmax(0,0.68fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,1.05fr)] items-center gap-x-1.5 gap-y-1";
+    "grid grid-cols-[minmax(0,1.05fr)_minmax(8.75rem,0.88fr)_minmax(0,0.58fr)_minmax(0,0.68fr)_minmax(0,0.68fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,1.05fr)] items-center gap-x-1.5 gap-y-1";
 
 function inquiryChildDesktopGridClass(showDesiredStart: boolean, customColumnCount: number): string {
     if (customColumnCount >= 2) return INQUIRY_CHILD_DESKTOP_GRID_8_CUSTOM_2;
@@ -60,6 +62,9 @@ const INQUIRY_CHILD_COL_HDR =
 /** Header row supplies labels; per-field labels stay hidden to keep one compact row. */
 const INQUIRY_CHILD_MOBILE_LABEL = "hidden";
 const INQUIRY_CHILD_CELL = "min-w-0 self-center";
+const INQUIRY_CHILD_DOB_CELL = "min-w-[8.75rem] shrink-0 self-center";
+const INQUIRY_CHILD_DOB_READ =
+    "block whitespace-nowrap text-[11px] leading-tight tabular-nums text-alloy-midnight/70";
 
 export type InquiryChildRow = {
     id: string;
@@ -545,11 +550,15 @@ export default function OpportunityInquiryChildrenSection({
             dob: row.dob ? String(row.dob).slice(0, 10) : "",
         };
         const patch = buildCustomerMemberPatch(draft, baseline);
-        if (Object.keys(patch).length === 0) return;
+        if (!inquiryChildIdentityHasChanges(draft, baseline)) return;
         debouncedIdentity.schedule(`${row.id}:identity`, patch, async (_id, p) => {
             markRowSaveState(row.id, "saving");
             try {
-                await patchCustomerMemberFromInquiryChild(row.customer_member_id, p);
+                await patchInquiryChildIdentityFromDrawer({
+                    row: { customer_member_id: row.customer_member_id, person_id: row.person_id },
+                    draft: inquiryChildIdentityDraftFromPatch(baseline, p),
+                    baseline,
+                });
                 markRowSaveState(row.id, "saved");
                 onChildrenMutated?.();
             } catch (e) {
@@ -827,12 +836,12 @@ export default function OpportunityInquiryChildrenSection({
                                         )}
                                     </div>
                                 </div>
-                                <div className={INQUIRY_CHILD_CELL}>
+                                <div className={INQUIRY_CHILD_DOB_CELL}>
                                     <div className={INQUIRY_CHILD_MOBILE_LABEL}>
                                         DOB / Age
                                     </div>
                                     {rowCanEdit ? (
-                                        <div className="flex min-w-0 items-center gap-1">
+                                        <div className="flex items-center gap-1 whitespace-nowrap">
                                             <input
                                                 type="date"
                                                 value={identity.dob}
@@ -844,17 +853,17 @@ export default function OpportunityInquiryChildrenSection({
                                                     }));
                                                     scheduleIdentitySave(r);
                                                 }}
-                                                className={`${fieldInput} min-w-0 flex-1`}
+                                                className={`${fieldInput} w-[7.25rem] shrink-0`}
                                                 aria-label={`Date of birth for ${displayName}`}
                                             />
                                             {age ? (
-                                                <span className="shrink-0 tabular-nums text-[9px] text-alloy-midnight/45">
-                                                    {age}
+                                                <span className="shrink-0 tabular-nums text-[10px] text-alloy-midnight/55">
+                                                    · {age}
                                                 </span>
                                             ) : null}
                                         </div>
                                     ) : (
-                                        <span className={`${readOnlyText} tabular-nums`}>{dobAge}</span>
+                                        <span className={INQUIRY_CHILD_DOB_READ}>{dobAge}</span>
                                     )}
                                 </div>
                                 {showDesiredStartColumn ? (

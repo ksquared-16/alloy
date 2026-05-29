@@ -1,5 +1,6 @@
 "use client";
 
+import { personDrawerRolePillClassName } from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
 import type { PersonDrawerProfileResult } from "@/lib/admin/person/personDrawerVisibilityTypes";
 import {
     resolvePersonDrawerProfile,
@@ -38,7 +39,7 @@ export default function PersonDrawerProfileBadges({ record, className }: Props) 
             {badgeLabels.map((label) => (
                 <span
                     key={label}
-                    className="inline-flex items-center rounded-full border border-alloy-forge/15 bg-alloy-stone/[0.06] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/70"
+                    className={personDrawerRolePillClassName}
                 >
                     {label}
                 </span>

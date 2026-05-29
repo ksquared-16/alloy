@@ -1393,6 +1393,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
           fields: [
             { key: "first_name", label: "First name", span: 1, renderHint: "text", locked: true },
             { key: "last_name", label: "Last name", span: 1, renderHint: "text", locked: true },
+            { key: "preferred_name", label: "Preferred name", span: 1, renderHint: "text", editable: true },
           ],
           locked: true,
         },
