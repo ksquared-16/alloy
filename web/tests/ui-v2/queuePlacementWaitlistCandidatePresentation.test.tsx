@@ -194,9 +194,9 @@ describe("Hayes multi-child waitlist presentation", () => {
 
         const sectionTitles = vms.map((v) => v!.cohortSectionTitle);
         expect(sectionTitles).toEqual([
-            "Pre-K waitlist",
-            "Preschool waitlist",
             "Toddler waitlist",
+            "Preschool waitlist",
+            "Pre-K waitlist",
         ]);
         expect(sectionTitles.every((t) => !t.includes("_"))).toBe(true);
 

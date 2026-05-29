@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
+import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { formatPhoneUS } from "@/lib/adminFormatters";
 import { normalizePhone } from "@/lib/contactNormalize";
 import {
@@ -14,6 +15,11 @@ import {
     type PersonContactCardFieldKey,
     type PersonContactCardValues,
 } from "@/lib/admin/drawer/primaryPersonCardEdit";
+import { openViewPersonFromOpportunity, prefetchViewPersonOnHover } from "@/lib/admin/drawer/openViewPersonFromOpportunity";
+import {
+    logViewPersonClickLive,
+    viewPersonLiveDiagAttrs,
+} from "@/lib/admin/drawer/viewPersonClickLiveDiagnostics";
 import {
     oppInqContactChannelLink,
     oppInqContactRow,
@@ -35,12 +41,14 @@ const INLINE_INPUT =
 
 export type EditablePersonContactCardProps = {
     personId: string | null;
+    opportunityId?: string | null;
     initialValues: PersonContactCardValues;
     gates: Record<PersonContactCardFieldKey, PersonContactCardFieldGate>;
     canMutate: boolean;
     cardPad: string;
     variant: "default" | "summary";
-    openDrawer: (opts: { type: AdminDrawerEntityType; id: string }) => void;
+    /** Optional override — defaults to AdminDrawerContext.openDrawer. */
+    openDrawer?: (opts: { type: AdminDrawerEntityType; id: string }) => void;
     onPersonUpdated?: (person: Record<string, unknown>) => void;
     /** Role badge, e.g. Parent */
     roleLabel?: string | null;
@@ -53,12 +61,13 @@ export type EditablePersonContactCardProps = {
 
 export default function EditablePersonContactCard({
     personId,
+    opportunityId,
     initialValues,
     gates,
     canMutate,
     cardPad,
     variant,
-    openDrawer,
+    openDrawer: openDrawerProp,
     onPersonUpdated,
     roleLabel,
     roleBadgeClassName,
@@ -68,7 +77,66 @@ export default function EditablePersonContactCard({
     phoneHref,
 }: EditablePersonContactCardProps) {
     const pid = (personId ?? "").trim();
+    const oppId = (opportunityId ?? "").trim();
     const anyEditable = personContactCardHasEditableField(gates) && Boolean(pid);
+    const { openDrawer: contextOpenDrawer, drawer, stack } = useAdminDrawer();
+    const openDrawer = openDrawerProp ?? contextOpenDrawer;
+    const [clickFired, setClickFired] = useState(false);
+    const [openCalled, setOpenCalled] = useState(false);
+    const viewPersonClickGuardRef = useRef(false);
+
+    const handleViewPersonClick = useCallback(
+        (e: React.MouseEvent) => {
+            e.stopPropagation();
+            e.preventDefault();
+            if (!pid || viewPersonClickGuardRef.current) return;
+            viewPersonClickGuardRef.current = true;
+            window.setTimeout(() => {
+                viewPersonClickGuardRef.current = false;
+            }, 400);
+
+            setClickFired(true);
+            setOpenCalled(true);
+            logViewPersonClickLive({
+                personId: pid,
+                opportunityId: oppId || null,
+                targetType: "persons",
+                targetId: pid,
+                openCalled: false,
+                currentDrawerType: drawer.type,
+                currentDrawerId: drawer.id,
+                stackDepth: stack.length,
+            });
+
+            const opened = openViewPersonFromOpportunity({
+                openDrawer,
+                personId: pid,
+                opportunityId: oppId,
+            });
+
+            if (opened) {
+                logViewPersonClickLive({
+                    personId: pid,
+                    opportunityId: oppId || null,
+                    targetType: "persons",
+                    targetId: pid,
+                    openCalled: true,
+                    currentDrawerType: drawer.type,
+                    currentDrawerId: drawer.id,
+                    stackDepth: stack.length,
+                });
+            }
+        },
+        [drawer.id, drawer.type, openDrawer, oppId, pid, stack.length]
+    );
+
+    const viewPersonDiagAttrs = pid
+        ? viewPersonLiveDiagAttrs({
+              personId: pid,
+              clickFired,
+              openCalled,
+          })
+        : {};
 
     const [draft, setDraft] = useState<PersonContactCardValues>(initialValues);
     const baselineRef = useRef(initialValues);
@@ -267,7 +335,10 @@ export default function EditablePersonContactCard({
                         {pid ? (
                             <button
                                 type="button"
-                                onClick={() => openDrawer({ type: "persons", id: pid })}
+                                data-testid="view-person-drawer-open"
+                                {...viewPersonDiagAttrs}
+                                onMouseEnter={() => prefetchViewPersonOnHover(pid)}
+                                onClick={handleViewPersonClick}
                                 className={`block w-full truncate text-left ${oppInqNameLink}`}
                             >
                                 {displayName !== "—" ? displayName : "View person"}
@@ -288,7 +359,10 @@ export default function EditablePersonContactCard({
                     {pid ? (
                         <button
                             type="button"
-                            onClick={() => openDrawer({ type: "persons", id: pid })}
+                            data-testid="view-person-drawer-open"
+                            {...viewPersonDiagAttrs}
+                            onMouseEnter={() => prefetchViewPersonOnHover(pid)}
+                            onClick={handleViewPersonClick}
                             className="text-[11px] font-semibold text-alloy-blue hover:underline underline-offset-2"
                         >
                             View person

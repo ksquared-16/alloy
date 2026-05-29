@@ -90,7 +90,29 @@ interface AdminDrawerState {
     opportunityQueuePreviewSeed?: OpportunityDrawerQueuePreviewSeed | null;
     /** Loaded WU queue slice for in-drawer prev/next (pipeline opportunities). */
     opportunityQueueNavigator?: OpportunityDrawerQueueNavigator | null;
+    /** Dev/diagnostic — how this drawer was opened (e.g. opportunity_primary_contact). */
+    openSource?: string | null;
 }
+
+export type OpenDrawerParams = {
+    type: AdminDrawerEntityType;
+    id: string;
+    defaultWorkflowEntityType?: string;
+    defaultCustomerId?: string;
+    defaultVendorId?: string;
+    defaultSchedulePrefill?: SchedulePrefill;
+    defaultJobPrefill?: JobPrefill;
+    jobRecordSurface?: JobRecordSurfaceParam;
+    operationalVisualContext?: OperationalVisualContext;
+    defaultOpportunitySurface?: "quote_intake";
+    opportunityWorkspaceContext?: OpportunityWorkspaceContext | null;
+    opportunityQueuePreviewSeed?: OpportunityDrawerQueuePreviewSeed | null;
+    opportunityQueueNavigator?: OpportunityDrawerQueueNavigator | null;
+    /** Dev/diagnostic — caller surface (e.g. opportunity_primary_contact). */
+    source?: string;
+    /** Parent record for stack back navigation when opening a linked drawer. */
+    parent?: { type: AdminDrawerEntityType; id: string };
+};
 
 /** Params held while bootstrap + drawer_primary load outside the modal. */
 export type OpportunityDrawerOpeningParams = {
@@ -131,21 +153,7 @@ interface AdminDrawerContextValue {
     canGoBack: boolean;
     /** Top of stack (the drawer we would return to on Back). */
     previousDrawer: DrawerStackItem | null;
-    openDrawer: (params: {
-        type: AdminDrawerEntityType;
-        id: string;
-        defaultWorkflowEntityType?: string;
-        defaultCustomerId?: string;
-        defaultVendorId?: string;
-        defaultSchedulePrefill?: SchedulePrefill;
-        defaultJobPrefill?: JobPrefill;
-        jobRecordSurface?: JobRecordSurfaceParam;
-        operationalVisualContext?: OperationalVisualContext;
-        defaultOpportunitySurface?: "quote_intake";
-        opportunityWorkspaceContext?: OpportunityWorkspaceContext | null;
-        opportunityQueuePreviewSeed?: OpportunityDrawerQueuePreviewSeed | null;
-        opportunityQueueNavigator?: OpportunityDrawerQueueNavigator | null;
-    }) => void;
+    openDrawer: (params: OpenDrawerParams) => void;
     /** Prev/next within the loaded work-unit queue — drawer stays open. */
     navigateOpportunityInQueue: (direction: "prev" | "next") => void;
     goBack: () => void;
@@ -353,21 +361,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const openDrawer = useCallback(
-        (params: {
-            type: AdminDrawerEntityType;
-            id: string;
-            defaultWorkflowEntityType?: string;
-            defaultCustomerId?: string;
-            defaultVendorId?: string;
-            defaultSchedulePrefill?: SchedulePrefill;
-            defaultJobPrefill?: JobPrefill;
-            jobRecordSurface?: JobRecordSurfaceParam;
-            operationalVisualContext?: OperationalVisualContext;
-            defaultOpportunitySurface?: "quote_intake";
-            opportunityWorkspaceContext?: OpportunityWorkspaceContext | null;
-            opportunityQueuePreviewSeed?: OpportunityDrawerQueuePreviewSeed | null;
-            opportunityQueueNavigator?: OpportunityDrawerQueueNavigator | null;
-        }) => {
+        (params: OpenDrawerParams) => {
             if (
                 params.type === "opportunities" &&
                 shouldDeferOpportunityDrawerOpen(pathname, params.id)
@@ -389,7 +383,22 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
             }
 
             setDrawer((prev) => {
-                pushDrawerToStack(prev);
+                const parent = params.parent;
+                const prevMatchesParent =
+                    parent != null &&
+                    prev.type === parent.type &&
+                    String(prev.id ?? "") === String(parent.id);
+                if (parent != null && !prevMatchesParent && parent.type && parent.id) {
+                    setStack((s) => [
+                        ...s,
+                        {
+                            type: parent.type,
+                            id: parent.id,
+                        },
+                    ]);
+                } else {
+                    pushDrawerToStack(prev);
+                }
                 const next: AdminDrawerState = {
                     type: params.type,
                     id: params.id,
@@ -407,6 +416,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                         params.type === "opportunities" ? params.opportunityQueuePreviewSeed ?? null : null,
                     opportunityQueueNavigator:
                         params.type === "opportunities" ? params.opportunityQueueNavigator ?? null : null,
+                    openSource: params.source ?? null,
                 };
                 if (
                     params.type === "opportunities" &&

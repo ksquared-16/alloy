@@ -1,0 +1,67 @@
+import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
+import { logPersonDrawerOpen } from "@/lib/admin/drawer/personDrawerPerfLogs";
+import {
+    isPersonDrawerSnapshotWarm,
+    prefetchPersonDrawerSnapshot,
+} from "@/lib/admin/prefetchPersonDrawerSnapshot";
+
+export type OpenDrawerFromOpportunityFn = (params: {
+    type: AdminDrawerEntityType;
+    id: string;
+    source?: string;
+    parent?: { type: AdminDrawerEntityType; id: string };
+}) => void;
+
+/** Direct View Person open from opportunity host — cache-first when snapshot is warm. */
+export function openViewPersonFromOpportunity(args: {
+    openDrawer: OpenDrawerFromOpportunityFn;
+    personId: string;
+    opportunityId: string;
+    source?: string;
+}): boolean {
+    const personId = args.personId.trim();
+    const opportunityId = args.opportunityId.trim();
+    if (!personId) return false;
+
+    const cacheHit = isPersonDrawerSnapshotWarm(personId);
+    const openStartedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const openSource = args.source ?? "opportunity_primary_contact";
+
+    args.openDrawer({
+        type: "persons",
+        id: personId,
+        source: openSource,
+        parent: opportunityId ? { type: "opportunities", id: opportunityId } : undefined,
+    });
+
+    const timeToVisibleMs = Math.round(
+        (typeof performance !== "undefined" ? performance.now() : Date.now()) - openStartedAt
+    );
+    logPersonDrawerOpen({
+        personId,
+        cacheHit,
+        timeToVisibleMs,
+        source: openSource,
+    });
+
+    if (!cacheHit) {
+        try {
+            prefetchPersonDrawerSnapshot(personId, { source: "click" });
+        } catch {
+            /* prefetch must not block open */
+        }
+    }
+
+    return true;
+}
+
+/** Optional hover warm — never blocks click open. */
+export function prefetchViewPersonOnHover(personId: string): void {
+    const id = personId.trim();
+    if (!id) return;
+    try {
+        prefetchPersonDrawerSnapshot(id, { source: "hover" });
+    } catch {
+        /* ignore */
+    }
+}

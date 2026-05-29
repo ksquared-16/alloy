@@ -1,16 +1,24 @@
 import { describe, expect, it } from "vitest";
 import {
-    buildInquiryChildCohortOptionsFromProgramItems,
+    buildInquiryChildRoomOptionsForSite,
+    filterInquiryChildSiteLocationOptions,
     isInquiryChildPlacementProgramFieldDisabled,
-    suggestCohortKeyFromProgramType,
     validateInquiryChildPlacementPatch,
 } from "@/lib/admin/drawer/inquiryChildPlacementScope";
 
 describe("inquiryChildPlacementScope", () => {
+    const hierarchy = [
+        { id: "site-north", label: "North Campus", location_type: "site", parent_location_id: null },
+        { id: "site-bright", label: "BrightStart Learning Center", location_type: "site", parent_location_id: null },
+        { id: "room-infant-a", label: "Infant A", location_type: "unit", parent_location_id: "site-north" },
+        { id: "room-preschool-1", label: "Preschool 1", location_type: "unit", parent_location_id: "site-north" },
+        { id: "room-prek", label: "Pre-K", location_type: "unit", parent_location_id: "site-bright" },
+    ];
+
     it("requires site before program or cohort", () => {
         const r = validateInquiryChildPlacementPatch({
             location_id: null,
-            program_room_cohort_key: "infant",
+            program_room_cohort_key: "room-infant-a",
         });
         expect(r.ok).toBe(false);
         expect(r.issues.some((i) => i.code === "cohort_without_site")).toBe(true);
@@ -18,26 +26,31 @@ describe("inquiryChildPlacementScope", () => {
 
     it("passes when site and cohort are set", () => {
         const r = validateInquiryChildPlacementPatch({
-            location_id: "loc-1",
-            program_room_cohort_key: "infant",
+            location_id: "site-north",
+            program_room_cohort_key: "room-infant-a",
         });
         expect(r.ok).toBe(true);
     });
 
     it("disables program fields until site is selected", () => {
         expect(isInquiryChildPlacementProgramFieldDisabled(null)).toBe(true);
-        expect(isInquiryChildPlacementProgramFieldDisabled("loc-1")).toBe(false);
+        expect(isInquiryChildPlacementProgramFieldDisabled("site-north")).toBe(false);
     });
 
-    it("builds cohort options from program option set", () => {
-        const opts = buildInquiryChildCohortOptionsFromProgramItems([
-            { item_key: "infant", label: "Infant" },
-        ]);
-        expect(opts[0]).toEqual({ cohort_key: "infant", label: "Infant" });
+    it("site options exclude classrooms and include physical sites only", () => {
+        const opts = filterInquiryChildSiteLocationOptions(hierarchy);
+        expect(opts.map((o) => o.label)).toEqual(["BrightStart Learning Center", "North Campus"]);
+        expect(opts.some((o) => o.label === "Infant A")).toBe(false);
     });
 
-    it("suggests cohort from program type", () => {
-        expect(suggestCohortKeyFromProgramType("toddler")).toBe("toddler");
-        expect(suggestCohortKeyFromProgramType("")).toBeNull();
+    it("room options exclude locations and respect selected site", () => {
+        const northRooms = buildInquiryChildRoomOptionsForSite(hierarchy, "site-north");
+        expect(northRooms.map((o) => o.label)).toEqual(["Infant A", "Preschool 1"]);
+        expect(northRooms.some((o) => o.label.includes("Campus"))).toBe(false);
+
+        const brightRooms = buildInquiryChildRoomOptionsForSite(hierarchy, "site-bright");
+        expect(brightRooms.map((o) => o.label)).toEqual(["Pre-K"]);
+
+        expect(buildInquiryChildRoomOptionsForSite(hierarchy, null)).toEqual([]);
     });
 });

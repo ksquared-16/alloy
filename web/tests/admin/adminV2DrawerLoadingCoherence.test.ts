@@ -465,6 +465,14 @@ describe("Drawer single-reveal bootstrap body", () => {
         expect(src).not.toMatch(/opportunityDrawerTabsPending && isOpportunityRecordModalTarget/);
     });
 
+    it("uses center modal presentation for locations on Admin V2 workspace", () => {
+        const src = read("components/admin/AdminEntityDrawer.tsx");
+        expect(src).toContain("isLocationRecordModalTarget");
+        expect(src).toMatch(
+            /useAdminV2RecordModalPresentation[\s\S]*isLocationRecordModalTarget/,
+        );
+    });
+
     it("does not show loading copy for packet status probe", () => {
         const src = read("components/admin/opportunity/OpportunityPacketReviewOverview.tsx");
         expect(src).not.toContain("Loading packet status");

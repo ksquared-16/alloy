@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useMemo, useLayoutEffect, useRef, useState, useEffect, type ReactNode } from "react";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
 import type {
   CrmCompactRowSemanticSlots,
@@ -40,7 +40,14 @@ import {
     placementWaitlistGroupRowMode,
 } from "@/lib/ui-v2/queuePlacementPriorityPresentation";
 import { buildPlacementV2QueueHint } from "@/lib/ui-v2/queuePlacementPriorityV2Presentation";
-import { resolveWaitlistQueueSection } from "@/lib/orchestration/placement/waitlistQueueSectionPresentation";
+import { resolveWaitlistQueueItemSectionKey } from "@/lib/orchestration/placement/waitlistQueueSectionPresentation";
+import {
+  buildWaitlistQueueBlockSectionPlan,
+  logWaitlistSectionLive,
+  sortWaitlistQueueItemsForDisplay,
+  waitlistSectionLiveDiagAttrs,
+  WAITLIST_SECTION_LIVE_DIAG_ENABLED,
+} from "@/lib/orchestration/placement/waitlistQueueBlockSectionPlan";
 
 type Props = {
   queue: QueueVm;
@@ -212,11 +219,7 @@ function DepartmentRollupLane({ queue, onAction, variant }: RollupLaneProps) {
 }
 
 function workUnitSectionKey(item: QueueItemVm): string | undefined {
-  const key = item.groupKey?.trim();
-  if (key) return key;
-  const label = item.groupLabel?.trim();
-  if (!label) return undefined;
-  return resolveWaitlistQueueSection({ legacyProgramGroupLabel: label }).sectionKey;
+  return resolveWaitlistQueueItemSectionKey(item);
 }
 
 function queueQuickActionDispatchId(qa: QueueItemQuickActionVm): string {
@@ -1031,6 +1034,31 @@ function WorkUnitQueueLane({
     [queue.items]
   );
 
+  const waitlistPlacementSections = useMemo(
+    () =>
+      queue.items.some(
+        (i) =>
+          i.placementWaitlistCandidate != null ||
+          (i.placementPriorityV2?.showPlacementV2Badge === true) ||
+          (i.placementPriority != null && !i.placementPriority.evaluateError)
+      ),
+    [queue.items]
+  );
+
+  const waitlistSectionPlan = useMemo(
+    () =>
+      waitlistPlacementSections ? buildWaitlistQueueBlockSectionPlan(queue.items) : null,
+    [queue.items, waitlistPlacementSections]
+  );
+
+  const displayQueueItems = useMemo(
+    () =>
+      waitlistPlacementSections
+        ? sortWaitlistQueueItemsForDisplay(queue.items)
+        : queue.items,
+    [queue.items, waitlistPlacementSections]
+  );
+
   useLayoutEffect(() => {
     if (!queue.rowsRefreshing) {
       const id = requestAnimationFrame(() => setRefreshMinHeightPx(undefined));
@@ -1044,17 +1072,17 @@ function WorkUnitQueueLane({
 
   const groupCounts = useMemo(() => {
     const m = new Map<string, number>();
-    for (const item of queue.items) {
+    for (const item of displayQueueItems) {
       const k = workUnitSectionKey(item);
       if (!k) continue;
       m.set(k, (m.get(k) ?? 0) + 1);
     }
     return m;
-  }, [queue.items]);
+  }, [displayQueueItems]);
 
   const placementCandidateCohortMeta = useMemo(() => {
     const bySection = new Map<string, string[]>();
-    for (const item of queue.items) {
+    for (const item of displayQueueItems) {
       const sk = workUnitSectionKey(item);
       if (!sk || !item.placementWaitlistCandidate) continue;
       const list = bySection.get(sk) ?? [];
@@ -1066,28 +1094,31 @@ function WorkUnitQueueLane({
       ids.forEach((id, i) => meta.set(id, { indexInSection: i, sectionSize: ids.length }));
     }
     return meta;
-  }, [queue.items]);
+  }, [displayQueueItems]);
 
-  let lastSectionKey: string | undefined;
-
-  const showQueueHeader = Boolean(queue.title?.trim());
-  const placementShowBucketChip = queue.placementDisplay?.show_bucket_chip !== false;
-  const placementShowSortHint = queue.placementDisplay?.show_sort_hint !== false;
-  const waitlistPlacementSections = useMemo(
-    () =>
-      queue.items.some(
-        (i) =>
-          i.placementWaitlistCandidate != null ||
-          (i.placementPriorityV2?.showPlacementV2Badge === true) ||
-          (i.placementPriority != null && !i.placementPriority.evaluateError)
-      ),
-    [queue.items]
-  );
+  useEffect(() => {
+    if (!WAITLIST_SECTION_LIVE_DIAG_ENABLED || !waitlistSectionPlan) return;
+    for (const header of waitlistSectionPlan.headers) {
+      logWaitlistSectionLive({
+        sectionKey: header.sectionKey,
+        label: header.label,
+        rowIds: header.rowIds,
+        rawGroupKeys: header.rawGroupKeys,
+        canonicalKeys: header.canonicalKeys,
+      });
+    }
+    if (waitlistSectionPlan.unsortedDuplicateSectionKeys.length > 0) {
+      console.warn(
+        "[waitlist-section-live] unsorted-duplicate-section-keys",
+        waitlistSectionPlan.unsortedDuplicateSectionKeys
+      );
+    }
+  }, [waitlistSectionPlan]);
 
   useLayoutEffect(() => {
     if (!hasV2PlacementRows || v2PlacementCollapseInitRef.current) return;
     const keys = new Set<string>();
-    for (const item of queue.items) {
+    for (const item of displayQueueItems) {
       const k = workUnitSectionKey(item);
       if (k) keys.add(k);
     }
@@ -1095,10 +1126,10 @@ function WorkUnitQueueLane({
       setCollapsedPlacementGroups(keys);
       v2PlacementCollapseInitRef.current = true;
     }
-  }, [hasV2PlacementRows, queue.items]);
+  }, [hasV2PlacementRows, displayQueueItems]);
 
   const placementLaneHint = useMemo(() => {
-    const v2Shadow = queue.items.some((i) => i.placementPriorityV2?.shadowMode === true);
+    const v2Shadow = displayQueueItems.some((i) => i.placementPriorityV2?.shadowMode === true);
     if (hasV2PlacementRows) {
       return buildPlacementV2QueueHint({
         shadowMode: v2Shadow,
@@ -1107,7 +1138,13 @@ function WorkUnitQueueLane({
       });
     }
     return queue.placementProjectionHint;
-  }, [hasV2PlacementRows, hasCandidatePlacementRows, queue.items, queue.placementProjectionHint]);
+  }, [hasV2PlacementRows, hasCandidatePlacementRows, displayQueueItems, queue.placementProjectionHint]);
+
+  let lastSectionKey: string | undefined;
+
+  const showQueueHeader = Boolean(queue.title?.trim());
+  const placementShowBucketChip = queue.placementDisplay?.show_bucket_chip !== false;
+  const placementShowSortHint = queue.placementDisplay?.show_sort_hint !== false;
   return (
     <section
       className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--primary adminv2-ws-wu-queue-shell"
@@ -1175,10 +1212,20 @@ function WorkUnitQueueLane({
             </div>
           </li>
         ) : null}
-        {queue.items.map((item) => {
+        {displayQueueItems.map((item) => {
           const sectionKey = workUnitSectionKey(item);
           const showGroup = sectionKey && sectionKey !== lastSectionKey;
           if (sectionKey) lastSectionKey = sectionKey;
+
+          const sectionDiagHeader =
+            showGroup && sectionKey && waitlistSectionPlan
+              ? waitlistSectionPlan.headers.find(
+                  (h) => h.sectionKey === sectionKey && h.rowIds[0] === item.id
+                )
+              : undefined;
+          const sectionDiagAttrs = sectionDiagHeader
+            ? waitlistSectionLiveDiagAttrs(sectionDiagHeader)
+            : {};
 
           const tier = item.urgencyTier ?? "standard";
           const attentionAccent = Boolean(item.needsOperationalAttention);
@@ -1231,6 +1278,7 @@ function WorkUnitQueueLane({
                     type="button"
                     className={`${labelSectionClasses} adminv2-ws-wu-queue-section-label--waitlist-toggle`}
                     aria-expanded={placementSectionExpanded}
+                    {...sectionDiagAttrs}
                     onClick={(e) => {
                       e.preventDefault();
                       if (!sectionKey) return;
@@ -1248,7 +1296,7 @@ function WorkUnitQueueLane({
                     </span>
                   </button>
                 ) : (
-                  <div className={labelSectionClasses} role="presentation">
+                  <div className={labelSectionClasses} role="presentation" {...sectionDiagAttrs}>
                     {sectionTitle}
                   </div>
                 )

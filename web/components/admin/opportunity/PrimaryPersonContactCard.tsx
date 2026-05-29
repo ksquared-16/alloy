@@ -12,17 +12,19 @@ import EditablePersonContactCard from "@/components/admin/opportunity/EditablePe
 
 type Props = {
     record: Record<string, unknown>;
+    opportunityId: string;
     canMutate: boolean;
     fieldDefinitions?: FieldDefForLinkedEdit[];
     cardPad: string;
     variant: "default" | "summary";
-    openDrawer: (opts: { type: AdminDrawerEntityType; id: string }) => void;
+    openDrawer?: (opts: { type: AdminDrawerEntityType; id: string }) => void;
     onPersonUpdated?: (person: Record<string, unknown>) => void;
 };
 
 /** Primary person on opportunity inquiry summary — thin wrapper over {@link EditablePersonContactCard}. */
 export default function PrimaryPersonContactCard({
     record,
+    opportunityId,
     canMutate,
     fieldDefinitions = [],
     cardPad,
@@ -40,6 +42,7 @@ export default function PrimaryPersonContactCard({
     return (
         <EditablePersonContactCard
             personId={personId}
+            opportunityId={opportunityId}
             initialValues={initialValues}
             gates={gates}
             canMutate={canMutate}

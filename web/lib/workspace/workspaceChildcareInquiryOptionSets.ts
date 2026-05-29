@@ -4,7 +4,7 @@ import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 /** Canonical URLs — all callers must use these strings so TTL + inflight dedupe share one cache key. */
 export const WORKSPACE_OPTION_SET_CHILDCARE_PROGRAM_URL = "/api/admin/option-sets/childcare_program_type";
 export const WORKSPACE_OPTION_SET_CHILDCARE_SCHEDULE_URL = "/api/admin/option-sets/childcare_schedule_type";
-export const WORKSPACE_INQUIRY_CHILD_LOCATIONS_URL = "/api/admin/locations";
+export const WORKSPACE_INQUIRY_CHILD_LOCATIONS_URL = "/api/admin/locations?hierarchy=1";
 
 const OPTION_SET_TTL_MS = 1500;
 

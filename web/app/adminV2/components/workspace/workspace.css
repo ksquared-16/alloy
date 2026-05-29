@@ -9430,6 +9430,12 @@
       color-mix(in srgb, var(--vc-drawer-body-veil, #f6f8fc) 92%, rgba(39, 63, 82, 0.04)) 100%) !important;
 }
 
+/* Record drawer scroll clears the fixed Talk to BOS command bar. */
+[data-adminv2-record-modal="true"] [data-adminv2-record-modal-scroll] {
+  scroll-padding-bottom: var(--ws-shell-bottom-safe, 120px);
+  padding-bottom: max(7rem, var(--ws-shell-bottom-safe, 120px));
+}
+
 [data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2-top]>p:first-of-type {
   color: color-mix(in srgb, rgba(39, 63, 82, 0.58) 72%, var(--vc-label-accent, rgba(39, 63, 82, 0.2)) 28%) !important;
   letter-spacing: 0.13em !important;

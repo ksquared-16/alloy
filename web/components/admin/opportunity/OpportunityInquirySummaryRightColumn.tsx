@@ -39,7 +39,7 @@ function TaskRowSkeleton() {
 function ReviewAssistSkeleton() {
     return (
         <div
-            className="min-h-[5.5rem] rounded-md border border-alloy-stone/12 bg-alloy-stone/[0.06] skeleton-pulse"
+            className="min-h-[3.25rem] rounded-md border border-alloy-stone/12 bg-alloy-stone/[0.06] skeleton-pulse"
             data-review-assist-skeleton="true"
             aria-hidden
         />
@@ -69,7 +69,7 @@ function InquirySummaryReviewAssist({
 
     return (
         <div
-            className="min-w-0 min-h-[5.5rem] shrink-0"
+            className="min-w-0 min-h-[3.25rem] shrink-0"
             data-drawer-slot="inquiry_summary_review_assist"
             data-review-assist-slot={hasAssist ? "ready" : assistLoading ? "skeleton" : "reserved"}
         >
@@ -85,7 +85,7 @@ function InquirySummaryReviewAssist({
                 />
             ) : (
                 <div
-                    className="min-h-[3rem] rounded-md border border-alloy-stone/12 bg-alloy-stone/[0.03]"
+                    className="min-h-[2rem] rounded-md border border-alloy-stone/12 bg-alloy-stone/[0.03]"
                     data-review-assist-placeholder="reserved"
                     aria-hidden
                 />

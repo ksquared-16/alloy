@@ -9,6 +9,7 @@ import { formatPhoneUS } from "@/lib/adminFormatters";
 import { normalizePhone } from "@/lib/contactNormalize";
 import { DrawerRelationshipPanelSkeleton } from "@/components/admin/workspace/DrawerRelationshipPanelSkeleton";
 import type { FieldDefForLinkedEdit } from "@/lib/admin/drawer/linkedRecordFieldEditing";
+import { primaryPersonIdFromOpportunityRecord } from "@/lib/admin/drawer/linkedRecordFieldEditing";
 import EditablePersonContactCard from "@/components/admin/opportunity/EditablePersonContactCard";
 import PrimaryPersonContactCard from "@/components/admin/opportunity/PrimaryPersonContactCard";
 import {
@@ -205,7 +206,7 @@ export function FamilyContactsPanel(props: {
         });
     }, [opportunityId, sectionKey, variant, timingEnabled]);
 
-    const primaryPersonId = record.primary_person_id != null ? String(record.primary_person_id).trim() : "";
+    const primaryPersonId = primaryPersonIdFromOpportunityRecord(record as Record<string, unknown>) ?? "";
 
     const rows = useMemo(() => {
         const raw = (record._opportunity_persons as unknown[]) ?? [];
@@ -251,6 +252,7 @@ export function FamilyContactsPanel(props: {
                 {primaryPersonId ? (
                     <PrimaryPersonContactCard
                         record={record}
+                        opportunityId={opportunityId}
                         canMutate={canMutate}
                         fieldDefinitions={fieldDefinitions}
                         cardPad={cardPad}
@@ -319,9 +321,7 @@ export function FamilyContactsPanel(props: {
                             ))}
                         </ul>
                     ) : (
-                        <p className={`${variant === "summary" ? "mt-1.5" : "mt-2"} ${oppInqMutedEmpty}`}>
-                            No additional contacts linked yet.
-                        </p>
+                        null
                     )
                 ) : (
                     <>
@@ -343,6 +343,7 @@ export function FamilyContactsPanel(props: {
                                 <li key={r.id}>
                                     <EditablePersonContactCard
                                         personId={personId || null}
+                                        opportunityId={opportunityId}
                                         initialValues={initialValues}
                                         gates={gates}
                                         canMutate={canMutate}

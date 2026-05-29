@@ -147,7 +147,12 @@ export default function Drawer({
               zIndex: zIndexPanel,
               backgroundColor: neutral.surface,
               color: neutral.textPrimary,
-              borderColor: derived.border,
+              borderTopColor: derived.border,
+              borderRightColor: derived.border,
+              borderBottomColor: derived.border,
+              borderLeftColor: cleaningRecordModalTone && recordModalContextStyle
+                  ? "var(--vc-record-rim)"
+                  : derived.border,
               boxShadow: cleaningRecordModalTone
                   ? "0 12px 40px rgba(39, 63, 82, 0.1), 0 2px 8px rgba(39, 63, 82, 0.04)"
                   : derived.cardShadow,
@@ -155,7 +160,6 @@ export default function Drawer({
                   ? {
                         borderLeftWidth: 3,
                         borderLeftStyle: "solid",
-                        borderLeftColor: "var(--vc-record-rim)",
                     }
                   : {}),
           }
@@ -165,10 +169,12 @@ export default function Drawer({
                   ? {
                         backgroundColor: neutral.surface,
                         color: neutral.textPrimary,
-                        borderColor: derived.border,
+                        borderTopColor: derived.border,
+                        borderRightColor: derived.border,
+                        borderBottomColor: derived.border,
+                        borderLeftColor: leftAccent ?? palette.midnightForge,
                         borderLeftWidth: 4,
                         borderLeftStyle: "solid",
-                        borderLeftColor: leftAccent ?? palette.midnightForge,
                     }
                   : accentColor
                     ? { borderLeftWidth: 4, borderLeftStyle: "solid", borderLeftColor: accentColor }

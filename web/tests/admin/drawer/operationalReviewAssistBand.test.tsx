@@ -83,14 +83,14 @@ describe("OperationalReviewAssistBand / Card 2.1", () => {
         );
 
         expect(html).toContain("Review assist");
-        expect(html).toContain("Why now");
-        expect(html).toContain("Do next");
         expect(html).toContain("Send a warm first response");
         expect(html).not.toContain('data-review-assist-row="likely_outcome"');
         expect(html).toContain('data-review-assist-compact="true"');
+        expect(html).toContain('data-review-assist-compact-body="true"');
         expect(html).toContain('data-review-assist-row="operational_read"');
-        expect(html).toContain('data-review-assist-row="why_now"');
         expect(html).toContain('data-review-assist-row="do_next"');
+        expect(html).toContain('data-testid="review-assist-compact-expand"');
+        expect(html).not.toMatch(/<p[^>]*data-review-assist-row="why_now"[^>]*>[^<]{80,}/);
         expect(html).not.toContain('data-testid="review-assist-urgency-chip"');
         expect(html).not.toContain("Needs attention:");
         expect(html).not.toContain("Alloy suggestion");
@@ -153,6 +153,7 @@ describe("OperationalReviewAssistBand / Card 2.1", () => {
         expect(html).toContain("Approximate timing");
         expect(html).toContain("Based on available activity");
         expect(html).toContain("Supporting detail available");
+        expect(html).toContain('data-testid="review-assist-compact-expand"');
         expect(html).not.toContain("Record changed");
         expect(html).not.toMatch(/AI confidence|model believes|critical warning/i);
     });
@@ -438,6 +439,7 @@ describe("OperationalAttentionHeaderStrip Card 2.1 integration", () => {
             />,
         );
         expect(html).toContain("Draft · not sent");
-        expect(html).toContain('data-drawer-slot="enhance_draft_action"');
+        expect(html).not.toContain('data-drawer-slot="enhance_draft_action"');
+        expect(html).toContain('data-testid="review-assist-compact-expand"');
     });
 });

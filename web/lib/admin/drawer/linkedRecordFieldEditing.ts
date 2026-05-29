@@ -39,7 +39,12 @@ function trimId(v: unknown): string | null {
 }
 
 export function primaryPersonIdFromOpportunityRecord(record: Record<string, unknown>): string | null {
-    return trimId(record._primary_person_id ?? record.primary_person_id);
+    const identity = record._identity as { primary_person?: { id?: unknown } } | null | undefined;
+    return trimId(
+        record._primary_person_id ??
+            record.primary_person_id ??
+            identity?.primary_person?.id
+    );
 }
 
 /** Project person scalars onto opportunity GET for drawer display (not persisted on opportunity). */

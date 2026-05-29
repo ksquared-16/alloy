@@ -1,6 +1,6 @@
 /**
- * Inquiry child placement scope — site + waitlist cohort (Card 2).
- * No site→program catalog yet; cohort options use childcare program option-set keys.
+ * Inquiry child placement scope — site (physical) + room/classroom (site-scoped unit).
+ * Program/category remains org-level via childcare program option set.
  */
 
 import { validateChildPlacementScope } from "@/lib/orchestration/placement/validateChildPlacementScope";
@@ -15,9 +15,49 @@ export type InquiryChildCohortOption = {
     label: string;
 };
 
-export const INQUIRY_CHILD_PLACEMENT_SCOPE_LIMITATION =
-    "Program/category is org-level; classrooms are site-level. Select a child site before program or cohort. Site-scoped rates and classroom catalogs are deferred.";
+export type InquiryChildLocationHierarchyRow = {
+    id: string;
+    label?: string | null;
+    location_type?: string | null;
+    parent_location_id?: string | null;
+};
 
+export const INQUIRY_CHILD_PLACEMENT_SCOPE_LIMITATION =
+    "Program/category is org-level; classrooms are site-level. Select a child site before program or room/cohort.";
+
+/** Physical campuses/centers only — same filter as workspace header site filter. */
+export function filterInquiryChildSiteLocationOptions(
+    locations: InquiryChildLocationHierarchyRow[]
+): InquiryChildLocationOption[] {
+    return locations
+        .filter((loc) => String(loc.location_type ?? "").trim() === "site")
+        .map((loc) => ({
+            id: String(loc.id),
+            label: (loc.label ?? loc.id).trim() || String(loc.id),
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/** Classrooms/rooms under the selected physical site (`location_type = unit`). */
+export function buildInquiryChildRoomOptionsForSite(
+    locations: InquiryChildLocationHierarchyRow[],
+    siteId: string | null | undefined
+): InquiryChildCohortOption[] {
+    const site = (siteId ?? "").trim();
+    if (!site) return [];
+    return locations
+        .filter((loc) => {
+            if (String(loc.location_type ?? "").trim() !== "unit") return false;
+            return String(loc.parent_location_id ?? "").trim() === site;
+        })
+        .map((loc) => ({
+            cohort_key: String(loc.id),
+            label: (loc.label ?? loc.id).trim() || String(loc.id),
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/** @deprecated Use {@link buildInquiryChildRoomOptionsForSite} — program items are org-level, not rooms. */
 export function buildInquiryChildCohortOptionsFromProgramItems(
     programItems: Array<{ item_key: string; label: string | null }>
 ): InquiryChildCohortOption[] {
@@ -89,7 +129,6 @@ export function validateInquiryChildPlacementPatch(input: {
 }
 
 /** Suggest cohort key when operator picks program and cohort is empty. */
-export function suggestCohortKeyFromProgramType(programType: string | null | undefined): string | null {
-    const k = (programType ?? "").trim();
-    return k || null;
+export function suggestCohortKeyFromProgramType(_programType: string | null | undefined): string | null {
+    return null;
 }

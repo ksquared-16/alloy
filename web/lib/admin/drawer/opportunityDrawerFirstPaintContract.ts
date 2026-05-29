@@ -126,7 +126,11 @@ export function filterOpportunityOverviewSectionsForFirstPaint(
     enrichmentHeldUntilInteraction?: boolean
 ): EntityDrawerSectionConfig[] {
     if (enrichmentHeldUntilInteraction) {
-        return sections.map((s) => ({ ...s, defaultExpanded: false, collapsible: true }));
+        return sections.map((s) =>
+            s.key === "inquiry_children"
+                ? { ...s, defaultExpanded: true, collapsible: true }
+                : { ...s, defaultExpanded: false, collapsible: true }
+        );
     }
     if (!firstPaintActive) return sections;
     if (!enrichmentLayoutReady) {

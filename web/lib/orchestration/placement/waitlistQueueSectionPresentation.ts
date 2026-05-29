@@ -46,6 +46,65 @@ export function resolveWaitlistQueueSection(params: {
     };
 }
 
+export type WaitlistQueueItemSectionInput = {
+    groupKey?: string | null;
+    groupLabel?: string | null;
+    placementWaitlistCandidate?: { cohortKey: string; cohortLabel: string } | null;
+    placementPriorityV2?: {
+        primaryCohortLabel?: string | null;
+        primaryCohortSectionTitle?: string | null;
+        showPlacementV2Badge?: boolean;
+    } | null;
+    placementPriority?: { programGroupSectionTitle?: string } | null;
+};
+
+/** Canonical org-level section key + operator title for one waitlist queue row. */
+export function resolveWaitlistQueueItemSection(
+    item: WaitlistQueueItemSectionInput
+): { sectionKey: string; sectionTitle: string } | null {
+    if (item.placementWaitlistCandidate) {
+        const s = resolveWaitlistQueueSection({
+            cohortKey: item.placementWaitlistCandidate.cohortKey,
+            cohortLabel: item.placementWaitlistCandidate.cohortLabel,
+        });
+        return { sectionKey: s.sectionKey, sectionTitle: s.sectionTitle };
+    }
+    if (item.placementPriorityV2?.showPlacementV2Badge) {
+        const s = resolveWaitlistQueueSection({
+            cohortLabel: item.placementPriorityV2.primaryCohortLabel,
+            legacyProgramGroupLabel: item.placementPriorityV2.primaryCohortSectionTitle,
+        });
+        return { sectionKey: s.sectionKey, sectionTitle: s.sectionTitle };
+    }
+    if (item.placementPriority?.programGroupSectionTitle) {
+        const s = resolveWaitlistQueueSection({
+            legacyProgramGroupLabel: item.placementPriority.programGroupSectionTitle,
+        });
+        return { sectionKey: s.sectionKey, sectionTitle: s.sectionTitle };
+    }
+    if (item.groupKey?.trim() || item.groupLabel?.trim()) {
+        const s = resolveWaitlistQueueSection({
+            cohortKey: item.groupKey,
+            cohortLabel: item.groupLabel,
+            legacyProgramGroupLabel: item.groupLabel,
+        });
+        return { sectionKey: s.sectionKey, sectionTitle: s.sectionTitle };
+    }
+    return null;
+}
+
+export function resolveWaitlistQueueItemSectionKey(item: WaitlistQueueItemSectionInput): string | undefined {
+    return resolveWaitlistQueueItemSection(item)?.sectionKey;
+}
+
+export function waitlistQueueItemGrouping(
+    item: WaitlistQueueItemSectionInput
+): { groupKey: string; groupLabel: string } | Record<string, never> {
+    const section = resolveWaitlistQueueItemSection(item);
+    if (!section) return {};
+    return { groupKey: section.sectionKey, groupLabel: section.sectionTitle };
+}
+
 export function buildWaitlistQueueGroupHeadersFromSections(
     sections: ReadonlyArray<{ sectionKey: string; sectionTitle: string }>
 ): Record<string, { label: string }> {
