@@ -51,6 +51,11 @@ import {
     shouldRefetchWorkUnitQueueRowsForEvent,
     logWorkUnitQueueRefreshDecision,
 } from "@/lib/admin/opportunityQueueRefreshEvent";
+import { logQueueSwitch } from "@/lib/perf/queueSwitchPerf";
+import {
+    queueRowsBufferMatchesActiveLane,
+    shouldApplyWorkUnitQueueRowsResponse,
+} from "@/lib/workspace/workUnitQueueRowFetchApply";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
@@ -609,6 +614,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const pendingQueueTabPerfRef = useRef(false);
     /** Last settled preview rows — keeps list visible while `queueItems` is briefly null during lane changes. */
     const queueRowsBufferRef = useRef<QueuePreviewItemVm[]>([]);
+    /** Queue key that owns `queueRowsBufferRef` — never show buffer for a different lane. */
+    const queueRowsBufferQueueKeyRef = useRef<string | null>(null);
     /** Latest rendered queue row VMs — used to seed opportunity drawer header on open. */
     const queueDisplayItemsRef = useRef<QueuePreviewItemVm[]>([]);
     const queueRowClientCacheRef = useRef(new Map<string, QueueRowClientCacheBucket<QueueItemsResult>>());
@@ -850,6 +857,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         queueRowLeaseSigsRef.current.clear();
         queueRowClientCacheRef.current.clear();
         queueRowsBufferRef.current = [];
+        queueRowsBufferQueueKeyRef.current = null;
         queueRowsBufferWorkUnitIdRef.current = null;
         wuBootstrapAttentionRef.current = null;
         setWuBootstrapAttentionBuckets(null);
@@ -1160,6 +1168,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 logicalUnmapped?: boolean;
                 /** When set on Needs attention fetches, avoids a one-frame stale read of `attention_bucket` from URL. */
                 attentionBucketOverride?: string | null;
+                /** User pill click — bypass in-flight lease and always fetch/apply for target lane. */
+                userInitiated?: boolean;
+                fromQueueKey?: string | null;
             }
         ) => {
             const summariesForLimit = _summaries ?? queueSummariesRef.current;
@@ -1307,13 +1318,33 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     return;
                 }
                 if (options?.quietStaleRefresh) {
-                    if (seq === queueItemsRequestSeq.current && stillSelected) {
+                    const decision = shouldApplyWorkUnitQueueRowsResponse({
+                        requestSeq: seq,
+                        latestRequestSeq: queueItemsRequestSeq.current,
+                        stillSelected,
+                    });
+                    if (decision.apply) {
                         putQueueRowCache(cache, viewScopeFingerprint, workUnitId, apiQueueKey, payload, abSnap);
                         setQueueItems(payload);
                     }
+                    if (options?.userInitiated) {
+                        logQueueSwitch({
+                            from_queue: options.fromQueueKey ?? null,
+                            to_queue: queueKey,
+                            request_id: seq,
+                            applied: decision.apply,
+                            skipped_reason: decision.skippedReason,
+                            selected_queue_after: selectedQueueKeyRef.current,
+                        });
+                    }
                     return;
                 }
-                if (seq === queueItemsRequestSeq.current) {
+                const decision = shouldApplyWorkUnitQueueRowsResponse({
+                    requestSeq: seq,
+                    latestRequestSeq: queueItemsRequestSeq.current,
+                    stillSelected,
+                });
+                if (decision.apply) {
                     putQueueRowCache(cache, viewScopeFingerprint, workUnitId, apiQueueKey, payload, abSnap);
                     setQueueItems(payload);
                     if (pendingQueueTabPerfRef.current && typeof window !== "undefined" && typeof performance !== "undefined") {
@@ -1340,6 +1371,17 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         });
                     }
                     markFirstUsefulPaintOnce();
+                }
+                if (options?.userInitiated) {
+                    logQueueSwitch({
+                        from_queue: options.fromQueueKey ?? null,
+                        to_queue: queueKey,
+                        request_id: seq,
+                        applied: decision.apply,
+                        skipped_reason: decision.skippedReason,
+                        buffered_rows_used: false,
+                        selected_queue_after: selectedQueueKeyRef.current,
+                    });
                 }
             };
 
@@ -1380,7 +1422,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 return;
             }
 
-            if (options?.force) {
+            if (options?.userInitiated) {
+                lease.delete(fetchSig);
+            } else if (options?.force) {
                 lease.delete(fetchSig);
             } else if (lease.has(fetchSig)) {
                 return;
@@ -1544,6 +1588,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
             }
             if (!sameQueue) {
                 queueRowsBufferWorkUnitIdRef.current = workUnitId;
+                queueRowsBufferRef.current = [];
+                queueRowsBufferQueueKeyRef.current = null;
                 const clearedFilters = clearLaneScopedWorkUnitRecordFilters(recordFiltersRef.current);
                 setRecordFilters(clearedFilters);
                 replaceWorkUnitQueueRecordFiltersInLocation(clearedFilters);
@@ -1586,6 +1632,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 suppressQueueFetchEffectOnceRef.current = true;
                 void fetchQueueItems(workUnitId, nextKey, null, {
                     force: false,
+                    userInitiated: true,
+                    fromQueueKey: prevKey,
                     logicalUnmapped: unmappedActive,
                     ...(resolvedPill.attentionBucketOverride !== undefined
                         ? { attentionBucketOverride: resolvedPill.attentionBucketOverride }
@@ -1602,8 +1650,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
         (bucketKey: string | null) => {
             if (!workUnitId) return;
             const next = (bucketKey ?? "").trim();
+            const prevKey = selectedQueueKeyRef.current;
             userLaneTouchedRef.current = true;
             skipNextQueueFetchEffectRef.current = true;
+            queueRowsBufferRef.current = [];
+            queueRowsBufferQueueKeyRef.current = null;
             const pillKey = next
                 ? `${ATTENTION_BUCKET_PILL_PREFIX}${next}`
                 : "needs_attention";
@@ -1620,6 +1671,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 workUnitId,
             });
             void fetchQueueItems(workUnitId, "needs_attention", null, {
+                userInitiated: true,
+                fromQueueKey: prevKey,
                 attentionBucketOverride: next,
             });
         },
@@ -3044,9 +3097,22 @@ export default function AdminV2OpportunityWorkUnitPage() {
         ) {
             queueRowsBufferRef.current = liveVmItems.slice();
             queueRowsBufferWorkUnitIdRef.current = workUnitId;
+            queueRowsBufferQueueKeyRef.current = activeQueueKey;
         }
 
-        const hasBufferedRows = queueRowsBufferRef.current.length > 0;
+        const bufferMatchesLane =
+            queueRowsBufferWorkUnitIdRef.current === workUnitId &&
+            queueRowsBufferMatchesActiveLane(
+                queueRowsBufferQueueKeyRef.current,
+                activeQueueKey,
+                (a, b) =>
+                    workUnitQueuePillKeysEquivalent(
+                        workUnit ? { queue_definition: workUnit.queue_definition } : null,
+                        a,
+                        b
+                    )
+            );
+        const hasBufferedRows = bufferMatchesLane && queueRowsBufferRef.current.length > 0;
         const queueLaneMismatch =
             queueItemsKey !== "" &&
             activeQueueKey !== "" &&

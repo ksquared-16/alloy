@@ -2,6 +2,7 @@ import { opportunityDrawerPrimaryContractReady } from "@/lib/admin/drawer/opport
 import { putDrawerEntitySnapshot } from "@/lib/admin/drawerEntitySnapshotCache";
 import { appendOpportunityDrawerOpenerHintsToUrl } from "@/lib/admin/opportunityDrawerOpenerHints";
 import type { OpportunityWorkspaceContext } from "@/contexts/AdminDrawerContext";
+import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
@@ -16,10 +17,11 @@ const drawerPrimaryByOpportunityId = new Map<string, DrawerPrimaryCacheEntry>();
 
 export function buildOpportunityDrawerPrimaryUrl(
     opportunityId: string,
-    workspaceContext?: OpportunityWorkspaceContext | null
+    workspaceContext?: OpportunityWorkspaceContext | null,
+    queuePreviewSeed?: OpportunityDrawerQueuePreviewSeed | null
 ): string {
     const base = `/api/admin/entity/opportunities/${encodeURIComponent(opportunityId.trim())}?surface=drawer_primary`;
-    return appendOpportunityDrawerOpenerHintsToUrl(base, workspaceContext ?? null);
+    return appendOpportunityDrawerOpenerHintsToUrl(base, workspaceContext ?? null, queuePreviewSeed ?? null);
 }
 
 function drawerPrimaryCacheKey(opportunityId: string): string {
@@ -35,9 +37,10 @@ export function isOpportunityDrawerPrimaryWarm(opportunityId: string): boolean {
 export function prefetchOpportunityDrawerPrimary(
     opportunityId: string,
     init?: RequestInit,
-    workspaceContext?: OpportunityWorkspaceContext | null
+    workspaceContext?: OpportunityWorkspaceContext | null,
+    queuePreviewSeed?: OpportunityDrawerQueuePreviewSeed | null
 ): void {
-    void fetchOpportunityDrawerPrimaryEntity(opportunityId, init, workspaceContext).catch(() => {
+    void fetchOpportunityDrawerPrimaryEntity(opportunityId, init, workspaceContext, queuePreviewSeed).catch(() => {
         /* non-fatal */
     });
 }
@@ -45,7 +48,8 @@ export function prefetchOpportunityDrawerPrimary(
 export async function fetchOpportunityDrawerPrimaryEntity(
     opportunityId: string,
     init?: RequestInit,
-    workspaceContext?: OpportunityWorkspaceContext | null
+    workspaceContext?: OpportunityWorkspaceContext | null,
+    queuePreviewSeed?: OpportunityDrawerQueuePreviewSeed | null
 ): Promise<Record<string, unknown>> {
     const cacheKey = drawerPrimaryCacheKey(opportunityId);
     if (!cacheKey) {
@@ -57,7 +61,7 @@ export async function fetchOpportunityDrawerPrimaryEntity(
         return cached.promise;
     }
 
-    const url = buildOpportunityDrawerPrimaryUrl(cacheKey, workspaceContext ?? null);
+    const url = buildOpportunityDrawerPrimaryUrl(cacheKey, workspaceContext ?? null, queuePreviewSeed ?? null);
     const promise = dedupeAdminFetch(url, init ?? workspaceDataFetchInit())
         .then(async (res) => {
             if (!res.ok) {

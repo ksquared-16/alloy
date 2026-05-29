@@ -16,6 +16,7 @@ import {
     type PersonContactCardValues,
 } from "@/lib/admin/drawer/primaryPersonCardEdit";
 import { openViewPersonFromOpportunity, prefetchViewPersonOnHover, prefetchViewPersonOnPointerDown } from "@/lib/admin/drawer/openViewPersonFromOpportunity";
+import { personDrawerOpenSeedFromContactValues } from "@/lib/admin/drawer/personDrawerOpenSeed";
 import {
     logViewPersonClickLive,
     viewPersonLiveDiagAttrs,
@@ -112,6 +113,7 @@ export default function EditablePersonContactCard({
                 openDrawer,
                 personId: pid,
                 opportunityId: oppId,
+                openSeed: personDrawerOpenSeedFromContactValues(pid, initialValues),
             });
 
             if (opened) {
@@ -127,7 +129,7 @@ export default function EditablePersonContactCard({
                 });
             }
         },
-        [drawer.id, drawer.type, openDrawer, oppId, pid, stack.length]
+        [drawer.id, drawer.type, openDrawer, oppId, pid, stack.length, initialValues]
     );
 
     const viewPersonDiagAttrs = pid

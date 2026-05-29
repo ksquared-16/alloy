@@ -37,11 +37,28 @@ describe("opportunityDrawerOpenerHints", () => {
         expect(readOpportunityDrawerOpenerHints(search)).toEqual({
             departmentId: "dept-2",
             workUnitId: "wu-2",
+            customerName: null,
+            primaryPersonName: null,
+            primaryPersonEmail: null,
+            primaryPersonPhone: null,
         });
         expect(readOpportunityDrawerOpenerHints(new URLSearchParams())).toEqual({
             departmentId: null,
             workUnitId: null,
+            customerName: null,
+            primaryPersonName: null,
+            primaryPersonEmail: null,
+            primaryPersonPhone: null,
         });
+    });
+
+    it("carries queue preview seed as display hints", () => {
+        const params = buildOpportunityDrawerOpenerHintParams(
+            { work_unit_id: "wu-1", department_id: "dept-1" },
+            { title: "Parent Name", subtitle: "Household Name" }
+        );
+        expect(params.get("hint_primary_person_name")).toBe("Parent Name");
+        expect(params.get("hint_customer_name")).toBe("Household Name");
     });
 
     it("buildOpportunityDrawerPrimaryUrl carries hints when workspace context is provided", () => {

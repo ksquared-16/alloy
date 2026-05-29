@@ -1,16 +1,17 @@
-import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
+import type { OpenDrawerParams } from "@/contexts/AdminDrawerContext";
+import { putDrawerEntitySnapshot } from "@/lib/admin/drawerEntitySnapshotCache";
 import { logPersonDrawerOpen } from "@/lib/admin/drawer/personDrawerPerfLogs";
+import {
+    applyPersonDrawerOpenSeed,
+    buildPersonDrawerSeedRecord,
+    type PersonDrawerOpenSeed,
+} from "@/lib/admin/drawer/personDrawerOpenSeed";
 import {
     isPersonDrawerSnapshotWarm,
     prefetchPersonDrawerSnapshot,
 } from "@/lib/admin/prefetchPersonDrawerSnapshot";
 
-export type OpenDrawerFromOpportunityFn = (params: {
-    type: AdminDrawerEntityType;
-    id: string;
-    source?: string;
-    parent?: { type: AdminDrawerEntityType; id: string };
-}) => void;
+export type OpenDrawerFromOpportunityFn = (params: OpenDrawerParams) => void;
 
 /** Direct View Person open from opportunity host — cache-first when snapshot is warm. */
 export function openViewPersonFromOpportunity(args: {
@@ -18,6 +19,7 @@ export function openViewPersonFromOpportunity(args: {
     personId: string;
     opportunityId: string;
     source?: string;
+    openSeed?: PersonDrawerOpenSeed | null;
 }): boolean {
     const personId = args.personId.trim();
     const opportunityId = args.opportunityId.trim();
@@ -27,11 +29,19 @@ export function openViewPersonFromOpportunity(args: {
     const openStartedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     const openSource = args.source ?? "opportunity_primary_contact";
 
+    if (!cacheHit && args.openSeed) {
+        const seedRecord = applyPersonDrawerOpenSeed(personId, args.openSeed);
+        if (seedRecord) {
+            putDrawerEntitySnapshot("persons", personId, seedRecord);
+        }
+    }
+
     args.openDrawer({
         type: "persons",
         id: personId,
         source: openSource,
         parent: opportunityId ? { type: "opportunities", id: opportunityId } : undefined,
+        personDrawerOpenSeed: args.openSeed ?? null,
     });
 
     const timeToVisibleMs = Math.round(

@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
+import type { PersonDrawerOpenSeed } from "@/lib/admin/drawer/personDrawerOpenSeed";
 import type { OpportunityDrawerOpenPreload } from "@/lib/admin/opportunityDrawerOpenCoordinator";
 import {
     loadOpportunityDrawerComposedOpen,
@@ -95,6 +96,8 @@ interface AdminDrawerState {
     opportunityQueueNavigator?: OpportunityDrawerQueueNavigator | null;
     /** Dev/diagnostic — how this drawer was opened (e.g. opportunity_primary_contact). */
     openSource?: string | null;
+    /** Display-only person labels from opportunity contact card — first paint before GET. */
+    personDrawerOpenSeed?: PersonDrawerOpenSeed | null;
 }
 
 export type OpenDrawerParams = {
@@ -115,6 +118,8 @@ export type OpenDrawerParams = {
     source?: string;
     /** Parent record for stack back navigation when opening a linked drawer. */
     parent?: { type: AdminDrawerEntityType; id: string };
+    /** Display-only person labels from opportunity host — first paint before GET. */
+    personDrawerOpenSeed?: PersonDrawerOpenSeed | null;
 };
 
 /** Params held while bootstrap + drawer_primary load outside the modal. */
@@ -440,7 +445,8 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                     defaultSchedulePrefill: params.defaultSchedulePrefill,
                     defaultJobPrefill: params.defaultJobPrefill,
                     jobRecordSurface: params.type === "jobs" ? params.jobRecordSurface : undefined,
-                    operationalVisualContext: params.operationalVisualContext,
+                    operationalVisualContext:
+                        params.operationalVisualContext ?? prev.operationalVisualContext,
                     defaultOpportunitySurface: params.defaultOpportunitySurface,
                     opportunityWorkspaceContext:
                         params.type === "opportunities" ? params.opportunityWorkspaceContext ?? null : null,
@@ -449,6 +455,8 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                     opportunityQueueNavigator:
                         params.type === "opportunities" ? params.opportunityQueueNavigator ?? null : null,
                     openSource: params.source ?? null,
+                    personDrawerOpenSeed:
+                        params.type === "persons" ? params.personDrawerOpenSeed ?? null : null,
                 };
                 if (
                     params.type === "opportunities" &&

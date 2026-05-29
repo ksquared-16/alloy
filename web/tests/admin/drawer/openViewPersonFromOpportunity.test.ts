@@ -34,7 +34,34 @@ describe("openViewPersonFromOpportunity", () => {
             id: PERSON_ID,
             source: "opportunity_primary_contact",
             parent: { type: "opportunities", id: OPP_ID },
+            personDrawerOpenSeed: null,
         });
+    });
+
+    it("seeds person snapshot from openSeed before drawer open when cache is cold", () => {
+        const openDrawer = vi.fn();
+        vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network")));
+
+        openViewPersonFromOpportunity({
+            openDrawer,
+            personId: PERSON_ID,
+            opportunityId: OPP_ID,
+            openSeed: {
+                personId: PERSON_ID,
+                first_name: "Jane",
+                last_name: "Doe",
+                email: "jane@example.com",
+            },
+        });
+
+        expect(openDrawer).toHaveBeenCalledWith(
+            expect.objectContaining({
+                personDrawerOpenSeed: expect.objectContaining({
+                    personId: PERSON_ID,
+                    first_name: "Jane",
+                }),
+            })
+        );
     });
 
     it("uses warm cache without click-time prefetch fetch", () => {

@@ -993,6 +993,12 @@ async function respondOpportunityRelationshipMemberOverlay(
 export type BuildOpportunityDrawerVisiblePayloadOptions = {
   /** When queue/workspace context already resolved department, skip work_units lookup. */
   hintDepartmentId?: string | null;
+  /** Display-only queue row hints — skip customer lookup when present. */
+  hintCustomerName?: string | null;
+  /** Display-only queue row hints — skip primary person hydrate when name present. */
+  hintPrimaryPersonName?: string | null;
+  hintPrimaryPersonEmail?: string | null;
+  hintPrimaryPersonPhone?: string | null;
 };
 
 export async function buildOpportunityDrawerVisiblePayload(
@@ -1016,9 +1022,28 @@ export async function buildOpportunityDrawerVisiblePayload(
   };
   const wuidForDept = trimOrNull(opp.work_unit_id);
   const hintDepartmentId = trimOrNull(options?.hintDepartmentId ?? null);
+  const hintCustomerName = trimOrNull(options?.hintCustomerName ?? null);
+  const hintPrimaryPersonName = trimOrNull(options?.hintPrimaryPersonName ?? null);
+  const hintPrimaryPersonEmail = trimOrNull(options?.hintPrimaryPersonEmail ?? null);
+  const hintPrimaryPersonPhone = trimOrNull(options?.hintPrimaryPersonPhone ?? null);
   const oppPipelineStageId = opp.pipeline_stage_id ?? null;
   const oppOrgIdForDefs = opp.org_id;
-  const primaryPersonContactP = fetchPrimaryPersonContactHydrate(supabase, orgId, opp);
+  const primaryPersonContactP =
+    hintPrimaryPersonName != null
+      ? Promise.resolve({
+          patch: {
+            _primary_person_id: trimOrNull(opp.primary_person_id),
+            _primary_person_name: hintPrimaryPersonName,
+            _primary_person_email: hintPrimaryPersonEmail,
+            _primary_person_phone: hintPrimaryPersonPhone,
+            _contact_name: hintPrimaryPersonName,
+            _primary_contact_name: hintPrimaryPersonName,
+            _primary_contact_email: hintPrimaryPersonEmail,
+            _primary_contact_phone: hintPrimaryPersonPhone,
+          },
+          warmPersonRows: [],
+        })
+      : fetchPrimaryPersonContactHydrate(supabase, orgId, opp);
   const phaseMs: Record<string, number> = {};
   const tParallel0 = Date.now();
   const wuDeptP = (async () => {
@@ -1036,19 +1061,22 @@ export async function buildOpportunityDrawerVisiblePayload(
     phaseMs.wu_dept_lookup_ms = Date.now() - t0;
     return row;
   })();
-  const customerP = (async () => {
-    const t0 = Date.now();
-    const row = opp.customer_id
-      ? await supabase
-            .from("customers")
-            .select("name")
-            .eq("id", opp.customer_id)
-            .eq("org_id", orgId)
-            .single()
-      : { data: null };
-    phaseMs.customer_lookup_ms = Date.now() - t0;
-    return row;
-  })();
+  const customerP =
+    hintCustomerName != null
+      ? Promise.resolve({ data: { name: hintCustomerName } })
+      : (async () => {
+          const t0 = Date.now();
+          const row = opp.customer_id
+            ? await supabase
+                  .from("customers")
+                  .select("name")
+                  .eq("id", opp.customer_id)
+                  .eq("org_id", orgId)
+                  .single()
+            : { data: null };
+          phaseMs.customer_lookup_ms = Date.now() - t0;
+          return row;
+        })();
   const stageP = (async () => {
     const t0 = Date.now();
     const row = oppPipelineStageId
@@ -1334,6 +1362,10 @@ export async function respondOpportunityEntityGet(
         : null;
     const out = await buildOpportunityDrawerVisiblePayload(supabase, orgId, data, {
       hintDepartmentId: trustedHintDepartmentId,
+      hintCustomerName: openerHints.customerName,
+      hintPrimaryPersonName: openerHints.primaryPersonName,
+      hintPrimaryPersonEmail: openerHints.primaryPersonEmail,
+      hintPrimaryPersonPhone: openerHints.primaryPersonPhone,
     });
     enrichPhaseMs.drawer_primary_build_ms = Date.now() - tPrimary0;
     const primaryPhases = (out._drawer_primary_phase_ms ?? {}) as Record<string, number>;
