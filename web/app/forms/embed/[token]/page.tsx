@@ -12,9 +12,5 @@ export default async function PublicFormEmbedPage({
     const raw = token ?? "";
     const showPreviewBanner = sp.preview === "1";
 
-    return (
-        <main>
-            <FormEmbedClient token={raw} showPreviewBanner={showPreviewBanner} />
-        </main>
-    );
+    return <FormEmbedClient token={raw} showPreviewBanner={showPreviewBanner} />;
 }

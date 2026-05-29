@@ -1,13 +1,15 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { isPublicFormEmbedPath } from "@/lib/public/forms/publicFormEmbedPath";
 
 export default function StagingBanner() {
   const appEnv = process.env.NEXT_PUBLIC_APP_ENV;
   const pathname = usePathname();
   const isAdminRoute = pathname?.startsWith("/admin");
+  const isFormEmbedRoute = isPublicFormEmbedPath(pathname);
 
-  if (appEnv !== "staging" || isAdminRoute) {
+  if (appEnv !== "staging" || isAdminRoute || isFormEmbedRoute) {
     return null;
   }
 

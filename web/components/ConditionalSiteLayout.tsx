@@ -6,6 +6,7 @@ import Footer from "@/components/Footer";
 import LayoutWrapper from "@/components/LayoutWrapper";
 import QuoteModalWrapper from "@/components/QuoteModalWrapper";
 import HomeAmbient from "@/components/HomeAmbient";
+import { isPublicFormEmbedPath } from "@/lib/public/forms/publicFormEmbedPath";
 
 export default function ConditionalSiteLayout({
   children,
@@ -14,9 +15,10 @@ export default function ConditionalSiteLayout({
 }) {
   const pathname = usePathname();
   const isAdminRoute = pathname?.startsWith("/admin");
+  const isFormEmbedRoute = isPublicFormEmbedPath(pathname);
 
-  if (isAdminRoute) {
-    // Admin routes: no Navbar/Footer, just render children (admin layout handles its own UI)
+  if (isAdminRoute || isFormEmbedRoute) {
+    // Admin + public form embed: no marketing chrome (embed layout owns the surface).
     return <>{children}</>;
   }
 

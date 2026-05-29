@@ -9,8 +9,17 @@ import {
 import { mergePublicSubmissionMeta } from "@/lib/public/forms/publicPayloadMeta";
 import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
 import { parseFormIntakeMeta } from "@/lib/forms/intake/formLeadCaptureTypes";
+import { isPublicFormEmbedPath } from "@/lib/public/forms/publicFormEmbedPath";
 
 describe("public form lib", () => {
+    it("isPublicFormEmbedPath matches embed routes only", () => {
+        expect(isPublicFormEmbedPath("/forms/embed/abc-token")).toBe(true);
+        expect(isPublicFormEmbedPath("/forms/embed")).toBe(true);
+        expect(isPublicFormEmbedPath("/forms/other")).toBe(false);
+        expect(isPublicFormEmbedPath("/")).toBe(false);
+        expect(isPublicFormEmbedPath(null)).toBe(false);
+    });
+
     it("hashFormLinkToken is stable hex", () => {
         const h = hashFormLinkToken("secret-token");
         expect(h).toMatch(/^[0-9a-f]{64}$/);
