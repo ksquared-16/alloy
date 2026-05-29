@@ -27,6 +27,16 @@ export const INQUIRY_RIGHT_COLUMN_HANDOFF_CARD_INNER_CLASS =
 export const INQUIRY_RIGHT_COLUMN_EMPTY_ROW_CLASS =
     "inline-flex h-[1.75rem] items-center text-[11px] text-alloy-midnight/50";
 
+/** Summary Family & contacts — stable footprint while primary/full hydrate. */
+export const INQUIRY_FAMILY_CONTACTS_SUMMARY_ROOT_CLASS =
+    "min-w-0 flex min-h-[5.5rem] flex-1 flex-col space-y-2";
+
+/** One reserved additional-contact row in summary variant (~card + gap). */
+export const INQUIRY_FAMILY_CONTACTS_ADDITIONAL_ROW_RESERVE_CLASS = "min-h-[3.25rem]";
+
+/** Primary person card slot in summary variant. */
+export const INQUIRY_FAMILY_CONTACTS_PRIMARY_SLOT_CLASS = "min-h-[3.75rem]";
+
 /** Root right column — stable total reserved height for inquiry summary column. */
 export const INQUIRY_SUMMARY_RIGHT_COLUMN_ROOT_CLASS =
     "mt-1.5 min-h-[11rem] border-t border-alloy-stone/10 pt-1.5";

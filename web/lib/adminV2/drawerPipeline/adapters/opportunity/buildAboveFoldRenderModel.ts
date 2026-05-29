@@ -42,10 +42,12 @@ function resolveShowRightColumn(
     record: Record<string, unknown>,
     below_fold_enrichment_ready: boolean,
     enrichment: DrawerEnrichmentState,
-    task_assist_enabled: boolean
+    task_assist_enabled: boolean,
+    above_fold_locked: boolean
 ): boolean {
     if (geometry.summary_right_column_reserved) return true;
     if (opportunityInquirySummaryRightPanelFromPrimaryOnly(record)) return true;
+    if (above_fold_locked) return false;
     return (
         below_fold_enrichment_ready &&
         enrichment.full_complete &&
@@ -94,7 +96,8 @@ export function buildOpportunityAboveFoldRenderModel(
         input.record,
         input.below_fold_enrichment_ready,
         input.enrichment,
-        input.task_assist_enabled
+        input.task_assist_enabled,
+        input.above_fold_locked
     );
     const full_bound = drawerFullBoundValuesReady(input.below_fold_enrichment_ready, input.enrichment);
     const right_column = buildInquirySummaryRightColumnModel({

@@ -19,7 +19,8 @@ describe("inquiry child placement save refreshes waitlist queue", () => {
 
     it("work-unit page listens for opportunity-updated and busts queue cache", () => {
         const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-        expect(page).toContain('"adminv2:opportunity-updated"');
+        expect(page).toContain("OPPORTUNITY_QUEUE_UPDATED_EVENT");
+        expect(page).toContain("shouldRefetchWorkUnitQueueRowsForEvent");
         expect(page).toContain("deleteQueueRowCacheKeysForWorkUnit");
         expect(page).toContain("fetchQueueSummaries");
     });

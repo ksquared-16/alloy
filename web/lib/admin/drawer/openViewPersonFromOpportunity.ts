@@ -57,6 +57,11 @@ export function openViewPersonFromOpportunity(args: {
 
 /** Optional hover warm — never blocks click open. */
 export function prefetchViewPersonOnHover(personId: string): void {
+    prefetchViewPersonOnPointerDown(personId);
+}
+
+/** Pointer/mousedown warm — runs before click handler for faster open. */
+export function prefetchViewPersonOnPointerDown(personId: string): void {
     const id = personId.trim();
     if (!id) return;
     try {

@@ -323,8 +323,14 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
             const run = ++queueNavRunRef.current;
             const primaryWarm = isOpportunityDrawerPrimaryWarm(targetId);
             const bootstrapWarm = isOpportunityDrawerBootstrapWarm(targetId);
+            const preloadReady =
+                opportunityDrawerPreloadRef.current?.opportunityId === targetId.trim();
 
             applyOpportunityQueueNavigation(targetId, navigator, workspace);
+
+            if (preloadReady) {
+                return;
+            }
 
             if (primaryWarm && bootstrapWarm) {
                 void loadOpportunityDrawerComposedOpen(targetId, workspace, workspaceDataFetchInit())

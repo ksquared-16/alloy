@@ -45,6 +45,11 @@ import {
     appendWorkspaceSiteToUrl,
     workspaceViewCacheFingerprint,
 } from "@/lib/adminV2/workspaceSiteFilterClient";
+import {
+    OPPORTUNITY_QUEUE_UPDATED_EVENT,
+    parseOpportunityQueueUpdatedDetail,
+    shouldRefetchWorkUnitQueueRowsForEvent,
+} from "@/lib/admin/opportunityQueueRefreshEvent";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
@@ -2481,17 +2486,26 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
     useEffect(() => {
         if (!workUnitId || !selectedQueueKey) return;
-        const onUpdated = (_ev: Event) => {
-            const summaries = queueSummariesRef.current;
+        const onUpdated = (ev: Event) => {
+            const detail = parseOpportunityQueueUpdatedDetail(ev);
+            const visibleIds = queueDisplayItemsRef.current
+                .map((row) => String(row.id ?? "").trim())
+                .filter(Boolean);
+            const refreshRows = shouldRefetchWorkUnitQueueRowsForEvent({
+                detail,
+                visibleOpportunityIds: visibleIds,
+            });
             deleteQueueRowCacheKeysForWorkUnit(queueRowClientCacheRef.current, viewScopeFingerprint, workUnitId);
-            void Promise.all([
-                fetchQueueItems(workUnitId, selectedQueueKey, summaries, { force: true }),
-                fetchQueueSummaries(workUnitId, { force: true }),
-            ]);
+            const summaries = queueSummariesRef.current;
+            const tasks: Promise<unknown>[] = [fetchQueueSummaries(workUnitId, { force: true })];
+            if (refreshRows) {
+                tasks.push(fetchQueueItems(workUnitId, selectedQueueKey, summaries, { force: true }));
+            }
+            void Promise.all(tasks);
         };
-        /** Drawer saves dispatch `adminv2:opportunity-updated` — bust row cache + refetch summaries for this lane (not drawer-only). */
-        window.addEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
-        return () => window.removeEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
+        /** Drawer saves dispatch `adminv2:opportunity-updated` — scoped row refresh + summaries (not on drawer close). */
+        window.addEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onUpdated as EventListener);
+        return () => window.removeEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onUpdated as EventListener);
     }, [fetchQueueItems, fetchQueueSummaries, selectedQueueKey, viewScopeFingerprint, workUnitId]);
 
     /** Row fetch after bootstrap authority — tab/bucket handlers may force; bootstrap owns first visible load (PERF-C-02). */

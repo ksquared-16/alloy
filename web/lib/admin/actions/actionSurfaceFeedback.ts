@@ -4,6 +4,7 @@
  */
 
 import type { ApplyRegistryResolvedActionResult } from "@/lib/admin/actions/applyRegistryResolvedActionResult";
+import { dispatchOpportunityQueueUpdated } from "@/lib/admin/opportunityQueueRefreshEvent";
 
 /** Read-only runtime executor labels for Settings inventory and docs. */
 export type ActionRuntimeExecutor =
@@ -79,14 +80,7 @@ export function formatLegacyRecordActionFailure(eventKey: string, error?: string
 }
 
 export function dispatchOpportunityRecordUpdated(opportunityId: string, actionKey: string): void {
-    if (typeof window === "undefined") return;
-    const id = opportunityId.trim();
-    if (!id) return;
-    window.dispatchEvent(
-        new CustomEvent("adminv2:opportunity-updated", {
-            detail: { id, action_key: actionKey.trim() || "registry_action" },
-        })
-    );
+    dispatchOpportunityQueueUpdated(opportunityId, actionKey.trim() || "registry_action");
 }
 
 export function shouldNotifyOpportunityRecordUpdated(actionType: string, result: ApplyRegistryResolvedActionResult): boolean {

@@ -15,7 +15,7 @@ import {
     type PersonContactCardFieldKey,
     type PersonContactCardValues,
 } from "@/lib/admin/drawer/primaryPersonCardEdit";
-import { openViewPersonFromOpportunity, prefetchViewPersonOnHover } from "@/lib/admin/drawer/openViewPersonFromOpportunity";
+import { openViewPersonFromOpportunity, prefetchViewPersonOnHover, prefetchViewPersonOnPointerDown } from "@/lib/admin/drawer/openViewPersonFromOpportunity";
 import {
     logViewPersonClickLive,
     viewPersonLiveDiagAttrs,
@@ -338,6 +338,7 @@ export default function EditablePersonContactCard({
                                 data-testid="view-person-drawer-open"
                                 {...viewPersonDiagAttrs}
                                 onMouseEnter={() => prefetchViewPersonOnHover(pid)}
+                                onPointerDown={() => prefetchViewPersonOnPointerDown(pid)}
                                 onClick={handleViewPersonClick}
                                 className={`block w-full truncate text-left ${oppInqNameLink}`}
                             >
@@ -362,6 +363,7 @@ export default function EditablePersonContactCard({
                             data-testid="view-person-drawer-open"
                             {...viewPersonDiagAttrs}
                             onMouseEnter={() => prefetchViewPersonOnHover(pid)}
+                            onPointerDown={() => prefetchViewPersonOnPointerDown(pid)}
                             onClick={handleViewPersonClick}
                             className="text-[11px] font-semibold text-alloy-blue hover:underline underline-offset-2"
                         >

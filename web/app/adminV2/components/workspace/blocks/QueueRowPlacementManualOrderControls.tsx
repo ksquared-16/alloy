@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { dispatchOpportunityQueueUpdatedBroadcast } from "@/lib/admin/opportunityQueueRefreshEvent";
 import type { QueueRowPlacementWaitlistCandidateVm } from "@/lib/ui-v2/workspace-types";
 
 type Props = {
@@ -45,9 +46,7 @@ export function QueueRowPlacementManualOrderControls({ row, indexInSection, sect
     }, []);
 
     const refreshQueue = useCallback(() => {
-        if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("adminv2:opportunity-updated"));
-        }
+        dispatchOpportunityQueueUpdatedBroadcast("placement_manual_order");
     }, []);
 
     const submit = useCallback(async () => {

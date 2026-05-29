@@ -13,6 +13,11 @@ import { primaryPersonIdFromOpportunityRecord } from "@/lib/admin/drawer/linkedR
 import EditablePersonContactCard from "@/components/admin/opportunity/EditablePersonContactCard";
 import PrimaryPersonContactCard from "@/components/admin/opportunity/PrimaryPersonContactCard";
 import {
+    INQUIRY_FAMILY_CONTACTS_ADDITIONAL_ROW_RESERVE_CLASS,
+    INQUIRY_FAMILY_CONTACTS_PRIMARY_SLOT_CLASS,
+    INQUIRY_FAMILY_CONTACTS_SUMMARY_ROOT_CLASS,
+} from "@/lib/admin/drawer/opportunityInquiryRightColumnGeometry";
+import {
     personContactCardValuesFromOpportunityPersonRow,
     resolveLinkedPersonContactCardFieldGates,
 } from "@/lib/admin/drawer/primaryPersonCardEdit";
@@ -246,8 +251,15 @@ export function FamilyContactsPanel(props: {
     const registryDensity = variant === "summary" ? "summary" : "default";
 
     return (
-        <div className={variant === "summary" ? "min-w-0 flex flex-1 flex-col space-y-2" : "space-y-3"} data-family-contacts-panel={sectionKey}>
-            <div className="min-w-0">
+        <div
+            className={
+                variant === "summary"
+                    ? INQUIRY_FAMILY_CONTACTS_SUMMARY_ROOT_CLASS
+                    : "space-y-3"
+            }
+            data-family-contacts-panel={sectionKey}
+        >
+            <div className={`min-w-0 ${variant === "summary" ? INQUIRY_FAMILY_CONTACTS_PRIMARY_SLOT_CLASS : ""}`}>
                 {variant === "default" ? <div className={eyebrow}>Primary person</div> : null}
                 {primaryPersonId ? (
                     <PrimaryPersonContactCard
@@ -293,7 +305,7 @@ export function FamilyContactsPanel(props: {
                 actionsFetchEnabled={actionsFetchEnabled}
             />
 
-            <div className="min-w-0 flex-1">
+            <div className={`min-w-0 flex-1 ${variant === "summary" ? "min-h-[2rem]" : ""}`}>
                 {sorted.length === 0 ? (
                     opportunityRelationshipsFullHydrateFailed ? (
                         <div
@@ -315,7 +327,10 @@ export function FamilyContactsPanel(props: {
                     ) : shellReservedAdditionalCount > 0 && sorted.length === 0 ? (
                         <ul className={`${variant === "summary" ? "space-y-2" : "space-y-2.5"} mt-1 list-none`}>
                             {Array.from({ length: shellReservedAdditionalCount }).map((_, i) => (
-                                <li key={`additional-contact-shell-${i}`}>
+                                <li
+                                    key={`additional-contact-shell-${i}`}
+                                    className={variant === "summary" ? INQUIRY_FAMILY_CONTACTS_ADDITIONAL_ROW_RESERVE_CLASS : undefined}
+                                >
                                     <SummaryAdditionalPersonCardSkeleton cardPad={cardPad} />
                                 </li>
                             ))}

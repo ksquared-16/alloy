@@ -195,6 +195,7 @@ import {
 } from "@/lib/admin/drawerEntitySnapshotCache";
 import { openViewPersonFromOpportunity } from "@/lib/admin/drawer/openViewPersonFromOpportunity";
 import { entityDataMatchesDrawer } from "@/lib/admin/drawer/entityDataMatchesDrawer";
+import { isPersonDrawerSnapshotWarm } from "@/lib/admin/prefetchPersonDrawerSnapshot";
 import { installPersonDrawerDevDirectOpen } from "@/lib/admin/drawer/personDrawerDevDirectOpen";
 import { prefetchLinkedPersonsFromOpportunityRecord } from "@/lib/admin/drawer/prefetchLinkedPersonsFromOpportunityRecord";
 import {
@@ -202,6 +203,7 @@ import {
     putDrawerStackRestoreSnapshot,
 } from "@/lib/admin/drawer/drawerStackRestoreSnapshot";
 import { logDrawerBackRestore, logPersonDrawerOpen } from "@/lib/admin/drawer/personDrawerPerfLogs";
+import { dispatchOpportunityQueueUpdated, dispatchOpportunityQueueUpdatedBroadcast } from "@/lib/admin/opportunityQueueRefreshEvent";
 import { primaryPersonIdFromOpportunityRecord } from "@/lib/admin/drawer/linkedRecordFieldEditing";
 import {
     opportunityDrawerEnrichmentLayoutReady as computeOpportunityDrawerEnrichmentLayoutReady,
@@ -5538,9 +5540,7 @@ export default function AdminEntityDrawer() {
                 setData((prev) => (prev ? { ...prev, ...json } : prev));
                 refetch();
                 router.refresh();
-                window.dispatchEvent(
-                    new CustomEvent("adminv2:opportunity-updated", { detail: { id: "", action_key: "customer_member_inline_save" } })
-                );
+                dispatchOpportunityQueueUpdatedBroadcast("customer_member_inline_save");
                 return;
             }
             if (drawer.type === "payments") {
@@ -7119,6 +7119,27 @@ export default function AdminEntityDrawer() {
                 }
             }
 
+            if (prev.type === "opportunities" && prev.id && next.type === "opportunities" && next.id && prev.id !== next.id) {
+                if (data && entityDataMatchesDrawer(data, prev.id, "opportunities")) {
+                    putDrawerEntitySnapshot("opportunities", prev.id, data as Record<string, unknown>);
+                }
+                const cached = peekDrawerEntitySnapshot("opportunities", next.id);
+                const entityWarm =
+                    cached != null && entityDataMatchesDrawer(cached, next.id, "opportunities");
+                if (entityWarm) {
+                    setData(cached);
+                    setLoading(false);
+                    setError(null);
+                    opportunityDrawerBootstrapAppliedRef.current = next.id;
+                    setOpportunityBootstrapAppliedId(next.id);
+                    if (String((cached as { _record_surface?: string })._record_surface ?? "").trim() === "full") {
+                        setOpportunityDrawerEnrichmentHeld(false);
+                        setOpportunityDrawerBelowFoldRevealed(true);
+                        setOpportunityDrawerSecondaryReady(true);
+                    }
+                }
+            }
+
             if (next.type === "opportunities" && next.id && prev.type === "persons") {
                 const restoreStartedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
                 const cached = peekDrawerEntitySnapshot("opportunities", next.id);
@@ -7209,12 +7230,11 @@ export default function AdminEntityDrawer() {
 
         opportunityLinkedPersonsPrefetchedRef.current = drawer.id;
         const record = data as Record<string, unknown>;
-        return scheduleAdminV2BackgroundWork(
-            () => {
-                prefetchLinkedPersonsFromOpportunityRecord(record, { source: "opportunity_drawer_idle" });
-            },
-            { idleTimeoutMs: 2000, fallbackMs: 120 }
-        );
+        try {
+            prefetchLinkedPersonsFromOpportunityRecord(record, { source: "opportunity_drawer_idle" });
+        } catch {
+            /* non-fatal */
+        }
     }, [
         drawer.type,
         drawer.id,
@@ -7670,6 +7690,7 @@ export default function AdminEntityDrawer() {
         drawer.id !== "new" &&
         !error &&
         !personDrawerExistingReady &&
+        !isPersonDrawerSnapshotWarm(String(drawer.id)) &&
         loading;
 
     useEffect(() => {
@@ -12849,6 +12870,12 @@ export default function AdminEntityDrawer() {
                                                                                         return next;
                                                                                     });
                                                                                     void refetch();
+                                                                                    if (drawer.id && drawer.id !== "new") {
+                                                                                        dispatchOpportunityQueueUpdated(
+                                                                                            String(drawer.id),
+                                                                                            "person_contact_save"
+                                                                                        );
+                                                                                    }
                                                                                 }}
                                                                                 onLinkedPersonUpdated={(personId, person) => {
                                                                                     setData((prev) => {
@@ -12864,6 +12891,12 @@ export default function AdminEntityDrawer() {
                                                                                         return next;
                                                                                     });
                                                                                     void refetch();
+                                                                                    if (drawer.id && drawer.id !== "new") {
+                                                                                        dispatchOpportunityQueueUpdated(
+                                                                                            String(drawer.id),
+                                                                                            "person_contact_save"
+                                                                                        );
+                                                                                    }
                                                                                 }}
                                                                                 openForm={({ form_key, action }) => {
                                                                                     setActionFormState({
@@ -12881,6 +12914,12 @@ export default function AdminEntityDrawer() {
                                                                                 onRegistryApplied={() => {
                                                                                     setRelatedPeopleRefreshKey((n) => n + 1);
                                                                                     void refetch();
+                                                                                    if (drawer.id && drawer.id !== "new") {
+                                                                                        dispatchOpportunityQueueUpdated(
+                                                                                            String(drawer.id),
+                                                                                            "family_contacts_registry"
+                                                                                        );
+                                                                                    }
                                                                                 }}
                                                                             />
                                                                         </div>

@@ -26,9 +26,10 @@ describe("person drawer perf follow-up wiring", () => {
         expect(drawer).toContain("logPersonDrawerOpen");
     });
 
-    it("View Person hover prefetch uses persons entity endpoint", () => {
+    it("View Person hover and pointerdown prefetch uses persons entity endpoint", () => {
         const card = read("components/admin/opportunity/EditablePersonContactCard.tsx");
         expect(card).toContain("prefetchViewPersonOnHover");
+        expect(card).toContain("prefetchViewPersonOnPointerDown");
     });
 
     it("prefetch and open modules emit perf log tags", () => {
