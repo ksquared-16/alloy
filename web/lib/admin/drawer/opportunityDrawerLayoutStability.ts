@@ -5,8 +5,40 @@ import {
     opportunityInquirySummaryRightPanelFromPrimaryOnly,
 } from "@/lib/admin/drawer/opportunityDrawerFirstPaintContract";
 
-/** Reserved header action rail height (matches DrawerWorkflowHeaderQuickActionsSkeleton). */
+/** Reserved header action rail height (matches header action skeleton). */
 export const OPPORTUNITY_DRAWER_HEADER_ACTIONS_RAIL_MIN_H_CLASS = "min-h-[2.75rem]";
+
+/** Skeleton button geometry — stable swap target for record_header actions. */
+export const OPPORTUNITY_DRAWER_HEADER_ACTIONS_SKELETON_BUTTON_CLASSES = [
+    "h-9 w-[5.25rem]",
+    "h-9 w-24",
+    "h-9 w-28",
+] as const;
+
+export function opportunityDrawerHeaderActionsExpectRegistry(params: {
+    drawerShellVariant: string;
+    bootstrapEnabled: boolean;
+    bootstrapLegacy: boolean;
+    inquiryWorkflow: boolean;
+}): boolean {
+    return (
+        params.drawerShellVariant === "adminV2" &&
+        params.bootstrapEnabled &&
+        !params.bootstrapLegacy &&
+        params.inquiryWorkflow
+    );
+}
+
+/** Show reserved skeleton until record_header actions resolve (never pop-in empty). */
+export function opportunityDrawerHeaderActionsShowSkeleton(params: {
+    expectRegistry: boolean;
+    headerActionsLoading: boolean;
+    headerActionsReady: boolean;
+}): boolean {
+    if (!params.expectRegistry) return false;
+    if (params.headerActionsReady) return false;
+    return params.headerActionsLoading || !params.headerActionsReady;
+}
 
 /** Collapsed inquiry_children section shell — stable header row only above the fold. */
 export const OPPORTUNITY_INQUIRY_CHILDREN_COLLAPSED_SHELL_CLASS = "min-h-[2.75rem]";

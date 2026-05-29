@@ -12,6 +12,8 @@ export function logDrawerPresentationGate(payload: {
     reveal_delay_ms?: number;
     raw_value_suppressed?: string[];
     skeleton_sections?: string[];
+    header_actions_ready?: boolean;
+    header_actions_skeleton?: boolean;
 }): void {
     if (!PERF_ENABLED) return;
     console.info("[perf.drawer.presentation_gate]", payload);

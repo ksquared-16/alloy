@@ -233,7 +233,10 @@ import {
     computeShowInquirySummaryRightColumn,
     OPPORTUNITY_DRAWER_BELOW_FOLD_SCROLL_PX,
     OPPORTUNITY_DRAWER_HEADER_ACTIONS_RAIL_MIN_H_CLASS,
+    OPPORTUNITY_DRAWER_HEADER_ACTIONS_SKELETON_BUTTON_CLASSES,
     opportunityDrawerAboveFoldLayoutLocked,
+    opportunityDrawerHeaderActionsExpectRegistry,
+    opportunityDrawerHeaderActionsShowSkeleton,
     opportunityDrawerLayoutFirstPaintGatesActive,
     opportunityDrawerSummaryLayoutMode,
     stabilizeOpportunityWorkflowOverviewSections,
@@ -1002,10 +1005,14 @@ function DrawerOpportunityWorkflowTimelineGateSkeleton() {
 
 function DrawerWorkflowHeaderQuickActionsSkeleton() {
     return (
-        <div className="flex flex-wrap items-start justify-end gap-2 min-h-[2.375rem]" aria-busy="true">
-            <DrawerQuietSkeletonBar className="h-9 w-[5.25rem]" />
-            <DrawerQuietSkeletonBar className="h-9 w-24" />
-            <DrawerQuietSkeletonBar className="h-9 w-28" />
+        <div
+            className={`flex flex-wrap items-start justify-end gap-2 ${OPPORTUNITY_DRAWER_HEADER_ACTIONS_RAIL_MIN_H_CLASS}`}
+            aria-busy="true"
+            data-opportunity-header-actions-skeleton="true"
+        >
+            {OPPORTUNITY_DRAWER_HEADER_ACTIONS_SKELETON_BUTTON_CLASSES.map((cls, i) => (
+                <DrawerQuietSkeletonBar key={i} className={cls} />
+            ))}
         </div>
     );
 }
@@ -3817,8 +3824,12 @@ export default function AdminEntityDrawer() {
             !opportunityDrawerBootstrapLegacy &&
             opportunityDrawerBootstrapAppliedRef.current !== drawer.id
         ) {
-            setOpportunityResolvedHeaderLoading(true);
-            return;
+            const ctxWuEarly = (drawer.opportunityWorkspaceContext?.work_unit_id ?? "").trim();
+            const ctxDeptEarly = (drawer.opportunityWorkspaceContext?.department_id ?? "").trim();
+            if (!ctxWuEarly || !ctxDeptEarly) {
+                setOpportunityResolvedHeaderLoading(true);
+                return;
+            }
         }
         if (
             drawerShellVariant === "adminV2" &&
@@ -3827,16 +3838,6 @@ export default function AdminEntityDrawer() {
             opportunityDrawerBootstrapAppliedRef.current === drawer.id &&
             opportunityResolvedHeaderActions != null
         ) {
-            return;
-        }
-        if (
-            drawerShellVariant === "adminV2" &&
-            adminV2DrawerBootstrapEnabled() &&
-            !opportunityDrawerBootstrapLegacy &&
-            opportunityDrawerBootstrapAppliedRef.current === drawer.id &&
-            !opportunityPrimaryHydrateApplied
-        ) {
-            setOpportunityResolvedHeaderLoading(false);
             return;
         }
         const ctxWu = (drawer.opportunityWorkspaceContext?.work_unit_id ?? "").trim();
@@ -3940,7 +3941,6 @@ export default function AdminEntityDrawer() {
         timingEnabled,
         drawerShellVariant,
         opportunityDrawerBootstrapLegacy,
-        opportunityPrimaryHydrateApplied,
         opportunityResolvedHeaderActions,
     ]);
 
@@ -6415,6 +6415,12 @@ export default function AdminEntityDrawer() {
         (resolvedHeader?.overflow.length ?? 0);
     const opportunityRegistryHeaderReady = !opportunityResolvedHeaderLoading && resolvedHeader != null;
     const useOpportunityActionRegistryHeader = opportunityRegistryHeaderReady && resolvedHeaderCount > 0;
+    const opportunityHeaderActionsExpectRegistry = opportunityDrawerHeaderActionsExpectRegistry({
+        drawerShellVariant,
+        bootstrapEnabled: adminV2DrawerBootstrapEnabled(),
+        bootstrapLegacy: opportunityDrawerBootstrapLegacy,
+        inquiryWorkflow: opportunityInquiryWorkflowDrawer,
+    });
 
     useEffect(() => {
         if (!timingEnabled) return;
@@ -6480,6 +6486,12 @@ export default function AdminEntityDrawer() {
         ]
     );
 
+    const opportunityHeaderActionsShowSkeleton = opportunityDrawerHeaderActionsShowSkeleton({
+        expectRegistry: opportunityHeaderActionsExpectRegistry,
+        headerActionsLoading: opportunityResolvedHeaderLoading,
+        headerActionsReady: opportunityRegistryHeaderReady,
+    });
+
     const dataMatchesDrawer = entityDataMatchesDrawer(data, drawer.id, drawer.type);
     const overviewData = dataMatchesDrawer ? data : null;
     const globalAssistant = useGlobalAssistantOptional();
@@ -6489,10 +6501,13 @@ export default function AdminEntityDrawer() {
             ? (
                   <div
                       className={`flex flex-col items-end gap-1.5 ${
+                          opportunityHeaderActionsExpectRegistry ||
                           opportunityDrawerAboveFoldLayoutLocked(
                               opportunityDrawerLayoutFrozen,
                               opportunityDrawerBelowFoldRevealed
-                          ) || opportunityRegistryHeaderReady
+                          ) ||
+                          opportunityRegistryHeaderReady ||
+                          opportunityHeaderActionsShowSkeleton
                               ? OPPORTUNITY_DRAWER_HEADER_ACTIONS_RAIL_MIN_H_CLASS
                               : ""
                       } ${
@@ -6508,13 +6523,8 @@ export default function AdminEntityDrawer() {
                       align="end"
                   >
                       {(() => {
-                          if (
-                              (opportunityHeaderFirstPaintSuppress ||
-                                  opportunityResolvedHeaderLoading) &&
-                              !opportunityResolvedHeaderActions &&
-                              !useOpportunityActionRegistryHeader
-                          ) {
-                              return null;
+                          if (opportunityHeaderActionsShowSkeleton) {
+                              return <DrawerWorkflowHeaderQuickActionsSkeleton />;
                           }
                           return (
                               <>
@@ -7278,12 +7288,16 @@ export default function AdminEntityDrawer() {
             reveal_delay_ms,
             raw_value_suppressed: opportunityDrawerAboveFoldPresentationReport.raw_value_suppressed,
             skeleton_sections: opportunityDrawerAboveFoldPresentationReport.skeleton_sections,
+            header_actions_ready: opportunityRegistryHeaderReady,
+            header_actions_skeleton: opportunityHeaderActionsShowSkeleton,
         });
     }, [
         drawer.type,
         drawer.id,
         opportunityDrawerAboveFoldPresentationReady,
         opportunityDrawerAboveFoldPresentationReport,
+        opportunityRegistryHeaderReady,
+        opportunityHeaderActionsShowSkeleton,
     ]);
 
     useLayoutEffect(() => {
