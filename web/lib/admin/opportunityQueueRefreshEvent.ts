@@ -19,8 +19,10 @@ const QUEUE_MEMBERSHIP_ACTION_KEYS = new Set([
     "tour_booking",
     "customer_member_inline_save",
     "inquiry_children_placement",
+    "inquiry_child_placement_scope",
     "placement_manual_order",
     "person_contact_save",
+    "family_contacts_registry",
     "registry_action",
 ]);
 
@@ -76,4 +78,20 @@ export function shouldRefetchWorkUnitQueueRowsForEvent(args: {
     if (!oppId) return true;
     if (visibleOpportunityIds.includes(oppId)) return true;
     return isQueueMembershipMutationActionKey(detail?.action_key);
+}
+
+const PERF_QUEUE_REFRESH_LOG =
+    typeof process !== "undefined" &&
+    (process.env.NODE_ENV === "development" || process.env.VITEST === "true");
+
+/** Dev-only: log scoped queue refresh decisions from the work-unit listener. */
+export function logWorkUnitQueueRefreshDecision(payload: {
+    opportunityId?: string;
+    actionKey?: string;
+    refreshRows: boolean;
+    refreshSummaries: boolean;
+    visibleRowCount: number;
+}): void {
+    if (!PERF_QUEUE_REFRESH_LOG || typeof window === "undefined") return;
+    console.info("[perf.queue.refresh]", payload);
 }

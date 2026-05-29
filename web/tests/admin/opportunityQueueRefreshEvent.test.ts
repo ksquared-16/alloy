@@ -41,5 +41,7 @@ describe("opportunityQueueRefreshEvent", () => {
         ).toBe(true);
         expect(isQueueMembershipMutationActionKey("inline_save")).toBe(true);
         expect(isQueueMembershipMutationActionKey("person_contact_save")).toBe(true);
+        expect(isQueueMembershipMutationActionKey("inquiry_child_placement_scope")).toBe(true);
+        expect(isQueueMembershipMutationActionKey("family_contacts_registry")).toBe(true);
     });
 });

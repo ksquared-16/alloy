@@ -49,6 +49,7 @@ import {
     OPPORTUNITY_QUEUE_UPDATED_EVENT,
     parseOpportunityQueueUpdatedDetail,
     shouldRefetchWorkUnitQueueRowsForEvent,
+    logWorkUnitQueueRefreshDecision,
 } from "@/lib/admin/opportunityQueueRefreshEvent";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
@@ -2501,6 +2502,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
             if (refreshRows) {
                 tasks.push(fetchQueueItems(workUnitId, selectedQueueKey, summaries, { force: true }));
             }
+            logWorkUnitQueueRefreshDecision({
+                opportunityId: detail?.id,
+                actionKey: detail?.action_key,
+                refreshRows,
+                refreshSummaries: true,
+                visibleRowCount: visibleIds.length,
+            });
             void Promise.all(tasks);
         };
         /** Drawer saves dispatch `adminv2:opportunity-updated` — scoped row refresh + summaries (not on drawer close). */

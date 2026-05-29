@@ -12763,17 +12763,17 @@ export default function AdminEntityDrawer() {
                                                         opportunityDrawerShellContract?.geometry
                                                             .summary_right_column_reserved === true;
                                                     const showInquirySummaryRightColumn =
-                                                        summaryRightColumnReserved ||
-                                                        inqModel?.show_right_column === true ||
-                                                        (!summaryRightColumnReserved &&
-                                                            computeShowInquirySummaryRightColumn({
-                                                                summaryRightColumnReserved: false,
-                                                                record: d,
-                                                                belowFoldEnrichmentReady:
-                                                                    opportunityDrawerBelowFoldEnrichmentReady,
-                                                                fullHydrateReady: opportunityFullRecordHydrateApplied,
-                                                                taskAssistEnabled: isTaskAssistV1UiEnabled(),
-                                                            }));
+                                                        inqModel != null
+                                                            ? inqModel.show_right_column
+                                                            : summaryRightColumnReserved ||
+                                                              computeShowInquirySummaryRightColumn({
+                                                                  summaryRightColumnReserved: false,
+                                                                  record: d,
+                                                                  belowFoldEnrichmentReady:
+                                                                      opportunityDrawerBelowFoldEnrichmentReady,
+                                                                  fullHydrateReady: opportunityFullRecordHydrateApplied,
+                                                                  taskAssistEnabled: isTaskAssistV1UiEnabled(),
+                                                              });
                                                     const inquirySummaryColumnMode =
                                                         inqModel?.column_mode ??
                                                         opportunityDrawerSummaryLayoutMode({
