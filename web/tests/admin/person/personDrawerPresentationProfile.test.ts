@@ -68,6 +68,18 @@ describe("personDrawerPresentationProfile", () => {
         expect(out.map((s) => s.key)).not.toContain("employee_placement");
     });
 
+    it("unlocks adult identity fields in Profile basic section", () => {
+        const profile: PersonDrawerProfileResult = {
+            profiles: ["parent"],
+            display: "parent",
+            badgeLabels: ["Parent"],
+        };
+        const out = applyPersonDrawerPresentationProfile(baseSections, profile);
+        const basic = out.find((s) => s.key === "basic_info");
+        expect(basic?.fields?.find((f) => f.key === "first_name")).toMatchObject({ editable: true, locked: false });
+        expect(basic?.fields?.find((f) => f.key === "last_name")).toMatchObject({ editable: true, locked: false });
+    });
+
     it("hides sibling group for parent-like relationship presentation", () => {
         const parentProfile: PersonDrawerProfileResult = {
             profiles: ["parent"],

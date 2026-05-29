@@ -97,7 +97,6 @@ import {
 } from "@/lib/entityPresentation";
 import { OpportunityIntakeSourceSection } from "@/components/admin/opportunity/OpportunityIntakeSourceSection";
 import PersonEmployeePlacementSection from "@/components/admin/entity/PersonEmployeePlacementSection";
-import PersonDrawerContextPanel from "@/components/admin/entity/PersonDrawerContextPanel";
 import PersonDrawerHeaderMetadata, {
     PersonDrawerHeaderContactMeta,
 } from "@/components/admin/entity/PersonDrawerHeaderMetadata";
@@ -272,7 +271,6 @@ import {
     mergeOpportunityFullHydrateStaged,
 } from "@/lib/admin/drawer/opportunityFullHydrateMerge";
 import { reportOpportunityDrawerHydrateLayoutStability } from "@/lib/admin/drawer/opportunityDrawerAboveFoldGeometry";
-import { INQUIRY_SUMMARY_RIGHT_COLUMN_SHELL_MIN_H_CLASS } from "@/lib/admin/drawer/opportunityInquiryRightColumnGeometry";
 import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
 import { assessOpportunityAboveFoldPresentationReady } from "@/lib/admin/drawer/opportunityAboveFoldPresentationReady";
 import {
@@ -345,6 +343,7 @@ import {
     oppInqEyebrow,
     oppInqFieldInput,
     oppInqInnerCard,
+    oppInqInnerCardCompact,
     oppInqLeadSummaryShellClassName,
     oppInqMutedEmpty,
     oppInqNameLink,
@@ -3659,6 +3658,12 @@ export default function AdminEntityDrawer() {
                 return;
             }
             if (a.action_type === "ui_intent") {
+                const p = a.payload && typeof a.payload === "object" ? (a.payload as Record<string, unknown>) : {};
+                const intent = p.intent != null ? String(p.intent).trim() : "";
+                if (intent === "send_enrollment_packet") {
+                    setOppLaunchPacketOpen(true);
+                    return;
+                }
                 const workUnitIdForCtx =
                     data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
                         ? String((data as { work_unit_id?: unknown }).work_unit_id)
@@ -3819,6 +3824,17 @@ export default function AdminEntityDrawer() {
         window.addEventListener(ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS, onFocusOperationalTasks as EventListener);
         return () =>
             window.removeEventListener(ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS, onFocusOperationalTasks as EventListener);
+    }, [drawer.type, drawer.id]);
+
+    useEffect(() => {
+        const onOpenEnrollmentPacket = (ev: Event) => {
+            const ce = ev as CustomEvent<{ opportunity_id?: string }>;
+            const id = typeof ce.detail?.opportunity_id === "string" ? ce.detail.opportunity_id.trim() : "";
+            if (!id || drawer.type !== "opportunities" || drawer.id !== id) return;
+            setOppLaunchPacketOpen(true);
+        };
+        window.addEventListener("adminv2:open-enrollment-packet", onOpenEnrollmentPacket as EventListener);
+        return () => window.removeEventListener("adminv2:open-enrollment-packet", onOpenEnrollmentPacket as EventListener);
     }, [drawer.type, drawer.id]);
 
     useEffect(() => {
@@ -6603,22 +6619,6 @@ export default function AdminEntityDrawer() {
                                           ))}
                                       </>
                                   : null}
-                                  {canMutate ? (
-                                      <>
-                                          <OpportunityDrawerHeaderActionButton
-                                              label="Send form"
-                                              inquiryWorkflow={opportunityInquiryWorkflowDrawer}
-                                              disabled={!!opportunityActionLoading}
-                                              onClick={() => setOppSendFormOpen(true)}
-                                          />
-                                          <OpportunityDrawerHeaderActionButton
-                                              label="Send enrollment packet"
-                                              inquiryWorkflow={opportunityInquiryWorkflowDrawer}
-                                              disabled={!!opportunityActionLoading}
-                                              onClick={() => setOppLaunchPacketOpen(true)}
-                                          />
-                                      </>
-                                  ) : null}
                               </>
                           );
                       })()}
@@ -7887,13 +7887,18 @@ export default function AdminEntityDrawer() {
         opportunityInquirySummaryEnrichmentGate,
         "80px"
     );
-    const { ref: inquirySummaryRightRef, intersecting: inquirySummaryRightVisible } = useDrawerSectionIntersection(
+    const { ref: inquirySummaryRightRef } = useDrawerSectionIntersection(
         opportunityInquirySummaryEnrichmentGate,
         "80px"
     );
     const tourBookingsFetchEnabled =
         opportunityDrawerPrimaryContractSatisfied && opportunityInquiryWorkflowDrawer;
-    const inquirySummaryFetchEnabled = opportunityInquirySummaryEnrichmentGate && inquirySummaryRightVisible;
+    /** Lead Summary right column is above the fold — arm when primary contract is ready (no scroll intersection). */
+    const inquirySummaryFetchEnabled =
+        opportunityInquiryWorkflowDrawer &&
+        opportunityDrawerPrimaryContractSatisfied &&
+        Boolean(drawer.id) &&
+        drawer.id !== "new";
     const opportunityRegistrySectionActionsFetchEnabled =
         opportunityDrawerOverviewRevealReady &&
         !opportunityDrawerLayoutFirstPaintGates &&
@@ -10068,7 +10073,7 @@ export default function AdminEntityDrawer() {
 
         return (
             <div
-                className="flex min-h-[1.375rem] flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-snug text-alloy-midnight/55"
+                className="flex min-h-[1rem] flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] leading-snug text-alloy-midnight/55"
                 data-drawer-last-activity-line="true"
             >
                 <span className="min-w-0">
@@ -10714,14 +10719,6 @@ export default function AdminEntityDrawer() {
             </div>
         ) : isJobDrawerV2 ? (
             <DrawerAboveFoldRenderer model={jobDrawerPipeline?.above_fold} />
-        ) : drawer.type === "persons" &&
-          overviewData &&
-          !(overviewData as { _create?: boolean })._create &&
-          !drawerGateLoading ? (
-            <PersonDrawerContextPanel
-                record={overviewData as Record<string, unknown>}
-                onOpenDrawer={(type, id) => openDrawer({ type: type as AdminDrawerEntityType, id })}
-            />
         ) : drawer.type === "locations" &&
           overviewData &&
           !(overviewData as { _create?: boolean })._create &&
@@ -13366,15 +13363,15 @@ export default function AdminEntityDrawer() {
                                                                 ) : null}
                                                             </div>
                                                             <div
-                                                                className={`mt-1 grid grid-cols-1 gap-1 ${inquirySummaryColumnMode === "two" ? "lg:grid-cols-2 lg:items-stretch" : ""} lg:gap-2`}
+                                                                className={`mt-0.5 grid grid-cols-1 gap-0.5 ${inquirySummaryColumnMode === "two" ? "lg:grid-cols-2 lg:items-start" : ""} lg:gap-1`}
                                                                 data-opportunity-inquiry-summary-columns={inquirySummaryColumnMode}
                                                             >
-                                                                <div className={`${oppInqInnerCard} min-h-0`}>
+                                                                <div className={`${oppInqInnerCardCompact} min-h-0`}>
                                                                     <div className={tinyLabel}>Family & contacts</div>
                                                                     {opportunityInquiryWorkflowDrawer ||
                                                                     familySummaryUsesFullPanel ||
                                                                     familyContactsInSummary ? (
-                                                                        <div className="mt-1 flex min-h-0 flex-1 flex-col">
+                                                                        <div className="mt-1 flex min-h-0 flex-col">
                                                                             <FamilyContactsPanel
                                                                                 variant="summary"
                                                                                 opportunityId={drawer.id}
@@ -13583,7 +13580,7 @@ export default function AdminEntityDrawer() {
                                                                 {showInquirySummaryRightColumn ? (
                                                                 <div
                                                                     ref={inquirySummaryRightRef}
-                                                                    className={`${oppInqInnerCard} flex min-w-0 flex-col ${INQUIRY_SUMMARY_RIGHT_COLUMN_SHELL_MIN_H_CLASS}`}
+                                                                    className={`${oppInqInnerCardCompact} flex min-h-0 min-w-0 flex-col`}
                                                                     data-shell-slot="inquiry_summary_right"
                                                                 >
                                                                     {drawer.id &&

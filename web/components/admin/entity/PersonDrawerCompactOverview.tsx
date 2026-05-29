@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import PersonEmployeePlacementSection from "@/components/admin/entity/PersonEmployeePlacementSection";
+import { PersonDrawerCustomerMemberships } from "@/components/admin/entity/PersonDrawerCustomerMemberships";
 import { readPersonEmployeePlacementValues } from "@/lib/admin/personEmployeePlacementFields";
 
 type Props = {
@@ -43,6 +44,13 @@ export default function PersonDrawerCompactOverview({
                         <dd className="text-alloy-midnight/85">{phone}</dd>
                     </div>
                 </dl>
+            </section>
+
+            <section className="rounded-lg border border-alloy-forge/10 bg-white/80 px-3 py-2.5">
+                <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/50">
+                    Customer accounts
+                </h4>
+                <PersonDrawerCustomerMemberships record={data} />
             </section>
 
             <section className="rounded-lg border border-alloy-forge/10 bg-white/80 px-3 py-2.5">

@@ -10,6 +10,10 @@ import { normalizePhone } from "@/lib/contactNormalize";
 import { DrawerRelationshipPanelSkeleton } from "@/components/admin/workspace/DrawerRelationshipPanelSkeleton";
 import type { FieldDefForLinkedEdit } from "@/lib/admin/drawer/linkedRecordFieldEditing";
 import { primaryPersonIdFromOpportunityRecord } from "@/lib/admin/drawer/linkedRecordFieldEditing";
+import {
+    resolveLeadSummaryPrimaryPersonId,
+    sortOpportunityFamilyContactRows,
+} from "@/lib/admin/drawer/opportunityFamilyContactsOrdering";
 import EditablePersonContactCard from "@/components/admin/opportunity/EditablePersonContactCard";
 import PrimaryPersonContactCard from "@/components/admin/opportunity/PrimaryPersonContactCard";
 import {
@@ -211,7 +215,7 @@ export function FamilyContactsPanel(props: {
         });
     }, [opportunityId, sectionKey, variant, timingEnabled]);
 
-    const primaryPersonId = primaryPersonIdFromOpportunityRecord(record as Record<string, unknown>) ?? "";
+    const primaryPersonId = resolveLeadSummaryPrimaryPersonId(record as Record<string, unknown>) ?? "";
 
     const rows = useMemo(() => {
         const raw = (record._opportunity_persons as unknown[]) ?? [];
@@ -231,20 +235,13 @@ export function FamilyContactsPanel(props: {
             .filter((r) => r.id && r.person_id);
     }, [record._opportunity_persons, refreshKey]);
 
-    const sorted = useMemo(() => {
-        const filtered = primaryPersonId
-            ? rows.filter((r) => String(r.person_id).trim() !== primaryPersonId)
-            : rows;
-        return [...filtered].sort((a, b) => {
-            const ra = String(a.role_type ?? "");
-            const rb = String(b.role_type ?? "");
-            if (ra !== rb) return ra.localeCompare(rb);
-            return String(a.name ?? "").localeCompare(String(b.name ?? ""));
-        });
-    }, [rows, primaryPersonId]);
+    const sorted = useMemo(
+        () => sortOpportunityFamilyContactRows(rows, primaryPersonId || null),
+        [rows, primaryPersonId]
+    );
 
     const eyebrow = oppInqEyebrow;
-    const cardPad = variant === "summary" ? "px-2 py-1.5" : "px-3 py-2.5";
+    const cardPad = variant === "summary" ? "px-1.5 py-0.5" : "px-3 py-2.5";
 
     const roleBadge = variant === "summary" ? oppInqRolePill : oppDrawerRolePillComfortable;
 
@@ -290,22 +287,24 @@ export function FamilyContactsPanel(props: {
                 </div>
             ) : null}
 
-            <OpportunityRecordSectionRegistryActions
-                opportunityId={opportunityId}
-                sectionKey={sectionKey}
-                departmentId={departmentId ?? null}
-                workUnitId={workUnitId ?? null}
-                excludeActionKeys={excludeActionKeys}
-                canMutate={canMutate}
-                router={router}
-                openDrawer={openDrawer}
-                openForm={openForm}
-                onApplied={onRegistryApplied}
-                layoutDensity={registryDensity}
-                actionsFetchEnabled={actionsFetchEnabled}
-            />
+            {variant !== "summary" ? (
+                <OpportunityRecordSectionRegistryActions
+                    opportunityId={opportunityId}
+                    sectionKey={sectionKey}
+                    departmentId={departmentId ?? null}
+                    workUnitId={workUnitId ?? null}
+                    excludeActionKeys={excludeActionKeys}
+                    canMutate={canMutate}
+                    router={router}
+                    openDrawer={openDrawer}
+                    openForm={openForm}
+                    onApplied={onRegistryApplied}
+                    layoutDensity={registryDensity}
+                    actionsFetchEnabled={actionsFetchEnabled}
+                />
+            ) : null}
 
-            <div className={`min-w-0 flex-1 ${variant === "summary" ? "min-h-[2rem]" : ""}`}>
+            <div className={`min-w-0 ${variant === "summary" ? "mt-0" : "flex-1"}`}>
                 {sorted.length === 0 ? (
                     opportunityRelationshipsFullHydrateFailed ? (
                         <div
@@ -325,7 +324,7 @@ export function FamilyContactsPanel(props: {
                             <DrawerRelationshipPanelSkeleton density="comfortable" rows={1} />
                         )
                     ) : shellReservedAdditionalCount > 0 && sorted.length === 0 ? (
-                        <ul className={`${variant === "summary" ? "space-y-1" : "space-y-2.5"} mt-0.5 list-none`}>
+                        <ul className={`${variant === "summary" ? "space-y-0.5" : "space-y-2.5"} ${variant === "summary" ? "mt-0" : "mt-0.5"} list-none`}>
                             {Array.from({ length: shellReservedAdditionalCount }).map((_, i) => (
                                 <li
                                     key={`additional-contact-shell-${i}`}
@@ -349,7 +348,7 @@ export function FamilyContactsPanel(props: {
                         >
                             Additional contacts
                         </div>
-                        <ul className={`${variant === "summary" ? "space-y-1" : "space-y-2.5"} mt-0.5 list-none`}>
+                        <ul className={`${variant === "summary" ? "space-y-0.5" : "space-y-2.5"} ${variant === "summary" ? "mt-0" : "mt-0.5"} list-none`}>
                         {sorted.map((r) => {
                             const personId = String(r.person_id ?? "").trim();
                             const initialValues = personContactCardValuesFromOpportunityPersonRow(r);

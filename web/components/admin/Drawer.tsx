@@ -228,6 +228,8 @@ export default function Drawer({
         );
     };
 
+    const hasHeaderSignals = headerSignals != null && headerSignals !== false;
+
     const headerBlock = (
         <>
             <div
@@ -252,7 +254,7 @@ export default function Drawer({
                 }
             >
                 <div
-                    className={`${cleaningRecordModalTone ? "px-6 pt-3.5 pb-1" : "px-6 pt-4 pb-2"} ${
+                    className={`${cleaningRecordModalTone ? "px-6 pt-3 pb-0.5" : "px-6 pt-4 pb-2"} ${
                         headerTitleRight != null && headerTitleRight !== false ? "flex items-start justify-between gap-4" : ""
                     }`}
                 >
@@ -326,7 +328,7 @@ export default function Drawer({
                 {headerSignals != null && headerSignals !== false && (
                     <div
                         data-adminv2-record-modal-signals-wrap
-                        className={`px-6 ${cleaningRecordModalTone ? "pb-1 pt-0" : "pb-3"}`}
+                        className={`px-6 ${cleaningRecordModalTone ? "pb-0 pt-0 -mb-1.5" : "pb-3"}`}
                         style={
                             isV2
                                 ? {
@@ -346,7 +348,13 @@ export default function Drawer({
                 {headerExtra != null && headerExtra !== false && (
                     <div
                         data-adminv2-record-modal-tabs-wrap
-                        className={`px-6 ${cleaningRecordModalTone ? "pb-1.5 pt-0.5" : "pb-1 pt-0"} ${cleaningRecordModalTone ? "border-t border-solid" : `border-t ${isV2 ? "" : "border-admin-border border-t-alloy-blue/30"}`}`}
+                        className={`px-6 ${
+                            cleaningRecordModalTone
+                                ? hasHeaderSignals
+                                    ? "pb-0 pt-0 -mt-1"
+                                    : "pb-0 pt-1"
+                                : "pb-1 pt-0"
+                        } ${cleaningRecordModalTone ? "border-t border-solid" : `border-t ${isV2 ? "" : "border-admin-border border-t-alloy-blue/30"}`}`}
                         style={
                             isV2
                                 ? {

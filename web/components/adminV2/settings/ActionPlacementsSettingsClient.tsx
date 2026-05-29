@@ -89,6 +89,7 @@ export default function ActionPlacementsSettingsClient() {
     const [editorMode, setEditorMode] = useState<"create" | "edit">("create");
     const [editorSeed, setEditorSeed] = useState<GuidedPlacementSeed | null>(null);
     const [systemDefaultsOpen, setSystemDefaultsOpen] = useState(false);
+    const editorRef = useRef<HTMLDivElement>(null);
     const chooserRef = useRef<HTMLElement>(null);
 
     const scrollToChooser = useCallback(() => {
@@ -169,15 +170,21 @@ export default function ActionPlacementsSettingsClient() {
         setEditorMode("edit");
         setEditorSeed({
             definitionId: row.definition_id,
+            definitionOrgId: row.definition_org_id,
             libraryEntry: lib,
             placementId: row.placement_id,
             entityType: row.entity_type ?? "opportunity",
             surface: row.surface,
+            slot: row.slot,
             sectionKey: row.section_key ?? "",
+            label: row.label,
             orderIndex: row.order_index,
             isActive: row.is_active,
         });
         setEditorOpen(true);
+        requestAnimationFrame(() => {
+            editorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
     };
 
     const removePlacement = async (placementId: string) => {
@@ -216,6 +223,46 @@ export default function ActionPlacementsSettingsClient() {
         }
     };
 
+    const reorderPlacement = async (row: ActionPlacementEditorRow, direction: "up" | "down") => {
+        const peers = orgPlacements
+            .filter(
+                (r) =>
+                    r.surface === row.surface &&
+                    r.slot === row.slot &&
+                    (r.entity_type ?? "") === (row.entity_type ?? "") &&
+                    (r.section_key ?? "") === (row.section_key ?? "")
+            )
+            .sort((a, b) => a.order_index - b.order_index || a.label.localeCompare(b.label));
+        const idx = peers.findIndex((r) => r.placement_id === row.placement_id);
+        const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+        if (idx < 0 || swapIdx < 0 || swapIdx >= peers.length) return;
+        const other = peers[swapIdx];
+        setSavingId(row.placement_id);
+        try {
+            await fetch(`/api/admin/action-placements/${row.placement_id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ order_index: other.order_index }),
+            }).then(async (res) => {
+                const json = (await res.json().catch(() => ({}))) as { error?: string };
+                if (!res.ok) throw new Error(json.error ?? "Update failed");
+            });
+            await fetch(`/api/admin/action-placements/${other.placement_id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ order_index: row.order_index }),
+            }).then(async (res) => {
+                const json = (await res.json().catch(() => ({}))) as { error?: string };
+                if (!res.ok) throw new Error(json.error ?? "Update failed");
+            });
+            await load();
+        } catch (e) {
+            setRowErrors((prev) => ({ ...prev, [row.placement_id]: (e as Error).message }));
+        } finally {
+            setSavingId(null);
+        }
+    };
+
     const listHandlers = {
         orgId: orgId ?? "",
         isAdmin,
@@ -225,6 +272,8 @@ export default function ActionPlacementsSettingsClient() {
         onEdit: openEdit,
         onRemove: (id: string) => void removePlacement(id),
         onToggleEnabled: (id: string, enabled: boolean) => void patchPlacement(id, { is_active: enabled }),
+        onReorder: (row: ActionPlacementEditorRow, direction: "up" | "down") => void reorderPlacement(row, direction),
+        allRows: orgPlacements,
     };
 
     return (
@@ -255,17 +304,19 @@ export default function ActionPlacementsSettingsClient() {
             />
 
             {editorOpen && editorSeed ? (
-                <ActionPlacementGuidedEditor
-                    open={editorOpen}
-                    mode={editorMode}
-                    seed={editorSeed}
-                    canMutate={canAddButtons}
-                    onClose={() => {
-                        setEditorOpen(false);
-                        setEditorSeed(null);
-                    }}
-                    onSaved={() => void load()}
-                />
+                <div ref={editorRef} className="scroll-mt-6">
+                    <ActionPlacementGuidedEditor
+                        open={editorOpen}
+                        mode={editorMode}
+                        seed={editorSeed}
+                        canMutate={canAddButtons}
+                        onClose={() => {
+                            setEditorOpen(false);
+                            setEditorSeed(null);
+                        }}
+                        onSaved={() => void load()}
+                    />
+                </div>
             ) : null}
 
             <section className="space-y-3" data-testid="your-action-buttons">

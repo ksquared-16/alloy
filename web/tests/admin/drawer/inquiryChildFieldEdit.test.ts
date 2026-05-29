@@ -38,6 +38,26 @@ describe("inquiryChildFieldEdit", () => {
         expect(resolveInquiryChildIdentityWriteTarget({ person_id: null })).toBe("customer_member");
     });
 
+    it("patchInquiryChildIdentityFromDrawer PATCHes person first and last name when linked", async () => {
+        const fetchMock = vi.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({ id: "p-1", first_name: "Mia", last_name: "Chen" }),
+        });
+        await patchInquiryChildIdentityFromDrawer({
+            row: { customer_member_id: "cm-1", person_id: "p-1" },
+            draft: { first_name: "Mia", last_name: "Chen", dob: "" },
+            baseline: { first_name: "Mia", last_name: "Chan", dob: "" },
+            fetchFn: fetchMock as unknown as typeof fetch,
+        });
+        expect(fetchMock).toHaveBeenCalledWith(
+            "/api/admin/persons/p-1",
+            expect.objectContaining({
+                method: "PATCH",
+                body: JSON.stringify({ last_name: "Chen" }),
+            })
+        );
+    });
+
     it("patchInquiryChildIdentityFromDrawer PATCHes person route when person_id is set", async () => {
         const fetchMock = vi.fn().mockResolvedValue({
             ok: true,

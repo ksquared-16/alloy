@@ -8,9 +8,9 @@ const SECTION_HEADER_CLASS =
 
 /** Pine accent — aligned with inquiry workflow snapshot header cards. */
 const PREMIUM_SECTION =
-  "rounded-lg border border-alloy-stone/20 border-l-[3px] border-l-[rgb(0,162,131)] bg-white/90 shadow-sm shadow-alloy-stone/10 ring-1 ring-alloy-stone/10 overflow-hidden";
+  "rounded-lg border border-alloy-stone/20 border-l-[3px] border-l-[rgb(0,162,131)] bg-gradient-to-br from-emerald-50/35 via-white/95 to-white shadow-sm shadow-alloy-stone/10 ring-1 ring-alloy-stone/10 overflow-hidden";
 const PREMIUM_HEADER_STATIC =
-  "border-b border-alloy-stone/15 bg-alloy-stone/[0.05] px-3 py-2.5 text-[10px] font-semibold tracking-[0.1em] text-alloy-forge/80";
+  "border-b border-alloy-stone/15 bg-alloy-stone/[0.05] px-2.5 py-1.5 text-[10px] font-semibold tracking-[0.1em] text-alloy-forge/80";
 
 interface EntityDrawerSectionProps {
   config: EntityDrawerSectionConfig;
@@ -51,7 +51,7 @@ export default function EntityDrawerSection({
     <section
       className={`${
         isPremium
-          ? `mb-5 ${PREMIUM_SECTION} ${isCollapsible && !expanded ? "shadow-md shadow-alloy-stone/15" : ""}`
+          ? `mb-3.5 ${PREMIUM_SECTION} ${isCollapsible && !expanded ? "shadow-md shadow-alloy-stone/15" : ""}`
           : "mb-6"
       } ${className}`}
       data-entity-section
@@ -71,7 +71,7 @@ export default function EntityDrawerSection({
             onClick={() => setExpanded((e) => !e)}
             className={`entity-drawer-section-toggle flex min-h-0 min-w-0 flex-1 items-center justify-between gap-2 text-left transition-colors duration-150 ${
               isPremium
-                ? "border-0 bg-transparent px-3 py-2.5 text-[10px] font-semibold tracking-[0.1em] text-alloy-forge/80 hover:bg-alloy-stone/10"
+                ? "border-0 bg-transparent px-2.5 py-1.5 text-[10px] font-semibold tracking-[0.1em] text-alloy-forge/80 hover:bg-alloy-stone/10"
                 : "border-0 bg-transparent px-3 py-2 hover:bg-alloy-stone/25"
             }`}
             aria-expanded={expanded}
@@ -83,8 +83,8 @@ export default function EntityDrawerSection({
           </button>
           {headerRight ? (
             <div
-              className={`flex shrink-0 items-center gap-2 self-center px-3 normal-case tracking-normal ${
-                isPremium ? "py-2.5" : "py-2"
+              className={`flex shrink-0 items-center gap-2 self-center px-2.5 normal-case tracking-normal ${
+                isPremium ? "py-1.5" : "py-2"
               }`}
             >
               {headerRight}
@@ -104,10 +104,10 @@ export default function EntityDrawerSection({
           className={
             blockContent
               ? isPremium
-                  ? "min-w-0 w-full px-3 pb-3 pt-2.5"
+                  ? "min-w-0 w-full px-2.5 pb-2 pt-1.5"
                   : `min-w-0 w-full ${isCollapsible ? "mt-2" : "mt-3"}`
               : isPremium
-                ? `min-w-0 w-full px-3 pb-3 pt-2.5 grid gap-x-4 gap-y-2 ${gridCols} [&>*]:min-w-0`
+                ? `min-w-0 w-full px-2.5 pb-2 pt-1.5 grid gap-x-3 gap-y-1.5 ${gridCols} [&>*]:min-w-0`
                 : `grid gap-x-4 gap-y-2 ${gridCols} ${isCollapsible ? "mt-2" : "mt-3"}`
           }
         >

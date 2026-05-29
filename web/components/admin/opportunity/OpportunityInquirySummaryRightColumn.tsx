@@ -2,6 +2,7 @@
 
 import { memo, useMemo } from "react";
 import type { DrawerInquirySummaryRightColumnRenderModel } from "@/lib/adminV2/drawerPipeline/types";
+import { resolveDrawerReviewAssistViewModel } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceViewModels";
 import { operationalTaskUrgencyBadge } from "@/lib/agent/taskAssist/taskAssistOperationalUrgency";
 import {
     INQUIRY_RIGHT_COLUMN_EMPTY_ROW_CLASS,
@@ -9,6 +10,7 @@ import {
     INQUIRY_RIGHT_COLUMN_TASKS_BODY_CLASS,
     INQUIRY_SUMMARY_RIGHT_COLUMN_ROOT_CLASS,
 } from "@/lib/admin/drawer/opportunityInquiryRightColumnGeometry";
+import BosDrawerAssistCta from "@/components/admin/drawer/BosDrawerAssistCta";
 import OperationalAttentionHeaderStrip from "@/components/admin/drawer/OperationalAttentionHeaderStrip";
 import OpportunityOperationalCompactStrip from "@/components/admin/opportunity/OpportunityOperationalCompactStrip";
 
@@ -39,7 +41,7 @@ function TaskRowSkeleton() {
 function ReviewAssistSkeleton() {
     return (
         <div
-            className="min-h-[3.25rem] rounded-md border border-alloy-stone/12 bg-alloy-stone/[0.06] skeleton-pulse"
+            className="min-h-[2.5rem] rounded-md border border-alloy-stone/12 bg-alloy-stone/[0.06] skeleton-pulse"
             data-review-assist-skeleton="true"
             aria-hidden
         />
@@ -62,20 +64,23 @@ function InquirySummaryReviewAssist({
 }) {
     const hasAssist =
         overviewData._operational_recommendation != null || overviewData._operational_attention != null;
+    const reviewAssist = hasAssist ? resolveDrawerReviewAssistViewModel(overviewData) : null;
+    const showStandaloneBos = !assistLoading && !reviewAssist;
 
-    if (!reviewAssistReserved && !assistLoading && !hasAssist) {
+    if (!reviewAssistReserved && !assistLoading && !hasAssist && !showStandaloneBos) {
         return null;
     }
 
     return (
         <div
-            className="min-w-0 min-h-[3.25rem] shrink-0"
+            className="min-w-0 shrink-0 space-y-1"
             data-drawer-slot="inquiry_summary_review_assist"
-            data-review-assist-slot={hasAssist ? "ready" : assistLoading ? "skeleton" : "reserved"}
+            data-review-assist-slot={
+                hasAssist ? "ready" : assistLoading ? "skeleton" : showStandaloneBos ? "bos_only" : "calm"
+            }
         >
-            {assistLoading && !hasAssist ? (
-                <ReviewAssistSkeleton />
-            ) : hasAssist ? (
+            {assistLoading && !hasAssist ? <ReviewAssistSkeleton /> : null}
+            {hasAssist ? (
                 <OperationalAttentionHeaderStrip
                     variant="chrome"
                     overviewData={overviewData}
@@ -83,13 +88,18 @@ function InquirySummaryReviewAssist({
                     bosAssistEntityId={opportunityId}
                     opportunitySingular={opportunitySingular}
                 />
-            ) : (
-                <div
-                    className="min-h-[2rem] rounded-md border border-alloy-stone/12 bg-alloy-stone/[0.03]"
-                    data-review-assist-placeholder="reserved"
-                    aria-hidden
-                />
+            ) : assistLoading ? null : reviewAssist ? null : (
+                <p className="text-[11px] leading-snug text-alloy-midnight/50" data-review-assist-calm="true">
+                    No urgent action flagged.
+                </p>
             )}
+            {showStandaloneBos ? (
+                <BosDrawerAssistCta
+                    entityId={opportunityId}
+                    overviewData={overviewData}
+                    opportunitySingular={opportunitySingular}
+                />
+            ) : null}
         </div>
     );
 }

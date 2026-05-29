@@ -195,7 +195,18 @@ export function applyPersonDrawerPresentationProfile(
                     : HIDDEN_FIELD_KEYS_ALL;
             const fields = (section.fields ?? [])
                 .filter((f) => !hiddenFields.has(f.key))
-                .map((f) => applyConsentFieldPresentation(f, section.key, profile, fieldTypesByKey?.[f.key]))
+                .map((f) => {
+                    const next = applyConsentFieldPresentation(f, section.key, profile, fieldTypesByKey?.[f.key]);
+                    if (!next) return null;
+                    if (
+                        !child &&
+                        section.key === "basic_info" &&
+                        (next.key === "first_name" || next.key === "last_name" || next.key === "preferred_name")
+                    ) {
+                        return { ...next, editable: true, locked: false };
+                    }
+                    return next;
+                })
                 .filter((f): f is EntityDrawerFieldConfig => f != null);
             return { ...section, fields };
         })

@@ -216,7 +216,7 @@ export default function OperationalReviewAssistBand({
                             data-review-assist-row="operational_read"
                             className={clsx(
                                 opInsightSummaryCompact,
-                                "min-w-0 flex-1 font-medium text-alloy-midnight line-clamp-1",
+                                "min-w-0 flex-1 font-medium text-alloy-midnight",
                             )}
                         >
                             {display.operationalRead}
@@ -224,7 +224,7 @@ export default function OperationalReviewAssistBand({
                     </div>
                     <p
                         data-review-assist-row="do_next"
-                        className={clsx(opInsightSummaryCompact, "min-w-0 text-alloy-midnight/85 line-clamp-1")}
+                        className={clsx(opInsightSummaryCompact, "min-w-0 text-alloy-midnight/85")}
                     >
                         {display.doNext}
                     </p>

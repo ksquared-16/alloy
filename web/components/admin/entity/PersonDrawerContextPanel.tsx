@@ -1,10 +1,6 @@
 "use client";
 
 import RecordDrawerContextPanel from "@/components/admin/drawer/record/RecordDrawerContextPanel";
-import {
-    PersonDrawerEnrollmentMirror,
-    PersonDrawerEnrollmentOpportunitiesMirror,
-} from "@/components/admin/entity/PersonDrawerVisibilitySections";
 import { resolvePersonDrawerProfileFromRecord } from "@/components/admin/entity/PersonDrawerProfileBadges";
 import { buildPersonDrawerRelationshipGroups } from "@/lib/admin/person/buildPersonDrawerRelationshipGroups";
 import { personDrawerRelationshipPresentation } from "@/lib/admin/person/personDrawerPresentationProfile";
@@ -14,6 +10,7 @@ import type {
     PersonSiblingLinkRow,
 } from "@/lib/admin/person/personDrawerVisibilityTypes";
 import { oppInqEyebrow } from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
+import { useMemo } from "react";
 
 type OpenDrawer = (type: string, id: string) => void;
 
@@ -99,6 +96,80 @@ function CompactAssociatedPeople({
     );
 }
 
+function CompactRelatedEnrollment({
+    enrollmentOpps,
+    enrollmentMirror,
+    onOpenDrawer,
+}: {
+    enrollmentOpps: PersonEnrollmentOpportunityRow[];
+    enrollmentMirror: PersonEnrollmentMirrorRow[];
+    onOpenDrawer: OpenDrawer;
+}) {
+    const entries = useMemo(() => {
+        const seen = new Set<string>();
+        const out: Array<{
+            id: string;
+            name: string;
+            status: string | null;
+            detail: string | null;
+        }> = [];
+
+        for (const row of enrollmentOpps) {
+            const id = String(row.opportunity_id ?? "").trim();
+            if (!id || seen.has(id)) continue;
+            seen.add(id);
+            out.push({
+                id,
+                name: row.opportunity_name?.trim() || "Enrollment",
+                status: row.status_label?.trim() || row.status_key?.trim() || null,
+                detail: row.role_label?.trim() || null,
+            });
+        }
+
+        for (const row of enrollmentMirror) {
+            const id = String(row.opportunity_id ?? "").trim();
+            if (!id || seen.has(id)) continue;
+            seen.add(id);
+            const detailParts = [row.outcome_status_label, row.program_label].filter(Boolean).map(String);
+            out.push({
+                id,
+                name: row.opportunity_name?.trim() || "Enrollment",
+                status:
+                    row.opportunity_status_label?.trim() ||
+                    row.opportunity_status_key?.trim() ||
+                    row.outcome_status_label?.trim() ||
+                    null,
+                detail: detailParts.length > 0 ? detailParts.join(" · ") : null,
+            });
+        }
+
+        return out.slice(0, 3);
+    }, [enrollmentOpps, enrollmentMirror]);
+
+    if (entries.length === 0) return null;
+
+    return (
+        <div data-person-drawer-related-enrollment="true">
+            <p className={oppInqEyebrow}>Related enrollment</p>
+            <ul className="mt-1 space-y-1 text-[12px] leading-snug text-alloy-midnight/75">
+                {entries.map((entry) => (
+                    <li key={entry.id} className="flex flex-wrap items-baseline gap-x-1.5">
+                        <button
+                            type="button"
+                            onClick={() => onOpenDrawer("opportunities", entry.id)}
+                            className="font-semibold text-alloy-blue hover:underline"
+                        >
+                            {entry.name}
+                        </button>
+                        {entry.status ? <span className="text-alloy-midnight/45">· {entry.status}</span> : null}
+                        {entry.detail ? <span className="text-alloy-midnight/45">· {entry.detail}</span> : null}
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
+}
+
 /** Operational context only — lead-summary style; no identity repetition. */
 export default function PersonDrawerContextPanel({
     record,
@@ -109,33 +180,22 @@ export default function PersonDrawerContextPanel({
 }) {
     const enrollmentMirror = (record._enrollment_mirror as PersonEnrollmentMirrorRow[]) ?? [];
     const enrollmentOpps = (record._enrollment_opportunities as PersonEnrollmentOpportunityRow[]) ?? [];
-    const latestInquiry = enrollmentOpps[0] ?? null;
-
-    const hasEnrollmentMirror = enrollmentMirror.length > 0;
-    const hasLatestInquiry = Boolean(latestInquiry);
+    const hasRelatedEnrollment = enrollmentMirror.length > 0 || enrollmentOpps.length > 0;
     const hasAssociated = personHasAssociatedPeople(record);
 
-    if (!hasEnrollmentMirror && !hasLatestInquiry && !hasAssociated) {
+    if (!hasRelatedEnrollment && !hasAssociated) {
         return null;
     }
 
     return (
         <RecordDrawerContextPanel data-record-drawer-context="person-operational" variant="lead-summary">
-            <div className="space-y-2">
-                {hasLatestInquiry ? (
-                    <div data-person-drawer-latest-inquiry="true">
-                        <p className={oppInqEyebrow}>Latest inquiry</p>
-                        <PersonDrawerEnrollmentOpportunitiesMirror
-                            rows={[latestInquiry!]}
-                            onOpenDrawer={onOpenDrawer}
-                        />
-                    </div>
-                ) : null}
-                {hasEnrollmentMirror ? (
-                    <div data-person-drawer-enrollment-activity="true">
-                        <p className={oppInqEyebrow}>Enrollment activity</p>
-                        <PersonDrawerEnrollmentMirror rows={enrollmentMirror.slice(0, 2)} onOpenDrawer={onOpenDrawer} />
-                    </div>
+            <div className="space-y-1.5">
+                {hasRelatedEnrollment ? (
+                    <CompactRelatedEnrollment
+                        enrollmentOpps={enrollmentOpps}
+                        enrollmentMirror={enrollmentMirror}
+                        onOpenDrawer={onOpenDrawer}
+                    />
                 ) : null}
                 {hasAssociated ? (
                     <CompactAssociatedPeople record={record} onOpenDrawer={onOpenDrawer} />

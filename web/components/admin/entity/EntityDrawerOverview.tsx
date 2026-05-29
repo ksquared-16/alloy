@@ -819,7 +819,9 @@ export default function EntityDrawerOverview({
     <div
       className={`${
         sectionSurface === "premium"
-          ? "space-y-0 pt-4 pb-1"
+          ? entityType === "persons"
+            ? "space-y-0 pt-2 pb-0"
+            : "space-y-0 pt-4 pb-1"
           : `space-y-0 ${entityType === "schedules" ? "pt-2 [&_section[data-entity-section]]:mb-3" : "pt-4"}`
       }`}
       data-entity-drawer-overview

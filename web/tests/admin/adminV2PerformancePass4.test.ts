@@ -23,9 +23,11 @@ describe("AdminV2 performance pass 4 contracts", () => {
         );
     });
 
-    it("right column shell uses geometry min-height token", () => {
+    it("right column shell is content-driven without reserved min-height band", () => {
         const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("INQUIRY_SUMMARY_RIGHT_COLUMN_SHELL_MIN_H_CLASS");
+        expect(drawer).toContain("data-shell-slot=\"inquiry_summary_right\"");
+        expect(drawer).toMatch(/oppInqInnerCardCompact[\s\S]{0,120}inquiry_summary_right/);
+        expect(drawer).not.toContain("INQUIRY_SUMMARY_RIGHT_COLUMN_SHELL_MIN_H_CLASS");
         expect(drawer).not.toMatch(
             /oppInqInnerCard[\s\S]{0,80}min-h-\[16rem\]/
         );

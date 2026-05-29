@@ -66,29 +66,16 @@ describe("BOS final quality pass", () => {
         expect(html).toContain("review_assist");
     });
 
-    it("Review Assist slot stays reserved before BOS payload arrives", () => {
-        const enrichment = buildDrawerEnrichmentState({
-            record: { id: "opp-1", _record_surface: "drawer_primary" },
-            drawer_id: "opp-1",
-            background_full_failed: false,
-        });
-        const model = buildInquirySummaryRightColumnModel({
-            record: { id: "opp-1" },
-            enrichment,
-            below_fold_enrichment_ready: false,
-            task_assist_enabled: true,
-        });
-        const html = renderToStaticMarkup(
-            <OpportunityInquirySummaryRightColumn
-                model={model}
-                opportunityId="opp-1"
-                overviewData={{ id: "opp-1" }}
-                reviewAssistLoading={false}
-            />
+    it("Review Assist calm state shows compact copy and BOS wiring without blank reserve", () => {
+        const rightCol = readFileSync(
+            join(webRoot, "components/admin/opportunity/OpportunityInquirySummaryRightColumn.tsx"),
+            "utf8"
         );
-        expect(html).toContain('data-review-assist-slot="reserved"');
-        expect(html).toContain('data-review-assist-placeholder="reserved"');
-        expect(html).toContain("min-h-[5.5rem]");
+        expect(rightCol).toContain("BosDrawerAssistCta");
+        expect(rightCol).toContain('"bos_only"');
+        expect(rightCol).toContain('data-review-assist-calm="true"');
+        expect(rightCol).toContain("No urgent action flagged.");
+        expect(rightCol).not.toContain('data-review-assist-placeholder="reserved"');
     });
 
     it("drawer right column renders without late conditional on rightColumnModel", () => {

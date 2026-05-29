@@ -158,7 +158,7 @@ export function PersonDrawerEnrollmentMirror({
     onOpenDrawer: OpenDrawer;
 }) {
     if (rows.length === 0) {
-        return <p className="text-sm text-alloy-midnight/60">No enrollment inquiries linked to this person.</p>;
+        return <p className="text-sm text-alloy-midnight/60">No enrollment records linked to this person.</p>;
     }
 
     return (
@@ -174,7 +174,7 @@ export function PersonDrawerEnrollmentMirror({
                             onClick={() => onOpenDrawer("opportunities", row.opportunity_id)}
                             className="text-alloy-blue hover:underline text-left font-medium"
                         >
-                            {row.opportunity_name?.trim() || "Enrollment inquiry"}
+                            {row.opportunity_name?.trim() || "Enrollment"}
                         </button>
                         {row.outcome_status_label || row.outcome_status_key ? (
                             <span className="text-alloy-muted text-xs">
@@ -203,7 +203,7 @@ export function PersonDrawerEnrollmentMirror({
                         ) : null}
                     </dl>
                     <p className="mt-2 text-[11px] text-alloy-midnight/45">
-                        Placement details are managed on the enrollment inquiry.
+                        Placement details are managed on the enrollment record.
                     </p>
                 </div>
             ))}
@@ -219,7 +219,7 @@ export function PersonDrawerEnrollmentOpportunitiesMirror({
     onOpenDrawer: OpenDrawer;
 }) {
     if (rows.length === 0) {
-        return <p className="text-sm text-alloy-midnight/60">No related enrollment inquiries.</p>;
+        return <p className="text-sm text-alloy-midnight/60">No related enrollment records.</p>;
     }
 
     return (
@@ -231,7 +231,7 @@ export function PersonDrawerEnrollmentOpportunitiesMirror({
                         onClick={() => onOpenDrawer("opportunities", row.opportunity_id)}
                         className="text-alloy-blue hover:underline text-left font-medium"
                     >
-                        {row.opportunity_name?.trim() || "Enrollment inquiry"}
+                        {row.opportunity_name?.trim() || "Enrollment"}
                     </button>
                     {row.status_label || row.status_key ? (
                         <span className="text-alloy-muted text-xs">{row.status_label ?? row.status_key}</span>

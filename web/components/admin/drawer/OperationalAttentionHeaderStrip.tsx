@@ -63,6 +63,60 @@ export default function OperationalAttentionHeaderStrip({
 
     const chrome = variant === "chrome";
 
+    const renderReviewAssistBand = () => {
+        if (!reviewAssist) return null;
+        const draftBody = suggestion?.suggested_content?.body?.trim();
+        const draftSlot = draftBody ? (
+            <div className="relative mt-0.5 w-full min-w-0" data-drawer-slot="deterministic_draft_row">
+                <button
+                    ref={draftTriggerRef}
+                    type="button"
+                    className="w-full rounded border border-alloy-stone/16 bg-white/55 px-1 py-0.5 text-left text-[8px] font-semibold text-alloy-blue hover:bg-white/70 focus:outline-none focus-visible:ring-1 focus-visible:ring-alloy-blue/35"
+                    aria-expanded={draftPopoverOpen}
+                    data-drawer-slot="deterministic_draft_trigger"
+                    onClick={() => setDraftPopoverOpen((v) => !v)}
+                >
+                    Draft · not sent
+                </button>
+                <OperationalAttentionAnchoredDraftPopover
+                    open={draftPopoverOpen}
+                    onClose={() => setDraftPopoverOpen(false)}
+                    anchorRef={draftTriggerRef}
+                    title="Draft"
+                    subtitle="Copy and edit before using."
+                    body={draftBody}
+                    copyLabel="Copy draft"
+                    data-drawer-slot="attention_draft_popover"
+                />
+            </div>
+        ) : null;
+        const bosAssistSlot =
+            bosAssistEntityId?.trim() ? (
+                <BosDrawerAssistCta
+                    entityId={bosAssistEntityId.trim()}
+                    overviewData={overviewData}
+                    opportunitySingular={opportunitySingular}
+                    queuePreviewSeed={queuePreviewSeed}
+                />
+            ) : null;
+        return (
+            <div data-drawer-slot="operational_attention_header" data-attention-surface="suggestion_primary">
+                <OperationalReviewAssistBand
+                    display={reviewAssist.display}
+                    variant={variant}
+                    suppressSectionBrandLabel={suppressSectionBrandLabel}
+                    readinessChrome={reviewAssist.readinessChrome}
+                    supportingDetail={reviewAssist.supportingDetail}
+                    urgencyChipContext={reviewAssist.urgencyChipContext}
+                    priorityExplanation={reviewAssist.priorityExplanation}
+                    draftSlot={draftSlot}
+                    enhanceSlot={suggestion ? <OperationalAttentionEnhanceDraft suggestion={suggestion} /> : null}
+                    bosAssistSlot={bosAssistSlot}
+                />
+            </div>
+        );
+    };
+
     if (err?.message) {
         return (
             <div
@@ -80,7 +134,10 @@ export default function OperationalAttentionHeaderStrip({
         );
     }
 
-    if (!payload) return null;
+    if (!payload) {
+        const reviewAssistBand = renderReviewAssistBand();
+        return reviewAssistBand;
+    }
 
     const wb = payload.waiting.bucket;
     const safeBucket: EnrollmentWaitBucket = isEnrollmentWaitBucket(wb) ? wb : "none";
@@ -134,62 +191,7 @@ export default function OperationalAttentionHeaderStrip({
     const factorsJoined = otherReasons.map((r) => r.label).join(", ");
 
     if (reviewAssist) {
-        const draftBody = suggestion?.suggested_content?.body?.trim();
-
-        const draftSlot = draftBody ? (
-            <div className="relative mt-0.5 w-full min-w-0" data-drawer-slot="deterministic_draft_row">
-                <button
-                    ref={draftTriggerRef}
-                    type="button"
-                    className="w-full rounded border border-alloy-stone/16 bg-white/55 px-1 py-0.5 text-left text-[8px] font-semibold text-alloy-blue hover:bg-white/70 focus:outline-none focus-visible:ring-1 focus-visible:ring-alloy-blue/35"
-                    aria-expanded={draftPopoverOpen}
-                    data-drawer-slot="deterministic_draft_trigger"
-                    onClick={() => setDraftPopoverOpen((v) => !v)}
-                >
-                    Draft · not sent
-                </button>
-                <OperationalAttentionAnchoredDraftPopover
-                    open={draftPopoverOpen}
-                    onClose={() => setDraftPopoverOpen(false)}
-                    anchorRef={draftTriggerRef}
-                    title="Draft"
-                    subtitle="Copy and edit before using."
-                    body={draftBody}
-                    copyLabel="Copy draft"
-                    data-drawer-slot="attention_draft_popover"
-                />
-            </div>
-        ) : null;
-
-        const bosAssistSlot =
-            bosAssistEntityId?.trim() ? (
-                <BosDrawerAssistCta
-                    entityId={bosAssistEntityId.trim()}
-                    overviewData={overviewData}
-                    opportunitySingular={opportunitySingular}
-                    queuePreviewSeed={queuePreviewSeed}
-                />
-            ) : null;
-
-        return (
-            <div
-                data-drawer-slot="operational_attention_header"
-                data-attention-surface="suggestion_primary"
-            >
-                <OperationalReviewAssistBand
-                    display={reviewAssist.display}
-                    variant={variant}
-                    suppressSectionBrandLabel={suppressSectionBrandLabel}
-                    readinessChrome={reviewAssist.readinessChrome}
-                    supportingDetail={reviewAssist.supportingDetail}
-                    urgencyChipContext={reviewAssist.urgencyChipContext}
-                    priorityExplanation={reviewAssist.priorityExplanation}
-                    draftSlot={draftSlot}
-                    enhanceSlot={suggestion ? <OperationalAttentionEnhanceDraft suggestion={suggestion} /> : null}
-                    bosAssistSlot={bosAssistSlot}
-                />
-            </div>
-        );
+        return renderReviewAssistBand()!;
     }
 
     const fallbackAssistFrame = clsx(
@@ -227,6 +229,14 @@ export default function OperationalAttentionHeaderStrip({
                             <span className="font-medium text-alloy-midnight/70">Activity · </span>
                             {payload.auxiliary.activity_stale.label}
                         </p>
+                    ) : null}
+                    {bosAssistEntityId?.trim() ? (
+                        <BosDrawerAssistCta
+                            entityId={bosAssistEntityId.trim()}
+                            overviewData={overviewData}
+                            opportunitySingular={opportunitySingular}
+                            queuePreviewSeed={queuePreviewSeed}
+                        />
                     ) : null}
                 </div>
             </div>

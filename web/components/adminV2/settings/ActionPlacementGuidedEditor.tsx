@@ -7,7 +7,6 @@ import type { ActionRegistryEntry } from "@/lib/admin/actions/actionDefinitionRe
 import {
     SETTINGS_SURFACE_OPTIONS,
     settingsSlotsForSurface,
-    settingsSurfaceLabel,
     surfaceRequiresSectionKey,
 } from "@/lib/admin/actions/actionPlacementPresentation";
 import { ACTION_PLACEMENT_ENTITY_TYPES } from "@/lib/admin/actions/actionButtonCreateUi";
@@ -17,9 +16,11 @@ export type GuidedPlacementSeed = {
     libraryEntry: ActionRegistryEntry;
     entityType?: string;
     surface?: string;
+    slot?: string;
     sectionKey?: string;
     placementId?: string;
     label?: string;
+    definitionOrgId?: string | null;
     orderIndex?: number;
     isActive?: boolean;
 };
@@ -45,17 +46,21 @@ export default function ActionPlacementGuidedEditor({ open, mode, seed, onClose,
     const [sectionKey, setSectionKey] = useState("");
     const [orderIndex, setOrderIndex] = useState(100);
     const [enabled, setEnabled] = useState(true);
+    const [buttonLabel, setButtonLabel] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const canEditLabel = Boolean(seed?.definitionOrgId);
 
     useEffect(() => {
         if (!open || !seed) return;
         setSurface(seed.surface ?? seed.libraryEntry.defaultSurface ?? "queue_row");
-        setSlot(seed.libraryEntry.defaultSlot ?? "row_inline");
+        setSlot(seed.slot ?? seed.libraryEntry.defaultSlot ?? "row_inline");
         setEntityType(seed.entityType ?? "opportunity");
         setSectionKey(seed.sectionKey ?? "");
         setOrderIndex(seed.orderIndex ?? 100);
         setEnabled(seed.isActive !== false);
+        setButtonLabel(seed.label ?? seed.libraryEntry.label);
         setError(null);
     }, [open, seed]);
 
@@ -114,6 +119,17 @@ export default function ActionPlacementGuidedEditor({ open, mode, seed, onClose,
         setSubmitting(true);
         setError(null);
         try {
+            if (canEditLabel && buttonLabel.trim() && buttonLabel.trim() !== (seed.label ?? "").trim()) {
+                const labelRes = await fetch(`/api/admin/action-definitions/${seed.definitionId}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({ label: buttonLabel.trim() }),
+                });
+                const labelJson = (await labelRes.json().catch(() => ({}))) as { error?: string };
+                if (!labelRes.ok) throw new Error(labelJson.error ?? "Could not update label");
+            }
+
             const res = await fetch(`/api/admin/action-placements/${seed.placementId}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
@@ -140,117 +156,143 @@ export default function ActionPlacementGuidedEditor({ open, mode, seed, onClose,
 
     return (
         <div
-            className="rounded-xl border border-alloy-pine/25 bg-white shadow-md"
-            data-testid="action-placement-guided-editor"
-            role="dialog"
-            aria-label={title}
+            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4"
+            data-testid="action-placement-guided-editor-backdrop"
+            onClick={onClose}
         >
-            <div className="flex items-start justify-between gap-3 border-b border-alloy-forge/10 px-4 py-3">
-                <div>
-                    <h2 className="text-sm font-semibold text-alloy-midnight">{title}</h2>
-                    <p className="mt-0.5 text-xs text-alloy-midnight/55">{seed.libraryEntry.description}</p>
+            <div
+                className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-alloy-pine/25 bg-white shadow-lg"
+                data-testid="action-placement-guided-editor"
+                role="dialog"
+                aria-modal="true"
+                aria-label={title}
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="flex items-start justify-between gap-3 border-b border-alloy-forge/10 px-4 py-3">
+                    <div>
+                        <h2 className="text-sm font-semibold text-alloy-midnight">{title}</h2>
+                        <p className="mt-0.5 text-xs text-alloy-midnight/55">{seed.libraryEntry.description}</p>
+                    </div>
+                    <button type="button" className="text-xs text-alloy-midnight/50 hover:text-alloy-midnight" onClick={onClose}>
+                        Cancel
+                    </button>
                 </div>
-                <button type="button" className="text-xs text-alloy-midnight/50 hover:text-alloy-midnight" onClick={onClose}>
-                    Cancel
-                </button>
-            </div>
-            <div className="space-y-3 px-4 py-3">
-                <label className="block text-xs">
-                    <span className="mb-1 block font-medium text-alloy-midnight/70">Where should this appear?</span>
-                    <select
-                        value={surface}
-                        onChange={(e) => setSurface(e.target.value)}
-                        className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
-                        disabled={submitting}
-                    >
-                        {WHERE_OPTIONS.map((o) => (
-                            <option key={o.value} value={o.value}>
-                                {o.label}
-                            </option>
-                        ))}
-                    </select>
-                    <span className="mt-0.5 block text-[11px] text-alloy-midnight/45">
-                        {WHERE_OPTIONS.find((o) => o.value === surface)?.description}
-                    </span>
-                </label>
+                <div className="space-y-3 px-4 py-3">
+                    {mode === "edit" ? (
+                        <label className="block text-xs">
+                            <span className="mb-1 block font-medium text-alloy-midnight/70">Button label</span>
+                            <input
+                                type="text"
+                                value={buttonLabel}
+                                onChange={(e) => setButtonLabel(e.target.value)}
+                                className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm disabled:bg-alloy-stone/[0.04]"
+                                disabled={submitting || !canEditLabel}
+                            />
+                            {!canEditLabel ? (
+                                <span className="mt-0.5 block text-[11px] text-alloy-midnight/45">
+                                    Built-in action labels are fixed. Add your own org action to customize the label.
+                                </span>
+                            ) : null}
+                        </label>
+                    ) : null}
 
-                {surfaceRequiresSectionKey(surface) ? (
                     <label className="block text-xs">
-                        <span className="mb-1 block font-medium text-alloy-midnight/70">Drawer section</span>
+                        <span className="mb-1 block font-medium text-alloy-midnight/70">Where should this appear?</span>
+                        <select
+                            value={surface}
+                            onChange={(e) => setSurface(e.target.value)}
+                            className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                            disabled={submitting}
+                        >
+                            {WHERE_OPTIONS.map((o) => (
+                                <option key={o.value} value={o.value}>
+                                    {o.label}
+                                </option>
+                            ))}
+                        </select>
+                        <span className="mt-0.5 block text-[11px] text-alloy-midnight/45">
+                            {WHERE_OPTIONS.find((o) => o.value === surface)?.description}
+                        </span>
+                    </label>
+
+                    {surfaceRequiresSectionKey(surface) ? (
+                        <label className="block text-xs">
+                            <span className="mb-1 block font-medium text-alloy-midnight/70">Drawer section</span>
+                            <input
+                                type="text"
+                                value={sectionKey}
+                                onChange={(e) => setSectionKey(e.target.value)}
+                                placeholder="e.g. details, inquiry_children"
+                                className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                disabled={submitting}
+                            />
+                            <span className="mt-0.5 block text-[11px] text-alloy-midnight/45">
+                                Match a section from Record layouts (drawer body).
+                            </span>
+                        </label>
+                    ) : null}
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="block text-xs">
+                            <span className="mb-1 block font-medium text-alloy-midnight/70">Record type</span>
+                            <select
+                                value={entityType}
+                                onChange={(e) => setEntityType(e.target.value)}
+                                className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                disabled={submitting}
+                            >
+                                {ACTION_PLACEMENT_ENTITY_TYPES.map((et) => (
+                                    <option key={et} value={et}>
+                                        {actionPlacementEntityTypeOptionLabel(et, labels)}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="block text-xs">
+                            <span className="mb-1 block font-medium text-alloy-midnight/70">Position in that area</span>
+                            <select
+                                value={slot}
+                                onChange={(e) => setSlot(e.target.value)}
+                                className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                disabled={submitting}
+                            >
+                                {slots.map((s) => (
+                                    <option key={s.value} value={s.value}>
+                                        {s.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    </div>
+
+                    <label className="block w-28 text-xs">
+                        <span className="mb-1 block font-medium text-alloy-midnight/70">Sort order</span>
                         <input
-                            type="text"
-                            value={sectionKey}
-                            onChange={(e) => setSectionKey(e.target.value)}
-                            placeholder="e.g. details, inquiry_children"
+                            type="number"
+                            value={orderIndex}
+                            onChange={(e) => setOrderIndex(Number(e.target.value))}
                             className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
                             disabled={submitting}
                         />
-                        <span className="mt-0.5 block text-[11px] text-alloy-midnight/45">
-                            Match a section from Record layouts (drawer body).
-                        </span>
+                        <span className="mt-0.5 block text-[11px] text-alloy-midnight/45">Lower numbers appear first.</span>
                     </label>
-                ) : null}
 
-                <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="block text-xs">
-                        <span className="mb-1 block font-medium text-alloy-midnight/70">Record type</span>
-                        <select
-                            value={entityType}
-                            onChange={(e) => setEntityType(e.target.value)}
-                            className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
-                            disabled={submitting}
-                        >
-                            {ACTION_PLACEMENT_ENTITY_TYPES.map((et) => (
-                                <option key={et} value={et}>
-                                    {actionPlacementEntityTypeOptionLabel(et, labels)}
-                                </option>
-                            ))}
-                        </select>
+                    <label className="flex items-center gap-2 text-xs">
+                        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} disabled={submitting} />
+                        <span className="text-alloy-midnight/70">Enabled for your organization</span>
                     </label>
-                    <label className="block text-xs">
-                        <span className="mb-1 block font-medium text-alloy-midnight/70">Position in that area</span>
-                        <select
-                            value={slot}
-                            onChange={(e) => setSlot(e.target.value)}
-                            className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
-                            disabled={submitting}
-                        >
-                            {slots.map((s) => (
-                                <option key={s.value} value={s.value}>
-                                    {s.label}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
+
+                    {error ? <p className="text-xs text-red-600">{error}</p> : null}
+
+                    <button
+                        type="button"
+                        disabled={submitting || !canMutate}
+                        className="rounded-lg bg-alloy-pine px-3 py-1.5 text-xs font-medium text-white disabled:opacity-45"
+                        onClick={() => void (mode === "create" ? submitCreate() : submitEdit())}
+                    >
+                        {submitting ? "Saving…" : mode === "create" ? "Add button" : "Save changes"}
+                    </button>
                 </div>
-
-                <label className="block w-28 text-xs">
-                    <span className="mb-1 block font-medium text-alloy-midnight/70">Sort order</span>
-                    <input
-                        type="number"
-                        value={orderIndex}
-                        onChange={(e) => setOrderIndex(Number(e.target.value))}
-                        className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
-                        disabled={submitting}
-                    />
-                    <span className="mt-0.5 block text-[11px] text-alloy-midnight/45">Lower numbers appear first.</span>
-                </label>
-
-                <label className="flex items-center gap-2 text-xs">
-                    <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} disabled={submitting} />
-                    <span className="text-alloy-midnight/70">Enabled for your organization</span>
-                </label>
-
-                {error ? <p className="text-xs text-red-600">{error}</p> : null}
-
-                <button
-                    type="button"
-                    disabled={submitting || !canMutate}
-                    className="rounded-lg bg-alloy-pine px-3 py-1.5 text-xs font-medium text-white disabled:opacity-45"
-                    onClick={() => void (mode === "create" ? submitCreate() : submitEdit())}
-                >
-                    {submitting ? "Saving…" : mode === "create" ? "Add button" : "Save changes"}
-                </button>
             </div>
         </div>
     );

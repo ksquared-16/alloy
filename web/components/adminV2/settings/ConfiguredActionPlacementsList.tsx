@@ -32,9 +32,11 @@ export type ConfiguredActionPlacementsListProps = {
     savingId: string | null;
     rowErrors: Record<string, string>;
     readOnly?: boolean;
+    allRows?: ActionPlacementEditorRow[];
     onEdit?: (row: ActionPlacementEditorRow) => void;
     onRemove?: (placementId: string) => void;
     onToggleEnabled?: (placementId: string, enabled: boolean) => void;
+    onReorder?: (row: ActionPlacementEditorRow, direction: "up" | "down") => void;
 };
 
 export default function ConfiguredActionPlacementsList({
@@ -45,9 +47,11 @@ export default function ConfiguredActionPlacementsList({
     savingId,
     rowErrors,
     readOnly = false,
+    allRows,
     onEdit,
     onRemove,
     onToggleEnabled,
+    onReorder,
 }: ConfiguredActionPlacementsListProps) {
     const { labels } = useEntityLabels();
     const groups = groupPlacementEditorRows(rows, labels);
@@ -77,6 +81,18 @@ export default function ConfiguredActionPlacementsList({
                                 entity_type: row.entity_type,
                                 org_id: row.definition_org_id,
                             });
+                            const peerRows = (allRows ?? rows)
+                                .filter(
+                                    (r) =>
+                                        r.surface === row.surface &&
+                                        r.slot === row.slot &&
+                                        (r.entity_type ?? "") === (row.entity_type ?? "") &&
+                                        (r.section_key ?? "") === (row.section_key ?? "")
+                                )
+                                .sort((a, b) => a.order_index - b.order_index || a.label.localeCompare(b.label));
+                            const peerIndex = peerRows.findIndex((r) => r.placement_id === row.placement_id);
+                            const canMoveUp = peerIndex > 0;
+                            const canMoveDown = peerIndex >= 0 && peerIndex < peerRows.length - 1;
                             return (
                                 <li
                                     key={row.placement_id}
@@ -114,9 +130,37 @@ export default function ConfiguredActionPlacementsList({
                                                 </span>
                                                 {formatActionPlacementWhere(row, labels)}
                                             </p>
+                                            <p className="text-[11px] text-alloy-midnight/50">
+                                                Sort order: {row.order_index}
+                                            </p>
                                         </div>
                                         {!readOnly ? (
                                             <div className="flex shrink-0 flex-row flex-wrap items-center gap-3 sm:flex-col sm:items-end">
+                                                {cap.editable && isAdmin && canMutate && onReorder ? (
+                                                    <div className="flex items-center gap-1 text-[11px] text-alloy-midnight/55">
+                                                        <span>Order</span>
+                                                        <button
+                                                            type="button"
+                                                            className="rounded border border-alloy-forge/15 px-1.5 py-0.5 hover:bg-alloy-stone/[0.06] disabled:opacity-40"
+                                                            disabled={saving || !canMoveUp}
+                                                            aria-label="Move up"
+                                                            data-testid={`action-placement-move-up-${row.placement_id}`}
+                                                            onClick={() => onReorder(row, "up")}
+                                                        >
+                                                            ↑
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            className="rounded border border-alloy-forge/15 px-1.5 py-0.5 hover:bg-alloy-stone/[0.06] disabled:opacity-40"
+                                                            disabled={saving || !canMoveDown}
+                                                            aria-label="Move down"
+                                                            data-testid={`action-placement-move-down-${row.placement_id}`}
+                                                            onClick={() => onReorder(row, "down")}
+                                                        >
+                                                            ↓
+                                                        </button>
+                                                    </div>
+                                                ) : null}
                                                 <label className="flex items-center gap-2 text-xs">
                                                     <span className="text-alloy-midnight/55">Enabled</span>
                                                     <input

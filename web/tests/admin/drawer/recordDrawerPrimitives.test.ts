@@ -32,12 +32,13 @@ describe("record drawer premium primitives", () => {
         expect(drawer).toContain("OpportunityDrawerHeaderActionsPanel");
     });
 
-    it("Person and Location use shared context panel primitives", () => {
+    it("Person drawer header uses metadata only; Location keeps shared context panel", () => {
+        const drawer = read("components/admin/AdminEntityDrawer.tsx");
+        expect(drawer).not.toContain("PersonDrawerContextPanel");
         const person = read("components/admin/entity/PersonDrawerContextPanel.tsx");
         const location = read("components/admin/entity/LocationDrawerContextPanel.tsx");
         expect(person).toContain("RecordDrawerContextPanel");
-        expect(person).toContain('variant="lead-summary"');
-        expect(person).toContain("person-operational");
         expect(location).toContain("RecordDrawerContextPanel");
+        expect(drawer).toContain("LocationDrawerContextPanel");
     });
 });

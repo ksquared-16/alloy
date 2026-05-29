@@ -16,7 +16,7 @@ export const oppInqNameLink =
 
 /** Contact row: channel values (phone / email) */
 export const oppInqContactRow =
-    "mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12px] leading-snug text-alloy-midnight/70";
+    "mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] leading-snug text-alloy-midnight/70";
 
 /** Phone / email as links (same scale as row, not display-name size) */
 export const oppInqContactChannelLink =
@@ -35,6 +35,10 @@ export const oppInqRolePill =
 /** Inner card shell (two-column summary) — flex so columns stretch on large screens */
 export const oppInqInnerCard =
     "flex min-h-0 min-w-0 flex-1 flex-col rounded-lg border border-alloy-stone/[0.1] bg-white/[0.97] px-2.5 py-2.5 shadow-sm ring-1 ring-alloy-stone/[0.06]";
+
+/** Compact inner card for Lead Summary Family & contacts column. */
+export const oppInqInnerCardCompact =
+    "flex min-h-0 min-w-0 flex-1 flex-col rounded-lg border border-alloy-stone/[0.1] bg-white/[0.97] px-1.5 py-1 shadow-sm ring-1 ring-alloy-stone/[0.06]";
 
 /** Communication / Notes segmented control */
 export function oppInqTabBtn(active: boolean): string {
@@ -63,4 +67,4 @@ export const personDrawerRolePillClassName =
 
 /** Lead summary outer shell — Opportunity inquiry summary + person operational context. */
 export const oppInqLeadSummaryShellClassName =
-    "rounded-xl border border-alloy-stone/15 border-l-[3px] border-l-[rgb(0,162,131)] bg-gradient-to-br from-emerald-50/45 via-white to-white px-2 py-1.5 shadow-md ring-1 ring-alloy-stone/10";
+    "rounded-xl border border-alloy-stone/15 border-l-[3px] border-l-[rgb(0,162,131)] bg-gradient-to-br from-emerald-50/45 via-white to-white px-2 py-0.5 shadow-md ring-1 ring-alloy-stone/10";

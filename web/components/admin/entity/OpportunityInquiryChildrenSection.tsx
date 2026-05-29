@@ -40,15 +40,15 @@ import {
 import { User } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-/** Literal Tailwind classes (must not be composed at runtime). DOB column uses min width so dates never truncate. */
+/** Literal Tailwind classes (must not be composed at runtime). DOB column compact; Desired Start wider. */
 const INQUIRY_CHILD_DESKTOP_GRID_7 =
-    "grid grid-cols-[minmax(0,1.2fr)_minmax(8.75rem,0.95fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,1.05fr)] items-center gap-x-1.5 gap-y-1";
+    "grid grid-cols-[minmax(0,1.2fr)_minmax(6.5rem,0.72fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,1.05fr)] items-center gap-x-1.5 gap-y-1";
 const INQUIRY_CHILD_DESKTOP_GRID_8 =
-    "grid grid-cols-[minmax(0,1.1fr)_minmax(8.75rem,0.9fr)_minmax(0,0.62fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,1.05fr)] items-center gap-x-1.5 gap-y-1";
+    "grid grid-cols-[minmax(0,1.1fr)_minmax(6.5rem,0.68fr)_minmax(7.75rem,1fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,1.05fr)] items-center gap-x-1.5 gap-y-1";
 const INQUIRY_CHILD_DESKTOP_GRID_8_CUSTOM_1 =
-    "grid grid-cols-[minmax(0,1.1fr)_minmax(8.75rem,0.9fr)_minmax(0,0.62fr)_minmax(0,0.72fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,1.05fr)] items-center gap-x-1.5 gap-y-1";
+    "grid grid-cols-[minmax(0,1.1fr)_minmax(6.5rem,0.68fr)_minmax(7.75rem,0.95fr)_minmax(0,0.72fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,1.05fr)] items-center gap-x-1.5 gap-y-1";
 const INQUIRY_CHILD_DESKTOP_GRID_8_CUSTOM_2 =
-    "grid grid-cols-[minmax(0,1.05fr)_minmax(8.75rem,0.88fr)_minmax(0,0.58fr)_minmax(0,0.68fr)_minmax(0,0.68fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,1.05fr)] items-center gap-x-1.5 gap-y-1";
+    "grid grid-cols-[minmax(0,1.05fr)_minmax(6.5rem,0.65fr)_minmax(7.5rem,0.95fr)_minmax(0,0.68fr)_minmax(0,0.68fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,0.78fr)_minmax(0,1.05fr)] items-center gap-x-1.5 gap-y-1";
 
 function inquiryChildDesktopGridClass(showDesiredStart: boolean, customColumnCount: number): string {
     if (customColumnCount >= 2) return INQUIRY_CHILD_DESKTOP_GRID_8_CUSTOM_2;
@@ -62,7 +62,7 @@ const INQUIRY_CHILD_COL_HDR =
 /** Header row supplies labels; per-field labels stay hidden to keep one compact row. */
 const INQUIRY_CHILD_MOBILE_LABEL = "hidden";
 const INQUIRY_CHILD_CELL = "min-w-0 self-center";
-const INQUIRY_CHILD_DOB_CELL = "min-w-[8.75rem] shrink-0 self-center";
+const INQUIRY_CHILD_DOB_CELL = "min-w-[6.5rem] shrink-0 self-center";
 const INQUIRY_CHILD_DOB_READ =
     "block whitespace-nowrap text-[11px] leading-tight tabular-nums text-alloy-midnight/70";
 
@@ -853,7 +853,7 @@ export default function OpportunityInquiryChildrenSection({
                                                     }));
                                                     scheduleIdentitySave(r);
                                                 }}
-                                                className={`${fieldInput} w-[7.25rem] shrink-0`}
+                                                className={`${fieldInput} w-[6.5rem] shrink-0`}
                                                 aria-label={`Date of birth for ${displayName}`}
                                             />
                                             {age ? (

@@ -3,9 +3,9 @@
 import { useMemo } from "react";
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
 import type { FieldDefForLinkedEdit } from "@/lib/admin/drawer/linkedRecordFieldEditing";
+import { resolveLeadSummaryPrimaryPersonId } from "@/lib/admin/drawer/opportunityFamilyContactsOrdering";
 import {
     primaryPersonCardValuesFromRecord,
-    primaryPersonIdFromOpportunityRecord,
     resolvePrimaryPersonCardFieldGates,
 } from "@/lib/admin/drawer/primaryPersonCardEdit";
 import EditablePersonContactCard from "@/components/admin/opportunity/EditablePersonContactCard";
@@ -32,7 +32,7 @@ export default function PrimaryPersonContactCard({
     openDrawer,
     onPersonUpdated,
 }: Props) {
-    const personId = primaryPersonIdFromOpportunityRecord(record) ?? "";
+    const personId = resolveLeadSummaryPrimaryPersonId(record) ?? "";
     const initialValues = useMemo(() => primaryPersonCardValuesFromRecord(record), [record]);
     const gates = useMemo(
         () => resolvePrimaryPersonCardFieldGates(record, fieldDefinitions, canMutate),

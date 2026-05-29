@@ -25,13 +25,12 @@ describe("Person drawer premium primitives", () => {
         expect(meta).toContain("data-record-drawer-back-link");
     });
 
-    it("PersonDrawerContextPanel is operational-only lead summary", () => {
-        const src = read("components/admin/entity/PersonDrawerContextPanel.tsx");
-        expect(src).toContain('variant="lead-summary"');
-        expect(src).toContain("PersonDrawerEnrollmentOpportunitiesMirror");
-        expect(src).toContain("CompactAssociatedPeople");
-        expect(src).not.toContain("<PersonDrawerProfileBadges");
-        expect(src).not.toContain("backLink");
+    it("person drawer header omits Related enrollment context strip", () => {
+        const drawer = read("components/admin/AdminEntityDrawer.tsx");
+        expect(drawer).toContain("PersonDrawerHeaderMetadata");
+        expect(drawer).not.toContain("PersonDrawerContextPanel");
+        const panel = read("components/admin/entity/PersonDrawerContextPanel.tsx");
+        expect(panel).toContain("Related enrollment");
     });
 
     it("PersonDrawerProfileBadges use substantial title-rail role pills", () => {
