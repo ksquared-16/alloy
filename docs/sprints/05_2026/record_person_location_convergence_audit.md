@@ -1,7 +1,7 @@
 # Record, Person & Location Convergence Sprint — Card 0 Audit
 
 **Date:** 2026-05-29  
-**Status:** Card 0 audit complete · **Card 1 shipped (2026-05-29)** · **Card 2 shipped (2026-05-29)** — child location authority display resolver  
+**Status:** Card 0 audit complete · **Card 1 shipped (2026-05-29)** · **Card 2 shipped (2026-05-29)** · **Card 3 audit complete (2026-05-29)** — person drawer convergence design  
 **Goal:** Architectural baseline for converging location, room, child inquiry, person drawer, relationships, record lifecycle, household terminology, and enrollment navigation into a coherent operator model.
 
 **Canonical references:** `docs/core/glossary.md`, `docs/system/entity-model.md`, `docs/system/record-system.md`, `docs/system/workspace-system.md`, `docs/system/configuration-system.md`, `docs/sprints/05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`, `docs/sprints/05_2026/waitlist_priority_fact_truth_child_scope.md`, `docs/sprints/05_2026/completed/settings_control_plane_closeout.md`
@@ -638,19 +638,20 @@ Department: Enrollment (key: enrollment)
 
 ---
 
-## Suggested sprint card sequencing (audit-only proposal)
+## Suggested sprint card sequencing
 
-| Card | Scope |
-|------|-------|
-| 1 | ~~Location hierarchy API~~ **Shipped (partial):** docs + inquiry UI labels/order + location drawer target spec | ✅ Card 1 |
-| 1b | Location hierarchy API (`parent_location_id`) + settings UX for site→room | Deferred |
-| 2 | OCM field_definitions parity + inquiry grid header policy | Partially done in Card 1 |
-| 3 | Placement sync verification on OCM site/room PATCH |
-| 4 | Household → Customer/Family string pass (operator UI) |
-| 5 | Person drawer → layout control plane (phase 1) |
-| 6 | Relationship editor API (person_relationships, customer_persons) |
-| 7 | Archive APIs for person, opportunity, location |
-| 8 | Add child modal persistence + placement fields |
+| Card | Scope | Status |
+|------|-------|--------|
+| 1 | Docs + inquiry UI labels/order + location drawer target spec | ✅ Shipped |
+| 1b | Location hierarchy API (`parent_location_id`) + settings UX | Deferred |
+| 2 | Child location authority display resolver | ✅ Shipped |
+| 3 | Person drawer convergence audit + target architecture | ✅ Audit complete |
+| 4 | Person drawer layout control plane (see Card 3 § Recommended Card 4) | Planned |
+| 5 | Relationship editor + profile resolver + enrollment mirror | Planned |
+| 6 | Person archive/deactivate governance | Planned |
+| 7 | Household → Customer/Family string pass | Backlog |
+| 8 | Queue child-location enrichment | Backlog |
+| 9 | Add child modal persistence + placement fields | Backlog |
 
 ---
 
@@ -800,6 +801,345 @@ Surfaces that render opportunity location and Card 2 disposition:
 | Drawer shell loading still shows queue-seed opportunity location before full hydrate | Acceptable gate-only fallback; full record replaces with resolver output |
 | Overview edit mode for `location_id` still edits opportunity FK | Canonical child placement remains on OCM; opportunity field is convenience |
 | Queue operators may still see opportunity-level site in meta lines | Documented; needs queue enrichment card |
+
+---
+
+## Card 3 — Person Drawer Convergence Audit & Target Architecture (audit only, 2026-05-29)
+
+**Status:** Audit + design only — **no drawer implementation, no migrations, no schema changes.**
+
+**Doctrine:** Opportunity drawer is the reference experience. Person drawer should eventually share the same shell, loading behavior, navigation model, and configuration philosophy — with **person-type-aware section composition**, not parallel hardcoded child/parent variants.
+
+---
+
+### Part A — Full Person Drawer Audit
+
+#### A.1 Entry points (every `openDrawer({ type: "persons" })` path)
+
+**Stack behavior** (`AdminDrawerContext.tsx`):
+- **`openViewPersonFromOpportunity`** — sets `parent: { type: "opportunities", id }`; opportunity snapshot restore on back. **Only path with explicit parent stack.**
+- **All other opens** — push current drawer onto stack; no opportunity restore semantics.
+
+| Category | Source context | File(s) | Parent stack |
+|----------|----------------|---------|--------------|
+| **Opportunity (canonical)** | Inquiry child, primary/additional contact | `openViewPersonFromOpportunity.ts`; `EditablePersonContactCard.tsx`, `PrimaryPersonContactCard.tsx`, `FamilyContactsPanel.tsx`; `AdminEntityDrawer.tsx` (inquiry children, inquiry summary) | **Yes** |
+| **Opportunity (direct)** | Household people, Related tab person link, legacy overview link | `OpportunityHouseholdPeoplePanel.tsx`; `AdminEntityDrawer.tsx` (~10483, ~13939) | No |
+| **People directory** | `/admin/people` list + create | `PeopleClient.tsx` | No |
+| **Customer / contact / member** | Overview links, legacy banners | `AdminEntityDrawer.tsx` (customer, contact, member hosts) | No |
+| **Location / vendor** | `person_locations`, vendor people | `AdminEntityDrawer.tsx`, `RelatedRecordsTabs.tsx` | No |
+| **Job / schedule** | `primary_person_id` link fields | `EntityDrawerOverview` via `entityPresentation` overrides | No |
+| **System admin** | DB relationships, documents list | `DbRelationshipsClient.tsx`, `DocumentsClient.tsx` | No |
+| **Forms intake** | Submission case file connected records | `SubmissionIntakeCaseFileContent.tsx`, `FormSubmissionDetailClient.tsx` | No |
+| **Dev** | Direct open helper | `personDrawerDevDirectOpen.ts` | No |
+
+**Does NOT open person drawer:**
+- Communications person search (`QuickMessageModal`, `person-search` API) — recipient picker only
+- CRM entity search picker — selection only
+- Task Assist entity search — opportunities, not persons
+- Workspace queues — opportunities/schedules
+- `ContextualRecordOpenListener` — opportunities only
+
+**Production open sites:** ~28 (excluding tests). Prefetch: `prefetchPersonDrawerSnapshot.ts`, `prefetchLinkedPersonsFromOpportunityRecord.ts` (idle warm from opportunity).
+
+#### A.2 Current drawer architecture
+
+| Layer | Implementation | Configurable? |
+|-------|----------------|---------------|
+| **Shell** | `AdminEntityDrawer.tsx` — same host as all entities | Shared |
+| **Overview (shipped)** | `PersonDrawerCompactOverview.tsx` — hardcoded Contact + Employee + Relationships slot | **Hardcoded** |
+| **Overview (bypassed)** | `EntityDrawerOverview.tsx` + `entityPresentation.persons` | Defined but **not rendered** for existing persons |
+| **Related tab** | Hardcoded sections in `AdminEntityDrawer.tsx` (~10624+) | Section labels hardcoded; role labels from org settings |
+| **Create** | Inline form in `AdminEntityDrawer.tsx` (first/last/email/phone) | Hardcoded |
+| **Tabs** | `entityPresentation.ts` — `overview`, `related`, `documents` | Presentation config (used for tab list) |
+| **Table columns** | `entityPresentation.ts` persons table | Partially configurable |
+
+**Data loaders:**
+
+| Stage | API / module |
+|-------|----------------|
+| Primary GET | `GET /api/admin/entity/persons/:id` — native row + `_customer_persons`, `_person_relationships`, `_linked_locations`, `_linked_opportunities`, compatibility rows, `_field_definitions` |
+| Related tab (lazy) | `GET /api/admin/related/person/:id` |
+| PATCH | `PATCH /api/admin/persons/:id` — native keys + `field_values` custom keys |
+| Create | `POST /api/admin/persons` |
+| Prefetch / cache | `prefetchPersonDrawerSnapshot.ts`, `drawerEntitySnapshotCache.ts` (120s TTL) |
+
+**Loading gates (person-specific):**
+- `usePersonCompactOverview` → body branch when data ready
+- `personDrawerShowLoadingShell` — cold cache + loading
+- Warm snapshot skips loading shell (`adminV2PerformancePass2.test.ts`)
+
+**Config sources:**
+
+| Source | Person support | Runtime effect today |
+|--------|------------------|----------------------|
+| `entityPresentation.ts` | Yes (persons) | Table + tab list; drawer sections **bypassed** |
+| `field_definitions` (`entity_type=person`) | Yes — Settings → Person Fields | Attached on GET; PATCH works; **not rendered** in compact overview |
+| `field_placements_v1` / drawer policy | Opportunity/job only | Person GET may attach policy; UI ignores |
+| `record_drawer_layouts` | **No** — not in `layoutsSettingsEntities.ts` | Not used |
+| `record_layouts` global templates | No person template | Not used |
+| `status_definitions` | Yes | `_status_display` on GET; header badge when set |
+
+**Critical bug (audit finding):** `overviewCustomContent` early-returns `{}` for existing persons (`AdminEntityDrawer.tsx` ~7808), so the **Relationships slot in compact overview never renders**. Dead code below (~8070–8173) would populate customers/locations/opportunities. **Related tab is the live relationship surface.**
+
+#### A.3 Person types — how the system actually distinguishes roles
+
+**There is no `person_type` column and no person-drawer layout fork.** Role is inferred from **join tables and context**, not from a single enum.
+
+| Operator concept | Primary storage | How inferred | Person drawer reflects? |
+|------------------|-----------------|--------------|-------------------------|
+| **Child** | `customer_members.relationship = 'child'`; optional `customer_persons.role_type = 'child'` | Member roster + OCM; `person_id` bridge optional | Related tab → legacy member link only; **no child profile/enrollment on person** |
+| **Parent** | `customer_persons.role_type = 'parent'`; `person_relationships.relationship_type = 'parent'` | Customer + directed edge | Related tab read-only |
+| **Guardian** | Same with `guardian` | Same | Same |
+| **Emergency contact** | `customer_persons`, `person_relationships`, `opportunity_persons` | Opportunity panels + customer links | Same; opportunity `FamilyContactsPanel` is edit surface |
+| **Employee** | `persons.is_employee`, `employee_id`, `employee_source` | Native column | **Card 2** — editable in compact overview |
+| **Unknown / generic** | Default when no role edges | Any person without resolved role context | Same compact UI as parent |
+
+**Child enrollment fields** (Location, Program, Room, Status) live on **`opportunity_customer_members`**, edited only in **`OpportunityInquiryChildrenSection`** — not on person drawer.
+
+**Vocabulary tables (org-configurable labels):**
+- `customer_person_role_types`
+- `person_relationship_type_settings`
+- `customer_member_relationship_types`
+
+---
+
+### Part B — Relationship Audit
+
+#### B.1 Relationship graph (as implemented)
+
+```
+persons (canonical identity)
+  ├── customer_persons → customers (role_type: parent, guardian, child, emergency_contact, …)
+  ├── person_relationships → persons (directed: adult → child)
+  ├── person_locations → locations
+  ├── customer_members (via person_id bridge) — child roster
+  ├── opportunity_persons — NOT loaded on person GET (opportunity-scoped only)
+  └── opportunities.primary_person_id — reverse lookup in related API only
+```
+
+| Edge | Table | Admin CRUD API | Person drawer | Opportunity drawer |
+|------|-------|----------------|---------------|-------------------|
+| Parent → child | `person_relationships` | **None** | Related tab read | — |
+| Guardian → child | `person_relationships` | **None** | Related tab read | — |
+| Emergency → child | `person_relationships` + `customer_persons` | **None** | Related tab read | `AddFamilyMemberModal`, `add_family_member` action |
+| Account role | `customer_persons` | `add_related_person` action only | Related tab read | `FamilyContactsPanel`, `OpportunityHouseholdPeoplePanel` |
+| Child roster | `customer_members` | `PATCH` / `DELETE` customer-members | Related legacy link | `OpportunityInquiryChildrenSection` |
+| Child enrollment | `opportunity_customer_members` | `PATCH` OCM | **Not on person** | Inquiry children grid |
+| Sibling | Implicit (shared `customer_id`) | Derived in `householdPlacementFacts.ts` | **Not shown** | Multiple children on opportunity |
+| Employee household | `persons.is_employee` via `customer_persons` join | `PATCH` persons | Employee card | — |
+
+#### B.2 Gaps
+
+1. **No relationship editor** on person drawer — `DbRelationshipsClient` copy references adding from person drawer; **not implemented**.
+2. **`opportunity_persons` invisible** when viewing a person — no reverse lookup on person GET/related.
+3. **Overview Relationships card dead** — compact overview slot never populated.
+4. **Three parallel child representations** — `customer_members`, `customer_persons` (child role), `person_relationships` — intake/booking may write different layers inconsistently.
+5. **Sibling has no first-class edge** — placement facts only.
+
+---
+
+### Part C — Target Architecture (design only)
+
+#### C.1 Shared principles (align with opportunity drawer)
+
+| Principle | Opportunity today | Person target |
+|-----------|-------------------|---------------|
+| Drawer shell | `AdminEntityDrawer` + record chrome + staged reveal | **Same shell** — retire `PersonDrawerCompactOverview` fork |
+| Layout authority | `record_drawer_layouts` + `entityPresentation` fallback + injected system sections | **Add `person` to layout control plane** |
+| Field behavior | `field_definitions` + `field_placements_v1` on opportunity | **Same pipeline** for person native + custom fields |
+| Loading | Bootstrap / snapshot / `drawer_visible` patterns | **Reuse** person prefetch + extend to layout-aware reveal |
+| Navigation | Parent stack from queue/workspace | **Generalize** `openViewPersonFromOpportunity` pattern for customer parent where needed |
+| Type-specific UI | Inquiry children injected section (not a separate drawer) | **Section visibility by resolved person profile**, not separate drawer routes |
+
+#### C.2 Person profile resolution (design)
+
+Introduce a **read-only resolver** (future card) — `resolvePersonDrawerProfile(personRecord, context?)`:
+
+| Profile | Resolution signals (priority order) |
+|---------|-----------------------------------|
+| `child` | `customer_members.relationship = 'child'` with `person_id` match; or `customer_persons.role_type = 'child'` |
+| `parent` | `customer_persons.role_type` in (`parent`, `primary_contact`) or `person_relationships` as `from_person` with type `parent` |
+| `guardian` | `guardian` role types |
+| `emergency_contact` | `emergency_contact` on customer_persons or person_relationships |
+| `employee` | `persons.is_employee === true` (may combine with parent) |
+| `generic` | Fallback |
+
+**Not a stored enum** — computed per open for section composition. Supports multi-hat persons (e.g. employee + parent) via **section union**, not exclusive layout swap.
+
+#### C.3 Shared header (all person types)
+
+| Field | Exists today | Target |
+|-------|--------------|--------|
+| **Name** | `first_name`, `last_name`, `_person_name`; header shows name without prefix | Keep; add `preferred_name` when set |
+| **Person type badge** | **Missing** | Show primary profile label from resolver (e.g. "Parent", "Child", "Employee") — config-driven labels from role type settings |
+| **Primary contact** | email/phone on `persons`; compact overview read-only | Editable via field policy; show best contact method in header |
+| **Status** | `status_key`, `_status_display`; header badge when set | Keep; align with opportunity status chrome |
+| **Profile photo** | **Missing** — no `avatar_url` on `persons` | Future — header slot reserved; requires schema/media card |
+
+#### C.4 Child layout (recommended sections)
+
+| Section | Fields / content | Exists today | Gap |
+|---------|------------------|--------------|-----|
+| **Profile** | Name, DOB, age, preferred name | `persons.date_of_birth`, `preferred_name`; age computable; name in header only | Compact overview hides profile fields; **no gender column** in schema |
+| **Enrollment** | Location, Program, Room, Status | On **OCM** per active inquiry; not on person | **Read-only mirror** from active `opportunity_customer_members` rows linked via `customer_members.person_id` — deep-link to opportunity; **no person-native enrollment SoT** |
+| **Relationships** | Parents, guardians, emergency contacts, siblings | `_person_relationships`, `_customer_persons` on GET; overview dead | Enable overview section; group by relationship type; siblings via shared customer |
+| **Documents** | Person-linked docs | Related tab documents (lazy) | Future dedicated section on layout control plane |
+| **Activity** | Comms / events | **Missing** on person drawer | Future — activity tab pattern from opportunity |
+
+**Schema note:** Gender is **not implemented** (`persons` has no column; no `gender` in web/). Would require field_definition custom field or future native column.
+
+#### C.5 Parent layout (recommended sections)
+
+| Section | Exists today | Gap |
+|---------|--------------|-----|
+| **Contact** | Read-only email/phone in compact | Make policy-driven editable |
+| **Employment** | `PersonEmployeePlacementSection` | Keep; move under layout section `employee_placement` |
+| **Relationships → Children** | Related tab person edges + customer members | Structured children list with links to child persons/members |
+| **Activity** | Missing | Future |
+
+#### C.6 Emergency contact layout (recommended sections)
+
+| Section | Exists today | Gap |
+|---------|--------------|-----|
+| **Contact** | Read-only | Editable |
+| **Relationship type** | On `customer_persons` / `opportunity_persons` | Show configurable label; edit via relationship API (Card 5) |
+| **Linked children** | `_person_relationships` to children | Grouped list with links |
+
+---
+
+### Part D — Config Strategy
+
+#### D.1 Why Settings → Person Fields does not drive the drawer today
+
+| Reason | Detail |
+|--------|--------|
+| **Compact overview fork** | `usePersonCompactOverview` forces hardcoded `PersonDrawerCompactOverview`; `EntityDrawerOverview` never runs |
+| **No layout entity** | `layoutsSettingsEntities.ts` excludes `person` — no `record_drawer_layouts` row |
+| **No section composition** | Opportunity uses `overview_section_order` + injected sections (`inquiry_children`); person has no equivalent |
+| **PATCH without policy UI** | Custom fields PATCH works but compact UI does not render `_field_definitions` |
+| **Early return in custom content** | `overviewCustomContent` returns `{}` for persons — blocks even hand-built relationship slots |
+
+#### D.2 Recommended convergence path (no special-case system)
+
+Person should use the **same four-plane model** as opportunity (`configuration-system.md`):
+
+| Plane | Person application |
+|-------|-------------------|
+| **Fields** | Continue `entity_type=person` in Settings → Fields; ensure native keys (`date_of_birth`, `preferred_name`, employee fields) in manifest |
+| **Field grouping** | `field_section_definitions` for person — profile, contact, employment |
+| **Layouts** | Add `person` to `LAYOUT_SETTINGS_ENTITY_ORDER`; seed global `record_layouts` template with **profile-aware default sections** (not separate apps) |
+| **Actions** | Register person actions (link to customer, add relationship) on `record_section` placements — same registry as opportunity |
+
+**Section visibility by profile:** Layout config supports `section_visibility_rules` keyed off **resolved person profile** (design extension to layout schema — evaluate reuse of opportunity `inquiry_drawer_mode` pattern vs generic `visible_when_profile` array).
+
+**Enrollment on child person:** **Injected read-only system section** `enrollment_inquiries` (mirror `inquiry_children` on opportunity) — loads OCM rows for `customer_members` linked to `person_id`; edit remains on opportunity.
+
+**Do not create** a parallel `person_drawer_compact` or child-only drawer route.
+
+---
+
+### Part E — Delete Governance (current state only)
+
+| Capability | Person today |
+|------------|--------------|
+| `archived_at` / `archived_by` | Columns exist; **not writable** via PATCH |
+| Archive / unarchive API | **Missing** (contacts have archive routes) |
+| `is_active` on persons | **Column does not exist** |
+| Deactivate | `status_key` PATCH supported; **no UI** in compact drawer |
+| Hard delete API | **Missing** |
+| Drawer Delete button | **Hidden** — `deleteConfig.ts` excludes persons |
+| `deletionEligibility` | **Not registered** for persons |
+
+No person drawer actions support archive, deactivate, or delete today.
+
+---
+
+### Problems (summary)
+
+1. **Parallel drawer implementation** — compact overview bypasses config pipeline used by opportunity.
+2. **Settings investment wasted** — Person Fields configured but not rendered.
+3. **Relationships overview broken** — dead code path; operators must use Related tab.
+4. **No person-type presentation** — child enrollment invisible on person record.
+5. **No relationship CRUD** — all meaningful edits on opportunity/customer surfaces.
+6. **Inconsistent navigation** — only opportunity inquiry uses parent stack restore.
+7. **No lifecycle governance** — archive columns exist without product path.
+
+---
+
+### Target architecture (summary diagram)
+
+```text
+AdminEntityDrawer (shared shell)
+  ├── record_drawer_layouts (person, surface=drawer)
+  ├── resolvePersonDrawerProfile(record) → child | parent | guardian | emergency | employee | generic
+  ├── EntityDrawerOverview (retire PersonDrawerCompactOverview)
+  │     ├── header chrome (name, profile badge, status, contact)
+  │     ├── sections from layout (field_definitions + native manifest)
+  │     ├── injected: enrollment_inquiries (child profile only, read-only OCM mirror)
+  │     └── injected: relationships_grouped (all profiles)
+  ├── field_placements_v1 (person — phase after layout)
+  └── related tab (documents, full relationship graph — until sections absorb)
+```
+
+---
+
+### Recommended implementation sequence
+
+#### Recommended Card 4 — Person drawer layout control plane (implementation)
+
+**Scope:**
+1. Add `person` to `layoutsSettingsEntities.ts` and effective-preview API allowlist.
+2. Seed global `record_layouts` default template for person (profile, contact, employment, relationships).
+3. Switch `AdminEntityDrawer` persons branch from `PersonDrawerCompactOverview` to `EntityDrawerOverview` + effective layout resolution.
+4. Fix `overviewCustomContent` early-return — enable relationships section or migrate to layout-injected section.
+5. Render `_field_definitions` in overview per layout (parity with opportunity phase 1).
+6. Wire `status_key` + name fields through existing field policy where configured.
+
+**Out of scope for Card 4:** profile resolver, enrollment mirror section, relationship editor API, archive.
+
+#### Recommended Card 5 — Relationship improvements (implementation)
+
+**Scope:**
+1. `resolvePersonDrawerProfile` helper + header profile badge.
+2. Person relationship editor API — CRUD for `person_relationships` and `customer_persons` behind `requireAdminOrOps()` + audit events.
+3. Reverse lookup `opportunity_persons` on person GET/related.
+4. Layout injected sections: `relationships_grouped`, read-only `enrollment_inquiries` for child profile.
+5. Generalize parent stack navigation for customer → person opens (optional).
+
+**Out of scope:** sibling edge type, full graph visualization.
+
+#### Recommended Card 6 — Delete / archive governance (implementation)
+
+**Scope:**
+1. Register persons in `deletionEligibility.ts` — recommend archive, block hard delete when edges exist.
+2. `POST /api/admin/persons/:id/archive` and `/unarchive` (mirror contacts pattern).
+3. Drawer header actions — Archive / Restore; status-based deactivate UX.
+4. **Do not** expose hard delete for persons in drawer without eligibility gate.
+
+**Dependency:** Cards 4–5 should land first so lifecycle actions attach to converged drawer chrome.
+
+---
+
+### Risks
+
+| Risk | Severity | Mitigation |
+|------|----------|------------|
+| Retiring compact overview regresses perf | Medium | Keep snapshot prefetch; staged reveal like opportunity |
+| Profile resolver wrong for multi-hat persons | Medium | Section union; show multiple badges |
+| Enrollment mirror stale vs OCM | Medium | Read-only + deep-link; never PATCH from person |
+| Layout migration breaks existing orgs | Low | Global template fallback; no org overrides until stable |
+| Relationship API without RLS audit | High | Service-role + app guards; audit events; follow contacts archive pattern |
+
+---
+
+### Open questions
+
+1. **Should child enrollment ever be editable on person drawer?** Audit recommends **no** — OCM remains SoT; person shows mirror + link to opportunity.
+2. **Single vs multi profile badge** when person is employee + parent?
+3. **When to add `person` to `field_placements_v1`?** After layout Card 4 or in same card?
+4. **Avatar / profile photo** — defer to media infrastructure sprint?
+5. **Retire `PersonFieldsClient` legacy route** vs migrate fully to Settings → Fields hub (`entity=person`)?
+6. **Sibling relationship type** — add to `person_relationship_type_settings` or keep implicit?
 
 ---
 
