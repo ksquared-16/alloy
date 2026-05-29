@@ -55,7 +55,7 @@ export type WaitlistQueueItemSectionInput = {
         primaryCohortSectionTitle?: string | null;
         showPlacementV2Badge?: boolean;
     } | null;
-    placementPriority?: { programGroupSectionTitle?: string } | null;
+    placementPriority?: { programGroupSectionTitle?: string; evaluateError?: boolean } | null;
 };
 
 /** Canonical org-level section key + operator title for one waitlist queue row. */

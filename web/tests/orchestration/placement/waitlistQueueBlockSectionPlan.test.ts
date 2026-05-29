@@ -39,6 +39,17 @@ describe("waitlistQueueBlockSectionPlan live QueueBlock path", () => {
         expect(plan.unsortedDuplicateSectionKeys).toContain("toddler");
     });
 
+    it("does not treat placement evaluate-error stubs as waitlist placement rows", () => {
+        const items = [
+            {
+                id: "err-only",
+                placementPriority: { evaluateError: true, programGroupSectionTitle: "Toddler" },
+            },
+            { id: "plain" },
+        ];
+        expect(sortWaitlistQueueItemsForDisplay(items)).toEqual(items);
+    });
+
     it("sortWaitlistQueueItemsForDisplay keeps org categories contiguous", () => {
         const items = [
             {
