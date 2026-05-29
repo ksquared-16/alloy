@@ -315,8 +315,8 @@ export default function OpportunityInquiryChildrenSection({
                 const statusJson = (await statusRes.json().catch(() => ({}))) as { statuses?: StatusRow[]; error?: string };
                 if (!progRes.ok) throw new Error(progJson.error ?? "Failed to load program types");
                 if (!schedRes.ok) throw new Error(schedJson.error ?? "Failed to load schedule types");
-                if (!locRes.ok) throw new Error(locJson.error ?? "Failed to load sites");
-                if (!statusRes.ok) throw new Error(statusJson.error ?? "Failed to load outcome statuses");
+                if (!locRes.ok) throw new Error(locJson.error ?? "Failed to load locations");
+                if (!statusRes.ok) throw new Error(statusJson.error ?? "Failed to load child status options");
                 if (cancelled) return;
                 setProgramItems((progJson.items ?? []).slice());
                 setScheduleItems((schedJson.items ?? []).slice());
@@ -369,8 +369,11 @@ export default function OpportunityInquiryChildrenSection({
 
     const showDesiredStartColumn = inquiryChildDrawerShowsDesiredStart(fieldDefs);
     const desiredStartLabel = labelForInquiryChildFieldKey(fieldDefs, "desired_start_date", "Desired start");
-    const siteLabel = labelForInquiryChildFieldKey(fieldDefs, "location_id", "Site");
-    const cohortLabel = labelForInquiryChildFieldKey(fieldDefs, "program_room_cohort_key", "Room / cohort");
+    const locationLabel = labelForInquiryChildFieldKey(fieldDefs, "location_id", "Location");
+    const programLabel = labelForInquiryChildFieldKey(fieldDefs, "desired_program_type", "Program");
+    const roomLabel = labelForInquiryChildFieldKey(fieldDefs, "program_room_cohort_key", "Room");
+    const scheduleLabel = labelForInquiryChildFieldKey(fieldDefs, "desired_schedule_type", "Schedule");
+    const statusLabel = labelForInquiryChildFieldKey(fieldDefs, "outcome_status_key", "Status");
     const customDrawerDefs = useMemo(
         () =>
             fieldDefs.filter(
@@ -536,9 +539,11 @@ export default function OpportunityInquiryChildrenSection({
                         >
                             <div className={INQUIRY_CHILD_COL_HDR}>Child</div>
                             <div className={INQUIRY_CHILD_COL_HDR}>DOB / Age</div>
-                            <div className={INQUIRY_CHILD_COL_HDR}>Program</div>
-                            <div className={INQUIRY_CHILD_COL_HDR}>Schedule</div>
-                            <div className={INQUIRY_CHILD_COL_HDR}>Outcome</div>
+                            <div className={INQUIRY_CHILD_COL_HDR}>{locationLabel}</div>
+                            <div className={INQUIRY_CHILD_COL_HDR}>{programLabel}</div>
+                            <div className={INQUIRY_CHILD_COL_HDR}>{roomLabel}</div>
+                            <div className={INQUIRY_CHILD_COL_HDR}>{scheduleLabel}</div>
+                            <div className={INQUIRY_CHILD_COL_HDR}>{statusLabel}</div>
                             <div className={INQUIRY_CHILD_COL_HDR}>Notes</div>
                             <div className={`${INQUIRY_CHILD_COL_HDR} text-right`}>View</div>
                         </div>
@@ -615,11 +620,11 @@ export default function OpportunityInquiryChildrenSection({
                             {(d.label ?? d.field_key ?? "").trim()}
                         </div>
                     ))}
-                    <div className={INQUIRY_CHILD_COL_HDR}>{siteLabel}</div>
-                    <div className={INQUIRY_CHILD_COL_HDR}>{cohortLabel}</div>
-                    <div className={INQUIRY_CHILD_COL_HDR}>Program</div>
-                    <div className={INQUIRY_CHILD_COL_HDR}>Schedule</div>
-                    <div className={INQUIRY_CHILD_COL_HDR}>Outcome</div>
+                    <div className={INQUIRY_CHILD_COL_HDR}>{locationLabel}</div>
+                    <div className={INQUIRY_CHILD_COL_HDR}>{programLabel}</div>
+                    <div className={INQUIRY_CHILD_COL_HDR}>{roomLabel}</div>
+                    <div className={INQUIRY_CHILD_COL_HDR}>{scheduleLabel}</div>
+                    <div className={INQUIRY_CHILD_COL_HDR}>{statusLabel}</div>
                     <div className={INQUIRY_CHILD_COL_HDR}>Notes</div>
                     <div className={`${INQUIRY_CHILD_COL_HDR} text-right`}>View</div>
                 </div>
@@ -716,7 +721,7 @@ export default function OpportunityInquiryChildrenSection({
                         >
                             {!r.linked_on_inquiry && rowCanEdit ? (
                                 <p className="col-span-full pb-0.5 text-[9px] font-medium leading-tight text-alloy-midnight/45">
-                                    Not on inquiry — saving program/schedule/outcome/notes links this child.
+                                    Not on inquiry — saving program, schedule, status, or notes links this child.
                                 </p>
                             ) : null}
                             {placementScopeHint ? (
@@ -934,7 +939,7 @@ export default function OpportunityInquiryChildrenSection({
                                     );
                                 })}
                                 <div className={INQUIRY_CHILD_CELL}>
-                                    <div className={INQUIRY_CHILD_MOBILE_LABEL}>{siteLabel}</div>
+                                    <div className={INQUIRY_CHILD_MOBILE_LABEL}>{locationLabel}</div>
                                     {rowCanEdit ? (
                                         <select
                                             value={st.location_id}
@@ -968,7 +973,7 @@ export default function OpportunityInquiryChildrenSection({
                                                 );
                                             }}
                                             className={fieldSelect}
-                                            aria-label={`${siteLabel} for ${displayName}`}
+                                            aria-label={`${locationLabel} for ${displayName}`}
                                         >
                                             <option value="">—</option>
                                             {siteOptions.map((loc) => (
@@ -982,50 +987,7 @@ export default function OpportunityInquiryChildrenSection({
                                     )}
                                 </div>
                                 <div className={INQUIRY_CHILD_CELL}>
-                                    <div className={INQUIRY_CHILD_MOBILE_LABEL}>{cohortLabel}</div>
-                                    {rowCanEdit ? (
-                                        <select
-                                            value={st.program_room_cohort_key}
-                                            disabled={saving || programFieldsDisabled}
-                                            title={
-                                                programFieldsDisabled ?
-                                                    "Select a site to choose a room/classroom"
-                                                :   undefined
-                                            }
-                                            onChange={(e) => {
-                                                const v = e.target.value;
-                                                setLocal((p) => ({
-                                                    ...p,
-                                                    [r.id]: { ...st, program_room_cohort_key: v },
-                                                }));
-                                                debounced.schedule(
-                                                    r.id,
-                                                    { program_room_cohort_key: v || null },
-                                                    (_id, patch) => {
-                                                        void saveOcmPatch(r, patch as InquiryChildOcmPatch);
-                                                    }
-                                                );
-                                            }}
-                                            className={fieldSelect}
-                                            aria-label={`${cohortLabel} for ${displayName}`}
-                                        >
-                                            <option value="">
-                                                {programFieldsDisabled ? "Select site first" : "—"}
-                                            </option>
-                                            {rowRoomOptions.map((i) => (
-                                                <option key={i.cohort_key} value={i.cohort_key}>
-                                                    {i.label}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    ) : (
-                                        <span className={readOnlyText}>{fallbackCohort}</span>
-                                    )}
-                                </div>
-                                <div className={INQUIRY_CHILD_CELL}>
-                                    <div className={INQUIRY_CHILD_MOBILE_LABEL}>
-                                        Program
-                                    </div>
+                                    <div className={INQUIRY_CHILD_MOBILE_LABEL}>{programLabel}</div>
                                     {rowCanEdit ? (
                                         <select
                                             value={st.desired_program_type}
@@ -1049,7 +1011,7 @@ export default function OpportunityInquiryChildrenSection({
                                                 );
                                             }}
                                             className={fieldSelect}
-                                            aria-label={`Desired program for ${displayName}`}
+                                            aria-label={`${programLabel} for ${displayName}`}
                                         >
                                             <option value="">(inherit)</option>
                                             {programItems.map((i) => (
@@ -1063,9 +1025,48 @@ export default function OpportunityInquiryChildrenSection({
                                     )}
                                 </div>
                                 <div className={INQUIRY_CHILD_CELL}>
-                                    <div className={INQUIRY_CHILD_MOBILE_LABEL}>
-                                        Schedule
-                                    </div>
+                                    <div className={INQUIRY_CHILD_MOBILE_LABEL}>{roomLabel}</div>
+                                    {rowCanEdit ? (
+                                        <select
+                                            value={st.program_room_cohort_key}
+                                            disabled={saving || programFieldsDisabled}
+                                            title={
+                                                programFieldsDisabled ?
+                                                    "Select a location to choose a room"
+                                                :   undefined
+                                            }
+                                            onChange={(e) => {
+                                                const v = e.target.value;
+                                                setLocal((p) => ({
+                                                    ...p,
+                                                    [r.id]: { ...st, program_room_cohort_key: v },
+                                                }));
+                                                debounced.schedule(
+                                                    r.id,
+                                                    { program_room_cohort_key: v || null },
+                                                    (_id, patch) => {
+                                                        void saveOcmPatch(r, patch as InquiryChildOcmPatch);
+                                                    }
+                                                );
+                                            }}
+                                            className={fieldSelect}
+                                            aria-label={`${roomLabel} for ${displayName}`}
+                                        >
+                                            <option value="">
+                                                {programFieldsDisabled ? "Select location first" : "—"}
+                                            </option>
+                                            {rowRoomOptions.map((i) => (
+                                                <option key={i.cohort_key} value={i.cohort_key}>
+                                                    {i.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <span className={readOnlyText}>{fallbackCohort}</span>
+                                    )}
+                                </div>
+                                <div className={INQUIRY_CHILD_CELL}>
+                                    <div className={INQUIRY_CHILD_MOBILE_LABEL}>{scheduleLabel}</div>
                                     {rowCanEdit ? (
                                         <select
                                             value={st.desired_schedule_type}
@@ -1078,7 +1079,7 @@ export default function OpportunityInquiryChildrenSection({
                                                 });
                                             }}
                                             className={fieldSelect}
-                                            aria-label={`Desired schedule for ${displayName}`}
+                                            aria-label={`${scheduleLabel} for ${displayName}`}
                                         >
                                             <option value="">(inherit)</option>
                                             {scheduleItems.map((i) => (
@@ -1092,9 +1093,7 @@ export default function OpportunityInquiryChildrenSection({
                                     )}
                                 </div>
                                 <div className={INQUIRY_CHILD_CELL}>
-                                    <div className={INQUIRY_CHILD_MOBILE_LABEL}>
-                                        Outcome
-                                    </div>
+                                    <div className={INQUIRY_CHILD_MOBILE_LABEL}>{statusLabel}</div>
                                     {rowCanEdit ? (
                                         <select
                                             value={st.outcome_status_key}
@@ -1107,7 +1106,7 @@ export default function OpportunityInquiryChildrenSection({
                                                 });
                                             }}
                                             className={`${fieldSelect} ${outcomeSelectAttention}`}
-                                            aria-label={`Outcome for ${displayName}`}
+                                            aria-label={`${statusLabel} for ${displayName}`}
                                         >
                                             <option value="">—</option>
                                             {statusItems.map((s) => (

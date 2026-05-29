@@ -16,6 +16,37 @@ Describe the main database-backed entities and how **persons**, **customer_perso
 - **Communications (canonical):** **`communication_threads`** (org + primary entity + channel + `recipient_key`) and **`communication_messages`** (inbound/outbound rows, read/unread, queue status). **`communication_provider_bindings`** selects Twilio/Resend configuration per org/channel (see **`docs/product/communications.md`**).
 - **Forms (engine):** **`form_definitions`**, **`form_definition_versions`**, **`form_public_links`**, **`form_submissions`** (+ linkage/signature tables per migrations) — versioned capture separate from **`documents`** file rows (see **`docs/product/documents-and-forms.md`**).
 - **Household children (enrollment / CRM compact):** **`customer_members`** stores people tied to a **`customers`** row (household/account). For queue previews and enrollment-style workflows, **active children** are rows with **`relationship = 'child'`** and **`is_active = true`**, joined from **`opportunities.customer_id` → `customer_members.customer_id`**. **`customer_persons`** is the **`person_id` ↔ `customer_id` link** with role semantics for canonical people; **`customer_members`** is the **household-member / child roster** used when list UIs need “who are the kids?” without treating opportunity JSON as truth. A future model might unify these; until then **`customer_members` is the source of truth for child names/DOB in queue enrichment**.
+- **Locations (physical hierarchy):** All address, site, and room/classroom records live in **`locations`** — there is **no separate `rooms` table in V1**. See **Location semantics** below.
+
+## Location semantics
+
+All physical / site / room-style location records use the hierarchical **`locations`** table (`org_id`-scoped).
+
+### Recommended taxonomy (`locations.location_type`)
+
+| Type | Meaning | Typical use |
+|------|---------|-------------|
+| **`address`** | Postal / address-level container | Customer service addresses, booking destinations |
+| **`site`** | Physical school, building, or center | Campus / center scope, tours, user site access |
+| **`unit`** | Room, classroom, or cohort/program space under a site | Child room interest; `parent_location_id` → site row |
+
+**Rooms are not a separate table.** Classrooms and rooms are **`locations` rows** where **`location_type = 'unit'`**, linked to a parent site via **`parent_location_id`**. Optional **`metadata`** (e.g. `semantic_kind: "classroom"`) may further describe the unit; the type CHECK allows only `address`, `site`, and `unit`.
+
+**Programs and cohorts (enrollment):** Childcare **program** bands are org option-set keys (`childcare_program_type`), not location rows. **Room/cohort interest** on a child inquiry is stored as **`program_room_cohort_key`** (text), usually the **`locations.id`** of a `unit` row. Waitlist grain uses **`placement_candidates.site_id`** + **`program_room_cohort_key`**.
+
+### Child vs opportunity location authority
+
+| Grain | Source of truth | Column |
+|-------|-----------------|--------|
+| **Child site / location** | **`opportunity_customer_members`** | `location_id` → `locations` (`site`) |
+| **Child room** | **`opportunity_customer_members`** | `program_room_cohort_key` → unit `locations.id` |
+| **Case / opportunity location** | **`opportunities`** | `location_id` |
+
+**`opportunities.location_id` is fallback and display convenience only** — not canonical child placement truth. Placement backfill may use it when a child OCM row has no `location_id`; operators should set child-level location in the inquiry children grid.
+
+**Opportunity display rule:** When all children on an opportunity resolve to the same site, opportunity surfaces may show that site. When children resolve to different sites, show **“Multiple locations”** and prefer child-level location badges/labels in inquiry and queue previews.
+
+**Key files:** `web/lib/admin/drawer/inquiryChildPlacementScope.ts`, `web/lib/recordChrome/locationDrawerLayoutTarget.ts`, `web/lib/entityPresentation.ts` (`locations` drawer — code-defined today).
 
 ## How it works
 
@@ -49,4 +80,4 @@ Describe the main database-backed entities and how **persons**, **customer_perso
 
 ## When this doc must be updated
 
-New entity types, FK migrations on `opportunities`/`customers`, retirement of `contacts` from APIs/UI, changes to **`customer_members`** vs opportunity-metadata child modeling, or changes to **tour** tables vs **`schedules`** / opportunity metadata mirror rules.
+New entity types, FK migrations on `opportunities`/`customers`, retirement of `contacts` from APIs/UI, changes to **`customer_members`** vs opportunity-metadata child modeling, changes to **tour** tables vs **`schedules`** / opportunity metadata mirror rules, or changes to **location hierarchy** / child placement authority (`opportunity_customer_members.location_id`).

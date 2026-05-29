@@ -386,6 +386,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
   },
   locations: {
     entityType: "locations",
+    /** Runtime drawer sections — target configured shape: `locationDrawerLayoutTarget.ts` */
     table: {
       columns: [
         { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },

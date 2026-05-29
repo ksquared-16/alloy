@@ -52,4 +52,13 @@ describe("inquiryChildFieldRegistry", () => {
             ])
         ).toBe(false);
     });
+
+    it("native manifest uses Card 1 inquiry child labels and program-before-room order", async () => {
+        const { INQUIRY_CHILD_NATIVE_FIELD_MANIFEST } = await import("@/lib/fields/inquiryChildFieldRegistry");
+        const byKey = Object.fromEntries(INQUIRY_CHILD_NATIVE_FIELD_MANIFEST.map((r) => [r.field_key, r]));
+        expect(byKey.location_id?.label).toBe("Location");
+        expect(byKey.program_room_cohort_key?.label).toBe("Room");
+        expect(byKey.outcome_status_key?.label).toBe("Status");
+        expect(byKey.desired_program_type?.sort_order).toBeLessThan(byKey.program_room_cohort_key?.sort_order ?? 0);
+    });
 });

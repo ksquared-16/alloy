@@ -23,7 +23,7 @@ export type InquiryChildLocationHierarchyRow = {
 };
 
 export const INQUIRY_CHILD_PLACEMENT_SCOPE_LIMITATION =
-    "Program/category is org-level; classrooms are site-level. Select a child site before program or room/cohort.";
+    "Program/category is org-level; classrooms are location-scoped. Select a child location before program or room.";
 
 /** Physical campuses/centers only — same filter as workspace header site filter. */
 export function filterInquiryChildSiteLocationOptions(
