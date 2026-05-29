@@ -1,7 +1,7 @@
 # Record, Person & Location Convergence Sprint — Card 0 Audit
 
 **Date:** 2026-05-29  
-**Status:** Card 0 audit complete · **Card 1 shipped (2026-05-29)** — docs, inquiry labels/order, location drawer target spec  
+**Status:** Card 0 audit complete · **Card 1 shipped (2026-05-29)** · **Card 2 shipped (2026-05-29)** — child location authority display resolver  
 **Goal:** Architectural baseline for converging location, room, child inquiry, person drawer, relationships, record lifecycle, household terminology, and enrollment navigation into a coherent operator model.
 
 **Canonical references:** `docs/core/glossary.md`, `docs/system/entity-model.md`, `docs/system/record-system.md`, `docs/system/workspace-system.md`, `docs/system/configuration-system.md`, `docs/sprints/05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`, `docs/sprints/05_2026/waitlist_priority_fact_truth_child_scope.md`, `docs/sprints/05_2026/completed/settings_control_plane_closeout.md`
@@ -709,7 +709,7 @@ Department: Enrollment (key: enrollment)
 - Location drawer runtime on `record_drawer_layouts` / Settings → Layouts tab for `location`.
 - `parent_location_id` on locations POST/PATCH API.
 - Site phone, email, director, room capacity, age range, ratio/licensing columns.
-- Opportunity-level “Multiple locations” display UX (documented only).
+- Opportunity-level “Multiple locations” display UX — **shipped in Card 2** (drawer header + overview).
 - Delete/archive, permissions, separate rooms/programs tables.
 
 ### Location drawer `record_drawer_layouts` blockers
@@ -730,6 +730,76 @@ Seeding a `record_drawer_layouts` row for `entity_type = location` would be **in
 | Orgs with customized `field_definitions` labels retain custom text until operators edit Settings | Migration only renames known legacy labels (`Site`, `Outcome`, `Room / cohort`) |
 | Grid column order still hardcoded in component | Manifest + field_defs sort order aligned for Settings preview; full policy-driven grid deferred |
 | Tenants who customized inquiry column labels in DB won't get new defaults | Expected — config overrides code fallbacks via `labelForInquiryChildFieldKey` |
+
+---
+
+## Card 2 — Child Location Authority + Opportunity Display Consistency (shipped 2026-05-29)
+
+### Part A — Implementation path audit
+
+Surfaces that render opportunity location and Card 2 disposition:
+
+| Surface | File(s) | Card 2 action |
+|---------|---------|---------------|
+| **Drawer header / subtitle** | `AdminEntityDrawer.tsx` (`opportunityHeaderLocationLabel`, `data-opportunity-drawer-location`) | **Updated** — uses `opportunityDisplayLocationLabel` |
+| **Opportunity overview** (`location_id` field) | `EntityDrawerOverview.tsx` via `opportunityOverviewRelationshipReadLabel` | **Updated** — resolver in `opportunityOverviewLabels.ts` |
+| **Child inquiry grid** (per-child Location column) | `OpportunityInquiryChildrenSection.tsx` | **Unchanged columns**; added multi-location operator hint |
+| **Queue row meta** (`locationContext`) | `enrollmentWorkUnitViewModel.ts`, `realWorkUnitFromOpportunities.ts` | **Not touched** — rows lack child `location_id`; see deferred |
+| **Queue enrichment** | `QueueService.ts` (`_location_label` from `opportunities.location_id`) | **Not touched** — no child location on preview rows |
+| **Lead/customer summary** | `FamilyContactsPanel`, `PrimaryPersonContactCard` | **Not touched** — no opportunity location display |
+| **Child lifecycle strip** | `OpportunityChildLifecycleSummaryStrip` / `buildOpportunityChildLifecycleSummary.ts` | **Not touched** — lifecycle only, not site |
+| **Tour section** | `OpportunityTourDrawerSection.tsx` | **Not touched** — tour site is booking truth, separate concern |
+| **Queue preview seed (loading)** | `opportunityQueuePreviewSeed` → drawer gate | **Unchanged fallback** — opportunity-level label during shell load only |
+
+### What changed
+
+**Shared resolver** — `web/lib/opportunities/resolveOpportunityDisplayLocation.ts`
+- `resolveOpportunityDisplayLocation(input)` — framework-agnostic rules (child-first, dedupe, single/multiple/none, opportunity fallback).
+- `opportunityDisplayLocationFromRecord(record)` — reads `_inquiry_children[].location_id` / `location_label` + opportunity fields.
+- `opportunityDisplayLocationLabel(record)` — operator-facing string.
+
+**Applied surfaces**
+- Drawer header: `Location: {label}` uses resolver (shows **Multiple locations** when children disagree).
+- Overview `location_id` read label uses same resolver via `opportunityOverviewRelationshipReadLabel`.
+- Inquiry children section: hint when `opportunityDisplayLocationKind === "multiple"`; per-child Location column unchanged.
+
+**Tests**
+- `web/tests/opportunities/resolveOpportunityDisplayLocation.test.ts` — resolver matrix.
+- `web/tests/admin/opportunityOverviewLocationLabel.test.ts` — overview integration.
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `web/lib/opportunities/resolveOpportunityDisplayLocation.ts` | **New** — shared resolver |
+| `web/lib/admin/opportunityOverviewLabels.ts` | `location_id` case uses resolver |
+| `web/components/admin/AdminEntityDrawer.tsx` | Header label + pass kind to inquiry section |
+| `web/components/admin/entity/OpportunityInquiryChildrenSection.tsx` | Multi-location hint |
+| `web/tests/opportunities/resolveOpportunityDisplayLocation.test.ts` | **New** |
+| `web/tests/admin/opportunityOverviewLocationLabel.test.ts` | **New** |
+
+### Intentionally deferred
+
+- **Queue row location display** — preview rows only carry `_location_label` from `opportunities.location_id` (`QueueService.ts`); no `_inquiry_children` or per-child `location_id` on queue VMs. Enriching queue view models is a follow-up card (no new network calls in Card 2).
+- **Location badges** in header when multiple — label string only.
+- **Placement backfill** behavior (`placement_candidates.site_id` fallback) — unchanged.
+- Schema, delete, permissions, new tables.
+
+### Validation results
+
+| Check | Result |
+|-------|--------|
+| `npm run test -- tests/opportunities/resolveOpportunityDisplayLocation.test.ts tests/admin/opportunityOverviewLocationLabel.test.ts` | Pass |
+| `npx tsc --noEmit` | Pre-existing repo failures; no errors in Card 2 files |
+| `npm run lint` | Pre-existing repo-wide issues |
+
+### Known risks
+
+| Risk | Notes |
+|------|-------|
+| Drawer shell loading still shows queue-seed opportunity location before full hydrate | Acceptable gate-only fallback; full record replaces with resolver output |
+| Overview edit mode for `location_id` still edits opportunity FK | Canonical child placement remains on OCM; opportunity field is convenience |
+| Queue operators may still see opportunity-level site in meta lines | Documented; needs queue enrichment card |
 
 ---
 

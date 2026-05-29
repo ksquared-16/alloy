@@ -189,6 +189,7 @@ export default function OpportunityInquiryChildrenSection({
     /** When false, defers field-definitions / option-set / status-definitions until edit. */
     enrichmentFetchEnabled = false,
     shellReservedRowCount = 0,
+    opportunityDisplayLocationKind,
 }: {
     rows: InquiryChildRow[];
     canEdit: boolean;
@@ -201,6 +202,8 @@ export default function OpportunityInquiryChildrenSection({
     embeddedInPremiumSection?: boolean;
     enrichmentFetchEnabled?: boolean;
     shellReservedRowCount?: number;
+    /** Resolved opportunity-level location display — used for multi-location operator hint. */
+    opportunityDisplayLocationKind?: "none" | "single" | "multiple" | null;
 }) {
     const rootCol = embeddedInPremiumSection ? "min-w-0 w-full" : "md:col-span-2";
     const emptyBox = embeddedInPremiumSection
@@ -602,6 +605,14 @@ export default function OpportunityInquiryChildrenSection({
             data-inquiry-children-section="OpportunityInquiryChildrenSection"
         >
             {loadErr ? <p className="mb-2 text-sm text-red-700">{loadErr}</p> : null}
+            {opportunityDisplayLocationKind === "multiple" ? (
+                <p
+                    className="mb-2 text-[10px] leading-snug text-alloy-midnight/50"
+                    data-inquiry-children-multi-location="true"
+                >
+                    Children on this inquiry may have different locations. Set location per child below.
+                </p>
+            ) : null}
             {enrichmentFetchEnabled && canEdit ? (
                 <p className="mb-2 text-[10px] leading-snug text-alloy-midnight/50">{INQUIRY_CHILD_PLACEMENT_SCOPE_LIMITATION}</p>
             ) : null}

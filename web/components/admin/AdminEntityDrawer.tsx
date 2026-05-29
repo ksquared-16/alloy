@@ -138,6 +138,10 @@ import {
     type JobDiscountOptionDto,
 } from "@/lib/admin/jobDiscountSelection";
 import {
+    opportunityDisplayLocationFromRecord,
+    opportunityDisplayLocationLabel,
+} from "@/lib/opportunities/resolveOpportunityDisplayLocation";
+import {
     opportunityOverviewRelationshipReadLabel,
     opportunityOverviewStatusBadgeLabel,
 } from "@/lib/admin/opportunityOverviewLabels";
@@ -6870,16 +6874,19 @@ export default function AdminEntityDrawer() {
     const opportunityHeaderLocationLabel = useMemo(() => {
         if (drawer.type !== "opportunities") return null;
         if (overviewData && !(overviewData as { _create?: boolean })._create) {
-            const loc = opportunityOverviewRelationshipReadLabel(
-                overviewData as Record<string, unknown>,
-                "location_id"
-            );
-            if (loc !== undefined && loc.trim()) return loc.trim();
+            const label = opportunityDisplayLocationLabel(overviewData as Record<string, unknown>);
+            if (label) return label;
         }
         const previewLoc = drawer.opportunityQueuePreviewSeed?.locationLabel?.trim();
         if (drawerGateLoading && previewLoc) return previewLoc;
         return null;
     }, [drawer.type, overviewData, drawerGateLoading, drawer.opportunityQueuePreviewSeed?.locationLabel]);
+
+    const opportunityDisplayLocationKind = useMemo(() => {
+        if (drawer.type !== "opportunities") return null;
+        if (!overviewData || (overviewData as { _create?: boolean })._create) return null;
+        return opportunityDisplayLocationFromRecord(overviewData as Record<string, unknown>).kind;
+    }, [drawer.type, overviewData]);
 
     const title: React.ReactNode = overviewData
         ? drawer.type === "contacts"
@@ -8627,6 +8634,7 @@ export default function AdminEntityDrawer() {
                         embeddedInPremiumSection={oppCfg?.inquiry_drawer_mode === "workflow_v1"}
                         recordDetailPending={drawerChildRows.length === 0 && expectedRowCount > 0}
                         shellReservedRowCount={expectedRowCount}
+                        opportunityDisplayLocationKind={opportunityDisplayLocationKind ?? undefined}
                         onChildrenMutated={() => void refetch()}
                         onOpenChild={(row) => {
                             const cm = row.customer_member_id?.trim() ?? "";
@@ -8679,6 +8687,7 @@ export default function AdminEntityDrawer() {
         opportunityDrawerFullBoundEnrichmentReady,
         opportunityDrawerShellContract,
         opportunityDrawerOverviewRevealReady,
+        opportunityDisplayLocationKind,
         getStatusLabel,
         viewerTz,
         opportunityRegistrySectionActionsFetchEnabled,

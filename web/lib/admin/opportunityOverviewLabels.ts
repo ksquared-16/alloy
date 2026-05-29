@@ -2,6 +2,7 @@
  * Opportunity drawer Overview: explicit FK → hydrated labels from GET /api/admin/entity/opportunities/:id.
  * Do not rely on generic UUID heuristics for these keys.
  */
+import { opportunityDisplayLocationFromRecord } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
 export const OPPORTUNITY_OVERVIEW_RELATIONSHIP_FIELD_KEYS = [
     "customer_id",
     "primary_person_id",
@@ -53,9 +54,16 @@ export function opportunityOverviewRelationshipReadLabel(
         case "contact_id":
             if (!hasNonEmptyFk(record, "contact_id") && !hasNonEmptyFk(record, "primary_contact_id")) return undefined;
             return trimNonEmpty(record._primary_contact_name ?? record._contact_name) ?? "";
-        case "location_id":
-            if (!hasNonEmptyFk(record, "location_id") && !hasNonEmptyFk(record, "_location_id")) return undefined;
-            return trimNonEmpty(record._location_label ?? record._location_name) ?? "";
+        case "location_id": {
+            const resolved = opportunityDisplayLocationFromRecord(record);
+            if (resolved.kind === "none") {
+                if (!hasNonEmptyFk(record, "location_id") && !hasNonEmptyFk(record, "_location_id")) {
+                    return undefined;
+                }
+                return trimNonEmpty(record._location_label ?? record._location_name) ?? "";
+            }
+            return resolved.label;
+        }
         case "vertical_id":
             if (!hasNonEmptyFk(record, "vertical_id")) return undefined;
             return trimNonEmpty(record._vertical_name) ?? "";
