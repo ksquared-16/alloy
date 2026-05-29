@@ -69,6 +69,11 @@ import {
     unregisterRouteLoadingOwner,
 } from "@/lib/adminV2/routeShellPipeline";
 import { recordBootstrapPayloadBytes } from "@/lib/perf/adminV2SpeedSprintTrace";
+import {
+    logAdminV2DuplicateFetchSuppressed,
+    logDeptBootstrapBreakdown,
+} from "@/lib/perf/adminV2BootstrapBreakdown";
+import { peelBootstrapServerPerf } from "@/lib/workspace/bootstrapServerPerfEnvelope";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import { setAdminV2PrimarySurfacePending } from "@/lib/perf/adminV2PrimarySurfaceGate";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
@@ -823,6 +828,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 }
 
                 try {
+                    const bootstrapClientT0 =
+                        typeof performance !== "undefined" ? performance.now() : 0;
                     const bootstrapMeta = await dedupeAdminFetchWithTtlMeta(
                         bootstrapRoute,
                         init,
@@ -838,7 +845,12 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         });
                     }
                     if (bootstrapRes.ok && !cancelled) {
-                        const b = (await bootstrapRes.json().catch(() => ({}))) as {
+                        const parseT0 = typeof performance !== "undefined" ? performance.now() : 0;
+                        const rawBootstrap = (await bootstrapRes.json().catch(() => ({}))) as Record<string, unknown>;
+                        const parseT1 = typeof performance !== "undefined" ? performance.now() : 0;
+                        const { payload: peeled, serverPerf } = peelBootstrapServerPerf(rawBootstrap);
+                        const applyT0 = typeof performance !== "undefined" ? performance.now() : 0;
+                        const b = peeled as {
                             error?: string;
                             department?: { id?: string; name?: string | null; key?: string | null };
                             work_units?: Array<{ id: string; name?: string | null; key?: string | null }>;
@@ -980,7 +992,34 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         });
                         if (deptCommit && !b.kpi_placements) {
                             runDeferredKpiPlacements();
+                        } else if (deptCommit && b.kpi_placements) {
+                            logAdminV2DuplicateFetchSuppressed({
+                                surface: "department",
+                                fetch: "kpi_placements",
+                                reason: "bootstrap_included_kpi_placements",
+                                departmentId,
+                            });
                         }
+                        const applyT1 = typeof performance !== "undefined" ? performance.now() : 0;
+                        logDeptBootstrapBreakdown({
+                            departmentId,
+                            serverPerf,
+                            client: {
+                                client_fetch_ttfb_ms:
+                                    bootstrapClientT0 > 0 && parseT0 > 0 ? parseT0 - bootstrapClientT0 : undefined,
+                                client_json_parse_ms:
+                                    parseT0 > 0 && parseT1 > 0 ? parseT1 - parseT0 : undefined,
+                                client_state_apply_ms:
+                                    applyT0 > 0 && applyT1 > 0 ? applyT1 - applyT0 : undefined,
+                                client_total_ms:
+                                    bootstrapClientT0 > 0 && applyT1 > 0 ? applyT1 - bootstrapClientT0 : undefined,
+                                cache_hit: bootstrapMeta.cache_hit,
+                                inflight_join: bootstrapMeta.inflight_join,
+                                payload_bytes: new TextEncoder().encode(JSON.stringify(peeled)).length,
+                            },
+                            duplicate_fetch_guard:
+                                deptCommit && b.kpi_placements ? "kpi_placements_in_bootstrap" : null,
+                        });
                         if (typeof performance !== "undefined" && typeof window !== "undefined") {
                             alloyPerfSet("department_ready", performance.now());
                         }

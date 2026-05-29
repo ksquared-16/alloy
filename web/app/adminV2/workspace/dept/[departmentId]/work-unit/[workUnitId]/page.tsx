@@ -71,6 +71,11 @@ import {
 } from "@/lib/adminV2/routeShellPipeline";
 import { recordBootstrapPayloadBytes } from "@/lib/perf/adminV2SpeedSprintTrace";
 import {
+    logAdminV2DuplicateFetchSuppressed,
+    logWorkUnitBootstrapBreakdown,
+} from "@/lib/perf/adminV2BootstrapBreakdown";
+import { peelBootstrapServerPerf } from "@/lib/workspace/bootstrapServerPerfEnvelope";
+import {
     markWorkUnitAboveFoldCoordinated,
     markWorkUnitLaneActionsRailPlaceholder,
     markWorkUnitLaneActionsRailReal,
@@ -525,6 +530,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [opportunityQueueRowResolved, setOpportunityQueueRowResolved] = useState<ResolvedActionForClient[] | null>(null);
     const [enrollmentRightRailResolved, setEnrollmentRightRailResolved] = useState<ResolvedActionForClient[] | null>(null);
     const [enrollmentActionsSettled, setEnrollmentActionsSettled] = useState(false);
+    const enrollmentActionsSettledRef = useRef(false);
     const [actionFeedback, setActionFeedback] = useState<string | null>(null);
     const [actionSurfaceError, setActionSurfaceError] = useState<string | null>(null);
 
@@ -1049,17 +1055,27 @@ export default function AdminV2OpportunityWorkUnitPage() {
         if (!workUnitId || !departmentId) return;
         const init = workspaceDataFetchInit();
 
-        try {
-            const rightRailList = await fetchWorkspaceRightRailResolvedActions({
+        if (!enrollmentActionsSettledRef.current) {
+            try {
+                const rightRailList = await fetchWorkspaceRightRailResolvedActions({
+                    departmentId,
+                    workUnitId,
+                    fetchInit: init,
+                });
+                if (Array.isArray(rightRailList) && rightRailList.length) {
+                    setEnrollmentRightRailResolved(rightRailList);
+                }
+            } catch {
+                /* non-fatal */
+            }
+        } else {
+            logAdminV2DuplicateFetchSuppressed({
+                surface: "work_unit",
+                fetch: "right_rail_actions",
+                reason: "bootstrap_hydrated_enrollment_rail",
                 departmentId,
                 workUnitId,
-                fetchInit: init,
             });
-            if (Array.isArray(rightRailList) && rightRailList.length) {
-                setEnrollmentRightRailResolved(rightRailList);
-            }
-        } catch {
-            /* non-fatal */
         }
 
         const actionsListRoute =
@@ -1629,6 +1645,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
             queueSummariesRoute === route
         ) {
             incrementRoutePostShellFetch("work_unit", "queue_summaries_skip");
+            logAdminV2DuplicateFetchSuppressed({
+                surface: "work_unit",
+                fetch: "queue_summaries",
+                reason: "bootstrap_or_prior_fetch_hydrated",
+                workUnitId: wuId,
+            });
             return;
         }
         setQueueSummariesError(null);
@@ -1784,6 +1806,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             setOpportunityQueueRowResolved(null);
             setEnrollmentRightRailResolved(null);
             setEnrollmentActionsSettled(false);
+            enrollmentActionsSettledRef.current = false;
             setWuPlacementRows(undefined);
             setWuScopeHasPlacements(false);
             setWuBootstrapAttentionBuckets(null);
@@ -1871,6 +1894,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
             try {
                 const abInit = initialLocationRef.current.attentionBucket.trim();
                 try {
+                    const bootstrapClientT0 =
+                        typeof performance !== "undefined" ? performance.now() : 0;
                     const bootstrapOwnership = workUnitBootstrapOwnershipFromSelection(
                         departmentId,
                         selectedSiteId,
@@ -1901,7 +1926,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         });
                     }
                     if (bootstrapRes.ok && !cancelled) {
-                        const b = (await bootstrapRes.json().catch(() => ({}))) as {
+                        const parseT0 = typeof performance !== "undefined" ? performance.now() : 0;
+                        const rawBootstrap = (await bootstrapRes.json().catch(() => ({}))) as Record<string, unknown>;
+                        const parseT1 = typeof performance !== "undefined" ? performance.now() : 0;
+                        const { payload: peeled, serverPerf } = peelBootstrapServerPerf(rawBootstrap);
+                        const applyT0 = typeof performance !== "undefined" ? performance.now() : 0;
+                        const b = peeled as {
                             error?: string;
                             department?: Partial<DeptRow> & { id?: string };
                             work_unit?: Partial<WorkUnitRow> & {
@@ -1978,6 +2008,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 setEnrollmentRightRailResolved(b.right_rail_actions);
                             }
                             setEnrollmentActionsSettled(true);
+                            enrollmentActionsSettledRef.current = true;
                             if (!Array.isArray(b.right_rail_actions)) {
                                 void fetchWorkspaceRightRailResolvedActions({
                                     departmentId,
@@ -1997,6 +2028,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             }
                         } else {
                             setEnrollmentActionsSettled(true);
+                            enrollmentActionsSettledRef.current = true;
                         }
 
                         if (b.queue?.attention?.execution_work_unit_id) {
@@ -2172,6 +2204,25 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             }, { idleTimeoutMs: 1500, fallbackMs: 80 });
                             requestWorkUnitDeferredSupplementRef.current();
                         }
+                        const applyT1 = typeof performance !== "undefined" ? performance.now() : 0;
+                        const payloadBytes = new TextEncoder().encode(JSON.stringify(peeled)).length;
+                        logWorkUnitBootstrapBreakdown({
+                            departmentId,
+                            workUnitId,
+                            serverPerf,
+                            client: {
+                                client_fetch_ttfb_ms:
+                                    bootstrapClientT0 > 0 && parseT0 > 0 ? parseT0 - bootstrapClientT0 : undefined,
+                                client_json_parse_ms:
+                                    parseT0 > 0 && parseT1 > 0 ? parseT1 - parseT0 : undefined,
+                                client_state_apply_ms:
+                                    applyT0 > 0 && applyT1 > 0 ? applyT1 - applyT0 : undefined,
+                                client_total_ms:
+                                    bootstrapClientT0 > 0 && applyT1 > 0 ? applyT1 - bootstrapClientT0 : undefined,
+                                bootstrap_owner: bootstrapOwner,
+                                payload_bytes: payloadBytes,
+                            },
+                        });
                         return;
                     }
                 } catch {
@@ -2262,6 +2313,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     setDept(deptRow);
                     setEnrollmentRightRailResolved(Array.isArray(rightRailList) ? rightRailList : []);
                     setEnrollmentActionsSettled(true);
+                    enrollmentActionsSettledRef.current = true;
                     if (orgId) {
                         writeWorkUnitPageCache(orgId, principalUserId, accessScopeFingerprint, {
                             departmentId,

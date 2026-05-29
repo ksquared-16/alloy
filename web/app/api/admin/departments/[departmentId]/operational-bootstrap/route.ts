@@ -16,6 +16,7 @@ import {
 import { loadDeptOperationalBootstrap } from "@/lib/workspace/loadDeptOperationalBootstrap";
 import { logDeptOperationalBootstrapPerf } from "@/lib/workspace/deptOperationalBootstrapPerf";
 import { loadRightRailActionsBundleServer } from "@/lib/workspace/loadRightRailActionsBundleServer";
+import { attachBootstrapServerPerf } from "@/lib/workspace/bootstrapServerPerfEnvelope";
 
 function parseLimit(searchParams: URLSearchParams): number | undefined {
     const raw = (searchParams.get("limit") ?? "").trim();
@@ -194,7 +195,21 @@ export async function GET(request: NextRequest, context: { params: Promise<{ dep
             },
         });
 
-        return NextResponse.json(responseBody);
+        const payloadBytes = Buffer.byteLength(JSON.stringify(responseBody), "utf8");
+        return NextResponse.json(
+            attachBootstrapServerPerf(responseBody, {
+                route_gate_ms: routeGateMs,
+                route_prep_ms: routePrepMs,
+                loader_ms: loaderMs,
+                payload_bytes: payloadBytes,
+                phases: {
+                    ...phases,
+                    kpi_placements_ms: kpiResult.ms,
+                    kpi_placements_cache_hit: kpiResult.cache_hit,
+                    right_rail_actions_ms: actionsResult.ms,
+                },
+            })
+        );
     } catch (e) {
         if (e instanceof QueueServiceError) {
             return NextResponse.json({ error: e.message, code: e.code }, { status: e.status });

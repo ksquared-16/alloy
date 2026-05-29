@@ -515,7 +515,9 @@ describe("Opportunity drawer first-paint contract", () => {
         const src = read("components/admin/AdminEntityDrawer.tsx");
         expect(src).toContain("buildOpportunityDrawerPipelineState");
         expect(src).toContain("opportunityDrawerPipeline");
-        expect(src).toContain("inqModel?.show_right_column");
+        expect(src).toMatch(
+            /inqModel != null\s*\n\s*\? inqModel\.show_right_column/
+        );
         expect(src).toContain("drawerFullBoundValuesReady");
         expect(src).toContain("FamilyContactsPanel");
         expect(src).toContain("OpportunityInquirySummaryRightColumn");

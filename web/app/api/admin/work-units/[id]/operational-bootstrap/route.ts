@@ -21,6 +21,7 @@ import {
     applyWorkUnitBootstrapLoaderCacheHitPhases,
     loadWorkUnitOperationalBootstrapCached,
 } from "@/lib/workspace/workUnitOperationalBootstrapServerCache";
+import { attachBootstrapServerPerf } from "@/lib/workspace/bootstrapServerPerfEnvelope";
 
 /** Matches loader `summaryMode: priority` + `priorityBudget: 6`. */
 const WU_REVEAL_SUMMARIES_MODE_KEY = "priority:6";
@@ -262,7 +263,26 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             },
         });
 
-        return NextResponse.json(responseBody);
+        const payloadBytes = Buffer.byteLength(JSON.stringify(responseBody), "utf8");
+        return NextResponse.json(
+            attachBootstrapServerPerf(responseBody, {
+                route_gate_ms: routeGateMs,
+                route_prep_ms: routePrepMs,
+                loader_ms: revealBlockingLoaderMs,
+                payload_bytes: payloadBytes,
+                phases: {
+                    ...loaderPhases,
+                    reveal_blocking_loader_ms: revealBlockingLoaderMs,
+                    blocking_loader_ms: revealBlockingLoaderMs,
+                    kpi_placements_ms: 0,
+                    kpi_placements_cache_hit: false,
+                    kpi_placements_deferred: true,
+                    right_rail_actions_ms: actionsResult.ms,
+                    right_rail_actions_cache_hit: actionsResult.cache_hit,
+                    right_rail_actions_deferred: actionsResult.deferred || deferBundle,
+                },
+            })
+        );
     } catch (e) {
         if (e instanceof QueueServiceError) {
             return NextResponse.json({ error: e.message, code: e.code }, { status: e.status });

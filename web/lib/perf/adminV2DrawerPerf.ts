@@ -5,6 +5,7 @@
 
 import { alloyPerfSet, ensureAlloyPerf } from "@/lib/perf/alloyPerfGlobal";
 import { emitAdminV2Perf, perfDrawerFullHydrate } from "@/lib/perf/adminV2PerfLog";
+import { logDrawerComposedBreakdown } from "@/lib/perf/adminV2BootstrapBreakdown";
 
 const ROW_CLICK_MARK = "drawer_row_click_at";
 const OPEN_START_MARK = "drawer_open_start";
@@ -178,6 +179,24 @@ export function reportDrawerOpenCoordinatorCommit(
             source: "network",
         });
     }
+
+    logDrawerComposedBreakdown({
+        opportunityId,
+        bootstrap_ms: metrics.bootstrap_ms,
+        drawer_primary_ms: metrics.primary_ms,
+        header_actions_ms: metrics.header_actions_ms,
+        anti_flicker_ms: metrics.anti_flicker_ms,
+        wait_for_composed_ms: waitComposed,
+        full_hydrate_ms: metrics.full_ms ?? null,
+        full_hydrate_pending: metrics.full_ms == null && !metrics.full_attached_at_open,
+        react_commit_ms: clickToCommit != null ? Math.max(0, clickToCommit - waitComposed - metrics.anti_flicker_ms) : null,
+        prefetch_hit: metrics.prefetch_hit,
+        bootstrap_warm: metrics.bootstrap_warm,
+        primary_warm: metrics.primary_warm,
+        full_warm: metrics.full_warm,
+        enrichment_held: metrics.enrichment_held,
+        full_attached_at_open: metrics.full_attached_at_open,
+    });
 }
 
 export function markDrawerBootstrapRequestStart(): void {

@@ -109,6 +109,56 @@
 
 ---
 
+## Pass 3 — Load-time attack (instrument + duplicate-fetch slimming)
+
+### Step 1 — Breakdown instrumentation (dev/staging only)
+
+| Log tag | Surfaces | Fields |
+|---------|----------|--------|
+| `[perf.wu.bootstrap.breakdown]` | WU cold load | route gate/prep, WU/dept lookup, summaries, primary lane, attention, right rail, KPI (deferred), client TTFB/parse/apply, payload_kb, slowest_step |
+| `[perf.dept.bootstrap.breakdown]` | Dept cold load | route gate/prep, dept/WU fetch, summaries, attention query/resolver, KPI, right rail, pipeline, serialize, client timings, slowest_step |
+| `[perf.drawer.composed.breakdown]` | Drawer cold open | bootstrap, drawer_primary, header actions, anti-flicker, composed wait, full_hydrate peek, react_commit estimate, slowest_step |
+
+Server routes attach `__server_perf` on operational-bootstrap JSON in non-production; client peels before state apply.
+
+### Step 2 — Duplicate-fetch audit (happy path)
+
+| Surface | Bootstrap includes | Legacy duplicate | Pass 3 action |
+|---------|-------------------|------------------|---------------|
+| Dept | summaries, attention, KPI, right rail | `runDeferredKpiPlacements` only when `!b.kpi_placements` | Confirmed guarded; dev log when KPI skipped |
+| WU | summaries, primary lane (inline/deferred), attention, right rail (cache hit) | `fetchQueueSummaries` skip when route matches; queue row effect suppressed post-bootstrap | **Fixed:** deferred supplement no longer re-fetches right rail when `enrollmentActionsSettledRef` set from bootstrap |
+
+### Bottleneck ranking (pre-fix reference — re-capture on staging with new logs)
+
+1. **WU operational-bootstrap TTFB** — attention lane ∥ summaries; primary lane rows when not deferred
+2. **Dept operational-bootstrap TTFB** — batch queue summaries + attention preview SQL
+3. **Drawer composed open** — bootstrap ∥ primary parallel; header actions serial gate
+4. **Full hydrate** — post-reveal; OCM join / field defs (unchanged this pass)
+
+### Pass 3 fixes
+
+| ID | Fix |
+|----|-----|
+| P5-A | Dev breakdown logs + `__server_perf` envelope on bootstrap routes |
+| P5-B | Suppress duplicate WU right-rail fetch in `loadWorkUnitDeferredSupplement` when bootstrap settled enrollment rail |
+| P5-C | Dev guard logs `[perf.bootstrap.duplicate_fetch_suppressed]` for skipped happy-path fetches |
+
+### Deferred (needs breakdown evidence on staging)
+
+- WU bootstrap payload slimming (attention defer, KPI already deferred on route)
+- Dept attention SQL index — document only until `attention_query_ms` confirmed dominant
+- Drawer header actions parallel to first paint
+- `surface=full` segment deferral
+
+---
+
+## Tests (Pass 3)
+
+- `web/tests/admin/adminV2PerformancePass3.test.ts`
+- Re-run Pass 1/2 contract tests + `npx tsc --noEmit`
+
+---
+
 ## Phase 3 performance debt
 
 - Dept attention SQL (`attention_query_ms` ~247ms) — index proposals only
