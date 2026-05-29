@@ -278,6 +278,8 @@ export async function loadWaitlistCandidateGrainQueueItems(params: {
     departmentMetadata: unknown | null;
     workUnitMetadata: unknown | null;
     nowMs: number;
+    /** When true, skip placement V2 projection for list preview (`queue_reveal`). */
+    skipPlacementProjection?: boolean;
     enrichOpportunityRows: (rows: Array<ReturnType<typeof opportunityPreviewFromCandidateRow>>) => Promise<{
         rows: Array<Record<string, unknown>>;
         queueListSubtimings?: WaitlistCandidateGrainLoadResult["enrichmentSubtimings"];
@@ -330,24 +332,30 @@ export async function loadWaitlistCandidateGrainQueueItems(params: {
         queue_key: params.ctx.placementQueueKey,
     });
 
-    const candidatesByOpportunityId = await bulkLoadPlacementCandidatesByOpportunity({
-        supabase: params.supabase,
-        orgId: params.orgId,
-        opportunityIds,
-        activeOnly: false,
-    });
-
-    const householdFactsByCustomerId = await loadPlacementEvaluationHouseholdContext({
-        supabase: params.supabase,
-        orgId: params.orgId,
-        candidatesByOpportunityId,
-    });
+    const skipPlacementProjection = params.skipPlacementProjection === true;
 
     let shadowMode = true;
     let placementDiagnostics: WaitlistCandidateGrainLoadResult["placementDiagnostics"] = null;
     let expandedRows: Array<Record<string, unknown>> = [];
 
-    if (placementResolved.status === "enabled" && placementResolved.engine_version === "v2") {
+    if (
+        !skipPlacementProjection &&
+        placementResolved.status === "enabled" &&
+        placementResolved.engine_version === "v2"
+    ) {
+        const candidatesByOpportunityId = await bulkLoadPlacementCandidatesByOpportunity({
+            supabase: params.supabase,
+            orgId: params.orgId,
+            opportunityIds,
+            activeOnly: false,
+        });
+
+        const householdFactsByCustomerId = await loadPlacementEvaluationHouseholdContext({
+            supabase: params.supabase,
+            orgId: params.orgId,
+            candidatesByOpportunityId,
+        });
+
         shadowMode = placementResolved.options.shadow_mode;
         const oppRows = opportunityIds
             .map((id) => enrichedByOppId.get(id))

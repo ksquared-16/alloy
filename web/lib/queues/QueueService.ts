@@ -3218,6 +3218,7 @@ export async function getWorkUnitQueueItems(params: {
                 departmentMetadata,
                 workUnitMetadata,
                 nowMs: refUtc.getTime(),
+                skipPlacementProjection,
                 enrichOpportunityRows: async (rows) => {
                     const statusTimed = await timedBranch(
                         fetchEffectiveStatusDefinitionsTagged(supabase as never, params.orgId, def.entity_type, {

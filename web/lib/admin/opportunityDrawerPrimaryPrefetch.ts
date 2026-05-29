@@ -1,4 +1,5 @@
 import { opportunityDrawerPrimaryContractReady } from "@/lib/admin/drawer/opportunityDrawerFirstPaintContract";
+import { putDrawerEntitySnapshot } from "@/lib/admin/drawerEntitySnapshotCache";
 import { appendOpportunityDrawerOpenerHintsToUrl } from "@/lib/admin/opportunityDrawerOpenerHints";
 import type { OpportunityWorkspaceContext } from "@/contexts/AdminDrawerContext";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
@@ -72,6 +73,7 @@ export async function fetchOpportunityDrawerPrimaryEntity(
             if (!opportunityDrawerPrimaryContractReady(json, cacheKey)) {
                 throw new Error("drawer_primary_contract_not_ready");
             }
+            putDrawerEntitySnapshot("opportunities", cacheKey, json);
             return json;
         })
         .catch((err) => {

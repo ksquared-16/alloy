@@ -65,6 +65,9 @@ describe("drawer above-fold doctrine", () => {
         });
         expect(pending.above_fold.inquiry_summary?.column_mode).toBe("two");
         expect(full.above_fold.inquiry_summary?.column_mode).toBe("two");
+        expect(pending.above_fold.inquiry_summary?.show_right_column).toBe(
+            full.above_fold.inquiry_summary?.show_right_column
+        );
     });
 
     it("compileJobDrawerShell fixes section order from shell not runtime discovery", () => {

@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight";
 import {
     activeOutboundBindings,
     availableComposerChannels,
     bindingEligibleForOutboundComposer,
     type BindingSummary,
 } from "@/lib/communications/composerChannels";
-import { requireAdminOrOps } from "@/lib/adminAuth";
 
 function sanitizeBindings(raw: BindingSummary[]): unknown[] {
     return raw.map((b) => {
@@ -33,11 +32,8 @@ function sanitizeBindings(raw: BindingSummary[]): unknown[] {
 
 /** GET — active communication_provider_bindings for org (no secrets emitted). */
 export async function GET() {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
-
-    const ctx = await getAdminContextCached();
-    if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const ctx = await requireAdminOrgContextLight();
+    if (ctx instanceof Response) return ctx;
 
     const supabase = createAdminClient();
     const { data, error } = await supabase

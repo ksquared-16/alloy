@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
+import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight";
 import { fetchRelatedPersonIdsForCommunicationsDrawer } from "@/lib/communications/threadRelatedPersonIds";
 
 /** Match /api/admin/activity entity_type normalization. */
@@ -93,11 +92,8 @@ async function attachLastPreviews(
 
 /** GET /api/admin/communications/threads — entity threads + person-anchored threads for related persons (Card 26). */
 export async function GET(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
-
-    const ctx = await getAdminContextCached();
-    if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const ctx = await requireAdminOrgContextLight();
+    if (ctx instanceof Response) return ctx;
 
     const { searchParams } = new URL(request.url);
     const entityTypeRaw = (searchParams.get("entity_type") ?? "").trim();

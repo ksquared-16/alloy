@@ -224,6 +224,7 @@ import {
     opportunityDrawerSummaryLayoutMode,
     stabilizeOpportunityWorkflowOverviewSections,
 } from "@/lib/admin/drawer/opportunityDrawerLayoutStability";
+import { INQUIRY_SUMMARY_RIGHT_COLUMN_SHELL_MIN_H_CLASS } from "@/lib/admin/drawer/opportunityInquiryRightColumnGeometry";
 import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
 import {
     buildJobDrawerPipelineState,
@@ -1719,6 +1720,7 @@ export default function AdminEntityDrawer() {
     const [jobCreateSaving, setJobCreateSaving] = useState(false);
     const [drawerTab, setDrawerTab] = useState<DrawerTabKey>("overview");
     const opportunityDrawerVisitedTabsRef = useRef(createOpportunityDrawerTabVisitSet());
+    const opportunityActivityTabLoadedIdRef = useRef<string | null>(null);
     const [opportunityDrawerTabVisitTick, setOpportunityDrawerTabVisitTick] = useState(0);
     /** Set default tab once per open; avoids resetting tab when pathname changes while drawer stays open. */
     const entityDrawerTabInitKeyRef = useRef<string>("");
@@ -2202,6 +2204,7 @@ export default function AdminEntityDrawer() {
             opportunityDrawerFirstPaintPreloadedRef.current = null;
             postRevealEnrichEndReportedRef.current = null;
             opportunityDrawerVisitedTabsRef.current = createOpportunityDrawerTabVisitSet();
+            opportunityActivityTabLoadedIdRef.current = null;
             setOpportunityDrawerTabVisitTick((n) => n + 1);
             setPostDrawerVisibleKey(null);
             setOpportunityDrawerLayoutFrozen(false);
@@ -2310,6 +2313,7 @@ export default function AdminEntityDrawer() {
         if (entityDrawerTabInitKeyRef.current !== entityOpenKey) {
             entityDrawerTabInitKeyRef.current = entityOpenKey;
             opportunityDrawerVisitedTabsRef.current = createOpportunityDrawerTabVisitSet();
+            opportunityActivityTabLoadedIdRef.current = null;
             setOpportunityDrawerTabVisitTick((n) => n + 1);
             setDrawerTab("overview");
         }
@@ -2752,6 +2756,7 @@ export default function AdminEntityDrawer() {
     useEffect(() => {
         if (drawerTab !== "activity") return;
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        if (opportunityActivityTabLoadedIdRef.current === drawer.id) return;
         let cancelled = false;
         (async () => {
             try {
@@ -2802,6 +2807,7 @@ export default function AdminEntityDrawer() {
                 if (!cancelled) {
                     setOpportunityWorkflowRunsLoading(false);
                     setOpportunityActivityLoading(false);
+                    opportunityActivityTabLoadedIdRef.current = drawer.id;
                 }
             }
         })();
@@ -7132,7 +7138,11 @@ export default function AdminEntityDrawer() {
                     setError(null);
                     opportunityDrawerBootstrapAppliedRef.current = next.id;
                     setOpportunityBootstrapAppliedId(next.id);
-                    if (String((cached as { _record_surface?: string })._record_surface ?? "").trim() === "full") {
+                    const surface = String((cached as { _record_surface?: string })._record_surface ?? "").trim();
+                    if (surface === "drawer_primary" || surface === "full") {
+                        opportunityDrawerFirstPaintPreloadedRef.current = next.id;
+                    }
+                    if (surface === "full") {
                         setOpportunityDrawerEnrichmentHeld(false);
                         setOpportunityDrawerBelowFoldRevealed(true);
                         setOpportunityDrawerSecondaryReady(true);
@@ -7369,10 +7379,13 @@ export default function AdminEntityDrawer() {
         opportunityDrawerFullBoundEnrichmentReady,
     ]);
 
-    /** Below-fold reveal: unlock secondary fetches / right column without reshaping first viewport. */
+    /** Below-fold reveal: scroll unlocks immediately; idle unlock waits for full hydrate settle. */
     useEffect(() => {
         if (!opportunityDrawerLayoutFrozen || opportunityDrawerBelowFoldRevealed) return;
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+
+        const fullSettled =
+            opportunityFullRecordHydrateApplied || opportunityBackgroundFullHydrateFailed;
 
         const scrollRoot = document.querySelector("[data-adminv2-record-modal-scroll]");
         const onScroll = () => {
@@ -7386,15 +7399,25 @@ export default function AdminEntityDrawer() {
             setOpportunityDrawerBelowFoldRevealed(true);
         }
 
-        const idleReveal = window.setTimeout(() => {
-            setOpportunityDrawerBelowFoldRevealed(true);
-        }, 2400);
+        let idleReveal: ReturnType<typeof setTimeout> | undefined;
+        if (fullSettled) {
+            idleReveal = setTimeout(() => {
+                setOpportunityDrawerBelowFoldRevealed(true);
+            }, 2400);
+        }
 
         return () => {
             scrollRoot?.removeEventListener("scroll", onScroll);
-            window.clearTimeout(idleReveal);
+            if (idleReveal != null) clearTimeout(idleReveal);
         };
-    }, [drawer.type, drawer.id, opportunityDrawerLayoutFrozen, opportunityDrawerBelowFoldRevealed]);
+    }, [
+        drawer.type,
+        drawer.id,
+        opportunityDrawerLayoutFrozen,
+        opportunityDrawerBelowFoldRevealed,
+        opportunityFullRecordHydrateApplied,
+        opportunityBackgroundFullHydrateFailed,
+    ]);
 
     useLayoutEffect(() => {
         if (!opportunityDrawerLayoutFrozen || opportunityDrawerBelowFoldRevealed) return;
@@ -9214,14 +9237,14 @@ export default function AdminEntityDrawer() {
         }
         if (oppInquiryWorkflowV1) {
             const savedOrder = oppDrawerCfg?.overview_section_order;
-            if (!savedOrder?.length && !opportunityDrawerAboveFoldLocked) {
+            if (!savedOrder?.length && opportunityDrawerEnrichmentLayoutReady) {
                 const icIdx = overviewSections.findIndex((s) => s.key === "inquiry_children");
                 if (icIdx > 0) {
                     const ic = overviewSections[icIdx]!;
                     overviewSections = [ic, ...overviewSections.slice(0, icIdx), ...overviewSections.slice(icIdx + 1)];
                 }
             }
-            if (!opportunityDrawerAboveFoldLocked) {
+            if (opportunityDrawerEnrichmentLayoutReady) {
                 overviewSections = overviewSections.map((s) =>
                     s.key === "inquiry_children" ? { ...s, defaultExpanded: true } : s
                 );
@@ -13056,7 +13079,7 @@ export default function AdminEntityDrawer() {
                                                                 {showInquirySummaryRightColumn ? (
                                                                 <div
                                                                     ref={inquirySummaryRightRef}
-                                                                    className={`${oppInqInnerCard} flex min-w-0 flex-col min-h-[16rem]`}
+                                                                    className={`${oppInqInnerCard} flex min-w-0 flex-col ${INQUIRY_SUMMARY_RIGHT_COLUMN_SHELL_MIN_H_CLASS}`}
                                                                     data-shell-slot="inquiry_summary_right"
                                                                 >
                                                                     {drawer.id &&

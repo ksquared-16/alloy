@@ -8,6 +8,9 @@ import {
     loadOpportunityDrawerComposedOpen,
     shouldDeferOpportunityDrawerOpen,
 } from "@/lib/admin/opportunityDrawerOpenCoordinator";
+import { peekDrawerEntitySnapshot } from "@/lib/admin/drawerEntitySnapshotCache";
+import { entityDataMatchesDrawer } from "@/lib/admin/drawer/entityDataMatchesDrawer";
+import { logOpportunityQueueNav } from "@/lib/admin/drawer/opportunityDrawerQueueNavPerf";
 import { prefetchAdjacentOpportunityDrawers } from "@/lib/admin/opportunityDrawerAdjacentPrefetch";
 import { prefetchOpportunityDrawerOnRowIntent } from "@/lib/admin/opportunityDrawerIntentPrefetch";
 import {
@@ -321,18 +324,40 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
             };
 
             const run = ++queueNavRunRef.current;
+            const navT0 = typeof performance !== "undefined" ? performance.now() : 0;
             const primaryWarm = isOpportunityDrawerPrimaryWarm(targetId);
             const bootstrapWarm = isOpportunityDrawerBootstrapWarm(targetId);
             const preloadReady =
                 opportunityDrawerPreloadRef.current?.opportunityId === targetId.trim();
+            const snapshotCached = peekDrawerEntitySnapshot("opportunities", targetId);
+            const snapshotWarm =
+                snapshotCached != null &&
+                entityDataMatchesDrawer(snapshotCached, targetId, "opportunities");
 
             applyOpportunityQueueNavigation(targetId, navigator, workspace);
 
-            if (preloadReady) {
+            const logNav = (path: import("@/lib/admin/drawer/opportunityDrawerQueueNavPerf").OpportunityQueueNavPath, overlay: boolean) => {
+                logOpportunityQueueNav({
+                    nav_source: direction === "prev" ? "queue_prev" : "queue_next",
+                    target_id: targetId,
+                    path,
+                    overlay_shown: overlay,
+                    bootstrap_warm: bootstrapWarm,
+                    primary_warm: primaryWarm,
+                    snapshot_warm: snapshotWarm,
+                    prefetch_hit: preloadReady,
+                    time_to_decision_ms:
+                        typeof performance !== "undefined" ? Math.round(performance.now() - navT0) : undefined,
+                });
+            };
+
+            if (preloadReady || snapshotWarm) {
+                logNav(preloadReady ? "preload_hit" : "snapshot_hit", false);
                 return;
             }
 
             if (primaryWarm && bootstrapWarm) {
+                logNav("warm_composed", false);
                 void loadOpportunityDrawerComposedOpen(targetId, workspace, workspaceDataFetchInit())
                     .then(({ preload }) => {
                         if (run !== queueNavRunRef.current) return;
@@ -345,6 +370,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
             }
 
             setOpportunityQueueNavTargetId(targetId);
+            logNav("cold_composed", true);
             void loadOpportunityDrawerComposedOpen(targetId, workspace, workspaceDataFetchInit())
                 .then(({ preload }) => {
                     if (run !== queueNavRunRef.current) return;

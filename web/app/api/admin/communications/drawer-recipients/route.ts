@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
-import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
+import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import {
     fetchJobDrawerEmailRecipients,
@@ -15,11 +14,8 @@ const UUID_RE = /^[0-9a-f-]{36}$/i;
  * Opportunities: opportunity_persons + primary_person_id. Jobs: customer_persons + opportunity_persons + primary_person_id.
  */
 export async function GET(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
-
-    const ctx = await getAdminContextCached();
-    if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const ctx = await requireAdminOrgContextLight();
+    if (ctx instanceof Response) return ctx;
 
     const entityTypeRaw = request.nextUrl.searchParams.get("entity_type")?.trim().toLowerCase() ?? "";
     const entityId = request.nextUrl.searchParams.get("entity_id")?.trim() ?? "";

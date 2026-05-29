@@ -55,7 +55,7 @@ describe("AdminV2 performance pass 2 contracts", () => {
     it("navigateOpportunityInQueue skips composed open when preload already matches target", () => {
         const ctx = read("contexts/AdminDrawerContext.tsx");
         expect(ctx).toContain("opportunityDrawerPreloadRef.current?.opportunityId === targetId.trim()");
-        expect(ctx).toMatch(/if \(preloadReady\) \{\s*return;/);
+        expect(ctx).toMatch(/if \(preloadReady \|\| snapshotWarm\) \{[\s\S]{0,120}return;/);
     });
 
     it("person drawer skips loading shell when snapshot is warm", () => {
