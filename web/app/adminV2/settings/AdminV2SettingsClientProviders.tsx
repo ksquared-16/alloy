@@ -4,6 +4,7 @@ import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
 import { AdminDrawerProvider } from "@/contexts/AdminDrawerContext";
 import { EntityLabelsProvider, type EntityLabelsMap } from "@/contexts/EntityLabelsContext";
 import AdminEntityDrawer from "@/components/admin/AdminEntityDrawer";
+import GlobalRecordSearchOpenListener from "@/components/adminV2/GlobalRecordSearchOpenListener";
 import type { EntityLabelsBootstrapMap } from "@/lib/admin/entityLabelsServer";
 import type { ReactNode } from "react";
 import SettingsHierarchyBreadcrumb from "./SettingsHierarchyBreadcrumb";
@@ -52,6 +53,7 @@ export default function AdminV2SettingsClientProviders({
                         </div>
                         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-3 sm:px-5">{children}</div>
                     </div>
+                    <GlobalRecordSearchOpenListener />
                     <AdminEntityDrawer />
                 </AdminDrawerProvider>
             </EntityLabelsProvider>

@@ -15,7 +15,8 @@ import {
     type QuickMessageLaunchSeed,
 } from "@/lib/adminV2/quickMessageLaunch";
 import AdminV2ProfileMenu from "@/app/adminV2/components/AdminV2ProfileMenu";
-import { MessageSquare } from "lucide-react";
+import GlobalSearchModal, { useGlobalSearchKeyboardShortcut } from "@/app/adminV2/components/GlobalSearchModal";
+import { MessageSquare, Search } from "lucide-react";
 
 function normalizeAdminPath(pathname: string): string {
   if (pathname === "/admin/v2" || pathname.startsWith("/admin/v2/")) {
@@ -102,6 +103,10 @@ export default function TopNavBar() {
   const [quickMessageOpen, setQuickMessageOpen] = useState(false);
   const [quickMessageSeed, setQuickMessageSeed] = useState<QuickMessageModalSeed | null>(null);
   const [tasksModalOpen, setTasksModalOpen] = useState(false);
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
+
+  const openGlobalSearch = useCallback(() => setGlobalSearchOpen(true), []);
+  useGlobalSearchKeyboardShortcut(openGlobalSearch);
 
   useEffect(() => {
     const onLaunch = (ev: Event) => {
@@ -165,15 +170,23 @@ export default function TopNavBar() {
             className="h-9 w-9 shrink-0"
           />
         </div>
-        <div
-          className="min-w-0 flex-1 max-w-xl rounded-md px-3.5 py-2.5 text-[15px]"
+        <button
+          type="button"
+          onClick={openGlobalSearch}
+          className="flex min-w-0 flex-1 max-w-xl items-center gap-2 rounded-md px-3.5 py-2.5 text-left text-[15px] outline-none transition-opacity hover:opacity-100 focus-visible:ring-1 focus-visible:ring-white/35"
           style={{
             backgroundColor: derived.searchBgOnPrimary,
             color: neutral.surface,
           }}
+          aria-label="Search records (⌘K)"
+          data-adminv2-global-search-trigger="true"
         >
-          <span className="opacity-90">Search</span>
-        </div>
+          <Search className="h-4 w-4 shrink-0 opacity-70" aria-hidden strokeWidth={2} />
+          <span className="min-w-0 flex-1 truncate opacity-90">Search records…</span>
+          <kbd className="hidden shrink-0 rounded border border-white/20 px-1.5 py-0.5 text-[10px] font-medium opacity-70 lg:inline">
+            ⌘K
+          </kbd>
+        </button>
         <div className="hidden items-center gap-2 shrink-0 md:flex" aria-label="Quick actions">
           <OperationalTasksNavBadge
             tabStyle={utilityBtnStyle}
@@ -210,6 +223,7 @@ export default function TopNavBar() {
         }}
       />
       <MyTasksModal open={tasksModalOpen} onClose={() => setTasksModalOpen(false)} />
+      <GlobalSearchModal open={globalSearchOpen} onClose={() => setGlobalSearchOpen(false)} />
     </header>
   );
 }

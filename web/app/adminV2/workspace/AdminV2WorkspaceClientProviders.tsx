@@ -7,6 +7,7 @@ import { EntityLabelsProvider, type EntityLabelsMap } from "@/contexts/EntityLab
 import AdminEntityDrawer from "@/components/admin/AdminEntityDrawer";
 import OpportunityDrawerOpenCoordinator from "@/components/admin/OpportunityDrawerOpenCoordinator";
 import ContextualRecordOpenListener from "@/components/adminV2/ContextualRecordOpenListener";
+import GlobalRecordSearchOpenListener from "@/components/adminV2/GlobalRecordSearchOpenListener";
 import AdminV2ClickDebugInstaller from "@/app/adminV2/components/AdminV2ClickDebugInstaller";
 import type { EntityLabelsBootstrapMap } from "@/lib/admin/entityLabelsServer";
 import { AdminOrgOperationalTimezoneProvider } from "@/contexts/AdminOrgOperationalTimezoneContext";
@@ -100,6 +101,7 @@ export default function AdminV2WorkspaceClientProviders({
                     </div>
                     <OpportunityDrawerOpenCoordinator />
                     <ContextualRecordOpenListener />
+                    <GlobalRecordSearchOpenListener />
                     <AdminEntityDrawer />
                   </AdminDrawerProvider>
                 </div>
