@@ -20,6 +20,12 @@ import {
     type RecordLayoutConfigJson,
 } from "@/lib/recordChrome/types";
 import { getSectionOrderFromScheduleLayoutBlocks, isScheduleLayoutV2 } from "@/lib/recordChrome/scheduleLayoutConfig";
+import {
+    buildPersonRuntimeLayoutSettingsPreview,
+    type PersonRuntimeLayoutSettingsPreview,
+} from "@/lib/recordChrome/personDrawerLayoutSettingsPreview";
+
+export type { PersonRuntimeLayoutSettingsPreview } from "@/lib/recordChrome/personDrawerLayoutSettingsPreview";
 
 export type PreviewFieldDef = {
     field_key: string;
@@ -54,11 +60,15 @@ export type DrawerLayoutPreviewSection = {
     field_keys?: string[];
 };
 
-export type DrawerLayoutPreviewFidelity = "opportunity_runtime_mirror" | "presentation_ordered_skeleton";
+export type DrawerLayoutPreviewFidelity =
+    | "opportunity_runtime_mirror"
+    | "person_runtime_mirror"
+    | "presentation_ordered_skeleton";
 
 export type EffectiveDrawerLayoutPreviewBundle = {
     fidelity: DrawerLayoutPreviewFidelity;
     sections: DrawerLayoutPreviewSection[];
+    person_runtime?: PersonRuntimeLayoutSettingsPreview;
 };
 
 function defaultSectionTitle(sectionKey: string): string {
@@ -459,6 +469,30 @@ function buildPresentationOrderedSkeleton(
     return { fidelity: "presentation_ordered_skeleton", sections: rows };
 }
 
+function buildPersonRuntimePreview(cfg: RecordLayoutConfigJson): EffectiveDrawerLayoutPreviewBundle {
+    const personRuntime = buildPersonRuntimeLayoutSettingsPreview(cfg);
+    const sections: DrawerLayoutPreviewSection[] = [];
+
+    for (const variant of personRuntime.variants) {
+        for (const op of variant.operating_sections) {
+            sections.push({
+                position: sections.length + 1,
+                section_key: op.section_key,
+                title: op.label,
+                kind: "layout_static",
+                structural_provenance: "presentation_template",
+                detail: `Operating module on ${variant.label} (${variant.variant_key}).`,
+            });
+        }
+    }
+
+    return {
+        fidelity: "person_runtime_mirror",
+        sections,
+        person_runtime: personRuntime,
+    };
+}
+
 /**
  * Build read-only preview rows for Settings. Opportunity uses full mirror; job/schedule use ordered skeleton.
  */
@@ -474,11 +508,13 @@ export function buildEffectiveDrawerLayoutPreview(params: {
     if (params.presentationEntityType === "opportunities") {
         return buildOpportunityPreview(params.config, defs, labels);
     }
-    if (
-        params.presentationEntityType === "jobs" ||
-        params.presentationEntityType === "schedules" ||
-        params.presentationEntityType === "persons"
-    ) {
+    if (params.presentationEntityType === "persons") {
+        if (params.config.person_drawer_mode === "runtime_v1") {
+            return buildPersonRuntimePreview(params.config);
+        }
+        return buildPresentationOrderedSkeleton(params.presentationEntityType, params.config);
+    }
+    if (params.presentationEntityType === "jobs" || params.presentationEntityType === "schedules") {
         return buildPresentationOrderedSkeleton(params.presentationEntityType, params.config);
     }
     return { fidelity: "presentation_ordered_skeleton", sections: [] };

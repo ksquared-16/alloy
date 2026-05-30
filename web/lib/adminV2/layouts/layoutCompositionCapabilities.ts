@@ -14,12 +14,17 @@ import {
 /** BOS capability that may propose/apply layout composition deltas (no separate AI architecture). */
 export const LAYOUT_COMPOSITION_PRIMARY_BOS_CAPABILITY = "config_layout_assist" as const;
 
-export type LayoutCompositionFidelity = "opportunity_runtime_mirror" | "presentation_ordered_skeleton";
+export type LayoutCompositionFidelity =
+    | "opportunity_runtime_mirror"
+    | "person_runtime_mirror"
+    | "presentation_ordered_skeleton";
 
 export type LayoutCompositionCapabilitiesInput = {
     entity: LayoutSettingsEntityKey;
     /** From effective-preview `workflow.workflow_v1_configured`. */
     workflowV1Configured?: boolean;
+    /** From effective-preview `person_runtime.runtime_v1_active`. */
+    personRuntimeV1Active?: boolean;
 };
 
 export type LayoutCompositionCapabilities = {
@@ -114,9 +119,34 @@ export function resolveLayoutCompositionCapabilities(
             "Job drawer section order is not editable here yet. Use Fields and Field grouping for field catalog changes; preview shows template ordering."
         );
     }
+    if (input.entity === "schedule") {
+        return readOnlyEntity(
+            "schedule",
+            "Schedule drawer composition uses layout blocks and global templates. Editing from Layouts is not supported in this phase."
+        );
+    }
+    if (input.entity === "person") {
+        const runtimeActive = input.personRuntimeV1Active === true;
+        return {
+            entity: "person",
+            fidelity: runtimeActive ? "person_runtime_mirror" : "presentation_ordered_skeleton",
+            isReadOnly: true,
+            canManageSections: false,
+            canAssignFields: false,
+            canPreviewActions: false,
+            canUseLinkedBlocks: false,
+            supportsWorkflowVirtualSections: false,
+            supportsFieldReorder: false,
+            supportsSectionArchive: false,
+            allowedMutationClasses: [],
+            primaryBosCapability: LAYOUT_COMPOSITION_PRIMARY_BOS_CAPABILITY,
+            readOnlyReason:
+                "Person drawer layouts use Runtime v1 operating variants (child, parent, generic). Review effective variants below. Editing from Layouts is deferred to a later phase.",
+        };
+    }
     return readOnlyEntity(
-        "schedule",
-        "Schedule drawer composition uses layout blocks and global templates. Editing from Layouts is not supported in this phase."
+        input.entity,
+        "Drawer composition editing is not supported for this record type in this phase."
     );
 }
 

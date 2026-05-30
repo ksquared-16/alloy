@@ -39,4 +39,12 @@ describe("layoutCompositionCapabilities", () => {
             expect(cap.canAssignFields).toBe(false);
         }
     });
+
+    it("read-only person with person-specific copy", () => {
+        const cap = resolveLayoutCompositionCapabilities({ entity: "person" });
+        expect(cap.isReadOnly).toBe(true);
+        expect(cap.canManageSections).toBe(false);
+        expect(cap.readOnlyReason).toMatch(/Runtime v1/i);
+        expect(cap.readOnlyReason).not.toMatch(/Schedule drawer composition/i);
+    });
 });

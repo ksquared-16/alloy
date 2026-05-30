@@ -7,6 +7,7 @@ import {
     buildOpportunityWorkflowV1EditorSections,
     type PreviewFieldDef,
 } from "@/lib/recordChrome/effectiveDrawerLayoutPreview";
+import { buildPersonRuntimeLayoutSettingsPreview } from "@/lib/recordChrome/personDrawerLayoutSettingsPreview";
 import type { EntityPresentationType } from "@/lib/entityPresentation";
 
 const ALLOWED = new Set(["job", "schedule", "opportunity", "person"]);
@@ -56,6 +57,7 @@ export async function GET(request: NextRequest) {
     const layout = resolved.layout;
     if (!layout) {
         if (entityType === "person") {
+            const personRuntime = buildPersonRuntimeLayoutSettingsPreview({});
             const preview = buildEffectiveDrawerLayoutPreview({
                 presentationEntityType: "persons",
                 config: {},
@@ -77,6 +79,7 @@ export async function GET(request: NextRequest) {
                 },
                 preview_fidelity: preview.fidelity,
                 sections: preview.sections,
+                person_runtime: personRuntime,
                 empty_reason: null,
             });
         }
@@ -146,6 +149,11 @@ export async function GET(request: NextRequest) {
         fieldSectionLabels,
     });
 
+    const person_runtime =
+        entityType === "person"
+            ? buildPersonRuntimeLayoutSettingsPreview(cfg)
+            : preview.person_runtime;
+
     const inquiryMode = cfg.inquiry_drawer_mode ?? null;
     const workflowV1Configured = inquiryMode === "workflow_v1";
 
@@ -177,5 +185,6 @@ export async function GET(request: NextRequest) {
         overview_hidden_sections: cfg.overview_hidden_sections ?? [],
         /** Card 5 — layout placement behavior for Settings field rows (read-only). */
         field_placements_v1: cfg.field_placements_v1 ?? [],
+        person_runtime,
     });
 }
