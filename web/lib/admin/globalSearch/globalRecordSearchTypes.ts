@@ -48,6 +48,8 @@ export type GlobalRecordSearchCluster = {
     children: GlobalRecordSearchHit[];
     parents: GlobalRecordSearchHit[];
     locations?: GlobalRecordSearchHit[];
+    /** Hidden child rows beyond per-cluster display cap. */
+    children_overflow?: number;
 };
 
 export type GlobalRecordSearchResponse = {
@@ -72,6 +74,10 @@ export const GLOBAL_RECORD_SEARCH_GROUP_LABELS: Record<GlobalRecordSearchGroupKe
     locations: "Campuses",
 };
 
-export const GLOBAL_RECORD_SEARCH_DEFAULT_LIMIT = 24;
-export const GLOBAL_RECORD_SEARCH_PER_GROUP_CAP = 6;
+export const GLOBAL_RECORD_SEARCH_DEFAULT_LIMIT = 48;
+export const GLOBAL_RECORD_SEARCH_PER_GROUP_CAP = 12;
+/** Fetch cap for child member rows before household expansion merge. */
+export const GLOBAL_SEARCH_CHILD_MEMBER_FETCH_CAP = 48;
+/** Max children shown per family cluster before "+ X more". */
+export const GLOBAL_RECORD_SEARCH_CHILDREN_PER_CLUSTER_MAX = 12;
 export const GLOBAL_RECORD_SEARCH_MIN_Q_LEN = 2;

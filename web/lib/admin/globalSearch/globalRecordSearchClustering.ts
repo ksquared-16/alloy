@@ -57,8 +57,8 @@ export function buildGlobalSearchFamilyClusters(hits: GlobalRecordSearchHit[]): 
                 "status_label"
             ),
             anchors,
-            children,
-            parents,
+            children: children.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })),
+            parents: parents.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })),
         });
     }
 

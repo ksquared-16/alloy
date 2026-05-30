@@ -5,6 +5,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { runGlobalRecordSearch } from "@/lib/admin/globalSearch/globalRecordSearchService";
 import { buildGlobalSearchFamilyClusters } from "@/lib/admin/globalSearch/globalRecordSearchClustering";
+import { applyGlobalSearchClusterDisplayLimits } from "@/lib/admin/globalSearch/globalRecordSearchClusterLimits";
+import {
+    expandGlobalSearchChildMemberRows,
+} from "@/lib/admin/globalSearch/globalRecordSearchHouseholdChildren";
 import {
     GLOBAL_SEARCH_LEGACY_DRAWER_ENTITY_TYPES,
     resolveGlobalSearchDrawerOpenTarget,
@@ -168,6 +172,114 @@ function createMockSupabase(tables: Record<string, Row[]>) {
         from: (table: string) => chain(table),
     } as unknown as SupabaseClient;
 }
+
+const CUSTOMER_MITCHELL = "88888888-8888-4888-8888-888888888888";
+const MITCHELL_OPP = "77777777-7777-4777-8777-777777777777";
+const MITCHELL_PARENT = "66666666-6666-4666-8666-666666666666";
+const MITCHELL_CHILDREN = [
+    "mitchell-child-aaaa-aaaa-aaaa-aaaaaaaaaaa1",
+    "mitchell-child-bbbb-bbbb-bbbb-bbbbbbbbbbb2",
+    "mitchell-child-cccc-cccc-cccc-ccccccccccc3",
+    "mitchell-child-dddd-dddd-dddd-ddddddddddd4",
+] as const;
+
+const mitchellFixtures = {
+    customer_members: [
+        {
+            id: MITCHELL_CHILDREN[0],
+            org_id: ORG,
+            customer_id: CUSTOMER_MITCHELL,
+            person_id: null,
+            display_name: "Ava Mitchell",
+            first_name: "Ava",
+            last_name: "Mitchell",
+            relationship: "child",
+            status_key: "active",
+        },
+        {
+            id: MITCHELL_CHILDREN[1],
+            org_id: ORG,
+            customer_id: CUSTOMER_MITCHELL,
+            person_id: null,
+            display_name: "Ben Mitchell",
+            first_name: "Ben",
+            last_name: "Mitchell",
+            relationship: "child",
+            status_key: "active",
+        },
+        {
+            id: MITCHELL_CHILDREN[2],
+            org_id: ORG,
+            customer_id: CUSTOMER_MITCHELL,
+            person_id: null,
+            display_name: "Cara Mitchell",
+            first_name: "Cara",
+            last_name: "Mitchell",
+            relationship: "child",
+            status_key: "active",
+        },
+        {
+            id: MITCHELL_CHILDREN[3],
+            org_id: ORG,
+            customer_id: CUSTOMER_MITCHELL,
+            person_id: null,
+            display_name: "Drew Mitchell",
+            first_name: "Drew",
+            last_name: "Mitchell",
+            relationship: "child",
+            status_key: "active",
+        },
+    ],
+    persons: [
+        {
+            id: MITCHELL_PARENT,
+            org_id: ORG,
+            first_name: "Pat",
+            last_name: "Mitchell",
+            full_name: "Pat Mitchell",
+            status_key: "active",
+        },
+    ],
+    customer_persons: [
+        {
+            org_id: ORG,
+            person_id: MITCHELL_PARENT,
+            customer_id: CUSTOMER_MITCHELL,
+            role_type: "guardian",
+            is_primary: true,
+        },
+    ],
+    customers: [
+        {
+            id: CUSTOMER_MITCHELL,
+            org_id: ORG,
+            name: "Mitchell Household",
+            status_key: "active",
+        },
+    ],
+    opportunities: [
+        {
+            id: MITCHELL_OPP,
+            org_id: ORG,
+            customer_id: CUSTOMER_MITCHELL,
+            location_id: southLoc,
+            name: "Family Inquiry - Mitchell",
+            title: "Family Inquiry - Mitchell",
+            status_key: "tour_scheduled",
+            created_at: "2026-02-01T00:00:00Z",
+        },
+    ],
+    locations: [
+        {
+            id: southLoc,
+            org_id: ORG,
+            label: "South Campus",
+            location_type: "site",
+            is_active: true,
+        },
+    ],
+    opportunity_persons: [],
+};
 
 const chenFixtures = {
     customer_members: [
@@ -457,6 +569,13 @@ describe("global search implementation guards", () => {
         expect(src).not.toContain("bg-alloy-blue");
     });
 
+    it("GlobalSearchBox renders clusters as grouped card containers", () => {
+        const boxPath = resolve(process.cwd(), "app/adminV2/components/GlobalSearchBox.tsx");
+        const src = readFileSync(boxPath, "utf8");
+        expect(src).toContain('data-global-search-cluster="true"');
+        expect(src).toContain("children_overflow");
+    });
+
     it("AdminDrawerContext swaps drawer in place for global search source", () => {
         const ctxPath = resolve(process.cwd(), "contexts/AdminDrawerContext.tsx");
         const src = readFileSync(ctxPath, "utf8");
@@ -693,5 +812,156 @@ describe("presentation helpers", () => {
         expect(hits[0]?.anchors).toHaveLength(1);
         expect(hits[0]?.anchors[0]?.group).toBe("leads");
         expect(hits[0]?.household_name).toBe("Chen Household");
+    });
+});
+
+describe("runGlobalRecordSearch — Mitchell household completeness", () => {
+    it("returns all four Mitchell children when searching last name", async () => {
+        const supabase = createMockSupabase(mitchellFixtures);
+        const { results, clusters } = await runGlobalRecordSearch({
+            supabase,
+            orgId: ORG,
+            accessDim: openDim,
+            rawQ: "mitchell",
+        });
+
+        const childHits = results.filter((r) => r.group === "children");
+        expect(childHits).toHaveLength(4);
+        expect(childHits.map((h) => h.name).sort()).toEqual([
+            "Ava Mitchell",
+            "Ben Mitchell",
+            "Cara Mitchell",
+            "Drew Mitchell",
+        ]);
+
+        const mitchellCluster = clusters.find((c) => c.household_name === "Mitchell Household");
+        expect(mitchellCluster?.children).toHaveLength(4);
+        expect(mitchellCluster?.children_overflow ?? 0).toBe(0);
+    });
+
+    it("expands household siblings when only household name matches", async () => {
+        const fixtures = {
+            ...mitchellFixtures,
+            customer_members: mitchellFixtures.customer_members.map((m, i) => ({
+                ...m,
+                display_name: i === 0 ? "Ava Mitchell" : `Child ${i + 1}`,
+                first_name: i === 0 ? "Ava" : `Kid${i + 1}`,
+                last_name: i === 0 ? "Mitchell" : "Other",
+            })),
+        };
+        const supabase = createMockSupabase(fixtures);
+        const { results } = await runGlobalRecordSearch({
+            supabase,
+            orgId: ORG,
+            accessDim: openDim,
+            rawQ: "mitchell",
+        });
+
+        expect(results.filter((r) => r.group === "children")).toHaveLength(4);
+    });
+
+    it("includes children without person_id", async () => {
+        const supabase = createMockSupabase(mitchellFixtures);
+        const { results } = await runGlobalRecordSearch({
+            supabase,
+            orgId: ORG,
+            accessDim: openDim,
+            rawQ: "mitchell",
+        });
+
+        for (const child of results.filter((r) => r.group === "children")) {
+            expect(child.person_id).toBeNull();
+            expect(child.open_entity_type).toBe("opportunities");
+        }
+    });
+
+    it("site-restricted user keeps Mitchell records at allowed campus only", async () => {
+        const supabase = createMockSupabase(mitchellFixtures);
+        const { results } = await runGlobalRecordSearch({
+            supabase,
+            orgId: ORG,
+            accessDim: {
+                departmentScope: "all" as const,
+                allowedDepartmentIds: null,
+                siteScope: "restricted" as const,
+                allowedSiteLocationIds: [southLoc],
+            },
+            rawQ: "mitchell",
+        });
+
+        expect(results.filter((r) => r.group === "children")).toHaveLength(4);
+        for (const hit of results) {
+            if (hit.group !== "locations") {
+                expect(hit.location_label).toBe("South Campus");
+            }
+        }
+    });
+
+    it("site-restricted user excludes Mitchell when campus is not allowed", async () => {
+        const supabase = createMockSupabase(mitchellFixtures);
+        const { results } = await runGlobalRecordSearch({
+            supabase,
+            orgId: ORG,
+            accessDim: northSiteDim,
+            rawQ: "mitchell",
+        });
+
+        expect(results.filter((r) => r.group === "children")).toHaveLength(0);
+    });
+});
+
+describe("global search household expansion helpers", () => {
+    it("expandGlobalSearchChildMemberRows includes all siblings for matched household", async () => {
+        const supabase = createMockSupabase(mitchellFixtures);
+        const direct = mitchellFixtures.customer_members.slice(0, 1);
+        const expanded = await expandGlobalSearchChildMemberRows({
+            supabase,
+            orgId: ORG,
+            token: "mitchell",
+            directMatches: direct,
+        });
+        expect(expanded).toHaveLength(4);
+    });
+
+    it("clustering does not drop valid children from the same household", () => {
+        const hits = Array.from({ length: 4 }).map((_, i) => ({
+            entity_type: "customer_members" as const,
+            entity_id: MITCHELL_CHILDREN[i],
+            group: "children" as const,
+            name: `Child ${i + 1}`,
+            type_label: "Child",
+            household_name: "Mitchell Household",
+            opportunity_name: "Family Inquiry - Mitchell",
+            lead_short_label: "Mitchell",
+            status_label: "Active",
+            location_label: "South Campus",
+            customer_id: CUSTOMER_MITCHELL,
+            opportunity_id: MITCHELL_OPP,
+            cluster_key: `${CUSTOMER_MITCHELL}:${MITCHELL_OPP}`,
+        }));
+        const clusters = buildGlobalSearchFamilyClusters(hits);
+        expect(clusters).toHaveLength(1);
+        expect(clusters[0]?.children).toHaveLength(4);
+    });
+
+    it("applyGlobalSearchClusterDisplayLimits surfaces children_overflow", () => {
+        const hits = Array.from({ length: 14 }).map((_, i) => ({
+            entity_type: "customer_members" as const,
+            entity_id: `child-${i}`,
+            group: "children" as const,
+            name: `Child ${i}`,
+            type_label: "Child",
+            household_name: "Mitchell Household",
+            opportunity_name: null,
+            lead_short_label: null,
+            status_label: null,
+            location_label: "South Campus",
+            customer_id: CUSTOMER_MITCHELL,
+            opportunity_id: MITCHELL_OPP,
+            cluster_key: `${CUSTOMER_MITCHELL}:${MITCHELL_OPP}`,
+        }));
+        const [cluster] = applyGlobalSearchClusterDisplayLimits(buildGlobalSearchFamilyClusters(hits));
+        expect(cluster?.children.length).toBe(12);
+        expect(cluster?.children_overflow).toBe(2);
     });
 });

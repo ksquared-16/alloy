@@ -319,21 +319,25 @@ export default function GlobalSearchBox() {
                                 key={cluster.key}
                                 role="group"
                                 aria-label={cluster.household_name ?? "Results"}
-                                className="mx-1.5 mb-1"
+                                data-global-search-cluster="true"
+                                className="mx-2 mb-2.5 overflow-hidden rounded-lg border border-alloy-forge/12 bg-alloy-stone/[0.02] shadow-[0_1px_4px_rgba(39,63,82,0.07)]"
                             >
                                 {inCluster && contextLine ?
-                                    <div
-                                        className="mb-0.5 mt-1.5 rounded-md border border-alloy-forge/8 bg-alloy-stone/[0.04] px-3 py-2"
-                                        aria-hidden
-                                    >
-                                        <p className="text-xs text-alloy-midnight/55">{contextLine}</p>
+                                    <div className="border-b border-alloy-forge/10 bg-alloy-stone/[0.045] px-3 py-2">
+                                        <p className="text-xs font-medium text-alloy-midnight/60">{contextLine}</p>
                                     </div>
                                 : null}
-                                <ul className="divide-y divide-alloy-forge/[0.06]">
+                                <ul className="divide-y divide-alloy-forge/[0.07]">
                                     {cluster.anchors.map((hit) => renderHit(hit, inCluster))}
                                     {cluster.children.map((hit) => renderHit(hit, inCluster))}
                                     {cluster.parents.map((hit) => renderHit(hit, inCluster))}
                                 </ul>
+                                {(cluster.children_overflow ?? 0) > 0 ?
+                                    <p className="border-t border-alloy-forge/8 px-3 py-2 text-xs text-alloy-midnight/50">
+                                        + {cluster.children_overflow} more{" "}
+                                        {cluster.children_overflow === 1 ? "child" : "children"}
+                                    </p>
+                                : null}
                             </div>
                         );
                     })}

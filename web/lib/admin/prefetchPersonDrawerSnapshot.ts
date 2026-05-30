@@ -9,7 +9,11 @@ import { PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS } from "@/lib/admin/person/pe
 import { PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS } from "@/lib/admin/person/personDrawerParentChrome";
 import { putDrawerEntitySnapshot, peekDrawerEntitySnapshot } from "@/lib/admin/drawerEntitySnapshotCache";
 
-export type PersonPrefetchSource = "opportunity_drawer_idle" | "hover" | "click";
+export type PersonPrefetchSource =
+    | "opportunity_drawer_idle"
+    | "person_drawer_idle"
+    | "hover"
+    | "click";
 
 const inflight = new Map<string, Promise<void>>();
 

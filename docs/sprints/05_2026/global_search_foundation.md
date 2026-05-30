@@ -21,6 +21,8 @@ Search and BOS remain separate. Phase 1 is **record lookup only** — no command
 - **Works while a drawer is open** — header search remains focusable; dropdown layers above the drawer; selecting a result **swaps** the open AdminV2 record in place (no stack push, no close/reopen flicker).
 - Results grouped by **family cluster** when household/opportunity context is shared.
 - Cluster header shows household, lead, and campus once as **muted typography** (non-clickable).
+- **Household-aware child expansion:** searching a family name or matching any household member returns **all siblings** in that household (not just the first N direct field matches).
+- Per-cluster cap (`12` children visible) shows **`+ X more children`** when a household exceeds the display cap — never silent drops within a cluster.
 - Row hierarchy:
   - **Primary:** record name (e.g. `Alex Chen`, `Family Inquiry - Chen / North Campus` for leads)
   - **Secondary:** muted text — `Child · Chen Family · North Campus` or `Lead · North Campus`
@@ -69,7 +71,8 @@ Returns `groups`, `clusters`, `results`. Groups: children, parents, leads, locat
 |------|------|
 | `web/app/adminV2/components/GlobalSearchBox.tsx` | Inline search + restrained UI |
 | `web/app/adminV2/components/GlobalSearchResultPills.tsx` | Status-only pill |
-| `web/lib/admin/globalSearch/globalRecordSearchResultPresentation.ts` | Typography helpers |
+| `web/lib/admin/globalSearch/globalRecordSearchHouseholdChildren.ts` | Household name + sibling child expansion |
+| `web/lib/admin/globalSearch/globalRecordSearchClusterLimits.ts` | Per-cluster overflow (`+ X more`) |
 | `web/lib/adminV2/drawerOutsideClick.ts` | Ignores global search for drawer dismiss |
 | `web/contexts/AdminDrawerContext.tsx` | In-place swap for `global_search` source |
 | `web/lib/adminV2/globalRecordSearchOpen.ts` | Event bridge + z-index constant |

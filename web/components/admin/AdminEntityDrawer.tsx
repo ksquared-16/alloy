@@ -6667,7 +6667,7 @@ export default function AdminEntityDrawer() {
     const openLinkedPersonFromHousehold = useCallback(
         (personId: string, fromRecord: Record<string, unknown>) => {
             const parentOpp =
-                previousDrawer?.type === "opportunities" ? previousDrawer.id : drawer.parent?.id ?? null;
+                previousDrawer?.type === "opportunities" ? previousDrawer.id : null;
             openPersonDrawerFromHousehold({
                 openDrawer,
                 personId,
@@ -6675,7 +6675,7 @@ export default function AdminEntityDrawer() {
                 parentOpportunityId: parentOpp,
             });
         },
-        [drawer.parent?.id, openDrawer, previousDrawer?.id, previousDrawer?.type]
+        [openDrawer, previousDrawer?.id, previousDrawer?.type]
     );
 
     const personChildLifecycleChrome = useMemo(() => {

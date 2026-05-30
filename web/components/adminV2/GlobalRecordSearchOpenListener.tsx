@@ -5,6 +5,7 @@ import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import {
     ADMINV2_GLOBAL_SEARCH_OPEN_RECORD_EVENT,
     clearGlobalRecordSearchOpenIntent,
+    GLOBAL_SEARCH_DRAWER_OPEN_SOURCE,
     readGlobalRecordSearchOpenIntent,
     type GlobalRecordSearchOpenDetail,
 } from "@/lib/adminV2/globalRecordSearchOpen";
@@ -22,7 +23,7 @@ export default function GlobalRecordSearchOpenListener() {
                 openDrawer({
                     type: pending.open_entity_type,
                     id: pending.open_entity_id,
-                    source: "global_search",
+                    source: GLOBAL_SEARCH_DRAWER_OPEN_SOURCE,
                 });
             }
         }
@@ -34,7 +35,7 @@ export default function GlobalRecordSearchOpenListener() {
             const id = detail?.open_entity_id?.trim();
             const type = detail?.open_entity_type;
             if (!id || !type || isGlobalSearchLegacyDrawerEntityType(type)) return;
-            openDrawer({ type, id, source: "global_search" });
+            openDrawer({ type, id, source: GLOBAL_SEARCH_DRAWER_OPEN_SOURCE });
         };
         window.addEventListener(ADMINV2_GLOBAL_SEARCH_OPEN_RECORD_EVENT, onOpen);
         return () => window.removeEventListener(ADMINV2_GLOBAL_SEARCH_OPEN_RECORD_EVENT, onOpen);

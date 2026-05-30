@@ -17,7 +17,14 @@ import {
     fetchPersonDirectOpportunityContext,
     type CustomerEnrollmentContext,
 } from "@/lib/admin/globalSearch/globalRecordSearchLocationContext";
+import { applyGlobalSearchClusterDisplayLimits } from "@/lib/admin/globalSearch/globalRecordSearchClusterLimits";
 import { buildGlobalSearchFamilyClusters } from "@/lib/admin/globalSearch/globalRecordSearchClustering";
+import {
+    expandGlobalSearchChildMemberRows,
+    fetchGlobalSearchChildMembersByCustomerIds,
+    globalSearchCollectHouseholdCustomerIds,
+    type GlobalSearchChildMemberRow,
+} from "@/lib/admin/globalSearch/globalRecordSearchHouseholdChildren";
 import { assembleGlobalSearchHit } from "@/lib/admin/globalSearch/globalRecordSearchHitAssembly";
 import { globalSearchPersonTypeLabel } from "@/lib/admin/globalSearch/globalRecordSearchPersonPresentation";
 import { personRowIsChildRelationship } from "@/lib/admin/globalSearch/globalRecordSearchPersonPresentation";
@@ -27,6 +34,7 @@ import {
     GLOBAL_RECORD_SEARCH_GROUP_LABELS,
     GLOBAL_RECORD_SEARCH_GROUP_ORDER,
     GLOBAL_RECORD_SEARCH_PER_GROUP_CAP,
+    GLOBAL_SEARCH_CHILD_MEMBER_FETCH_CAP,
     type GlobalRecordSearchCluster,
     type GlobalRecordSearchGroup,
     type GlobalRecordSearchGroupKey,
@@ -65,79 +73,14 @@ function memberDisplayName(m: {
     return parts || `Child ${m.id.slice(0, 8)}…`;
 }
 
-function mergeContext(
-    primary: CustomerEnrollmentContext | null | undefined,
-    fallback: CustomerEnrollmentContext | null | undefined
-): CustomerEnrollmentContext | null {
-    if (primary?.location_id || primary?.opportunity_id) return primary ?? null;
-    return fallback ?? primary ?? null;
-}
-
-function applySiteScopeToHit(
-    hit: GlobalRecordSearchHit,
-    accessDim: AdminAccessScopeDimensions,
-    locationId: string | null | undefined
-): GlobalRecordSearchHit | null {
-    if (!globalSearchRecordAllowedBySiteScope(locationId, accessDim)) return null;
-    return hit;
-}
-
-async function searchChildren(
+async function buildChildHitsFromMemberRows(
     supabase: SupabaseClient,
     orgId: string,
     accessDim: AdminAccessScopeDimensions,
-    rawQ: string,
-    token: string,
-    perGroupCap: number,
+    rows: GlobalSearchChildMemberRow[],
     memberStatusLabels: Map<string, string>,
     oppStatusLabels: Map<string, string>
 ): Promise<GlobalRecordSearchHit[]> {
-    const sel = "id, customer_id, person_id, display_name, first_name, last_name, relationship, status_key";
-    type MemberRow = {
-        id: string;
-        customer_id: string;
-        person_id?: string | null;
-        display_name?: string | null;
-        first_name?: string | null;
-        last_name?: string | null;
-        relationship?: string | null;
-        status_key?: string | null;
-    };
-
-    let rows: MemberRow[] = [];
-    if (CRM_ENTITY_SEARCH_UUID_RE.test(rawQ)) {
-        const { data, error } = await supabase
-            .from("customer_members")
-            .select(sel)
-            .eq("org_id", orgId)
-            .eq("id", rawQ)
-            .maybeSingle();
-        if (error) throw new Error(error.message);
-        if (data) rows = [data as MemberRow];
-    } else {
-        const pattern = `%${token}%`;
-        const q = () => supabase.from("customer_members").select(sel).eq("org_id", orgId).limit(perGroupCap * 4);
-        const [dn, fn, ln] = await Promise.all([
-            q().ilike("display_name", pattern),
-            q().ilike("first_name", pattern),
-            q().ilike("last_name", pattern),
-        ]);
-        const err = dn.error ?? fn.error ?? ln.error;
-        if (err) throw new Error(err.message);
-        const byId = new Map<string, MemberRow>();
-        for (const batch of [dn.data, fn.data, ln.data]) {
-            for (const row of (batch ?? []) as MemberRow[]) {
-                if (row?.id && personRowIsChildRelationship(row.relationship)) {
-                    byId.set(String(row.id), row);
-                }
-            }
-        }
-        rows = [...byId.values()].sort((a, b) =>
-            memberDisplayName(a).localeCompare(memberDisplayName(b), undefined, { sensitivity: "base" })
-        );
-    }
-
-    rows = rows.filter((r) => personRowIsChildRelationship(r.relationship)).slice(0, perGroupCap);
     if (!rows.length) return [];
 
     const customerIds = rows.map((r) => r.customer_id);
@@ -172,7 +115,139 @@ async function searchChildren(
         const hit = applySiteScopeToHit(assembled, accessDim, ctx?.location_id);
         if (hit) hits.push(hit);
     }
-    return hits;
+    return hits.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+}
+
+async function searchChildrenDirectMemberRows(
+    supabase: SupabaseClient,
+    orgId: string,
+    rawQ: string,
+    token: string,
+    fetchCap: number
+): Promise<GlobalSearchChildMemberRow[]> {
+    type MemberRow = GlobalSearchChildMemberRow;
+
+    if (CRM_ENTITY_SEARCH_UUID_RE.test(rawQ)) {
+        const { data, error } = await supabase
+            .from("customer_members")
+            .select("id, customer_id, person_id, display_name, first_name, last_name, relationship, status_key")
+            .eq("org_id", orgId)
+            .eq("id", rawQ)
+            .maybeSingle();
+        if (error) throw new Error(error.message);
+        return data && personRowIsChildRelationship((data as MemberRow).relationship) ? [data as MemberRow] : [];
+    }
+
+    const pattern = `%${token}%`;
+    const q = () =>
+        supabase
+            .from("customer_members")
+            .select("id, customer_id, person_id, display_name, first_name, last_name, relationship, status_key")
+            .eq("org_id", orgId)
+            .limit(fetchCap);
+    const [dn, fn, ln] = await Promise.all([
+        q().ilike("display_name", pattern),
+        q().ilike("first_name", pattern),
+        q().ilike("last_name", pattern),
+    ]);
+    const err = dn.error ?? fn.error ?? ln.error;
+    if (err) throw new Error(err.message);
+
+    const byId = new Map<string, MemberRow>();
+    for (const batch of [dn.data, fn.data, ln.data]) {
+        for (const row of (batch ?? []) as MemberRow[]) {
+            if (row?.id && personRowIsChildRelationship(row.relationship)) {
+                byId.set(String(row.id), row);
+            }
+        }
+    }
+    return [...byId.values()];
+}
+
+function mergeContext(
+    primary: CustomerEnrollmentContext | null | undefined,
+    fallback: CustomerEnrollmentContext | null | undefined
+): CustomerEnrollmentContext | null {
+    if (primary?.location_id || primary?.opportunity_id) return primary ?? null;
+    return fallback ?? primary ?? null;
+}
+
+function applySiteScopeToHit(
+    hit: GlobalRecordSearchHit,
+    accessDim: AdminAccessScopeDimensions,
+    locationId: string | null | undefined
+): GlobalRecordSearchHit | null {
+    if (!globalSearchRecordAllowedBySiteScope(locationId, accessDim)) return null;
+    return hit;
+}
+
+async function searchChildren(
+    supabase: SupabaseClient,
+    orgId: string,
+    accessDim: AdminAccessScopeDimensions,
+    rawQ: string,
+    token: string,
+    perGroupCap: number,
+    memberStatusLabels: Map<string, string>,
+    oppStatusLabels: Map<string, string>,
+    _seedCustomerIds: string[] = []
+): Promise<GlobalRecordSearchHit[]> {
+    const directRows = await searchChildrenDirectMemberRows(
+        supabase,
+        orgId,
+        rawQ,
+        token,
+        GLOBAL_SEARCH_CHILD_MEMBER_FETCH_CAP
+    );
+    const expandedRows = await expandGlobalSearchChildMemberRows({
+        supabase,
+        orgId,
+        token,
+        directMatches: directRows,
+        seedCustomerIds: _seedCustomerIds,
+    });
+
+    return buildChildHitsFromMemberRows(
+        supabase,
+        orgId,
+        accessDim,
+        expandedRows.slice(0, GLOBAL_SEARCH_CHILD_MEMBER_FETCH_CAP),
+        memberStatusLabels,
+        oppStatusLabels
+    );
+}
+
+async function supplementChildrenFromHouseholdSeeds(
+    supabase: SupabaseClient,
+    orgId: string,
+    accessDim: AdminAccessScopeDimensions,
+    existingChildren: GlobalRecordSearchHit[],
+    seedHits: GlobalRecordSearchHit[],
+    perGroupCap: number,
+    memberStatusLabels: Map<string, string>,
+    oppStatusLabels: Map<string, string>
+): Promise<GlobalRecordSearchHit[]> {
+    const existingIds = new Set(existingChildren.map((h) => h.entity_id));
+    const householdIds = globalSearchCollectHouseholdCustomerIds(seedHits);
+    if (!householdIds.length) return existingChildren;
+
+    const memberRows = await fetchGlobalSearchChildMembersByCustomerIds(supabase, orgId, householdIds);
+    const missingRows = memberRows.filter((row) => !existingIds.has(String(row.id)));
+    if (!missingRows.length) return existingChildren;
+
+    const supplementalHits = await buildChildHitsFromMemberRows(
+        supabase,
+        orgId,
+        accessDim,
+        missingRows,
+        memberStatusLabels,
+        oppStatusLabels
+    );
+
+    const merged = [...existingChildren, ...supplementalHits].sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+    );
+    return merged.slice(0, GLOBAL_SEARCH_CHILD_MEMBER_FETCH_CAP);
 }
 
 async function searchParents(
@@ -519,16 +594,29 @@ export async function runGlobalRecordSearch(args: SearchArgs): Promise<{
     const personStatusLabels = new Map(Object.entries(displayLabelsFromDefinitions(personDefs)));
     const oppStatusLabels = new Map(Object.entries(displayLabelsFromDefinitions(oppDefs)));
 
-    const [children, parents, leads, locations] = await Promise.all([
+    const [childrenRaw, parents, leads, locations] = await Promise.all([
         searchChildren(args.supabase, args.orgId, args.accessDim, rawQ, token, perGroupCap, memberStatusLabels, oppStatusLabels),
         searchParents(args.supabase, args.orgId, args.accessDim, rawQ, token, perGroupCap, personStatusLabels, oppStatusLabels),
         searchLeads(args.supabase, args.orgId, args.accessDim, rawQ, token, perGroupCap, oppStatusLabels),
         searchLocations(args.supabase, args.orgId, args.accessDim, rawQ, token, perGroupCap),
     ]);
 
+    let children = await supplementChildrenFromHouseholdSeeds(
+        args.supabase,
+        args.orgId,
+        args.accessDim,
+        childrenRaw,
+        [...parents, ...leads],
+        perGroupCap,
+        memberStatusLabels,
+        oppStatusLabels
+    );
+
+    const allHits = [...children, ...parents, ...leads, ...locations];
+    const clusters = applyGlobalSearchClusterDisplayLimits(buildGlobalSearchFamilyClusters(allHits));
     const groups = buildGroups({ children, parents, leads, locations }, limit);
-    const results = groups.flatMap((g) => g.hits);
-    const clusters = buildGlobalSearchFamilyClusters(results);
+    const clusterHits = clusters.flatMap((c) => [...c.anchors, ...c.children, ...c.parents]);
+    const results = [...clusterHits, ...locations];
 
     return { q: rawQ, groups, clusters, results };
 }

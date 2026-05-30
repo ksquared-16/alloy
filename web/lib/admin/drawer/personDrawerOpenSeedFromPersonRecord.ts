@@ -29,48 +29,60 @@ export function personDrawerOpenSeedFromPersonRecord(
     const pid = personId.trim();
     if (!pid) return null;
 
-    for (const row of record._household_child_links as Record<string, unknown>[] | undefined) {
-        if (!row || typeof row !== "object") continue;
-        if (trimOrNull(row.person_id) !== pid) continue;
-        const names = splitDisplayName(trimOrNull(row.display_name));
-        return {
-            personId: pid,
-            first_name: names.first,
-            last_name: names.last,
-            display_name: names.display,
-            date_of_birth: trimOrNull(row.date_of_birth) ?? undefined,
-            presentation_emphasis: PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS,
-        };
+    const childLinks = record._household_child_links;
+    if (Array.isArray(childLinks)) {
+        for (const row of childLinks) {
+            if (!row || typeof row !== "object") continue;
+            const link = row as Record<string, unknown>;
+            if (trimOrNull(link.person_id) !== pid) continue;
+            const names = splitDisplayName(trimOrNull(link.display_name));
+            return {
+                personId: pid,
+                first_name: names.first,
+                last_name: names.last,
+                display_name: names.display,
+                date_of_birth: trimOrNull(link.date_of_birth) ?? undefined,
+                presentation_emphasis: PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS,
+            };
+        }
     }
 
-    for (const row of record._sibling_links as Record<string, unknown>[] | undefined) {
-        if (!row || typeof row !== "object") continue;
-        if (trimOrNull(row.person_id) !== pid) continue;
-        const names = splitDisplayName(trimOrNull(row.display_name));
-        return {
-            personId: pid,
-            first_name: names.first,
-            last_name: names.last,
-            display_name: names.display,
-            presentation_emphasis: PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS,
-        };
+    const siblingLinks = record._sibling_links;
+    if (Array.isArray(siblingLinks)) {
+        for (const row of siblingLinks) {
+            if (!row || typeof row !== "object") continue;
+            const link = row as Record<string, unknown>;
+            if (trimOrNull(link.person_id) !== pid) continue;
+            const names = splitDisplayName(trimOrNull(link.display_name));
+            return {
+                personId: pid,
+                first_name: names.first,
+                last_name: names.last,
+                display_name: names.display,
+                presentation_emphasis: PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS,
+            };
+        }
     }
 
-    for (const row of record._household_adult_links as Record<string, unknown>[] | undefined) {
-        if (!row || typeof row !== "object") continue;
-        if (trimOrNull(row.person_id) !== pid) continue;
-        const names = splitDisplayName(trimOrNull(row.display_name));
-        return personDrawerOpenSeedFromContactValues(
-            pid,
-            {
-                first_name: names.first ?? "",
-                last_name: names.last ?? "",
-                display_name: names.display ?? "",
-                email: trimOrNull(row.email) ?? "",
-                phone: trimOrNull(row.phone) ?? "",
-            },
-            { presentation_emphasis: PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS }
-        );
+    const adultLinks = record._household_adult_links;
+    if (Array.isArray(adultLinks)) {
+        for (const row of adultLinks) {
+            if (!row || typeof row !== "object") continue;
+            const link = row as Record<string, unknown>;
+            if (trimOrNull(link.person_id) !== pid) continue;
+            const names = splitDisplayName(trimOrNull(link.display_name));
+            return personDrawerOpenSeedFromContactValues(
+                pid,
+                {
+                    first_name: names.first ?? "",
+                    last_name: names.last ?? "",
+                    display_name: names.display ?? "",
+                    email: trimOrNull(link.email) ?? "",
+                    phone: trimOrNull(link.phone) ?? "",
+                },
+                { presentation_emphasis: PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS }
+            );
+        }
     }
 
     return null;

@@ -38,9 +38,10 @@ describe("prefetchLinkedPersonsFromOpportunityRecord", () => {
 
         expect(ids.sort()).toEqual([LINKED, PRIMARY].sort());
         await Promise.all([...__getPersonDrawerPrefetchInflightForTests().values()]);
-        expect(fetchMock).toHaveBeenCalledTimes(2);
-        expect(peekDrawerEntitySnapshot("persons", PRIMARY)?.first_name).toBe("Test");
-        expect(peekDrawerEntitySnapshot("persons", LINKED)?.first_name).toBe("Test");
+        // Parent open seeds are cache-stamped before network — no fetch when cold cache only has seeds.
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(peekDrawerEntitySnapshot("persons", PRIMARY)).not.toBeNull();
+        expect(peekDrawerEntitySnapshot("persons", LINKED)).not.toBeNull();
     });
 
     it("prefetches inquiry child person ids", async () => {
@@ -65,7 +66,10 @@ describe("prefetchLinkedPersonsFromOpportunityRecord", () => {
 
         expect(ids).toEqual([CHILD]);
         await Promise.all([...__getPersonDrawerPrefetchInflightForTests().values()]);
-        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(fetchMock).not.toHaveBeenCalled();
         expect(peekDrawerEntitySnapshot("persons", CHILD)?.first_name).toBe("Sophia");
+        expect(peekDrawerEntitySnapshot("persons", CHILD)?._drawer_presentation_emphasis).toBe(
+            "child_lifecycle"
+        );
     });
 });
