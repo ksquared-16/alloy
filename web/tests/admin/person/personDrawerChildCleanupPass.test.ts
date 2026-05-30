@@ -20,21 +20,18 @@ describe("child drawer cleanup pass", () => {
         expect(bos).toContain("INQUIRY_SUMMARY_RIGHT_COLUMN_ROOT_CLASS");
     });
 
-    it("family section uses ordered hierarchy blocks", () => {
-        const src = readFileSync(
+    it("child lifecycle uses shared household section instead of legacy family block", () => {
+        const visibility = readFileSync(
             join(process.cwd(), "components/admin/entity/PersonDrawerVisibilitySections.tsx"),
             "utf8"
         );
-        expect(src).toContain("Parents / guardians");
-        expect(src).toContain("Siblings");
-        expect(src).toContain("Emergency contacts");
-        expect(src).toContain("Other household adults");
-        const householdIdx = src.indexOf("Parents / guardians");
-        const siblingsIdx = src.indexOf('title="Siblings"');
-        const emergencyIdx = src.indexOf("Emergency contacts");
-        expect(householdIdx).toBeGreaterThan(-1);
-        expect(siblingsIdx).toBeGreaterThan(householdIdx);
-        expect(emergencyIdx).toBeGreaterThan(siblingsIdx);
+        expect(visibility).not.toContain("Parents / guardians");
+        const household = readFileSync(
+            join(process.cwd(), "components/admin/entity/PersonDrawerHouseholdSection.tsx"),
+            "utf8"
+        );
+        expect(household).toContain("Guardians");
+        expect(household).toContain("Children");
     });
 
     it("module nav stays in child drawer — no opportunity comms navigation", () => {

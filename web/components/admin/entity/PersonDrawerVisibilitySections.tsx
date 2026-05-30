@@ -8,7 +8,6 @@ import {
     resolvePersonDrawerRelationshipSectionModel,
 } from "@/lib/admin/person/personDrawerRelationshipSection";
 import { resolvePersonDrawerPresentationEmphasis } from "@/lib/admin/person/personDrawerPresentationEmphasis";
-import { resolvePersonDrawerChildFamilyModel } from "@/lib/admin/person/resolvePersonDrawerChildFamilyModel";
 import { resolvePersonDrawerProfileFromRecord } from "@/components/admin/entity/PersonDrawerProfileBadges";
 import {
     oppInqEyebrow,
@@ -82,115 +81,19 @@ export function PersonDrawerRelationshipsOverview({
     const groups = buildPersonDrawerRelationshipGroups(personDrawerRelationshipInputFromRecord(record));
     const model = resolvePersonDrawerRelationshipSectionModel(profile, groups);
     const childFamilyEmphasis = resolvePersonDrawerPresentationEmphasis(profile) === "child_lifecycle";
-    const familyPreview = childFamilyEmphasis ? resolvePersonDrawerChildFamilyModel(record) : null;
 
-    if (
-        !personDrawerRelationshipSectionHasContent(model, groups) &&
-        !(childFamilyEmphasis && (familyPreview?.household_label || familyPreview?.parents_guardians.length))
-    ) {
+    if (childFamilyEmphasis) {
+        /** Household IA lives in `PersonDrawerHouseholdSection` on the child operating surface. */
+        return null;
+    }
+
+    if (!personDrawerRelationshipSectionHasContent(model, groups)) {
         return null;
     }
 
     const openPerson = (id: string) => onOpenDrawer("persons", id);
     const openMember = (id: string) => onOpenDrawer("customer_members", id);
     const siblings = groups.siblings;
-
-    if (childFamilyEmphasis) {
-        const family = resolvePersonDrawerChildFamilyModel(record);
-        const hasFamilyContent =
-            family.household_label ||
-            family.parents_guardians.length > 0 ||
-            siblings.length > 0 ||
-            family.emergency_contacts.length > 0 ||
-            family.other_household_adults.length > 0;
-
-        if (!hasFamilyContent) return null;
-
-        return (
-            <div
-                className={`${oppInqLeadSummaryShellClassName} mb-2`}
-                data-person-drawer-relationships-grouped="true"
-                data-person-drawer-family-emphasis="true"
-            >
-                <h4 className={`${oppInqEyebrow} px-0.5`}>Family & household</h4>
-                <div className={`${oppInqInnerCardCompact} mt-2 space-y-3`} data-person-drawer-family-household="true">
-                    {family.household_label ? (
-                        <div>
-                            <h5 className={oppInqEyebrow}>Household</h5>
-                            <p className="mt-1 text-[14px] font-semibold text-alloy-midnight/90">
-                                {family.household_label}
-                            </p>
-                        </div>
-                    ) : null}
-                    {family.parents_guardians.length > 0 ? (
-                        <GroupBlock title="Parents / guardians">
-                            {family.parents_guardians.map((row) => (
-                                <RelationshipLinkRow
-                                    key={row.person_id ?? row.display_name}
-                                    row={{
-                                        person_id: row.person_id,
-                                        display_name: row.display_name,
-                                        relationship_label: row.role_label,
-                                    }}
-                                    onOpenPerson={openPerson}
-                                />
-                            ))}
-                        </GroupBlock>
-                    ) : null}
-                    {siblings.length > 0 ? (
-                        <GroupBlock title="Siblings">
-                            {siblings.map((row) => (
-                                <RelationshipLinkRow
-                                    key={row.person_id ?? row.customer_member_id ?? row.display_name ?? "sibling"}
-                                    row={row}
-                                    onOpenPerson={openPerson}
-                                    onOpenMember={openMember}
-                                />
-                            ))}
-                        </GroupBlock>
-                    ) : null}
-                    {family.emergency_contacts.length > 0 ? (
-                        <GroupBlock title="Emergency contacts">
-                            {family.emergency_contacts.map((row) => (
-                                <RelationshipLinkRow
-                                    key={row.person_id ?? row.display_name}
-                                    row={{
-                                        person_id: row.person_id,
-                                        display_name: row.display_name,
-                                        relationship_label: row.role_label,
-                                    }}
-                                    onOpenPerson={openPerson}
-                                />
-                            ))}
-                        </GroupBlock>
-                    ) : null}
-                    {family.other_household_adults.length > 0 ? (
-                        <GroupBlock title="Other household adults">
-                            {family.other_household_adults.map((row) => (
-                                <RelationshipLinkRow
-                                    key={row.person_id ?? row.display_name}
-                                    row={{
-                                        person_id: row.person_id,
-                                        display_name: row.display_name,
-                                        relationship_label: row.role_label,
-                                    }}
-                                    onOpenPerson={openPerson}
-                                />
-                            ))}
-                        </GroupBlock>
-                    ) : null}
-                    {family.source_note ? (
-                        <p
-                            className="text-[10px] leading-snug text-alloy-midnight/35"
-                            data-person-drawer-family-source-note="true"
-                        >
-                            {family.source_note}
-                        </p>
-                    ) : null}
-                </div>
-            </div>
-        );
-    }
 
     return (
         <div className="space-y-2" data-person-drawer-relationships-grouped="true">

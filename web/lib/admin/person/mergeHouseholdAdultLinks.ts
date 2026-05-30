@@ -1,3 +1,4 @@
+import { customerPersonRowIsHouseholdPrimaryContact } from "@/lib/admin/person/householdPrimaryContact";
 import type { PersonHouseholdAdultLinkRow } from "@/lib/admin/person/personDrawerVisibilityTypes";
 
 function trimOrNull(v: unknown): string | null {
@@ -44,7 +45,12 @@ export function mergeHouseholdAdultLinks(rows: PersonHouseholdAdultLinkRow[]): P
         const key = `${customerId}:${personId}`;
         const existing = byKey.get(key);
         if (!existing) {
-            byKey.set(key, { ...row });
+            byKey.set(key, {
+                ...row,
+                is_household_primary_contact:
+                    row.is_household_primary_contact ??
+                    customerPersonRowIsHouseholdPrimaryContact(row),
+            });
             continue;
         }
 
@@ -65,6 +71,11 @@ export function mergeHouseholdAdultLinks(rows: PersonHouseholdAdultLinkRow[]): P
             role_type: trimOrNull(preferredRole.role_type) ?? existingRole,
             role_label: mergeRoleLabels(existing.role_label, row.role_label),
             is_primary: Boolean(existing.is_primary || row.is_primary),
+            is_household_primary_contact:
+                Boolean(existing.is_household_primary_contact) ||
+                Boolean(row.is_household_primary_contact) ||
+                customerPersonRowIsHouseholdPrimaryContact(preferredRole) ||
+                customerPersonRowIsHouseholdPrimaryContact(row),
         });
     }
 

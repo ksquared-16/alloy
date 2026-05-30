@@ -70,23 +70,25 @@ describe("child drawer operational pass", () => {
         expect(bos).toContain("No urgent action flagged");
     });
 
-    it("enrollment context uses family lead pill — not child status text", () => {
-        const ctx = readFileSync(
-            join(process.cwd(), "components/admin/entity/PersonDrawerChildEnrollmentContext.tsx"),
+    it("header lead pill uses Lead label — not child status text", () => {
+        const executive = readFileSync(
+            join(process.cwd(), "components/admin/entity/PersonDrawerChildHeaderExecutive.tsx"),
             "utf8"
         );
-        expect(ctx).toContain("Family Lead:");
-        expect(ctx).not.toContain("Enrollment Tour Scheduled");
-        expect(ctx).not.toContain('aria-label="Enrollment"');
+        expect(executive).toContain("personDrawerChildLeadPillLabel");
+        expect(executive).not.toContain("Family Lead:");
+        expect(executive).not.toContain("Enrollment Tour Scheduled");
+        expect(executive).not.toContain('aria-label="Enrollment"');
     });
 
-    it("family section uses household projection source note", () => {
+    it("family section uses shared household projection on operating surface", () => {
         const src = readFileSync(
-            join(process.cwd(), "components/admin/entity/PersonDrawerVisibilitySections.tsx"),
+            join(process.cwd(), "components/admin/entity/PersonDrawerHouseholdSection.tsx"),
             "utf8"
         );
-        expect(src).toContain("resolvePersonDrawerChildFamilyModel");
-        expect(src).toContain("data-person-drawer-family-source-note");
+        expect(src).toContain("resolvePersonDrawerHouseholdModel");
+        expect(src).toContain("data-person-drawer-household");
+        expect(src).toContain("data-person-drawer-household-child-link");
     });
 
     it("opportunity lifecycle rail uses work-unit queue with enrollment fallback", () => {

@@ -1,99 +1,78 @@
-# Global search foundation (Phase 1)
+# Global search foundation (Phase 1 — V1 complete)
 
-**Status:** Shipped MVP — deterministic record lookup from AdminV2 header.  
+**Status:** V1 complete — inline header search with family clusters, restrained typography, AdminV2-only drawer open, search usable while drawer is open.  
 **Not in scope:** BOS guidance, semantic/AI retrieval, document or communication content search.
 
 ## Product doctrine
 
 | Surface | User intent | Examples |
 |---------|-------------|----------|
-| **Search** | User knows the record they want | Sophia Chen, North Campus, Family Inquiry – Chen, Invoice 1023 |
+| **Search** | User knows the record they want | Sophia Chen, North Campus, Family Inquiry – Chen |
 | **BOS** | User wants operational guidance | Who should I call today? Families missing paperwork? |
 
-Search and BOS remain separate. Phase 1 is **record lookup only**.
+Search and BOS remain separate. Phase 1 is **record lookup only** — no command palette / full-screen modal.
 
-## Architecture audit (May 2026)
+## UX (V1 closeout)
 
-### Existing assets reused
+- Search stays **anchored in the AdminV2 header** (`GlobalSearchBox`).
+- Focus/type → inline dropdown under the input.
+- **⌘K** focuses the header input (does not open a modal).
+- Keyboard: ↑↓ navigate, Enter open, Esc close (Esc in search does not dismiss the drawer).
+- **Works while a drawer is open** — header search remains focusable; dropdown layers above the drawer; selecting a result **swaps** the open AdminV2 record in place (no stack push, no close/reopen flicker).
+- Results grouped by **family cluster** when household/opportunity context is shared.
+- Cluster header shows household, lead, and campus once as **muted typography** (non-clickable).
+- Row hierarchy:
+  - **Primary:** record name (e.g. `Alex Chen`, `Family Inquiry - Chen / North Campus` for leads)
+  - **Secondary:** muted text — `Child · Chen Family · North Campus` or `Lead · North Campus`
+  - **Status:** optional Bend Pine pill when meaningful
+- **Visual restraint:** white dropdown, soft border/shadow, neutral hover/selected states — no blue accents; only status pills use color.
+- **Household is not a standalone searchable/openable result** — context only on child, guardian, and lead rows or cluster header.
+- Labels use **Lead** (never “Family lead”); status keys humanized (`tour_scheduled` → Tour Scheduled).
 
-| Concern | Existing module | Global search usage |
-|---------|-----------------|---------------------|
-| Header chrome | `TopNavBar.tsx` | Search trigger + `GlobalSearchModal` |
-| CRM text search | `crmEntitySearchShared.ts` | Token sanitization, person label helper |
-| Person role badges | `resolvePersonDrawerProfile.ts` | Person hit `type_label` (Child, Guardian, …) |
-| Opportunity scope | `accessScope.ts`, `resolveRecordScopeConstraints` | Org/dept/site-filtered opportunity matches |
-| Person/customer scope | `fetchScopedPersonIdsForRestrictedAdmin`, `fetchScopedCustomerIdsForRestrictedAdmin` | Restricted-admin result filtering |
-| Location labels | `locationDisplayLabel.ts` | Campus/site secondary context |
-| Status labels | `fetchEffectiveStatusDefinitions` | Hit `status_label` |
-| Drawer open | `AdminDrawerContext.openDrawer` | Via `GlobalRecordSearchOpenListener` + event bridge |
-| Prior art (forms) | `GET /api/admin/forms/crm-entity-search` | Per-entity ilike patterns — **not** merged; global search adds unified API + enrichment |
+## Searchable / openable grains (V1)
 
-### Intentionally not reused
+| Group | Opens via AdminV2 drawer |
+|-------|--------------------------|
+| Children | Canonical **Person** when `person_id` exists; else opportunity or customer |
+| Parents & guardians | **Person** |
+| Leads | **Opportunity** |
+| Campuses | **Location** |
 
-- **`GET /api/admin/ai/task-assist/entity-search`** — BOS/Task Assist path; fuzzy variants and customer→opp bridge belong to assist, not universal search.
-- **Queue row search** — Work-unit filter bars search within loaded queue slices only.
+Household (`customers`) is **context only** in V1.
 
-### New modules
+## Drawer open contract
 
-| Path | Role |
-|------|------|
-| `web/lib/admin/globalSearch/globalRecordSearchService.ts` | Parallel org-scoped queries + merge |
-| `web/app/api/admin/global-search/route.ts` | Admin+ops GET API |
-| `web/app/adminV2/components/GlobalSearchModal.tsx` | Command-palette UI (debounced fetch, keyboard) |
-| `web/lib/adminV2/globalRecordSearchOpen.ts` | Event + sessionStorage bridge (TopNavBar sits outside `AdminDrawerProvider`) |
-| `web/components/adminV2/GlobalRecordSearchOpenListener.tsx` | Opens drawer with `source: "global_search"` |
+1. `resolveGlobalSearchOpenFromHit` → `launchGlobalRecordSearchOpen` with `open_entity_type` / `open_entity_id`.
+2. **Never** open `customer_members` or `contacts` drawers.
+3. `source: "global_search"` → `AdminDrawerContext.openDrawer` **replaces** the current drawer without pushing stack.
+4. Outside-click dismiss ignores `[data-adminv2-global-search-box]` so search stays usable with drawer open.
 
-## Phase 1 scope
+## Location context (schema-safe)
 
-**Entity types:** people (`persons`), leads (`opportunities`), households (`customers`), campuses (`locations` where `location_type = site`).
+**Do not use `customer_members.site_id`**.
 
-**Result shape:**
-
-```json
-{
-  "entity_type": "persons",
-  "entity_id": "uuid",
-  "name": "Sophia Chen",
-  "type_label": "Child",
-  "secondary_context": "North Campus",
-  "status_label": "Active"
-}
-```
-
-**UX:** Click header search or **⌘K** (Ctrl+K on Windows) → type ≥2 chars → results → ↑↓ → Enter → drawer opens.
-
-**Drawer behavior:** Uses existing `openDrawer` / `AdminEntityDrawer` — no parallel navigation system. Opportunity opens respect `OpportunityDrawerOpenCoordinator` deferral on workspace routes.
-
-**Cross-route open:** TopNavBar is above nested `AdminDrawerProvider` trees. On workspace/settings/forms routes, a custom event opens the drawer in-place. On other AdminV2 routes (e.g. workflows), intent is stored in `sessionStorage` and the user is sent to `/adminV2/workspace`, where the listener consumes the intent.
+| Grain | Path |
+|-------|------|
+| Child | `customer_id` → `customers` → `opportunities` → `locations` |
+| Parent | `customer_persons` → customer path; optional `opportunity_persons` |
+| Lead | Direct on opportunity row |
 
 ## API
 
 `GET /api/admin/global-search?q=&limit=`
 
-- Auth: `requireAdminOrOps` + org context + access scope dimensions.
-- `q`: min 2 sanitized chars, or UUID exact match.
-- `limit`: 1–20 (default 20).
-- Per-type cap: 8 before merge (people → leads → households → campuses).
+Returns `groups`, `clusters`, `results`. Groups: children, parents, leads, locations — **no households group**.
 
-## Performance notes
+## Key files
 
-- Four parallel Supabase query groups per request (person, opportunity, customer, location).
-- Person search runs up to five ilike queries then dedupes in memory (same pattern as CRM entity search).
-- Server logs `[admin-timing]` when total handler time exceeds **250ms**.
-- Client debounce **180ms** on input; stale responses dropped via sequence counter.
-- Status definition reads use existing cached `fetchEffectiveStatusDefinitions`.
-
-**Follow-ups if latency becomes visible:** single RPC or materialized search index; person multi-column search consolidation; prefetch on header focus.
-
-## Future roadmap (not Phase 1)
-
-- BOS / natural-language retrieval (separate entry point — AI command surface)
-- Semantic / embedding search
-- Document body and communication thread content search
-- Jobs, invoices, payments, schedules as searchable types
-- Deep-link URL params (`?open=`) instead of sessionStorage for non-drawer routes
-- Lift `AdminDrawerProvider` to AdminV2 root to simplify open bridge
-- Search analytics (top queries, zero-result rate)
+| Path | Role |
+|------|------|
+| `web/app/adminV2/components/GlobalSearchBox.tsx` | Inline search + restrained UI |
+| `web/app/adminV2/components/GlobalSearchResultPills.tsx` | Status-only pill |
+| `web/lib/admin/globalSearch/globalRecordSearchResultPresentation.ts` | Typography helpers |
+| `web/lib/adminV2/drawerOutsideClick.ts` | Ignores global search for drawer dismiss |
+| `web/contexts/AdminDrawerContext.tsx` | In-place swap for `global_search` source |
+| `web/lib/adminV2/globalRecordSearchOpen.ts` | Event bridge + z-index constant |
 
 ## Verification
 
@@ -102,10 +81,8 @@ cd web && npx tsc --noEmit
 cd web && npm run test -- tests/admin/globalSearch/globalRecordSearch.test.ts
 ```
 
-Manual: ⌘K from workspace → search known person/lead/household/campus → Enter → drawer opens with correct record.
+## Future (post-V1)
 
-## Related docs
-
-- `docs/system/record-system.md` — drawer authority vs queue previews
-- `docs/system/workspace-system.md` — workspace navigation context
-- `docs/product/bos-foundation.md` — BOS remains separate from search
+- Standalone household search/open when customer drawer UX is ready
+- BOS / semantic / document / comms content search
+- Jobs, invoices, payments

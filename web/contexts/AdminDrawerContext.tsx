@@ -22,6 +22,7 @@ import {
 import { isOpportunityDrawerBootstrapWarm } from "@/lib/admin/opportunityDrawerBootstrapClient";
 import { isOpportunityDrawerPrimaryWarm } from "@/lib/admin/opportunityDrawerPrimaryPrefetch";
 import { markDrawerOpenStart } from "@/lib/perf/adminV2DrawerPerf";
+import { GLOBAL_SEARCH_DRAWER_OPEN_SOURCE } from "@/lib/adminV2/globalRecordSearchOpen";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import type { OperationalVisualContext } from "@/lib/visualContext";
 
@@ -430,7 +431,10 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                     parent != null &&
                     prev.type === parent.type &&
                     String(prev.id ?? "") === String(parent.id);
-                if (parent != null && !prevMatchesParent && parent.type && parent.id) {
+                const swapInPlace = params.source === GLOBAL_SEARCH_DRAWER_OPEN_SOURCE;
+                if (swapInPlace) {
+                    /* Global search replaces the open record — no stack push, no close/reopen flicker. */
+                } else if (parent != null && !prevMatchesParent && parent.type && parent.id) {
                     setStack((s) => [
                         ...s,
                         {

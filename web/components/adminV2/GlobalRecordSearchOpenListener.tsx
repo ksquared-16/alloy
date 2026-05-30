@@ -8,8 +8,9 @@ import {
     readGlobalRecordSearchOpenIntent,
     type GlobalRecordSearchOpenDetail,
 } from "@/lib/adminV2/globalRecordSearchOpen";
+import { isGlobalSearchLegacyDrawerEntityType } from "@/lib/admin/globalSearch/globalRecordSearchDrawerTarget";
 
-/** Opens entity drawer from global search without coupling TopNavBar to AdminDrawerProvider. */
+/** Opens AdminV2 entity drawer from global search — blocks legacy member/contact drawers. */
 export default function GlobalRecordSearchOpenListener() {
     const { openDrawer } = useAdminDrawer();
 
@@ -17,16 +18,22 @@ export default function GlobalRecordSearchOpenListener() {
         const pending = readGlobalRecordSearchOpenIntent();
         if (pending) {
             clearGlobalRecordSearchOpenIntent();
-            openDrawer({ type: pending.entity_type, id: pending.entity_id, source: "global_search" });
+            if (!isGlobalSearchLegacyDrawerEntityType(pending.open_entity_type)) {
+                openDrawer({
+                    type: pending.open_entity_type,
+                    id: pending.open_entity_id,
+                    source: "global_search",
+                });
+            }
         }
     }, [openDrawer]);
 
     useEffect(() => {
         const onOpen = (ev: Event) => {
             const detail = (ev as CustomEvent<GlobalRecordSearchOpenDetail>).detail;
-            const id = detail?.entity_id?.trim();
-            const type = detail?.entity_type;
-            if (!id || !type) return;
+            const id = detail?.open_entity_id?.trim();
+            const type = detail?.open_entity_type;
+            if (!id || !type || isGlobalSearchLegacyDrawerEntityType(type)) return;
             openDrawer({ type, id, source: "global_search" });
         };
         window.addEventListener(ADMINV2_GLOBAL_SEARCH_OPEN_RECORD_EVENT, onOpen);

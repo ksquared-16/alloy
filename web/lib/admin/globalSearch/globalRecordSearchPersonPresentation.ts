@@ -6,12 +6,8 @@ export function globalSearchCrmDisplayLabel(label: string | null | undefined): s
     const raw = String(label ?? "").trim();
     if (!raw) return null;
     const lower = raw.toLowerCase();
-    if (lower === "inquiry") return "Lead";
-    if (lower === "family inquiry") return "Family lead";
-    if (lower.includes("inquiry")) {
-        return raw.replace(/\binquiry\b/gi, (match) =>
-            match[0] === match[0]?.toUpperCase() ? "Lead" : "lead"
-        );
+    if (lower === "inquiry" || lower === "family inquiry" || lower.includes("inquiry")) {
+        return "Lead";
     }
     return raw;
 }

@@ -11,6 +11,7 @@ import { DrawerRelationshipPanelSkeleton } from "@/components/admin/workspace/Dr
 import type { FieldDefForLinkedEdit } from "@/lib/admin/drawer/linkedRecordFieldEditing";
 import { primaryPersonIdFromOpportunityRecord } from "@/lib/admin/drawer/linkedRecordFieldEditing";
 import {
+    buildOpportunityFamilyContactRows,
     resolveLeadSummaryPrimaryPersonId,
     sortOpportunityFamilyContactRows,
 } from "@/lib/admin/drawer/opportunityFamilyContactsOrdering";
@@ -218,22 +219,20 @@ export function FamilyContactsPanel(props: {
     const primaryPersonId = resolveLeadSummaryPrimaryPersonId(record as Record<string, unknown>) ?? "";
 
     const rows = useMemo(() => {
-        const raw = (record._opportunity_persons as unknown[]) ?? [];
-        if (!Array.isArray(raw)) return [] as OpportunityPersonRow[];
-        return raw
-            .map((x) => {
-                const r = x as Record<string, unknown>;
-                return {
-                    id: String(r.id ?? ""),
-                    person_id: String(r.person_id ?? ""),
-                    role_type: String(r.role_type ?? "—"),
-                    name: r.name != null ? String(r.name) : null,
-                    phone: r.phone != null ? String(r.phone) : null,
-                    email: r.email != null ? String(r.email) : null,
-                } satisfies OpportunityPersonRow;
-            })
+        return buildOpportunityFamilyContactRows(record as Record<string, unknown>)
+            .map(
+                (r) =>
+                    ({
+                        id: r.id,
+                        person_id: r.person_id,
+                        role_type: r.role_type,
+                        name: r.name,
+                        phone: r.phone ?? null,
+                        email: r.email ?? null,
+                    }) satisfies OpportunityPersonRow
+            )
             .filter((r) => r.id && r.person_id);
-    }, [record._opportunity_persons, refreshKey]);
+    }, [record, refreshKey]);
 
     const sorted = useMemo(
         () => sortOpportunityFamilyContactRows(rows, primaryPersonId || null),

@@ -17,6 +17,7 @@ import {
 } from "@/lib/admin/drawer/primaryPersonCardEdit";
 import { openViewPersonFromOpportunity, prefetchViewPersonOnHover, prefetchViewPersonOnPointerDown } from "@/lib/admin/drawer/openViewPersonFromOpportunity";
 import { personDrawerOpenSeedFromContactValues } from "@/lib/admin/drawer/personDrawerOpenSeed";
+import { PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS } from "@/lib/admin/person/personDrawerParentChrome";
 import {
     logViewPersonClickLive,
     viewPersonLiveDiagAttrs,
@@ -116,7 +117,9 @@ export default function EditablePersonContactCard({
                 openDrawer,
                 personId: pid,
                 opportunityId: oppId,
-                openSeed: personDrawerOpenSeedFromContactValues(pid, initialValues),
+                openSeed: personDrawerOpenSeedFromContactValues(pid, initialValues, {
+                    presentation_emphasis: PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS,
+                }),
             });
 
             if (opened) {

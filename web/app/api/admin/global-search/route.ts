@@ -15,7 +15,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 /**
  * GET `/api/admin/global-search?q=&limit=`
  *
- * Phase 1 — deterministic org-scoped record lookup (people, leads, households, campuses).
+ * Phase 1 — deterministic org-scoped record lookup (people, leads, campuses).
+ * Household name is context-only in V1 — not a standalone result group.
  * Not BOS / semantic search.
  */
 export async function GET(request: NextRequest) {
@@ -61,7 +62,7 @@ export async function GET(request: NextRequest) {
     const t0 = Date.now();
 
     try {
-        const { q, results } = await runGlobalRecordSearch({
+        const { q, groups, clusters, results } = await runGlobalRecordSearch({
             supabase,
             orgId: ctx.orgId,
             accessDim: scopeDimensionsFromAccess(access),
@@ -75,10 +76,11 @@ export async function GET(request: NextRequest) {
                 total_ms: totalMs,
                 q_len: q.length,
                 result_count: results.length,
+                group_count: groups.length,
             });
         }
 
-        return NextResponse.json({ ok: true, q, results });
+        return NextResponse.json({ ok: true, q, groups, clusters, results });
     } catch (e) {
         console.error("[global-search]", e);
         return NextResponse.json(

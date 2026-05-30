@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+    buildOpportunityFamilyContactRows,
     isPrimaryContactRoleType,
     resolveLeadSummaryPrimaryPersonId,
     sortOpportunityFamilyContactRows,
@@ -16,7 +17,23 @@ describe("opportunityFamilyContactsOrdering", () => {
         ).toBe("person-a");
     });
 
-    it("falls back to linked primary_contact role when FK is unset", () => {
+    it("falls back to household customer_persons primary contact when FK is unset", () => {
+        expect(
+            resolveLeadSummaryPrimaryPersonId({
+                customer_id: "cust-1",
+                _customer_persons: [
+                    {
+                        customer_id: "cust-1",
+                        person_id: "person-household",
+                        role_type: "primary_contact",
+                        is_primary: true,
+                    },
+                ],
+            })
+        ).toBe("person-household");
+    });
+
+    it("falls back to linked primary_contact role when FK and household rows are unset", () => {
         expect(
             resolveLeadSummaryPrimaryPersonId({
                 _opportunity_persons: [
@@ -25,6 +42,32 @@ describe("opportunityFamilyContactsOrdering", () => {
                 ],
             })
         ).toBe("person-a");
+    });
+
+    it("merges household customer_persons guardians into additional contacts", () => {
+        const rows = buildOpportunityFamilyContactRows({
+            customer_id: "cust-1",
+            primary_person_id: "p-primary",
+            _opportunity_persons: [{ id: "1", person_id: "p-primary", role_type: "primary_contact", name: "Primary" }],
+            _customer_persons: [
+                {
+                    customer_id: "cust-1",
+                    person_id: "p-primary",
+                    role_type: "primary_contact",
+                    is_primary: true,
+                    name: "Primary",
+                },
+                {
+                    customer_id: "cust-1",
+                    person_id: "p-other",
+                    role_type: "guardian",
+                    is_primary: false,
+                    name: "Other Guardian",
+                },
+            ],
+        });
+        const additional = sortOpportunityFamilyContactRows(rows, "p-primary");
+        expect(additional.map((r) => r.person_id)).toEqual(["p-other"]);
     });
 
     it("sorts primary-contact roles before other linked people", () => {

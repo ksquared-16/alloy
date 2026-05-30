@@ -1,4 +1,5 @@
 import type { EntityDrawerFieldConfig, EntityDrawerSectionConfig } from "@/lib/entityPresentation";
+import { PERSON_DRAWER_PARENT_ADDRESS_FIELD_KEYS } from "@/lib/admin/person/personDrawerParentAddressFields";
 import type { PersonDrawerProfileResult } from "@/lib/admin/person/personDrawerVisibilityTypes";
 
 /** Legacy section keys superseded by `enrollment_activity`. */
@@ -41,6 +42,12 @@ const HIDDEN_SECTION_KEYS_PARENT = new Set([
     "child_profile",
     "contact_info",
     "contact",
+    "basic_info",
+    "basic",
+    "profile",
+    "enrollment",
+    "enrollment_opportunities",
+    "enrollment_activity",
 ]);
 const HIDDEN_SECTION_KEYS_EMERGENCY = new Set([
     "record_info",
@@ -76,6 +83,16 @@ const HIDDEN_FIELD_KEYS_PARENT = new Set([
     "date_of_birth",
     "dob",
     "status_key",
+]);
+
+/** Parent summary panel owns these keys — hide from config-driven overview when parent chrome is active. */
+export const PERSON_DRAWER_PARENT_OPERATING_SUMMARY_KEYS = new Set([
+    "first_name",
+    "last_name",
+    "email",
+    "phone",
+    "preferred_contact_method",
+    "communication_opt_out",
 ]);
 
 const HIDDEN_FIELD_KEYS_EMERGENCY = new Set([...HIDDEN_FIELD_KEYS_ALL, "date_of_birth", "dob", "status_key"]);
@@ -168,10 +185,12 @@ function mergeParentContactFieldsIntoBasicInfo(
 export function applyPersonDrawerPresentationProfile(
     sections: EntityDrawerSectionConfig[],
     profile: PersonDrawerProfileResult,
-    fieldTypesByKey?: Record<string, string>
+    fieldTypesByKey?: Record<string, string>,
+    options?: { parentOperatingChrome?: boolean }
 ): EntityDrawerSectionConfig[] {
     const child = isChildProfile(profile);
     const parentLike = isParentLikeProfile(profile) && !child;
+    const parentOperating = Boolean(options?.parentOperatingChrome && parentLike);
     const emergency = isEmergencyContactProfile(profile);
 
     const result = sections
@@ -179,6 +198,12 @@ export function applyPersonDrawerPresentationProfile(
             if (child && HIDDEN_SECTION_KEYS_CHILD.has(section.key)) return false;
             if (parentLike && HIDDEN_SECTION_KEYS_PARENT.has(section.key)) return false;
             if (emergency && HIDDEN_SECTION_KEYS_EMERGENCY.has(section.key)) return false;
+            if (
+                parentOperating &&
+                (section.key === "consent" || isConsentSection(section.key))
+            ) {
+                return false;
+            }
             if (
                 (child || parentLike) &&
                 section.key === "consent" &&
@@ -199,7 +224,15 @@ export function applyPersonDrawerPresentationProfile(
             const hiddenFields = child
                 ? HIDDEN_FIELD_KEYS_CHILD
                 : parentLike
-                  ? HIDDEN_FIELD_KEYS_PARENT
+                  ? new Set([
+                        ...HIDDEN_FIELD_KEYS_PARENT,
+                        ...(parentOperating
+                            ? [
+                                  ...PERSON_DRAWER_PARENT_OPERATING_SUMMARY_KEYS,
+                                  ...PERSON_DRAWER_PARENT_ADDRESS_FIELD_KEYS,
+                              ]
+                            : []),
+                    ])
                   : emergency
                     ? HIDDEN_FIELD_KEYS_EMERGENCY
                     : HIDDEN_FIELD_KEYS_ALL;
@@ -227,10 +260,10 @@ export function applyPersonDrawerPresentationProfile(
         });
 
     if (parentLike) {
-        return mergeParentContactFieldsIntoBasicInfo(
-            result.filter((s) => !LEGACY_ENROLLMENT_SECTION_KEYS.has(s.key)),
-            sections
-        );
+        const filtered = result.filter((s) => !LEGACY_ENROLLMENT_SECTION_KEYS.has(s.key));
+        /** Parent operating chrome owns summary/contact — do not re-merge presentation Profile/Contact. */
+        if (parentOperating) return filtered;
+        return mergeParentContactFieldsIntoBasicInfo(filtered, sections);
     }
     return result.filter((s) => !LEGACY_ENROLLMENT_SECTION_KEYS.has(s.key));
 }

@@ -56,11 +56,25 @@ export async function ensureCustomerPersonsPrimaryLink(
         .maybeSingle();
 
     if (existing?.id) {
+        await supabase
+            .from("customer_persons")
+            .update({ is_primary: false })
+            .eq("org_id", orgId)
+            .eq("customer_id", customerId)
+            .eq("role_type", roleType)
+            .neq("person_id", personId);
         if (!existing.is_primary) {
             await supabase.from("customer_persons").update({ is_primary: true }).eq("id", existing.id);
         }
         return;
     }
+
+    await supabase
+        .from("customer_persons")
+        .update({ is_primary: false })
+        .eq("org_id", orgId)
+        .eq("customer_id", customerId)
+        .eq("role_type", roleType);
 
     const insert = {
         org_id: orgId,

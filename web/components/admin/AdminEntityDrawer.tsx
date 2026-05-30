@@ -95,18 +95,26 @@ import {
     type EntityDrawerFieldConfig,
 } from "@/lib/entityPresentation";
 import { OpportunityIntakeSourceSection } from "@/components/admin/opportunity/OpportunityIntakeSourceSection";
+import PersonDrawerEmployeeStatusSection from "@/components/admin/entity/PersonDrawerEmployeeStatusSection";
 import PersonEmployeePlacementSection from "@/components/admin/entity/PersonEmployeePlacementSection";
 import PersonDrawerHeaderMetadata, {
     formatPersonDrawerRecordNumber,
     PersonDrawerHeaderContactMeta,
 } from "@/components/admin/entity/PersonDrawerHeaderMetadata";
-import PersonDrawerContextPanel from "@/components/admin/entity/PersonDrawerContextPanel";
+import { resolvePersonDrawerOperatingBackLink } from "@/lib/admin/person/personDrawerBackLink";
 import PersonDrawerChildLifecycleRail from "@/components/admin/entity/PersonDrawerChildLifecycleRail";
 import PersonDrawerChildSummary from "@/components/admin/entity/PersonDrawerChildSummary";
 import PersonDrawerChildOverviewSkeleton from "@/components/admin/entity/PersonDrawerChildOverviewSkeleton";
-import PersonDrawerChildEnrollmentContext from "@/components/admin/entity/PersonDrawerChildEnrollmentContext";
+import PersonDrawerChildHeaderExecutive from "@/components/admin/entity/PersonDrawerChildHeaderExecutive";
 import PersonDrawerChildCommunicationsPlaceholder from "@/components/admin/entity/PersonDrawerChildCommunicationsPlaceholder";
 import PersonDrawerChildTitleRow from "@/components/admin/entity/PersonDrawerChildTitleRow";
+import PersonDrawerParentSummary from "@/components/admin/entity/PersonDrawerParentSummary";
+import PersonDrawerParentHouseholdSection from "@/components/admin/entity/PersonDrawerParentHouseholdSection";
+import PersonDrawerHouseholdSection from "@/components/admin/entity/PersonDrawerHouseholdSection";
+import PersonDrawerHouseholdAddress from "@/components/admin/entity/PersonDrawerHouseholdAddress";
+import PersonDrawerParentLifecycleRail from "@/components/admin/entity/PersonDrawerParentLifecycleRail";
+import PersonDrawerParentTitleRow from "@/components/admin/entity/PersonDrawerParentTitleRow";
+import PersonDrawerParentOverviewSkeleton from "@/components/admin/entity/PersonDrawerParentOverviewSkeleton";
 import PersonDrawerEnrollmentActivity from "@/components/admin/entity/PersonDrawerEnrollmentActivity";
 import PersonDrawerProfileBadges from "@/components/admin/entity/PersonDrawerProfileBadges";
 import LocationDrawerContextPanel from "@/components/admin/entity/LocationDrawerContextPanel";
@@ -124,7 +132,6 @@ import {
     suppressEmptyChildDetailFields,
 } from "@/lib/admin/person/personDrawerPresentationProfile";
 import {
-    personDrawerShowsChildContextPanel,
     sortOverviewSectionsForChildLifecycle,
 } from "@/lib/admin/person/personDrawerChildLifecycleSlots";
 import {
@@ -137,6 +144,18 @@ import {
     resolvePersonDrawerProfileFromRecordWithHint,
     type PersonDrawerChildChromeHint,
 } from "@/lib/admin/person/personDrawerChildChrome";
+import {
+    personDrawerParentChromeActive,
+    PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS,
+    resolvePersonDrawerProfileFromRecordWithParentHint,
+    type PersonDrawerParentChromeHint,
+} from "@/lib/admin/person/personDrawerParentChrome";
+import { personDrawerParentSectionTitle } from "@/lib/admin/person/personDrawerParentHeaderContext";
+import {
+    personDrawerChildOperatingOverviewSections,
+    personDrawerParentOperatingOverviewSections,
+} from "@/lib/admin/person/personDrawerOperatingOverviewSections";
+import { stampPersonDrawerParentHeaderContext } from "@/lib/admin/person/resolvePersonDrawerParentHouseholdModel";
 import { PERSON_DRAWER_CHILD_STATUS_ENTITY_TYPE } from "@/lib/admin/person/personDrawerChildStatusEntityType";
 import {
     appendLegacyPersonStatusOption,
@@ -269,6 +288,12 @@ import { entityDataMatchesDrawer } from "@/lib/admin/drawer/entityDataMatchesDra
 import { isPersonDrawerSnapshotWarm } from "@/lib/admin/prefetchPersonDrawerSnapshot";
 import { installPersonDrawerDevDirectOpen } from "@/lib/admin/drawer/personDrawerDevDirectOpen";
 import { prefetchLinkedPersonsFromOpportunityRecord } from "@/lib/admin/drawer/prefetchLinkedPersonsFromOpportunityRecord";
+import { prefetchLinkedPersonsFromPersonRecord } from "@/lib/admin/drawer/prefetchLinkedPersonsFromPersonRecord";
+import {
+    openPersonDrawerFromHousehold,
+    PERSON_DRAWER_HOUSEHOLD_CHILD_OPEN_SOURCE,
+} from "@/lib/admin/drawer/openPersonDrawerFromHousehold";
+import { applyHouseholdPrimaryContactToRecord } from "@/lib/admin/person/applyHouseholdPrimaryContactToRecord";
 import RecordLifecycleRail from "@/components/admin/drawer/RecordLifecycleRail";
 import RecordLifecycleRailSkeleton from "@/components/admin/drawer/RecordLifecycleRailSkeleton";
 import { resolveRecordLifecycleRailModel } from "@/lib/admin/drawer/resolveRecordLifecycleRailModel";
@@ -1745,6 +1770,8 @@ export default function AdminEntityDrawer() {
     const drawerEntityTargetKeyPrevRef = useRef("");
     /** Linked person prefetch dedupe per open opportunity id. */
     const opportunityLinkedPersonsPrefetchedRef = useRef<string | null>(null);
+    /** Linked person prefetch dedupe per open person id. */
+    const personLinkedPersonsPrefetchedRef = useRef<string | null>(null);
     const opportunityDrawerShellSettledPerfRef = useRef(false);
     const opportunityDrawerRevealCoordStartedAtRef = useRef<number | null>(null);
     /** Pre-open coordinator applied bootstrap + drawer_primary before modal mount. */
@@ -6583,6 +6610,7 @@ export default function AdminEntityDrawer() {
         if (drawer.type !== "persons") return null;
         const childOpenSource =
             drawer.openSource === PERSON_DRAWER_CHILD_OPEN_SOURCE ||
+            drawer.openSource === PERSON_DRAWER_HOUSEHOLD_CHILD_OPEN_SOURCE ||
             drawer.openSource === "opportunity_inquiry_child";
         return {
             presentation_emphasis:
@@ -6598,6 +6626,58 @@ export default function AdminEntityDrawer() {
         drawer.openSource,
     ]);
 
+    const personDrawerParentChromeHint = useMemo((): PersonDrawerParentChromeHint | null => {
+        if (drawer.type !== "persons") return null;
+        const parentOpenSource =
+            drawer.openSource === "opportunity_primary_contact" ||
+            drawer.openSource === "opportunity_household_adult";
+        return {
+            presentation_emphasis:
+                drawer.personDrawerOpenSeed?.presentation_emphasis === PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS ||
+                parentOpenSource
+                    ? PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS
+                    : undefined,
+            open_source: drawer.openSource ?? null,
+        };
+    }, [
+        drawer.type,
+        drawer.personDrawerOpenSeed?.presentation_emphasis,
+        drawer.openSource,
+    ]);
+
+    const personDrawerOperatingBackLink = useMemo(
+        () =>
+            resolvePersonDrawerOperatingBackLink(canGoBack, previousDrawer, drawer.openSource),
+        [canGoBack, drawer.openSource, previousDrawer]
+    );
+
+    const mergePersonDrawerRecord = useCallback(
+        (json: Record<string, unknown>) => {
+            setData((prev) => (prev ? { ...prev, ...json } : prev));
+            if (drawer.id && drawer.type === "persons") {
+                putDrawerEntitySnapshot("persons", drawer.id, {
+                    ...(overviewData ?? {}),
+                    ...json,
+                });
+            }
+        },
+        [drawer.id, drawer.type, overviewData]
+    );
+
+    const openLinkedPersonFromHousehold = useCallback(
+        (personId: string, fromRecord: Record<string, unknown>) => {
+            const parentOpp =
+                previousDrawer?.type === "opportunities" ? previousDrawer.id : drawer.parent?.id ?? null;
+            openPersonDrawerFromHousehold({
+                openDrawer,
+                personId,
+                fromRecord,
+                parentOpportunityId: parentOpp,
+            });
+        },
+        [drawer.parent?.id, openDrawer, previousDrawer?.id, previousDrawer?.type]
+    );
+
     const personChildLifecycleChrome = useMemo(() => {
         if (drawer.type !== "persons" || !overviewData || (overviewData as { _create?: boolean })._create) {
             return personDrawerChildChromeActive(null, personDrawerChildChromeHint);
@@ -6607,6 +6687,22 @@ export default function AdminEntityDrawer() {
             personDrawerChildChromeHint
         );
     }, [drawer.type, overviewData, personDrawerChildChromeHint]);
+
+    const personParentGuardianChrome = useMemo(() => {
+        if (drawer.type !== "persons" || personChildLifecycleChrome) return false;
+        if (!overviewData || (overviewData as { _create?: boolean })._create) {
+            return personDrawerParentChromeActive(null, personDrawerParentChromeHint);
+        }
+        return personDrawerParentChromeActive(
+            overviewData as Record<string, unknown>,
+            personDrawerParentChromeHint
+        );
+    }, [
+        drawer.type,
+        overviewData,
+        personDrawerParentChromeHint,
+        personChildLifecycleChrome,
+    ]);
 
     const personDrawerResolvedProfile = useMemo(() => {
         if (drawer.type !== "persons" || !overviewData || (overviewData as { _create?: boolean })._create) {
@@ -7243,14 +7339,29 @@ export default function AdminEntityDrawer() {
         return { ...tabLabels, related: "Activity", communications: "Communications" };
     }, [personChildLifecycleChrome, tabLabels]);
 
+    const personParentTabLabelsResolved = useMemo(() => {
+        if (!personParentGuardianChrome) return tabLabels;
+        return { ...tabLabels, related: "Activity", communications: "Communications" };
+    }, [personParentGuardianChrome, tabLabels]);
+
     const personChildTabListResolved = useMemo((): DrawerTabKey[] => {
         if (!personChildLifecycleChrome || drawer.type !== "persons") return tabList;
         const ordered: DrawerTabKey[] = ["overview", "related", "documents", "communications"];
         return ordered.filter((t) => tabList.includes(t) || t === "documents" || t === "communications");
     }, [personChildLifecycleChrome, drawer.type, tabList]);
 
+    const personParentTabListResolved = useMemo((): DrawerTabKey[] => {
+        if (!personParentGuardianChrome || drawer.type !== "persons") return tabList;
+        const ordered: DrawerTabKey[] = ["overview", "related", "documents", "communications"];
+        return ordered.filter((t) => tabList.includes(t) || t === "documents" || t === "communications");
+    }, [personParentGuardianChrome, drawer.type, tabList]);
+
     const drawerTabLabelsForUi =
-        personChildLifecycleChrome && drawer.type === "persons" ? personChildTabLabelsResolved : tabLabels;
+        drawer.type === "persons" && personChildLifecycleChrome
+            ? personChildTabLabelsResolved
+            : drawer.type === "persons" && personParentGuardianChrome
+              ? personParentTabLabelsResolved
+              : tabLabels;
 
     /** Admin V2 job record modal: Record, Related, Activity, Financials only (no RRS/documents tabs). */
     const jobDrawerV2TabListResolved = useMemo((): DrawerTabKey[] => {
@@ -7635,6 +7746,68 @@ export default function AdminEntityDrawer() {
         data,
         dataMatchesDrawer,
     ]);
+
+    useEffect(() => {
+        if (drawer.type !== "persons" || !drawer.id || drawer.id === "new") {
+            personLinkedPersonsPrefetchedRef.current = null;
+            return;
+        }
+        if (!drawerReady || !data || !dataMatchesDrawer) return;
+        if (personLinkedPersonsPrefetchedRef.current === drawer.id) return;
+        if (!personChildLifecycleChrome && !personParentGuardianChrome) return;
+
+        personLinkedPersonsPrefetchedRef.current = drawer.id;
+        try {
+            prefetchLinkedPersonsFromPersonRecord(data as Record<string, unknown>, {
+                source: "person_drawer_idle",
+            });
+        } catch {
+            /* non-fatal */
+        }
+    }, [
+        drawer.type,
+        drawer.id,
+        drawerReady,
+        data,
+        dataMatchesDrawer,
+        personChildLifecycleChrome,
+        personParentGuardianChrome,
+    ]);
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const onHouseholdPrimarySaved = (ev: Event) => {
+            const ce = ev as CustomEvent<{
+                type?: string;
+                id?: string;
+                primary_person_id?: string;
+            }>;
+            if (ce.detail?.type !== "customers") return;
+            const customerId = String(ce.detail?.id ?? "").trim();
+            const primaryPersonId = String(ce.detail?.primary_person_id ?? "").trim();
+            if (!customerId || !primaryPersonId) return;
+
+            if (drawer.type === "persons" && drawerReady && data && dataMatchesDrawer && drawer.id) {
+                const record = data as Record<string, unknown>;
+                const customerIds = new Set<string>();
+                for (const row of (record._household_context as { customer_id?: unknown }[] | undefined) ?? []) {
+                    const cid = String(row?.customer_id ?? "").trim();
+                    if (cid) customerIds.add(cid);
+                }
+                for (const row of (record._household_adult_links as { customer_id?: unknown }[] | undefined) ?? []) {
+                    const cid = String(row?.customer_id ?? "").trim();
+                    if (cid) customerIds.add(cid);
+                }
+                if (customerIds.has(customerId)) {
+                    mergePersonDrawerRecord(
+                        applyHouseholdPrimaryContactToRecord(record, customerId, primaryPersonId)
+                    );
+                }
+            }
+        };
+        window.addEventListener("admin-entity-saved", onHouseholdPrimarySaved);
+        return () => window.removeEventListener("admin-entity-saved", onHouseholdPrimarySaved);
+    }, [drawer.type, drawer.id, drawerReady, data, dataMatchesDrawer, mergePersonDrawerRecord]);
 
     const opportunityDrawerBootstrapEnrichmentPath =
         drawerShellVariant === "adminV2" &&
@@ -8044,6 +8217,16 @@ export default function AdminEntityDrawer() {
         ) {
             return personChildTabListResolved;
         }
+        if (
+            drawer.type === "persons" &&
+            personParentGuardianChrome &&
+            drawer.id &&
+            drawer.id !== "new" &&
+            overviewData &&
+            !(overviewData as { _create?: boolean })._create
+        ) {
+            return personParentTabListResolved;
+        }
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
             return tabList;
         }
@@ -8066,6 +8249,8 @@ export default function AdminEntityDrawer() {
         overviewData,
         personChildLifecycleChrome,
         personChildTabListResolved,
+        personParentGuardianChrome,
+        personParentTabListResolved,
         opportunityDrawerShellContract,
         opportunityDrawerOverviewRevealReady,
         opportunityRecordGateWorkflowLayout,
@@ -8142,11 +8327,21 @@ export default function AdminEntityDrawer() {
         !isPersonDrawerSeedRecord(data as Record<string, unknown>) &&
         drawerReady;
 
+    const personDrawerParentBodyHydrated =
+        personParentGuardianChrome &&
+        personDrawerPaintReady &&
+        !isPersonDrawerSeedRecord(data as Record<string, unknown>) &&
+        drawerReady;
+
     const personDrawerOverviewReady =
         personDrawerPaintReady &&
         (personChildLifecycleChrome
             ? personDrawerChildBodyHydrated || useConfigDrivenOverview
-            : useConfigDrivenOverview || isPersonDrawerSeedRecord(data as Record<string, unknown>));
+            : personParentGuardianChrome
+              ? personDrawerParentBodyHydrated ||
+                useConfigDrivenOverview ||
+                isPersonDrawerSeedRecord(data as Record<string, unknown>)
+              : useConfigDrivenOverview || isPersonDrawerSeedRecord(data as Record<string, unknown>));
 
     const personDrawerExistingReady = personDrawerOverviewReady;
 
@@ -8157,6 +8352,14 @@ export default function AdminEntityDrawer() {
         !error &&
         personChildLifecycleChrome &&
         !personDrawerChildBodyHydrated;
+
+    const personDrawerParentOverviewPending =
+        drawer.type === "persons" &&
+        !!drawer.id &&
+        drawer.id !== "new" &&
+        !error &&
+        personParentGuardianChrome &&
+        !personDrawerParentBodyHydrated;
 
     const personDrawerShowLoadingShell =
         drawer.type === "persons" &&
@@ -8510,16 +8713,23 @@ export default function AdminEntityDrawer() {
         if (drawer.type === "persons" && data && !(data as { _create?: boolean })._create) {
             const p = data as Record<string, unknown>;
             const personId = String(drawer.id ?? p.id ?? "").trim();
-            const profile = resolvePersonDrawerProfileFromRecordWithHint(p, personDrawerChildChromeHint);
+            const profile = personParentGuardianChrome
+                ? resolvePersonDrawerProfileFromRecordWithParentHint(p, personDrawerParentChromeHint)
+                : resolvePersonDrawerProfileFromRecordWithHint(p, personDrawerChildChromeHint);
             const enrollmentMirror = (p._enrollment_mirror as Parameters<typeof PersonDrawerEnrollmentActivity>[0]["mirrorRows"]) ?? [];
             const enrollmentOpps =
                 (p._enrollment_opportunities as Parameters<typeof PersonDrawerEnrollmentActivity>[0]["opportunityRows"]) ?? [];
             const openPersonDrawer = (type: string, id: string) =>
                 openDrawer({ type: type as AdminDrawerEntityType, id });
-            const hasRelationships = personDrawerHasRelationshipContent(p, profile);
+            const hasRelationships =
+                !personParentGuardianChrome &&
+                !personChildLifecycleChrome &&
+                personDrawerHasRelationshipContent(p, profile);
             const childLifecycle = personChildLifecycleChrome;
             const enrollmentActivity =
-                !childLifecycle && (enrollmentMirror.length > 0 || enrollmentOpps.length > 0) ? (
+                !childLifecycle &&
+                !personParentGuardianChrome &&
+                (enrollmentMirror.length > 0 || enrollmentOpps.length > 0) ? (
                     <PersonDrawerEnrollmentActivity
                         mirrorRows={enrollmentMirror}
                         opportunityRows={enrollmentOpps}
@@ -8528,7 +8738,10 @@ export default function AdminEntityDrawer() {
                     />
                 ) : null;
             return {
-                ...(personId
+                ...(personId &&
+                !personParentGuardianChrome &&
+                !personChildLifecycleChrome &&
+                personDrawerShouldShowEmployeePlacement(profile)
                     ? {
                           employee_placement: (
                               <PersonEmployeePlacementSection
@@ -9463,7 +9676,11 @@ export default function AdminEntityDrawer() {
 
         if (drawer.type === "persons") {
             const personPres = (getEntityPresentation("persons").drawer?.overviewSections ?? []) as EntityDrawerSectionConfig[];
-            if (fromDefs.length === 0) {
+            if (
+                fromDefs.length === 0 &&
+                !personParentGuardianChrome &&
+                !personChildLifecycleChrome
+            ) {
                 sectionBlocks = [...personPres];
             }
         }
@@ -9480,7 +9697,13 @@ export default function AdminEntityDrawer() {
 
         const keys = new Set(sectionBlocks.map((s) => s.key));
         const append: EntityDrawerSectionConfig[] = [];
-        if (drawer.type === "persons" && overviewData && !(overviewData as { _create?: boolean })._create) {
+        if (
+            drawer.type === "persons" &&
+            overviewData &&
+            !(overviewData as { _create?: boolean })._create &&
+            !personParentGuardianChrome &&
+            !personChildLifecycleChrome
+        ) {
             const personPres = (getEntityPresentation("persons").drawer?.overviewSections ?? []) as EntityDrawerSectionConfig[];
             const enrollmentRows = ((overviewData as Record<string, unknown>)._enrollment_mirror as unknown[]) ?? [];
             const enrollmentOpps = ((overviewData as Record<string, unknown>)._enrollment_opportunities as unknown[]) ?? [];
@@ -9491,7 +9714,6 @@ export default function AdminEntityDrawer() {
             }
             if (
                 !keys.has("enrollment_activity") &&
-                !personChildLifecycleChrome &&
                 (enrollmentRows.length > 0 || enrollmentOpps.length > 0)
             ) {
                 const personProfile = resolvePersonDrawerProfileFromRecord(overviewData as Record<string, unknown>);
@@ -9752,25 +9974,38 @@ export default function AdminEntityDrawer() {
             overviewSections = applyPolicyChromeToOverviewSections(overviewSections, chrome);
         }
         if (drawer.type === "persons" && overviewData && !(overviewData as { _create?: boolean })._create) {
-            const profile = resolvePersonDrawerProfileFromRecordWithHint(
+            const profile = resolvePersonDrawerProfileFromRecordWithParentHint(
                 overviewData as Record<string, unknown>,
-                personDrawerChildChromeHint
+                personDrawerParentChromeHint
             );
             const fieldTypesByKey: Record<string, string> = {};
             for (const d of ((overviewData as Record<string, unknown>)._field_definitions as { field_key: string; field_type: string }[] | undefined) ?? []) {
                 fieldTypesByKey[d.field_key] = d.field_type;
             }
-            overviewSections = applyPersonDrawerPresentationProfile(overviewSections, profile, fieldTypesByKey);
-            if (personChildLifecycleChrome) {
-                overviewSections = sortOverviewSectionsForChildLifecycle(overviewSections).filter(
-                    (s) => s.key !== "child_lifecycle_roadmap" && s.key !== "enrollment_activity"
+            overviewSections = applyPersonDrawerPresentationProfile(overviewSections, profile, fieldTypesByKey, {
+                parentOperatingChrome: personParentGuardianChrome,
+            });
+            if (personParentGuardianChrome) {
+                overviewSections = personDrawerParentOperatingOverviewSections(
+                    overviewSections.map((s) => ({
+                        ...s,
+                        title: personDrawerParentSectionTitle(s.key, s.title),
+                    }))
                 );
-                overviewSections = overviewSections.map((s) => ({
-                    ...s,
-                    title: personDrawerChildSectionTitle(s.key, s.title),
-                }));
+            }
+            if (personChildLifecycleChrome) {
                 overviewSections = suppressEmptyChildDetailFields(
-                    overviewSections,
+                    personDrawerChildOperatingOverviewSections(
+                        sortOverviewSectionsForChildLifecycle(overviewSections)
+                            .filter(
+                                (s) =>
+                                    s.key !== "child_lifecycle_roadmap" && s.key !== "enrollment_activity"
+                            )
+                            .map((s) => ({
+                                ...s,
+                                title: personDrawerChildSectionTitle(s.key, s.title),
+                            }))
+                    ),
                     overviewData as Record<string, unknown>
                 );
             }
@@ -9814,7 +10049,23 @@ export default function AdminEntityDrawer() {
         opportunityDrawerEnrichmentHeld,
         statusDefsForDrawer,
         personChildLifecycleChrome,
+        personParentGuardianChrome,
         personDrawerChildChromeHint,
+        personDrawerParentChromeHint,
+    ]);
+
+    /** Parent/child operating chrome must pass `[]` when empty — otherwise EntityDrawerOverview falls back to generic Profile/Contact sections. */
+    const personDrawerOverviewSectionsOverride = useMemo((): EntityDrawerSectionConfig[] | undefined => {
+        if (drawer.type !== "persons") return undefined;
+        if (personParentGuardianChrome || personChildLifecycleChrome) {
+            return configDrivenOverviewSections;
+        }
+        return configDrivenOverviewSections.length > 0 ? configDrivenOverviewSections : undefined;
+    }, [
+        drawer.type,
+        personParentGuardianChrome,
+        personChildLifecycleChrome,
+        configDrivenOverviewSections,
     ]);
 
     const overviewFieldPolicyProps = useMemo(() => {
@@ -10137,6 +10388,20 @@ export default function AdminEntityDrawer() {
         setFormData,
     ]);
 
+    const openPersonDrawerChildLeadOpportunity = useCallback(
+        (opportunityId: string) => {
+            if (
+                previousDrawer?.type === "opportunities" &&
+                String(previousDrawer.id ?? "") === String(opportunityId)
+            ) {
+                goBack();
+                return;
+            }
+            openDrawer({ type: "opportunities", id: opportunityId });
+        },
+        [goBack, openDrawer, previousDrawer]
+    );
+
     const personDrawerChildHeaderStatus = useMemo(() => {
         if (drawer.type !== "persons" || !personChildLifecycleChrome) return null;
         if (!overviewData || (overviewData as { _create?: boolean })._create) return null;
@@ -10400,17 +10665,36 @@ export default function AdminEntityDrawer() {
         personDrawerChildChromeHint,
     ]);
 
+    const personDrawerParentLifecycleRail = useMemo(() => {
+        if (drawer.type !== "persons" || !personParentGuardianChrome) return null;
+        if (!drawer.id || drawer.id === "new") return null;
+        if (!personDrawerPaintReady) return null;
+
+        const d = overviewData as Record<string, unknown> | null;
+        if (!d || (d as { _create?: boolean })._create) return null;
+
+        return (
+            <PersonDrawerParentLifecycleRail
+                record={d}
+                chromeHint={personDrawerParentChromeHint}
+                onSelectTab={setDrawerTab}
+            />
+        );
+    }, [
+        drawer.type,
+        drawer.id,
+        personParentGuardianChrome,
+        personDrawerPaintReady,
+        overviewData,
+        personDrawerParentChromeHint,
+    ]);
+
     const drawerPostTabStrip =
         isOpportunityRecordModalTarget &&
         drawer.type === "opportunities" &&
         opportunityDrawerLifecycleRail
             ? opportunityDrawerLifecycleRail
-            : personRecordChromeBodyShell &&
-                personChildLifecycleChrome &&
-                drawer.type === "persons" &&
-                personDrawerPaintReady
-              ? personDrawerChildLifecycleRail
-              : undefined;
+            : undefined;
 
     const opportunityActivityHeaderLine = useMemo(() => {
         if (drawer.type !== "opportunities") return null;
@@ -10955,7 +11239,7 @@ export default function AdminEntityDrawer() {
                             {formatPersonDrawerRecordNumber(overviewData as Record<string, unknown>)}
                         </span>
                     ) : null}
-                    {canGoBack && previousDrawer ? (
+                    {personDrawerOperatingBackLink ? (
                         <>
                             {formatPersonDrawerRecordNumber(overviewData as Record<string, unknown>) ? (
                                 <span className="text-alloy-midnight/30">·</span>
@@ -10966,7 +11250,7 @@ export default function AdminEntityDrawer() {
                                 className="text-[12px] font-medium text-alloy-blue hover:underline"
                                 data-record-drawer-back-link="true"
                             >
-                                Back to {getEntityLabel(labels, previousDrawer.type, "singular")}
+                                {personDrawerOperatingBackLink.label}
                             </button>
                         </>
                     ) : null}
@@ -10974,16 +11258,46 @@ export default function AdminEntityDrawer() {
             </div>
         ) : drawer.type === "persons" &&
           personRecordChromeBodyShell &&
+          personParentGuardianChrome &&
+          overviewData &&
+          !(overviewData as { _create?: boolean })._create ? (
+            <div className="mt-0.5" data-person-drawer-parent-header-subtitle="true">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] leading-snug text-alloy-midnight/75">
+                    {personDrawerParentHeaderStatus ? (
+                        <span className="shrink-0">{personDrawerParentHeaderStatus}</span>
+                    ) : null}
+                    {formatPersonDrawerRecordNumber(overviewData as Record<string, unknown>) ? (
+                        <span className="font-medium text-alloy-midnight/80">
+                            {formatPersonDrawerRecordNumber(overviewData as Record<string, unknown>)}
+                        </span>
+                    ) : null}
+                    {personDrawerOperatingBackLink ? (
+                        <>
+                            {formatPersonDrawerRecordNumber(overviewData as Record<string, unknown>) ? (
+                                <span className="text-alloy-midnight/30">·</span>
+                            ) : null}
+                            <button
+                                type="button"
+                                onClick={goBack}
+                                className="text-[12px] font-medium text-alloy-blue hover:underline"
+                                data-record-drawer-back-link="true"
+                            >
+                                {personDrawerOperatingBackLink.label}
+                            </button>
+                        </>
+                    ) : null}
+                </div>
+            </div>
+        ) : drawer.type === "persons" &&
+          personRecordChromeBodyShell &&
+          !personParentGuardianChrome &&
           overviewData &&
           !(overviewData as { _create?: boolean })._create ? (
             <PersonDrawerHeaderMetadata
                 record={overviewData as Record<string, unknown>}
                 backLink={
-                    canGoBack && previousDrawer
-                        ? {
-                              label: `Back to ${getEntityLabel(labels, previousDrawer.type, "singular")}`,
-                              onClick: goBack,
-                          }
+                    personDrawerOperatingBackLink
+                        ? { label: personDrawerOperatingBackLink.label, onClick: goBack }
                         : null
                 }
                 statusSlot={personDrawerParentHeaderStatus}
@@ -11007,6 +11321,13 @@ export default function AdminEntityDrawer() {
         overviewData &&
         !(overviewData as { _create?: boolean })._create ? (
             <PersonDrawerChildTitleRow record={overviewData as Record<string, unknown>} />
+        ) : personParentGuardianChrome &&
+            overviewData &&
+            !(overviewData as { _create?: boolean })._create ? (
+            <PersonDrawerParentTitleRow
+                record={overviewData as Record<string, unknown>}
+                chromeHint={personDrawerParentChromeHint}
+            />
         ) : (
             drawerTitleTextResolved
         );
@@ -11085,6 +11406,15 @@ export default function AdminEntityDrawer() {
         overviewData &&
         !(overviewData as { _create?: boolean })._create ? (
             personChildLifecycleChrome ? (
+                <div className="flex flex-col items-end gap-1">
+                    <PersonDrawerChildHeaderExecutive
+                        record={overviewData as Record<string, unknown>}
+                        chromeHint={personDrawerChildChromeHint}
+                        onOpenLeadOpportunity={openPersonDrawerChildLeadOpportunity}
+                    />
+                    <div className="flex flex-wrap items-center justify-end gap-2">{drawerHeaderActions}</div>
+                </div>
+            ) : personParentGuardianChrome ? (
                 <div className="flex flex-col items-end gap-1">
                     <div className="flex flex-wrap items-center justify-end gap-2">{drawerHeaderActions}</div>
                 </div>
@@ -11177,7 +11507,8 @@ export default function AdminEntityDrawer() {
             headerRecordContext={personHeaderRecordContext}
             statusBadge={
                 (drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer) ||
-                (drawer.type === "persons" && personChildLifecycleChrome)
+                (drawer.type === "persons" && personChildLifecycleChrome) ||
+                (drawer.type === "persons" && personParentGuardianChrome)
                     ? undefined
                     : drawerStatusBadge
             }
@@ -11245,6 +11576,33 @@ export default function AdminEntityDrawer() {
                 >
                     <PersonDrawerChildOverviewSkeleton />
                 </div>
+            ) : personDrawerParentOverviewPending && !personDrawerPaintReady ? (
+                <div
+                    className={drawerRecordBodyRootClassName}
+                    data-person-drawer-parent-pending="true"
+                    role="status"
+                    aria-live="polite"
+                >
+                    <PersonDrawerParentOverviewSkeleton />
+                </div>
+            ) : personDrawerShowLoadingShell && personChildLifecycleChrome ? (
+                <div
+                    className={drawerRecordBodyRootClassName}
+                    data-person-drawer-child-pending="true"
+                    role="status"
+                    aria-live="polite"
+                >
+                    <PersonDrawerChildOverviewSkeleton />
+                </div>
+            ) : personDrawerShowLoadingShell && personParentGuardianChrome ? (
+                <div
+                    className={drawerRecordBodyRootClassName}
+                    data-person-drawer-parent-pending="true"
+                    role="status"
+                    aria-live="polite"
+                >
+                    <PersonDrawerParentOverviewSkeleton />
+                </div>
             ) : personDrawerShowLoadingShell ? (
                 <div
                     className={drawerRecordBodyRootClassName}
@@ -11254,7 +11612,7 @@ export default function AdminEntityDrawer() {
                 >
                     <p className="text-sm font-medium text-alloy-midnight/75">Loading person…</p>
                 </div>
-            ) : drawerBodyGateLoading && !opportunityInquiryWorkflowDrawer && !(drawer.type === "persons" && (personDrawerPaintReady || personDrawerChildOverviewPending)) ? (
+            ) : drawerBodyGateLoading && !opportunityInquiryWorkflowDrawer && !(drawer.type === "persons" && (personDrawerPaintReady || personDrawerChildOverviewPending || personDrawerParentOverviewPending)) ? (
                 <div
                     className={drawerRecordBodyRootClassName}
                     data-adminv2-drawer-record-gate-skeleton="true"
@@ -12891,6 +13249,21 @@ export default function AdminEntityDrawer() {
                             <PersonDrawerChildCommunicationsPlaceholder />
                         </div>
                     ) : null}
+                    {drawerTab === "communications" &&
+                    drawer.type === "persons" &&
+                    personParentGuardianChrome &&
+                    drawer.id &&
+                    drawer.id !== "new" ? (
+                        <div className="pt-2" data-person-drawer-parent-comms="true">
+                            <CommunicationsDrawerSection
+                                key={drawer.id}
+                                embedded
+                                apiEntityType="persons"
+                                entityId={drawer.id}
+                                active={drawerTab === "communications"}
+                            />
+                        </div>
+                    ) : null}
                     {opportunityWorkflowTabSessionActive
                         ? renderOpportunityWorkflowTabPane(
                               "communications",
@@ -14181,23 +14554,8 @@ export default function AdminEntityDrawer() {
                                 personRecordChromeBodyShell &&
                                 entityDrawerOverviewData &&
                                 !(entityDrawerOverviewData as { _create?: boolean })._create &&
-                                personDrawerShowsChildContextPanel(
-                                    resolvePersonDrawerProfileFromRecord(
-                                        entityDrawerOverviewData as Record<string, unknown>
-                                    )
-                                ) ? (
-                                    <PersonDrawerContextPanel
-                                        record={entityDrawerOverviewData as Record<string, unknown>}
-                                        onOpenDrawer={(type, id) =>
-                                            openDrawer({ type: type as AdminDrawerEntityType, id })
-                                        }
-                                    />
-                                ) : null}
-                                {drawer.type === "persons" &&
-                                personRecordChromeBodyShell &&
-                                entityDrawerOverviewData &&
-                                !(entityDrawerOverviewData as { _create?: boolean })._create &&
-                                personChildLifecycleChrome && personDrawerPaintReady ? (
+                                personChildLifecycleChrome &&
+                                (personDrawerPaintReady || isPersonDrawerSeedRecord(entityDrawerOverviewData as Record<string, unknown>)) ? (
                                     <>
                                         <PersonDrawerChildSummary
                                             record={entityDrawerOverviewData as Record<string, unknown>}
@@ -14213,20 +14571,92 @@ export default function AdminEntityDrawer() {
                                                 }
                                             }}
                                         />
-                                        <PersonDrawerChildEnrollmentContext
-                                            record={entityDrawerOverviewData as Record<string, unknown>}
-                                            chromeHint={personDrawerChildChromeHint}
-                                            onOpenLeadOpportunity={(opportunityId) => {
-                                                if (
-                                                    previousDrawer?.type === "opportunities" &&
-                                                    String(previousDrawer.id ?? "") === String(opportunityId)
-                                                ) {
-                                                    goBack();
-                                                    return;
+                                        {personDrawerChildBodyHydrated ? (
+                                            <PersonDrawerHouseholdSection
+                                                record={entityDrawerOverviewData as Record<string, unknown>}
+                                                onOpenDrawer={(type, id) =>
+                                                    openDrawer({ type: type as AdminDrawerEntityType, id })
                                                 }
-                                                openDrawer({ type: "opportunities", id: opportunityId });
+                                                onOpenLinkedPerson={(personId) =>
+                                                    openLinkedPersonFromHousehold(
+                                                        personId,
+                                                        entityDrawerOverviewData as Record<string, unknown>
+                                                    )
+                                                }
+                                                viewingPersonId={drawer.id}
+                                                dataDrawerVariant="child"
+                                                canMutate={!!canMutate}
+                                                onRecordUpdated={mergePersonDrawerRecord}
+                                            />
+                                        ) : null}
+                                    </>
+                                ) : null}
+                                {drawer.type === "persons" &&
+                                personRecordChromeBodyShell &&
+                                entityDrawerOverviewData &&
+                                !(entityDrawerOverviewData as { _create?: boolean })._create &&
+                                personParentGuardianChrome &&
+                                (personDrawerPaintReady || isPersonDrawerSeedRecord(entityDrawerOverviewData as Record<string, unknown>)) ? (
+                                    <>
+                                        <PersonDrawerParentSummary
+                                            record={entityDrawerOverviewData as Record<string, unknown>}
+                                            chromeHint={personDrawerParentChromeHint}
+                                            canMutate={!!canMutate}
+                                            onPersonUpdated={(json) => {
+                                                setData((prev) => (prev ? { ...prev, ...json } : prev));
+                                                if (drawer.id) {
+                                                    putDrawerEntitySnapshot("persons", drawer.id, {
+                                                        ...(entityDrawerOverviewData ?? {}),
+                                                        ...json,
+                                                    });
+                                                }
                                             }}
                                         />
+                                        {personDrawerParentBodyHydrated ? (
+                                            <>
+                                                <PersonDrawerParentHouseholdSection
+                                                    record={stampPersonDrawerParentHeaderContext(
+                                                        entityDrawerOverviewData as Record<string, unknown>
+                                                    )}
+                                                    chromeHint={personDrawerParentChromeHint}
+                                                    onOpenDrawer={(type, id) =>
+                                                        openDrawer({ type: type as AdminDrawerEntityType, id })
+                                                    }
+                                                    onOpenLinkedPerson={(personId) =>
+                                                        openLinkedPersonFromHousehold(
+                                                            personId,
+                                                            entityDrawerOverviewData as Record<string, unknown>
+                                                        )
+                                                    }
+                                                    canMutate={!!canMutate}
+                                                    onRecordUpdated={mergePersonDrawerRecord}
+                                                />
+                                                <PersonDrawerHouseholdAddress
+                                                    record={entityDrawerOverviewData as Record<string, unknown>}
+                                                    chromeHint={personDrawerParentChromeHint}
+                                                    canMutate={!!canMutate}
+                                                    onRecordUpdated={mergePersonDrawerRecord}
+                                                />
+                                                {drawer.id && drawer.id !== "new" ? (
+                                                    <PersonDrawerEmployeeStatusSection
+                                                        personId={drawer.id}
+                                                        initialValues={readPersonEmployeePlacementValues(
+                                                            entityDrawerOverviewData as Record<string, unknown>
+                                                        )}
+                                                        canMutate={!!canMutate}
+                                                        onPersonUpdated={(json) => {
+                                                            setData((prev) => (prev ? { ...prev, ...json } : prev));
+                                                            if (drawer.id) {
+                                                                putDrawerEntitySnapshot("persons", drawer.id, {
+                                                                    ...(entityDrawerOverviewData ?? {}),
+                                                                    ...json,
+                                                                });
+                                                            }
+                                                        }}
+                                                    />
+                                                ) : null}
+                                            </>
+                                        ) : null}
                                     </>
                                 ) : null}
                                 <EntityDrawerOverview
@@ -14237,9 +14667,7 @@ export default function AdminEntityDrawer() {
                                     overviewSectionsOverride={
                                         opportunityInquiryWorkflowDrawer
                                             ? configDrivenOverviewSections
-                                            : configDrivenOverviewSections.length > 0
-                                              ? configDrivenOverviewSections
-                                              : undefined
+                                            : personDrawerOverviewSectionsOverride
                                     }
                                     scheduleOverviewRows={
                                         drawer.type === "schedules"

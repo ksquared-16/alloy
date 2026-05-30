@@ -1,19 +1,34 @@
-import type { GlobalRecordSearchEntityType } from "@/lib/admin/globalSearch/globalRecordSearchTypes";
+import type { GlobalSearchAdminV2DrawerEntityType } from "@/lib/admin/globalSearch/globalRecordSearchDrawerTarget";
+import type { GlobalRecordSearchHit } from "@/lib/admin/globalSearch/globalRecordSearchTypes";
+import type { GlobalRecordSearchCluster } from "@/lib/admin/globalSearch/globalRecordSearchTypes";
+import { ADMINV2_SHELL_CHROME_Z } from "@/components/admin/Drawer";
+
+export type GlobalRecordSearchOpenDetail = {
+    open_entity_type: GlobalSearchAdminV2DrawerEntityType;
+    open_entity_id: string;
+};
+
+export const GLOBAL_SEARCH_DRAWER_OPEN_SOURCE = "global_search";
+
+/** Dropdown stacks above portaled drawer panel (70) within shell chrome (100). */
+export const GLOBAL_SEARCH_DROPDOWN_Z_INDEX = ADMINV2_SHELL_CHROME_Z + 5;
 
 export const ADMINV2_GLOBAL_SEARCH_OPEN_RECORD_EVENT = "adminv2:global-search-open-record";
 
 export const GLOBAL_RECORD_SEARCH_OPEN_INTENT_KEY = "adminv2_global_search_open_intent";
 
-export type GlobalRecordSearchOpenDetail = {
-    entity_type: GlobalRecordSearchEntityType;
-    entity_id: string;
-};
-
 export type GlobalRecordSearchOpenIntent = GlobalRecordSearchOpenDetail & {
     stored_at: number;
 };
 
-const DRAWER_HOST_PREFIXES = ["/adminV2/workspace", "/admin/v2/workspace", "/adminV2/settings", "/admin/v2/settings", "/adminV2/forms", "/admin/v2/forms"];
+const DRAWER_HOST_PREFIXES = [
+    "/adminV2/workspace",
+    "/admin/v2/workspace",
+    "/adminV2/settings",
+    "/admin/v2/settings",
+    "/adminV2/forms",
+    "/admin/v2/forms",
+];
 
 export function adminV2PathHasDrawerHost(pathname: string): boolean {
     const p = pathname.trim();
@@ -26,7 +41,7 @@ export function readGlobalRecordSearchOpenIntent(): GlobalRecordSearchOpenIntent
         const raw = window.sessionStorage.getItem(GLOBAL_RECORD_SEARCH_OPEN_INTENT_KEY);
         if (!raw) return null;
         const parsed = JSON.parse(raw) as GlobalRecordSearchOpenIntent;
-        if (!parsed?.entity_type || !parsed?.entity_id) return null;
+        if (!parsed?.open_entity_type || !parsed?.open_entity_id) return null;
         if (Date.now() - (parsed.stored_at ?? 0) > 60_000) {
             window.sessionStorage.removeItem(GLOBAL_RECORD_SEARCH_OPEN_INTENT_KEY);
             return null;
@@ -58,19 +73,29 @@ export function dispatchGlobalRecordSearchOpen(detail: GlobalRecordSearchOpenDet
     );
 }
 
-/** Open a global-search hit — event on drawer hosts, else stash intent and return workspace path. */
+/** Open resolved AdminV2 drawer target — never legacy member/contact drawers. */
 export function launchGlobalRecordSearchOpen(detail: GlobalRecordSearchOpenDetail): string | null {
-    const entity_id = detail.entity_id.trim();
-    const entity_type = detail.entity_type;
+    const entity_id = detail.open_entity_id.trim();
+    const entity_type = detail.open_entity_type;
     if (!entity_id || typeof window === "undefined") return null;
 
-    const normalized = { entity_type, entity_id };
-
     if (adminV2PathHasDrawerHost(window.location.pathname)) {
-        dispatchGlobalRecordSearchOpen(normalized);
+        dispatchGlobalRecordSearchOpen({ open_entity_type: entity_type, open_entity_id: entity_id });
         return null;
     }
 
-    storeGlobalRecordSearchOpenIntent(normalized);
+    storeGlobalRecordSearchOpenIntent({ open_entity_type: entity_type, open_entity_id: entity_id });
     return "/adminV2/workspace";
+}
+
+export function flattenGlobalSearchClustersForKeyboard(
+    clusters: GlobalRecordSearchCluster[],
+    locationHits: GlobalRecordSearchHit[] = []
+): GlobalRecordSearchHit[] {
+    const out: GlobalRecordSearchHit[] = [];
+    for (const cluster of clusters) {
+        out.push(...cluster.anchors, ...cluster.children, ...cluster.parents);
+    }
+    out.push(...locationHits);
+    return out;
 }

@@ -1,15 +1,10 @@
-import { buildPersonEnrollmentActivityEntries } from "@/components/admin/entity/PersonDrawerEnrollmentActivity";
 import {
     personDrawerChildAgeLabel,
     personDrawerChildDisplayName,
     personDrawerChildGenderLabel,
-    personDrawerCrmDisplayLabel,
     resolvePersonDrawerPrimaryGuardian,
 } from "@/lib/admin/person/personDrawerChildIdentity";
-import type {
-    PersonEnrollmentMirrorRow,
-    PersonEnrollmentOpportunityRow,
-} from "@/lib/admin/person/personDrawerVisibilityTypes";
+import { resolvePersonDrawerChildPlacementFromRecord } from "@/lib/admin/person/personDrawerChildPlacementContext";
 
 export type PersonDrawerChildSummaryModel = {
     display_name: string;
@@ -20,8 +15,10 @@ export type PersonDrawerChildSummaryModel = {
     gender_label: string | null;
     program_label: string | null;
     location_label: string | null;
+    room_label: string | null;
     status_label: string | null;
     primary_opportunity_id: string | null;
+    primary_ocm_id: string | null;
     primary_guardian: ReturnType<typeof resolvePersonDrawerPrimaryGuardian>;
 };
 
@@ -54,12 +51,13 @@ function personDrawerDobLabel(record: Record<string, unknown>): string | null {
     return dt.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
-/** Primary above-the-fold child identity + enrollment mirror context. */
+/**
+ * Primary above-the-fold child identity + enrollment mirror context.
+ * Program/location come from `_enrollment_mirror` (OCM / opportunity) — never from `persons` location fields.
+ */
 export function resolvePersonDrawerChildSummaryModel(record: Record<string, unknown>): PersonDrawerChildSummaryModel {
     const display_name = personDrawerChildDisplayName(record) ?? "Child";
-    const mirror = (record._enrollment_mirror as PersonEnrollmentMirrorRow[]) ?? [];
-    const opps = (record._enrollment_opportunities as PersonEnrollmentOpportunityRow[]) ?? [];
-    const entry = buildPersonEnrollmentActivityEntries(mirror, opps)[0] ?? null;
+    const placement = resolvePersonDrawerChildPlacementFromRecord(record);
 
     return {
         display_name,
@@ -68,10 +66,12 @@ export function resolvePersonDrawerChildSummaryModel(record: Record<string, unkn
         dob_label: personDrawerDobLabel(record),
         age_label: personDrawerChildAgeLabel(record),
         gender_label: personDrawerChildGenderLabel(record),
-        program_label: entry?.program_label?.trim() || entry?.room_label?.trim() || null,
-        location_label: entry?.location_label?.trim() || null,
-        status_label: personDrawerCrmDisplayLabel(entry?.status_label ?? entry?.outcome_label),
-        primary_opportunity_id: entry?.opportunity_id ?? null,
+        program_label: placement.program_label,
+        location_label: placement.location_label,
+        room_label: placement.room_label,
+        status_label: placement.status_label,
+        primary_opportunity_id: placement.primary_opportunity_id,
+        primary_ocm_id: placement.primary_ocm_id,
         primary_guardian: resolvePersonDrawerPrimaryGuardian(record),
     };
 }

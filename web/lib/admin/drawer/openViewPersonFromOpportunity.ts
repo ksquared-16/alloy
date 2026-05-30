@@ -4,9 +4,11 @@ import { logPersonDrawerOpen } from "@/lib/admin/drawer/personDrawerPerfLogs";
 import {
     applyPersonDrawerOpenSeed,
     cachePersonDrawerChildOpenSeed,
+    cachePersonDrawerParentOpenSeed,
     PERSON_DRAWER_CHILD_OPEN_SOURCE,
     type PersonDrawerOpenSeed,
 } from "@/lib/admin/drawer/personDrawerOpenSeed";
+import { PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS } from "@/lib/admin/person/personDrawerParentChrome";
 import {
     isPersonDrawerSnapshotWarm,
     prefetchPersonDrawerSnapshot,
@@ -33,6 +35,10 @@ export function openViewPersonFromOpportunity(args: {
 
     if (childOpen && args.openSeed) {
         cachePersonDrawerChildOpenSeed(personId, args.openSeed);
+    } else if (
+        args.openSeed?.presentation_emphasis === PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS
+    ) {
+        cachePersonDrawerParentOpenSeed(personId, args.openSeed);
     } else if (!cacheHit && args.openSeed) {
         const seedRecord = applyPersonDrawerOpenSeed(personId, args.openSeed);
         if (seedRecord) {

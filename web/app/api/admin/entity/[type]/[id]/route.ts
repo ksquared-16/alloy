@@ -1336,7 +1336,7 @@ export async function GET(
                 .limit(PERSON_LIMIT);
             out._linked_opportunities = oppRows ?? [];
 
-            await attachPersonDrawerVisibility(supabase, orgId, id, out);
+            await attachPersonDrawerVisibility(supabase, orgId, id, out, { siteScope: scopeDim });
             await attachFieldDefinitionsAndValues(supabase, out, "persons", id);
             await attachDirectFkRelationshipDisplays(supabase, orgId, "persons", out);
             return NextResponse.json(out);

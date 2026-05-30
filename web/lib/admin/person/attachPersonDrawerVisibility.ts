@@ -1,12 +1,18 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { batchOptionItemLabelsForOrg } from "@/lib/admin/optionItemLabelForOrg";
+import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import { resolveStatusLabel } from "@/lib/admin/statusDefinitionsResolve";
+import { buildPersonEnrollmentMirrorRowsForMemberIds } from "@/lib/admin/person/buildPersonEnrollmentMirrorRows";
+import { customerPersonRowIsHouseholdPrimaryContact } from "@/lib/admin/person/householdPrimaryContact";
 import { mergeHouseholdAdultLinks } from "@/lib/admin/person/mergeHouseholdAdultLinks";
+import { personDrawerHouseholdAgeLabel } from "@/lib/admin/person/personDrawerHouseholdDisplay";
+import { filterPersonDrawerHouseholdVisibilityBySiteScope } from "@/lib/admin/person/personDrawerHouseholdSiteScope";
+import { viewingPersonHouseholdDisplayName } from "@/lib/admin/person/resolvePersonDrawerHouseholdModel";
 import type {
     PersonEnrollmentMirrorRow,
     PersonEnrollmentOpportunityRow,
     PersonHouseholdAdultLinkRow,
     PersonHouseholdChildLinkRow,
+    PersonHouseholdCustomerAddressRow,
     PersonSiblingLinkRow,
 } from "@/lib/admin/person/personDrawerVisibilityTypes";
 
@@ -29,28 +35,20 @@ function trimOrNull(v: unknown): string | null {
     return s || null;
 }
 
-function locationDisplayLabel(row: {
-    label?: string | null;
-    address1?: string | null;
-    city?: string | null;
-    postal_code?: string | null;
-}): string | null {
-    return (
-        trimOrNull(row.label) ||
-        [row.address1, row.city, row.postal_code].filter(Boolean).join(", ").trim() ||
-        null
-    );
-}
-
 /**
  * Read-only person drawer visibility payloads (enrollment mirror, opportunity mirror, siblings).
  * OCM remains operational authority — this only projects existing rows for display.
  */
+export type AttachPersonDrawerVisibilityOptions = {
+    siteScope?: AdminAccessScopeDimensions | null;
+};
+
 export async function attachPersonDrawerVisibility(
     supabase: AdminSupabase,
     orgId: string,
     personId: string,
-    out: Record<string, unknown>
+    out: Record<string, unknown>,
+    options?: AttachPersonDrawerVisibilityOptions
 ): Promise<void> {
     const memberRows =
         (out._compatibility_members as {
@@ -72,99 +70,11 @@ export async function attachPersonDrawerVisibility(
     ] as string[];
     const householdCustomerIds = [...new Set([...customerIdsFromMembers, ...customerIdsFromCp])];
 
-    const enrollmentMirror: PersonEnrollmentMirrorRow[] = [];
-    if (memberIds.length > 0) {
-        const { data: ocmRows } = await supabase
-            .from("opportunity_customer_members")
-            .select(
-                "id, opportunity_id, customer_member_id, location_id, desired_program_type, program_room_cohort_key, outcome_status_key"
-            )
-            .eq("org_id", orgId)
-            .in("customer_member_id", memberIds)
-            .order("updated_at", { ascending: false })
-            .limit(PERSON_VISIBILITY_LIMIT);
-
-        const ocmList = ocmRows ?? [];
-        const oppIds = [...new Set(ocmList.map((r: { opportunity_id: string }) => r.opportunity_id))];
-        const locIds = [
-            ...new Set(
-                ocmList
-                    .flatMap((r: { location_id?: string | null; program_room_cohort_key?: string | null }) => [
-                        trimOrNull(r.location_id),
-                        trimOrNull(r.program_room_cohort_key),
-                    ])
-                    .filter(Boolean)
-            ),
-        ] as string[];
-
-        const [oppRes, locRes] = await Promise.all([
-            oppIds.length > 0
-                ? supabase
-                      .from("opportunities")
-                      .select("id, name, status_key")
-                      .eq("org_id", orgId)
-                      .in("id", oppIds)
-                : { data: [] as { id: string; name?: string | null; status_key?: string | null }[] },
-            locIds.length > 0
-                ? supabase
-                      .from("locations")
-                      .select("id, label, address1, city, postal_code")
-                      .eq("org_id", orgId)
-                      .in("id", locIds)
-                : { data: [] as { id: string; label?: string | null; address1?: string | null; city?: string | null; postal_code?: string | null }[] },
-        ]);
-
-        const oppById = new Map((oppRes.data ?? []).map((o) => [o.id, o]));
-        const locById = new Map((locRes.data ?? []).map((l) => [l.id, l]));
-        const memberNameById = new Map(memberRows.map((m) => [m.id, trimOrNull(m.display_name)]));
-
-        const programPairs = ocmList.map((r: { desired_program_type?: string | null }) => ({
-            setKey: "childcare_program_type",
-            itemKey: r.desired_program_type,
-        }));
-        const programLabels = await batchOptionItemLabelsForOrg(supabase, orgId, programPairs);
-
-        for (const row of ocmList) {
-            const ocm = row as {
-                id: string;
-                opportunity_id: string;
-                customer_member_id: string;
-                location_id?: string | null;
-                desired_program_type?: string | null;
-                program_room_cohort_key?: string | null;
-                outcome_status_key?: string | null;
-            };
-            const opp = oppById.get(ocm.opportunity_id);
-            const siteId = trimOrNull(ocm.location_id);
-            const roomKey = trimOrNull(ocm.program_room_cohort_key);
-            const siteRow = siteId ? locById.get(siteId) : undefined;
-            const roomRow = roomKey ? locById.get(roomKey) : undefined;
-            const programKey = trimOrNull(ocm.desired_program_type);
-            const programLabel = programKey
-                ? programLabels.get(`childcare_program_type\0${programKey}`) ?? programKey
-                : null;
-            const outcomeKey = trimOrNull(ocm.outcome_status_key);
-
-            enrollmentMirror.push({
-                id: ocm.id,
-                opportunity_id: ocm.opportunity_id,
-                opportunity_name: trimOrNull(opp?.name),
-                opportunity_status_key: trimOrNull(opp?.status_key),
-                opportunity_status_label: opp?.status_key
-                    ? await resolveStatusLabel(supabase, orgId, "opportunities", opp.status_key)
-                    : null,
-                customer_member_id: ocm.customer_member_id,
-                child_display_name: memberNameById.get(ocm.customer_member_id) ?? null,
-                location_label: siteRow ? locationDisplayLabel(siteRow) : null,
-                program_label: programLabel,
-                room_label: roomRow ? locationDisplayLabel(roomRow) : roomKey,
-                outcome_status_key: outcomeKey,
-                outcome_status_label: outcomeKey
-                    ? await resolveStatusLabel(supabase, orgId, "opportunity_customer_members", outcomeKey)
-                    : null,
-            });
-        }
-    }
+    const memberNameById = new Map(memberRows.map((m) => [m.id, trimOrNull(m.display_name)]));
+    const enrollmentMirror: PersonEnrollmentMirrorRow[] =
+        memberIds.length > 0
+            ? await buildPersonEnrollmentMirrorRowsForMemberIds(supabase, orgId, memberIds, memberNameById)
+            : [];
 
     const enrollmentOpportunities: PersonEnrollmentOpportunityRow[] = [];
     const seenOpp = new Set<string>();
@@ -337,8 +247,38 @@ export async function attachPersonDrawerVisibility(
                 role_type: roleKey,
                 role_label: roleKey ? (adultRoleLabelByKey.get(roleKey) ?? roleKey) : null,
                 is_primary: Boolean(a.is_primary),
+                is_household_primary_contact: customerPersonRowIsHouseholdPrimaryContact({
+                    role_type: roleKey,
+                    is_primary: a.is_primary,
+                }),
             });
         }
+
+        const viewingDisplayName = viewingPersonHouseholdDisplayName(out);
+        for (const row of (out._customer_persons as {
+            customer_id?: string;
+            person_id?: string;
+            role_type?: string | null;
+            is_primary?: boolean | null;
+            _role_label?: string | null;
+        }[]) ?? []) {
+            const customerId = trimOrNull(row.customer_id);
+            if (!customerId || !householdCustomerIds.includes(customerId)) continue;
+            if (trimOrNull(row.person_id) !== personId) continue;
+            const roleKey = trimOrNull(row.role_type);
+            rawAdultLinks.push({
+                person_id: personId,
+                customer_id: customerId,
+                display_name: viewingDisplayName,
+                role_type: roleKey,
+                role_label: roleKey
+                    ? trimOrNull(row._role_label) ?? roleKey
+                    : trimOrNull(row._role_label),
+                is_primary: Boolean(row.is_primary),
+                is_household_primary_contact: customerPersonRowIsHouseholdPrimaryContact(row),
+            });
+        }
+
         householdAdultLinks.push(...mergeHouseholdAdultLinks(rawAdultLinks));
 
         const selfMemberIds = new Set(memberIds);
@@ -360,28 +300,192 @@ export async function attachPersonDrawerVisibility(
         }
     }
 
+    if (householdChildLinks.length > 0) {
+        const memberIdsMissingPerson = householdChildLinks
+            .filter((link) => !link.person_id)
+            .map((link) => link.customer_member_id);
+        if (memberIdsMissingPerson.length > 0) {
+            const { data: memberPersonRows } = await supabase
+                .from("customer_members")
+                .select("id, person_id")
+                .eq("org_id", orgId)
+                .in("id", memberIdsMissingPerson);
+            const personIdByMemberId = new Map(
+                (memberPersonRows ?? []).map((row: { id: string; person_id?: string | null }) => [
+                    row.id,
+                    trimOrNull(row.person_id),
+                ])
+            );
+            for (const link of householdChildLinks) {
+                if (!link.person_id) {
+                    link.person_id = personIdByMemberId.get(link.customer_member_id) ?? null;
+                }
+            }
+        }
+
+        const childPersonIds = [
+            ...new Set(
+                householdChildLinks.map((link) => link.person_id).filter((id): id is string => Boolean(id))
+            ),
+        ];
+        if (childPersonIds.length > 0) {
+            const { data: childPersonRows } = await supabase
+                .from("persons")
+                .select("id, date_of_birth, dob, status_key, photo_url, avatar_url")
+                .eq("org_id", orgId)
+                .in("id", childPersonIds);
+            const personMetaById = new Map(
+                (childPersonRows ?? []).map(
+                    (row: {
+                        id: string;
+                        date_of_birth?: string | null;
+                        dob?: string | null;
+                        status_key?: string | null;
+                        photo_url?: string | null;
+                        avatar_url?: string | null;
+                    }) => [row.id, row]
+                )
+            );
+            const statusKeys = [
+                ...new Set(
+                    (childPersonRows ?? [])
+                        .map((row: { status_key?: string | null }) => trimOrNull(row.status_key))
+                        .filter((key): key is string => Boolean(key))
+                ),
+            ];
+            const statusLabelByKey = new Map<string, string>();
+            for (const statusKey of statusKeys) {
+                statusLabelByKey.set(
+                    statusKey,
+                    (await resolveStatusLabel(supabase, orgId, "persons", statusKey)) ?? statusKey
+                );
+            }
+            for (const link of householdChildLinks) {
+                if (!link.person_id) continue;
+                const meta = personMetaById.get(link.person_id);
+                if (!meta) continue;
+                const dob = trimOrNull(meta.date_of_birth) ?? trimOrNull(meta.dob);
+                link.date_of_birth = dob;
+                link.age_label = personDrawerHouseholdAgeLabel(dob);
+                const statusKey = trimOrNull(meta.status_key);
+                link.status_key = statusKey;
+                link.status_label = statusKey ? statusLabelByKey.get(statusKey) ?? statusKey : null;
+                link.photo_url = trimOrNull(meta.photo_url) ?? trimOrNull(meta.avatar_url);
+            }
+        }
+    }
+
     if (householdCustomerIds.length > 0) {
-        const { data: customerRows } = await supabase
-            .from("customers")
-            .select("id, name")
-            .eq("org_id", orgId)
-            .in("id", householdCustomerIds);
-        out._household_context = (customerRows ?? []).map(
+        const [customerRes, addressLocRes] = await Promise.all([
+            supabase
+                .from("customers")
+                .select("id, name")
+                .eq("org_id", orgId)
+                .in("id", householdCustomerIds),
+            supabase
+                .from("locations")
+                .select(
+                    "id, customer_id, label, address1, address2, city, state, postal_code, is_primary"
+                )
+                .eq("org_id", orgId)
+                .in("customer_id", householdCustomerIds)
+                .eq("location_type", "address")
+                .eq("is_active", true)
+                .order("is_primary", { ascending: false }),
+        ]);
+        out._household_context = (customerRes.data ?? []).map(
             (c: { id: string; name?: string | null }) => ({
                 customer_id: c.id,
                 customer_name: trimOrNull(c.name),
             })
         );
+        const addressByCustomer = new Map<string, PersonHouseholdCustomerAddressRow>();
+        for (const row of addressLocRes.data ?? []) {
+            const loc = row as {
+                id: string;
+                customer_id: string;
+                label?: string | null;
+                address1?: string | null;
+                address2?: string | null;
+                city?: string | null;
+                state?: string | null;
+                postal_code?: string | null;
+            };
+            const customerId = String(loc.customer_id);
+            if (addressByCustomer.has(customerId)) continue;
+            const line1 = trimOrNull(loc.address1);
+            if (!line1 && !trimOrNull(loc.city) && !trimOrNull(loc.postal_code)) continue;
+            addressByCustomer.set(customerId, {
+                customer_id: customerId,
+                location_id: loc.id,
+                address_line1: line1,
+                address_line2: trimOrNull(loc.address2),
+                city: trimOrNull(loc.city),
+                state: trimOrNull(loc.state),
+                postal_code: trimOrNull(loc.postal_code),
+                label: trimOrNull(loc.label),
+            });
+        }
+        out._household_customer_addresses = [...addressByCustomer.values()];
     } else {
         out._household_context = [];
+        out._household_customer_addresses = [];
     }
 
-    out._enrollment_mirror = enrollmentMirror;
     out._enrollment_opportunities = enrollmentOpportunities;
+    if (siblingLinks.length > 0) {
+        const siblingMemberIds = siblingLinks
+            .filter((link) => !link.person_id)
+            .map((link) => link.customer_member_id);
+        if (siblingMemberIds.length > 0) {
+            const { data: siblingMemberRows } = await supabase
+                .from("customer_members")
+                .select("id, person_id")
+                .eq("org_id", orgId)
+                .in("id", siblingMemberIds);
+            const personIdByMemberId = new Map(
+                (siblingMemberRows ?? []).map((row: { id: string; person_id?: string | null }) => [
+                    row.id,
+                    trimOrNull(row.person_id),
+                ])
+            );
+            for (const link of siblingLinks) {
+                if (!link.person_id) {
+                    link.person_id = personIdByMemberId.get(link.customer_member_id) ?? null;
+                }
+            }
+        }
+    }
+
+    const householdMemberDisplay = new Map<string, string | null>();
+    for (const link of [...householdChildLinks, ...siblingLinks]) {
+        householdMemberDisplay.set(link.customer_member_id, trimOrNull(link.display_name));
+    }
+    const extraHouseholdMemberIds = [...householdMemberDisplay.keys()].filter(
+        (id) => !memberIds.includes(id)
+    );
+    if (extraHouseholdMemberIds.length > 0) {
+        const extraMirror = await buildPersonEnrollmentMirrorRowsForMemberIds(
+            supabase,
+            orgId,
+            extraHouseholdMemberIds,
+            householdMemberDisplay
+        );
+        const seenMemberIds = new Set(enrollmentMirror.map((row) => row.customer_member_id));
+        for (const row of extraMirror) {
+            if (seenMemberIds.has(row.customer_member_id)) continue;
+            seenMemberIds.add(row.customer_member_id);
+            enrollmentMirror.push(row);
+        }
+    }
+
     out._sibling_links = siblingLinks;
     out._household_adult_links = householdAdultLinks;
     out._household_child_links = householdChildLinks;
+    out._enrollment_mirror = enrollmentMirror;
     out._opportunity_person_roles = (oppPersonList as { role_type?: string | null }[]).map((r) => ({
         role_type: r.role_type ?? null,
     }));
+
+    filterPersonDrawerHouseholdVisibilityBySiteScope(out, options?.siteScope ?? null);
 }

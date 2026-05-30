@@ -1,6 +1,7 @@
 import {
     PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS,
 } from "@/lib/admin/person/personDrawerChildChrome";
+import { PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS } from "@/lib/admin/person/personDrawerParentChrome";
 import { findInquiryChildInOpportunityRecord } from "@/lib/admin/drawer/inquiryChildOpportunityRows";
 import { primaryPersonIdFromOpportunityRecord } from "@/lib/admin/drawer/linkedRecordFieldEditing";
 import { primaryPersonCardValuesFromRecord } from "@/lib/admin/drawer/primaryPersonCardEdit";
@@ -18,8 +19,8 @@ export type PersonDrawerOpenSeed = {
     phone?: string;
     display_name?: string;
     date_of_birth?: string;
-    /** First-paint child drawer chrome before profile joins hydrate. */
-    presentation_emphasis?: "child_lifecycle";
+    /** First-paint drawer chrome before profile joins hydrate. */
+    presentation_emphasis?: "child_lifecycle" | "guardian_communication";
 };
 
 function trimOrNull(v: unknown): string | null {
@@ -29,7 +30,8 @@ function trimOrNull(v: unknown): string | null {
 
 export function personDrawerOpenSeedFromContactValues(
     personId: string,
-    values: PersonContactCardValues
+    values: PersonContactCardValues,
+    options?: { presentation_emphasis?: PersonDrawerOpenSeed["presentation_emphasis"] }
 ): PersonDrawerOpenSeed {
     return {
         personId: personId.trim(),
@@ -38,6 +40,7 @@ export function personDrawerOpenSeedFromContactValues(
         email: values.email || undefined,
         phone: values.phone || undefined,
         display_name: values.display_name || undefined,
+        presentation_emphasis: options?.presentation_emphasis,
     };
 }
 
@@ -65,6 +68,9 @@ export function buildPersonDrawerSeedRecord(seed: PersonDrawerOpenSeed): Record<
         ...(trimOrNull(seed.date_of_birth) ? { date_of_birth: trimOrNull(seed.date_of_birth) } : {}),
         ...(seed.presentation_emphasis === PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS
             ? { _drawer_presentation_emphasis: PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS }
+            : {}),
+        ...(seed.presentation_emphasis === PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS
+            ? { _drawer_presentation_emphasis: PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS }
             : {}),
     };
 }
@@ -145,6 +151,55 @@ export function stampChildLifecycleOpenContextOnPersonRecord(
     return next;
 }
 
+/** Stamp parent/guardian first-paint context onto a hydrated or cached person row. */
+export function stampParentGuardianOpenContextOnPersonRecord(
+    record: Record<string, unknown>,
+    seed: PersonDrawerOpenSeed | null | undefined
+): Record<string, unknown> {
+    if (!seed || seed.presentation_emphasis !== PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS) {
+        return record;
+    }
+    const next: Record<string, unknown> = { ...record };
+    next._drawer_presentation_emphasis = PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS;
+    if (trimOrNull(seed.first_name) && !trimOrNull(record.first_name)) {
+        next.first_name = trimOrNull(seed.first_name);
+    }
+    if (trimOrNull(seed.last_name) && !trimOrNull(record.last_name)) {
+        next.last_name = trimOrNull(seed.last_name);
+    }
+    if (trimOrNull(seed.email) && !trimOrNull(record.email)) {
+        next.email = trimOrNull(seed.email);
+    }
+    if (trimOrNull(seed.phone) && !trimOrNull(record.phone)) {
+        next.phone = trimOrNull(seed.phone);
+    }
+    if (trimOrNull(seed.display_name)) {
+        next._person_name = trimOrNull(seed.display_name);
+    }
+    return next;
+}
+
+/** Merge parent open seed into drawer snapshot cache (prefetch + cache-hit opens). */
+export function cachePersonDrawerParentOpenSeed(
+    personId: string,
+    seed: PersonDrawerOpenSeed | null | undefined
+): Record<string, unknown> | null {
+    const pid = personId.trim();
+    if (!pid || !seed || seed.personId.trim() !== pid) return null;
+    if (seed.presentation_emphasis !== PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS) return null;
+
+    const cached = peekDrawerEntitySnapshot("persons", pid);
+    if (cached && String(cached.id ?? "").trim() === pid) {
+        const stamped = stampParentGuardianOpenContextOnPersonRecord(cached, seed);
+        putDrawerEntitySnapshot("persons", pid, stamped);
+        return stamped;
+    }
+
+    const seedRecord = buildPersonDrawerSeedRecord(seed);
+    putDrawerEntitySnapshot("persons", pid, seedRecord);
+    return seedRecord;
+}
+
 /** Merge child open seed into drawer snapshot cache (prefetch + cache-hit opens). */
 export function cachePersonDrawerChildOpenSeed(
     personId: string,
@@ -180,7 +235,9 @@ export function personDrawerSeedFromOpportunityRecord(
     const primaryId = primaryPersonIdFromOpportunityRecord(opportunityRecord);
     if (primaryId === pid) {
         const values = primaryPersonCardValuesFromRecord(opportunityRecord);
-        return personDrawerOpenSeedFromContactValues(pid, values);
+        return personDrawerOpenSeedFromContactValues(pid, values, {
+            presentation_emphasis: PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS,
+        });
     }
 
     const rows = opportunityRecord._opportunity_persons;
@@ -197,7 +254,7 @@ export function personDrawerSeedFromOpportunityRecord(
                 email: trimOrNull((row as { email?: unknown }).email) ?? undefined,
                 phone: trimOrNull((row as { phone?: unknown }).phone) ?? undefined,
                 display_name: name ?? undefined,
-                presentation_emphasis: PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS,
+                presentation_emphasis: PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS,
             };
         }
     }

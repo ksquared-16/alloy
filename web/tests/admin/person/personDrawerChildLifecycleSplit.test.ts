@@ -126,8 +126,10 @@ describe("child lifecycle split wiring", () => {
 
     it("AdminEntityDrawer renders summary from seed without full hydrate gate", () => {
         const src = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(src).toContain("personChildLifecycleChrome && personDrawerPaintReady");
-        expect(src).toContain("PersonDrawerChildEnrollmentContext");
-        expect(src).not.toContain("PersonDrawerChildHeaderExecutive");
+        expect(src).toMatch(
+            /personChildLifecycleChrome[\s\S]{0,120}personDrawerPaintReady[\s\S]{0,120}isPersonDrawerSeedRecord/
+        );
+        expect(src).toContain("PersonDrawerChildHeaderExecutive");
+        expect(src).not.toContain("PersonDrawerChildEnrollmentContext");
     });
 });

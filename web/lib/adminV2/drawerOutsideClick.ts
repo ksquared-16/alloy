@@ -3,6 +3,7 @@ export const ADMINV2_DRAWER_OUTSIDE_CLICK_IGNORE_SELECTORS = [
     '[data-adminv2-drawer="true"]',
     "[data-adminv2-ai-command-bar]",
     "[data-adminv2-ai-command-surface]",
+    '[data-adminv2-global-search-box="true"]',
 ] as const;
 
 /**

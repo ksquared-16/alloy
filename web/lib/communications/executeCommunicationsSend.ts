@@ -114,7 +114,7 @@ export async function executeCommunicationsSend(
             const elig = await assertRecipientPersonEligibleForDrawerEmail(
                 supabase,
                 orgId,
-                primaryEntityType as "opportunities" | "jobs",
+                primaryEntityType as "opportunities" | "jobs" | "persons",
                 primaryEntityId,
                 recipientPersonIdRaw
             );
@@ -144,7 +144,7 @@ export async function executeCommunicationsSend(
             const elig = await assertRecipientPersonEligibleForDrawerSms(
                 supabase,
                 orgId,
-                primaryEntityType as "opportunities" | "jobs",
+                primaryEntityType as "opportunities" | "jobs" | "persons",
                 primaryEntityId,
                 recipientPersonIdRaw
             );

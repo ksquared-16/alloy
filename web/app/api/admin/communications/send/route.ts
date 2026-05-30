@@ -91,8 +91,14 @@ export async function POST(request: NextRequest) {
         entityType = "persons";
         entityId = recipientPersonIdRaw;
     } else {
-        if (!entityType || (entityType !== "opportunities" && entityType !== "jobs")) {
-            return NextResponse.json({ error: "entity_type must be opportunities or jobs" }, { status: 400 });
+        if (
+            !entityType ||
+            (entityType !== "opportunities" && entityType !== "jobs" && entityType !== "persons")
+        ) {
+            return NextResponse.json(
+                { error: "entity_type must be opportunities, jobs, or persons" },
+                { status: 400 }
+            );
         }
         if (!entityId || !UUID_RE.test(entityId)) return NextResponse.json({ error: "Valid entity_id required" }, { status: 400 });
     }

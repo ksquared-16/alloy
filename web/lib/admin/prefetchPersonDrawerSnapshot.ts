@@ -2,8 +2,11 @@ import { entityDataMatchesDrawer } from "@/lib/admin/drawer/entityDataMatchesDra
 import { logPersonPrefetch } from "@/lib/admin/drawer/personDrawerPerfLogs";
 import {
     stampChildLifecycleOpenContextOnPersonRecord,
+    stampParentGuardianOpenContextOnPersonRecord,
     type PersonDrawerOpenSeed,
 } from "@/lib/admin/drawer/personDrawerOpenSeed";
+import { PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS } from "@/lib/admin/person/personDrawerChildChrome";
+import { PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS } from "@/lib/admin/person/personDrawerParentChrome";
 import { putDrawerEntitySnapshot, peekDrawerEntitySnapshot } from "@/lib/admin/drawerEntitySnapshotCache";
 
 export type PersonPrefetchSource = "opportunity_drawer_idle" | "hover" | "click";
@@ -18,25 +21,33 @@ export function isPersonDrawerSnapshotWarm(personId: string): boolean {
 }
 
 /** Warm person drawer snapshot before navigation (stack back restores opportunity instantly). */
+function stampPrefetchOpenSeed(
+    record: Record<string, unknown>,
+    openSeed: PersonDrawerOpenSeed | undefined
+): Record<string, unknown> {
+    if (!openSeed) return record;
+    if (openSeed.presentation_emphasis === PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS) {
+        return stampChildLifecycleOpenContextOnPersonRecord(record, openSeed);
+    }
+    if (openSeed.presentation_emphasis === PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS) {
+        return stampParentGuardianOpenContextOnPersonRecord(record, openSeed);
+    }
+    return record;
+}
+
 export function prefetchPersonDrawerSnapshot(
     personId: string,
-    opts?: { source?: PersonPrefetchSource; childOpenSeed?: PersonDrawerOpenSeed }
+    opts?: { source?: PersonPrefetchSource; childOpenSeed?: PersonDrawerOpenSeed; openSeed?: PersonDrawerOpenSeed }
 ): void {
     const source = opts?.source ?? "click";
-    const childOpenSeed = opts?.childOpenSeed;
+    const openSeed = opts?.openSeed ?? opts?.childOpenSeed;
     const id = personId.trim();
     if (!id) return;
 
     if (isPersonDrawerSnapshotWarm(id)) {
-        if (childOpenSeed?.presentation_emphasis === "child_lifecycle") {
-            const cached = peekDrawerEntitySnapshot("persons", id);
-            if (cached) {
-                putDrawerEntitySnapshot(
-                    "persons",
-                    id,
-                    stampChildLifecycleOpenContextOnPersonRecord(cached, childOpenSeed)
-                );
-            }
+        const cached = peekDrawerEntitySnapshot("persons", id);
+        if (cached) {
+            putDrawerEntitySnapshot("persons", id, stampPrefetchOpenSeed(cached, openSeed));
         }
         logPersonPrefetch({ personId: id, source, cacheHit: true, durationMs: 0 });
         return;
@@ -51,11 +62,7 @@ export function prefetchPersonDrawerSnapshot(
             if (!res.ok) return;
             const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
             if (json && typeof json === "object" && entityDataMatchesDrawer(json, id, "persons")) {
-                const stamped =
-                    childOpenSeed?.presentation_emphasis === "child_lifecycle"
-                        ? stampChildLifecycleOpenContextOnPersonRecord(json, childOpenSeed)
-                        : json;
-                putDrawerEntitySnapshot("persons", id, stamped);
+                putDrawerEntitySnapshot("persons", id, stampPrefetchOpenSeed(json, openSeed));
             }
         })
         .catch(() => {})

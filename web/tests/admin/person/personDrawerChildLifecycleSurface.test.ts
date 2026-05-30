@@ -113,12 +113,12 @@ describe("deduplication ownership", () => {
         expect(buildPersonDrawerQuickLinks(childRecord)?.length ?? 0).toBeGreaterThan(0);
     });
 
-    it("keeps quick links for parent profile", () => {
-        expect(personDrawerShowsChildContextPanel(parentProfile)).toBe(true);
+    it("hides quick links for parent profile", () => {
+        expect(personDrawerShowsChildContextPanel(parentProfile)).toBe(false);
     });
 
     it("uses default section chrome for overview sections — accent in summary and enrollment shells", () => {
-        expect(CHILD_LIFECYCLE_PREMIUM_SECTION_KEYS.size).toBe(0);
+        expect(CHILD_LIFECYCLE_PREMIUM_SECTION_KEYS.has("medical")).toBe(true);
         expect(childLifecycleSectionSurface("enrollment_activity")).toBe("default");
         expect(childLifecycleSectionSurface("relationships")).toBe("default");
     });

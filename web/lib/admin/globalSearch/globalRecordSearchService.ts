@@ -2,7 +2,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
     applyRecordScopeConstraintsToQuery,
-    fetchScopedCustomerIdsForRestrictedAdmin,
     fetchScopedPersonIdsForRestrictedAdmin,
     resolveRecordScopeConstraints,
     type AdminAccessScopeDimensions,
@@ -14,15 +13,23 @@ import {
     type LocationDisplayLabelRow,
 } from "@/lib/admin/locationDisplayLabel";
 import {
-    globalSearchCrmDisplayLabel,
-    globalSearchPersonSecondaryContext,
-    globalSearchPersonTypeLabel,
-    personRowIsChildRelationship,
-} from "@/lib/admin/globalSearch/globalRecordSearchPersonPresentation";
+    fetchCustomerEnrollmentContextByCustomerIds,
+    fetchPersonDirectOpportunityContext,
+    type CustomerEnrollmentContext,
+} from "@/lib/admin/globalSearch/globalRecordSearchLocationContext";
+import { buildGlobalSearchFamilyClusters } from "@/lib/admin/globalSearch/globalRecordSearchClustering";
+import { assembleGlobalSearchHit } from "@/lib/admin/globalSearch/globalRecordSearchHitAssembly";
+import { globalSearchPersonTypeLabel } from "@/lib/admin/globalSearch/globalRecordSearchPersonPresentation";
+import { personRowIsChildRelationship } from "@/lib/admin/globalSearch/globalRecordSearchPersonPresentation";
+import { globalSearchRecordAllowedBySiteScope } from "@/lib/admin/globalSearch/globalRecordSearchScope";
 import {
     GLOBAL_RECORD_SEARCH_DEFAULT_LIMIT,
-    GLOBAL_RECORD_SEARCH_PER_TYPE_CAP,
-    type GlobalRecordSearchEntityType,
+    GLOBAL_RECORD_SEARCH_GROUP_LABELS,
+    GLOBAL_RECORD_SEARCH_GROUP_ORDER,
+    GLOBAL_RECORD_SEARCH_PER_GROUP_CAP,
+    type GlobalRecordSearchCluster,
+    type GlobalRecordSearchGroup,
+    type GlobalRecordSearchGroupKey,
     type GlobalRecordSearchHit,
 } from "@/lib/admin/globalSearch/globalRecordSearchTypes";
 import { displayLabelsFromDefinitions, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
@@ -46,41 +53,137 @@ function filterByAllowedIds<T extends { id: string }>(rows: T[], allowed: string
     return rows.filter((r) => set.has(r.id));
 }
 
-function oppLabel(o: { name?: string | null; title?: string | null; id: string }): string {
-    const t = (o.title ?? "").trim();
-    const n = (o.name ?? "").trim();
-    return t || n || `Opportunity ${o.id.slice(0, 8)}…`;
+function memberDisplayName(m: {
+    display_name?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    id: string;
+}): string {
+    const dn = (m.display_name ?? "").trim();
+    if (dn) return dn;
+    const parts = [m.first_name, m.last_name].filter(Boolean).join(" ").trim();
+    return parts || `Child ${m.id.slice(0, 8)}…`;
 }
 
-async function fetchLocationLabels(
-    supabase: SupabaseClient,
-    orgId: string,
-    locationIds: string[]
-): Promise<Map<string, string>> {
-    const out = new Map<string, string>();
-    const ids = [...new Set(locationIds.map(String).filter(Boolean))];
-    if (!ids.length) return out;
-    const { data, error } = await supabase
-        .from("locations")
-        .select(LOCATION_DISPLAY_LABEL_SELECT)
-        .eq("org_id", orgId)
-        .in("id", ids as any);
-    if (error) return out;
-    for (const row of (data ?? []) as Array<{ id: string } & LocationDisplayLabelRow>) {
-        const label = locationDisplayLabelFromRow(row);
-        if (label) out.set(String(row.id), label);
-    }
-    return out;
+function mergeContext(
+    primary: CustomerEnrollmentContext | null | undefined,
+    fallback: CustomerEnrollmentContext | null | undefined
+): CustomerEnrollmentContext | null {
+    if (primary?.location_id || primary?.opportunity_id) return primary ?? null;
+    return fallback ?? primary ?? null;
 }
 
-async function searchPersons(
+function applySiteScopeToHit(
+    hit: GlobalRecordSearchHit,
+    accessDim: AdminAccessScopeDimensions,
+    locationId: string | null | undefined
+): GlobalRecordSearchHit | null {
+    if (!globalSearchRecordAllowedBySiteScope(locationId, accessDim)) return null;
+    return hit;
+}
+
+async function searchChildren(
     supabase: SupabaseClient,
     orgId: string,
     accessDim: AdminAccessScopeDimensions,
     rawQ: string,
     token: string,
-    perTypeCap: number,
-    personStatusLabels: Map<string, string>
+    perGroupCap: number,
+    memberStatusLabels: Map<string, string>,
+    oppStatusLabels: Map<string, string>
+): Promise<GlobalRecordSearchHit[]> {
+    const sel = "id, customer_id, person_id, display_name, first_name, last_name, relationship, status_key";
+    type MemberRow = {
+        id: string;
+        customer_id: string;
+        person_id?: string | null;
+        display_name?: string | null;
+        first_name?: string | null;
+        last_name?: string | null;
+        relationship?: string | null;
+        status_key?: string | null;
+    };
+
+    let rows: MemberRow[] = [];
+    if (CRM_ENTITY_SEARCH_UUID_RE.test(rawQ)) {
+        const { data, error } = await supabase
+            .from("customer_members")
+            .select(sel)
+            .eq("org_id", orgId)
+            .eq("id", rawQ)
+            .maybeSingle();
+        if (error) throw new Error(error.message);
+        if (data) rows = [data as MemberRow];
+    } else {
+        const pattern = `%${token}%`;
+        const q = () => supabase.from("customer_members").select(sel).eq("org_id", orgId).limit(perGroupCap * 4);
+        const [dn, fn, ln] = await Promise.all([
+            q().ilike("display_name", pattern),
+            q().ilike("first_name", pattern),
+            q().ilike("last_name", pattern),
+        ]);
+        const err = dn.error ?? fn.error ?? ln.error;
+        if (err) throw new Error(err.message);
+        const byId = new Map<string, MemberRow>();
+        for (const batch of [dn.data, fn.data, ln.data]) {
+            for (const row of (batch ?? []) as MemberRow[]) {
+                if (row?.id && personRowIsChildRelationship(row.relationship)) {
+                    byId.set(String(row.id), row);
+                }
+            }
+        }
+        rows = [...byId.values()].sort((a, b) =>
+            memberDisplayName(a).localeCompare(memberDisplayName(b), undefined, { sensitivity: "base" })
+        );
+    }
+
+    rows = rows.filter((r) => personRowIsChildRelationship(r.relationship)).slice(0, perGroupCap);
+    if (!rows.length) return [];
+
+    const customerIds = rows.map((r) => r.customer_id);
+    const contextByCustomer = await fetchCustomerEnrollmentContextByCustomerIds(
+        supabase,
+        orgId,
+        customerIds,
+        accessDim,
+        oppStatusLabels
+    );
+
+    const hits: GlobalRecordSearchHit[] = [];
+    for (const m of rows) {
+        const ctx = contextByCustomer.get(String(m.customer_id)) ?? null;
+        const statusKey = m.status_key?.trim() || null;
+        const assembled = assembleGlobalSearchHit({
+            entity_type: "customer_members",
+            entity_id: m.id,
+            group: "children",
+            name: memberDisplayName(m),
+            type_label: "Child",
+            household_name: ctx?.customer_name ?? null,
+            opportunity_name: ctx?.opportunity_name ?? null,
+            status_key: statusKey,
+            status_labels: memberStatusLabels,
+            fallback_status_label: ctx?.opportunity_status_label ?? null,
+            location_label: ctx?.location_label ?? null,
+            person_id: m.person_id ?? null,
+            customer_id: String(m.customer_id),
+            opportunity_id: ctx?.opportunity_id ?? null,
+        });
+        const hit = applySiteScopeToHit(assembled, accessDim, ctx?.location_id);
+        if (hit) hits.push(hit);
+    }
+    return hits;
+}
+
+async function searchParents(
+    supabase: SupabaseClient,
+    orgId: string,
+    accessDim: AdminAccessScopeDimensions,
+    rawQ: string,
+    token: string,
+    perGroupCap: number,
+    personStatusLabels: Map<string, string>,
+    oppStatusLabels: Map<string, string>
 ): Promise<GlobalRecordSearchHit[]> {
     const scopedPersonIds = await fetchScopedPersonIdsForRestrictedAdmin(supabase, orgId, accessDim);
     const sel = "id, first_name, last_name, full_name, email, phone, status_key";
@@ -89,8 +192,6 @@ async function searchPersons(
         first_name?: string | null;
         last_name?: string | null;
         full_name?: string | null;
-        email?: string | null;
-        phone?: string | null;
         status_key?: string | null;
     };
 
@@ -106,18 +207,16 @@ async function searchPersons(
         if (data) rows = [data as PersonRow];
     } else {
         const pattern = `%${token}%`;
-        const q = () => supabase.from("persons").select(sel).eq("org_id", orgId).limit(perTypeCap * 3);
-        const [fn, sn, ln, em, ph] = await Promise.all([
+        const q = () => supabase.from("persons").select(sel).eq("org_id", orgId).limit(perGroupCap * 4);
+        const [fn, sn, ln] = await Promise.all([
             q().ilike("full_name", pattern),
             q().ilike("first_name", pattern),
             q().ilike("last_name", pattern),
-            q().ilike("email", pattern),
-            q().ilike("phone", pattern),
         ]);
-        const err = fn.error ?? sn.error ?? ln.error ?? em.error ?? ph.error;
+        const err = fn.error ?? sn.error ?? ln.error;
         if (err) throw new Error(err.message);
         const byId = new Map<string, PersonRow>();
-        for (const batch of [fn.data, sn.data, ln.data, em.data, ph.data]) {
+        for (const batch of [fn.data, sn.data, ln.data]) {
             for (const row of (batch ?? []) as PersonRow[]) {
                 if (row?.id) byId.set(String(row.id), row);
             }
@@ -127,129 +226,106 @@ async function searchPersons(
         );
     }
 
-    rows = filterByAllowedIds(rows, scopedPersonIds).slice(0, perTypeCap);
+    rows = filterByAllowedIds(rows, scopedPersonIds).slice(0, perGroupCap);
     if (!rows.length) return [];
 
     const personIds = rows.map((r) => r.id);
-    const [cmRes, cpRes] = await Promise.all([
-        supabase
-            .from("customer_members")
-            .select("person_id, customer_id, relationship, site_id, status_key, is_active")
-            .eq("org_id", orgId)
-            .in("person_id", personIds),
+    const [cpRes, cmChildRes] = await Promise.all([
         supabase
             .from("customer_persons")
             .select("person_id, customer_id, role_type, is_primary")
             .eq("org_id", orgId)
             .in("person_id", personIds),
+        supabase
+            .from("customer_members")
+            .select("person_id, relationship")
+            .eq("org_id", orgId)
+            .in("person_id", personIds),
     ]);
-    if (cmRes.error) throw new Error(cmRes.error.message);
     if (cpRes.error) throw new Error(cpRes.error.message);
+    if (cmChildRes.error) throw new Error(cmChildRes.error.message);
 
-    const customerIds = new Set<string>();
-    for (const row of cmRes.data ?? []) {
-        const cid = (row as { customer_id?: string }).customer_id;
-        if (cid) customerIds.add(String(cid));
+    const childOnlyPersonIds = new Set<string>();
+    const adultPersonIds = new Set<string>();
+    for (const row of cmChildRes.data ?? []) {
+        const pid = String((row as { person_id?: string }).person_id ?? "");
+        if (!pid) continue;
+        if (personRowIsChildRelationship((row as { relationship?: string }).relationship)) {
+            childOnlyPersonIds.add(pid);
+        }
     }
     for (const row of cpRes.data ?? []) {
-        const cid = (row as { customer_id?: string }).customer_id;
-        if (cid) customerIds.add(String(cid));
+        const pid = String((row as { person_id?: string }).person_id ?? "");
+        if (pid) adultPersonIds.add(pid);
     }
 
-    const siteIds = new Set<string>();
-    for (const row of cmRes.data ?? []) {
-        const sid = (row as { site_id?: string | null }).site_id;
-        if (sid) siteIds.add(String(sid));
-    }
+    rows = rows.filter((p) => adultPersonIds.has(p.id) || !childOnlyPersonIds.has(p.id));
+    if (!rows.length) return [];
 
-    const [customerNameById, siteLabelById] = await Promise.all([
-        (async () => {
-            const map = new Map<string, string>();
-            const ids = [...customerIds];
-            if (!ids.length) return map;
-            const { data } = await supabase.from("customers").select("id, name").eq("org_id", orgId).in("id", ids);
-            for (const c of data ?? []) {
-                const name = (c as { name?: string | null }).name?.trim();
-                if (name) map.set(String((c as { id: string }).id), name);
-            }
-            return map;
-        })(),
-        fetchLocationLabels(supabase, orgId, [...siteIds]),
+    const customerIds = [...new Set((cpRes.data ?? []).map((r) => String((r as { customer_id?: string }).customer_id ?? "")).filter(Boolean))];
+    const [contextByCustomer, contextByPerson] = await Promise.all([
+        fetchCustomerEnrollmentContextByCustomerIds(supabase, orgId, customerIds, accessDim, oppStatusLabels),
+        fetchPersonDirectOpportunityContext(supabase, orgId, personIds, accessDim, oppStatusLabels),
     ]);
 
-    const membersByPerson = new Map<string, Array<{ relationship?: string | null; customer_id?: string; site_id?: string | null }>>();
-    for (const row of cmRes.data ?? []) {
-        const pid = String((row as { person_id?: string }).person_id ?? "");
-        if (!pid) continue;
-        const list = membersByPerson.get(pid) ?? [];
-        list.push(row as { relationship?: string | null; customer_id?: string; site_id?: string | null });
-        membersByPerson.set(pid, list);
-    }
-
-    const personsByPerson = new Map<string, Array<{ role_type?: string | null; customer_id?: string; is_primary?: boolean | null }>>();
+    const cpByPerson = new Map<string, Array<{ customer_id?: string; role_type?: string | null }>>();
     for (const row of cpRes.data ?? []) {
         const pid = String((row as { person_id?: string }).person_id ?? "");
         if (!pid) continue;
-        const list = personsByPerson.get(pid) ?? [];
-        list.push(row as { role_type?: string | null; customer_id?: string; is_primary?: boolean | null });
-        personsByPerson.set(pid, list);
+        const list = cpByPerson.get(pid) ?? [];
+        list.push(row as { customer_id?: string; role_type?: string | null });
+        cpByPerson.set(pid, list);
     }
 
-    return rows.map((p) => {
-        const members = membersByPerson.get(p.id) ?? [];
-        const customerPersons = personsByPerson.get(p.id) ?? [];
-        const childMember =
-            members.find((m) => personRowIsChildRelationship(m.relationship)) ??
-            members[0] ??
-            null;
-        const isChild = members.some((m) => personRowIsChildRelationship(m.relationship));
-        const primaryCp =
-            customerPersons.find((cp) => cp.is_primary) ??
-            customerPersons[0] ??
-            null;
-        const householdId = childMember?.customer_id ?? primaryCp?.customer_id ?? null;
-        const householdName = householdId ? customerNameById.get(String(householdId)) ?? null : null;
-        const siteLabel =
-            childMember?.site_id != null ? siteLabelById.get(String(childMember.site_id)) ?? null : null;
-
+    const hits: GlobalRecordSearchHit[] = [];
+    for (const p of rows.slice(0, perGroupCap)) {
+        const customerPersons = cpByPerson.get(p.id) ?? [];
+        const primaryCp = customerPersons.find((cp) => (cp as { is_primary?: boolean }).is_primary) ?? customerPersons[0];
+        const customerId = primaryCp?.customer_id != null ? String(primaryCp.customer_id) : null;
+        const ctx = mergeContext(
+            customerId ? contextByCustomer.get(customerId) : null,
+            contextByPerson.get(p.id)
+        );
         const type_label = globalSearchPersonTypeLabel({
             person_id: p.id,
-            customer_members: members.map((m) => ({ relationship: m.relationship })),
             customer_persons: customerPersons.map((cp) => ({ role_type: cp.role_type })),
         });
-
         const statusKey = p.status_key?.trim() || null;
-        const status_label = statusKey ? personStatusLabels.get(statusKey) ?? statusKey : null;
-
-        return {
-            entity_type: "persons" as const,
+        const assembled = assembleGlobalSearchHit({
+            entity_type: "persons",
             entity_id: p.id,
+            group: "parents",
             name: labelPersonRow(p),
             type_label,
-            secondary_context: globalSearchPersonSecondaryContext({
-                isChild,
-                siteLabel,
-                householdName,
-            }),
-            status_label,
-        };
-    });
+            household_name: ctx?.customer_name ?? null,
+            opportunity_name: ctx?.opportunity_name ?? null,
+            status_key: statusKey,
+            status_labels: personStatusLabels,
+            fallback_status_label: ctx?.opportunity_status_label ?? null,
+            location_label: ctx?.location_label ?? null,
+            person_id: p.id,
+            customer_id: customerId,
+            opportunity_id: ctx?.opportunity_id ?? null,
+        });
+        const hit = applySiteScopeToHit(assembled, accessDim, ctx?.location_id);
+        if (hit) hits.push(hit);
+    }
+    return hits;
 }
 
-async function searchOpportunities(
+async function searchLeads(
     supabase: SupabaseClient,
     orgId: string,
     accessDim: AdminAccessScopeDimensions,
     rawQ: string,
     token: string,
-    perTypeCap: number,
+    perGroupCap: number,
     oppStatusLabels: Map<string, string>
 ): Promise<GlobalRecordSearchHit[]> {
     const scopeCons = await resolveRecordScopeConstraints(supabase, orgId, accessDim);
     if (scopeCons.impossible) return [];
 
-    const sel =
-        "id, name, title, customer_id, location_id, status_key, opportunity_number, created_at";
+    const sel = "id, name, title, customer_id, location_id, status_key, created_at";
     type OppRow = {
         id: string;
         name?: string | null;
@@ -273,125 +349,67 @@ async function searchOpportunities(
         const { data, error } = await q
             .or(`name.ilike.${pattern},title.ilike.${pattern}`)
             .order("created_at", { ascending: false })
-            .limit(perTypeCap);
+            .limit(perGroupCap);
         if (error) throw new Error(error.message);
         rows = (data ?? []) as OppRow[];
     }
 
     if (!rows.length) return [];
 
+    const customerIds = rows.map((r) => r.customer_id).filter(Boolean) as string[];
+    const customerNames = new Map<string, string>();
+    if (customerIds.length) {
+        const { data: customers } = await supabase
+            .from("customers")
+            .select("id, name")
+            .eq("org_id", orgId)
+            .in("id", customerIds);
+        for (const c of customers ?? []) {
+            const name = (c as { name?: string | null }).name?.trim();
+            if (name) customerNames.set(String((c as { id: string }).id), name);
+        }
+    }
+
     const locationIds = rows.map((r) => r.location_id).filter(Boolean) as string[];
-    const locationLabels = await fetchLocationLabels(supabase, orgId, locationIds);
+    const locationLabels = new Map<string, string>();
+    if (locationIds.length) {
+        const { data: locs } = await supabase
+            .from("locations")
+            .select(LOCATION_DISPLAY_LABEL_SELECT)
+            .eq("org_id", orgId)
+            .in("id", locationIds);
+        for (const row of (locs ?? []) as Array<{ id: string } & LocationDisplayLabelRow>) {
+            const label = locationDisplayLabelFromRow(row);
+            if (label) locationLabels.set(String(row.id), label);
+        }
+    }
 
-    return rows.map((o) => {
+    const hits: GlobalRecordSearchHit[] = [];
+    for (const o of rows) {
+        const t = (o.title ?? "").trim();
+        const n = (o.name ?? "").trim();
+        const label = t || n || `Opportunity ${o.id.slice(0, 8)}…`;
         const statusKey = o.status_key?.trim() || null;
-        const rawStatus = statusKey ? oppStatusLabels.get(statusKey) ?? statusKey : null;
-        return {
-            entity_type: "opportunities" as const,
+        const locationId = o.location_id != null ? String(o.location_id) : null;
+        const cid = o.customer_id != null ? String(o.customer_id) : null;
+        const assembled = assembleGlobalSearchHit({
+            entity_type: "opportunities",
             entity_id: o.id,
-            name: globalSearchCrmDisplayLabel(oppLabel(o)) ?? oppLabel(o),
-            type_label: "Lead",
-            secondary_context: o.location_id ? locationLabels.get(String(o.location_id)) ?? null : null,
-            status_label: rawStatus ? globalSearchCrmDisplayLabel(rawStatus) ?? rawStatus : null,
-        };
-    });
-}
-
-async function searchCustomers(
-    supabase: SupabaseClient,
-    orgId: string,
-    accessDim: AdminAccessScopeDimensions,
-    rawQ: string,
-    token: string,
-    perTypeCap: number,
-    customerStatusLabels: Map<string, string>
-): Promise<GlobalRecordSearchHit[]> {
-    const scopedCustomerIds = await fetchScopedCustomerIdsForRestrictedAdmin(supabase, orgId, accessDim);
-    const sel = "id, name, customer_number, status_key, primary_contact_id";
-    type CustomerRow = {
-        id: string;
-        name?: string | null;
-        customer_number?: number | null;
-        status_key?: string | null;
-        primary_contact_id?: string | null;
-    };
-
-    let rows: CustomerRow[] = [];
-    if (CRM_ENTITY_SEARCH_UUID_RE.test(rawQ)) {
-        const { data, error } = await supabase
-            .from("customers")
-            .select(sel)
-            .eq("org_id", orgId)
-            .eq("id", rawQ)
-            .maybeSingle();
-        if (error) throw new Error(error.message);
-        if (data) rows = [data as CustomerRow];
-    } else {
-        const pattern = `%${token}%`;
-        const { data, error } = await supabase
-            .from("customers")
-            .select(sel)
-            .eq("org_id", orgId)
-            .ilike("name", pattern)
-            .order("name", { ascending: true })
-            .limit(perTypeCap * 2);
-        if (error) throw new Error(error.message);
-        rows = (data ?? []) as CustomerRow[];
-    }
-
-    rows = filterByAllowedIds(rows, scopedCustomerIds).slice(0, perTypeCap);
-    if (!rows.length) return [];
-
-    const contactIds = rows.map((r) => r.primary_contact_id).filter(Boolean) as string[];
-    const contactNameById = new Map<string, string>();
-    if (contactIds.length) {
-        const { data: contacts } = await supabase
-            .from("contacts")
-            .select("id, first_name, last_name, person_id")
-            .eq("org_id", orgId)
-            .in("id", contactIds);
-        const personIds = (contacts ?? [])
-            .map((c) => (c as { person_id?: string | null }).person_id)
-            .filter(Boolean) as string[];
-        const personNameById = new Map<string, string>();
-        if (personIds.length) {
-            const { data: persons } = await supabase
-                .from("persons")
-                .select("id, first_name, last_name, full_name")
-                .eq("org_id", orgId)
-                .in("id", personIds);
-            for (const p of persons ?? []) {
-                personNameById.set(String((p as { id: string }).id), labelPersonRow(p as Parameters<typeof labelPersonRow>[0]));
-            }
-        }
-        for (const c of contacts ?? []) {
-            const cid = String((c as { id: string }).id);
-            const pid = (c as { person_id?: string | null }).person_id;
-            const fromPerson = pid ? personNameById.get(String(pid)) : null;
-            const fromContact = [c.first_name, c.last_name].filter(Boolean).join(" ").trim();
-            const label = fromPerson || fromContact || null;
-            if (label) contactNameById.set(cid, label);
-        }
-    }
-
-    return rows.map((c) => {
-        const label = (c.name && String(c.name).trim()) || `Customer ${c.id.slice(0, 8)}…`;
-        const statusKey = (c.status_key ?? "").trim() || null;
-        return {
-            entity_type: "customers" as const,
-            entity_id: c.id,
+            group: "leads",
             name: label,
-            type_label: "Household",
-            secondary_context:
-                c.primary_contact_id ?
-                    contactNameById.get(String(c.primary_contact_id)) ??
-                    (c.customer_number != null ? `Account #${c.customer_number}` : null)
-                :   c.customer_number != null ?
-                    `Account #${c.customer_number}`
-                :   null,
-            status_label: statusKey ? customerStatusLabels.get(statusKey) ?? statusKey : null,
-        };
-    });
+            type_label: "Lead",
+            household_name: cid ? customerNames.get(cid) ?? null : null,
+            opportunity_name: label,
+            status_key: statusKey,
+            status_labels: oppStatusLabels,
+            location_label: locationId ? locationLabels.get(locationId) ?? null : null,
+            customer_id: cid,
+            opportunity_id: o.id,
+        });
+        const hit = applySiteScopeToHit(assembled, accessDim, locationId);
+        if (hit) hits.push(hit);
+    }
+    return hits;
 }
 
 async function searchLocations(
@@ -400,7 +418,7 @@ async function searchLocations(
     accessDim: AdminAccessScopeDimensions,
     rawQ: string,
     token: string,
-    perTypeCap: number
+    perGroupCap: number
 ): Promise<GlobalRecordSearchHit[]> {
     let allowedSiteIds: string[] | null = null;
     if (accessDim.siteScope === "restricted" && accessDim.allowedSiteLocationIds?.length) {
@@ -413,7 +431,6 @@ async function searchLocations(
         label?: string | null;
         address1?: string | null;
         city?: string | null;
-        postal_code?: string | null;
         location_type?: string | null;
         is_active?: boolean | null;
     };
@@ -438,10 +455,8 @@ async function searchLocations(
             .or("is_active.is.null,is_active.eq.true")
             .ilike("label", pattern)
             .order("label", { ascending: true })
-            .limit(perTypeCap * 2);
-        if (allowedSiteIds?.length) {
-            q = q.in("id", allowedSiteIds);
-        }
+            .limit(perGroupCap * 2);
+        if (allowedSiteIds?.length) q = q.in("id", allowedSiteIds);
         const { data, error } = await q;
         if (error) throw new Error(error.message);
         rows = (data ?? []) as LocRow[];
@@ -452,64 +467,68 @@ async function searchLocations(
         rows = rows.filter((r) => allow.has(r.id));
     }
 
-    rows = rows.slice(0, perTypeCap);
-    return rows.map((loc) => {
-        const name = locationDisplayLabelFromRow(loc) ?? `Location ${loc.id.slice(0, 8)}…`;
-        const city = loc.city?.trim();
-        const typeLabel = loc.location_type === "site" ? "Campus" : "Location";
-        return {
-            entity_type: "locations" as const,
+    return rows.slice(0, perGroupCap).map((loc) => {
+        const locLabel = locationDisplayLabelFromRow(loc) ?? `Location ${loc.id.slice(0, 8)}…`;
+        return assembleGlobalSearchHit({
+            entity_type: "locations",
             entity_id: loc.id,
-            name,
-            type_label: typeLabel,
-            secondary_context: city || loc.address1?.trim() || null,
-            status_label: loc.is_active === false ? "Inactive" : "Active",
-        };
+            group: "locations",
+            name: locLabel,
+            type_label: "Campus",
+            location_label: locLabel,
+            status_key: loc.is_active === false ? "inactive" : "active",
+            status_labels: new Map([
+                ["active", "Active"],
+                ["inactive", "Inactive"],
+            ]),
+        });
     });
 }
 
-function mergeGlobalSearchHits(
-    buckets: Record<GlobalRecordSearchEntityType, GlobalRecordSearchHit[]>,
-    limit: number
-): GlobalRecordSearchHit[] {
-    const order: GlobalRecordSearchEntityType[] = ["persons", "opportunities", "customers", "locations"];
-    const out: GlobalRecordSearchHit[] = [];
-    for (const kind of order) {
-        for (const hit of buckets[kind] ?? []) {
-            if (out.length >= limit) return out;
-            out.push(hit);
-        }
+function buildGroups(buckets: Record<GlobalRecordSearchGroupKey, GlobalRecordSearchHit[]>, limit: number): GlobalRecordSearchGroup[] {
+    const groups: GlobalRecordSearchGroup[] = [];
+    let remaining = limit;
+    for (const key of GLOBAL_RECORD_SEARCH_GROUP_ORDER) {
+        if (remaining <= 0) break;
+        const hits = (buckets[key] ?? []).slice(0, remaining);
+        if (!hits.length) continue;
+        groups.push({ key, label: GLOBAL_RECORD_SEARCH_GROUP_LABELS[key], hits });
+        remaining -= hits.length;
     }
-    return out;
+    return groups;
 }
 
 /** Org-scoped deterministic record lookup for AdminV2 global search (Phase 1). */
-export async function runGlobalRecordSearch(args: SearchArgs): Promise<{ q: string; results: GlobalRecordSearchHit[] }> {
+export async function runGlobalRecordSearch(args: SearchArgs): Promise<{
+    q: string;
+    groups: GlobalRecordSearchGroup[];
+    clusters: GlobalRecordSearchCluster[];
+    results: GlobalRecordSearchHit[];
+}> {
     const rawQ = args.rawQ.trim();
     const token = sanitizeCrmSearchToken(rawQ);
     const limit = clampLimit(args.limit);
-    const perTypeCap = Math.min(GLOBAL_RECORD_SEARCH_PER_TYPE_CAP, limit);
+    const perGroupCap = Math.min(GLOBAL_RECORD_SEARCH_PER_GROUP_CAP, limit);
 
-    const [personDefs, oppDefs, customerDefs] = await Promise.all([
+    const [memberDefs, personDefs, oppDefs] = await Promise.all([
+        fetchEffectiveStatusDefinitions(args.supabase, args.orgId, "customer_members", { activeOnly: true }),
         fetchEffectiveStatusDefinitions(args.supabase, args.orgId, "persons", { activeOnly: true }),
         fetchEffectiveStatusDefinitions(args.supabase, args.orgId, "opportunities", { activeOnly: true }),
-        fetchEffectiveStatusDefinitions(args.supabase, args.orgId, "customers", { activeOnly: true }),
     ]);
+    const memberStatusLabels = new Map(Object.entries(displayLabelsFromDefinitions(memberDefs)));
     const personStatusLabels = new Map(Object.entries(displayLabelsFromDefinitions(personDefs)));
     const oppStatusLabels = new Map(Object.entries(displayLabelsFromDefinitions(oppDefs)));
-    const customerStatusLabels = new Map(Object.entries(displayLabelsFromDefinitions(customerDefs)));
 
-    const [persons, opportunities, customers, locations] = await Promise.all([
-        searchPersons(args.supabase, args.orgId, args.accessDim, rawQ, token, perTypeCap, personStatusLabels),
-        searchOpportunities(args.supabase, args.orgId, args.accessDim, rawQ, token, perTypeCap, oppStatusLabels),
-        searchCustomers(args.supabase, args.orgId, args.accessDim, rawQ, token, perTypeCap, customerStatusLabels),
-        searchLocations(args.supabase, args.orgId, args.accessDim, rawQ, token, perTypeCap),
+    const [children, parents, leads, locations] = await Promise.all([
+        searchChildren(args.supabase, args.orgId, args.accessDim, rawQ, token, perGroupCap, memberStatusLabels, oppStatusLabels),
+        searchParents(args.supabase, args.orgId, args.accessDim, rawQ, token, perGroupCap, personStatusLabels, oppStatusLabels),
+        searchLeads(args.supabase, args.orgId, args.accessDim, rawQ, token, perGroupCap, oppStatusLabels),
+        searchLocations(args.supabase, args.orgId, args.accessDim, rawQ, token, perGroupCap),
     ]);
 
-    const results = mergeGlobalSearchHits(
-        { persons, opportunities, customers, locations },
-        limit
-    );
+    const groups = buildGroups({ children, parents, leads, locations }, limit);
+    const results = groups.flatMap((g) => g.hits);
+    const clusters = buildGlobalSearchFamilyClusters(results);
 
-    return { q: rawQ, results };
+    return { q: rawQ, groups, clusters, results };
 }

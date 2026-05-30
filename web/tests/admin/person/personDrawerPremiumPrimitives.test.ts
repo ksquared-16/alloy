@@ -25,12 +25,10 @@ describe("Person drawer premium primitives", () => {
         expect(meta).toContain("data-record-drawer-back-link");
     });
 
-    it("person drawer context panel renders associated people above overview body", () => {
+    it("person drawer retires quick links — household section owns navigation", () => {
         const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("PersonDrawerContextPanel");
-        const panel = read("components/admin/entity/PersonDrawerContextPanel.tsx");
-        expect(panel).toContain("Quick links");
-        expect(panel).not.toContain("Related enrollment");
+        expect(drawer).not.toContain("PersonDrawerContextPanel");
+        expect(drawer).toContain("PersonDrawerHouseholdSection");
     });
 
     it("PersonDrawerProfileBadges use substantial title-rail role pills", () => {

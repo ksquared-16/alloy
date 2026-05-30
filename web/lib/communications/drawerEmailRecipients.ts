@@ -306,13 +306,50 @@ export async function fetchJobDrawerEmailRecipients(
     return sortedRows;
 }
 
+/** Person drawer: the opened person is the sole composer recipient. */
+export async function fetchPersonDrawerEmailRecipients(
+    supabase: AdminSupabase,
+    orgId: string,
+    personId: string
+): Promise<DrawerEmailRecipientRow[]> {
+    const { data } = await supabase
+        .from("persons")
+        .select("id, first_name, last_name, full_name, email, phone")
+        .eq("id", personId)
+        .eq("org_id", orgId)
+        .maybeSingle();
+    if (!data || typeof data !== "object") return [];
+    const row = data as {
+        id?: string;
+        first_name?: string | null;
+        last_name?: string | null;
+        full_name?: string | null;
+        email?: string | null;
+        phone?: string | null;
+    };
+    return [
+        {
+            person_id: personId,
+            email: trimEmail(row.email),
+            phone: smsToOrNull(row.phone),
+            display_name: personLabel(row),
+            relationship_hint: null,
+            is_suggested_default: true,
+        },
+    ];
+}
+
 export async function assertRecipientPersonEligibleForDrawerEmail(
     supabase: AdminSupabase,
     orgId: string,
-    entityType: "opportunities" | "jobs",
+    entityType: "opportunities" | "jobs" | "persons",
     entityId: string,
     personId: string
 ): Promise<boolean> {
+    if (entityType === "persons") {
+        if (personId !== entityId) return false;
+        return (await getPersonEmailOrNull(supabase, orgId, personId)) !== null;
+    }
     const related = await fetchRelatedPersonIdsForCommunicationsDrawer(supabase, orgId, entityType, entityId);
     if (!related.includes(personId)) return false;
     return (await getPersonEmailOrNull(supabase, orgId, personId)) !== null;
@@ -321,10 +358,14 @@ export async function assertRecipientPersonEligibleForDrawerEmail(
 export async function assertRecipientPersonEligibleForDrawerSms(
     supabase: AdminSupabase,
     orgId: string,
-    entityType: "opportunities" | "jobs",
+    entityType: "opportunities" | "jobs" | "persons",
     entityId: string,
     personId: string
 ): Promise<boolean> {
+    if (entityType === "persons") {
+        if (personId !== entityId) return false;
+        return (await getPersonSmsToOrNull(supabase, orgId, personId)) !== null;
+    }
     const related = await fetchRelatedPersonIdsForCommunicationsDrawer(supabase, orgId, entityType, entityId);
     if (!related.includes(personId)) return false;
     return (await getPersonSmsToOrNull(supabase, orgId, personId)) !== null;

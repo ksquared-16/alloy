@@ -23,6 +23,7 @@ import {
   type InquiryChildHydrateRow,
 } from "@/lib/admin/drawer/inquiryChildrenHydration";
 import { attachOpportunityChildLifecycleSummary } from "@/lib/opportunities/buildOpportunityChildLifecycleSummary";
+import { resolveCustomerHouseholdPrimaryContactPersonId } from "@/lib/admin/person/householdPrimaryContact";
 import { logDbTiming, withDbTiming } from "@/lib/admin/dbQueryTiming";
 import {
   perfDrawerFullHydrate,
@@ -139,6 +140,7 @@ async function fetchPrimaryPersonContactHydrate(
   supabase: AdminSupabase,
   orgId: string,
   opp: Record<string, unknown> & {
+    customer_id?: string | null;
     primary_contact_id?: string | null;
     primary_person_id?: string | null;
   },
@@ -148,11 +150,19 @@ async function fetchPrimaryPersonContactHydrate(
 }> {
   const patch: Record<string, unknown> = {};
   const warmPersonRows: WarmPersonRow[] = [];
-  if (opp.primary_person_id) {
+  let primaryPersonId = trimOrNull(opp.primary_person_id);
+  if (!primaryPersonId && opp.customer_id) {
+    primaryPersonId = await resolveCustomerHouseholdPrimaryContactPersonId(
+      supabase,
+      orgId,
+      opp.customer_id
+    );
+  }
+  if (primaryPersonId) {
     const { data: person } = await supabase
       .from("persons")
       .select("id, first_name, last_name, full_name, email, phone, date_of_birth")
-      .eq("id", opp.primary_person_id)
+      .eq("id", primaryPersonId)
       .eq("org_id", orgId)
       .maybeSingle();
     const p = person as WarmPersonRow | null;
@@ -2063,6 +2073,48 @@ export async function respondOpportunityEntityGet(
         email: trimOrNull(p?.email),
       };
     });
+
+    if (householdId) {
+      const { data: cpRows } = await supabase
+        .from("customer_persons")
+        .select("person_id, role_type, is_primary")
+        .eq("org_id", orgId)
+        .eq("customer_id", householdId);
+      const cpPersonIds = [
+        ...new Set(
+          ((cpRows ?? []) as { person_id?: string | null }[])
+            .map((r) => trimOrNull(r.person_id))
+            .filter((id): id is string => Boolean(id))
+        ),
+      ];
+      const missingCpPersonIds = cpPersonIds.filter((pid) => !pmap.has(pid));
+      if (missingCpPersonIds.length > 0) {
+        const { data: cpPeople } = await supabase
+          .from("persons")
+          .select("id, first_name, last_name, full_name, email, phone")
+          .eq("org_id", orgId)
+          .in("id", missingCpPersonIds);
+        for (const row of (cpPeople ?? []) as PersonRowAgg[]) {
+          pmap.set(row.id, row);
+        }
+      }
+      out._customer_persons = ((cpRows ?? []) as {
+        person_id: string;
+        role_type?: string | null;
+        is_primary?: boolean | null;
+      }[]).map((cp) => {
+        const p = (pmap.get(cp.person_id) ?? null) as PersonRowAgg | null;
+        return {
+          customer_id: householdId,
+          person_id: cp.person_id,
+          role_type: trimOrNull(cp.role_type),
+          is_primary: Boolean(cp.is_primary),
+          name: personDisplayName(p),
+          phone: trimOrNull(p?.phone),
+          email: trimOrNull(p?.email),
+        };
+      });
+    }
   }
   markPhase("after_opportunity_persons");
   lapSegment("opportunity_person_list_build");

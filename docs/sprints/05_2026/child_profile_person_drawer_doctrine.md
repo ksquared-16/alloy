@@ -118,7 +118,9 @@ The child person record is the durable lifecycle anchor. Current drawer slots an
 | Communications | — | Comms section / thread preview |
 | History | — | Activity timeline |
 
-**Final child UX pass (2026-05-29):** Child drawer complete — deduplicated information ownership, selective green rail (summary + enrollment shell only), Family as relationship home, horizontal lifecycle stepper. Ready for Parent operating surface sprint. See [`person_relationship_child_lifecycle_foundation.md`](./person_relationship_child_lifecycle_foundation.md).
+**Final child UX pass (2026-05-29):** Child drawer complete — deduplicated information ownership, selective green rail (summary + enrollment shell only), Family as relationship home, horizontal lifecycle stepper. See [`person_relationship_child_lifecycle_foundation.md`](./person_relationship_child_lifecycle_foundation.md).
+
+**Parent operating surface (2026-05-29):** Parent/guardian drawer shipped — contact summary, household/children grouping, communication preferences, person_generic status only, in-drawer module shortcuts. See [`parent_operating_surface_person_drawer.md`](./parent_operating_surface_person_drawer.md).
 
 `CHILD_LIFECYCLE_SECTION_SLOTS` in `personDrawerPresentationEmphasis.ts` documents reserved layout keys; only `enrollment_activity` + `relationships` render as body sections today.
 
@@ -428,7 +430,8 @@ Corrective pass: stabilize without new concepts or redesign.
 | `PersonDrawerChildSummary.tsx` | Editable DOB/gender; no header duplication |
 | `PersonDrawerChildHeaderExecutive.tsx` | Operational pills only — status in title rail |
 | `PersonDrawerChildLifecycleSnapshot.tsx` | Horizontal lifecycle strip (Family Lead, Documents, Communications, Activity) |
-| `PersonDrawerVisibilitySections.tsx` | Family section owns household + guardians + siblings |
+| `PersonDrawerHouseholdSection.tsx` | Shared household IA — Guardians \| Children columns; emergency + pickups below (parent + child drawers) |
+| `PersonDrawerVisibilitySections.tsx` | Non–child-lifecycle relationship links only (household moved to shared section) |
 | `personDrawerChildLifecycleSlots.ts` | Activity label; operational slot phases |
 | `AdminEntityDrawer.tsx` | Preload on opp reveal; hide Enrollment when lifecycle owns lead; child status badge |
 
@@ -437,7 +440,7 @@ Corrective pass: stabilize without new concepts or redesign.
 1. **Header** — name, enrollment status (title rail), Child/age/DOB/gender/program/location pills
 2. **Child summary** — avatar, name, editable DOB/gender (Opportunity primary-contact doctrine)
 3. **Lifecycle strip** — compact horizontal rollup with links
-4. **Family** — household, guardians, siblings
+4. **Household** — guardians \| children (two columns), emergency contacts, authorized pickups
 5. **Child details** — remaining configurable fields
 
 Enrollment section is **suppressed** when child lifecycle chrome is active (lifecycle strip links to Family Lead).
@@ -580,7 +583,7 @@ Reseed scripts (`seedRealisticChildcareDemoData.ts`, waitlist demo) are **out of
 - Schedule / attendance / billing lifecycle **modules** (tab shows placeholders + links only)
 - Person-native Communications tab (today: link to opportunity comms when enrollment opp exists)
 - **BOS child insights** in child drawer (future: optional signal slot via layout config)
-- Parent Operating Surface sprint (next)
+- Parent operating surface follow-ups (comms timeline, BOS, layout config) — see `parent_operating_surface_person_drawer.md`
 - Platform-wide inquiry → lead terminology (drawer display labels only today)
 - Remove `PersonDrawerChildLifecycleRoadmap.tsx` overview component (superseded by Lifecycle tab; file retained unused)
 - Authorized pickup as structured field (notes field exists: `authorized_pickup_notes`)

@@ -1,112 +1,697 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { runGlobalRecordSearch } from "@/lib/admin/globalSearch/globalRecordSearchService";
+import { buildGlobalSearchFamilyClusters } from "@/lib/admin/globalSearch/globalRecordSearchClustering";
+import {
+    GLOBAL_SEARCH_LEGACY_DRAWER_ENTITY_TYPES,
+    resolveGlobalSearchDrawerOpenTarget,
+} from "@/lib/admin/globalSearch/globalRecordSearchDrawerTarget";
+import { resolveGlobalSearchOpenFromHit } from "@/lib/admin/globalSearch/globalRecordSearchOpenResolution";
+import {
+    formatGlobalSearchClusterContextLine,
+    formatGlobalSearchHitPrimaryName,
+    formatGlobalSearchHitSecondaryLine,
+    formatGlobalSearchHitMetaLine,
+    globalSearchLeadDisplayLabel,
+} from "@/lib/admin/globalSearch/globalRecordSearchResultPresentation";
+import { humanizeGlobalSearchStatusLabel } from "@/lib/admin/globalSearch/globalRecordSearchStatusLabel";
+import { globalSearchRecordAllowedBySiteScope } from "@/lib/admin/globalSearch/globalRecordSearchScope";
 import {
     globalSearchCrmDisplayLabel,
-    globalSearchPersonSecondaryContext,
     globalSearchPersonTypeLabel,
     personRowIsChildRelationship,
 } from "@/lib/admin/globalSearch/globalRecordSearchPersonPresentation";
 import {
     adminV2PathHasDrawerHost,
-    readGlobalRecordSearchOpenIntent,
-    storeGlobalRecordSearchOpenIntent,
     clearGlobalRecordSearchOpenIntent,
     GLOBAL_RECORD_SEARCH_OPEN_INTENT_KEY,
+    GLOBAL_SEARCH_DROPDOWN_Z_INDEX,
+    GLOBAL_SEARCH_DRAWER_OPEN_SOURCE,
+    launchGlobalRecordSearchOpen,
+    readGlobalRecordSearchOpenIntent,
 } from "@/lib/adminV2/globalRecordSearchOpen";
+import { ADMINV2_DRAWER_OUTSIDE_CLICK_IGNORE_SELECTORS } from "@/lib/adminV2/drawerOutsideClick";
+import { ADMINV2_SHELL_CHROME_Z } from "@/components/admin/Drawer";
 
-describe("globalSearchCrmDisplayLabel", () => {
-    it("maps inquiry labels to Lead for search display", () => {
-        expect(globalSearchCrmDisplayLabel("Inquiry")).toBe("Lead");
-        expect(globalSearchCrmDisplayLabel("Family inquiry")).toBe("Family lead");
+const ORG = "11111111-1111-4111-8111-111111111111";
+const CUSTOMER_CHEN = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const CHILD_MEMBER = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const SOPHIA_PERSON = "99999999-9999-4999-8999-999999999999";
+const PARENT_PERSON = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+const OPP_ID = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+const LOC_NORTH = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+
+const openDim = {
+    departmentScope: "all" as const,
+    allowedDepartmentIds: null,
+    siteScope: "all" as const,
+    allowedSiteLocationIds: null,
+};
+
+const northSiteDim = {
+    departmentScope: "all" as const,
+    allowedDepartmentIds: null,
+    siteScope: "restricted" as const,
+    allowedSiteLocationIds: [LOC_NORTH],
+};
+
+const southLoc = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+
+vi.mock("@/lib/admin/statusDefinitionsResolve", () => ({
+    fetchEffectiveStatusDefinitions: vi.fn(async () => []),
+    displayLabelsFromDefinitions: vi.fn(() => ({})),
+}));
+
+vi.mock("@/lib/admin/accessScope", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("@/lib/admin/accessScope")>();
+    return {
+        ...actual,
+        fetchScopedPersonIdsForRestrictedAdmin: vi.fn(async () => null),
+        fetchScopedCustomerIdsForRestrictedAdmin: vi.fn(async () => null),
+        resolveRecordScopeConstraints: vi.fn(async () => ({
+            workUnitIds: null,
+            locationIds: null,
+            impossible: false,
+        })),
+        applyRecordScopeConstraintsToQuery: vi.fn((q: unknown) => q),
+    };
+});
+
+type Row = Record<string, unknown>;
+
+function patternToken(pattern: string): string {
+    return pattern.replace(/^%/, "").replace(/%$/, "").toLowerCase();
+}
+
+function rowMatchesIlike(row: Row, col: string, pattern: string): boolean {
+    return String(row[col] ?? "")
+        .toLowerCase()
+        .includes(patternToken(pattern));
+}
+
+function createMockSupabase(tables: Record<string, Row[]>) {
+    const chain = (tableName: string): Record<string, unknown> => {
+        let filters: Array<{ kind: string; col: string; val: unknown }> = [];
+        let orExpr: string | null = null;
+        let limitN = 50;
+
+        const exec = (): { data: Row[]; error: null } => {
+            let rows = [...(tables[tableName] ?? [])];
+            for (const f of filters) {
+                if (f.kind === "eq") rows = rows.filter((r) => r[f.col] === f.val);
+                else if (f.kind === "ilike") rows = rows.filter((r) => rowMatchesIlike(r, f.col, String(f.val)));
+                else if (f.kind === "in") {
+                    const set = new Set(Array.isArray(f.val) ? f.val : []);
+                    rows = rows.filter((r) => set.has(r[f.col]));
+                }
+            }
+            if (orExpr && tableName === "opportunities") {
+                const patterns = orExpr
+                    .split(",")
+                    .map((part) => {
+                        const m = part.match(/\.ilike\.(.+)$/);
+                        return m ? patternToken(m[1]) : "";
+                    })
+                    .filter(Boolean);
+                rows = rows.filter((r) =>
+                    patterns.some(
+                        (tok) =>
+                            String(r.name ?? "")
+                                .toLowerCase()
+                                .includes(tok) ||
+                            String(r.title ?? "")
+                                .toLowerCase()
+                                .includes(tok)
+                    )
+                );
+            }
+            return { data: rows.slice(0, limitN), error: null };
+        };
+
+        const builder: Record<string, unknown> = {
+            select: () => builder,
+            eq: (col: string, val: unknown) => {
+                filters.push({ kind: "eq", col, val });
+                return builder;
+            },
+            ilike: (col: string, val: unknown) => {
+                filters.push({ kind: "ilike", col, val });
+                return builder;
+            },
+            in: (col: string, val: unknown) => {
+                filters.push({ kind: "in", col, val });
+                return builder;
+            },
+            or: (expr: string) => {
+                orExpr = expr;
+                return builder;
+            },
+            not: () => builder,
+            order: () => builder,
+            limit: (n: number) => {
+                limitN = n;
+                return builder;
+            },
+            maybeSingle: async () => {
+                const { data } = exec();
+                return { data: data[0] ?? null, error: null };
+            },
+            then: (resolve: (v: unknown) => void) => Promise.resolve(exec()).then(resolve),
+        };
+        return builder;
+    };
+
+    return {
+        from: (table: string) => chain(table),
+    } as unknown as SupabaseClient;
+}
+
+const chenFixtures = {
+    customer_members: [
+        {
+            id: CHILD_MEMBER,
+            org_id: ORG,
+            customer_id: CUSTOMER_CHEN,
+            person_id: SOPHIA_PERSON,
+            display_name: "Sophia Chen",
+            first_name: "Sophia",
+            last_name: "Chen",
+            relationship: "child",
+            status_key: "active",
+        },
+    ],
+    persons: [
+        {
+            id: SOPHIA_PERSON,
+            org_id: ORG,
+            first_name: "Sophia",
+            last_name: "Chen",
+            full_name: "Sophia Chen",
+            status_key: "active",
+        },
+        {
+            id: PARENT_PERSON,
+            org_id: ORG,
+            first_name: "Sarah",
+            last_name: "Chen",
+            full_name: "Sarah Chen",
+            status_key: "active",
+        },
+    ],
+    customer_persons: [
+        {
+            org_id: ORG,
+            person_id: PARENT_PERSON,
+            customer_id: CUSTOMER_CHEN,
+            role_type: "guardian",
+            is_primary: true,
+        },
+    ],
+    customers: [
+        {
+            id: CUSTOMER_CHEN,
+            org_id: ORG,
+            name: "Chen Household",
+            status_key: "active",
+        },
+    ],
+    opportunities: [
+        {
+            id: OPP_ID,
+            org_id: ORG,
+            customer_id: CUSTOMER_CHEN,
+            location_id: LOC_NORTH,
+            name: "Family Inquiry - Chen",
+            title: "Family Inquiry - Chen",
+            status_key: "tour_scheduled",
+            created_at: "2026-01-01T00:00:00Z",
+        },
+        {
+            id: "opp-south",
+            org_id: ORG,
+            customer_id: "cust-other",
+            location_id: southLoc,
+            name: "Other Inquiry",
+            title: "Other Inquiry",
+            status_key: "new_inquiry",
+            created_at: "2026-01-02T00:00:00Z",
+        },
+    ],
+    locations: [
+        {
+            id: LOC_NORTH,
+            org_id: ORG,
+            label: "North Campus",
+            location_type: "site",
+            is_active: true,
+        },
+        {
+            id: southLoc,
+            org_id: ORG,
+            label: "South Campus",
+            location_type: "site",
+            is_active: true,
+        },
+    ],
+    opportunity_persons: [],
+};
+
+describe("runGlobalRecordSearch — Chen family", () => {
+    it("returns child with household, lead, and campus context", async () => {
+        const supabase = createMockSupabase(chenFixtures);
+        const { groups, results, clusters } = await runGlobalRecordSearch({
+            supabase,
+            orgId: ORG,
+            accessDim: openDim,
+            rawQ: "Chen",
+        });
+
+        const child = results.find((r) => r.group === "children");
+        expect(child).toMatchObject({
+            entity_type: "customer_members",
+            entity_id: CHILD_MEMBER,
+            name: "Sophia Chen",
+            type_label: "Child",
+            household_name: "Chen Household",
+            location_label: "North Campus",
+            person_id: SOPHIA_PERSON,
+            open_entity_type: "persons",
+            open_entity_id: SOPHIA_PERSON,
+        });
+        expect(child?.lead_short_label).toBe("Chen");
+        expect(clusters.length).toBeGreaterThan(0);
+        expect(groups.some((g) => g.key === "children")).toBe(true);
+    });
+
+    it("returns parent/guardian with related household and location", async () => {
+        const supabase = createMockSupabase(chenFixtures);
+        const { results } = await runGlobalRecordSearch({
+            supabase,
+            orgId: ORG,
+            accessDim: openDim,
+            rawQ: "Chen",
+        });
+
+        const parent = results.find((r) => r.group === "parents" && r.entity_id === PARENT_PERSON);
+        expect(parent).toMatchObject({
+            entity_type: "persons",
+            name: "Sarah Chen",
+            type_label: "Guardian",
+            household_name: "Chen Household",
+            location_label: "North Campus",
+            open_entity_type: "persons",
+            open_entity_id: PARENT_PERSON,
+        });
+    });
+
+    it("returns children, parents, and leads groups for Chen — no standalone household rows", async () => {
+        const supabase = createMockSupabase(chenFixtures);
+        const { groups, results } = await runGlobalRecordSearch({
+            supabase,
+            orgId: ORG,
+            accessDim: openDim,
+            rawQ: "Chen",
+        });
+
+        expect(groups.map((g) => g.key)).toEqual(
+            expect.arrayContaining(["children", "parents", "leads"])
+        );
+        expect(groups.map((g) => g.key as string)).not.toContain("households");
+        expect(results.some((r) => r.type_label === "Household")).toBe(false);
+        expect(results.some((r) => r.household_name === "Chen Household")).toBe(true);
+    });
+
+    it("clusters Chen family hits with shared household context", async () => {
+        const supabase = createMockSupabase(chenFixtures);
+        const { results, clusters } = await runGlobalRecordSearch({
+            supabase,
+            orgId: ORG,
+            accessDim: openDim,
+            rawQ: "Chen",
+        });
+
+        const familyCluster = clusters.find((c) => c.key !== "__ungrouped__");
+        expect(familyCluster).toBeDefined();
+        expect(familyCluster?.household_name).toBe("Chen Household");
+        expect(familyCluster?.location_label).toBe("North Campus");
+        expect(familyCluster?.children.some((c) => c.name === "Sophia Chen")).toBe(true);
+
+        const contextLine = formatGlobalSearchClusterContextLine(familyCluster!);
+        expect(contextLine).toContain("Chen Household");
+        expect(contextLine).toContain("Lead: Chen");
+        expect(contextLine).toContain("North Campus");
+        expect(contextLine!.split("North Campus")).toHaveLength(2);
+
+        const child = results.find((r) => r.group === "children")!;
+        const secondary = formatGlobalSearchHitSecondaryLine(child, { inCluster: true });
+        expect(secondary).toBe("Child");
+        const secondaryFull = formatGlobalSearchHitSecondaryLine(child);
+        expect(secondaryFull).toContain("Chen Household");
+        expect(secondaryFull).toContain("North Campus");
+
+        const meta = formatGlobalSearchHitMetaLine(child);
+        expect(meta).not.toContain("Family lead");
+        expect(meta).toMatch(/Active|Tour Scheduled/);
     });
 });
 
-describe("globalSearchPersonTypeLabel", () => {
-    it("labels child members as Child", () => {
-        expect(
-            globalSearchPersonTypeLabel({
-                person_id: "p1",
-                customer_members: [{ relationship: "child" }],
-            })
-        ).toBe("Child");
+describe("runGlobalRecordSearch — site scope", () => {
+    it("restricted location user only receives records for allowed campuses", async () => {
+        const supabase = createMockSupabase(chenFixtures);
+        const { results } = await runGlobalRecordSearch({
+            supabase,
+            orgId: ORG,
+            accessDim: northSiteDim,
+            rawQ: "Chen",
+        });
+
+        expect(results.length).toBeGreaterThan(0);
+        for (const hit of results) {
+            if (hit.group === "locations") {
+                expect(hit.entity_id).toBe(LOC_NORTH);
+            } else {
+                expect(hit.location_label).toBe("North Campus");
+            }
+        }
+        expect(results.some((r) => r.name === "Other Inquiry")).toBe(false);
     });
 
-    it("labels guardians from customer_persons", () => {
-        expect(
-            globalSearchPersonTypeLabel({
-                person_id: "p2",
-                customer_persons: [{ role_type: "guardian" }],
-            })
-        ).toBe("Guardian");
-    });
-
-    it("falls back to Person when no role signals", () => {
-        expect(globalSearchPersonTypeLabel({ person_id: "p3" })).toBe("Person");
-    });
-});
-
-describe("globalSearchPersonSecondaryContext", () => {
-    it("prefers site for children", () => {
-        expect(
-            globalSearchPersonSecondaryContext({
-                isChild: true,
-                siteLabel: "North Campus",
-                householdName: "Chen Household",
-            })
-        ).toBe("North Campus");
-    });
-
-    it("prefers household for guardians", () => {
-        expect(
-            globalSearchPersonSecondaryContext({
-                isChild: false,
-                siteLabel: "North Campus",
-                householdName: "Chen Household",
-            })
-        ).toBe("Chen Household");
+    it("globalSearchRecordAllowedBySiteScope rejects inaccessible locations", () => {
+        expect(globalSearchRecordAllowedBySiteScope(LOC_NORTH, northSiteDim)).toBe(true);
+        expect(globalSearchRecordAllowedBySiteScope(southLoc, northSiteDim)).toBe(false);
+        expect(globalSearchRecordAllowedBySiteScope(null, northSiteDim)).toBe(false);
     });
 });
 
-describe("personRowIsChildRelationship", () => {
-    it("recognizes child relationship keys", () => {
-        expect(personRowIsChildRelationship("child")).toBe(true);
-        expect(personRowIsChildRelationship("enrolled_child")).toBe(true);
-        expect(personRowIsChildRelationship("guardian")).toBe(false);
+describe("global search implementation guards", () => {
+    it("service source does not expose standalone household search group", () => {
+        const servicePath = resolve(process.cwd(), "lib/admin/globalSearch/globalRecordSearchService.ts");
+        const src = readFileSync(servicePath, "utf8");
+        expect(src).not.toContain("searchHouseholds");
+        expect(src).not.toMatch(/group:\s*"households"/);
+    });
+
+    it("does not reference customer_members.site_id in service source", () => {
+        const servicePath = resolve(process.cwd(), "lib/admin/globalSearch/globalRecordSearchService.ts");
+        const locationPath = resolve(process.cwd(), "lib/admin/globalSearch/globalRecordSearchLocationContext.ts");
+        const serviceSrc = readFileSync(servicePath, "utf8");
+        const locationSrc = readFileSync(locationPath, "utf8");
+        expect(serviceSrc).not.toMatch(/customer_members[\s\S]{0,400}\bsite_id\b/);
+        expect(locationSrc).not.toContain("customer_members");
+    });
+
+    it("TopNavBar uses inline GlobalSearchBox without modal", () => {
+        const topNavPath = resolve(process.cwd(), "app/adminV2/components/TopNavBar.tsx");
+        const src = readFileSync(topNavPath, "utf8");
+        expect(src).toContain("GlobalSearchBox");
+        expect(src).not.toContain("GlobalSearchModal");
+    });
+
+    it("GlobalSearchBox is inline autocomplete, not a modal", () => {
+        const boxPath = resolve(process.cwd(), "app/adminV2/components/GlobalSearchBox.tsx");
+        const src = readFileSync(boxPath, "utf8");
+        expect(src).toContain('data-adminv2-global-search-box="true"');
+        expect(src).not.toContain("aria-modal");
+        expect(src).not.toContain("fixed inset-0");
+    });
+
+    it("GlobalSearchBox never opens drawer via legacy entity_type", () => {
+        const boxPath = resolve(process.cwd(), "app/adminV2/components/GlobalSearchBox.tsx");
+        const src = readFileSync(boxPath, "utf8");
+        expect(src).toContain("resolveGlobalSearchOpenFromHit");
+        expect(src).not.toMatch(/launchGlobalRecordSearchOpen\(\{\s*entity_type:\s*hit\.entity_type/);
+        for (const legacy of GLOBAL_SEARCH_LEGACY_DRAWER_ENTITY_TYPES) {
+            expect(src).not.toContain(`entity_type: "${legacy}"`);
+        }
+    });
+
+    it("GlobalRecordSearchOpenListener blocks legacy drawer types", () => {
+        const listenerPath = resolve(process.cwd(), "components/adminV2/GlobalRecordSearchOpenListener.tsx");
+        const src = readFileSync(listenerPath, "utf8");
+        expect(src).toContain("isGlobalSearchLegacyDrawerEntityType");
+        expect(src).toContain("open_entity_type");
+    });
+
+    it("drawer outside-click ignore list includes global search box", () => {
+        expect(ADMINV2_DRAWER_OUTSIDE_CLICK_IGNORE_SELECTORS).toContain(
+            '[data-adminv2-global-search-box="true"]'
+        );
+    });
+
+    it("GlobalSearchBox dropdown z-index stays above drawer panel within shell chrome", () => {
+        expect(GLOBAL_SEARCH_DROPDOWN_Z_INDEX).toBeGreaterThan(70);
+        expect(GLOBAL_SEARCH_DROPDOWN_Z_INDEX).toBeGreaterThanOrEqual(ADMINV2_SHELL_CHROME_Z);
+        const boxPath = resolve(process.cwd(), "app/adminV2/components/GlobalSearchBox.tsx");
+        const src = readFileSync(boxPath, "utf8");
+        expect(src).toContain("GLOBAL_SEARCH_DROPDOWN_Z_INDEX");
+    });
+
+    it("GlobalSearchBox uses restrained neutral styling without blue accent rows", () => {
+        const boxPath = resolve(process.cwd(), "app/adminV2/components/GlobalSearchBox.tsx");
+        const src = readFileSync(boxPath, "utf8");
+        expect(src).not.toContain("text-alloy-blue");
+        expect(src).not.toContain("border-l-alloy-blue");
+        expect(src).not.toContain("bg-alloy-blue");
+    });
+
+    it("AdminDrawerContext swaps drawer in place for global search source", () => {
+        const ctxPath = resolve(process.cwd(), "contexts/AdminDrawerContext.tsx");
+        const src = readFileSync(ctxPath, "utf8");
+        expect(src).toContain("GLOBAL_SEARCH_DRAWER_OPEN_SOURCE");
+        expect(src).toMatch(/swapInPlace[\s\S]*global search replaces the open record/i);
+        expect(GLOBAL_SEARCH_DRAWER_OPEN_SOURCE).toBe("global_search");
     });
 });
 
-describe("globalRecordSearchOpen bridge", () => {
+describe("drawer open targets", () => {
     beforeEach(() => {
         const store = new Map<string, string>();
         vi.stubGlobal("sessionStorage", {
             getItem: (k: string) => store.get(k) ?? null,
-            setItem: (k: string, v: string) => {
-                store.set(k, v);
-            },
-            removeItem: (k: string) => {
-                store.delete(k);
-            },
+            setItem: (k: string, v: string) => store.set(k, v),
+            removeItem: (k: string) => store.delete(k),
         });
-        vi.stubGlobal("window", { sessionStorage: globalThis.sessionStorage, location: { pathname: "/" } });
+        vi.stubGlobal("window", {
+            sessionStorage: globalThis.sessionStorage,
+            location: { pathname: "/adminV2/workspace" },
+            dispatchEvent: vi.fn(),
+        });
     });
 
     afterEach(() => {
         vi.unstubAllGlobals();
     });
 
-    it("adminV2PathHasDrawerHost matches workspace and settings", () => {
+    it("child with canonical person opens persons drawer, not customer_members", async () => {
+        const supabase = createMockSupabase(chenFixtures);
+        const { results } = await runGlobalRecordSearch({
+            supabase,
+            orgId: ORG,
+            accessDim: openDim,
+            rawQ: "Sophia",
+        });
+
+        const child = results.find((r) => r.group === "children");
+        expect(child?.entity_type).toBe("customer_members");
+        const target = resolveGlobalSearchDrawerOpenTarget(child!);
+        expect(target).toEqual({ entity_type: "persons", entity_id: SOPHIA_PERSON });
+
+        const resolution = resolveGlobalSearchOpenFromHit(child!);
+        expect(resolution.supported).toBe(true);
+        launchGlobalRecordSearchOpen(resolution.detail!);
+        const event = (window.dispatchEvent as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as CustomEvent;
+        expect(event.detail.open_entity_type).toBe("persons");
+        expect(event.detail.open_entity_id).toBe(SOPHIA_PERSON);
+        expect(event.detail.open_entity_type).not.toBe("customer_members");
+    });
+
+    it("resolveGlobalSearchDrawerOpenTarget never returns legacy drawer types", async () => {
+        const supabase = createMockSupabase(chenFixtures);
+        const { results } = await runGlobalRecordSearch({
+            supabase,
+            orgId: ORG,
+            accessDim: openDim,
+            rawQ: "Chen",
+        });
+
+        for (const hit of results) {
+            const target = resolveGlobalSearchDrawerOpenTarget(hit);
+            if (target) {
+                expect(GLOBAL_SEARCH_LEGACY_DRAWER_ENTITY_TYPES).not.toContain(target.entity_type);
+            }
+        }
+    });
+
+    it("launchGlobalRecordSearchOpen dispatches AdminV2 open detail while on drawer host", () => {
+        launchGlobalRecordSearchOpen({
+            open_entity_type: "persons",
+            open_entity_id: PARENT_PERSON,
+        });
+        expect(window.dispatchEvent).toHaveBeenCalled();
+        const event = (window.dispatchEvent as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0] as CustomEvent;
+        expect(event.detail.open_entity_type).toBe("persons");
+        expect(event.detail.open_entity_id).toBe(PARENT_PERSON);
+    });
+
+    it("stores persons drawer intent for non-host routes", () => {
+        vi.stubGlobal("window", {
+            sessionStorage: globalThis.sessionStorage,
+            location: { pathname: "/adminV2/workflows" },
+            dispatchEvent: vi.fn(),
+        });
+        sessionStorage.removeItem(GLOBAL_RECORD_SEARCH_OPEN_INTENT_KEY);
+        const nav = launchGlobalRecordSearchOpen({
+            open_entity_type: "persons",
+            open_entity_id: PARENT_PERSON,
+        });
+        expect(nav).toBe("/adminV2/workspace");
+        expect(readGlobalRecordSearchOpenIntent()?.open_entity_type).toBe("persons");
+        clearGlobalRecordSearchOpenIntent();
+    });
+});
+
+describe("presentation helpers", () => {
+    it("formatGlobalSearchHitSecondaryLine follows typography hierarchy", () => {
+        const childLine = formatGlobalSearchHitSecondaryLine({
+            entity_type: "customer_members",
+            entity_id: CHILD_MEMBER,
+            group: "children",
+            name: "Sophia Chen",
+            type_label: "Child",
+            household_name: "Chen Household",
+            opportunity_name: "Family Inquiry - Chen",
+            lead_short_label: "Chen",
+            status_label: "Tour Scheduled",
+            location_label: "North Campus",
+        });
+        expect(childLine).toBe("Child · Chen Household · North Campus");
+
+        const leadLine = formatGlobalSearchHitSecondaryLine({
+            entity_type: "opportunities",
+            entity_id: OPP_ID,
+            group: "leads",
+            name: "Family Inquiry - Chen",
+            type_label: "Lead",
+            household_name: "Chen Household",
+            opportunity_name: "Family Inquiry - Chen",
+            lead_short_label: "Chen",
+            status_label: "Tour Completed",
+            location_label: "North Campus",
+        });
+        expect(leadLine).toBe("Lead · North Campus");
+
+        expect(
+            formatGlobalSearchHitPrimaryName({
+                entity_type: "opportunities",
+                entity_id: OPP_ID,
+                group: "leads",
+                name: "Family Inquiry - Chen",
+                type_label: "Lead",
+                household_name: null,
+                opportunity_name: null,
+                lead_short_label: null,
+                status_label: null,
+                location_label: "North Campus",
+            })
+        ).toBe("Family Inquiry - Chen / North Campus");
+    });
+
+    it("formatGlobalSearchHitMetaLine includes secondary and status without Family lead", () => {
+        const line = formatGlobalSearchHitMetaLine({
+            entity_type: "customer_members",
+            entity_id: CHILD_MEMBER,
+            group: "children",
+            name: "Sophia Chen",
+            type_label: "Child",
+            household_name: "Chen Household",
+            opportunity_name: "Family Inquiry - Chen",
+            lead_short_label: "Chen",
+            status_label: "Tour Scheduled",
+            location_label: "North Campus",
+        });
+        expect(line).toContain("Child");
+        expect(line).toContain("Chen Household");
+        expect(line).toContain("North Campus");
+        expect(line).toContain("Tour Scheduled");
+        expect(line).not.toContain("Family lead");
+    });
+
+    it("buildGlobalSearchStatusPill is the only colored pill surface", () => {
+        const pillsPath = resolve(process.cwd(), "app/adminV2/components/GlobalSearchResultPills.tsx");
+        const src = readFileSync(pillsPath, "utf8");
+        expect(src).toContain("Status-only pill");
+        expect(src).not.toContain("alloy-blue");
+    });
+
+    it("globalSearchCrmDisplayLabel maps inquiry to Lead", () => {
+        expect(globalSearchCrmDisplayLabel("Inquiry")).toBe("Lead");
+        expect(globalSearchLeadDisplayLabel("Family Inquiry - Chen")).toBe("Lead");
+    });
+
+    it("humanizeGlobalSearchStatusLabel title-cases raw keys", () => {
+        expect(humanizeGlobalSearchStatusLabel("tour_completed", {})).toBe("Tour Completed");
+        expect(humanizeGlobalSearchStatusLabel("new_inquiry", {})).toBe("New Inquiry");
+        expect(humanizeGlobalSearchStatusLabel("tour_scheduled", {})).toBe("Tour Scheduled");
+    });
+
+    it("personRowIsChildRelationship recognizes child keys", () => {
+        expect(personRowIsChildRelationship("child")).toBe(true);
+    });
+
+    it("globalSearchPersonTypeLabel labels guardians", () => {
+        expect(
+            globalSearchPersonTypeLabel({
+                person_id: PARENT_PERSON,
+                customer_persons: [{ role_type: "guardian" }],
+            })
+        ).toBe("Guardian");
+    });
+
+    it("adminV2PathHasDrawerHost matches workspace routes", () => {
         expect(adminV2PathHasDrawerHost("/adminV2/workspace/dept/x")).toBe(true);
-        expect(adminV2PathHasDrawerHost("/adminV2/settings/locations")).toBe(true);
         expect(adminV2PathHasDrawerHost("/adminV2/workflows")).toBe(false);
     });
 
-    it("stores and reads sessionStorage open intent", () => {
-        sessionStorage.removeItem(GLOBAL_RECORD_SEARCH_OPEN_INTENT_KEY);
-        storeGlobalRecordSearchOpenIntent({ entity_type: "persons", entity_id: "abc" });
-        const intent = readGlobalRecordSearchOpenIntent();
-        expect(intent?.entity_type).toBe("persons");
-        expect(intent?.entity_id).toBe("abc");
-        clearGlobalRecordSearchOpenIntent();
-        expect(readGlobalRecordSearchOpenIntent()).toBeNull();
+    it("buildGlobalSearchFamilyClusters groups by customer and opportunity without household rows", () => {
+        const hits = buildGlobalSearchFamilyClusters([
+            {
+                entity_type: "opportunities",
+                entity_id: OPP_ID,
+                group: "leads",
+                name: "Family Inquiry - Chen",
+                type_label: "Lead",
+                household_name: "Chen Household",
+                opportunity_name: "Family Inquiry - Chen",
+                lead_short_label: "Chen",
+                status_label: "Tour Scheduled",
+                location_label: "North Campus",
+                customer_id: CUSTOMER_CHEN,
+                opportunity_id: OPP_ID,
+                cluster_key: `${CUSTOMER_CHEN}:${OPP_ID}`,
+            },
+            {
+                entity_type: "customer_members",
+                entity_id: CHILD_MEMBER,
+                group: "children",
+                name: "Sophia Chen",
+                type_label: "Child",
+                household_name: "Chen Household",
+                opportunity_name: "Family Inquiry - Chen",
+                lead_short_label: "Chen",
+                status_label: "Tour Scheduled",
+                location_label: "North Campus",
+                customer_id: CUSTOMER_CHEN,
+                opportunity_id: OPP_ID,
+                cluster_key: `${CUSTOMER_CHEN}:${OPP_ID}`,
+            },
+        ]);
+        expect(hits).toHaveLength(1);
+        expect(hits[0]?.children).toHaveLength(1);
+        expect(hits[0]?.anchors).toHaveLength(1);
+        expect(hits[0]?.anchors[0]?.group).toBe("leads");
+        expect(hits[0]?.household_name).toBe("Chen Household");
     });
 });

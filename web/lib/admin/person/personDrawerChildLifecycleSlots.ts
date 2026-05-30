@@ -57,9 +57,9 @@ export function personDrawerShowsChildLifecycleSurface(profile: PersonDrawerProf
     return resolvePersonDrawerPresentationEmphasis(profile) === "child_lifecycle";
 }
 
-/** Child drawer uses Family + Summary — quick links duplicate relationship home. */
-export function personDrawerShowsChildContextPanel(profile: PersonDrawerProfileResult): boolean {
-    return !personDrawerShowsChildLifecycleSurface(profile);
+/** Quick links retired — household section owns relationship navigation for all person drawers. */
+export function personDrawerShowsChildContextPanel(_profile: PersonDrawerProfileResult): boolean {
+    return false;
 }
 
 export function resolveChildLifecycleSlotStates(record: Record<string, unknown>): ChildLifecycleSlotState[] {
@@ -136,7 +136,7 @@ export const CHILD_LIFECYCLE_SECTION_ORDER: Record<string, number> = {
 };
 
 /** Section keys that receive premium pine-accent chrome in child lifecycle overview (none — accent lives in summary + enrollment shells). */
-export const CHILD_LIFECYCLE_PREMIUM_SECTION_KEYS = new Set<string>();
+export const CHILD_LIFECYCLE_PREMIUM_SECTION_KEYS = new Set<string>(["medical"]);
 
 export function sortOverviewSectionsForChildLifecycle<T extends { key: string }>(sections: T[]): T[] {
     return [...sections].sort((a, b) => {

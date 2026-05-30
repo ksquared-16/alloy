@@ -159,16 +159,17 @@ describe("child header and summary model", () => {
         expect(src).toContain("personDrawerChildAgeLabel");
     });
 
-    it("enrollment context lives in overview — not header executive", () => {
+    it("program and lead pills live in header executive — not between summary and household", () => {
         const drawer = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(drawer).toContain("PersonDrawerChildEnrollmentContext");
-        expect(drawer).not.toContain("PersonDrawerChildHeaderExecutive");
-        const ctx = readFileSync(
-            join(process.cwd(), "components/admin/entity/PersonDrawerChildEnrollmentContext.tsx"),
+        expect(drawer).toContain("PersonDrawerChildHeaderExecutive");
+        expect(drawer).not.toContain("PersonDrawerChildEnrollmentContext");
+        const executive = readFileSync(
+            join(process.cwd(), "components/admin/entity/PersonDrawerChildHeaderExecutive.tsx"),
             "utf8"
         );
-        expect(ctx).toContain("data-person-drawer-enrollment-context");
-        expect(ctx).not.toContain("status_key");
+        expect(executive).toContain("data-person-drawer-child-header-executive");
+        expect(executive).toContain("data-person-drawer-child-lead-pill");
+        expect(executive).not.toContain("status_key");
     });
 
     it("AdminEntityDrawer uses person status dropdown for child — not opportunity enrollment mirror", () => {
@@ -198,16 +199,15 @@ describe("family consolidation", () => {
         expect(primaryHouseholdLabel(childRecord)).toBe("Chen Family");
     });
 
-    it("family section component renders household hierarchy blocks", () => {
+    it("family section component renders shared household hierarchy blocks", () => {
         const src = readFileSync(
-            join(process.cwd(), "components/admin/entity/PersonDrawerVisibilitySections.tsx"),
+            join(process.cwd(), "components/admin/entity/PersonDrawerHouseholdSection.tsx"),
             "utf8"
         );
-        expect(src).toContain("data-person-drawer-family-household");
-        expect(src).toContain("Parents / guardians");
-        expect(src).toContain("Siblings");
-        expect(src).toContain("Emergency contacts");
-        expect(src).toContain("resolvePersonDrawerChildFamilyModel");
+        expect(src).toContain("data-person-drawer-household");
+        expect(src).toContain("Guardians");
+        expect(src).toContain("Children");
+        expect(src).toContain("resolvePersonDrawerHouseholdModel");
     });
 });
 
@@ -222,21 +222,11 @@ describe("child module nav — below tabs, no enrollment pipeline", () => {
         expect(src).toContain('related: "Activity"');
     });
 
-    it("child postTabStrip renders module nav only — not opportunity pipeline", () => {
-        const railSrc = readFileSync(
-            join(process.cwd(), "components/admin/entity/PersonDrawerChildLifecycleRail.tsx"),
-            "utf8"
-        );
-        expect(railSrc).not.toContain("RecordLifecycleRail");
-        expect(railSrc).not.toContain("resolvePersonDrawerChildEnrollmentProgress");
-        expect(railSrc).toContain("PersonDrawerChildModuleNav");
-
+    it("child drawer uses tabs for modules — no duplicate chip strip under tabs", () => {
         const drawerSrc = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(drawerSrc).toContain("personDrawerChildLifecycleRail");
-        expect(drawerSrc).toContain("postTabStrip={drawerPostTabStrip}");
-        expect(drawerSrc).not.toMatch(
-            /personDrawerChildLifecycleRail[\s\S]{0,120}RecordLifecycleRailSkeleton/
-        );
+        const stripBlock = drawerSrc.slice(drawerSrc.indexOf("const drawerPostTabStrip"));
+        expect(stripBlock.slice(0, 500)).not.toContain("personDrawerChildLifecycleRail");
+        expect(drawerSrc).toContain('related: "Activity"');
     });
 
     it("summary renders from seed before full relationship hydrate", () => {
@@ -244,8 +234,9 @@ describe("child module nav — below tabs, no enrollment pipeline", () => {
         expect(src).toContain("personDrawerChildBodyHydrated");
         expect(src).toContain("PersonDrawerChildOverviewSkeleton");
         expect(src).toContain("personDrawerChildOverviewPending");
+        expect(src).toContain("PersonDrawerChildSummary");
         expect(src).toMatch(
-            /personChildLifecycleChrome && personDrawerPaintReady[\s\S]{0,120}PersonDrawerChildSummary/
+            /personChildLifecycleChrome[\s\S]{0,240}isPersonDrawerSeedRecord/
         );
         expect(src).toMatch(
             /personDrawerChildOverviewPending && !personDrawerPaintReady/
@@ -256,7 +247,8 @@ describe("child module nav — below tabs, no enrollment pipeline", () => {
 describe("enrollment duplication guard", () => {
     it("AdminEntityDrawer hides enrollment section when child lifecycle chrome active", () => {
         const src = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(src).toContain("!childLifecycle && (enrollmentMirror.length > 0");
+        expect(src).toContain("!childLifecycle &&");
+        expect(src).toContain("!personParentGuardianChrome");
         expect(src).toContain('s.key !== "enrollment_activity"');
     });
 });

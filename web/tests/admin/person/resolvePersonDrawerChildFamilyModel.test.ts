@@ -4,7 +4,7 @@ import { resolvePersonDrawerChildFamilyModel } from "@/lib/admin/person/resolveP
 describe("resolvePersonDrawerChildFamilyModel", () => {
     it("orders household hierarchy: parents/guardians, siblings via UI, emergency contacts", () => {
         const model = resolvePersonDrawerChildFamilyModel({
-            _household_context: [{ customer_name: "Foster household" }],
+            _household_context: [{ customer_id: "cust-1", customer_name: "Foster household" }],
             _household_adult_links: [
                 {
                     person_id: "olivia",
@@ -43,15 +43,15 @@ describe("resolvePersonDrawerChildFamilyModel", () => {
 
         expect(model.household_label).toBe("Foster household");
         expect(model.parents_guardians.map((a) => a.display_name)).toEqual([
-            "Olivia Foster",
             "Grace Walsh",
             "Jordan Foster",
+            "Olivia Foster",
         ]);
         expect(model.emergency_contacts.map((a) => a.display_name)).toEqual(["Pat Walsh"]);
         expect(model.other_household_adults).toHaveLength(0);
     });
 
-    it("puts non-caregiver household roles under other household adults", () => {
+    it("delegates guardians and emergency contacts to shared household model", () => {
         const model = resolvePersonDrawerChildFamilyModel({
             _household_adult_links: [
                 {
@@ -74,6 +74,6 @@ describe("resolvePersonDrawerChildFamilyModel", () => {
         });
 
         expect(model.parents_guardians.map((a) => a.display_name)).toEqual(["Primary Parent"]);
-        expect(model.other_household_adults.map((a) => a.display_name)).toEqual(["Billing Contact"]);
+        expect(model.other_household_adults).toHaveLength(0);
     });
 });

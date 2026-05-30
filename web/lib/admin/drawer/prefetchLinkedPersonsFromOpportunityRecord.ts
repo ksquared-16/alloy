@@ -1,8 +1,11 @@
 import { collectLinkedPersonIdsFromOpportunityRecord } from "@/lib/admin/drawer/collectLinkedPersonIdsFromOpportunityRecord";
 import {
     cachePersonDrawerChildOpenSeed,
+    cachePersonDrawerParentOpenSeed,
     personDrawerSeedFromOpportunityRecord,
 } from "@/lib/admin/drawer/personDrawerOpenSeed";
+import { PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS } from "@/lib/admin/person/personDrawerChildChrome";
+import { PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS } from "@/lib/admin/person/personDrawerParentChrome";
 import {
     prefetchPersonDrawerSnapshot,
     type PersonPrefetchSource,
@@ -17,7 +20,12 @@ export function prefetchLinkedPersonsFromOpportunityRecord(
     const ids = collectLinkedPersonIdsFromOpportunityRecord(record);
     for (const personId of ids) {
         const seed = personDrawerSeedFromOpportunityRecord(record, personId);
-        prefetchPersonDrawerSnapshot(personId, { source, childOpenSeed: seed ?? undefined });
+        if (seed?.presentation_emphasis === PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS) {
+            cachePersonDrawerChildOpenSeed(personId, seed);
+        } else if (seed?.presentation_emphasis === PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS) {
+            cachePersonDrawerParentOpenSeed(personId, seed);
+        }
+        prefetchPersonDrawerSnapshot(personId, { source, openSeed: seed ?? undefined });
     }
     return ids;
 }

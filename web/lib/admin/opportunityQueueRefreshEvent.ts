@@ -22,6 +22,7 @@ const QUEUE_MEMBERSHIP_ACTION_KEYS = new Set([
     "inquiry_child_placement_scope",
     "placement_manual_order",
     "person_contact_save",
+    "household_primary_contact",
     "family_contacts_registry",
     "registry_action",
 ]);

@@ -1,5 +1,6 @@
 import type { PersonDrawerProfileResult } from "@/lib/admin/person/personDrawerVisibilityTypes";
 import { PERSON_DRAWER_CHILD_OPEN_SOURCE } from "@/lib/admin/drawer/personDrawerOpenSeed";
+import { PERSON_DRAWER_HOUSEHOLD_CHILD_OPEN_SOURCE } from "@/lib/admin/drawer/openPersonDrawerFromHousehold";
 import { resolvePersonDrawerProfile } from "@/lib/admin/person/resolvePersonDrawerProfile";
 import { personDrawerShowsChildLifecycleSurface } from "@/lib/admin/person/personDrawerChildLifecycleSlots";
 
@@ -40,7 +41,8 @@ export function resolvePersonDrawerProfileFromRecordWithHint(
     if (
         recordHint === PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS ||
         hintEmphasis === PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS ||
-        openSource === PERSON_DRAWER_CHILD_OPEN_SOURCE
+        openSource === PERSON_DRAWER_CHILD_OPEN_SOURCE ||
+        openSource === PERSON_DRAWER_HOUSEHOLD_CHILD_OPEN_SOURCE
     ) {
         return {
             profiles: ["child"],
@@ -58,6 +60,11 @@ export function personDrawerChildChromeActive(
     hint?: PersonDrawerChildChromeHint | null
 ): boolean {
     if (hint?.presentation_emphasis === PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS) return true;
-    if (hint?.open_source === PERSON_DRAWER_CHILD_OPEN_SOURCE) return true;
+    if (
+        hint?.open_source === PERSON_DRAWER_CHILD_OPEN_SOURCE ||
+        hint?.open_source === PERSON_DRAWER_HOUSEHOLD_CHILD_OPEN_SOURCE
+    ) {
+        return true;
+    }
     return personDrawerShowsChildLifecycleSurface(resolvePersonDrawerProfileFromRecordWithHint(record, hint));
 }

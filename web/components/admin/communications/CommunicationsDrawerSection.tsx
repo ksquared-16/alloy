@@ -282,7 +282,9 @@ export default function CommunicationsDrawerSection({
     const markedReadSubmittedRef = useRef<Set<string>>(new Set());
 
     const composerEntity =
-        apiEntityType === "opportunities" || apiEntityType === "jobs" ? apiEntityType : null;
+        apiEntityType === "opportunities" || apiEntityType === "jobs" || apiEntityType === "persons"
+            ? apiEntityType
+            : null;
     const showDrawerComposerChrome = !!(embedded && composerEntity);
 
     const [channelsAvailable, setChannelsAvailable] = useState<string[]>([]);
@@ -952,6 +954,8 @@ export default function CommunicationsDrawerSection({
         }`;
 
     const emptyThreadsClass = embedded ? "text-[12px] text-alloy-midnight/60" : "text-sm text-alloy-midnight/60";
+    const isPersonDrawerEntity = apiEntityType === "persons";
+
     const emptyThreadsBody = useMemo(() => {
         if (bindingsErr) {
             return (
@@ -986,7 +990,9 @@ export default function CommunicationsDrawerSection({
             return (
                 <div className={emptyThreadsClass}>
                     <p className="font-medium text-alloy-midnight/75">
-                        No eligible email or SMS recipients found for this record.
+                        {isPersonDrawerEntity
+                            ? "Add email or mobile on the person summary to send messages."
+                            : "No eligible email or SMS recipients found for this record."}
                     </p>
                 </div>
             );
@@ -1002,7 +1008,11 @@ export default function CommunicationsDrawerSection({
         return (
             <div className={emptyThreadsClass}>
                 <p className="font-medium text-alloy-midnight/75">No communications yet</p>
-                <p className="mt-1 leading-relaxed">Start the conversation below.</p>
+                <p className="mt-1 leading-relaxed">
+                    {isPersonDrawerEntity
+                        ? "Message history for this person will appear here. Use the composer below to send email or SMS."
+                        : "Start the conversation below."}
+                </p>
             </div>
         );
     }, [
@@ -1015,6 +1025,7 @@ export default function CommunicationsDrawerSection({
         showDrawerComposerChrome,
         composerEntity,
         emptyThreadsClass,
+        isPersonDrawerEntity,
     ]);
 
     if (!active) return null;
@@ -1030,9 +1041,13 @@ export default function CommunicationsDrawerSection({
                 : "Configure an active SMS binding to send.";
         }
         if (recipientsForComposer.length === 0) {
-            return effectiveComposer === "email"
-                ? "No linked person has an email address for this channel."
-                : "No linked person has a mobile number for SMS.";
+            return isPersonDrawerEntity
+                ? effectiveComposer === "email"
+                    ? "Add an email on the person summary to send."
+                    : "Add a mobile number on the person summary to send SMS."
+                : effectiveComposer === "email"
+                  ? "No linked person has an email address for this channel."
+                  : "No linked person has a mobile number for SMS.";
         }
         if (selectedRecipientIds.size === 0) return "Select at least one recipient.";
         if (!composerBody.trim()) return "Enter a message to send.";
@@ -1050,9 +1065,13 @@ export default function CommunicationsDrawerSection({
                 <p className="text-[11px] text-alloy-ember">{recipientsErr}</p>
             ) : recipientsForComposer.length === 0 ? (
                 <p className="text-[10px] text-alloy-midnight/58">
-                    {effectiveComposer === "email"
-                        ? "No linked people with email."
-                        : "No linked people with a mobile number for SMS."}
+                    {isPersonDrawerEntity
+                        ? effectiveComposer === "email"
+                            ? "No email on file for this person."
+                            : "No mobile on file for this person."
+                        : effectiveComposer === "email"
+                          ? "No linked people with email."
+                          : "No linked people with a mobile number for SMS."}
                 </p>
             ) : (
                 <div className="flex max-h-[3.75rem] flex-wrap gap-0.5 overflow-y-auto pr-0.5">
