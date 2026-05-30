@@ -143,8 +143,8 @@ export function shouldRefreshQueueSummariesForEvent(args: {
     visibleOpportunityIds: readonly string[];
 }): boolean {
     if (shouldPatchWorkUnitQueueRowsForEvent(args)) return false;
-    const oppId = (detail?.id ?? "").trim();
-    const actionKey = (detail?.action_key ?? "").trim();
+    const oppId = (args.detail?.id ?? "").trim();
+    const actionKey = (args.detail?.action_key ?? "").trim();
     if (
         oppId &&
         PERSON_DRAWER_ONLY_QUEUE_ACTION_KEYS.has(actionKey) &&
