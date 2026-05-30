@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import PersonDrawerChildSummaryBosPanel from "@/components/admin/entity/PersonDrawerChildSummaryBosPanel";
 import PersonDrawerIdentityAvatar from "@/components/admin/entity/PersonDrawerIdentityAvatar";
+import PersonDrawerSummarySaveBar from "@/components/admin/entity/PersonDrawerSummarySaveBar";
 import {
     oppInqEyebrow,
     oppInqFieldInput,
@@ -10,20 +11,16 @@ import {
 } from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
 import { personDrawerChildChromeActive } from "@/lib/admin/person/personDrawerChildChrome";
 import type { PersonDrawerChildChromeHint } from "@/lib/admin/person/personDrawerChildChrome";
+import { patchPersonDrawerFields } from "@/lib/admin/person/patchPersonDrawerFields";
 import {
-    PERSON_DRAWER_CHILD_ENROLLMENT_DATE_KEY,
-    PERSON_DRAWER_CHILD_START_DATE_KEY,
-    personDrawerChildDateIsoFromRecord,
-} from "@/lib/admin/person/personDrawerChildLifecycleFields";
-import {
-    patchPersonDrawerFields,
-    personDrawerDobIsoFromRecord,
-} from "@/lib/admin/person/patchPersonDrawerFields";
-import {
-    personDrawerGenderSelectOptions,
-    personDrawerGenderStoredValue,
-} from "@/lib/admin/person/personDrawerGenderField";
+    buildChildSummaryPatch,
+    childSummaryDraftFromRecord,
+    childSummaryDraftIsDirty,
+    type ChildSummaryDraft,
+} from "@/lib/admin/person/personDrawerSummaryDraft";
+import { personDrawerGenderSelectOptions } from "@/lib/admin/person/personDrawerGenderField";
 import { resolvePersonDrawerChildSummaryModel } from "@/lib/admin/person/personDrawerChildSummaryModel";
+import { setPersonDrawerUnsavedChecker } from "@/lib/admin/person/personDrawerUnsavedGuard";
 
 function compactFieldClassName(): string {
     return `${oppInqFieldInput} !py-1 !text-[13px]`;
@@ -43,12 +40,12 @@ function DateField({
     label,
     value,
     disabled,
-    onCommit,
+    onChange,
 }: {
     label: string;
     value: string;
     disabled: boolean;
-    onCommit: (next: string) => void;
+    onChange: (next: string) => void;
 }) {
     return (
         <label className="flex min-w-0 flex-col gap-0.5">
@@ -57,15 +54,14 @@ function DateField({
                 type="date"
                 value={value}
                 disabled={disabled}
-                onChange={(e) => onCommit(e.target.value)}
-                onBlur={(e) => onCommit(e.target.value)}
+                onChange={(e) => onChange(e.target.value)}
                 className={compactFieldClassName()}
             />
         </label>
     );
 }
 
-/** Child identity hero — 50/50 fields + BOS assist; age lives in title row only. */
+/** Child identity hero — explicit save (no DOB blur autosave). */
 export default function PersonDrawerChildSummary({
     record,
     chromeHint,
@@ -84,40 +80,41 @@ export default function PersonDrawerChildSummary({
     const personId = String(record.id ?? "").trim();
     const summary = resolvePersonDrawerChildSummaryModel(record);
     const genderOptions = personDrawerGenderSelectOptions(record);
-    const [firstName, setFirstName] = useState(String(record.first_name ?? "").trim());
-    const [lastName, setLastName] = useState(String(record.last_name ?? "").trim());
-    const [dob, setDob] = useState(personDrawerDobIsoFromRecord(record));
-    const [gender, setGender] = useState(personDrawerGenderStoredValue(record));
-    const [enrollmentDate, setEnrollmentDate] = useState(
-        personDrawerChildDateIsoFromRecord(record, PERSON_DRAWER_CHILD_ENROLLMENT_DATE_KEY)
-    );
-    const [startDate, setStartDate] = useState(
-        personDrawerChildDateIsoFromRecord(record, PERSON_DRAWER_CHILD_START_DATE_KEY)
-    );
+    const [draft, setDraft] = useState<ChildSummaryDraft>(() => childSummaryDraftFromRecord(record));
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        setFirstName(String(record.first_name ?? "").trim());
-        setLastName(String(record.last_name ?? "").trim());
-        setDob(personDrawerDobIsoFromRecord(record));
-        setGender(personDrawerGenderStoredValue(record));
-        setEnrollmentDate(personDrawerChildDateIsoFromRecord(record, PERSON_DRAWER_CHILD_ENROLLMENT_DATE_KEY));
-        setStartDate(personDrawerChildDateIsoFromRecord(record, PERSON_DRAWER_CHILD_START_DATE_KEY));
+        setDraft(childSummaryDraftFromRecord(record));
     }, [record]);
 
-    const saveFields = useCallback(
-        async (patch: Record<string, unknown>) => {
-            if (!personId || !canMutate) return;
-            setSaving(true);
-            try {
-                const json = await patchPersonDrawerFields(personId, patch);
-                onPersonUpdated?.({ ...record, ...json, ...patch });
-            } finally {
-                setSaving(false);
-            }
-        },
-        [canMutate, onPersonUpdated, personId, record]
-    );
+    const dirty = useMemo(() => childSummaryDraftIsDirty(record, draft), [draft, record]);
+
+    useEffect(() => {
+        setPersonDrawerUnsavedChecker(() => dirty);
+        return () => setPersonDrawerUnsavedChecker(null);
+    }, [dirty]);
+
+    useEffect(() => {
+        const onBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (!dirty) return;
+            e.preventDefault();
+        };
+        window.addEventListener("beforeunload", onBeforeUnload);
+        return () => window.removeEventListener("beforeunload", onBeforeUnload);
+    }, [dirty]);
+
+    const saveAll = useCallback(async () => {
+        if (!personId || !canMutate || !dirty) return;
+        const patch = buildChildSummaryPatch(record, draft);
+        if (Object.keys(patch).length === 0) return;
+        setSaving(true);
+        try {
+            const json = await patchPersonDrawerFields(personId, patch);
+            onPersonUpdated?.({ ...record, ...json, ...patch });
+        } finally {
+            setSaving(false);
+        }
+    }, [canMutate, dirty, draft, onPersonUpdated, personId, record]);
 
     return (
         <section
@@ -144,15 +141,11 @@ export default function PersonDrawerChildSummary({
                                     <span className={oppInqEyebrow}>First name</span>
                                     <input
                                         type="text"
-                                        value={firstName}
+                                        value={draft.first_name}
                                         disabled={!canMutate || saving}
-                                        onChange={(e) => setFirstName(e.target.value)}
-                                        onBlur={() => {
-                                            const next = firstName.trim();
-                                            const prev = String(record.first_name ?? "").trim();
-                                            if (next === prev) return;
-                                            void saveFields({ first_name: next || null });
-                                        }}
+                                        onChange={(e) =>
+                                            setDraft((p) => ({ ...p, first_name: e.target.value }))
+                                        }
                                         className={`${compactFieldClassName()} font-semibold text-alloy-midnight`}
                                         placeholder="First name"
                                         autoComplete="given-name"
@@ -163,15 +156,11 @@ export default function PersonDrawerChildSummary({
                                     <span className={oppInqEyebrow}>Last name</span>
                                     <input
                                         type="text"
-                                        value={lastName}
+                                        value={draft.last_name}
                                         disabled={!canMutate || saving}
-                                        onChange={(e) => setLastName(e.target.value)}
-                                        onBlur={() => {
-                                            const next = lastName.trim();
-                                            const prev = String(record.last_name ?? "").trim();
-                                            if (next === prev) return;
-                                            void saveFields({ last_name: next || null });
-                                        }}
+                                        onChange={(e) =>
+                                            setDraft((p) => ({ ...p, last_name: e.target.value }))
+                                        }
                                         className={`${compactFieldClassName()} font-semibold text-alloy-midnight`}
                                         placeholder="Last name"
                                         autoComplete="family-name"
@@ -182,25 +171,18 @@ export default function PersonDrawerChildSummary({
                             <SummaryFieldRow>
                                 <DateField
                                     label="DOB"
-                                    value={dob}
+                                    value={draft.date_of_birth}
                                     disabled={!canMutate || saving}
-                                    onCommit={(next) => {
-                                        setDob(next);
-                                        const prev = personDrawerDobIsoFromRecord(record);
-                                        if (next.trim() === prev) return;
-                                        void saveFields({ date_of_birth: next.trim() || null });
-                                    }}
+                                    onChange={(next) => setDraft((p) => ({ ...p, date_of_birth: next }))}
                                 />
                                 <label className="flex min-w-0 flex-col gap-0.5">
                                     <span className={oppInqEyebrow}>Gender</span>
                                     <select
-                                        value={gender}
+                                        value={draft.gender}
                                         disabled={!canMutate || saving}
-                                        onChange={(e) => {
-                                            const next = e.target.value;
-                                            setGender(next);
-                                            void saveFields({ gender: next || null });
-                                        }}
+                                        onChange={(e) =>
+                                            setDraft((p) => ({ ...p, gender: e.target.value }))
+                                        }
                                         className={compactFieldClassName()}
                                         data-person-drawer-gender-select="true"
                                     >
@@ -216,37 +198,25 @@ export default function PersonDrawerChildSummary({
                             <SummaryFieldRow>
                                 <DateField
                                     label="Enrollment date"
-                                    value={enrollmentDate}
+                                    value={draft.enrollment_date}
                                     disabled={!canMutate || saving}
-                                    onCommit={(next) => {
-                                        setEnrollmentDate(next);
-                                        const prev = personDrawerChildDateIsoFromRecord(
-                                            record,
-                                            PERSON_DRAWER_CHILD_ENROLLMENT_DATE_KEY
-                                        );
-                                        if (next.trim() === prev) return;
-                                        void saveFields({
-                                            [PERSON_DRAWER_CHILD_ENROLLMENT_DATE_KEY]: next.trim() || null,
-                                        });
-                                    }}
+                                    onChange={(next) =>
+                                        setDraft((p) => ({ ...p, enrollment_date: next }))
+                                    }
                                 />
                                 <DateField
                                     label="Start date"
-                                    value={startDate}
+                                    value={draft.start_date}
                                     disabled={!canMutate || saving}
-                                    onCommit={(next) => {
-                                        setStartDate(next);
-                                        const prev = personDrawerChildDateIsoFromRecord(
-                                            record,
-                                            PERSON_DRAWER_CHILD_START_DATE_KEY
-                                        );
-                                        if (next.trim() === prev) return;
-                                        void saveFields({
-                                            [PERSON_DRAWER_CHILD_START_DATE_KEY]: next.trim() || null,
-                                        });
-                                    }}
+                                    onChange={(next) => setDraft((p) => ({ ...p, start_date: next }))}
                                 />
                             </SummaryFieldRow>
+                            <PersonDrawerSummarySaveBar
+                                dirty={dirty}
+                                saving={saving}
+                                canMutate={canMutate}
+                                onSave={() => void saveAll()}
+                            />
                         </div>
                     </div>
                 </div>

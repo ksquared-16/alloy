@@ -1,7 +1,7 @@
 # Person Drawer Hardening + Performance Sprint
 
-**Status:** In progress (2026-05-30)  
-**Scope:** Person drawer navigation performance, correct operating shells, OCM placement display, household primary contact propagation, unlinked child safety, config gap audit.  
+**Status:** In progress (2026-05-30, phase 2)  
+**Scope:** Person drawer navigation performance, correct operating shells, global search open, explicit save, formatting, household layout, tab preload, config audit.  
 **Out of scope:** Child / Parent / Opportunity IA redesign — operating model is locked.
 
 ---
@@ -14,119 +14,128 @@
 | **Child person drawer** | Child lifecycle operating surface |
 | **Parent/Guardian person drawer** | Household / contact operating surface |
 | **Person** | Identity, demographics, status |
-| **Household / customer** | Address, family account |
+| **Household / customer** | Mailing address (`customers` → `locations` type address) |
 | **customer_persons** | Household-scoped primary contact |
-| **Future Enrollment/Placement** | Durable schedule / attendance / billing (not this sprint) |
+| **OCM** | Child school/site/program/category until Enrollment/Placement exists |
 
 ---
 
-## Goals and delivery
+## Phase 1 (complete)
 
-### 1. Drawer navigation performance
+- Opportunity / household linked-person prefetch + open seeds
+- Typed child/parent loading shells
+- OCM placement in header + household child rows
+- Primary contact cross-drawer merge
+- Unlinked child safety
+
+See git history / `personDrawerHardeningSprint.test.ts`.
+
+---
+
+## Phase 2 (this pass)
+
+### 1. Drawer loading / perceived performance
 
 | Path | Mechanism |
 |------|-----------|
-| Opportunity → Child / Parent | `prefetchLinkedPersonsFromOpportunityRecord` after opportunity `drawerReady`; open seeds via `personDrawerSeedFromOpportunityRecord` + `cachePersonDrawerChildOpenSeed` / `cachePersonDrawerParentOpenSeed` |
-| Parent → Child, Child → Parent | **New:** `prefetchLinkedPersonsFromPersonRecord` after parent/child hydrate; `openPersonDrawerFromHousehold` with typed `personDrawerOpenSeed` |
-| All person opens | Cache-first in `AdminEntityDrawer` layout effect (`peekDrawerEntitySnapshot`); `prefetchPersonDrawerSnapshot` on hover/click |
+| Opportunity ↔ person | Idle prefetch + open seeds (phase 1) |
+| Parent ↔ child | `openPersonDrawerFromHousehold` + `prefetchLinkedPersonsFromPersonRecord` |
+| Global search → person | `personDrawerOpenSeedFromGlobalSearchHit` + cache stamp + `prefetchPersonDrawerSnapshot` before open |
+| Cold load | Child/parent skeleton when chrome hint known; generic shell only for unknown profile |
 
-**Before:** Household person links called `openDrawer({ type: "persons", id })` with no seed — cold opens could show generic “Loading person…” and wrong profile chrome until GET completed.
+### 2. Global search open
 
-**After:** Household navigation passes child/parent presentation emphasis; typed `PersonDrawerChildOverviewSkeleton` / `PersonDrawerParentOverviewSkeleton` during cold load when chrome hint is known.
+- `resolveGlobalSearchOpenFromHit` attaches `personDrawerOpenSeed` for `parents` / `children` groups
+- `GlobalRecordSearchOpenListener` stamps cache and prefetches before `openDrawer`
+- `AdminEntityDrawer` chrome hints honor `global_search` + seed emphasis
 
-### 2. Correct shell / layout loading
+### 3. Drawer-to-drawer navigation
 
-- Child: `personDrawerChildChromeActive` + `PersonDrawerChildOverviewSkeleton` / child executive header
-- Parent: `personDrawerParentChromeActive` + `PersonDrawerParentOverviewSkeleton`
-- Opportunity: unchanged inquiry workflow shell
-- Generic `Profile` / `Contact` sections suppressed via `personDrawerChildOperatingOverviewSections` / `personDrawerParentOperatingOverviewSections` and `applyPersonDrawerPresentationProfile`
+- Cache-first layout effect (phase 1)
+- `confirmDiscardPersonDrawerUnsaved` on close, back, and cross-open when summary dirty
 
-### 3. Child school location / program
+### 4. Tab preload
 
-- **Source:** `_enrollment_mirror` (OCM projection) via `resolvePersonDrawerChildPlacementFromRecord`
-- **Header:** `PersonDrawerChildHeaderExecutive` (program + location pills; lead pill deep-links to Family Lead when OCM opportunity id present)
-- **Household child rows:** `resolveChildHouseholdCardLines` — age · program · location
-- **No** `person.location` / `person.program` fields
+- `personRelatedData` prefetched after parent/child hydrate (documents tab instant)
+- **Activity tab:** `PersonDrawerOperatingActivityTab` polished empty state — no legacy relationships list on operating surfaces
 
-### 4. Primary contact / action consistency
+### 5. Save behavior
 
-| Surface | Update path |
-|---------|-------------|
-| Household drawer PATCH | `patchHouseholdPrimaryContact` → `dispatchHouseholdPrimaryContactChanged` |
-| Open opportunity drawer | `adminv2:opportunity-updated` → `refetch()` (existing) |
-| Work-unit queue | `dispatchOpportunityQueueUpdated(..., "household_primary_contact")` |
-| Open person drawers (same household) | **New:** `admin-entity-saved` listener merges `applyHouseholdPrimaryContactToRecord` |
-| Communications default recipient | Opportunity refetch + entity GET primary person resolution (existing server paths) |
+- Parent/child summary: explicit **Save** (Bend Pine), dirty indicator, no field `onBlur` autosave
+- DOB/date fields only persist on Save (fixes partial date entry)
+- `personDrawerUnsavedGuard` + browser `beforeunload` + drawer close/back confirm
 
-### 5. Unlinked records
+### 6. Phone formatting
 
-- `link_state: "unlinked"` when `customer_members.person_id` is null
-- Non-clickable row + tooltip + fix hint (`customer_members.person_id` → existing person; do not duplicate person)
-- Documented in `personDrawerHouseholdUnlinkedChild.ts`
+- `formatPhoneUS` → `(XXX) XXX-XXXX` everywhere it is used (parent summary hint, queue, cards, etc.)
 
-### 6. Config hardening audit (defer runtime rebuild)
+### 7. Parent address ownership
 
-See [Config gap audit](#config-gap-audit) below. Prefer `record_drawer_layouts`, `visible_when.roles` / profiles, and built-in section registry over new hardcoded branches.
+**Decision:** Household mailing address lives on **customer account** (`customers` primary location, type `address`), edited in parent drawer via `PersonDrawerHouseholdAddress`.
 
-### 7. Tests
+- Not person-level mailing fields
+- Empty copy: “No household mailing address on file for this account”
+- Add/edit uses `patchHouseholdCustomerLocation` / `createHouseholdCustomerAddress`
 
-- `web/tests/admin/person/personDrawerHardeningSprint.test.ts` — prefetch, seeds, shells, placement, primary contact listener
-- Existing: `personDrawerChildStabilization`, `personDrawerOwnershipFinalPass`, `personDrawerPrimaryContactLocationDoctrine`, `personDrawerParentOperatingPass`, `prefetchLinkedPersonsFromOpportunityRecord`
+### 8. Employee status
 
----
+- `compactOperatingSurface` on person drawer hides **Source** field and shortens help copy
+- Premium card shell via `PersonDrawerEmployeeStatusSection`
 
-## Config gap audit
+### 9. Household layout
 
-Hardcoded today — candidate to move to config when runtime supports it safely:
+- Guardians + Children columns always render in paired grid (`data-person-drawer-household-columns="paired"`)
+- Empty column shows em dash — no collapse to single column
 
-| Area | Current hardcode | Target config |
-|------|------------------|---------------|
-| Section visibility | `applyPersonDrawerPresentationProfile`, `isPersonDrawerChildSuppressedOverviewSection`, parent operating section filters | `record_drawer_layouts` + `visible_when.profiles` |
-| Overview tabs | Parent module nav chips → `setDrawerTab` (communications, etc.) | Built-in section registry + tab manifest per profile |
-| Summary field placement | Child hero in `PersonDrawerChildSummary`; parent contact in `PersonDrawerParentSummary` | Layout `overviewSections` with profile-scoped field keys |
-| Role / profile chrome | `personDrawerChildChromeActive`, `personDrawerParentChromeActive`, open-source hints | `visible_when.roles` + presentation emphasis from layout metadata |
-| Status applicability | `personStatusApplicability`, child lifecycle status keys | Status defs `metadata.applicability` (partially done) |
-| Built-in sections | Household, address, employee status, enrollment activity mounted in `AdminEntityDrawer` | Built-in section registry keys (`household`, `household_address`, `employee_status`, …) |
-| Child placement edit | Deep-link to opportunity (Family Lead) when `primary_opportunity_id` | Registry action on child profile or OCM row scope |
+### 10. Config gap audit (unchanged — defer runtime)
 
-**Do not migrate in this sprint** unless a small, safe extraction (no parallel config runtime).
+| Area | Today | Target |
+|------|-------|--------|
+| Section visibility | `personDrawer*OperatingOverviewSections` | `record_drawer_layouts` + `visible_when.profiles` |
+| Tabs | Hardcoded parent/child tab lists | Layout tab manifest |
+| Summary fields | `PersonDrawer*Summary` components | Overview section field keys |
+| Built-in sections | Mounted in `AdminEntityDrawer` | Built-in section registry |
+| Status defs | `personStatusApplicability` | Status metadata |
+| Header slots | Executive/header components | `record_drawer_layouts` header slots |
 
 ---
 
-## Key files
+## Tests
 
-| File | Role |
-|------|------|
-| `web/lib/admin/drawer/openPersonDrawerFromHousehold.ts` | Typed household navigation |
-| `web/lib/admin/drawer/prefetchLinkedPersonsFromPersonRecord.ts` | Post-hydrate linked prefetch |
-| `web/lib/admin/drawer/personDrawerOpenSeedFromPersonRecord.ts` | Seeds from household links |
-| `web/lib/admin/prefetchPersonDrawerSnapshot.ts` | Snapshot warm + parent/child stamp |
-| `web/components/admin/AdminEntityDrawer.tsx` | Shell gates, prefetch effects, primary contact listener |
-| `web/lib/admin/person/personDrawerChildPlacementContext.ts` | OCM placement resolution |
-
----
-
-## Verification
+| File | Covers |
+|------|--------|
+| `personDrawerHardeningSprint.test.ts` | Prefetch, household open, shells, placement |
+| `personDrawerHardeningPhase2.test.ts` | Global search seeds, explicit save, phone, layout, employee |
+| `formatPhoneUS.test.ts` | `(XXX) XXX-XXXX` |
+| Existing parent/child/ownership tests | IA locks, primary contact, household |
 
 ```bash
 cd web && npx tsc --noEmit
-cd web && npm run test -- tests/admin/person/personDrawerHardeningSprint.test.ts
-cd web && npm run test -- tests/admin/person/personDrawerChildStabilization.test.ts
-cd web && npm run test -- tests/admin/drawer/prefetchLinkedPersonsFromOpportunityRecord.test.ts
+cd web && npm run test -- tests/admin/person/personDrawerHardeningPhase2.test.ts tests/admin/person/personDrawerHardeningSprint.test.ts tests/admin/formatPhoneUS.test.ts
 ```
 
 ---
 
-## Before / after summary
+## Before / after (phase 2)
 
 | Concern | Before | After |
 |---------|--------|-------|
-| Opp → person | Prefetch + seeds (prior work) | Parent seeds also cached on idle prefetch |
-| Parent ↔ child | Plain `openDrawer`, generic loading | Seeds + idle prefetch + typed skeletons |
-| Cold load shell | Generic “Loading person…” when hint missing | Child/parent skeleton when open source / seed present |
-| Primary contact | Opportunity + queue events | + optimistic merge on other open person drawers in household |
-| Placement | OCM mirror in header/household (prior work) | Unchanged; tests locked |
-| Unlinked child | Documented + disabled UI (prior work) | Unchanged |
+| Global search → person | Plain open, generic shell | Profile seed + cache + correct chrome |
+| Summary save | Blur autosave (DOB partial save risk) | Explicit Save + dirty + leave warning |
+| Phone display | `555-123-4567` | `(555) 123-4567` |
+| Activity tab (parent/child) | Legacy relationships in “Activity” | Polished empty state |
+| Household columns | Single column when one side empty | Stable two-column grid |
+| Employee source | Shown on person drawer | Hidden on operating surface |
+
+---
+
+## Deferred
+
+- Full person Activity timeline (mirror opportunity activity API)
+- Communications/documents tab background prefetch beyond related payload
+- Config runtime migration for drawer layouts
+- Person-level mailing address (not product truth — household location only)
+- Opportunity drawer open from global search with queue context seed
 
 ---
 
@@ -135,4 +144,3 @@ cd web && npm run test -- tests/admin/drawer/prefetchLinkedPersonsFromOpportunit
 - `docs/sprints/05_2026/child_profile_person_drawer_doctrine.md`
 - `docs/sprints/05_2026/parent_operating_surface_person_drawer.md`
 - `docs/sprints/05_2026/person_drawer_primary_contact_location_doctrine.md`
-- `docs/sprints/05_2026/adminv2_drawer_performance_hardening_phase0.md`

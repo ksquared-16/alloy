@@ -331,10 +331,13 @@ export default function PersonDrawerHouseholdSection({
                             ) : null}
 
                             {group.guardians.length > 0 || group.children.length > 0 ? (
-                                <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
-                                    {group.guardians.length > 0 ? (
-                                        <HouseholdColumn title="Guardians">
-                                            {group.guardians.map((row) => (
+                                <div
+                                    className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2"
+                                    data-person-drawer-household-columns="paired"
+                                >
+                                    <HouseholdColumn title="Guardians">
+                                        {group.guardians.length > 0 ? (
+                                            group.guardians.map((row) => (
                                                 <GuardianCard
                                                     key={row.person_id ?? row.display_name}
                                                     row={row}
@@ -343,12 +346,14 @@ export default function PersonDrawerHouseholdSection({
                                                     onOpenPerson={openPerson}
                                                     onPrimarySet={handlePrimarySet}
                                                 />
-                                            ))}
-                                        </HouseholdColumn>
-                                    ) : null}
-                                    {group.children.length > 0 ? (
-                                        <HouseholdColumn title="Children">
-                                            {group.children.map((row) => (
+                                            ))
+                                        ) : (
+                                            <li className="text-[11px] text-alloy-midnight/40">—</li>
+                                        )}
+                                    </HouseholdColumn>
+                                    <HouseholdColumn title="Children">
+                                        {group.children.length > 0 ? (
+                                            group.children.map((row) => (
                                                 <ChildCard
                                                     key={
                                                         row.person_id ??
@@ -358,9 +363,11 @@ export default function PersonDrawerHouseholdSection({
                                                     row={row}
                                                     onOpenChild={openChild}
                                                 />
-                                            ))}
-                                        </HouseholdColumn>
-                                    ) : null}
+                                            ))
+                                        ) : (
+                                            <li className="text-[11px] text-alloy-midnight/40">—</li>
+                                        )}
+                                    </HouseholdColumn>
                                 </div>
                             ) : null}
 

@@ -96,6 +96,7 @@ import {
 } from "@/lib/entityPresentation";
 import { OpportunityIntakeSourceSection } from "@/components/admin/opportunity/OpportunityIntakeSourceSection";
 import PersonDrawerEmployeeStatusSection from "@/components/admin/entity/PersonDrawerEmployeeStatusSection";
+import PersonDrawerOperatingActivityTab from "@/components/admin/entity/PersonDrawerOperatingActivityTab";
 import PersonEmployeePlacementSection from "@/components/admin/entity/PersonEmployeePlacementSection";
 import PersonDrawerHeaderMetadata, {
     formatPersonDrawerRecordNumber,
@@ -147,6 +148,7 @@ import {
 import {
     personDrawerParentChromeActive,
     PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS,
+    PERSON_DRAWER_PARENT_OPEN_SOURCE,
     resolvePersonDrawerProfileFromRecordWithParentHint,
     type PersonDrawerParentChromeHint,
 } from "@/lib/admin/person/personDrawerParentChrome";
@@ -293,6 +295,7 @@ import {
     openPersonDrawerFromHousehold,
     PERSON_DRAWER_HOUSEHOLD_CHILD_OPEN_SOURCE,
 } from "@/lib/admin/drawer/openPersonDrawerFromHousehold";
+import { GLOBAL_SEARCH_DRAWER_OPEN_SOURCE } from "@/lib/adminV2/globalRecordSearchOpen";
 import { applyHouseholdPrimaryContactToRecord } from "@/lib/admin/person/applyHouseholdPrimaryContactToRecord";
 import RecordLifecycleRail from "@/components/admin/drawer/RecordLifecycleRail";
 import RecordLifecycleRailSkeleton from "@/components/admin/drawer/RecordLifecycleRailSkeleton";
@@ -3097,6 +3100,31 @@ export default function AdminEntityDrawer() {
                 .finally(() => setPersonRelatedLoading(false));
         }
     }, [drawer.type, drawer.id, drawerTab, personRelatedData]);
+
+    /** Preload person documents/related payload after operating drawer hydrates (tab switch feels instant). */
+    useEffect(() => {
+        if (drawer.type !== "persons" || !drawer.id || drawer.id === "new") return;
+        if (!drawerReady || !data || !dataMatchesDrawer) return;
+        if (!personChildLifecycleChrome && !personParentGuardianChrome) return;
+        if (personRelatedData || personRelatedLoading) return;
+
+        setPersonRelatedLoading(true);
+        fetch(`/api/admin/related/person/${drawer.id}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then((json: PersonRelatedPayload | null) => setPersonRelatedData(json ?? null))
+            .catch(() => setPersonRelatedData(null))
+            .finally(() => setPersonRelatedLoading(false));
+    }, [
+        drawer.type,
+        drawer.id,
+        drawerReady,
+        data,
+        dataMatchesDrawer,
+        personChildLifecycleChrome,
+        personParentGuardianChrome,
+        personRelatedData,
+        personRelatedLoading,
+    ]);
 
     useEffect(() => {
         if (drawer.type !== "customers" || !drawer.id) {
@@ -6611,7 +6639,9 @@ export default function AdminEntityDrawer() {
         const childOpenSource =
             drawer.openSource === PERSON_DRAWER_CHILD_OPEN_SOURCE ||
             drawer.openSource === PERSON_DRAWER_HOUSEHOLD_CHILD_OPEN_SOURCE ||
-            drawer.openSource === "opportunity_inquiry_child";
+            drawer.openSource === "opportunity_inquiry_child" ||
+            (drawer.openSource === GLOBAL_SEARCH_DRAWER_OPEN_SOURCE &&
+                drawer.personDrawerOpenSeed?.presentation_emphasis === PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS);
         return {
             presentation_emphasis:
                 drawer.personDrawerOpenSeed?.presentation_emphasis === PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS ||
@@ -6630,7 +6660,10 @@ export default function AdminEntityDrawer() {
         if (drawer.type !== "persons") return null;
         const parentOpenSource =
             drawer.openSource === "opportunity_primary_contact" ||
-            drawer.openSource === "opportunity_household_adult";
+            drawer.openSource === "opportunity_household_adult" ||
+            drawer.openSource === PERSON_DRAWER_PARENT_OPEN_SOURCE ||
+            (drawer.openSource === GLOBAL_SEARCH_DRAWER_OPEN_SOURCE &&
+                drawer.personDrawerOpenSeed?.presentation_emphasis === PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS);
         return {
             presentation_emphasis:
                 drawer.personDrawerOpenSeed?.presentation_emphasis === PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS ||
@@ -11910,7 +11943,26 @@ export default function AdminEntityDrawer() {
                             <DrawerLinkWithName label="Customer" id={data?.customer_id != null ? String(data.customer_id) : null} type="customers" displayName={String(data?._customer_name ?? "")} />
                         </div>
                     )}
-                    {drawerTab === "related" && drawer.type === "persons" && drawer.id && drawer.id !== "new" && (
+                    {drawerTab === "related" &&
+                    drawer.type === "persons" &&
+                    drawer.id &&
+                    drawer.id !== "new" &&
+                    personChildLifecycleChrome ? (
+                        <PersonDrawerOperatingActivityTab variant="child" />
+                    ) : null}
+                    {drawerTab === "related" &&
+                    drawer.type === "persons" &&
+                    drawer.id &&
+                    drawer.id !== "new" &&
+                    personParentGuardianChrome ? (
+                        <PersonDrawerOperatingActivityTab variant="parent" />
+                    ) : null}
+                    {drawerTab === "related" &&
+                    drawer.type === "persons" &&
+                    drawer.id &&
+                    drawer.id !== "new" &&
+                    !personChildLifecycleChrome &&
+                    !personParentGuardianChrome ? (
                         <div className="pt-2 mb-4">
                             {personRelatedLoading ? (
                                 <div className="flex min-h-[10rem] flex-col gap-3 py-1" aria-busy="true">
@@ -14644,6 +14696,7 @@ export default function AdminEntityDrawer() {
                                                             entityDrawerOverviewData as Record<string, unknown>
                                                         )}
                                                         canMutate={!!canMutate}
+                                                        compactOperatingSurface
                                                         onPersonUpdated={(json) => {
                                                             setData((prev) => (prev ? { ...prev, ...json } : prev));
                                                             if (drawer.id) {

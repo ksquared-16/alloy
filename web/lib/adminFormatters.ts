@@ -176,15 +176,15 @@ export function formatFrequencyLabel(cadence: string | null | undefined, interva
     return n === 1 ? "Every 1 month" : `Every ${n} months`;
 }
 
-/** Format US phone for display: 541-654-3217. Accepts E.164, digits-only, or already formatted (uses last 10 digits for country code 1). */
+/** Format US phone for display: (541) 654-3217. Uses last 10 digits when country code 1 is present. */
 export function formatPhoneUS(value: string | null | undefined): string {
     if (value == null || value === "") return "—";
     const digits = String(value).replace(/\D/g, "");
-    if (digits.length < 10) return String(value);
+    if (digits.length < 10) return String(value).trim() || "—";
     const area = digits.slice(-10, -7);
     const mid = digits.slice(-7, -4);
     const last = digits.slice(-4);
-    return `${area}-${mid}-${last}`;
+    return `(${area}) ${mid}-${last}`;
 }
 
 /** @deprecated Prefer formatDateTimeUtcAudit. */

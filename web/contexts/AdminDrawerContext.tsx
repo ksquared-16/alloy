@@ -22,6 +22,7 @@ import {
 import { isOpportunityDrawerBootstrapWarm } from "@/lib/admin/opportunityDrawerBootstrapClient";
 import { isOpportunityDrawerPrimaryWarm } from "@/lib/admin/opportunityDrawerPrimaryPrefetch";
 import { markDrawerOpenStart } from "@/lib/perf/adminV2DrawerPerf";
+import { confirmDiscardPersonDrawerUnsaved } from "@/lib/admin/person/personDrawerUnsavedGuard";
 import { GLOBAL_SEARCH_DRAWER_OPEN_SOURCE } from "@/lib/adminV2/globalRecordSearchOpen";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import type { OperationalVisualContext } from "@/lib/visualContext";
@@ -405,6 +406,9 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
 
     const openDrawer = useCallback(
         (params: OpenDrawerParams) => {
+            if (drawer.type === "persons" && drawer.id && !confirmDiscardPersonDrawerUnsaved()) {
+                return;
+            }
             if (
                 params.type === "opportunities" &&
                 shouldDeferOpportunityDrawerOpen(pathname, params.id)
@@ -481,10 +485,11 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                 return next;
             });
         },
-        [pathname, pushDrawerToStack]
+        [drawer.id, drawer.type, pathname, pushDrawerToStack]
     );
 
     const goBack = useCallback(() => {
+        if (!confirmDiscardPersonDrawerUnsaved()) return;
         setStack((s) => {
             const next = [...s];
             const item = next.pop();
@@ -510,6 +515,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const closeDrawer = useCallback(() => {
+        if (!confirmDiscardPersonDrawerUnsaved()) return;
         queueNavRunRef.current += 1;
         setOpportunityQueueNavTargetId(null);
         setOpeningOpportunity(null);

@@ -20,7 +20,8 @@ import {
 } from "@/lib/admin/person/resolvePersonDrawerHouseholdAddress";
 import type { PersonHouseholdCustomerAddressRow } from "@/lib/admin/person/personDrawerVisibilityTypes";
 
-export const PERSON_DRAWER_HOUSEHOLD_ADDRESS_EMPTY_COPY = "No household address on file";
+export const PERSON_DRAWER_HOUSEHOLD_ADDRESS_EMPTY_COPY =
+    "No household mailing address on file for this account";
 
 const ADDRESS_FIELD_KEYS = ["address_line1", "address_line2", "city", "state", "postal_code"] as const;
 

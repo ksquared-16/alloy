@@ -1,11 +1,13 @@
 import type { GlobalSearchAdminV2DrawerEntityType } from "@/lib/admin/globalSearch/globalRecordSearchDrawerTarget";
 import type { GlobalRecordSearchHit } from "@/lib/admin/globalSearch/globalRecordSearchTypes";
 import type { GlobalRecordSearchCluster } from "@/lib/admin/globalSearch/globalRecordSearchTypes";
+import type { PersonDrawerOpenSeed } from "@/lib/admin/drawer/personDrawerOpenSeed";
 import { ADMINV2_SHELL_CHROME_Z } from "@/components/admin/Drawer";
 
 export type GlobalRecordSearchOpenDetail = {
     open_entity_type: GlobalSearchAdminV2DrawerEntityType;
     open_entity_id: string;
+    personDrawerOpenSeed?: PersonDrawerOpenSeed | null;
 };
 
 export const GLOBAL_SEARCH_DRAWER_OPEN_SOURCE = "global_search";

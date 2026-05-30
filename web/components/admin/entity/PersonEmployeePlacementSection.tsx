@@ -19,6 +19,8 @@ export type PersonEmployeePlacementSectionProps = {
     canMutate: boolean;
     /** Shown under fields when editing from a linked surface (e.g. contact). */
     saveHint?: string;
+    /** Parent/child person drawer — hide legacy source field and long help copy. */
+    compactOperatingSurface?: boolean;
     onPersonUpdated?: (person: Record<string, unknown>) => void;
 };
 
@@ -27,6 +29,7 @@ export default function PersonEmployeePlacementSection({
     initialValues,
     canMutate,
     saveHint,
+    compactOperatingSurface = false,
     onPersonUpdated,
 }: PersonEmployeePlacementSectionProps) {
     const baselineRef = useRef(initialValues);
@@ -90,11 +93,13 @@ export default function PersonEmployeePlacementSection({
 
     return (
         <div className="space-y-3" data-person-employee-placement="true">
-            <p className="text-xs text-alloy-midnight/55 leading-snug">
-                Person records are generic identity profiles (parent, employee, emergency contact, payer, staff, and
-                more). Employee status drives waitlist employee-family priority when this person is on a family account.
-                Child enrollment and waitlist scope stay on the opportunity child section — not here.
-            </p>
+            {!compactOperatingSurface ? (
+                <p className="text-xs text-alloy-midnight/55 leading-snug">
+                    Person records are generic identity profiles (parent, employee, emergency contact, payer, staff, and
+                    more). Employee status drives waitlist employee-family priority when this person is on a family account.
+                    Child enrollment and waitlist scope stay on the opportunity child section — not here.
+                </p>
+            ) : null}
             <label className="flex items-center gap-2 text-sm text-alloy-midnight/85">
                 <input
                     type="checkbox"
@@ -114,7 +119,7 @@ export default function PersonEmployeePlacementSection({
                 <span className="font-medium">Employee</span>
             </label>
             {showIdFields ? (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className={compactOperatingSurface ? "max-w-sm" : "grid grid-cols-1 gap-3 sm:grid-cols-2"}>
                     <div>
                         <label className="mb-0.5 block text-xs font-medium text-alloy-midnight/60">
                             Employee ID
@@ -132,21 +137,23 @@ export default function PersonEmployeePlacementSection({
                             autoComplete="off"
                         />
                     </div>
-                    <div>
-                        <label className="mb-0.5 block text-xs font-medium text-alloy-midnight/60">Source</label>
-                        <input
-                            value={draft.employee_source}
-                            disabled={!canMutate || saving}
-                            onChange={(e) => {
-                                setDraft((p) => ({ ...p, employee_source: e.target.value }));
-                                scheduleSave();
-                            }}
-                            onBlur={() => void persist()}
-                            className={INPUT_CLASS}
-                            placeholder="e.g. manual"
-                            autoComplete="off"
-                        />
-                    </div>
+                    {!compactOperatingSurface ? (
+                        <div>
+                            <label className="mb-0.5 block text-xs font-medium text-alloy-midnight/60">Source</label>
+                            <input
+                                value={draft.employee_source}
+                                disabled={!canMutate || saving}
+                                onChange={(e) => {
+                                    setDraft((p) => ({ ...p, employee_source: e.target.value }));
+                                    scheduleSave();
+                                }}
+                                onBlur={() => void persist()}
+                                className={INPUT_CLASS}
+                                placeholder="e.g. manual"
+                                autoComplete="off"
+                            />
+                        </div>
+                    ) : null}
                 </div>
             ) : null}
             {saveHint ? <p className="text-[10px] text-alloy-midnight/45">{saveHint}</p> : null}

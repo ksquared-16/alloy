@@ -13,10 +13,11 @@ describe("formatPhoneUS", () => {
         expect(formatPhoneUS("12345")).toBe("12345");
     });
 
-    it("formats 10 digits and E.164 +1 as XXX-XXX-XXXX", () => {
-        expect(formatPhoneUS("5551234567")).toBe("555-123-4567");
-        expect(formatPhoneUS("+15551234567")).toBe("555-123-4567");
-        expect(formatPhoneUS("1-555-123-4567")).toBe("555-123-4567");
-        expect(formatPhoneUS("(555) 123-4567")).toBe("555-123-4567");
+    it("formats 10 digits and E.164 +1 as (XXX) XXX-XXXX", () => {
+        expect(formatPhoneUS("5551234567")).toBe("(555) 123-4567");
+        expect(formatPhoneUS("+15551234567")).toBe("(555) 123-4567");
+        expect(formatPhoneUS("1-555-123-4567")).toBe("(555) 123-4567");
+        expect(formatPhoneUS("(555) 123-4567")).toBe("(555) 123-4567");
+        expect(formatPhoneUS("4444444444")).toBe("(444) 444-4444");
     });
 });

@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import PersonDrawerParentSummaryBosPanel from "@/components/admin/entity/PersonDrawerParentSummaryBosPanel";
 import PersonDrawerIdentityAvatar from "@/components/admin/entity/PersonDrawerIdentityAvatar";
+import PersonDrawerSummarySaveBar from "@/components/admin/entity/PersonDrawerSummarySaveBar";
 import {
     oppInqEyebrow,
     oppInqFieldInput,
@@ -11,8 +12,14 @@ import {
 import { personDrawerParentChromeActive } from "@/lib/admin/person/personDrawerParentChrome";
 import type { PersonDrawerParentChromeHint } from "@/lib/admin/person/personDrawerParentChrome";
 import { patchPersonDrawerFields } from "@/lib/admin/person/patchPersonDrawerFields";
+import {
+    buildParentSummaryPatch,
+    parentSummaryDraftFromRecord,
+    parentSummaryDraftIsDirty,
+    type ParentSummaryDraft,
+} from "@/lib/admin/person/personDrawerSummaryDraft";
 import { resolvePersonDrawerParentSummaryModel } from "@/lib/admin/person/personDrawerParentSummaryModel";
-import { formatPhoneUS } from "@/lib/adminFormatters";
+import { setPersonDrawerUnsavedChecker } from "@/lib/admin/person/personDrawerUnsavedGuard";
 
 function compactFieldClassName(): string {
     return `${oppInqFieldInput} !py-1 !text-[13px]`;
@@ -28,7 +35,7 @@ function SummaryFieldRow({
     return <div className={`grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 ${className}`}>{children}</div>;
 }
 
-/** Parent/guardian contact hero — 50/50 fields + BOS assist. */
+/** Parent/guardian contact hero — explicit save (no field blur autosave). */
 export default function PersonDrawerParentSummary({
     record,
     chromeHint,
@@ -46,37 +53,41 @@ export default function PersonDrawerParentSummary({
 
     const personId = String(record.id ?? "").trim();
     const summary = resolvePersonDrawerParentSummaryModel(record);
-    const [firstName, setFirstName] = useState(String(record.first_name ?? "").trim());
-    const [lastName, setLastName] = useState(String(record.last_name ?? "").trim());
-    const [email, setEmail] = useState(String(record.email ?? "").trim());
-    const [phone, setPhone] = useState(String(record.phone ?? "").trim());
-    const [preferredContact, setPreferredContact] = useState(summary.preferred_contact_method ?? "");
-    const [optOut, setOptOut] = useState(summary.communication_opt_out);
+    const [draft, setDraft] = useState<ParentSummaryDraft>(() => parentSummaryDraftFromRecord(record));
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        const next = resolvePersonDrawerParentSummaryModel(record);
-        setFirstName(String(record.first_name ?? "").trim());
-        setLastName(String(record.last_name ?? "").trim());
-        setEmail(String(record.email ?? "").trim());
-        setPhone(String(record.phone ?? "").trim());
-        setPreferredContact(next.preferred_contact_method ?? "");
-        setOptOut(next.communication_opt_out);
+        setDraft(parentSummaryDraftFromRecord(record));
     }, [record]);
 
-    const saveFields = useCallback(
-        async (patch: Record<string, unknown>) => {
-            if (!personId || !canMutate) return;
-            setSaving(true);
-            try {
-                const json = await patchPersonDrawerFields(personId, patch);
-                onPersonUpdated?.({ ...record, ...json, ...patch });
-            } finally {
-                setSaving(false);
-            }
-        },
-        [canMutate, onPersonUpdated, personId, record]
-    );
+    const dirty = useMemo(() => parentSummaryDraftIsDirty(record, draft), [draft, record]);
+
+    useEffect(() => {
+        setPersonDrawerUnsavedChecker(() => dirty);
+        return () => setPersonDrawerUnsavedChecker(null);
+    }, [dirty]);
+
+    useEffect(() => {
+        const onBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (!dirty) return;
+            e.preventDefault();
+        };
+        window.addEventListener("beforeunload", onBeforeUnload);
+        return () => window.removeEventListener("beforeunload", onBeforeUnload);
+    }, [dirty]);
+
+    const saveAll = useCallback(async () => {
+        if (!personId || !canMutate || !dirty) return;
+        const patch = buildParentSummaryPatch(record, draft);
+        if (Object.keys(patch).length === 0) return;
+        setSaving(true);
+        try {
+            const json = await patchPersonDrawerFields(personId, patch);
+            onPersonUpdated?.({ ...record, ...json, ...patch });
+        } finally {
+            setSaving(false);
+        }
+    }, [canMutate, dirty, draft, onPersonUpdated, personId, record]);
 
     return (
         <section
@@ -103,15 +114,11 @@ export default function PersonDrawerParentSummary({
                                     <span className={oppInqEyebrow}>First name</span>
                                     <input
                                         type="text"
-                                        value={firstName}
+                                        value={draft.first_name}
                                         disabled={!canMutate || saving}
-                                        onChange={(e) => setFirstName(e.target.value)}
-                                        onBlur={() => {
-                                            const next = firstName.trim();
-                                            const prev = String(record.first_name ?? "").trim();
-                                            if (next === prev) return;
-                                            void saveFields({ first_name: next || null });
-                                        }}
+                                        onChange={(e) =>
+                                            setDraft((p) => ({ ...p, first_name: e.target.value }))
+                                        }
                                         className={`${compactFieldClassName()} font-semibold text-alloy-midnight`}
                                         autoComplete="given-name"
                                         aria-label="Parent first name"
@@ -121,15 +128,11 @@ export default function PersonDrawerParentSummary({
                                     <span className={oppInqEyebrow}>Last name</span>
                                     <input
                                         type="text"
-                                        value={lastName}
+                                        value={draft.last_name}
                                         disabled={!canMutate || saving}
-                                        onChange={(e) => setLastName(e.target.value)}
-                                        onBlur={() => {
-                                            const next = lastName.trim();
-                                            const prev = String(record.last_name ?? "").trim();
-                                            if (next === prev) return;
-                                            void saveFields({ last_name: next || null });
-                                        }}
+                                        onChange={(e) =>
+                                            setDraft((p) => ({ ...p, last_name: e.target.value }))
+                                        }
                                         className={`${compactFieldClassName()} font-semibold text-alloy-midnight`}
                                         autoComplete="family-name"
                                         aria-label="Parent last name"
@@ -141,15 +144,9 @@ export default function PersonDrawerParentSummary({
                                     <span className={oppInqEyebrow}>Email</span>
                                     <input
                                         type="email"
-                                        value={email}
+                                        value={draft.email}
                                         disabled={!canMutate || saving}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        onBlur={() => {
-                                            const next = email.trim();
-                                            const prev = String(record.email ?? "").trim();
-                                            if (next === prev) return;
-                                            void saveFields({ email: next || null });
-                                        }}
+                                        onChange={(e) => setDraft((p) => ({ ...p, email: e.target.value }))}
                                         className={compactFieldClassName()}
                                         autoComplete="email"
                                         aria-label="Parent email"
@@ -159,15 +156,9 @@ export default function PersonDrawerParentSummary({
                                     <span className={oppInqEyebrow}>Mobile</span>
                                     <input
                                         type="tel"
-                                        value={phone}
+                                        value={draft.phone}
                                         disabled={!canMutate || saving}
-                                        onChange={(e) => setPhone(e.target.value)}
-                                        onBlur={() => {
-                                            const next = phone.trim();
-                                            const prev = String(record.phone ?? "").trim();
-                                            if (next === prev) return;
-                                            void saveFields({ phone: next || null });
-                                        }}
+                                        onChange={(e) => setDraft((p) => ({ ...p, phone: e.target.value }))}
                                         className={compactFieldClassName()}
                                         autoComplete="tel"
                                         aria-label="Parent phone"
@@ -181,17 +172,14 @@ export default function PersonDrawerParentSummary({
                                             <span className={oppInqEyebrow}>Preferred contact</span>
                                             <input
                                                 type="text"
-                                                value={preferredContact}
+                                                value={draft.preferred_contact_method}
                                                 disabled={!canMutate || saving}
-                                                onChange={(e) => setPreferredContact(e.target.value)}
-                                                onBlur={() => {
-                                                    const next = preferredContact.trim();
-                                                    const prev = summary.preferred_contact_method ?? "";
-                                                    if (next === prev) return;
-                                                    void saveFields({
-                                                        preferred_contact_method: next || null,
-                                                    });
-                                                }}
+                                                onChange={(e) =>
+                                                    setDraft((p) => ({
+                                                        ...p,
+                                                        preferred_contact_method: e.target.value,
+                                                    }))
+                                                }
                                                 className={compactFieldClassName()}
                                                 aria-label="Preferred contact method"
                                             />
@@ -203,13 +191,14 @@ export default function PersonDrawerParentSummary({
                                         <label className="flex min-w-0 flex-col gap-0.5">
                                             <span className={oppInqEyebrow}>Communication opt-out</span>
                                             <select
-                                                value={optOut ? "yes" : "no"}
+                                                value={draft.communication_opt_out ? "yes" : "no"}
                                                 disabled={!canMutate || saving}
-                                                onChange={(e) => {
-                                                    const next = e.target.value === "yes";
-                                                    setOptOut(next);
-                                                    void saveFields({ communication_opt_out: next });
-                                                }}
+                                                onChange={(e) =>
+                                                    setDraft((p) => ({
+                                                        ...p,
+                                                        communication_opt_out: e.target.value === "yes",
+                                                    }))
+                                                }
                                                 className={compactFieldClassName()}
                                                 data-person-drawer-communication-opt-out="true"
                                                 aria-label="Communication opt-out"
@@ -221,11 +210,12 @@ export default function PersonDrawerParentSummary({
                                     ) : null}
                                 </SummaryFieldRow>
                             )}
-                            {phone && !summary.has_preferred_contact_field ? (
-                                <p className="text-[10px] text-alloy-midnight/40">
-                                    On file: {formatPhoneUS(phone)}
-                                </p>
-                            ) : null}
+                            <PersonDrawerSummarySaveBar
+                                dirty={dirty}
+                                saving={saving}
+                                canMutate={canMutate}
+                                onSave={() => void saveAll()}
+                            />
                         </div>
                     </div>
                 </div>
