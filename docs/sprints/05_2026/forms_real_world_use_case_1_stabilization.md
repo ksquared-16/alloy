@@ -181,6 +181,15 @@ Setup status (`linkOutcomeConfigured`, lead routing display) is evaluated **per 
 
 - `web/tests/forms/locationSpecificPublicLinkMetadata.test.ts`
 - `web/tests/forms/duplicateFormDefinitionForAdmin.test.ts`
+- `web/tests/forms/resolveDemoEnrollmentLeadTestContext.test.ts`
+
+### Demo QA root cause (May 2026)
+
+**Symptom:** `qaEnrollmentLeadOpportunityProof` created submissions but no opportunity; lifecycle script crashed with `invalid input syntax for type uuid: "null"`.
+
+**Root cause:** QA scripts patched public link metadata with `DEMO_CHILDCARE_ENROLLMENT_LEAD_INTAKE_LINK_METADATA`, which hardcodes `default_location_id` to a fixture UUID (`7ce70708-…`) that no longer exists after Firefly multi-site location setup (South/West/North campuses). Opportunity insert failed FK on `location_id`; lifecycle script then passed string `"null"` to activity loader.
+
+**Fix:** `resolveDemoEnrollmentLeadTestContext.ts` resolves the live first active site location, selects the canonical demo link by **token hash** (not `limit(1)`), and both prepare + QA scripts use `ensureDemoEnrollmentLeadPublicLinkMetadata` before submit.
 
 ## Related
 

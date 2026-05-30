@@ -91,6 +91,62 @@ export default function FormDetailClient() {
     const [createdOnceLinkId, setCreatedOnceLinkId] = useState<string | null>(null);
     const [deleteBusy, setDeleteBusy] = useState(false);
     const [deleteErr, setDeleteErr] = useState<string | null>(null);
+    const [creatingLocationLink, setCreatingLocationLink] = useState(false);
+    const [locationLinkErr, setLocationLinkErr] = useState<string | null>(null);
+    const [duplicateBusy, setDuplicateBusy] = useState(false);
+    const [duplicateErr, setDuplicateErr] = useState<string | null>(null);
+
+    type CreatedLinkResponse = CreatedLinkPayload &
+        Partial<FormPublicLinkRow> & {
+            id?: string;
+            created_at?: string;
+            is_active?: boolean;
+            metadata?: Record<string, unknown>;
+            token_prefix?: string | null;
+            pinned_form_definition_version_id?: string | null;
+        };
+
+    const applyCreatedLinkResponse = useCallback(
+        (d: CreatedLinkResponse | undefined, options?: { scrollToOrchestration?: boolean }) => {
+            if (d?.plaintext_token && d.embed_path) {
+                const embedUrl =
+                    d.embed_url ??
+                    (typeof window !== "undefined" ? `${window.location.origin}${d.embed_path}` : null);
+                setCreatedOnce({
+                    plaintext_token: d.plaintext_token,
+                    embed_path: d.embed_path,
+                    embed_url: embedUrl,
+                });
+                if (d.id && embedUrl) {
+                    writeLinkEmbedUrl(d.id, embedUrl);
+                }
+            }
+            if (d?.id) {
+                const linkId = d.id;
+                setCreatedOnceLinkId(linkId);
+                setSelectedRuntimeLinkId(linkId);
+                writeActiveRuntimeLinkId(formId, linkId);
+                setLinks((prev) => {
+                    if (prev.some((link) => link.id === linkId)) return prev;
+                    const nextLink: FormPublicLinkRow = {
+                        id: linkId,
+                        is_active: d.is_active ?? true,
+                        created_at: d.created_at ?? new Date().toISOString(),
+                        metadata: (d.metadata ?? {}) as Record<string, unknown>,
+                        token_prefix: d.token_prefix ?? null,
+                        pinned_form_definition_version_id: d.pinned_form_definition_version_id ?? null,
+                    };
+                    return [nextLink, ...prev];
+                });
+            }
+            if (options?.scrollToOrchestration && typeof window !== "undefined") {
+                requestAnimationFrame(() => {
+                    document.getElementById("lifecycle-orchestration")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                });
+            }
+        },
+        [formId]
+    );
 
     const load = useCallback(async () => {
         if (!formId) return;
@@ -169,52 +225,44 @@ export default function FormDetailClient() {
                 setCreateErr((json as { error?: string }).error ?? "Could not create link");
                 return;
             }
-            const d = (json as {
-                data?: CreatedLinkPayload &
-                    Partial<FormPublicLinkRow> & { id?: string; created_at?: string; is_active?: boolean; metadata?: Record<string, unknown> };
-            }).data;
-            if (d?.plaintext_token && d.embed_path) {
-                const embedUrl =
-                    d.embed_url ??
-                    (typeof window !== "undefined" ? `${window.location.origin}${d.embed_path}` : null);
-                setCreatedOnce({
-                    plaintext_token: d.plaintext_token,
-                    embed_path: d.embed_path,
-                    embed_url: embedUrl,
-                });
-                if (d.id && embedUrl) {
-                    writeLinkEmbedUrl(d.id, embedUrl);
-                }
-            }
-            if (d?.id) {
-                const linkId = d.id;
-                setCreatedOnceLinkId(linkId);
-                setSelectedRuntimeLinkId(linkId);
-                writeActiveRuntimeLinkId(formId, linkId);
-                setLinks((prev) => {
-                    if (prev.some((link) => link.id === linkId)) return prev;
-                    const nextLink: FormPublicLinkRow = {
-                        id: linkId,
-                        is_active: d.is_active ?? true,
-                        created_at: d.created_at ?? new Date().toISOString(),
-                        metadata: (d.metadata ?? {}) as Record<string, unknown>,
-                        token_prefix: d.token_prefix ?? null,
-                        pinned_form_definition_version_id: d.pinned_form_definition_version_id ?? null,
-                    };
-                    return [nextLink, ...prev];
-                });
-            }
-            if (typeof window !== "undefined") {
-                requestAnimationFrame(() => {
-                    document.getElementById("lifecycle-orchestration")?.scrollIntoView({ behavior: "smooth", block: "start" });
-                });
-            }
+            applyCreatedLinkResponse((json as { data?: CreatedLinkResponse }).data, { scrollToOrchestration: true });
         } catch (e) {
             setCreateErr((e as Error).message);
         } finally {
             setCreating(false);
         }
     };
+
+    const createLocationPublicLink = useCallback(
+        async (input: { label: string; locationId: string; workUnitId?: string | null }) => {
+            if (!formId || !canMutate) return;
+            setCreatingLocationLink(true);
+            setLocationLinkErr(null);
+            setCopyWarn(null);
+            try {
+                const res = await fetch(`/api/admin/forms/${encodeURIComponent(formId)}/public-links`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        label: input.label,
+                        default_location_id: input.locationId,
+                        ...(input.workUnitId ? { default_work_unit_id: input.workUnitId } : {}),
+                    }),
+                });
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    setLocationLinkErr((json as { error?: string }).error ?? "Could not create location link");
+                    return;
+                }
+                applyCreatedLinkResponse((json as { data?: CreatedLinkResponse }).data, { scrollToOrchestration: true });
+            } catch (e) {
+                setLocationLinkErr((e as Error).message);
+            } finally {
+                setCreatingLocationLink(false);
+            }
+        },
+        [applyCreatedLinkResponse, canMutate, formId]
+    );
 
     const handleLinkMetadataSaved = useCallback((linkId: string, metadata: Record<string, unknown>) => {
         setLinks((prev) => prev.map((link) => (link.id === linkId ? { ...link, metadata } : link)));
@@ -297,6 +345,24 @@ export default function FormDetailClient() {
             setPreviewBusy(false);
         }
     }, [formId, canMutate, load]);
+
+    const handleDuplicateForm = useCallback(async () => {
+        if (!formId || !canMutate || !detail) return;
+        setDuplicateErr(null);
+        setDuplicateBusy(true);
+        try {
+            const res = await fetch(`/api/admin/forms/${encodeURIComponent(formId)}/duplicate`, { method: "POST" });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Could not duplicate form");
+            const newId = (json as { data?: { id?: string } }).data?.id;
+            if (!newId) throw new Error("Duplicate response missing form id");
+            router.push(`${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(newId)}`);
+        } catch (e) {
+            setDuplicateErr((e as Error).message);
+        } finally {
+            setDuplicateBusy(false);
+        }
+    }, [canMutate, detail, formId, router]);
 
     const handleArchiveForm = useCallback(async () => {
         if (!formId || !canMutate || !detail) return;
@@ -438,15 +504,26 @@ export default function FormDetailClient() {
                             Packets
                         </FormsOperationalLink>
                         {canMutate && detail.is_active !== false ?
-                            <button
-                                type="button"
-                                className="text-xs font-semibold text-alloy-ember hover:underline disabled:opacity-50"
-                                disabled={deleteBusy}
-                                data-testid="form-action-archive"
-                                onClick={() => void handleArchiveForm()}
-                            >
-                                {deleteBusy ? "Archiving…" : "Archive form"}
-                            </button>
+                            <>
+                                <button
+                                    type="button"
+                                    className="text-xs font-semibold text-alloy-blue hover:underline disabled:opacity-50"
+                                    disabled={duplicateBusy}
+                                    data-testid="form-action-duplicate"
+                                    onClick={() => void handleDuplicateForm()}
+                                >
+                                    {duplicateBusy ? "Duplicating…" : "Duplicate form"}
+                                </button>
+                                <button
+                                    type="button"
+                                    className="text-xs font-semibold text-alloy-ember hover:underline disabled:opacity-50"
+                                    disabled={deleteBusy}
+                                    data-testid="form-action-archive"
+                                    onClick={() => void handleArchiveForm()}
+                                >
+                                    {deleteBusy ? "Archiving…" : "Archive form"}
+                                </button>
+                            </>
                         :   null}
                     </div>
                 :   null
@@ -461,6 +538,9 @@ export default function FormDetailClient() {
                 <>
                     {deleteErr ?
                         <p className="mb-3 text-sm text-alloy-ember" role="alert">{deleteErr}</p>
+                    :   null}
+                    {duplicateErr ?
+                        <p className="mb-3 text-sm text-alloy-ember" role="alert">{duplicateErr}</p>
                     :   null}
                     <FormLifecycleWorkspaceLayout
                     formId={formId}
@@ -499,6 +579,9 @@ export default function FormDetailClient() {
                     }}
                     onPreview={() => void handlePreviewForm()}
                     onCreateLink={() => void createPublicLink()}
+                    onCreateLocationLink={(input) => void createLocationPublicLink(input)}
+                    creatingLocationLink={creatingLocationLink}
+                    locationLinkErr={locationLinkErr}
                     onCopy={(key, text) => void copyText(key, text)}
                     onVersionsUpdated={() => void load()}
                     onLinkMetadataSaved={handleLinkMetadataSaved}

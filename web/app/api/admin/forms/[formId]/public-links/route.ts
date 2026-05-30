@@ -16,6 +16,7 @@ import {
 } from "@/lib/forms/existingRecord/existingRecordFormLaunch";
 import { mintExistingRecordFormLinkForAdmin } from "@/lib/forms/existingRecord/mintExistingRecordFormLinkForAdmin";
 import { parsePrefillFieldMapBody } from "@/lib/forms/prefill/prefillFieldMap";
+import { buildLocationSpecificLinkMetadata, readUuid } from "@/lib/forms/locationSpecificPublicLinkMetadata";
 
 function deriveEmbedBaseUrl(request: NextRequest): string | null {
     const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
@@ -130,6 +131,40 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             : {};
     delete clientMetadata.prefill_field_map;
 
+    const locationId =
+        readUuid(body.default_location_id) ??
+        readUuid(body.location_id) ??
+        readUuid(clientMetadata.default_location_id);
+    const workUnitId =
+        readUuid(body.default_work_unit_id) ??
+        readUuid(body.work_unit_id) ??
+        readUuid(clientMetadata.default_work_unit_id);
+    const linkLabel =
+        typeof body.label === "string"
+            ? body.label.trim()
+            : typeof body.name === "string"
+              ? body.name.trim()
+              : typeof clientMetadata.label === "string"
+                ? clientMetadata.label.trim()
+                : "";
+
+    if (locationId) {
+        try {
+            Object.assign(
+                clientMetadata,
+                buildLocationSpecificLinkMetadata({
+                    label: linkLabel || "Location link",
+                    locationId,
+                    workUnitId,
+                })
+            );
+        } catch (e) {
+            return jsonError(e instanceof Error ? e.message : "Invalid location link input", 400);
+        }
+    } else if (workUnitId) {
+        clientMetadata.default_work_unit_id = workUnitId;
+    }
+
     const formRow = form as { key: string; metadata?: Record<string, unknown> };
     const metadata = await mergePublicLinkMetadataForCreate(supabase, {
         orgId: ctx.orgId,
@@ -180,13 +215,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         if (parsed.map) metadata.prefill_field_map = parsed.map;
     }
 
-    const label =
-        typeof body.label === "string"
-            ? body.label.trim()
-            : typeof body.name === "string"
-              ? body.name.trim()
-              : "";
-    if (label) metadata.label = label;
+    if (linkLabel && !metadata.label) metadata.label = linkLabel;
 
     const is_active = typeof body.is_active === "boolean" ? body.is_active : true;
 

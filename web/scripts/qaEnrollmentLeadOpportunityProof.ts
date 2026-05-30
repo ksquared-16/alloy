@@ -16,16 +16,14 @@ import { config as loadEnv } from "dotenv";
 import { resolve } from "path";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import {
-    DEMO_CHILDCARE_ENROLLMENT_LEAD_EMBED_TOKEN,
-    DEMO_CHILDCARE_ENROLLMENT_LEAD_INTAKE_LINK_METADATA,
     DEMO_CHILDCARE_ENROLLMENT_WORK_UNIT_ID,
     DEMO_CHILDCARE_ORG_ID,
 } from "@/lib/forms/intakeRuntimeTestFixtures";
+import { ensureDemoEnrollmentLeadPublicLinkMetadata } from "@/lib/forms/resolveDemoEnrollmentLeadTestContext";
 import { buildIntakeCasePresentationRows } from "@/lib/forms/intakeCasePresentation";
 import { buildIntakeQuickReviewViewModel } from "@/lib/forms/intakeQuickReviewPresentation";
 import { intakeCaseMatchesWorkspaceFilter } from "@/lib/forms/intakeWorkspaceFilters";
 import { opportunityMatchesEnrollmentNewLeadsQueue } from "@/lib/config/enrollmentPipelineQueueDefinitionV2";
-import { ENROLLMENT_LEAD_CAPTURE_DEMO_FORM_KEY } from "@/lib/forms/seeds/enrollmentLeadCaptureDemo";
 import type { SubmissionInboxRow } from "@/lib/forms/submissionInboxPresentation";
 
 loadEnv({ path: resolve(process.cwd(), ".env.local") });
@@ -127,39 +125,13 @@ async function main() {
     const supabase = createAdminClient();
     const email = `ic56-lead-proof-${Date.now()}@example.com`;
     const phone = `602557${String(Date.now()).slice(-4)}`;
-    const token = DEMO_CHILDCARE_ENROLLMENT_LEAD_EMBED_TOKEN;
 
-    const { data: form } = await supabase
-        .from("form_definitions")
-        .select("id,name")
-        .eq("org_id", DEMO_CHILDCARE_ORG_ID)
-        .eq("key", ENROLLMENT_LEAD_CAPTURE_DEMO_FORM_KEY)
-        .maybeSingle();
-    assert(!!form?.id, "Enrollment Lead — Demo form exists (run prepare script first)", errors);
-    if (!form?.id) {
-        console.error(JSON.stringify({ pass: false, errors }, null, 2));
-        process.exit(1);
-    }
-
-    const { data: link } = await supabase
-        .from("form_public_links")
-        .select("id,metadata")
-        .eq("org_id", DEMO_CHILDCARE_ORG_ID)
-        .eq("form_definition_id", form.id)
-        .eq("is_active", true)
-        .limit(1)
-        .maybeSingle();
-    assert(!!link?.id, "active public link exists", errors);
-
-    if (link?.id) {
-        await supabase
-            .from("form_public_links")
-            .update({ metadata: { ...(link.metadata as Record<string, unknown>), ...DEMO_CHILDCARE_ENROLLMENT_LEAD_INTAKE_LINK_METADATA } })
-            .eq("id", link.id);
-    }
-
+    const proofCtx = await ensureDemoEnrollmentLeadPublicLinkMetadata(supabase);
+    const token = proofCtx.token;
+    const form = { id: proofCtx.formId, name: proofCtx.formName };
     notes.push(`formId: ${form.id}`);
     notes.push(`formName: ${form.name}`);
+    notes.push(`publicLinkId: ${proofCtx.publicLinkId}`);
     notes.push(`embed: ${APP_BASE}/forms/embed/${token}`);
 
     const submissionId = await publicCreateDraft(token);
@@ -171,6 +143,9 @@ async function main() {
     notes.push(`email: ${email}`);
 
     assert(row.status === "submitted", "public submit succeeded", errors);
+    if (!row.opportunity_id && typeof meta.intake_error === "string") {
+        notes.push(`intake_error: ${meta.intake_error}`);
+    }
     assert(!!row.opportunity_id, "opportunity created", errors);
     assert(!row.customer_member_id, "no child/customer member auto-created", errors);
     assert(meta.intake_needs_review === false, "intake_needs_review false", errors);

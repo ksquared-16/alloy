@@ -40,6 +40,10 @@ import {
     intakeWorkspaceBtnSecondary,
 } from "@/components/forms/workspace/IntakeWorkspaceHubView";
 import {
+    FormLocationShareLinksPanel,
+    type CreateLocationLinkInput,
+} from "@/components/forms/admin/FormLocationShareLinksPanel";
+import {
     opMetadata,
     opMutedMeta,
     opSectionTitle,
@@ -48,6 +52,7 @@ import {
 type Props = {
     formId: string;
     formKey: string;
+    formName: string;
     formMetadata: Record<string, unknown> | null | undefined;
     links: FormPublicLinkRow[];
     documentGenerationConfigured: boolean;
@@ -64,6 +69,9 @@ type Props = {
     onLinkMetadataSaved?: (linkId: string, metadata: Record<string, unknown>) => void;
     onCreateLink?: () => void;
     creatingLink?: boolean;
+    onCreateLocationLink?: (input: CreateLocationLinkInput) => void | Promise<void>;
+    creatingLocationLink?: boolean;
+    locationLinkErr?: string | null;
 };
 
 function stepStatusClass(status: "complete" | "active" | "pending"): string {
@@ -76,6 +84,7 @@ function stepStatusClass(status: "complete" | "active" | "pending"): string {
 export function FormIntakeRuntimeOrchestrationPanel({
     formId,
     formKey,
+    formName,
     formMetadata,
     links,
     documentGenerationConfigured,
@@ -92,6 +101,9 @@ export function FormIntakeRuntimeOrchestrationPanel({
     onLinkMetadataSaved,
     onCreateLink,
     creatingLink = false,
+    onCreateLocationLink,
+    creatingLocationLink = false,
+    locationLinkErr = null,
 }: Props) {
     const { openDrawer } = useAdminDrawer();
     const [labelCatalog, setLabelCatalog] = useState<OutcomeRoutingLabelCatalog | null>(null);
@@ -466,6 +478,27 @@ export function FormIntakeRuntimeOrchestrationPanel({
                                 </button>
                             </div>
                         </TechnicalDetailDisclosure>
+                    :   null}
+
+                    {onCreateLocationLink ?
+                        <div className="mt-4 border-t border-alloy-midnight/[0.06] pt-3" data-testid="orchestration-location-links">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/65">
+                                Location-specific links
+                            </p>
+                            <FormLocationShareLinksPanel
+                                formId={formId}
+                                formKey={formKey}
+                                formName={formName}
+                                links={links}
+                                hasPublished={hasPublished}
+                                canMutate={canMutate}
+                                creating={creatingLocationLink}
+                                createErr={locationLinkErr}
+                                copied={copied}
+                                onCopy={onCopy}
+                                onCreateLocationLink={onCreateLocationLink}
+                            />
+                        </div>
                     :   null}
                 </div>
 

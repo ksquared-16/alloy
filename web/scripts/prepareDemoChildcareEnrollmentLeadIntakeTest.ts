@@ -10,10 +10,11 @@ import { config as loadEnv } from "dotenv";
 import { resolve } from "path";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import {
-    DEMO_CHILDCARE_CENTER_LOCATION_ID,
-    DEMO_CHILDCARE_ENROLLMENT_LEAD_INTAKE_LINK_METADATA,
     DEMO_CHILDCARE_ORG_ID,
 } from "@/lib/forms/intakeRuntimeTestFixtures";
+import {
+    buildDemoEnrollmentLeadIntakeLinkMetadata,
+} from "@/lib/forms/resolveDemoEnrollmentLeadTestContext";
 import {
     ENROLLMENT_LEAD_CAPTURE_DEMO_DEFINITION_METADATA,
     ENROLLMENT_LEAD_CAPTURE_DEMO_FORM_KEY,
@@ -145,9 +146,8 @@ async function ensurePublicLink(orgId: string, formId: string, versionId: string
         label: "Enrollment Lead — Demo embed",
         demo: true,
         seed: "enrollment_lead_capture_demo",
-        ...DEMO_CHILDCARE_ENROLLMENT_LEAD_INTAKE_LINK_METADATA,
-        default_location_id: locationId || DEMO_CHILDCARE_CENTER_LOCATION_ID,
-        runtime_test_prepared_at: new Date().toISOString(),
+        ...(await buildDemoEnrollmentLeadIntakeLinkMetadata(supabase, orgId)),
+        default_location_id: locationId,
     };
 
     if (existing?.id) {

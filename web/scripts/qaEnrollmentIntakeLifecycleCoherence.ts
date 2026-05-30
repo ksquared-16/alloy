@@ -16,11 +16,12 @@ import { loadOpportunityActivityEvents } from "@/lib/admin/loadOpportunityRelate
 import { formatOpportunityActivityTimelineEvent } from "@/lib/admin/opportunityActivityTimelineFormat";
 import { buildOpportunityIntakeSourceViewModel } from "@/lib/forms/opportunityIntakeSourcePresentation";
 import {
-    DEMO_CHILDCARE_ENROLLMENT_LEAD_EMBED_TOKEN,
-    DEMO_CHILDCARE_ENROLLMENT_LEAD_INTAKE_LINK_METADATA,
     DEMO_CHILDCARE_ORG_ID,
 } from "@/lib/forms/intakeRuntimeTestFixtures";
-import { ENROLLMENT_LEAD_CAPTURE_DEMO_FORM_KEY } from "@/lib/forms/seeds/enrollmentLeadCaptureDemo";
+import {
+    ensureDemoEnrollmentLeadPublicLinkMetadata,
+    readUuidOrNull,
+} from "@/lib/forms/resolveDemoEnrollmentLeadTestContext";
 
 loadEnv({ path: resolve(process.cwd(), ".env.local") });
 loadEnv({ path: resolve(process.cwd(), ".env") });
@@ -73,31 +74,11 @@ async function main() {
     const supabase = createAdminClient();
     const email = `lifecycle-coherence-${Date.now()}@example.com`;
     const phone = `602558${String(Date.now()).slice(-4)}`;
-    const token = DEMO_CHILDCARE_ENROLLMENT_LEAD_EMBED_TOKEN;
 
-    const { data: form } = await supabase
-        .from("form_definitions")
-        .select("id,name")
-        .eq("org_id", DEMO_CHILDCARE_ORG_ID)
-        .eq("key", ENROLLMENT_LEAD_CAPTURE_DEMO_FORM_KEY)
-        .maybeSingle();
-    assert(!!form?.id, "Enrollment Lead form exists", errors);
-
-    const { data: link } = await supabase
-        .from("form_public_links")
-        .select("id,metadata")
-        .eq("org_id", DEMO_CHILDCARE_ORG_ID)
-        .eq("form_definition_id", form!.id)
-        .eq("is_active", true)
-        .limit(1)
-        .maybeSingle();
-
-    if (link?.id) {
-        await supabase
-            .from("form_public_links")
-            .update({ metadata: { ...(link.metadata as Record<string, unknown>), ...DEMO_CHILDCARE_ENROLLMENT_LEAD_INTAKE_LINK_METADATA } })
-            .eq("id", link.id);
-    }
+    const proofCtx = await ensureDemoEnrollmentLeadPublicLinkMetadata(supabase);
+    const token = proofCtx.token;
+    const form = { id: proofCtx.formId, name: proofCtx.formName };
+    assert(!!form.id, "Enrollment Lead form exists", errors);
 
     const submissionId = await publicCreateDraft(token);
     await publicSubmit(token, submissionId, email, phone);
@@ -108,8 +89,14 @@ async function main() {
         .eq("id", submissionId)
         .maybeSingle();
 
-    assert(!!submission?.opportunity_id, "opportunity linked to submission", errors);
-    const opportunityId = submission!.opportunity_id!;
+    const opportunityId = readUuidOrNull(submission?.opportunity_id);
+    assert(!!opportunityId, "opportunity linked to submission", errors);
+    if (!opportunityId) {
+        const meta = (submission?.payload as { meta?: Record<string, unknown> })?.meta ?? {};
+        if (typeof meta.intake_error === "string") notes.push(`intake_error: ${meta.intake_error}`);
+        console.log(JSON.stringify({ pass: false, notes, errors }, null, 2));
+        process.exit(1);
+    }
 
     const intakeVm = buildOpportunityIntakeSourceViewModel({
         submission_id: submission!.id,
