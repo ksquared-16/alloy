@@ -1,3 +1,8 @@
+import { customerPersonRowIsHouseholdPrimaryContact } from "@/lib/admin/person/householdPrimaryContact";
+import {
+    normPersonDrawerHouseholdRole,
+    PERSON_DRAWER_HOUSEHOLD_PARENT_GUARDIAN_ROLES,
+} from "@/lib/admin/person/personDrawerHouseholdRoles";
 import { evaluateHouseholdCompletionRequirements } from "@/lib/completion/evaluateHouseholdCompletionRequirements";
 import { evaluateOpportunityCompletionRequirements } from "@/lib/completion/evaluateOpportunityCompletionRequirements";
 import { evaluatePersonCompletionRequirements } from "@/lib/completion/evaluatePersonCompletionRequirements";
@@ -48,6 +53,7 @@ export function buildCompletionContextFromRecord(input: {
     phase: CompletionEvaluationContext["phase"];
     record: Record<string, unknown>;
     surface?: string;
+    layout_variant_key?: string | null;
     status_from?: string | null;
     status_to?: string | null;
     action_key?: string | null;
@@ -58,6 +64,7 @@ export function buildCompletionContextFromRecord(input: {
         entity_type: input.entity_type,
         entity_id: input.entity_id,
         surface: input.surface,
+        layout_variant_key: input.layout_variant_key?.trim() || undefined,
         status_from: input.status_from,
         status_to: input.status_to,
         action_key: input.action_key,
@@ -129,9 +136,60 @@ function extractRelatedFromRecord(record: Record<string, unknown>) {
         );
     }
 
+    const adultLinksRaw = record._household_adult_links;
+    if (Array.isArray(adultLinksRaw) && adultLinksRaw.length > 0) {
+        const guardians = adultLinksRaw.filter((link) => {
+            if (link == null || typeof link !== "object") return false;
+            const role = normPersonDrawerHouseholdRole(
+                (link as { role_type?: string | null }).role_type
+            );
+            return PERSON_DRAWER_HOUSEHOLD_PARENT_GUARDIAN_ROLES.has(role);
+        });
+        if (household_guardian_count == null) {
+            household_guardian_count = guardians.length;
+        }
+        if (household_has_primary_contact == null) {
+            household_has_primary_contact = adultLinksRaw.some((link) => {
+                if (link == null || typeof link !== "object") return false;
+                const row = link as {
+                    is_household_primary_contact?: boolean;
+                    is_primary?: boolean;
+                    role_type?: string | null;
+                };
+                if (row.is_household_primary_contact === true) return true;
+                return customerPersonRowIsHouseholdPrimaryContact(row);
+            });
+        }
+    }
+
+    if (household_has_primary_contact == null && customer_persons?.length) {
+        household_has_primary_contact = customer_persons.some((row) =>
+            customerPersonRowIsHouseholdPrimaryContact(row)
+        );
+        if (household_guardian_count == null) {
+            household_guardian_count = customer_persons.filter((row) => {
+                const role = normPersonDrawerHouseholdRole(row.role_type);
+                return PERSON_DRAWER_HOUSEHOLD_PARENT_GUARDIAN_ROLES.has(role);
+            }).length;
+        }
+    }
+
+    const householdContextRaw = record._household_context;
+    const customer_id_from_household =
+        Array.isArray(householdContextRaw) &&
+        householdContextRaw[0] != null &&
+        typeof householdContextRaw[0] === "object"
+            ? String((householdContextRaw[0] as { customer_id?: string }).customer_id ?? "").trim() ||
+              null
+            : null;
+
     const customer_id =
         (typeof record.customer_id === "string" ? record.customer_id : null) ??
-        (typeof record._customer_id === "string" ? record._customer_id : null);
+        (typeof record._customer_id === "string" ? record._customer_id : null) ??
+        customer_id_from_household ??
+        (Array.isArray(adultLinksRaw) && adultLinksRaw[0] != null && typeof adultLinksRaw[0] === "object"
+            ? String((adultLinksRaw[0] as { customer_id?: string }).customer_id ?? "").trim() || null
+            : null);
 
     return {
         customer_id,
@@ -151,6 +209,7 @@ export function evaluateCompletionRequirementsFromRecord(input: {
     phase: CompletionEvaluationContext["phase"];
     record: Record<string, unknown>;
     surface?: string;
+    layout_variant_key?: string | null;
     status_from?: string | null;
     status_to?: string | null;
     action_key?: string | null;

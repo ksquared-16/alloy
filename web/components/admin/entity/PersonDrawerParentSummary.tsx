@@ -38,11 +38,13 @@ function SummaryFieldRow({
 export default function PersonDrawerParentSummary({
     record,
     chromeHint,
+    layoutVariantKey,
     canMutate = false,
     onPersonUpdated,
 }: {
     record: Record<string, unknown>;
     chromeHint?: PersonDrawerParentChromeHint | null;
+    layoutVariantKey?: string | null;
     canMutate?: boolean;
     onPersonUpdated?: (next: Record<string, unknown>) => void;
 }) {
@@ -207,7 +209,11 @@ export default function PersonDrawerParentSummary({
                         </div>
                     </div>
                 </div>
-                <PersonDrawerParentSummaryBosPanel personId={personId} overviewData={record} />
+                <PersonDrawerParentSummaryBosPanel
+                    personId={personId}
+                    overviewData={record}
+                    layoutVariantKey={layoutVariantKey}
+                />
             </div>
         </section>
     );

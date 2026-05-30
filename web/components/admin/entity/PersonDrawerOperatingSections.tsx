@@ -69,6 +69,7 @@ export default function PersonDrawerOperatingSections({
                 <PersonDrawerChildSummary
                     record={record}
                     chromeHint={childChromeHint}
+                    layoutVariantKey={variant.variant_key}
                     canMutate={canMutate}
                     onPersonUpdated={onPersonUpdated}
                 />
@@ -77,6 +78,7 @@ export default function PersonDrawerOperatingSections({
                 <PersonDrawerParentSummary
                     record={record}
                     chromeHint={parentChromeHint}
+                    layoutVariantKey={variant.variant_key}
                     canMutate={canMutate}
                     onPersonUpdated={onPersonUpdated}
                 />

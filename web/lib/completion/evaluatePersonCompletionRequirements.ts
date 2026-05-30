@@ -60,6 +60,7 @@ function fieldMissingViolation(
         missing_reason: input.missing_reason,
         context: {
             surface: ctx.surface,
+            layout_variant_key: ctx.layout_variant_key,
             status_from: trimOrNull(ctx.status_from) ?? undefined,
             status_to: trimOrNull(ctx.status_to) ?? undefined,
             action_key: trimOrNull(ctx.action_key) ?? undefined,

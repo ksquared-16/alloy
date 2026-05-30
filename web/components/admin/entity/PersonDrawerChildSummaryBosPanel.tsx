@@ -7,26 +7,26 @@ import {
     INQUIRY_RIGHT_COLUMN_GROUP_LABEL_CLASS,
     INQUIRY_SUMMARY_RIGHT_COLUMN_ROOT_CLASS,
 } from "@/lib/admin/drawer/opportunityInquiryRightColumnGeometry";
-import { evaluateCompletionRequirementsFromRecord } from "@/lib/completion/evaluateCompletionRequirements";
+import { evaluatePersonDrawerCompletionPreview } from "@/lib/admin/person/personDrawerLayoutCompletionBridge";
 
 /** Child summary assist column with completion guardrails preview. */
 export default function PersonDrawerChildSummaryBosPanel({
     personId,
     overviewData,
+    layoutVariantKey,
 }: {
     personId: string;
     overviewData: Record<string, unknown>;
+    layoutVariantKey?: string | null;
 }) {
     const completionPreview = useMemo(
         () =>
-            evaluateCompletionRequirementsFromRecord({
-                entity_type: "person",
-                entity_id: personId,
-                phase: "preview",
+            evaluatePersonDrawerCompletionPreview({
+                personId,
                 record: overviewData,
-                surface: "person_drawer_child",
+                layoutVariantKey,
             }),
-        [personId, overviewData]
+        [personId, overviewData, layoutVariantKey]
     );
 
     const hasBlocking = completionPreview.blocking.length > 0;
@@ -35,6 +35,7 @@ export default function PersonDrawerChildSummaryBosPanel({
         <aside
             className={`${INQUIRY_SUMMARY_RIGHT_COLUMN_ROOT_CLASS} h-full min-h-[12rem] rounded-lg border border-alloy-stone/10 bg-alloy-stone/[0.02] px-2.5 py-2`}
             data-person-drawer-child-bos="true"
+            data-person-drawer-completion-layout-variant={layoutVariantKey ?? undefined}
             aria-label="Child assist"
         >
             <p className={INQUIRY_RIGHT_COLUMN_GROUP_LABEL_CLASS}>Assist</p>

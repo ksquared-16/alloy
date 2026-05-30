@@ -30,6 +30,7 @@ export type RequirementViolationContext = {
     lifecycle_stage?: string;
     role_key?: string;
     profile_key?: string;
+    layout_variant_key?: string;
 };
 
 export type RequirementViolation = {
@@ -64,6 +65,8 @@ export type CompletionEvaluationContext = {
     action_key?: string | null;
     role_keys?: string[];
     profile_keys?: string[];
+    /** Sprint A layout variant key when evaluated from runtime person drawer. */
+    layout_variant_key?: string;
     /** Merged native + custom field values for evaluation. */
     values: Record<string, unknown>;
     /** Related records for cross-entity rules (household, inquiry children). */

@@ -147,12 +147,11 @@ describe("person drawer hardening phase 3", () => {
         expect(address).not.toContain("No household mailing address on file");
     });
 
-    it("work unit route uses shell-ready gate instead of full above-fold gate for page swap", () => {
+    it("work unit route uses cold/warm page content gate (warm shell-first, cold above-fold)", () => {
         const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-        expect(page).toContain("!workUnitShellReady");
-        expect(page).not.toMatch(
-            /!workUnitAboveFoldPageReady \? \([\s\S]{0,120}WorkUnitPageLoadingGate/
-        );
+        expect(page).toContain("workUnitPageSeededFromCache");
+        expect(page).toContain("workUnitPageContentReady");
+        expect(page).toMatch(/!workUnitPageContentReady[\s\S]*WorkUnitPageLoadingGate/);
     });
 
     it("parent summary and employee placement omit doctrine and On file copy", () => {

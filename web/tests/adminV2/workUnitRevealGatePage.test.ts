@@ -10,12 +10,16 @@ function read(rel: string): string {
 }
 
 describe("work-unit above-fold reveal gate (page)", () => {
-    it("page holds WorkUnitPageLoadingGate until above_fold_ready", () => {
+    it("page uses cold/warm content gate for WorkUnitPageLoadingGate", () => {
         const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
         expect(page).toContain("workUnitRevealGate");
         expect(page).toContain("workUnitAboveFoldPageReady");
+        expect(page).toContain("workUnitPageSeededFromCache");
+        expect(page).toContain("setWorkUnitPageSeededFromCache");
+        expect(page).toContain("workUnitPageContentReady");
+        expect(page).toContain("resolveWorkUnitPageContentReady");
         expect(page).toContain("WorkUnitPageLoadingGate");
-        expect(page).toMatch(/!workUnitAboveFoldPageReady[\s\S]*WorkUnitPageLoadingGate/);
+        expect(page).toMatch(/!workUnitPageContentReady[\s\S]*WorkUnitPageLoadingGate/);
         expect(page).toContain("markWorkUnitRevealGateStart");
         expect(page).toContain("markWorkUnitRevealGatePhases");
     });

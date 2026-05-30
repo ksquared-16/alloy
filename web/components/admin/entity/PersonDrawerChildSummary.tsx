@@ -64,11 +64,13 @@ function DateField({
 export default function PersonDrawerChildSummary({
     record,
     chromeHint,
+    layoutVariantKey,
     canMutate = false,
     onPersonUpdated,
 }: {
     record: Record<string, unknown>;
     chromeHint?: PersonDrawerChildChromeHint | null;
+    layoutVariantKey?: string | null;
     canMutate?: boolean;
     onPersonUpdated?: (next: Record<string, unknown>) => void;
 }) {
@@ -208,7 +210,11 @@ export default function PersonDrawerChildSummary({
                         </div>
                     </div>
                 </div>
-                <PersonDrawerChildSummaryBosPanel personId={personId} overviewData={record} />
+                <PersonDrawerChildSummaryBosPanel
+                    personId={personId}
+                    overviewData={record}
+                    layoutVariantKey={layoutVariantKey}
+                />
             </div>
         </section>
     );
