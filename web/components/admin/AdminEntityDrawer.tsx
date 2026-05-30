@@ -116,6 +116,8 @@ import PersonDrawerHouseholdAddress from "@/components/admin/entity/PersonDrawer
 import PersonDrawerParentLifecycleRail from "@/components/admin/entity/PersonDrawerParentLifecycleRail";
 import PersonDrawerParentTitleRow from "@/components/admin/entity/PersonDrawerParentTitleRow";
 import PersonDrawerParentOverviewSkeleton from "@/components/admin/entity/PersonDrawerParentOverviewSkeleton";
+import OpportunityDrawerHeaderSaveActions from "@/components/admin/entity/OpportunityDrawerHeaderSaveActions";
+import PersonDrawerOperatingSaveHeaderActions from "@/components/admin/entity/PersonDrawerOperatingSaveHeaderActions";
 import PersonDrawerEnrollmentActivity from "@/components/admin/entity/PersonDrawerEnrollmentActivity";
 import PersonDrawerProfileBadges from "@/components/admin/entity/PersonDrawerProfileBadges";
 import LocationDrawerContextPanel from "@/components/admin/entity/LocationDrawerContextPanel";
@@ -280,12 +282,11 @@ import {
 } from "@/lib/admin/drawerEntitySnapshotCache";
 import { openInquiryChildPersonFromOpportunitySync } from "@/lib/admin/drawer/openInquiryChildPersonFromOpportunity";
 import {
-    buildPersonDrawerSeedRecord,
     isPersonDrawerSeedRecord,
     PERSON_DRAWER_CHILD_OPEN_SOURCE,
-    personDrawerSeedFromOpportunityRecord,
     resolvePersonDrawerTransitionSnapshot,
 } from "@/lib/admin/drawer/personDrawerOpenSeed";
+import { personDrawerOperatingSummaryVisible } from "@/lib/admin/person/personDrawerShellPolicy";
 import { openViewPersonFromOpportunity } from "@/lib/admin/drawer/openViewPersonFromOpportunity";
 import { entityDataMatchesDrawer } from "@/lib/admin/drawer/entityDataMatchesDrawer";
 import { isPersonDrawerSnapshotWarm } from "@/lib/admin/prefetchPersonDrawerSnapshot";
@@ -298,6 +299,14 @@ import {
 } from "@/lib/admin/drawer/openPersonDrawerFromHousehold";
 import { GLOBAL_SEARCH_DRAWER_OPEN_SOURCE } from "@/lib/adminV2/globalRecordSearchOpen";
 import { applyHouseholdPrimaryContactToRecord } from "@/lib/admin/person/applyHouseholdPrimaryContactToRecord";
+import {
+    applyPersonIdentityPatchToPersonRecord,
+    applyPersonPatchToOpportunityInquiryChildren,
+} from "@/lib/admin/person/applyPersonPatchToOpportunityInquiryChildren";
+import {
+    dispatchPersonRecordUpdated,
+    type PersonRecordUpdatedDetail,
+} from "@/lib/admin/person/dispatchPersonRecordUpdated";
 import RecordLifecycleRail from "@/components/admin/drawer/RecordLifecycleRail";
 import RecordLifecycleRailSkeleton from "@/components/admin/drawer/RecordLifecycleRailSkeleton";
 import { resolveRecordLifecycleRailModel } from "@/lib/admin/drawer/resolveRecordLifecycleRailModel";
@@ -306,6 +315,7 @@ import {
     peekDrawerStackRestoreSnapshot,
     putDrawerStackRestoreSnapshot,
 } from "@/lib/admin/drawer/drawerStackRestoreSnapshot";
+import { opportunityDrawerRecordNeedsRevalidate } from "@/lib/admin/drawer/opportunityDrawerRecordNeedsRevalidate";
 import { logDrawerBackRestore, logPersonDrawerOpen } from "@/lib/admin/drawer/personDrawerPerfLogs";
 import { dispatchOpportunityQueueUpdated, dispatchOpportunityQueueUpdatedBroadcast } from "@/lib/admin/opportunityQueueRefreshEvent";
 import { primaryPersonIdFromOpportunityRecord } from "@/lib/admin/drawer/linkedRecordFieldEditing";
@@ -6608,7 +6618,22 @@ export default function AdminEntityDrawer() {
     });
 
     const dataMatchesDrawer = entityDataMatchesDrawer(data, drawer.id, drawer.type);
-    const overviewData = dataMatchesDrawer ? data : null;
+    const personDrawerFirstPaintRecord = useMemo((): Record<string, unknown> | null => {
+        if (drawer.type !== "persons" || !drawer.id || drawer.id === "new") return null;
+        if (dataMatchesDrawer && data) {
+            return data as Record<string, unknown>;
+        }
+        return resolvePersonDrawerTransitionSnapshot({
+            personId: drawer.id,
+            openSeed: drawer.personDrawerOpenSeed,
+        });
+    }, [data, dataMatchesDrawer, drawer.id, drawer.personDrawerOpenSeed, drawer.type]);
+    const overviewData =
+        drawer.type === "persons" && personDrawerFirstPaintRecord
+            ? personDrawerFirstPaintRecord
+            : dataMatchesDrawer
+              ? data
+              : null;
 
     const personDrawerChildChromeHint = useMemo((): PersonDrawerChildChromeHint | null => {
         if (drawer.type !== "persons") return null;
@@ -7681,6 +7706,10 @@ export default function AdminEntityDrawer() {
                 const shell = peekDrawerStackRestoreSnapshot("opportunities", next.id);
                 const entityWarm =
                     cached != null && entityDataMatchesDrawer(cached, next.id, "opportunities");
+                const needsRevalidate =
+                    entityWarm && opportunityDrawerRecordNeedsRevalidate(cached as Record<string, unknown>);
+
+                personLinkedPersonsPrefetchedRef.current = null;
 
                 if (entityWarm) {
                     setData(cached);
@@ -7688,10 +7717,19 @@ export default function AdminEntityDrawer() {
                     setError(null);
                     opportunityDrawerBootstrapAppliedRef.current = next.id;
                     setOpportunityBootstrapAppliedId(next.id);
-                    if (String((cached as { _record_surface?: string })._record_surface ?? "").trim() === "full") {
+                    const surface = String((cached as { _record_surface?: string })._record_surface ?? "").trim();
+                    if (surface === "full" && !needsRevalidate) {
                         setOpportunityDrawerEnrichmentHeld(false);
                         setOpportunityDrawerBelowFoldRevealed(true);
                         setOpportunityDrawerSecondaryReady(true);
+                    } else if (needsRevalidate) {
+                        setOpportunityDrawerEnrichmentHeld(false);
+                        setOpportunityDrawerBelowFoldRevealed(false);
+                        setOpportunityDrawerSecondaryReady(false);
+                        opportunityDrawerFirstPaintPreloadedRef.current = null;
+                        opportunityBackgroundFullDoneRef.current = null;
+                        memberPersonGraphOverlayDoneRef.current = null;
+                        resetOpportunityDrawerHydrateGuards(next.id);
                     }
                 }
                 if (shell) {
@@ -7700,16 +7738,24 @@ export default function AdminEntityDrawer() {
                         setOpportunityBootstrapAppliedId(shell.opportunityBootstrapAppliedId);
                         opportunityDrawerBootstrapAppliedRef.current = shell.opportunityBootstrapAppliedId;
                     }
-                    if (shell.opportunityDrawerBelowFoldRevealed) {
+                    if (shell.opportunityDrawerBelowFoldRevealed && !needsRevalidate) {
                         setOpportunityDrawerBelowFoldRevealed(true);
                     }
-                    if (shell.opportunityDrawerSecondaryReady) {
+                    if (shell.opportunityDrawerSecondaryReady && !needsRevalidate) {
                         setOpportunityDrawerSecondaryReady(true);
                     }
-                    setOpportunityDrawerEnrichmentHeld(shell.opportunityDrawerEnrichmentHeld);
-                    if (shell.opportunityDrawerFirstPaintPreloaded) {
+                    if (!needsRevalidate) {
+                        setOpportunityDrawerEnrichmentHeld(shell.opportunityDrawerEnrichmentHeld);
+                    }
+                    if (shell.opportunityDrawerFirstPaintPreloaded && !needsRevalidate) {
                         opportunityDrawerFirstPaintPreloadedRef.current = next.id;
                     }
+                }
+                if (needsRevalidate) {
+                    allowOpportunityDrawerFullRefetch(next.id);
+                    queueMicrotask(() => {
+                        void runOpportunityBackgroundFullHydrateRef.current?.({ cacheBust: true });
+                    });
                 }
                 logDrawerBackRestore({
                     opportunityId: next.id,
@@ -7832,37 +7878,91 @@ export default function AdminEntityDrawer() {
 
     useEffect(() => {
         if (typeof window === "undefined") return;
-        const onHouseholdPrimarySaved = (ev: Event) => {
-            const ce = ev as CustomEvent<{
-                type?: string;
-                id?: string;
-                primary_person_id?: string;
-            }>;
-            if (ce.detail?.type !== "customers") return;
-            const customerId = String(ce.detail?.id ?? "").trim();
-            const primaryPersonId = String(ce.detail?.primary_person_id ?? "").trim();
-            if (!customerId || !primaryPersonId) return;
+        const onAdminEntitySaved = (ev: Event) => {
+            const ce = ev as CustomEvent<
+                | PersonRecordUpdatedDetail
+                | { type: "customers"; id?: string; primary_person_id?: string }
+            >;
+            const detailType = ce.detail?.type;
 
-            if (drawer.type === "persons" && drawerReady && data && dataMatchesDrawer && drawer.id) {
-                const record = data as Record<string, unknown>;
-                const customerIds = new Set<string>();
-                for (const row of (record._household_context as { customer_id?: unknown }[] | undefined) ?? []) {
-                    const cid = String(row?.customer_id ?? "").trim();
-                    if (cid) customerIds.add(cid);
+            if (detailType === "customers") {
+                const customerId = String(ce.detail?.id ?? "").trim();
+                const primaryPersonId = String(ce.detail?.primary_person_id ?? "").trim();
+                if (!customerId || !primaryPersonId) return;
+
+                if (drawer.type === "persons" && drawerReady && data && dataMatchesDrawer && drawer.id) {
+                    const record = data as Record<string, unknown>;
+                    const customerIds = new Set<string>();
+                    for (const row of (record._household_context as { customer_id?: unknown }[] | undefined) ?? []) {
+                        const cid = String(row?.customer_id ?? "").trim();
+                        if (cid) customerIds.add(cid);
+                    }
+                    for (const row of (record._household_adult_links as { customer_id?: unknown }[] | undefined) ?? []) {
+                        const cid = String(row?.customer_id ?? "").trim();
+                        if (cid) customerIds.add(cid);
+                    }
+                    if (customerIds.has(customerId)) {
+                        mergePersonDrawerRecord(
+                            applyHouseholdPrimaryContactToRecord(record, customerId, primaryPersonId)
+                        );
+                    }
                 }
-                for (const row of (record._household_adult_links as { customer_id?: unknown }[] | undefined) ?? []) {
-                    const cid = String(row?.customer_id ?? "").trim();
-                    if (cid) customerIds.add(cid);
-                }
-                if (customerIds.has(customerId)) {
-                    mergePersonDrawerRecord(
-                        applyHouseholdPrimaryContactToRecord(record, customerId, primaryPersonId)
+                return;
+            }
+
+            if (detailType !== "persons") return;
+            const personId = String(ce.detail?.id ?? "").trim();
+            const patch = ce.detail?.patch ?? {};
+            const personJson = ce.detail?.person ?? null;
+            const mergePatch = { ...(personJson ?? {}), ...patch };
+            if (!personId || Object.keys(mergePatch).length === 0) return;
+            const opportunityIdFromEvent = String(ce.detail?.opportunity_id ?? "").trim();
+
+            if (
+                drawer.type === "persons" &&
+                drawerReady &&
+                data &&
+                dataMatchesDrawer &&
+                drawer.id &&
+                String(drawer.id) === personId
+            ) {
+                mergePersonDrawerRecord(
+                    applyPersonIdentityPatchToPersonRecord(
+                        data as Record<string, unknown>,
+                        mergePatch,
+                        personJson
+                    )
+                );
+            }
+
+            const openOpportunityId =
+                drawer.type === "opportunities" && drawer.id ? String(drawer.id).trim() : "";
+            const targetOpportunityId = opportunityIdFromEvent || openOpportunityId;
+            if (
+                drawer.type === "opportunities" &&
+                drawerReady &&
+                data &&
+                dataMatchesDrawer &&
+                targetOpportunityId &&
+                openOpportunityId === targetOpportunityId
+            ) {
+                setData((prev) => {
+                    if (!prev) return prev;
+                    const next = applyPersonPatchToOpportunityInquiryChildren(
+                        { ...(prev as Record<string, unknown>) },
+                        personId,
+                        mergePatch,
+                        personJson
                     );
-                }
+                    if (drawer.id) {
+                        putDrawerEntitySnapshot("opportunities", drawer.id, next);
+                    }
+                    return next;
+                });
             }
         };
-        window.addEventListener("admin-entity-saved", onHouseholdPrimarySaved);
-        return () => window.removeEventListener("admin-entity-saved", onHouseholdPrimarySaved);
+        window.addEventListener("admin-entity-saved", onAdminEntitySaved);
+        return () => window.removeEventListener("admin-entity-saved", onAdminEntitySaved);
     }, [drawer.type, drawer.id, drawerReady, data, dataMatchesDrawer, mergePersonDrawerRecord]);
 
     const opportunityDrawerBootstrapEnrichmentPath =
@@ -8373,9 +8473,9 @@ export default function AdminEntityDrawer() {
         !!drawer.id &&
         drawer.id !== "new" &&
         !error &&
-        entityDataMatchesDrawer(data, drawer.id, drawer.type) &&
-        !!data &&
-        (drawerReady || isPersonDrawerSeedRecord(data as Record<string, unknown>));
+        !!overviewData &&
+        (dataMatchesDrawer || personDrawerFirstPaintRecord != null) &&
+        (drawerReady || isPersonDrawerSeedRecord(overviewData as Record<string, unknown>));
 
     const personDrawerChildBodyHydrated =
         personChildLifecycleChrome &&
@@ -9301,7 +9401,8 @@ export default function AdminEntityDrawer() {
                             return typeof rawStart === "string" && rawStart.trim() ? rawStart.trim().slice(0, 10) : null;
                         })()}
                         canEdit={!!canMutate}
-                        enrichmentFetchEnabled={isEditing}
+                        enrichmentFetchEnabled={drawerChildRows.length > 0 && !!canMutate}
+                        placementLabelFetchEnabled={drawerChildRows.length > 0}
                         embeddedInPremiumSection={oppCfg?.inquiry_drawer_mode === "workflow_v1"}
                         recordDetailPending={drawerChildRows.length === 0 && expectedRowCount > 0}
                         shellReservedRowCount={expectedRowCount}
@@ -10966,8 +11067,36 @@ export default function AdminEntityDrawer() {
         ) : null
     ) : null;
 
+    const personDrawerOperatingSaveActive =
+        personRecordChromeBodyShell &&
+        drawer.type === "persons" &&
+        overviewData &&
+        !(overviewData as { _create?: boolean })._create &&
+        (personChildLifecycleChrome || personParentGuardianChrome);
+
+    const opportunityDrawerHeaderSaveActive =
+        drawer.type === "opportunities" &&
+        isOpportunityExistingView &&
+        overviewData &&
+        !(overviewData as { _create?: boolean })._create;
+
+    const opportunityHeaderSaveNode = opportunityDrawerHeaderSaveActive ? (
+        <OpportunityDrawerHeaderSaveActions
+            canMutate={!!canMutate}
+            formDirty={nonJobFormDirty}
+            onSaveForm={() => saveEdit()}
+            onCancelForm={handleInlineCancel}
+            formSaving={saving}
+            saveSuccess={saveSuccess}
+        />
+    ) : null;
+
     const drawerHeaderActions = (
         <div className="flex flex-wrap items-center justify-end gap-2">
+            {personDrawerOperatingSaveActive ? (
+                <PersonDrawerOperatingSaveHeaderActions canMutate={!!canMutate} />
+            ) : null}
+            {opportunityHeaderSaveNode && drawer.type !== "opportunities" ? opportunityHeaderSaveNode : null}
             {canGoBack &&
                 previousDrawer &&
                 !(
@@ -11016,7 +11145,11 @@ export default function AdminEntityDrawer() {
                             <button type="button" onClick={() => { if (initialJobFormData) setFormData((prev) => ({ ...prev, ...initialJobFormData })); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
                         </>
                     )}
-                    {INLINE_EDIT_ENTITY_TYPES.includes(drawer.type as (typeof INLINE_EDIT_ENTITY_TYPES)[number]) && !(data as { _create?: boolean })?._create && canMutate && (nonJobFormDirty || saving || saveSuccess) && (
+                    {INLINE_EDIT_ENTITY_TYPES.includes(drawer.type as (typeof INLINE_EDIT_ENTITY_TYPES)[number]) &&
+                        drawer.type !== "opportunities" &&
+                        !(data as { _create?: boolean })?._create &&
+                        canMutate &&
+                        (nonJobFormDirty || saving || saveSuccess) && (
                         <>
                             {saveSuccess && <span className="text-sm text-alloy-juniper font-medium">Saved</span>}
                             <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
@@ -11129,16 +11262,16 @@ export default function AdminEntityDrawer() {
                 opportunityQueueDefinition) &&
             drawerTabStripKeys.length > 0 ? (
             <div className="flex min-h-0 flex-wrap gap-0.5 rounded-lg border border-admin-border bg-white py-1.5 px-1.5">
-                {drawerTabStripKeys.map((tab) => (
-                    <button
-                        key={tab}
-                        type="button"
-                        onClick={() => selectDrawerTab(tab)}
-                        className={`rounded-md px-3 py-1.5 text-xs font-medium leading-snug transition-colors adminv2-record-modal-tab ${drawerTab === tab ? "adminv2-record-modal-tab--active" : "text-alloy-forge/80 hover:bg-alloy-stone/50"}`}
-                    >
-                        {drawerTabLabelsForUi[tab] ?? tab}
-                    </button>
-                ))}
+                    {drawerTabStripKeys.map((tab) => (
+                        <button
+                            key={tab}
+                            type="button"
+                            onClick={() => selectDrawerTab(tab)}
+                            className={`rounded-md px-3 py-1.5 text-xs font-medium leading-snug transition-colors adminv2-record-modal-tab ${drawerTab === tab ? "adminv2-record-modal-tab--active" : "text-alloy-forge/80 hover:bg-alloy-stone/50"}`}
+                        >
+                            {drawerTabLabelsForUi[tab] ?? tab}
+                        </button>
+                    ))}
             </div>
         ) : (drawerReady || drawerGateLoading) &&
             !opportunityInquiryWorkflowDrawer &&
@@ -11398,6 +11531,9 @@ export default function AdminEntityDrawer() {
                 <div className="flex flex-wrap items-start justify-end gap-2">
                     {opportunityHeaderQuickActionsNode}
                 </div>
+                {opportunityHeaderSaveNode ? (
+                    <div className="flex flex-wrap items-center justify-end gap-2">{opportunityHeaderSaveNode}</div>
+                ) : null}
             </div>
         ) : undefined;
 
@@ -11444,7 +11580,7 @@ export default function AdminEntityDrawer() {
         !!drawer.id;
 
     const opportunityHeaderTitleRailRight =
-        opportunityQueueNavControls || opportunityHeaderQuickActionsNode ? (
+        opportunityQueueNavControls || opportunityHeaderQuickActionsNode || opportunityHeaderSaveNode ? (
             <div className="flex flex-col items-end gap-2">
                 {opportunityQueueNavControls ? (
                     <div className="flex shrink-0 items-center justify-end">{opportunityQueueNavControls}</div>
@@ -11452,6 +11588,9 @@ export default function AdminEntityDrawer() {
                 <div className="flex flex-wrap items-start justify-end gap-2">
                     {opportunityHeaderQuickActionsNode ?? <DrawerWorkflowHeaderQuickActionsSkeleton />}
                 </div>
+                {opportunityHeaderSaveNode ? (
+                    <div className="flex flex-wrap items-center justify-end gap-2">{opportunityHeaderSaveNode}</div>
+                ) : null}
             </div>
         ) : (
             <DrawerWorkflowHeaderQuickActionsSkeleton />
@@ -11624,7 +11763,7 @@ export default function AdminEntityDrawer() {
                     >
                         <DrawerOpportunityOperationalLoadingComposition />
                     </div>
-                ) : personDrawerChildOverviewPending && !personDrawerPaintReady ? (
+                ) : personDrawerChildOverviewPending ? (
                     <div
                         className={drawerRecordBodyRootClassName}
                         data-person-drawer-child-pending="true"
@@ -11633,7 +11772,7 @@ export default function AdminEntityDrawer() {
                     >
                         <PersonDrawerChildOverviewSkeleton />
                     </div>
-                ) : personDrawerParentOverviewPending && !personDrawerPaintReady ? (
+                ) : personDrawerParentOverviewPending ? (
                     <div
                         className={drawerRecordBodyRootClassName}
                         data-person-drawer-parent-pending="true"
@@ -14278,6 +14417,20 @@ export default function AdminEntityDrawer() {
                                                                                                 []
                                                                                             }
                                                                                             onPrimaryPersonUpdated={(person) => {
+                                                                                                const primaryId = String(
+                                                                                                    (d as Record<string, unknown>).primary_person_id ??
+                                                                                                        (d as Record<string, unknown>)._primary_person_id ??
+                                                                                                        ""
+                                                                                                ).trim();
+                                                                                                if (primaryId) {
+                                                                                                    dispatchPersonRecordUpdated({
+                                                                                                        personId: primaryId,
+                                                                                                        patch: {},
+                                                                                                        person: person as Record<string, unknown>,
+                                                                                                        source: "person_contact_save",
+                                                                                                        opportunityId: drawer.id ?? null,
+                                                                                                    });
+                                                                                                }
                                                                                                 setData((prev) => {
                                                                                                     if (!prev) return prev;
                                                                                                     const next = { ...prev } as Record<string, unknown>;
@@ -14293,6 +14446,13 @@ export default function AdminEntityDrawer() {
                                                                                                 }
                                                                                             }}
                                                                                             onLinkedPersonUpdated={(personId, person) => {
+                                                                                                dispatchPersonRecordUpdated({
+                                                                                                    personId,
+                                                                                                    patch: {},
+                                                                                                    person: person as Record<string, unknown>,
+                                                                                                    source: "person_contact_save",
+                                                                                                    opportunityId: drawer.id ?? null,
+                                                                                                });
                                                                                                 setData((prev) => {
                                                                                                     if (!prev) return prev;
                                                                                                     const next = { ...prev } as Record<string, unknown>;
@@ -14629,7 +14789,10 @@ export default function AdminEntityDrawer() {
                                                 entityDrawerOverviewData &&
                                                 !(entityDrawerOverviewData as { _create?: boolean })._create &&
                                                 personChildLifecycleChrome &&
-                                                (personDrawerPaintReady || isPersonDrawerSeedRecord(entityDrawerOverviewData as Record<string, unknown>)) ? (
+                                                personDrawerOperatingSummaryVisible({
+                                                    bodyHydrated: personDrawerChildBodyHydrated,
+                                                    record: entityDrawerOverviewData as Record<string, unknown>,
+                                                }) ? (
                                                 <>
                                                     <PersonDrawerChildSummary
                                                         record={entityDrawerOverviewData as Record<string, unknown>}
@@ -14670,7 +14833,10 @@ export default function AdminEntityDrawer() {
                                                 entityDrawerOverviewData &&
                                                 !(entityDrawerOverviewData as { _create?: boolean })._create &&
                                                 personParentGuardianChrome &&
-                                                (personDrawerPaintReady || isPersonDrawerSeedRecord(entityDrawerOverviewData as Record<string, unknown>)) ? (
+                                                personDrawerOperatingSummaryVisible({
+                                                    bodyHydrated: personDrawerParentBodyHydrated,
+                                                    record: entityDrawerOverviewData as Record<string, unknown>,
+                                                }) ? (
                                                 <>
                                                     <PersonDrawerParentSummary
                                                         record={entityDrawerOverviewData as Record<string, unknown>}
@@ -14719,6 +14885,7 @@ export default function AdminEntityDrawer() {
                                                                     )}
                                                                     canMutate={!!canMutate}
                                                                     compactOperatingSurface
+                                                                    deferSave
                                                                     onPersonUpdated={(json) => {
                                                                         setData((prev) => (prev ? { ...prev, ...json } : prev));
                                                                         if (drawer.id) {

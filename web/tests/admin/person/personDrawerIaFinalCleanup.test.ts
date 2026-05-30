@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { PERSON_DRAWER_HOUSEHOLD_ADDRESS_EMPTY_COPY } from "@/components/admin/entity/PersonDrawerHouseholdAddress";
 import { personDrawerChildLeadPillLabel } from "@/lib/admin/person/personDrawerChildLeadPill";
 import {
     isPersonDrawerChildSuppressedOverviewSection,
@@ -47,14 +46,14 @@ describe("person drawer IA final cleanup", () => {
         expect(personDrawerHouseholdAddressHasContent(model)).toBe(true);
     });
 
-    it("parent address shows polished empty state when no household location", () => {
+    it("parent address omits unavailable empty mailing copy when no household location", () => {
         const address = readFileSync(
             join(process.cwd(), "components/admin/entity/PersonDrawerHouseholdAddress.tsx"),
             "utf8"
         );
-        expect(address).toContain(PERSON_DRAWER_HOUSEHOLD_ADDRESS_EMPTY_COPY);
-        expect(address).toContain('data-person-drawer-address-empty="true"');
-        expect(address).not.toMatch(/showEmptyHousehold[\s\S]{0,80}return null/);
+        expect(address).not.toContain("No household mailing address on file");
+        expect(address).not.toContain('data-person-drawer-address-empty="true"');
+        expect(address).toContain("data-person-drawer-household-address");
     });
 
     it("child program and lead pills render in header executive, not overview body", () => {

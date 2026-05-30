@@ -1,6 +1,6 @@
 # Person Drawer Hardening + Performance Sprint
 
-**Status:** In progress (2026-05-30, phase 2)  
+**Status:** Complete — see `docs/sprints/05_2026/completed/person_drawer_hardening_performance_closeout.md` (2026-05-30)  
 **Scope:** Person drawer navigation performance, correct operating shells, global search open, explicit save, formatting, household layout, tab preload, config audit.  
 **Out of scope:** Child / Parent / Opportunity IA redesign — operating model is locked.
 
@@ -61,9 +61,9 @@ See git history / `personDrawerHardeningSprint.test.ts`.
 
 ### 5. Save behavior
 
-- Parent/child summary: explicit **Save** (Bend Pine), dirty indicator, no field `onBlur` autosave
+- Parent/child summary: explicit **Save** via header record actions (hidden when clean), dirty indicator, no field `onBlur` autosave
 - DOB/date fields only persist on Save (fixes partial date entry)
-- `personDrawerUnsavedGuard` + browser `beforeunload` + drawer close/back confirm
+- `personDrawerUnsavedGuard` + branded unsaved modal on drawer close/back/open
 
 ### 6. Phone formatting
 

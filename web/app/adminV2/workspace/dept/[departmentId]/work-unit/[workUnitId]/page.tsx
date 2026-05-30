@@ -4560,7 +4560,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         >
             {error && !workUnitShellReady ? (
                 <p className="text-sm text-alloy-ember px-1 py-4">{error}</p>
-            ) : !workUnitAboveFoldPageReady ? (
+            ) : !workUnitShellReady ? (
                 <WorkUnitPageLoadingGate workUnitTitle={wuName} departmentTitle={deptName} />
             ) : (
                 <>

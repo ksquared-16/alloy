@@ -11,7 +11,7 @@ import {
 } from "@/lib/admin/person/personDrawerSummaryDraft";
 import { PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS } from "@/lib/admin/person/personDrawerChildChrome";
 import { PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS } from "@/lib/admin/person/personDrawerParentChrome";
-import { confirmDiscardPersonDrawerUnsaved } from "@/lib/admin/person/personDrawerUnsavedGuard";
+import { confirmDiscardPersonDrawerUnsavedLegacy } from "@/lib/admin/person/personDrawerUnsavedGuard";
 
 const root = process.cwd();
 
@@ -69,15 +69,16 @@ describe("person drawer hardening phase 2", () => {
         expect(drawer).toContain("PersonDrawerOperatingActivityTab");
     });
 
-    it("parent and child summaries use explicit save bar", () => {
+    it("parent and child summaries defer save to drawer-level footer", () => {
         expect(read("components/admin/entity/PersonDrawerParentSummary.tsx")).toContain(
-            "PersonDrawerSummarySaveBar"
+            "registerPersonDrawerEditSection"
         );
         expect(read("components/admin/entity/PersonDrawerParentSummary.tsx")).not.toContain("onBlur");
         expect(read("components/admin/entity/PersonDrawerChildSummary.tsx")).toContain(
-            "PersonDrawerSummarySaveBar"
+            "registerPersonDrawerEditSection"
         );
         expect(read("components/admin/entity/PersonDrawerChildSummary.tsx")).not.toContain("onBlur");
+        expect(read("components/admin/AdminEntityDrawer.tsx")).toContain("PersonDrawerOperatingSaveHeaderActions");
     });
 
     it("summary draft detects dirty state and builds patch on save only", () => {
@@ -148,6 +149,7 @@ describe("person drawer hardening phase 2", () => {
 
     it("drawer context guards navigation when summary is dirty", () => {
         expect(read("contexts/AdminDrawerContext.tsx")).toContain("confirmDiscardPersonDrawerUnsaved");
-        expect(typeof confirmDiscardPersonDrawerUnsaved()).toBe("boolean");
+        expect(read("contexts/AdminDrawerContext.tsx")).toContain("PersonDrawerUnsavedChangesModal");
+        expect(typeof confirmDiscardPersonDrawerUnsavedLegacy()).toBe("boolean");
     });
 });

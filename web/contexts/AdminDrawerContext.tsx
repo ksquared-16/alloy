@@ -22,7 +22,11 @@ import {
 import { isOpportunityDrawerBootstrapWarm } from "@/lib/admin/opportunityDrawerBootstrapClient";
 import { isOpportunityDrawerPrimaryWarm } from "@/lib/admin/opportunityDrawerPrimaryPrefetch";
 import { markDrawerOpenStart } from "@/lib/perf/adminV2DrawerPerf";
-import { confirmDiscardPersonDrawerUnsaved } from "@/lib/admin/person/personDrawerUnsavedGuard";
+import {
+    confirmDiscardPersonDrawerUnsaved,
+    setPersonDrawerUnsavedPromptOpener,
+} from "@/lib/admin/person/personDrawerUnsavedGuard";
+import PersonDrawerUnsavedChangesModal from "@/components/admin/entity/PersonDrawerUnsavedChangesModal";
 import { GLOBAL_SEARCH_DRAWER_OPEN_SOURCE } from "@/lib/adminV2/globalRecordSearchOpen";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import type { OperationalVisualContext } from "@/lib/visualContext";
@@ -397,6 +401,17 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
         [applyOpportunityQueueNavigation, drawer.id, drawer.opportunityQueueNavigator, drawer.opportunityWorkspaceContext, drawer.type]
     );
 
+    const [personUnsavedPromptOpen, setPersonUnsavedPromptOpen] = useState(false);
+    const personUnsavedProceedRef = useRef<(() => void) | null>(null);
+
+    useEffect(() => {
+        setPersonDrawerUnsavedPromptOpener((request) => {
+            personUnsavedProceedRef.current = request.onDiscard;
+            setPersonUnsavedPromptOpen(true);
+        });
+        return () => setPersonDrawerUnsavedPromptOpener(null);
+    }, []);
+
     const consumeOpportunityDrawerPreload = useCallback((opportunityId: string): OpportunityDrawerOpenPreload | null => {
         const p = opportunityDrawerPreloadRef.current;
         if (!p || p.opportunityId !== opportunityId.trim()) return null;
@@ -406,9 +421,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
 
     const openDrawer = useCallback(
         (params: OpenDrawerParams) => {
-            if (drawer.type === "persons" && drawer.id && !confirmDiscardPersonDrawerUnsaved()) {
-                return;
-            }
+            const proceedOpen = () => {
             if (
                 params.type === "opportunities" &&
                 shouldDeferOpportunityDrawerOpen(pathname, params.id)
@@ -484,12 +497,18 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                 }
                 return next;
             });
+            };
+            if (drawer.type === "persons" && drawer.id) {
+                confirmDiscardPersonDrawerUnsaved(proceedOpen);
+                return;
+            }
+            proceedOpen();
         },
         [drawer.id, drawer.type, pathname, pushDrawerToStack]
     );
 
     const goBack = useCallback(() => {
-        if (!confirmDiscardPersonDrawerUnsaved()) return;
+        const proceedBack = () => {
         setStack((s) => {
             const next = [...s];
             const item = next.pop();
@@ -508,20 +527,26 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                     opportunityWorkspaceContext: item.opportunityWorkspaceContext,
                     opportunityQueuePreviewSeed: item.opportunityQueuePreviewSeed,
                     opportunityQueueNavigator: item.opportunityQueueNavigator,
+                    personDrawerOpenSeed: null,
+                    openSource: null,
                 });
             }
             return next;
         });
+        };
+        confirmDiscardPersonDrawerUnsaved(proceedBack);
     }, []);
 
     const closeDrawer = useCallback(() => {
-        if (!confirmDiscardPersonDrawerUnsaved()) return;
+        const proceedClose = () => {
         queueNavRunRef.current += 1;
         setOpportunityQueueNavTargetId(null);
         setOpeningOpportunity(null);
         opportunityDrawerPreloadRef.current = null;
         setDrawer({ type: null, id: null });
         setStack([]);
+        };
+        confirmDiscardPersonDrawerUnsaved(proceedClose);
     }, []);
 
     /**
@@ -564,6 +589,19 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
             }}
         >
             {children}
+            <PersonDrawerUnsavedChangesModal
+                isOpen={personUnsavedPromptOpen}
+                onContinueEditing={() => {
+                    personUnsavedProceedRef.current = null;
+                    setPersonUnsavedPromptOpen(false);
+                }}
+                onDiscard={() => {
+                    setPersonUnsavedPromptOpen(false);
+                    const proceed = personUnsavedProceedRef.current;
+                    personUnsavedProceedRef.current = null;
+                    proceed?.();
+                }}
+            />
         </AdminDrawerContext.Provider>
     );
 }

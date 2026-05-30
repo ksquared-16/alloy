@@ -70,15 +70,22 @@ export function isQueueMembershipMutationActionKey(actionKey: string | undefined
 /**
  * Whether the current lane row fetch should run (summaries may still refresh separately).
  */
+/** Person-only drawer edits should not force a full lane row refetch when the lead is off-screen. */
+const PERSON_DRAWER_ONLY_QUEUE_ACTION_KEYS = new Set(["person_contact_save"]);
+
 export function shouldRefetchWorkUnitQueueRowsForEvent(args: {
     detail: OpportunityQueueUpdatedDetail | null;
     visibleOpportunityIds: readonly string[];
 }): boolean {
     const { detail, visibleOpportunityIds } = args;
+    const actionKey = (detail?.action_key ?? "").trim();
     const oppId = (detail?.id ?? "").trim();
     if (!oppId) return true;
+    if (PERSON_DRAWER_ONLY_QUEUE_ACTION_KEYS.has(actionKey) && !visibleOpportunityIds.includes(oppId)) {
+        return false;
+    }
     if (visibleOpportunityIds.includes(oppId)) return true;
-    return isQueueMembershipMutationActionKey(detail?.action_key);
+    return isQueueMembershipMutationActionKey(actionKey);
 }
 
 const PERF_QUEUE_REFRESH_LOG =

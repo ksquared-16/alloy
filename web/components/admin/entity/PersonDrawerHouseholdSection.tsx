@@ -20,6 +20,11 @@ import {
     PERSON_DRAWER_UNLINKED_CHILD_TOOLTIP,
 } from "@/lib/admin/person/personDrawerHouseholdUnlinkedChild";
 import {
+    applyHouseholdGuardianPrimaryDisplay,
+    householdParentGuardianCount,
+    householdShowsPrimaryContactControl,
+} from "@/lib/admin/person/personDrawerHouseholdPrimaryContactDisplay";
+import {
     resolvePersonDrawerHouseholdModel,
     resolveViewingPersonGuardianForCustomer,
     viewingPersonHouseholdDisplayName,
@@ -30,7 +35,7 @@ import {
 type OpenDrawer = (type: string, id: string) => void;
 
 const HOUSEHOLD_PERSON_CARD_CLASS =
-    "flex min-w-0 items-start gap-2.5 rounded-lg border border-alloy-stone/15 bg-white/90 px-2.5 py-2 shadow-sm transition hover:border-alloy-stone/25";
+    "flex h-full min-h-[4.5rem] min-w-0 items-start gap-2.5 rounded-lg border border-alloy-stone/15 bg-white/90 px-2.5 py-2 shadow-sm transition hover:border-alloy-stone/25";
 
 function RoleChip({ label }: { label: string }) {
     return (
@@ -46,6 +51,7 @@ function HouseholdPrimaryContactControl({
     displayName,
     isPrimary,
     canMutate,
+    guardianCount,
     onPrimarySet,
     dataViewingPerson = false,
 }: {
@@ -54,6 +60,7 @@ function HouseholdPrimaryContactControl({
     displayName: string;
     isPrimary: boolean;
     canMutate: boolean;
+    guardianCount: number;
     onPrimarySet: (customerId: string, personId: string) => Promise<void>;
     dataViewingPerson?: boolean;
 }) {
@@ -69,7 +76,7 @@ function HouseholdPrimaryContactControl({
         }
     }, [canMutate, customerId, isPrimary, onPrimarySet, personId, saving]);
 
-    if (!canMutate || isPrimary) return null;
+    if (!householdShowsPrimaryContactControl({ guardianCount, isPrimary, canMutate })) return null;
 
     return (
         <label
@@ -96,11 +103,13 @@ function ViewingPersonPrimaryContactCard({
     row,
     customerId,
     canMutate,
+    guardianCount,
     onPrimarySet,
 }: {
     row: PersonDrawerHouseholdMember;
     customerId: string;
     canMutate: boolean;
+    guardianCount: number;
     onPrimarySet: (customerId: string, personId: string) => Promise<void>;
 }) {
     const personId = row.person_id;
@@ -120,7 +129,6 @@ function ViewingPersonPrimaryContactCard({
                 />
                 <div className="min-w-0 flex-1">
                     <p className="truncate text-[13px] font-semibold text-alloy-midnight/90">{row.display_name}</p>
-                    <p className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">You</p>
                     {row.is_primary ? (
                         <div className="mt-1">
                             <RoleChip label="Primary" />
@@ -132,6 +140,7 @@ function ViewingPersonPrimaryContactCard({
                         displayName={row.display_name}
                         isPrimary={row.is_primary}
                         canMutate={canMutate}
+                        guardianCount={guardianCount}
                         onPrimarySet={onPrimarySet}
                         dataViewingPerson
                     />
@@ -145,12 +154,14 @@ function GuardianCard({
     row,
     customerId,
     canMutate,
+    guardianCount,
     onOpenPerson,
     onPrimarySet,
 }: {
     row: PersonDrawerHouseholdMember;
     customerId: string;
     canMutate: boolean;
+    guardianCount: number;
     onOpenPerson: (id: string) => void;
     onPrimarySet: (customerId: string, personId: string) => Promise<void>;
 }) {
@@ -158,13 +169,14 @@ function GuardianCard({
     const personId = row.person_id;
 
     const primaryControl =
-        personId && canMutate ? (
+        personId ? (
             <HouseholdPrimaryContactControl
                 customerId={customerId}
                 personId={personId}
                 displayName={row.display_name}
                 isPrimary={isPrimary}
                 canMutate={canMutate}
+                guardianCount={guardianCount}
                 onPrimarySet={onPrimarySet}
             />
         ) : null;
@@ -416,12 +428,12 @@ export default function PersonDrawerHouseholdSection({
 
                             {group.guardians.length > 0 || group.children.length > 0 ? (
                                 <div
-                                    className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2"
+                                    className="grid min-w-0 grid-cols-1 items-stretch gap-4 md:grid-cols-2"
                                     data-person-drawer-household-columns="paired"
                                 >
                                     <HouseholdColumn title="Guardians">
                                         {(() => {
-                                            const viewingGuardian =
+                                            const viewingGuardianRaw =
                                                 isParentDrawer && viewingId
                                                     ? resolveViewingPersonGuardianForCustomer(
                                                           record,
@@ -429,11 +441,25 @@ export default function PersonDrawerHouseholdSection({
                                                           viewingId
                                                       )
                                                     : null;
-                                            const viewingName =
-                                                viewingGuardian?.display_name ??
-                                                (viewingId ? viewingPersonHouseholdDisplayName(record) : null);
+                                            const guardiansDisplayed = applyHouseholdGuardianPrimaryDisplay(
+                                                group.guardians
+                                            );
+                                            const viewingGuardian = viewingGuardianRaw
+                                                ? applyHouseholdGuardianPrimaryDisplay([
+                                                      {
+                                                          ...viewingGuardianRaw,
+                                                          display_name:
+                                                              viewingPersonHouseholdDisplayName(record) ??
+                                                              viewingGuardianRaw.display_name,
+                                                      },
+                                                  ])[0] ?? null
+                                                : null;
+                                            const guardianCount = householdParentGuardianCount(
+                                                guardiansDisplayed,
+                                                Boolean(viewingGuardian)
+                                            );
                                             const hasGuardianRows =
-                                                Boolean(viewingGuardian) || group.guardians.length > 0;
+                                                Boolean(viewingGuardian) || guardiansDisplayed.length > 0;
 
                                             if (!hasGuardianRows) {
                                                 return (
@@ -446,22 +472,20 @@ export default function PersonDrawerHouseholdSection({
                                                     {viewingGuardian ? (
                                                         <ViewingPersonPrimaryContactCard
                                                             key={`viewing-${viewingGuardian.person_id}`}
-                                                            row={{
-                                                                ...viewingGuardian,
-                                                                display_name:
-                                                                    viewingName ?? viewingGuardian.display_name,
-                                                            }}
+                                                            row={viewingGuardian}
                                                             customerId={group.customer_id}
                                                             canMutate={canMutate}
+                                                            guardianCount={guardianCount}
                                                             onPrimarySet={handlePrimarySet}
                                                         />
                                                     ) : null}
-                                                    {group.guardians.map((row) => (
+                                                    {guardiansDisplayed.map((row) => (
                                                         <GuardianCard
                                                             key={row.person_id ?? row.display_name}
                                                             row={row}
                                                             customerId={group.customer_id}
                                                             canMutate={canMutate}
+                                                            guardianCount={guardianCount}
                                                             onOpenPerson={openPerson}
                                                             onPrimarySet={handlePrimarySet}
                                                         />
@@ -498,6 +522,7 @@ export default function PersonDrawerHouseholdSection({
                                             row={row}
                                             customerId={group.customer_id}
                                             canMutate={false}
+                                            guardianCount={0}
                                             onOpenPerson={openPerson}
                                             onPrimarySet={handlePrimarySet}
                                         />
@@ -513,6 +538,7 @@ export default function PersonDrawerHouseholdSection({
                                             row={row}
                                             customerId={group.customer_id}
                                             canMutate={false}
+                                            guardianCount={0}
                                             onOpenPerson={openPerson}
                                             onPrimarySet={handlePrimarySet}
                                         />

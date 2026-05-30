@@ -32,6 +32,15 @@ describe("opportunityQueueRefreshEvent", () => {
         ).toBe(false);
     });
 
+    it("skips row refetch for off-screen person_contact_save", () => {
+        expect(
+            shouldRefetchWorkUnitQueueRowsForEvent({
+                detail: { id: "other-opp", action_key: "person_contact_save" },
+                visibleOpportunityIds: ["opp-1"],
+            })
+        ).toBe(false);
+    });
+
     it("refetches rows for membership mutations even when id not visible", () => {
         expect(
             shouldRefetchWorkUnitQueueRowsForEvent({

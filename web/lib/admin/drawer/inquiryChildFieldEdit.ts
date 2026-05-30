@@ -129,7 +129,11 @@ export async function patchInquiryChildIdentityFromDrawer(args: {
     draft: InquiryChildIdentityPatch;
     baseline: InquiryChildIdentityPatch;
     fetchFn?: typeof fetch;
-}): Promise<{ writeTarget: InquiryChildIdentityWriteTarget; patch: Record<string, unknown> }> {
+}): Promise<{
+    writeTarget: InquiryChildIdentityWriteTarget;
+    patch: Record<string, unknown>;
+    person?: Record<string, unknown>;
+}> {
     const fetchImpl = args.fetchFn ?? fetch;
     const personId = trimId(args.row.person_id);
     if (personId) {
@@ -143,7 +147,7 @@ export async function patchInquiryChildIdentityFromDrawer(args: {
             fetchFn: fetchImpl,
         });
         if (!result.ok) throw new Error(result.error);
-        return { writeTarget: "person", patch };
+        return { writeTarget: "person", patch, person: result.json };
     }
 
     const patch = buildCustomerMemberPatch(args.draft, args.baseline);

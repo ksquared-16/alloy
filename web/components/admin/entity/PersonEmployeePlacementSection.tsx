@@ -7,6 +7,7 @@ import {
     type PersonEmployeePlacementValues,
 } from "@/lib/admin/personEmployeePlacementFields";
 import { patchLinkedPersonFromOpportunityDrawer } from "@/lib/admin/drawer/linkedRecordFieldEditing";
+import { registerPersonDrawerEditSection } from "@/lib/admin/person/personDrawerEditingCoordinator";
 
 const INPUT_CLASS =
     "w-full rounded border border-admin-border bg-white px-2 py-1.5 text-sm text-alloy-forge focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:cursor-not-allowed disabled:opacity-60";
@@ -21,6 +22,8 @@ export type PersonEmployeePlacementSectionProps = {
     saveHint?: string;
     /** Parent/child person drawer — hide legacy source field and long help copy. */
     compactOperatingSurface?: boolean;
+    /** Drawer-level save — do not autosave on blur/change. */
+    deferSave?: boolean;
     onPersonUpdated?: (person: Record<string, unknown>) => void;
 };
 
@@ -30,6 +33,7 @@ export default function PersonEmployeePlacementSection({
     canMutate,
     saveHint,
     compactOperatingSurface = false,
+    deferSave = false,
     onPersonUpdated,
 }: PersonEmployeePlacementSectionProps) {
     const baselineRef = useRef(initialValues);
@@ -75,12 +79,13 @@ export default function PersonEmployeePlacementSection({
     }, [canMutate, draft, onPersonUpdated, personId, saving]);
 
     const scheduleSave = useCallback(() => {
+        if (deferSave) return;
         if (timerRef.current) clearTimeout(timerRef.current);
         timerRef.current = setTimeout(() => {
             timerRef.current = null;
             void persist();
         }, SAVE_DELAY_MS);
-    }, [persist]);
+    }, [deferSave, persist]);
 
     useEffect(
         () => () => {
@@ -91,9 +96,28 @@ export default function PersonEmployeePlacementSection({
 
     const showIdFields = draft.is_employee;
 
+    useEffect(() => {
+        if (!deferSave) return;
+        registerPersonDrawerEditSection("employee_placement", {
+            isDirty: () => {
+                const patch = buildPersonEmployeePlacementPatch(draft, baselineRef.current);
+                return Object.keys(patch).length > 0;
+            },
+            save: persist,
+            revert: () => setDraft(baselineRef.current),
+        });
+        return () => registerPersonDrawerEditSection("employee_placement", null);
+    }, [deferSave, draft, persist]);
+
+    const employeeRowClass = compactOperatingSurface
+        ? "flex flex-wrap items-end gap-3"
+        : "space-y-3";
+
     return (
-        <div className="space-y-3" data-person-employee-placement="true">
-            <label className="flex items-center gap-2 text-sm text-alloy-midnight/85">
+        <div className={employeeRowClass} data-person-employee-placement="true">
+            <label
+                className={`flex items-center gap-2 text-sm text-alloy-midnight/85 ${compactOperatingSurface ? "shrink-0 pb-1.5" : ""}`}
+            >
                 <input
                     type="checkbox"
                     checked={draft.is_employee}
@@ -112,8 +136,14 @@ export default function PersonEmployeePlacementSection({
                 <span className="font-medium">Employee</span>
             </label>
             {showIdFields ? (
-                <div className={compactOperatingSurface ? "max-w-sm" : "grid grid-cols-1 gap-3 sm:grid-cols-2"}>
-                    <div>
+                <div
+                    className={
+                        compactOperatingSurface
+                            ? "flex min-w-0 flex-1 flex-wrap items-end gap-2"
+                            : "grid grid-cols-1 gap-3 sm:grid-cols-2"
+                    }
+                >
+                    <div className={compactOperatingSurface ? "min-w-[10rem] flex-1 max-w-sm" : undefined}>
                         <label className="mb-0.5 block text-xs font-medium text-alloy-midnight/60">
                             Employee ID
                         </label>
@@ -124,7 +154,7 @@ export default function PersonEmployeePlacementSection({
                                 setDraft((p) => ({ ...p, employee_id: e.target.value }));
                                 scheduleSave();
                             }}
-                            onBlur={() => void persist()}
+                            onBlur={deferSave ? undefined : () => void persist()}
                             className={INPUT_CLASS}
                             placeholder="Optional"
                             autoComplete="off"

@@ -6,7 +6,7 @@ function trimOrNull(v: unknown): string | null {
 }
 
 export type PersonDrawerHouseholdAddressModel = {
-    source: "customer_location" | "person_interim" | "none";
+    source: "customer_location" | "none";
     /** When `customer_location`, household/account owns address truth. */
     customer_id: string | null;
     location_id: string | null;
@@ -60,33 +60,6 @@ export function resolvePersonDrawerHouseholdAddressModel(
             postal_code: householdRow.postal_code,
             label: householdRow.label,
             interim_note: null,
-        };
-    }
-
-    const hasPersonAddressFieldDefs = (
-        (record._field_definitions as { field_key?: string }[] | undefined) ?? []
-    ).some((def) =>
-        ["address_line1", "address_line2", "city", "state", "postal_code"].includes(
-            String(def.field_key ?? "")
-        )
-    );
-    const hasPersonAddressValues = ["address_line1", "address_line2", "city", "state", "postal_code"].some(
-        (key) => record[key] != null && String(record[key]).trim() !== ""
-    );
-
-    if (hasPersonAddressFieldDefs || hasPersonAddressValues) {
-        return {
-            source: "person_interim",
-            customer_id: null,
-            location_id: null,
-            address_line1: trimOrNull(record.address_line1),
-            address_line2: trimOrNull(record.address_line2),
-            city: trimOrNull(record.city),
-            state: trimOrNull(record.state),
-            postal_code: trimOrNull(record.postal_code),
-            label: null,
-            interim_note:
-                "Household mailing address is not on file for this account. Showing interim person mailing fields until customer location address is added.",
         };
     }
 

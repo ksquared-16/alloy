@@ -25,6 +25,12 @@ import { loadWorkspaceChildcareInquiryOptionSets } from "@/lib/workspace/workspa
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { logInquiryChildrenDebug, summarizeInquiryChildrenRows } from "@/lib/admin/drawer/inquiryChildrenDebug";
+import { dispatchPersonRecordUpdated } from "@/lib/admin/person/dispatchPersonRecordUpdated";
+import { resolveChildAgeDisplayLabel } from "@/lib/admin/drawer/childAgeDisplay";
+import {
+    registerDrawerOperatingEditSection,
+} from "@/lib/admin/drawer/drawerOperatingSaveCoordinator";
+import { resolveInquiryChildProgramCategoryLabel } from "@/lib/admin/drawer/inquiryChildOcmPlacementDisplay";
 import { OPPORTUNITY_INQUIRY_CHILDREN_COLLAPSED_SHELL_CLASS } from "@/lib/admin/drawer/opportunityDrawerLayoutStability";
 
 const INQUIRY_CHILD_ROW_SHELL_MIN_H = "min-h-[2.25rem]";
@@ -38,7 +44,7 @@ import {
     type InquiryChildFieldDefLike,
 } from "@/lib/fields/inquiryChildFieldRegistry";
 import { User } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 
 /** Literal Tailwind classes (must not be composed at runtime). DOB column compact; Desired Start wider. */
 const INQUIRY_CHILD_DESKTOP_GRID_7 =
@@ -191,6 +197,8 @@ export default function OpportunityInquiryChildrenSection({
     embeddedInPremiumSection = false,
     /** When false, defers field-definitions / option-set / status-definitions until edit. */
     enrichmentFetchEnabled = false,
+    /** When true, loads program/schedule option labels for read-only display (OCM placement). */
+    placementLabelFetchEnabled = false,
     shellReservedRowCount = 0,
     opportunityDisplayLocationKind,
 }: {
@@ -204,6 +212,7 @@ export default function OpportunityInquiryChildrenSection({
     recordDetailPending?: boolean;
     embeddedInPremiumSection?: boolean;
     enrichmentFetchEnabled?: boolean;
+    placementLabelFetchEnabled?: boolean;
     shellReservedRowCount?: number;
     /** Resolved opportunity-level location display — used for multi-location operator hint. */
     opportunityDisplayLocationKind?: "none" | "single" | "multiple" | null;
@@ -285,8 +294,13 @@ export default function OpportunityInquiryChildrenSection({
         });
     }, [rows]);
 
+    const loadPlacementLabels = placementLabelFetchEnabled && rows.length > 0;
+    /** Load location/status option sets whenever placement labels load — first paint must show Program + Location. */
+    const loadEditorEnrichment =
+        (enrichmentFetchEnabled || placementLabelFetchEnabled) && rows.length > 0;
+
     useEffect(() => {
-        if (!enrichmentFetchEnabled || rows.length === 0) {
+        if (!loadPlacementLabels && !loadEditorEnrichment) {
             setProgramItems([]);
             setScheduleItems([]);
             setLocationItems([]);
@@ -301,7 +315,13 @@ export default function OpportunityInquiryChildrenSection({
                 const init = workspaceDataFetchInit();
                 const [bundle, statusRes] = await Promise.all([
                     loadWorkspaceChildcareInquiryOptionSets(init),
-                    dedupeAdminFetchWithTtl("/api/admin/status-definitions?entity_type=opportunity_customer_members", init, 1500),
+                    loadEditorEnrichment
+                        ? dedupeAdminFetchWithTtl(
+                              "/api/admin/status-definitions?entity_type=opportunity_customer_members",
+                              init,
+                              1500
+                          )
+                        : Promise.resolve(new Response(JSON.stringify({ definitions: [] }), { status: 200 })),
                 ]);
                 const progRes = bundle.programRes;
                 const schedRes = bundle.scheduleRes;
@@ -321,20 +341,28 @@ export default function OpportunityInquiryChildrenSection({
                 const statusJson = (await statusRes.json().catch(() => ({}))) as { statuses?: StatusRow[]; error?: string };
                 if (!progRes.ok) throw new Error(progJson.error ?? "Failed to load program types");
                 if (!schedRes.ok) throw new Error(schedJson.error ?? "Failed to load schedule types");
-                if (!locRes.ok) throw new Error(locJson.error ?? "Failed to load locations");
-                if (!statusRes.ok) throw new Error(statusJson.error ?? "Failed to load child status options");
                 if (cancelled) return;
-                setProgramItems((progJson.items ?? []).slice());
-                setScheduleItems((schedJson.items ?? []).slice());
-                setLocationItems(
-                    (locJson.locations ?? []).map((loc) => ({
-                        id: String(loc.id),
-                        label: (loc.label ?? loc.city ?? loc.id).trim() || loc.id,
-                        location_type: loc.location_type ?? null,
-                        parent_location_id: loc.parent_location_id ?? null,
-                    }))
-                );
-                setStatusItems((statusJson.statuses ?? []).slice().sort((a, b) => (Number(a.sort_order ?? 100) - Number(b.sort_order ?? 100))));
+                if (loadPlacementLabels || loadEditorEnrichment) {
+                    setProgramItems((progJson.items ?? []).slice());
+                    setScheduleItems((schedJson.items ?? []).slice());
+                }
+                if (loadEditorEnrichment) {
+                    if (!locRes.ok) throw new Error(locJson.error ?? "Failed to load locations");
+                    if (!statusRes.ok) throw new Error(statusJson.error ?? "Failed to load child status options");
+                    setLocationItems(
+                        (locJson.locations ?? []).map((loc) => ({
+                            id: String(loc.id),
+                            label: (loc.label ?? loc.city ?? loc.id).trim() || loc.id,
+                            location_type: loc.location_type ?? null,
+                            parent_location_id: loc.parent_location_id ?? null,
+                        }))
+                    );
+                    setStatusItems(
+                        (statusJson.statuses ?? [])
+                            .slice()
+                            .sort((a, b) => Number(a.sort_order ?? 100) - Number(b.sort_order ?? 100))
+                    );
+                }
             } catch (e) {
                 if (cancelled) return;
                 setLoadErr((e as Error).message);
@@ -344,7 +372,7 @@ export default function OpportunityInquiryChildrenSection({
         return () => {
             cancelled = true;
         };
-    }, [enrichmentFetchEnabled, rows.length]);
+    }, [loadPlacementLabels, loadEditorEnrichment, rows.length]);
 
     useEffect(() => {
         if (!enrichmentFetchEnabled) {
@@ -487,7 +515,7 @@ export default function OpportunityInquiryChildrenSection({
         };
     };
 
-    const saveInquiryChildRow = async (row: InquiryChildRow) => {
+    const saveInquiryChildRow = useCallback(async (row: InquiryChildRow) => {
         const st = local[row.id];
         const identityDraft = identityLocal[row.id];
         if (!st || !identityDraft) return;
@@ -515,11 +543,25 @@ export default function OpportunityInquiryChildrenSection({
                 row.customer_member_id &&
                 inquiryChildIdentityHasChanges(identityDraft, identityBaseline)
             ) {
-                await patchInquiryChildIdentityFromDrawer({
+                const identityWrite = await patchInquiryChildIdentityFromDrawer({
                     row: { customer_member_id: row.customer_member_id, person_id: row.person_id },
                     draft: identityDraft,
                     baseline: identityBaseline,
                 });
+                const personId = (row.person_id ?? "").trim();
+                if (
+                    identityWrite.writeTarget === "person" &&
+                    personId &&
+                    Object.keys(identityWrite.patch).length > 0
+                ) {
+                    dispatchPersonRecordUpdated({
+                        personId,
+                        patch: identityWrite.patch,
+                        person: identityWrite.person,
+                        source: "inquiry_child_identity",
+                        opportunityId: opportunityId ?? null,
+                    });
+                }
             }
             const ocmPatch = buildInquiryChildOcmPatchFromEditorLocal({
                 row,
@@ -535,7 +577,106 @@ export default function OpportunityInquiryChildrenSection({
         } catch (e) {
             markRowSaveState(row.id, "error", (e as Error).message);
         }
-    };
+    }, [
+        canEdit,
+        customDrawerDefs,
+        local,
+        identityLocal,
+        opportunityDesiredStartDate,
+        opportunityId,
+        onChildrenMutated,
+    ]);
+
+    const customFieldKeys = useMemo(() => customDrawerDefs.map((d) => d.field_key), [customDrawerDefs]);
+
+    const resetEditorStateFromRows = useCallback(() => {
+        setLocal((prev) => {
+            const next = { ...prev };
+            for (const r of rows) {
+                if (!r.id) continue;
+                const startDisplay = resolveInquiryChildDesiredStartDisplay(
+                    r.desired_start_date,
+                    opportunityDesiredStartDate
+                );
+                const custom: Record<string, string> = {};
+                for (const [k, v] of Object.entries(r.custom_fields ?? {})) {
+                    if (v == null) custom[k] = "";
+                    else if (typeof v === "string") custom[k] = v;
+                    else custom[k] = String(v);
+                }
+                next[r.id] = {
+                    location_id: normalizeKey(r.location_id),
+                    program_room_cohort_key: normalizeKey(r.program_room_cohort_key),
+                    desired_program_type: normalizeKey(r.desired_program_type),
+                    desired_schedule_type: normalizeKey(r.desired_schedule_type),
+                    outcome_status_key: normalizeKey(r.outcome_status_key),
+                    notes: (r.notes ?? "").toString(),
+                    desired_start_edit: startDisplay.inputValue,
+                    custom,
+                };
+            }
+            return next;
+        });
+        setIdentityLocal((prev) => {
+            const next = { ...prev };
+            for (const r of rows) {
+                if (!r.id) continue;
+                const display = (r.display_name ?? "").trim();
+                let first = (r.first_name ?? "").trim();
+                let last = (r.last_name ?? "").trim();
+                if (!first && !last && display) {
+                    const parts = display.split(/\s+/).filter(Boolean);
+                    first = parts[0] ?? "";
+                    last = parts.length > 1 ? parts.slice(1).join(" ") : "";
+                }
+                next[r.id] = {
+                    first_name: first,
+                    last_name: last,
+                    dob: r.dob ? String(r.dob).slice(0, 10) : "",
+                };
+            }
+            return next;
+        });
+    }, [rows, opportunityDesiredStartDate]);
+
+    const inquiryChildrenSectionIsDirty = useCallback(() => {
+        return rows.some((r) => {
+            const st = local[r.id];
+            const identityDraft = identityLocal[r.id];
+            if (!st || !identityDraft) return false;
+            return inquiryChildEditorRowIsDirty({
+                row: r,
+                local: st,
+                identityDraft,
+                identityBaseline: identityBaselineForRow(r),
+                opportunityDesiredStartDate,
+                customFieldKeys,
+            });
+        });
+    }, [rows, local, identityLocal, opportunityDesiredStartDate, customFieldKeys]);
+
+    useLayoutEffect(() => {
+        if (!canEdit) {
+            registerDrawerOperatingEditSection("opportunity_inquiry_children", null);
+            return undefined;
+        }
+        registerDrawerOperatingEditSection("opportunity_inquiry_children", {
+            isDirty: inquiryChildrenSectionIsDirty,
+            save: async () => {
+                for (const r of rows) {
+                    await saveInquiryChildRow(r);
+                }
+            },
+            revert: () => resetEditorStateFromRows(),
+        });
+        return () => registerDrawerOperatingEditSection("opportunity_inquiry_children", null);
+    }, [
+        canEdit,
+        rows,
+        inquiryChildrenSectionIsDirty,
+        saveInquiryChildRow,
+        resetEditorStateFromRows,
+    ]);
 
     useEffect(() => {
         logInquiryChildrenDebug("OpportunityInquiryChildrenSection.render", {
@@ -663,12 +804,16 @@ export default function OpportunityInquiryChildrenSection({
                 {rows.map((r) => {
                     const name = (r.display_name ?? "").trim() || "—";
                     const isMetadataOnly = (r.customer_member_id ?? "").startsWith("metadata_child:");
-                    const age = (r.age ?? "").trim();
+                    const ageLabel = resolveChildAgeDisplayLabel({
+                        person_id: r.person_id,
+                        person_date_of_birth: r.person_id && r.dob ? String(r.dob).slice(0, 10) : null,
+                        member_dob: r.dob ? String(r.dob).slice(0, 10) : null,
+                    });
                     const dobAge =
                         r.dob ?
-                            age ? `${formatDate(r.dob)} · ${age}`
+                            ageLabel ? `${formatDate(r.dob)} · ${ageLabel}`
                             :   formatDate(r.dob)
-                        :   age || "—";
+                        :   ageLabel || "—";
                     const startFallback = resolveInquiryChildDesiredStartDisplay(
                         r.desired_start_date,
                         opportunityDesiredStartDate
@@ -712,10 +857,12 @@ export default function OpportunityInquiryChildrenSection({
                     const displayName =
                         [identity.first_name, identity.last_name].filter(Boolean).join(" ").trim() || name;
                     const fallbackProgram =
-                        (r.desired_program_label ?? "").trim() ||
-                        (st.desired_program_type
-                            ? (programLabelByKey.get(st.desired_program_type) ?? st.desired_program_type)
-                            : "—");
+                        resolveInquiryChildProgramCategoryLabel({
+                            desired_program_type:
+                                st.desired_program_type || normalizeKey(r.desired_program_type),
+                            desired_program_label: r.desired_program_label,
+                            optionLabelLookup: programLabelByKey,
+                        }) ?? "—";
                     const fallbackSchedule =
                         (r.desired_schedule_label ?? "").trim() ||
                         (st.desired_schedule_type
@@ -852,9 +999,9 @@ export default function OpportunityInquiryChildrenSection({
                                                 className={`${fieldInput} w-[6.5rem] shrink-0`}
                                                 aria-label={`Date of birth for ${displayName}`}
                                             />
-                                            {age ? (
+                                            {ageLabel ? (
                                                 <span className="shrink-0 tabular-nums text-[10px] text-alloy-midnight/55">
-                                                    · {age}
+                                                    · {ageLabel}
                                                 </span>
                                             ) : null}
                                         </div>
@@ -1113,14 +1260,7 @@ export default function OpportunityInquiryChildrenSection({
                                     {rowCanEdit ? (
                                         <div className="mt-0.5 flex min-h-[0.75rem] flex-wrap items-center gap-1.5 leading-none">
                                             {rowDirty ? (
-                                                <button
-                                                    type="button"
-                                                    disabled={saving}
-                                                    onClick={() => void saveInquiryChildRow(r)}
-                                                    className="rounded border border-alloy-blue/35 bg-alloy-blue/[0.08] px-1.5 py-0.5 text-[9px] font-semibold text-alloy-blue hover:bg-alloy-blue/10 disabled:opacity-60"
-                                                >
-                                                    {saving ? "Saving…" : "Save"}
-                                                </button>
+                                                <span className="text-[9px] font-medium text-amber-800/80">Unsaved</span>
                                             ) : null}
                                             {rowStatus(r.id)}
                                         </div>

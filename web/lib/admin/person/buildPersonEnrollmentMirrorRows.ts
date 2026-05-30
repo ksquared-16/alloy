@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { batchOptionItemLabelsForOrg } from "@/lib/admin/optionItemLabelForOrg";
+import { resolveInquiryChildProgramCategoryLabel } from "@/lib/admin/drawer/inquiryChildOcmPlacementDisplay";
 import { resolveStatusLabel } from "@/lib/admin/statusDefinitionsResolve";
 import type { PersonEnrollmentMirrorRow } from "@/lib/admin/person/personDrawerVisibilityTypes";
 
@@ -120,9 +121,10 @@ export async function buildPersonEnrollmentMirrorRowsForMemberIds(
         const siteRow = siteId ? locById.get(siteId) : undefined;
         const roomRow = roomKey ? locById.get(roomKey) : undefined;
         const programKey = trimOrNull(ocm.desired_program_type);
-        const programLabel = programKey
-            ? programLabels.get(`childcare_program_type\0${programKey}`) ?? programKey
-            : null;
+        const programLabel = resolveInquiryChildProgramCategoryLabel({
+            desired_program_type: programKey,
+            optionLabelLookup: programLabels,
+        });
         const outcomeKey = trimOrNull(ocm.outcome_status_key);
 
         mirror.push({

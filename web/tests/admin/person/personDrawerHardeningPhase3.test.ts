@@ -26,9 +26,11 @@ const PARENT_ID = "11111111-1111-4111-8111-111111111111";
 const CHILD_ID = "22222222-2222-4222-8222-222222222222";
 
 describe("person drawer hardening phase 3", () => {
-    it("hides primary-contact radio when guardian is already primary", () => {
+    it("hides primary-contact control for primary or single-guardian households", () => {
         const section = read("components/admin/entity/PersonDrawerHouseholdSection.tsx");
-        expect(section).toContain("if (!canMutate || isPrimary) return null");
+        expect(section).toContain("householdShowsPrimaryContactControl");
+        expect(section).toContain("applyHouseholdGuardianPrimaryDisplay");
+        expect(section).not.toContain(">You<");
         expect(section).not.toMatch(
             /isPrimary \? "Primary contact" : "Set as primary contact"/
         );
@@ -113,12 +115,44 @@ describe("person drawer hardening phase 3", () => {
 
     it("AdminEntityDrawer shows typed skeleton until child/parent body hydrates", () => {
         const drawer = read("components/admin/AdminEntityDrawer.tsx");
+        expect(drawer).toContain("personDrawerFirstPaintRecord");
         expect(drawer).toContain(") : personDrawerChildOverviewPending ? (");
         expect(drawer).not.toContain("personDrawerChildOverviewPending && !personDrawerPaintReady");
-        expect(drawer).toContain("personDrawerChildBodyHydrated ? (");
-        expect(drawer).toContain("personDrawerParentBodyHydrated ? (");
+        expect(drawer).toContain("personDrawerOperatingSummaryVisible");
         expect(drawer).toContain("resolvePersonDrawerTransitionSnapshot");
         expect(drawer).toContain('prev.type === "persons"');
+    });
+
+    it("uses one drawer-level save header action instead of per-section save bars", () => {
+        const drawer = read("components/admin/AdminEntityDrawer.tsx");
+        expect(drawer).toContain("PersonDrawerOperatingSaveHeaderActions");
+        expect(drawer).not.toContain("PersonDrawerOperatingSaveFooter");
+        expect(read("components/admin/entity/PersonDrawerParentSummary.tsx")).not.toContain(
+            "PersonDrawerSummarySaveBar"
+        );
+        expect(read("components/admin/entity/PersonDrawerChildSummary.tsx")).not.toContain(
+            "PersonDrawerSummarySaveBar"
+        );
+    });
+
+    it("compact employee status renders checkbox and id inline", () => {
+        const placement = read("components/admin/entity/PersonEmployeePlacementSection.tsx");
+        expect(placement).toContain("flex flex-wrap items-end gap-3");
+        expect(placement).toContain("deferSave");
+    });
+
+    it("address section does not mention interim person mailing fields or empty mailing copy", () => {
+        const address = read("components/admin/entity/PersonDrawerHouseholdAddress.tsx");
+        expect(address).not.toContain("interim");
+        expect(address).not.toContain("No household mailing address on file");
+    });
+
+    it("work unit route uses shell-ready gate instead of full above-fold gate for page swap", () => {
+        const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
+        expect(page).toContain("!workUnitShellReady");
+        expect(page).not.toMatch(
+            /!workUnitAboveFoldPageReady \? \([\s\S]{0,120}WorkUnitPageLoadingGate/
+        );
     });
 
     it("parent summary and employee placement omit doctrine and On file copy", () => {

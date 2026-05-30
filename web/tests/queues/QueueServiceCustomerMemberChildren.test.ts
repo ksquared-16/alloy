@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { resolveChildAgeDisplayLabel } from "@/lib/admin/drawer/childAgeDisplay";
 import { __testing } from "@/lib/queues/QueueService";
-import { approximateAgeMonthsFromDobIso, programLabelAndAgeGroupFromAgeMonths } from "@/lib/childcare/childCareProgramFromDob";
 
 describe("QueueService — customer_members → CRM compact children (pure helpers)", () => {
     const {
@@ -10,7 +10,13 @@ describe("QueueService — customer_members → CRM compact children (pure helpe
         displayBaseNameForCustomerMember,
     } = __testing;
 
-    const fixedNow = new Date("2026-06-01T12:00:00.000Z");
+    function emptyPlacementContext() {
+        return {
+            opportunityId: "opp-1",
+            ocmByMemberId: new Map(),
+            optionLabelLookup: new Map<string, string>(),
+        };
+    }
 
     function emptyPersonContext() {
         return {
@@ -19,18 +25,13 @@ describe("QueueService — customer_members → CRM compact children (pure helpe
         };
     }
 
-    function secondaryFromDob(dob: string): string {
-        const months = approximateAgeMonthsFromDobIso(dob, fixedNow) ?? 0;
-        const t = programLabelAndAgeGroupFromAgeMonths(months);
-        return t.age_group ? `${t.program_label} · ${t.age_group}` : t.program_label;
-    }
-
-    it("one active child → one structured row; secondary from DOB-derived program", () => {
+    it("one active child → primary includes canonical age from Person DOB", () => {
         const { childDobByPersonId, personById } = emptyPersonContext();
         childDobByPersonId.set("p1", "2024-01-22");
         const lines = buildCrmCompactStructuredLinesFromCustomerMembers(
             [
                 {
+                    id: "cm-1",
                     customer_id: "cust-1",
                     display_name: "Mia Chen",
                     person_id: "p1",
@@ -38,50 +39,84 @@ describe("QueueService — customer_members → CRM compact children (pure helpe
                 },
             ],
             childDobByPersonId,
-            personById
+            personById,
+            emptyPlacementContext()
         );
         expect(lines).toHaveLength(1);
+        const age = resolveChildAgeDisplayLabel({
+            person_id: "p1",
+            person_date_of_birth: "2024-01-22",
+        });
         expect(lines[0]!.primary).toContain("Mia Chen");
-        expect(lines[0]!.primary).toMatch(/\(/);
-        expect(lines[0]!.secondary).toBe(secondaryFromDob("2024-01-22"));
+        expect(lines[0]!.primary).toContain(age);
     });
 
-    it("multiple children → multiple rows; per-child program when ages differ", () => {
-        const { childDobByPersonId, personById } = emptyPersonContext();
-        childDobByPersonId.set("p1", "2021-03-10");
-        childDobByPersonId.set("p2", "2024-03-10");
-        const lines = buildCrmCompactStructuredLinesFromCustomerMembers(
-            [
-                { customer_id: "c1", display_name: "Liam Patel", person_id: "p1", dob: "2021-03-10" },
-                { customer_id: "c1", display_name: "Mia Patel", person_id: "p2", dob: "2024-03-10" },
-            ],
-            childDobByPersonId,
-            personById
-        );
-        expect(lines).toHaveLength(2);
-        const sec0 = secondaryFromDob("2021-03-10");
-        const sec1 = secondaryFromDob("2024-03-10");
-        expect(lines.map((l) => l.secondary).sort().join("|")).toBe([sec0, sec1].sort().join("|"));
-        expect(sec0).not.toEqual(sec1);
-    });
-
-    it("prefers member metadata program when present (drawer-saved values)", () => {
-        const { childDobByPersonId, personById } = emptyPersonContext();
+    it("secondary uses OCM desired_program_type (not DOB-derived mock program)", () => {
+        const lookup = new Map([["childcare_program_type\0toddler", "Toddler"]]);
+        const ctx = {
+            opportunityId: "opp-1",
+            ocmByMemberId: new Map([
+                [
+                    "cm-1",
+                    {
+                        opportunity_id: "opp-1",
+                        customer_member_id: "cm-1",
+                        desired_program_type: "toddler",
+                    },
+                ],
+            ]),
+            optionLabelLookup: lookup,
+        };
         const lines = buildCrmCompactStructuredLinesFromCustomerMembers(
             [
                 {
+                    id: "cm-1",
                     customer_id: "c1",
                     display_name: "Test Child",
                     person_id: "p9",
                     dob: "2021-06-01",
-                    metadata: { program_label: "Preschool — 3–4 years", age_group: "Ages 36–48 mo" },
                 },
             ],
-            childDobByPersonId,
-            personById
+            emptyPersonContext().childDobByPersonId,
+            emptyPersonContext().personById,
+            ctx
         );
-        expect(lines).toHaveLength(1);
-        expect(lines[0]!.secondary).toBe("Preschool — 3–4 years");
+        expect(lines[0]!.secondary).toBe("Toddler");
+    });
+
+    it("secondary is null when OCM program type is absent", () => {
+        const lines = buildCrmCompactStructuredLinesFromCustomerMembers(
+            [
+                {
+                    id: "cm-1",
+                    customer_id: "c1",
+                    display_name: "Test Child",
+                    person_id: "p9",
+                    dob: "2021-06-01",
+                },
+            ],
+            emptyPersonContext().childDobByPersonId,
+            emptyPersonContext().personById,
+            emptyPlacementContext()
+        );
+        expect(lines[0]!.secondary).toBeNull();
+    });
+
+    it("prefers member metadata program_label only when OCM has no desired_program_type", () => {
+        const lines = buildCrmCompactStructuredLinesFromCustomerMembers(
+            [
+                {
+                    id: "cm-1",
+                    customer_id: "c1",
+                    display_name: "Test Child",
+                    metadata: { program_label: "Legacy Preschool" },
+                },
+            ],
+            emptyPersonContext().childDobByPersonId,
+            emptyPersonContext().personById,
+            emptyPlacementContext()
+        );
+        expect(lines[0]!.secondary).toBe("Legacy Preschool");
     });
 
     it("ignores non-child relationship rows (filter predicate)", () => {

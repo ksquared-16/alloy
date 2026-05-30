@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import PersonDrawerParentSummaryBosPanel from "@/components/admin/entity/PersonDrawerParentSummaryBosPanel";
 import PersonDrawerIdentityAvatar from "@/components/admin/entity/PersonDrawerIdentityAvatar";
-import PersonDrawerSummarySaveBar from "@/components/admin/entity/PersonDrawerSummarySaveBar";
+import { registerPersonDrawerEditSection } from "@/lib/admin/person/personDrawerEditingCoordinator";
 import {
     oppInqEyebrow,
     oppInqFieldInput,
@@ -19,7 +19,6 @@ import {
     type ParentSummaryDraft,
 } from "@/lib/admin/person/personDrawerSummaryDraft";
 import { resolvePersonDrawerParentSummaryModel } from "@/lib/admin/person/personDrawerParentSummaryModel";
-import { setPersonDrawerUnsavedChecker } from "@/lib/admin/person/personDrawerUnsavedGuard";
 
 function compactFieldClassName(): string {
     return `${oppInqFieldInput} !py-1 !text-[13px]`;
@@ -62,20 +61,6 @@ export default function PersonDrawerParentSummary({
 
     const dirty = useMemo(() => parentSummaryDraftIsDirty(record, draft), [draft, record]);
 
-    useEffect(() => {
-        setPersonDrawerUnsavedChecker(() => dirty);
-        return () => setPersonDrawerUnsavedChecker(null);
-    }, [dirty]);
-
-    useEffect(() => {
-        const onBeforeUnload = (e: BeforeUnloadEvent) => {
-            if (!dirty) return;
-            e.preventDefault();
-        };
-        window.addEventListener("beforeunload", onBeforeUnload);
-        return () => window.removeEventListener("beforeunload", onBeforeUnload);
-    }, [dirty]);
-
     const saveAll = useCallback(async () => {
         if (!personId || !canMutate || !dirty) return;
         const patch = buildParentSummaryPatch(record, draft);
@@ -88,6 +73,15 @@ export default function PersonDrawerParentSummary({
             setSaving(false);
         }
     }, [canMutate, dirty, draft, onPersonUpdated, personId, record]);
+
+    useEffect(() => {
+        registerPersonDrawerEditSection("parent_summary", {
+            isDirty: () => parentSummaryDraftIsDirty(record, draft),
+            save: saveAll,
+            revert: () => setDraft(parentSummaryDraftFromRecord(record)),
+        });
+        return () => registerPersonDrawerEditSection("parent_summary", null);
+    }, [draft, record, saveAll]);
 
     return (
         <section
@@ -210,12 +204,6 @@ export default function PersonDrawerParentSummary({
                                     ) : null}
                                 </SummaryFieldRow>
                             )}
-                            <PersonDrawerSummarySaveBar
-                                dirty={dirty}
-                                saving={saving}
-                                canMutate={canMutate}
-                                onSave={() => void saveAll()}
-                            />
                         </div>
                     </div>
                 </div>

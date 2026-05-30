@@ -1,6 +1,7 @@
 import { buildPersonDrawerRelationshipGroups } from "@/lib/admin/person/buildPersonDrawerRelationshipGroups";
 import { personDrawerRelationshipInputFromRecord } from "@/lib/admin/person/personDrawerRelationshipInput";
 import type { PersonHouseholdAdultLinkRow } from "@/lib/admin/person/personDrawerVisibilityTypes";
+import { resolveChildAgeDisplayLabel } from "@/lib/admin/drawer/childAgeDisplay";
 import { personDrawerGenderDisplayLabel } from "@/lib/admin/person/personDrawerGenderField";
 
 /** Person-drawer-only CRM display labels — does not mutate stored status keys. */
@@ -18,25 +19,6 @@ export function personDrawerCrmDisplayLabel(label: string | null | undefined): s
     return raw;
 }
 
-function ageLabelFromDobIso(dobIso: string | null | undefined): string | null {
-    const raw = String(dobIso ?? "").trim();
-    if (!raw) return null;
-    const d = new Date(raw);
-    if (Number.isNaN(d.getTime())) return null;
-    const now = new Date();
-    let years = now.getFullYear() - d.getFullYear();
-    let months = now.getMonth() - d.getMonth();
-    if (now.getDate() - d.getDate() < 0) months -= 1;
-    if (months < 0) {
-        years -= 1;
-        months += 12;
-    }
-    if (years < 0) return null;
-    if (years >= 2) return `${years} yrs`;
-    if (years >= 1) return `${years} yr ${months} mo`;
-    return `${Math.max(0, years * 12 + months)} mo`;
-}
-
 export function personDrawerChildDisplayName(record: Record<string, unknown>): string | null {
     const full = String(record.full_name ?? "").trim();
     if (full) return full;
@@ -47,11 +29,13 @@ export function personDrawerChildDisplayName(record: Record<string, unknown>): s
 }
 
 export function personDrawerChildAgeLabel(record: Record<string, unknown>): string | null {
-    const fromRecord = String(record._age ?? record.age ?? "").trim();
-    if (fromRecord) return fromRecord;
+    const personId = String(record.id ?? record.person_id ?? "").trim() || null;
     const dobRaw = record.date_of_birth ?? record.dob;
     const dobIso = dobRaw != null && String(dobRaw).trim() !== "" ? String(dobRaw).slice(0, 10) : null;
-    return ageLabelFromDobIso(dobIso);
+    return resolveChildAgeDisplayLabel({
+        person_id: personId,
+        person_date_of_birth: dobIso,
+    });
 }
 
 export function personDrawerChildGenderLabel(record: Record<string, unknown>): string | null {

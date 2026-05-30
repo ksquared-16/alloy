@@ -75,8 +75,8 @@ describe("person drawer IA cleanup pass", () => {
         );
         expect(household).toContain("PersonDrawerIdentityAvatar");
         expect(household).toContain("data-person-drawer-household-child-unlinked");
-        expect(household).toContain("role_chips");
-        expect(household).toContain("age_label");
+        expect(household).toContain('label="Primary"');
+        expect(household).toContain("data-person-drawer-child-age");
     });
 
     it("prefers customer location address over person interim fields", () => {
@@ -101,13 +101,13 @@ describe("person drawer IA cleanup pass", () => {
         expect(personDrawerHouseholdAddressHasContent(model)).toBe(true);
     });
 
-    it("documents interim person address when no household location", () => {
+    it("treats person-only address fields as empty household mailing state", () => {
         const model = resolvePersonDrawerHouseholdAddressModel({
             _field_definitions: [{ field_key: "city" }],
             city: "Denver",
         });
-        expect(model.source).toBe("person_interim");
-        expect(model.interim_note).toContain("interim");
+        expect(model.source).toBe("none");
+        expect(model.interim_note).toBeNull();
     });
 
     it("suppresses child profile section on child lifecycle overview", () => {
@@ -134,13 +134,13 @@ describe("person drawer IA cleanup pass", () => {
         expect(employee).toContain("oppInqLeadSummaryShellClassName");
     });
 
-    it("parent address component always renders section shell for parent chrome", () => {
+    it("parent address section does not show unavailable empty mailing copy", () => {
         const address = readFileSync(
             join(process.cwd(), "components/admin/entity/PersonDrawerHouseholdAddress.tsx"),
             "utf8"
         );
-        expect(address).toContain("data-person-drawer-address-empty");
-        expect(address).toContain("No household address on file");
+        expect(address).toContain("data-person-drawer-household-address");
+        expect(address).not.toContain("No household mailing address on file");
     });
 
     it("parent operating overview strips Profile, Contact, and Record Info sections", () => {

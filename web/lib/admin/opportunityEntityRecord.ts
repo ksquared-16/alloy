@@ -42,6 +42,8 @@ import { readOpportunityDrawerOpenerHints } from "@/lib/admin/opportunityDrawerO
 import { applyPrimaryPersonMirrorValuesToHostRecord } from "@/lib/admin/drawer/linkedRecordFieldEditing";
 import { loadInquiryChildCustomFieldValuesByOcmId } from "@/lib/admin/drawer/inquiryChildCustomFieldValues";
 import { normalizeIsoDateOnly } from "@/lib/fields/inquiryChildFieldRegistry";
+import { resolveInquiryChildProgramCategoryLabel } from "@/lib/admin/drawer/inquiryChildOcmPlacementDisplay";
+import { enrichInquiryChildrenWithPlacementOptionLabels } from "@/lib/admin/drawer/enrichInquiryChildrenPlacementLabels";
 
 type AdminSupabase = ReturnType<typeof createAdminClient>;
 
@@ -366,18 +368,11 @@ function mapOcmJoinRowsToInquiryChildrenBlock(
       trimOrNull(r.desired_program_type) ?? oppDefaultProgramType;
     const desiredScheduleType =
       trimOrNull(r.desired_schedule_type) ?? oppDefaultScheduleType;
-    const memMeta = (m?.metadata ?? null) as Record<string, unknown> | null;
-    const demoProgramLabel =
-      memMeta && typeof memMeta.demo_program_label === "string"
-        ? trimOrNull(memMeta.demo_program_label)
-        : null;
     const outcomeStatusKey = trimOrNull(r.outcome_status_key);
-    const rawProgLabel = optionLabelFromBatchMap(
-      optionLabelMap,
-      "childcare_program_type",
-      desiredProgramType,
-    );
-    const desiredProgramLabel = rawProgLabel ?? demoProgramLabel;
+    const desiredProgramLabel = resolveInquiryChildProgramCategoryLabel({
+      desired_program_type: desiredProgramType,
+      optionLabelLookup: optionLabelMap,
+    });
     const desiredScheduleLabel = optionLabelFromBatchMap(
       optionLabelMap,
       "childcare_schedule_type",
@@ -652,6 +647,11 @@ export async function attachOpportunityInquiryChildrenShell(
     optionLabelMap,
   );
   let inquiryChildrenOut = applyInquiryChildrenMetadataFallbacks(inquiryChildrenMerged, oppMeta, opportunityId);
+  inquiryChildrenOut = await enrichInquiryChildrenWithPlacementOptionLabels(
+    supabase,
+    orgId,
+    inquiryChildrenOut,
+  );
 
   host._inquiry_children = inquiryChildrenOut;
   host._member_person_graph_pending = memList.some((m) => trimOrNull(m.person_id) != null);
@@ -939,6 +939,7 @@ async function respondOpportunityRelationshipMemberOverlay(
     optionLabelMap,
   );
   inquiryBlocks = applyInquiryChildrenMetadataFallbacks(inquiryBlocks, oppMeta, opportunityId);
+  inquiryBlocks = await enrichInquiryChildrenWithPlacementOptionLabels(supabase, orgId, inquiryBlocks);
   inquiryBlocks = await attachInquiryChildRowCustomFields(supabase, orgId, inquiryBlocks);
 
   const payload = {
@@ -2001,6 +2002,11 @@ export async function respondOpportunityEntityGet(
     optionLabelMap,
   );
   let inquiryChildrenOut = applyInquiryChildrenMetadataFallbacks(inquiryChildrenMerged, oppMeta, id);
+  inquiryChildrenOut = await enrichInquiryChildrenWithPlacementOptionLabels(
+    supabase,
+    orgId,
+    inquiryChildrenOut,
+  );
   inquiryChildrenOut = await attachInquiryChildRowCustomFields(supabase, orgId, inquiryChildrenOut);
   out._inquiry_children = inquiryChildrenOut;
   attachOpportunityChildLifecycleSummary(out);

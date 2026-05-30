@@ -120,7 +120,9 @@ export function resolveInquiryChildIdentityFields(args: {
     };
 }
 
-function ageFromDobIso(dobIso: string | null | undefined): { label: string } | null {
+export function inquiryChildAgeLabelFromDob(
+    dobIso: string | null | undefined,
+): { label: string } | null {
     const raw = String(dobIso ?? "").trim();
     if (!raw) return null;
     const d = new Date(raw);
@@ -187,7 +189,7 @@ export function mergeHouseholdActiveChildrenIntoInquiryChildren(
             member: m,
         });
         const dob = identity.dob;
-        const age = ageFromDobIso(dob);
+        const age = inquiryChildAgeLabelFromDob(dob);
         const first_name = identity.first_name;
         const last_name = identity.last_name;
         const display_name = identity.display_name ?? `${cmId.slice(0, 8)}…`;

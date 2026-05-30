@@ -8,7 +8,7 @@ import { neutral, derived, palette } from "@/styles/tokens/colors";
 /**
  * AdminV2 entity drawer stacking (see docs in sidebar branch below):
  * - Shell chrome (sidebar, top nav) must stay above the dim layer so Settings/links work in one click.
- * - Dim is pointer-events-none so workspace routes under the panel receive clicks.
+ * - Dim captures pointer events and closes the drawer; underlying workspace must not receive clicks.
  * - Panel is right-docked with an explicit max width — never a full-viewport hit target.
  */
 export const ADMINV2_DRAWER_BACKDROP_Z = 60;
@@ -122,16 +122,27 @@ export default function Drawer({
         return () => window.removeEventListener("keydown", onKeyDown);
     }, [isOpen, onClose]);
 
-    /** Admin V2: dim stays pointer-events-none; close on outside mousedown (command bar excluded). */
+    /** Admin V2 fallback: outside mousedown when backdrop does not cover target (command bar excluded). */
     useEffect(() => {
         if (!isOpen || variant !== "adminV2") return;
         const onMouseDown = (e: MouseEvent) => {
-            if (!shouldCloseAdminV2DrawerOnOutsideTarget(e.target)) return;
+            const target = e.target;
+            if (target instanceof Element && target.closest(".adminv2-drawer-backdrop-hit")) return;
+            if (!shouldCloseAdminV2DrawerOnOutsideTarget(target)) return;
+            e.preventDefault();
+            e.stopPropagation();
             onClose();
         };
-        document.addEventListener("mousedown", onMouseDown);
-        return () => document.removeEventListener("mousedown", onMouseDown);
+        document.addEventListener("mousedown", onMouseDown, true);
+        return () => document.removeEventListener("mousedown", onMouseDown, true);
     }, [isOpen, onClose, variant]);
+
+    const closeOnBackdropMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (e.target !== e.currentTarget) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+    };
 
     if (!isOpen) return null;
 
@@ -398,9 +409,10 @@ export default function Drawer({
         isModal ? (
             <>
                 <div
-                    className="adminv2-drawer-modal-dim fixed inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity duration-200 pointer-events-none"
+                    className="adminv2-drawer-backdrop-hit adminv2-drawer-modal-dim fixed inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity duration-200 pointer-events-auto"
                     style={{ zIndex: zIndexBackdrop }}
                     aria-hidden
+                    onMouseDown={closeOnBackdropMouseDown}
                 />
                 <div
                     role="dialog"
@@ -422,9 +434,10 @@ export default function Drawer({
         ) : (
             <>
                 <div
-                    className="adminv2-drawer-sidebar-dim fixed inset-0 bg-black/50 pointer-events-none"
+                    className="adminv2-drawer-backdrop-hit adminv2-drawer-sidebar-dim fixed inset-0 bg-black/50 pointer-events-auto"
                     style={{ zIndex: zIndexBackdrop }}
                     aria-hidden
+                    onMouseDown={closeOnBackdropMouseDown}
                 />
                 <div
                     role="dialog"
