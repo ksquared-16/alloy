@@ -100,14 +100,34 @@ describe("Opportunity drawer lifecycle rail wiring", () => {
         const shell = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
         expect(shell).toContain("resolveWorkUnitQueueDefinitionForDrawer");
     });
+
+    it("shows opportunity lifecycle rail whenever memo resolves content — not gated on overview reveal", () => {
+        const shell = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
+        expect(shell).toMatch(/drawerPostTabStrip[\s\S]{0,220}opportunityDrawerLifecycleRail/);
+        expect(shell).not.toMatch(
+            /drawerPostTabStrip[\s\S]{0,220}opportunityDrawerOverviewRevealReady[\s\S]{0,120}opportunityDrawerLifecycleRail/
+        );
+    });
+
+    it("shows opportunity tabs when queue definition is loaded", () => {
+        const shell = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
+        expect(shell).toMatch(
+            /opportunityDrawerOverviewRevealReady[\s\S]{0,120}opportunityDrawerShellContract[\s\S]{0,80}opportunityQueueDefinition/
+        );
+    });
 });
 
-describe("Child drawer lifecycle rail", () => {
-    it("uses shared RecordLifecycleRail in postTabStrip below tabs", () => {
-        const rail = readFileSync(join(process.cwd(), "components/admin/drawer/RecordLifecycleRail.tsx"), "utf8");
+describe("Child drawer post-tab strip", () => {
+    it("uses module nav only — enrollment pipeline stays on opportunity drawer", () => {
+        const childRail = readFileSync(
+            join(process.cwd(), "components/admin/entity/PersonDrawerChildLifecycleRail.tsx"),
+            "utf8"
+        );
         const shell = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(rail).toContain("data-record-lifecycle-rail");
+        expect(childRail).not.toContain("RecordLifecycleRail");
+        expect(childRail).toContain("PersonDrawerChildModuleNav");
         expect(shell).toContain("PersonDrawerChildLifecycleRail");
         expect(shell).toContain("personDrawerChildLifecycleRail");
+        expect(shell).toContain('data-testid="opportunity-lifecycle-rail"');
     });
 });

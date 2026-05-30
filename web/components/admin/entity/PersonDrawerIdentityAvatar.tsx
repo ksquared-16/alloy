@@ -10,9 +10,10 @@ export default function PersonDrawerIdentityAvatar({
     displayName: string;
     initials: string;
     photoUrl?: string | null;
-    size?: "sm" | "md";
+    size?: "sm" | "md" | "lg";
 }) {
-    const dim = size === "sm" ? "h-9 w-9 text-[11px]" : "h-11 w-11 text-[13px]";
+    const dim =
+        size === "sm" ? "h-9 w-9 text-[11px]" : size === "lg" ? "h-14 w-14 text-[15px]" : "h-11 w-11 text-[13px]";
     if (photoUrl) {
         return (
             <img

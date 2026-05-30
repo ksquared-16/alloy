@@ -2,6 +2,8 @@
 
 import type { ReactNode } from "react";
 import { buildPersonDrawerRelationshipGroups } from "@/lib/admin/person/buildPersonDrawerRelationshipGroups";
+import { dedupePersonRelationshipLinks } from "@/lib/admin/person/dedupePersonRelationshipLinks";
+import { resolvePersonDrawerPrimaryGuardian } from "@/lib/admin/person/personDrawerChildIdentity";
 import { personDrawerRelationshipInputFromRecord } from "@/lib/admin/person/personDrawerRelationshipInput";
 import {
     personDrawerRelationshipSectionHasContent,
@@ -14,24 +16,20 @@ import type { PersonRelationshipLink } from "@/lib/admin/person/personDrawerVisi
 import {
     oppInqEyebrow,
     oppInqInnerCardCompact,
+    oppInqLeadSummaryShellClassName,
 } from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
 
 type OpenDrawer = (type: string, id: string) => void;
 
-function dedupeRelationshipLinks(links: PersonRelationshipLink[]): PersonRelationshipLink[] {
-    const seen = new Set<string>();
-    const out: PersonRelationshipLink[] = [];
-    for (const link of links) {
-        const key = link.person_id
-            ? `p:${link.person_id}`
-            : link.customer_member_id
-              ? `m:${link.customer_member_id}`
-              : `n:${link.display_name ?? ""}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        out.push(link);
-    }
-    return out;
+function guardianMatchesPrimary(
+    row: PersonRelationshipLink,
+    primary: ReturnType<typeof resolvePersonDrawerPrimaryGuardian>
+): boolean {
+    if (!primary) return false;
+    if (primary.person_id && row.person_id === primary.person_id) return true;
+    const rowName = row.display_name?.trim().toLowerCase();
+    const primaryName = primary.display_name.trim().toLowerCase();
+    return Boolean(rowName && primaryName && rowName === primaryName);
 }
 
 function RelationshipLinkRow({
@@ -55,7 +53,7 @@ function RelationshipLinkRow({
                 <button
                     type="button"
                     onClick={() => onOpenPerson(row.person_id!)}
-                    className="font-semibold text-alloy-blue hover:underline text-left"
+                    className="text-left font-semibold text-alloy-blue hover:underline"
                 >
                     {label}
                 </button>
@@ -63,7 +61,7 @@ function RelationshipLinkRow({
                 <button
                     type="button"
                     onClick={() => onOpenMember(row.customer_member_id!)}
-                    className="font-semibold text-alloy-blue hover:underline text-left"
+                    className="text-left font-semibold text-alloy-blue hover:underline"
                 >
                     {label}
                 </button>
@@ -79,9 +77,9 @@ function RelationshipLinkRow({
 
 function GroupBlock({ title, children }: { title: string; children: ReactNode }) {
     return (
-        <div className={oppInqInnerCardCompact}>
-            <h4 className={oppInqEyebrow}>{title}</h4>
-            <ul className="mt-2 space-y-2">{children}</ul>
+        <div>
+            <h5 className={`${oppInqEyebrow} mt-2.5 first:mt-0`}>{title}</h5>
+            <ul className="mt-1.5 space-y-1.5">{children}</ul>
         </div>
     );
 }
@@ -99,93 +97,159 @@ export function PersonDrawerRelationshipsOverview({
     const model = resolvePersonDrawerRelationshipSectionModel(profile, groups);
     const childFamilyEmphasis = resolvePersonDrawerPresentationEmphasis(profile) === "child_lifecycle";
     const householdLabel = childFamilyEmphasis ? primaryHouseholdLabel(record) : null;
+    const primaryGuardian = childFamilyEmphasis ? resolvePersonDrawerPrimaryGuardian(record) : null;
 
     if (
         !personDrawerRelationshipSectionHasContent(model, groups) &&
-        !(childFamilyEmphasis && householdLabel)
+        !(childFamilyEmphasis && (householdLabel || primaryGuardian))
     ) {
         return null;
     }
 
     const openPerson = (id: string) => onOpenDrawer("persons", id);
     const openMember = (id: string) => onOpenDrawer("customer_members", id);
-    const childGuardians = dedupeRelationshipLinks([...groups.parents, ...groups.guardians]);
+    const childGuardians = dedupePersonRelationshipLinks([...groups.parents, ...groups.guardians]);
+    const additionalGuardians = primaryGuardian
+        ? childGuardians.filter((row) => !guardianMatchesPrimary(row, primaryGuardian))
+        : childGuardians.slice(1);
+    const siblings = groups.siblings;
+
+    if (childFamilyEmphasis) {
+        const hasFamilyContent =
+            householdLabel ||
+            primaryGuardian ||
+            additionalGuardians.length > 0 ||
+            siblings.length > 0;
+
+        if (!hasFamilyContent) return null;
+
+        return (
+            <div
+                className={`${oppInqLeadSummaryShellClassName} mb-2`}
+                data-person-drawer-relationships-grouped="true"
+                data-person-drawer-family-emphasis="true"
+            >
+                <h4 className={`${oppInqEyebrow} px-0.5`}>Family & household</h4>
+                <div className={`${oppInqInnerCardCompact} mt-2`} data-person-drawer-family-household="true">
+                    {householdLabel ? (
+                        <div>
+                            <h5 className={oppInqEyebrow}>Household</h5>
+                            <p className="mt-1 text-[14px] font-semibold text-alloy-midnight/90">{householdLabel}</p>
+                        </div>
+                    ) : null}
+                    {primaryGuardian ? (
+                        <GroupBlock title="Primary guardian">
+                            <RelationshipLinkRow
+                                row={{
+                                    person_id: primaryGuardian.person_id,
+                                    display_name: primaryGuardian.display_name,
+                                    relationship_label: primaryGuardian.role_label,
+                                }}
+                                onOpenPerson={openPerson}
+                            />
+                        </GroupBlock>
+                    ) : null}
+                    {additionalGuardians.length > 0 ? (
+                        <GroupBlock title="Other adults">
+                            {additionalGuardians.map((row) => (
+                                <RelationshipLinkRow
+                                    key={row.person_id ?? row.display_name ?? "guardian"}
+                                    row={row}
+                                    onOpenPerson={openPerson}
+                                />
+                            ))}
+                        </GroupBlock>
+                    ) : null}
+                    {siblings.length > 0 ? (
+                        <GroupBlock title="Siblings">
+                            {siblings.map((row) => (
+                                <RelationshipLinkRow
+                                    key={row.person_id ?? row.customer_member_id ?? row.display_name ?? "sibling"}
+                                    row={row}
+                                    onOpenPerson={openPerson}
+                                    onOpenMember={openMember}
+                                />
+                            ))}
+                        </GroupBlock>
+                    ) : null}
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-2" data-person-drawer-relationships-grouped="true">
-            {childFamilyEmphasis && householdLabel ? (
-                <div className={oppInqInnerCardCompact} data-person-drawer-family-household="true">
-                    <h4 className={oppInqEyebrow}>Household</h4>
-                    <p className="mt-1.5 text-[13px] font-semibold text-alloy-midnight/85">{householdLabel}</p>
+            {model.showParents && groups.parents.length > 0 ? (
+                <div className={oppInqInnerCardCompact}>
+                    <h4 className={oppInqEyebrow}>Parents</h4>
+                    <ul className="mt-2 space-y-2">
+                        {groups.parents.map((row) => (
+                            <RelationshipLinkRow
+                                key={row.person_id ?? row.display_name ?? "parent"}
+                                row={row}
+                                onOpenPerson={openPerson}
+                            />
+                        ))}
+                    </ul>
                 </div>
             ) : null}
-            {childFamilyEmphasis && childGuardians.length > 0 ? (
-                <GroupBlock title="Guardians">
-                    {childGuardians.map((row) => (
-                        <RelationshipLinkRow
-                            key={row.person_id ?? row.display_name ?? "guardian"}
-                            row={row}
-                            onOpenPerson={openPerson}
-                        />
-                    ))}
-                </GroupBlock>
-            ) : null}
-            {!childFamilyEmphasis && model.showParents && groups.parents.length > 0 ? (
-                <GroupBlock title="Parents">
-                    {groups.parents.map((row) => (
-                        <RelationshipLinkRow
-                            key={row.person_id ?? row.display_name ?? "parent"}
-                            row={row}
-                            onOpenPerson={openPerson}
-                        />
-                    ))}
-                </GroupBlock>
-            ) : null}
-            {!childFamilyEmphasis && model.showGuardians && groups.guardians.length > 0 ? (
-                <GroupBlock title="Guardians">
-                    {groups.guardians.map((row) => (
-                        <RelationshipLinkRow
-                            key={row.person_id ?? row.display_name ?? "guardian"}
-                            row={row}
-                            onOpenPerson={openPerson}
-                        />
-                    ))}
-                </GroupBlock>
+            {model.showGuardians && groups.guardians.length > 0 ? (
+                <div className={oppInqInnerCardCompact}>
+                    <h4 className={oppInqEyebrow}>Guardians</h4>
+                    <ul className="mt-2 space-y-2">
+                        {groups.guardians.map((row) => (
+                            <RelationshipLinkRow
+                                key={row.person_id ?? row.display_name ?? "guardian"}
+                                row={row}
+                                onOpenPerson={openPerson}
+                            />
+                        ))}
+                    </ul>
+                </div>
             ) : null}
             {model.showEmergency && groups.emergency_contacts.length > 0 ? (
-                <GroupBlock title="Emergency contacts">
-                    {groups.emergency_contacts.map((row) => (
-                        <RelationshipLinkRow
-                            key={row.person_id ?? row.display_name ?? "emergency"}
-                            row={row}
-                            onOpenPerson={openPerson}
-                        />
-                    ))}
-                </GroupBlock>
+                <div className={oppInqInnerCardCompact}>
+                    <h4 className={oppInqEyebrow}>Emergency contacts</h4>
+                    <ul className="mt-2 space-y-2">
+                        {groups.emergency_contacts.map((row) => (
+                            <RelationshipLinkRow
+                                key={row.person_id ?? row.display_name ?? "emergency"}
+                                row={row}
+                                onOpenPerson={openPerson}
+                            />
+                        ))}
+                    </ul>
+                </div>
             ) : null}
             {model.showChildren && groups.children.length > 0 ? (
-                <GroupBlock title="Children">
-                    {groups.children.map((row) => (
-                        <RelationshipLinkRow
-                            key={row.person_id ?? row.customer_member_id ?? row.display_name ?? "child"}
-                            row={row}
-                            onOpenPerson={openPerson}
-                            onOpenMember={openMember}
-                        />
-                    ))}
-                </GroupBlock>
+                <div className={oppInqInnerCardCompact}>
+                    <h4 className={oppInqEyebrow}>Children</h4>
+                    <ul className="mt-2 space-y-2">
+                        {groups.children.map((row) => (
+                            <RelationshipLinkRow
+                                key={row.person_id ?? row.customer_member_id ?? row.display_name ?? "child"}
+                                row={row}
+                                onOpenPerson={openPerson}
+                                onOpenMember={openMember}
+                            />
+                        ))}
+                    </ul>
+                </div>
             ) : null}
-            {model.showSiblings && groups.siblings.length > 0 ? (
-                <GroupBlock title={model.siblingsTitle}>
-                    {groups.siblings.map((row) => (
-                        <RelationshipLinkRow
-                            key={row.person_id ?? row.customer_member_id ?? row.display_name ?? "sibling"}
-                            row={row}
-                            onOpenPerson={openPerson}
-                            onOpenMember={openMember}
-                        />
-                    ))}
-                </GroupBlock>
+            {model.showSiblings && siblings.length > 0 ? (
+                <div className={oppInqInnerCardCompact}>
+                    <h4 className={oppInqEyebrow}>{model.siblingsTitle}</h4>
+                    <ul className="mt-2 space-y-2">
+                        {siblings.map((row) => (
+                            <RelationshipLinkRow
+                                key={row.person_id ?? row.customer_member_id ?? row.display_name ?? "sibling"}
+                                row={row}
+                                onOpenPerson={openPerson}
+                                onOpenMember={openMember}
+                            />
+                        ))}
+                    </ul>
+                </div>
             ) : null}
         </div>
     );

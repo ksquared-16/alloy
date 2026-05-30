@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { batchOptionItemLabelsForOrg } from "@/lib/admin/optionItemLabelForOrg";
 import { resolveStatusLabel } from "@/lib/admin/statusDefinitionsResolve";
+import { mergeHouseholdAdultLinks } from "@/lib/admin/person/mergeHouseholdAdultLinks";
 import type {
     PersonEnrollmentMirrorRow,
     PersonEnrollmentOpportunityRow,
@@ -316,7 +317,8 @@ export async function attachPersonDrawerVisibility(
             (adultRoleTypesRes.data ?? []).map((r: { key: string; label: string | null }) => [r.key, r.label ?? r.key])
         );
 
-        const seenAdults = new Set<string>();
+        const rawAdultLinks: PersonHouseholdAdultLinkRow[] = [];
+        const seenRoleRows = new Set<string>();
         for (const row of adultRows) {
             const a = row as {
                 person_id: string;
@@ -325,10 +327,10 @@ export async function attachPersonDrawerVisibility(
                 is_primary?: boolean | null;
             };
             const dedupeKey = `${a.customer_id}:${a.person_id}:${normRoleKey(a.role_type)}`;
-            if (seenAdults.has(dedupeKey)) continue;
-            seenAdults.add(dedupeKey);
+            if (seenRoleRows.has(dedupeKey)) continue;
+            seenRoleRows.add(dedupeKey);
             const roleKey = trimOrNull(a.role_type);
-            householdAdultLinks.push({
+            rawAdultLinks.push({
                 person_id: a.person_id,
                 customer_id: a.customer_id,
                 display_name: adultNameById.get(a.person_id) ?? null,
@@ -337,6 +339,7 @@ export async function attachPersonDrawerVisibility(
                 is_primary: Boolean(a.is_primary),
             });
         }
+        householdAdultLinks.push(...mergeHouseholdAdultLinks(rawAdultLinks));
 
         const selfMemberIds = new Set(memberIds);
         for (const row of childMemberRes.data ?? []) {

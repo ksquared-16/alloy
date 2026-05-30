@@ -63,7 +63,7 @@ export const oppDrawerRolePillComfortable =
 
 /** Person drawer title-rail role pills — aligned with Opportunity header chip weight. */
 export const personDrawerRolePillClassName =
-    "inline-flex max-w-[12rem] items-center rounded-full border border-alloy-blue/30 bg-alloy-blue/[0.08] px-3 py-1 text-[11px] font-semibold leading-none text-alloy-midnight/85 shadow-sm";
+    "inline-flex max-w-[12rem] items-center rounded-full border border-alloy-blue/35 bg-alloy-blue/[0.12] px-3 py-1 text-[11px] font-semibold leading-none text-alloy-midnight/90 shadow-sm ring-1 ring-alloy-blue/10";
 
 /** Lead summary outer shell — Opportunity inquiry summary + person operational context. */
 export const oppInqLeadSummaryShellClassName =

@@ -19,6 +19,7 @@ describe("Opportunity tour schedule UX alignment", () => {
     it("inquiry summary uses OpportunityInquiryTourDateBlock for booking-backed Tour date", () => {
         const drawer = readFileSync(drawerPath, "utf8");
         expect(drawer).toContain("OpportunityInquiryTourDateBlock");
+        expect(drawer).toContain('data-shell-slot="inquiry_tour_date"');
         const tourBlock = readFileSync(comp("OpportunityInquiryTourDateBlock.tsx"), "utf8");
         expect(tourBlock).toContain("formatTourBookingInstantSiteLocal");
     });

@@ -462,16 +462,45 @@ Focused tightening — no redesign, no new concepts.
 
 | File | Change |
 |------|--------|
-| `PersonDrawerChildLifecycleRail.tsx` | Child lifecycle in `postTabStrip` via shared `RecordLifecycleRail` |
-| `resolveWorkUnitQueueDefinitionForDrawer.ts` | Coerce v2 `queue_definition` for Opportunity lifecycle rail |
+| `PersonDrawerChildLifecycleRail.tsx` | Child module shortcuts in `postTabStrip` (no enrollment pipeline) |
+| `resolveWorkUnitQueueDefinitionForDrawer.ts` | Coerce v2 `queue_definition` for **Opportunity** lifecycle rail |
 | Migration `20260529220000_person_gender_field_definition.sql` | Configurable gender select on person |
 | `AdminEntityDrawer.tsx` | `personDrawerChildBodyHydrated`; status in subtitle rail; `goBack()` for linked lead |
 
-Hierarchy: subtitle status → context pills → lifecycle rail (below tabs) → child summary → Family → Child details. Profile/Basic hidden. BOS child insights deferred.
+Hierarchy: subtitle person status → module nav (below tabs) → child summary → enrollment context → Family → Child details. Profile/Basic hidden. Enrollment pipeline rail is **Opportunity drawer only**.
 
 #### Preload doctrine
 
-After opportunity overview reveal, background-prefetch linked person ids (primary, `_opportunity_persons`, `_inquiry_children`). Child open checks cache/seed first — no generic person shell flash.
+After opportunity primary hydrate, background-prefetch linked person ids (primary, `_opportunity_persons`, `_inquiry_children`). Child open checks cache/seed first — no generic person shell flash.
+
+---
+
+### IA audit implementation pass (2026-05-30)
+
+Approved audit direction — child drawer as **operating surface**, not Person entity form.
+
+| File | Change |
+|------|--------|
+| `PersonDrawerChildSummary.tsx` | Identity hero — avatar, inline name, compact DOB/gender (age in title row only) |
+| `PersonDrawerChildEnrollmentContext.tsx` | Enrollment-owned program/location/lead link (overview) |
+| `PersonDrawerChildLifecycleRail.tsx` | Module nav chips only — Documents, Communications, Activity, future modules |
+| `resolvePersonDrawerChildEnrollmentProgress.ts` | Resolver for linked lead pipeline (Opportunity drawer / tests — not child UI) |
+| `resolvePersonDrawerChildModuleNavModel.ts` | Documents, Communications, Activity, future modules |
+| `mergeHouseholdAdultLinks.ts` | Source dedupe for duplicate `customer_persons` role rows |
+| `attachPersonDrawerVisibility.ts` | Applies household adult merge at projection |
+| `AdminEntityDrawer.tsx` | Summary from seed; early prefetch; Related→Activity tab label; opp tabs+rail parity |
+
+#### Information hierarchy (IA-approved)
+
+1. **Header** — name + Child + age pill (once); person `status_key` dropdown in subtitle rail (`persons.status_key`, not opportunity status)  
+2. **Tabs** — Overview \| Activity (related) \| Documents  
+3. **Post-tab strip** — compact module shortcuts only (Documents, Communications, Activity, Schedule/Attendance/Billing soon)  
+4. **Child summary** — identity hero (editable name/DOB/gender — no duplicate age)  
+5. **Enrollment context** — program, location, family lead link  
+6. **Family & household** — account, primary guardian, other adults, siblings  
+7. **Medical / child details** — config-driven remainder  
+
+**Rivera three-guardian root cause:** duplicate `customer_persons` rows for one adult with different `role_type` values — fixed at `_household_adult_links` projection via `mergeHouseholdAdultLinks`.
 
 ---
 

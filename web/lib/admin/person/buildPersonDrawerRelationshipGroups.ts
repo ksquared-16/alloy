@@ -1,3 +1,4 @@
+import { dedupePersonRelationshipLinks } from "@/lib/admin/person/dedupePersonRelationshipLinks";
 import type {
     PersonDrawerRelationshipGroups,
     PersonHouseholdAdultLinkRow,
@@ -43,22 +44,6 @@ function norm(raw: string | null | undefined): string {
         .trim()
         .toLowerCase()
         .replace(/\s+/g, "_");
-}
-
-function dedupeLinks(links: PersonRelationshipLink[]): PersonRelationshipLink[] {
-    const seen = new Set<string>();
-    const out: PersonRelationshipLink[] = [];
-    for (const link of links) {
-        const key = link.person_id
-            ? `p:${link.person_id}`
-            : link.customer_member_id
-              ? `m:${link.customer_member_id}`
-              : `n:${link.display_name ?? ""}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        out.push(link);
-    }
-    return out;
 }
 
 function pushPersonLink(
@@ -149,10 +134,10 @@ export function buildPersonDrawerRelationshipGroups(
     }
 
     return {
-        parents: dedupeLinks(parents),
-        guardians: dedupeLinks(guardians),
-        emergency_contacts: dedupeLinks(emergency),
-        children: dedupeLinks(children),
-        siblings: dedupeLinks(siblings),
+        parents: dedupePersonRelationshipLinks(parents),
+        guardians: dedupePersonRelationshipLinks(guardians),
+        emergency_contacts: dedupePersonRelationshipLinks(emergency),
+        children: dedupePersonRelationshipLinks(children),
+        siblings: dedupePersonRelationshipLinks(siblings),
     };
 }
