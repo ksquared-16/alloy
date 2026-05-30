@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+    applyPersonIdentityPatchToOpportunityHost,
     applyPersonIdentityPatchToPersonRecord,
     applyPersonPatchToOpportunityInquiryChildren,
 } from "@/lib/admin/person/applyPersonPatchToOpportunityInquiryChildren";
@@ -23,6 +24,27 @@ describe("person drawer ↔ opportunity person identity sync", () => {
         );
         expect(patch.date_of_birth).toBe("2019-06-01");
         expect(patch).not.toHaveProperty("dob");
+    });
+
+    it("applyPersonIdentityPatchToOpportunityHost patches inquiry child and primary person mirrors", () => {
+        const host = {
+            _primary_person_id: "p1",
+            _primary_person_name: "Old Name",
+            _primary_person_email: "old@example.com",
+            _primary_person_phone: "5551112222",
+            _opportunity_persons: [{ person_id: "p1", name: "Old Name", email: "old@example.com", phone: "5551112222" }],
+            _inquiry_children: [
+                { person_id: "p1", first_name: "Sam", last_name: "Lee", dob: "2018-01-01", age: "8y" },
+            ],
+        };
+        const next = applyPersonIdentityPatchToOpportunityHost(
+            host,
+            "p1",
+            { email: "new@example.com", phone: "(555) 999-0000" },
+            { first_name: "Sam", last_name: "Lee", email: "new@example.com", phone: "(555) 999-0000" }
+        );
+        expect(next._primary_person_email).toBe("new@example.com");
+        expect((next._opportunity_persons as { email?: string }[])[0]?.email).toBe("new@example.com");
     });
 
     it("applyPersonPatchToOpportunityInquiryChildren updates matching child row DOB and age", () => {
@@ -60,11 +82,13 @@ describe("person drawer ↔ opportunity person identity sync", () => {
         expect(personDrawerChildAgeLabel(merged)).toBeTruthy();
     });
 
-    it("dispatchPersonRecordUpdated dispatches admin-entity-saved detail shape", () => {
+    it("dispatchPersonRecordUpdated dispatches admin-entity-saved and queue row patch", () => {
         const src = read("lib/admin/person/dispatchPersonRecordUpdated.ts");
         expect(src).toContain('type: "persons"');
         expect(src).toContain("admin-entity-saved");
         expect(src).toContain("opportunity_id");
+        expect(src).toContain("buildQueueRowDisplayPatchFromPersonSave");
+        expect(src).toContain("dispatchOpportunityQueueUpdated");
         expect(typeof dispatchPersonRecordUpdated).toBe("function");
     });
 
@@ -77,7 +101,7 @@ describe("person drawer ↔ opportunity person identity sync", () => {
 
     it("AdminEntityDrawer listens for person admin-entity-saved and patches inquiry children", () => {
         const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("applyPersonPatchToOpportunityInquiryChildren");
+        expect(drawer).toContain("applyPersonIdentityPatchToOpportunityHost");
         expect(drawer).toContain("applyPersonIdentityPatchToPersonRecord");
     });
 
