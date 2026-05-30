@@ -13,8 +13,8 @@ import {
     locationDisplayLabelFromRow,
     type LocationDisplayLabelRow,
 } from "@/lib/admin/locationDisplayLabel";
-import { personDrawerCrmDisplayLabel } from "@/lib/admin/person/personDrawerChildIdentity";
 import {
+    globalSearchCrmDisplayLabel,
     globalSearchPersonSecondaryContext,
     globalSearchPersonTypeLabel,
     personRowIsChildRelationship,
@@ -289,10 +289,10 @@ async function searchOpportunities(
         return {
             entity_type: "opportunities" as const,
             entity_id: o.id,
-            name: personDrawerCrmDisplayLabel(oppLabel(o)) ?? oppLabel(o),
+            name: globalSearchCrmDisplayLabel(oppLabel(o)) ?? oppLabel(o),
             type_label: "Lead",
             secondary_context: o.location_id ? locationLabels.get(String(o.location_id)) ?? null : null,
-            status_label: rawStatus ? personDrawerCrmDisplayLabel(rawStatus) ?? rawStatus : null,
+            status_label: rawStatus ? globalSearchCrmDisplayLabel(rawStatus) ?? rawStatus : null,
         };
     });
 }

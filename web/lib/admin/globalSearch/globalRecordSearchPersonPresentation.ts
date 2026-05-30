@@ -1,6 +1,21 @@
 import { resolvePersonDrawerProfile } from "@/lib/admin/person/resolvePersonDrawerProfile";
 import type { PersonDrawerProfileKey } from "@/lib/admin/person/personDrawerVisibilityTypes";
 
+/** Display-only inquiry → Lead normalization for search result labels. */
+export function globalSearchCrmDisplayLabel(label: string | null | undefined): string | null {
+    const raw = String(label ?? "").trim();
+    if (!raw) return null;
+    const lower = raw.toLowerCase();
+    if (lower === "inquiry") return "Lead";
+    if (lower === "family inquiry") return "Family lead";
+    if (lower.includes("inquiry")) {
+        return raw.replace(/\binquiry\b/gi, (match) =>
+            match[0] === match[0]?.toUpperCase() ? "Lead" : "lead"
+        );
+    }
+    return raw;
+}
+
 const TYPE_LABELS: Record<Exclude<PersonDrawerProfileKey, "mixed" | "unknown">, string> = {
     child: "Child",
     parent: "Parent",

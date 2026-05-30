@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 import {
+    globalSearchCrmDisplayLabel,
     globalSearchPersonSecondaryContext,
     globalSearchPersonTypeLabel,
     personRowIsChildRelationship,
@@ -12,6 +13,13 @@ import {
     clearGlobalRecordSearchOpenIntent,
     GLOBAL_RECORD_SEARCH_OPEN_INTENT_KEY,
 } from "@/lib/adminV2/globalRecordSearchOpen";
+
+describe("globalSearchCrmDisplayLabel", () => {
+    it("maps inquiry labels to Lead for search display", () => {
+        expect(globalSearchCrmDisplayLabel("Inquiry")).toBe("Lead");
+        expect(globalSearchCrmDisplayLabel("Family inquiry")).toBe("Family lead");
+    });
+});
 
 describe("globalSearchPersonTypeLabel", () => {
     it("labels child members as Child", () => {
