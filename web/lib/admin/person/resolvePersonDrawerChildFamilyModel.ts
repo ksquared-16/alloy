@@ -1,13 +1,7 @@
 import type { PersonHouseholdAdultLinkRow } from "@/lib/admin/person/personDrawerVisibilityTypes";
 
-const CAREGIVER_ROLE_KEYS = new Set([
-    "parent",
-    "primary_contact",
-    "primary",
-    "guardian",
-    "emergency_contact",
-    "emergency",
-]);
+const PARENT_GUARDIAN_ROLE_KEYS = new Set(["parent", "primary_contact", "primary", "guardian"]);
+const EMERGENCY_ROLE_KEYS = new Set(["emergency_contact", "emergency"]);
 
 function normRole(raw: string | null | undefined): string {
     return String(raw ?? "")
@@ -21,8 +15,7 @@ function rolePrecedence(roleType: string | null): number {
     if (role === "primary_contact" || role === "primary") return 0;
     if (role === "parent") return 1;
     if (role === "guardian") return 2;
-    if (role === "emergency_contact" || role === "emergency") return 3;
-    return 4;
+    return 3;
 }
 
 export type PersonDrawerChildFamilyAdult = {
@@ -36,9 +29,10 @@ export type PersonDrawerChildFamilyAdult = {
 
 export type PersonDrawerChildFamilyModel = {
     household_label: string | null;
-    primary_adult: PersonDrawerChildFamilyAdult | null;
-    other_adults: PersonDrawerChildFamilyAdult[];
-    source_note: string;
+    parents_guardians: PersonDrawerChildFamilyAdult[];
+    emergency_contacts: PersonDrawerChildFamilyAdult[];
+    other_household_adults: PersonDrawerChildFamilyAdult[];
+    source_note: string | null;
 };
 
 function toFamilyAdult(row: PersonHouseholdAdultLinkRow): PersonDrawerChildFamilyAdult | null {
@@ -54,15 +48,28 @@ function toFamilyAdult(row: PersonHouseholdAdultLinkRow): PersonDrawerChildFamil
     };
 }
 
-function isCaregiverRole(roleType: string | null | undefined): boolean {
-    const role = normRole(roleType);
-    if (!role) return false;
-    return CAREGIVER_ROLE_KEYS.has(role);
+function sortAdults(rows: PersonDrawerChildFamilyAdult[]): PersonDrawerChildFamilyAdult[] {
+    return [...rows].sort((a, b) => {
+        if (a.is_primary !== b.is_primary) return a.is_primary ? -1 : 1;
+        return rolePrecedence(a.role_type) - rolePrecedence(b.role_type);
+    });
+}
+
+function dedupeAdults(rows: PersonDrawerChildFamilyAdult[]): PersonDrawerChildFamilyAdult[] {
+    const seen = new Set<string>();
+    const out: PersonDrawerChildFamilyAdult[] = [];
+    for (const row of rows) {
+        const key = row.person_id ?? row.display_name.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(row);
+    }
+    return out;
 }
 
 /**
  * Family section model — household customer_persons only (not person_relationships).
- * Opportunity drawer shows primary contact; person drawer shows full household caregivers.
+ * Opportunity drawer shows primary contact; person drawer shows household caregivers.
  */
 export function resolvePersonDrawerChildFamilyModel(
     record: Record<string, unknown>
@@ -74,32 +81,36 @@ export function resolvePersonDrawerChildFamilyModel(
 
     const links = ((record._household_adult_links as PersonHouseholdAdultLinkRow[] | undefined) ?? [])
         .map(toFamilyAdult)
-        .filter((row): row is PersonDrawerChildFamilyAdult => row != null)
-        .filter((row) => isCaregiverRole(row.role_type));
+        .filter((row): row is PersonDrawerChildFamilyAdult => row != null);
 
-    const sorted = [...links].sort((a, b) => {
-        if (a.is_primary !== b.is_primary) return a.is_primary ? -1 : 1;
-        return rolePrecedence(a.role_type) - rolePrecedence(b.role_type);
-    });
-
-    const primary =
-        sorted.find((row) => row.is_primary) ??
-        sorted.find((row) => {
+    const parents_guardians = dedupeAdults(
+        sortAdults(
+            links.filter((row) => PARENT_GUARDIAN_ROLE_KEYS.has(normRole(row.role_type)))
+        )
+    );
+    const emergency_contacts = dedupeAdults(
+        sortAdults(links.filter((row) => EMERGENCY_ROLE_KEYS.has(normRole(row.role_type))))
+    );
+    const other_household_adults = dedupeAdults(
+        links.filter((row) => {
             const role = normRole(row.role_type);
-            return role === "parent" || role === "primary" || role === "primary_contact";
-        }) ??
-        sorted[0] ??
-        null;
+            return (
+                role.length > 0 &&
+                !PARENT_GUARDIAN_ROLE_KEYS.has(role) &&
+                !EMERGENCY_ROLE_KEYS.has(role)
+            );
+        })
+    );
 
-    const other_adults = primary
-        ? sorted.filter((row) => row.person_id !== primary.person_id)
-        : sorted.slice(1);
+    const hasExtraAdults = other_household_adults.length > 0;
 
     return {
         household_label: householdLabel,
-        primary_adult: primary,
-        other_adults,
-        source_note:
-            "From household account — may include more adults than the linked family lead contact.",
+        parents_guardians,
+        emergency_contacts,
+        other_household_adults,
+        source_note: hasExtraAdults
+            ? "Includes adults linked on the household account, not only the family lead contact."
+            : null,
     };
 }

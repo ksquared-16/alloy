@@ -552,6 +552,25 @@ Lifecycle tab owns stage visibility + links into existing modules (enrollment �
 
 ---
 
+## Demo seed plan (deferred — do not reseed until drawer stable)
+
+**Do not reseed demo data until child drawer behavior is verified in AdminV2.** When reseed runs (last step):
+
+| Target | Rule |
+|--------|------|
+| Volume | ~10 children per location |
+| Pipeline | Each starts as **New Lead** on a linked opportunity |
+| Household | One **primary guardian/contact** per family |
+| Siblings | Only when intentional (same customer, multiple child members) |
+| Emergency contacts | Only when intentional (explicit `customer_persons` / relationship rows) |
+| Person status | Use `persons.status_key` lifecycle defs (Active, Future Start, …) — not `customer_members` roster status |
+| Status applicability | `status_definitions.metadata.applies_to_profiles`: `child_lifecycle` vs `person_generic`; child drawer filters child-applicable keys; parent/guardian excludes Withdrawn/Graduated |
+| Extra adults | Avoid stray `customer_persons` rows that pollute household projection |
+
+Reseed scripts (`seedRealisticChildcareDemoData.ts`, waitlist demo) are **out of scope** for drawer stabilization passes.
+
+---
+
 ## Deferred items
 
 - Profile-aware person `record_drawer_layouts` runtime + `visible_when` conditions

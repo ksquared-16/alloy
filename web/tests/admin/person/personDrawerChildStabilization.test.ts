@@ -198,17 +198,16 @@ describe("family consolidation", () => {
         expect(primaryHouseholdLabel(childRecord)).toBe("Chen Family");
     });
 
-    it("family section component renders household, primary guardian, and siblings", () => {
+    it("family section component renders household hierarchy blocks", () => {
         const src = readFileSync(
             join(process.cwd(), "components/admin/entity/PersonDrawerVisibilitySections.tsx"),
             "utf8"
         );
         expect(src).toContain("data-person-drawer-family-household");
-        expect(src).toContain("Primary guardian");
-        expect(src).toContain("Other adults");
+        expect(src).toContain("Parents / guardians");
         expect(src).toContain("Siblings");
+        expect(src).toContain("Emergency contacts");
         expect(src).toContain("resolvePersonDrawerChildFamilyModel");
-        expect(src).toContain("data-person-drawer-family-source-note");
     });
 });
 

@@ -4,35 +4,31 @@ import PersonDrawerChildModuleNav from "@/components/admin/entity/PersonDrawerCh
 import { personDrawerChildChromeActive } from "@/lib/admin/person/personDrawerChildChrome";
 import type { PersonDrawerChildChromeHint } from "@/lib/admin/person/personDrawerChildChrome";
 import { resolvePersonDrawerChildModuleNavModel } from "@/lib/admin/person/resolvePersonDrawerChildModuleNavModel";
-import { resolvePersonDrawerChildSummaryModel } from "@/lib/admin/person/personDrawerChildSummaryModel";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 
-/** Child drawer module shortcuts only — no opportunity enrollment pipeline. */
+/** Child drawer module shortcuts — stay inside person drawer (no opportunity navigation). */
 export default function PersonDrawerChildLifecycleRail({
     record,
     chromeHint,
     onSelectTab,
-    onOpenOpportunityCommunications,
 }: {
     record: Record<string, unknown>;
     chromeHint?: PersonDrawerChildChromeHint | null;
     onSelectTab: (tab: DrawerTabKey) => void;
-    onOpenOpportunityCommunications: (opportunityId: string) => void;
 }) {
     if (!personDrawerChildChromeActive(record, chromeHint)) {
         return null;
     }
 
     const moduleItems = resolvePersonDrawerChildModuleNavModel(record);
-    const primaryOpportunityId = resolvePersonDrawerChildSummaryModel(record).primary_opportunity_id;
 
     const handleModuleClick = (key: string) => {
         if (key === "documents") {
             onSelectTab("documents");
             return;
         }
-        if (key === "communications" && primaryOpportunityId) {
-            onOpenOpportunityCommunications(primaryOpportunityId);
+        if (key === "communications") {
+            onSelectTab("communications");
             return;
         }
         if (key === "activity") {
@@ -40,7 +36,5 @@ export default function PersonDrawerChildLifecycleRail({
         }
     };
 
-    return (
-        <PersonDrawerChildModuleNav items={moduleItems} onModuleClick={handleModuleClick} />
-    );
+    return <PersonDrawerChildModuleNav items={moduleItems} onModuleClick={handleModuleClick} />;
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import {
     personDrawerAboveFoldShowsContact,
     personDrawerAboveFoldShowsDob,
@@ -61,19 +62,22 @@ export function PersonDrawerHeaderContactMeta({ record }: { record: Record<strin
     return null;
 }
 
-/** Person drawer subtitle row — record # and back link only. */
+/** Person drawer subtitle row — record #, optional status, and back link. */
 export default function PersonDrawerHeaderMetadata({
     record,
     backLink = null,
+    statusSlot = null,
 }: {
     record: Record<string, unknown>;
     backLink?: BackLink | null;
+    statusSlot?: ReactNode;
 }) {
     const recordNumber = formatPersonDrawerRecordNumber(record);
 
     return (
         <div className="mt-0.5" data-person-drawer-header-metadata="true">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] leading-snug text-alloy-midnight/75">
+                {statusSlot ? <span className="shrink-0">{statusSlot}</span> : null}
                 {recordNumber ? <span className="font-medium text-alloy-midnight/80">{recordNumber}</span> : null}
                 {backLink ? (
                     <>

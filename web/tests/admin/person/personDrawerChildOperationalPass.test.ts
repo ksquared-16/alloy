@@ -93,7 +93,7 @@ describe("child drawer operational pass", () => {
         const src = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
         expect(src).toContain("resolveOpportunityDrawerQueueDefinition");
         expect(src).toMatch(
-            /drawerPostTabStrip[\s\S]{0,180}isOpportunityRecordModalTarget[\s\S]{0,120}opportunityDrawerLifecycleRail/
+            /allowEnrollmentFallback:\s*isOpportunityRecordModalTarget/
         );
         expect(src).not.toMatch(
             /drawerPostTabStrip[\s\S]{0,180}opportunityInquiryWorkflowDrawer[\s\S]{0,80}opportunityDrawerLifecycleRail/

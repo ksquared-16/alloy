@@ -19,6 +19,7 @@ export function normalizeEffectiveStatusEntityType(entityType: string): string {
     if (t === "opportunity_customer_member" || t === "opportunity_customer_members") {
         return "opportunity_customer_members";
     }
+    if (t === "child" || t === "children") return "persons";
     const raw = String(entityType ?? "").trim();
     return raw || t;
 }

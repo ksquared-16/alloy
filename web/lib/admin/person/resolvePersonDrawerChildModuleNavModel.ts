@@ -1,6 +1,5 @@
 import type { ChildLifecycleSlotPhase } from "@/lib/admin/person/personDrawerChildLifecycleSlots";
 import { resolveChildLifecycleSlotStates } from "@/lib/admin/person/personDrawerChildLifecycleSlots";
-import { resolvePersonDrawerChildSummaryModel } from "@/lib/admin/person/personDrawerChildSummaryModel";
 
 export type PersonDrawerChildModuleNavItem = {
     key: string;
@@ -16,7 +15,6 @@ const MODULE_KEYS = ["documents", "communications", "activity", "schedule", "att
 export function resolvePersonDrawerChildModuleNavModel(
     record: Record<string, unknown>
 ): PersonDrawerChildModuleNavItem[] {
-    const primaryOpportunityId = resolvePersonDrawerChildSummaryModel(record).primary_opportunity_id;
     const slots = new Map(resolveChildLifecycleSlotStates(record).map((slot) => [slot.key, slot]));
 
     return MODULE_KEYS.map((key) => {
@@ -27,7 +25,7 @@ export function resolvePersonDrawerChildModuleNavModel(
 
         let actionable = false;
         if (key === "documents") actionable = true;
-        if (key === "communications" && primaryOpportunityId) actionable = true;
+        if (key === "communications") actionable = true;
         if (key === "activity") actionable = true;
 
         return { key, label, phase, actionable };

@@ -105,6 +105,7 @@ import PersonDrawerChildLifecycleRail from "@/components/admin/entity/PersonDraw
 import PersonDrawerChildSummary from "@/components/admin/entity/PersonDrawerChildSummary";
 import PersonDrawerChildOverviewSkeleton from "@/components/admin/entity/PersonDrawerChildOverviewSkeleton";
 import PersonDrawerChildEnrollmentContext from "@/components/admin/entity/PersonDrawerChildEnrollmentContext";
+import PersonDrawerChildCommunicationsPlaceholder from "@/components/admin/entity/PersonDrawerChildCommunicationsPlaceholder";
 import PersonDrawerChildTitleRow from "@/components/admin/entity/PersonDrawerChildTitleRow";
 import PersonDrawerEnrollmentActivity from "@/components/admin/entity/PersonDrawerEnrollmentActivity";
 import PersonDrawerProfileBadges from "@/components/admin/entity/PersonDrawerProfileBadges";
@@ -136,6 +137,13 @@ import {
     resolvePersonDrawerProfileFromRecordWithHint,
     type PersonDrawerChildChromeHint,
 } from "@/lib/admin/person/personDrawerChildChrome";
+import { PERSON_DRAWER_CHILD_STATUS_ENTITY_TYPE } from "@/lib/admin/person/personDrawerChildStatusEntityType";
+import {
+    appendLegacyPersonStatusOption,
+    PERSON_STATUS_PROFILE_CHILD_LIFECYCLE,
+    PERSON_STATUS_PROFILE_GENERIC,
+    resolvePersonDrawerStatusProfile,
+} from "@/lib/admin/person/personStatusApplicability";
 import {
     applyLocationDrawerPresentation,
     locationCustomContentKeysForKind,
@@ -4477,6 +4485,10 @@ export default function AdminEntityDrawer() {
             setStatusDefsForDrawer([]);
             return;
         }
+        /** Existing person drawers use profile-aware status fetch below. */
+        if (drawer.type === "persons" && drawer.id && drawer.id !== "new") {
+            return;
+        }
         if (
             drawer.type === "opportunities" &&
             drawerShellVariant === "adminV2" &&
@@ -6596,6 +6608,49 @@ export default function AdminEntityDrawer() {
         );
     }, [drawer.type, overviewData, personDrawerChildChromeHint]);
 
+    const personDrawerResolvedProfile = useMemo(() => {
+        if (drawer.type !== "persons" || !overviewData || (overviewData as { _create?: boolean })._create) {
+            return null;
+        }
+        return resolvePersonDrawerProfileFromRecordWithHint(
+            overviewData as Record<string, unknown>,
+            personDrawerChildChromeHint
+        );
+    }, [drawer.type, overviewData, personDrawerChildChromeHint]);
+
+    const personDrawerStatusProfile = useMemo(() => {
+        return resolvePersonDrawerStatusProfile(personDrawerResolvedProfile, {
+            childChrome: personChildLifecycleChrome,
+        });
+    }, [personDrawerResolvedProfile, personChildLifecycleChrome]);
+
+    useEffect(() => {
+        if (!personDrawerStatusProfile || drawer.type !== "persons" || !drawer.id || drawer.id === "new") {
+            return;
+        }
+        setStatusDefsLoading(true);
+        const init = workspaceDataFetchInit();
+        dedupeAdminFetchWithTtl(
+            `/api/admin/status-options?entity_type=${encodeURIComponent(PERSON_DRAWER_CHILD_STATUS_ENTITY_TYPE)}&status_profile=${encodeURIComponent(personDrawerStatusProfile)}`,
+            init,
+            0
+        )
+            .then((r) => (r.ok ? r.json() : { options: [] }))
+            .then((json: { options?: { value: string; label: string; sort_order?: number }[] }) => {
+                const opts = json.options ?? [];
+                setStatusDefsForDrawer(
+                    opts.map((o) => ({
+                        status_key: o.value,
+                        status_label: o.label,
+                        sort_order: o.sort_order ?? 0,
+                        is_active: true,
+                    }))
+                );
+            })
+            .catch(() => setStatusDefsForDrawer([]))
+            .finally(() => setStatusDefsLoading(false));
+    }, [personDrawerStatusProfile, drawer.type, drawer.id]);
+
     const globalAssistant = useGlobalAssistantOptional();
 
     const opportunityHeaderQuickActionsNode =
@@ -7185,8 +7240,14 @@ export default function AdminEntityDrawer() {
 
     const personChildTabLabelsResolved = useMemo(() => {
         if (!personChildLifecycleChrome) return tabLabels;
-        return { ...tabLabels, related: "Activity" };
+        return { ...tabLabels, related: "Activity", communications: "Communications" };
     }, [personChildLifecycleChrome, tabLabels]);
+
+    const personChildTabListResolved = useMemo((): DrawerTabKey[] => {
+        if (!personChildLifecycleChrome || drawer.type !== "persons") return tabList;
+        const ordered: DrawerTabKey[] = ["overview", "related", "documents", "communications"];
+        return ordered.filter((t) => tabList.includes(t) || t === "documents" || t === "communications");
+    }, [personChildLifecycleChrome, drawer.type, tabList]);
 
     const drawerTabLabelsForUi =
         personChildLifecycleChrome && drawer.type === "persons" ? personChildTabLabelsResolved : tabLabels;
@@ -7973,6 +8034,16 @@ export default function AdminEntityDrawer() {
 
     /** Inquiry workflow (or record-chrome loading for an existing opportunity): fixed top tabs; no Related. */
     const drawerTabStripKeys = useMemo((): DrawerTabKey[] => {
+        if (
+            drawer.type === "persons" &&
+            personChildLifecycleChrome &&
+            drawer.id &&
+            drawer.id !== "new" &&
+            overviewData &&
+            !(overviewData as { _create?: boolean })._create
+        ) {
+            return personChildTabListResolved;
+        }
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
             return tabList;
         }
@@ -7993,6 +8064,8 @@ export default function AdminEntityDrawer() {
         drawer.type,
         drawer.id,
         overviewData,
+        personChildLifecycleChrome,
+        personChildTabListResolved,
         opportunityDrawerShellContract,
         opportunityDrawerOverviewRevealReady,
         opportunityRecordGateWorkflowLayout,
@@ -10105,17 +10178,7 @@ export default function AdminEntityDrawer() {
             statusDefsForDrawer
                 ?.filter((s) => s.is_active !== false)
                 .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)) ?? [];
-        if (currentStatus && !statusOptions.some((s) => s.status_key === currentStatus)) {
-            statusOptions = [
-                ...statusOptions,
-                {
-                    status_key: currentStatus,
-                    status_label: statusDisplayLabel ?? currentStatus,
-                    sort_order: 9999,
-                    is_active: true,
-                },
-            ];
-        }
+        statusOptions = appendLegacyPersonStatusOption(statusOptions, currentStatus, statusDisplayLabel);
 
         return (
             <div
@@ -10170,6 +10233,94 @@ export default function AdminEntityDrawer() {
         refetch,
     ]);
 
+    const personDrawerParentHeaderStatus = useMemo(() => {
+        if (drawer.type !== "persons" || personChildLifecycleChrome) return null;
+        if (personDrawerStatusProfile !== PERSON_STATUS_PROFILE_GENERIC) return null;
+        if (!overviewData || (overviewData as { _create?: boolean })._create) return null;
+        if (!personDrawerPaintReady) return null;
+
+        const d = overviewData as Record<string, unknown>;
+        const currentStatus = String(formData.status_key ?? d.status_key ?? "").trim();
+        const statusDisplayLabel =
+            String((d as { _status_display?: string | null })._status_display ?? "").trim() ||
+            getStatusLabel(currentStatus) ||
+            currentStatus ||
+            null;
+
+        let statusOptions =
+            statusDefsForDrawer
+                ?.filter((s) => s.is_active !== false)
+                .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)) ?? [];
+        statusOptions = appendLegacyPersonStatusOption(statusOptions, currentStatus, statusDisplayLabel);
+
+        if (!currentStatus && statusOptions.length === 0 && !statusDefsLoading) {
+            return null;
+        }
+
+        if (!currentStatus && statusDefsLoading) {
+            return (
+                <div
+                    className="h-9 w-full max-w-[11rem] skeleton-pulse rounded-full border border-alloy-stone/20 bg-alloy-stone/8 sm:max-w-[15rem]"
+                    aria-hidden
+                    data-person-status-skeleton="true"
+                />
+            );
+        }
+
+        return (
+            <div
+                className="flex min-w-0 max-w-[11rem] shrink flex-col gap-0.5 sm:max-w-[15rem]"
+                data-person-drawer-parent-header-status="true"
+            >
+                <span className="sr-only">Person status</span>
+                <select
+                    value={currentStatus}
+                    disabled={!canMutate || statusDefsLoading || statusOptions.length === 0}
+                    onChange={(e) => {
+                        const nextKey = e.target.value.trim();
+                        setFormData((prev) => ({ ...prev, status_key: nextKey || null }));
+                        if (!drawer.id || drawer.id === "new" || !canMutate) return;
+                        void fetch(`/api/admin/persons/${encodeURIComponent(drawer.id)}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ status_key: nextKey || null }),
+                        })
+                            .then(async (res) => {
+                                const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+                                if (!res.ok) throw new Error(String(json.error ?? "Save failed"));
+                                setData((prev) => (prev ? { ...prev, ...json } : prev));
+                                refetch();
+                            })
+                            .catch((e) => setSaveError((e as Error).message));
+                    }}
+                    className="w-full min-w-0 rounded-full border border-alloy-stone/30 bg-white px-3 py-2 text-[12px] font-semibold text-alloy-midnight/90 shadow-md shadow-alloy-stone/10 ring-1 ring-alloy-stone/10 focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20 disabled:opacity-60"
+                    aria-label="Person status"
+                    data-record-drawer-header-status="select"
+                >
+                    <option value="">— None —</option>
+                    {statusOptions.map((s) => (
+                        <option key={s.status_key} value={s.status_key}>
+                            {s.status_label ?? s.status_key}
+                        </option>
+                    ))}
+                </select>
+            </div>
+        );
+    }, [
+        drawer.type,
+        drawer.id,
+        personChildLifecycleChrome,
+        personDrawerStatusProfile,
+        personDrawerPaintReady,
+        overviewData,
+        formData.status_key,
+        statusDefsForDrawer,
+        statusDefsLoading,
+        canMutate,
+        getStatusLabel,
+        refetch,
+    ]);
+
     const opportunityChildLifecycleSummary = useMemo((): OpportunityChildLifecycleSummary | null => {
         if (drawer.type !== "opportunities" || !overviewData || (overviewData as { _create?: boolean })._create) {
             return null;
@@ -10186,7 +10337,7 @@ export default function AdminEntityDrawer() {
         const d = overviewData as Record<string, unknown> | null;
         const currentStatus = String(formData.status_key ?? d?.status_key ?? "").trim() || null;
         const qd = resolveOpportunityDrawerQueueDefinition(opportunityQueueDefinition, {
-            allowEnrollmentFallback: opportunityInquiryWorkflowDrawer,
+            allowEnrollmentFallback: isOpportunityRecordModalTarget,
         });
         const model = resolveRecordLifecycleRailModel({
             queueDefinition: qd,
@@ -10207,7 +10358,7 @@ export default function AdminEntityDrawer() {
             );
         }
 
-        if (railLoading || (opportunityInquiryWorkflowDrawer && !qd)) {
+        if (railLoading || (isOpportunityRecordModalTarget && !qd)) {
             return <RecordLifecycleRailSkeleton stepCount={6} />;
         }
 
@@ -10220,6 +10371,7 @@ export default function AdminEntityDrawer() {
         formData.status_key,
         opportunityQueueDefinition,
         opportunityInquiryWorkflowDrawer,
+        isOpportunityRecordModalTarget,
         opportunityDrawerBootstrapPending,
         opportunityDrawerPrimaryLoadingVisible,
     ]);
@@ -10237,30 +10389,6 @@ export default function AdminEntityDrawer() {
                 record={d}
                 chromeHint={personDrawerChildChromeHint}
                 onSelectTab={setDrawerTab}
-                onOpenOpportunityCommunications={(opportunityId) => {
-                    if (
-                        previousDrawer?.type === "opportunities" &&
-                        String(previousDrawer.id ?? "") === String(opportunityId)
-                    ) {
-                        goBack();
-                        window.setTimeout(() => {
-                            window.dispatchEvent(
-                                new CustomEvent("adminv2:opportunity-focus-comms", {
-                                    detail: { opportunity_id: opportunityId },
-                                })
-                            );
-                        }, 150);
-                        return;
-                    }
-                    openDrawer({ type: "opportunities", id: opportunityId });
-                    window.setTimeout(() => {
-                        window.dispatchEvent(
-                            new CustomEvent("adminv2:opportunity-focus-comms", {
-                                detail: { opportunity_id: opportunityId },
-                            })
-                        );
-                    }, 150);
-                }}
             />
         );
     }, [
@@ -10270,9 +10398,6 @@ export default function AdminEntityDrawer() {
         personDrawerPaintReady,
         overviewData,
         personDrawerChildChromeHint,
-        previousDrawer,
-        goBack,
-        openDrawer,
     ]);
 
     const drawerPostTabStrip =
@@ -10861,6 +10986,7 @@ export default function AdminEntityDrawer() {
                           }
                         : null
                 }
+                statusSlot={personDrawerParentHeaderStatus}
             />
         ) : (
             headerSubtitleBase
@@ -12756,6 +12882,15 @@ export default function AdminEntityDrawer() {
                             />
                         </div>
                     )}
+                    {drawerTab === "communications" &&
+                    drawer.type === "persons" &&
+                    personChildLifecycleChrome &&
+                    drawer.id &&
+                    drawer.id !== "new" ? (
+                        <div className="pt-2">
+                            <PersonDrawerChildCommunicationsPlaceholder />
+                        </div>
+                    ) : null}
                     {opportunityWorkflowTabSessionActive
                         ? renderOpportunityWorkflowTabPane(
                               "communications",

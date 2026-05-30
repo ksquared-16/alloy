@@ -16,6 +16,10 @@ import {
     STATUS_KEY_REGEX,
     uniqueStatusKey,
 } from "@/lib/admin/slugifyAdminKey";
+import {
+    buildPersonStatusApplicabilityMetadata,
+    formatPersonStatusApplicabilityLabel,
+} from "@/lib/admin/person/personStatusApplicability";
 
 /** Canonical admin-configurable workflow statuses (kept in sync with GET /api/admin/status-definitions unscoped list). */
 const ENTITY_TYPES = ADMIN_STATUS_DEFINITIONS_ENTITY_TYPES;
@@ -70,6 +74,18 @@ const STATUSES_DEFAULT_SUBTITLE =
 const STATUSES_ADMINV2_SUBTITLE =
     "Manage status names and order. When business events should change status (for example, tour date set → Tour Scheduled), that behavior is workflow automation — see Automations and Settings → Workflow automation rules (read-only reference).";
 
+/** Operator hints — disambiguate childcare labels (Children vs People). */
+const STATUS_ENTITY_HINTS: Partial<Record<string, string>> = {
+    persons:
+        "Person lifecycle status on persons.status_key. Use Applicability to target child vs parent/guardian drawers — not customer_members roster or opportunity sub-statuses.",
+    customer_members:
+        "Member roster status on customer_members — not the person drawer status (configure under People / persons).",
+    opportunity_customer_members:
+        "Per-child inquiry sub-status on an opportunity — not the person drawer status.",
+};
+
+type PersonStatusApplicabilityMode = "child_lifecycle" | "person_generic" | "both";
+
 export default function StatusesClient({
     basePath = "/admin/system/statuses",
     adminV2Chrome = false,
@@ -90,6 +106,8 @@ export default function StatusesClient({
     const [modalAdvancedKey, setModalAdvancedKey] = useState(false);
     const [modalKeyManual, setModalKeyManual] = useState(false);
     const [modalSortOrder, setModalSortOrder] = useState(100);
+    const [modalPersonApplicability, setModalPersonApplicability] =
+        useState<PersonStatusApplicabilityMode>("child_lifecycle");
     const [modalSaving, setModalSaving] = useState(false);
     const [modalError, setModalError] = useState<string | null>(null);
 
@@ -143,6 +161,7 @@ export default function StatusesClient({
         setModalAdvancedKey(false);
         setModalKeyManual(false);
         setModalSortOrder(100);
+        setModalPersonApplicability("child_lifecycle");
         setModalError(null);
         setModalOpen(true);
     };
@@ -173,6 +192,10 @@ export default function StatusesClient({
         setModalSaving(true);
         setModalError(null);
         try {
+            const metadata =
+                modalEntityType === "persons"
+                    ? buildPersonStatusApplicabilityMetadata(modalPersonApplicability)
+                    : {};
             const res = await fetch("/api/admin/status-definitions", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -182,7 +205,7 @@ export default function StatusesClient({
                     status_label: modalLabel.trim() || null,
                     sort_order: modalSortOrder,
                     is_active: true,
-                    metadata: {},
+                    metadata,
                 }),
             });
             const json = await res.json().catch(() => ({}));
@@ -296,13 +319,16 @@ export default function StatusesClient({
         }
     }, [entityTypeFilter, sortedEntityTypes]);
 
-    const renderTable = (rows: StatusDef[], emptyMessage: string) => (
+    const renderTable = (rows: StatusDef[], emptyMessage: string, entityType?: string) => (
         <div className="overflow-x-auto">
             <table className="w-full min-w-[520px] text-left text-sm">
                 <thead>
                     <tr className="border-b border-[#e6e8ec] text-[#59678b]">
                         <th className="pb-2 pr-4 font-semibold">Label</th>
                         <th className="pb-2 pr-4 font-semibold">Key</th>
+                        {entityType === "persons" ? (
+                            <th className="pb-2 pr-4 font-semibold">Applicability</th>
+                        ) : null}
                         <th className="pb-2 pr-4 font-semibold">Sort</th>
                         <th className="pb-2 pr-4 font-semibold">Active</th>
                         <th className="pb-2 pr-4 font-semibold">System</th>
@@ -312,7 +338,7 @@ export default function StatusesClient({
                 <tbody>
                     {rows.length === 0 ? (
                         <tr>
-                            <td colSpan={canMutate ? 6 : 5} className="py-4 text-[#59678b]">
+                            <td colSpan={canMutate ? (entityType === "persons" ? 7 : 6) : entityType === "persons" ? 6 : 5} className="py-4 text-[#59678b]">
                                 {emptyMessage}
                             </td>
                         </tr>
@@ -330,6 +356,11 @@ export default function StatusesClient({
                                             />
                                         </td>
                                         <td className="py-2 pr-4 text-[#59678b]">{row.status_key}</td>
+                                        {entityType === "persons" ? (
+                                            <td className="py-2 pr-4 text-[#59678b]">
+                                                {formatPersonStatusApplicabilityLabel(row.metadata, row.status_key)}
+                                            </td>
+                                        ) : null}
                                         <td className="py-2 pr-4">
                                             <input
                                                 type="number"
@@ -370,6 +401,11 @@ export default function StatusesClient({
                                             {row.status_label ?? "—"}
                                         </td>
                                         <td className="py-2 pr-4 text-[#59678b]">{row.status_key}</td>
+                                        {entityType === "persons" ? (
+                                            <td className="py-2 pr-4 text-[#59678b]">
+                                                {formatPersonStatusApplicabilityLabel(row.metadata, row.status_key)}
+                                            </td>
+                                        ) : null}
                                         <td className="py-2 pr-4 text-[#59678b]">{row.sort_order}</td>
                                         <td className="py-2 pr-4">{row.is_active ? "Yes" : "No"}</td>
                                         <td className="py-2 pr-4">{row.is_system ? "Yes" : "—"}</td>
@@ -476,7 +512,7 @@ export default function StatusesClient({
 
             {!loading && !error && entityTypeFilter && (
                 <SectionCard title="Status definitions">
-                    {renderTable(statuses, "No statuses found. Try clearing the filter or add a new status.")}
+                    {renderTable(statuses, "No statuses found. Try clearing the filter or add a new status.", entityTypeFilter)}
                     {editError && <p className="mt-2 text-sm text-red-600">{editError}</p>}
                 </SectionCard>
             )}
@@ -534,7 +570,12 @@ export default function StatusesClient({
                                         </button>
                                         {isExpanded && (
                                             <div className="p-5">
-                                                {renderTable(rows, "No statuses for this entity type.")}
+                                                {STATUS_ENTITY_HINTS[entityType] ? (
+                                                    <p className="mb-3 text-xs leading-snug text-[#59678b]">
+                                                        {STATUS_ENTITY_HINTS[entityType]}
+                                                    </p>
+                                                ) : null}
+                                                {renderTable(rows, "No statuses for this entity type.", entityType)}
                                                 {editError && <p className="mt-2 text-sm text-red-600">{editError}</p>}
                                             </div>
                                         )}
@@ -573,6 +614,28 @@ export default function StatusesClient({
                                     </select>
                                 </div>
                             )}
+                            {modalEntityType === "persons" ? (
+                                <div>
+                                    <label className="block text-xs font-medium text-[#59678b] mb-0.5">
+                                        Applicability / profile
+                                    </label>
+                                    <select
+                                        value={modalPersonApplicability}
+                                        onChange={(e) =>
+                                            setModalPersonApplicability(e.target.value as PersonStatusApplicabilityMode)
+                                        }
+                                        className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                    >
+                                        <option value="child_lifecycle">Child lifecycle</option>
+                                        <option value="person_generic">All people (parent/guardian/employee)</option>
+                                        <option value="both">Child + all people</option>
+                                    </select>
+                                    <p className="mt-1 text-[11px] leading-snug text-[#59678b]">
+                                        Creates a <strong>People</strong> status on persons.status_key — not
+                                        customer_members roster or opportunity enrollment sub-statuses.
+                                    </p>
+                                </div>
+                            ) : null}
                             <div>
                                 <label className="block text-xs font-medium text-[#59678b] mb-0.5">Status label</label>
                                 <input

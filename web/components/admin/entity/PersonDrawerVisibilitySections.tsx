@@ -86,7 +86,7 @@ export function PersonDrawerRelationshipsOverview({
 
     if (
         !personDrawerRelationshipSectionHasContent(model, groups) &&
-        !(childFamilyEmphasis && (familyPreview?.household_label || familyPreview?.primary_adult))
+        !(childFamilyEmphasis && (familyPreview?.household_label || familyPreview?.parents_guardians.length))
     ) {
         return null;
     }
@@ -99,9 +99,10 @@ export function PersonDrawerRelationshipsOverview({
         const family = resolvePersonDrawerChildFamilyModel(record);
         const hasFamilyContent =
             family.household_label ||
-            family.primary_adult ||
-            family.other_adults.length > 0 ||
-            siblings.length > 0;
+            family.parents_guardians.length > 0 ||
+            siblings.length > 0 ||
+            family.emergency_contacts.length > 0 ||
+            family.other_household_adults.length > 0;
 
         if (!hasFamilyContent) return null;
 
@@ -121,21 +122,9 @@ export function PersonDrawerRelationshipsOverview({
                             </p>
                         </div>
                     ) : null}
-                    {family.primary_adult ? (
-                        <GroupBlock title="Primary guardian">
-                            <RelationshipLinkRow
-                                row={{
-                                    person_id: family.primary_adult.person_id,
-                                    display_name: family.primary_adult.display_name,
-                                    relationship_label: family.primary_adult.role_label,
-                                }}
-                                onOpenPerson={openPerson}
-                            />
-                        </GroupBlock>
-                    ) : null}
-                    {family.other_adults.length > 0 ? (
-                        <GroupBlock title="Other adults">
-                            {family.other_adults.map((row) => (
+                    {family.parents_guardians.length > 0 ? (
+                        <GroupBlock title="Parents / guardians">
+                            {family.parents_guardians.map((row) => (
                                 <RelationshipLinkRow
                                     key={row.person_id ?? row.display_name}
                                     row={{
@@ -160,9 +149,39 @@ export function PersonDrawerRelationshipsOverview({
                             ))}
                         </GroupBlock>
                     ) : null}
-                    {family.other_adults.length > 0 ? (
+                    {family.emergency_contacts.length > 0 ? (
+                        <GroupBlock title="Emergency contacts">
+                            {family.emergency_contacts.map((row) => (
+                                <RelationshipLinkRow
+                                    key={row.person_id ?? row.display_name}
+                                    row={{
+                                        person_id: row.person_id,
+                                        display_name: row.display_name,
+                                        relationship_label: row.role_label,
+                                    }}
+                                    onOpenPerson={openPerson}
+                                />
+                            ))}
+                        </GroupBlock>
+                    ) : null}
+                    {family.other_household_adults.length > 0 ? (
+                        <GroupBlock title="Other household adults">
+                            {family.other_household_adults.map((row) => (
+                                <RelationshipLinkRow
+                                    key={row.person_id ?? row.display_name}
+                                    row={{
+                                        person_id: row.person_id,
+                                        display_name: row.display_name,
+                                        relationship_label: row.role_label,
+                                    }}
+                                    onOpenPerson={openPerson}
+                                />
+                            ))}
+                        </GroupBlock>
+                    ) : null}
+                    {family.source_note ? (
                         <p
-                            className="text-[10px] leading-snug text-alloy-midnight/45"
+                            className="text-[10px] leading-snug text-alloy-midnight/35"
                             data-person-drawer-family-source-note="true"
                         >
                             {family.source_note}

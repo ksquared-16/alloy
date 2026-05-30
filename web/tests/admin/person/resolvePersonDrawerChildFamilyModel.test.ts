@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { resolvePersonDrawerChildFamilyModel } from "@/lib/admin/person/resolvePersonDrawerChildFamilyModel";
 
 describe("resolvePersonDrawerChildFamilyModel", () => {
-    it("uses household_adult_links — Zoe-style guardian vs other adults", () => {
+    it("orders household hierarchy: parents/guardians, siblings via UI, emergency contacts", () => {
         const model = resolvePersonDrawerChildFamilyModel({
             _household_context: [{ customer_name: "Foster household" }],
             _household_adult_links: [
@@ -30,16 +30,28 @@ describe("resolvePersonDrawerChildFamilyModel", () => {
                     role_label: "Guardian",
                     is_primary: false,
                 },
+                {
+                    person_id: "aunt",
+                    customer_id: "cust-1",
+                    display_name: "Pat Walsh",
+                    role_type: "emergency_contact",
+                    role_label: "Emergency contact",
+                    is_primary: false,
+                },
             ],
         });
 
         expect(model.household_label).toBe("Foster household");
-        expect(model.primary_adult?.display_name).toBe("Olivia Foster");
-        expect(model.other_adults.map((a) => a.display_name)).toEqual(["Grace Walsh", "Jordan Foster"]);
-        expect(model.source_note).toContain("household account");
+        expect(model.parents_guardians.map((a) => a.display_name)).toEqual([
+            "Olivia Foster",
+            "Grace Walsh",
+            "Jordan Foster",
+        ]);
+        expect(model.emergency_contacts.map((a) => a.display_name)).toEqual(["Pat Walsh"]);
+        expect(model.other_household_adults).toHaveLength(0);
     });
 
-    it("excludes non-caregiver household roles from other adults", () => {
+    it("puts non-caregiver household roles under other household adults", () => {
         const model = resolvePersonDrawerChildFamilyModel({
             _household_adult_links: [
                 {
@@ -61,7 +73,7 @@ describe("resolvePersonDrawerChildFamilyModel", () => {
             ],
         });
 
-        expect(model.primary_adult?.display_name).toBe("Primary Parent");
-        expect(model.other_adults).toHaveLength(0);
+        expect(model.parents_guardians.map((a) => a.display_name)).toEqual(["Primary Parent"]);
+        expect(model.other_household_adults.map((a) => a.display_name)).toEqual(["Billing Contact"]);
     });
 });
