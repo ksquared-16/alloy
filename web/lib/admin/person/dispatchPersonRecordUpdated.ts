@@ -1,3 +1,4 @@
+import { buildQueueRowDisplayPatchFromPersonSave } from "@/lib/admin/opportunityQueueRowDisplayPatch";
 import { dispatchOpportunityQueueUpdated } from "@/lib/admin/opportunityQueueRefreshEvent";
 
 export type PersonRecordUpdatedDetail = {
@@ -35,6 +36,15 @@ export function dispatchPersonRecordUpdated(args: {
     window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail }));
 
     if (opportunityId) {
-        dispatchOpportunityQueueUpdated(opportunityId, args.source ?? "person_record_updated");
+        const queueRowPatch = buildQueueRowDisplayPatchFromPersonSave({
+            personId,
+            patch: args.patch,
+            person: args.person ?? null,
+        });
+        dispatchOpportunityQueueUpdated(
+            opportunityId,
+            args.source ?? "person_record_updated",
+            queueRowPatch
+        );
     }
 }

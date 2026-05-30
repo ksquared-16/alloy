@@ -14543,12 +14543,6 @@ export default function AdminEntityDrawer() {
                                                                                                     return next;
                                                                                                 });
                                                                                                 void refetch();
-                                                                                                if (drawer.id && drawer.id !== "new") {
-                                                                                                    dispatchOpportunityQueueUpdated(
-                                                                                                        String(drawer.id),
-                                                                                                        "person_contact_save"
-                                                                                                    );
-                                                                                                }
                                                                                             }}
                                                                                             onLinkedPersonUpdated={(personId, person) => {
                                                                                                 dispatchPersonRecordUpdated({
@@ -14571,12 +14565,6 @@ export default function AdminEntityDrawer() {
                                                                                                     return next;
                                                                                                 });
                                                                                                 void refetch();
-                                                                                                if (drawer.id && drawer.id !== "new") {
-                                                                                                    dispatchOpportunityQueueUpdated(
-                                                                                                        String(drawer.id),
-                                                                                                        "person_contact_save"
-                                                                                                    );
-                                                                                                }
                                                                                             }}
                                                                                             openForm={({ form_key, action }) => {
                                                                                                 setActionFormState({

@@ -47,10 +47,16 @@ import {
 } from "@/lib/adminV2/workspaceSiteFilterClient";
 import {
     OPPORTUNITY_QUEUE_UPDATED_EVENT,
-    parseOpportunityQueueUpdatedDetail,
-    shouldRefetchWorkUnitQueueRowsForEvent,
     logWorkUnitQueueRefreshDecision,
+    parseOpportunityQueueUpdatedDetail,
+    shouldPatchWorkUnitQueueRowsForEvent,
+    shouldRefetchWorkUnitQueueRowsForEvent,
+    shouldRefreshQueueSummariesForEvent,
 } from "@/lib/admin/opportunityQueueRefreshEvent";
+import {
+    patchWorkUnitQueueItemsResult,
+    patchWorkUnitQueuePreviewItems,
+} from "@/lib/workspace/patchWorkUnitQueuePreviewRow";
 import { logQueueSwitch } from "@/lib/perf/queueSwitchPerf";
 import {
     queueRowsBufferMatchesActiveLane,
@@ -221,6 +227,10 @@ import {
     workUnitRevealShellReady,
     workUnitRevealSummariesReady,
 } from "@/lib/adminV2/workUnitRevealGate";
+import {
+    workUnitKpiStripShowsPlaceholder,
+    workUnitPageContentReady as resolveWorkUnitPageContentReady,
+} from "@/lib/adminV2/workUnitPageRevealPolicy";
 import { WorkUnitPageLoadingGate } from "@/app/adminV2/components/workspace/WorkUnitPageLoadingGate";
 import { logAdminV2LegacyFanOut } from "@/lib/adminV2/runtime/adminV2LegacyFanOutDiagnostics";
 import { alloyPerfGet, alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
@@ -579,6 +589,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
     >(null);
     const firstUsefulPaintMarkedRef = useRef(false);
     const seededWorkUnitShellRef = useRef(false);
+    /** Reactive mirror of session shell seed — drives cold vs warm page reveal gate. */
+    const [workUnitPageSeededFromCache, setWorkUnitPageSeededFromCache] = useState(false);
     /** User changed lane via tabs/buckets — bootstrap must not overwrite selection when summaries arrive. */
     const userLaneTouchedRef = useRef(false);
     /** Lane filter UI — source of truth; URL is not synced after mount. */
@@ -896,15 +908,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
         setLaneUnmappedOnly(init.unmapped);
 
         seededWorkUnitShellRef.current = false;
+        setWorkUnitPageSeededFromCache(false);
         clearWorkUnitBootstrapSessionForEntity(departmentId, workUnitId);
         if (!orgId) return;
         setWorkUnit((prev) => (prev?.id === workUnitId ? prev : null));
         const hit = readWorkUnitPageCache(orgId, departmentId, workUnitId, principalUserId, accessScopeFingerprint);
         if (!hit || hit.departmentId !== departmentId || hit.workUnit.id !== workUnitId) {
             seededWorkUnitShellRef.current = false;
+            setWorkUnitPageSeededFromCache(false);
             return;
         }
         seededWorkUnitShellRef.current = true;
+        setWorkUnitPageSeededFromCache(true);
         setDept(hit.dept);
         setWorkUnit(hit.workUnit as WorkUnitRow);
         setError(null);
@@ -2595,15 +2610,70 @@ export default function AdminV2OpportunityWorkUnitPage() {
         const onUpdated = (ev: Event) => {
             const detail = parseOpportunityQueueUpdatedDetail(ev);
             const visibleIds = queueDisplayItemsRef.current
-                .map((row) => String(row.id ?? "").trim())
+                .map((row) => String(row.opportunityId ?? row.id ?? "").trim())
                 .filter(Boolean);
+            const oppId = (detail?.id ?? "").trim();
+            const patchRows = shouldPatchWorkUnitQueueRowsForEvent({
+                detail,
+                visibleOpportunityIds: visibleIds,
+            });
+            if (patchRows && oppId && detail?.queue_row_patch) {
+                setQueueItems((prev) => {
+                    const patched = patchWorkUnitQueueItemsResult(prev, oppId, detail.queue_row_patch!);
+                    return patched ?? prev;
+                });
+                const displayPatched = patchWorkUnitQueuePreviewItems(
+                    queueDisplayItemsRef.current,
+                    oppId,
+                    detail.queue_row_patch
+                );
+                if (displayPatched) {
+                    queueDisplayItemsRef.current = displayPatched;
+                    if (
+                        queueRowsBufferWorkUnitIdRef.current === workUnitId &&
+                        queueRowsBufferRef.current.length > 0
+                    ) {
+                        queueRowsBufferRef.current = displayPatched;
+                    }
+                }
+                const refreshSummaries = shouldRefreshQueueSummariesForEvent({
+                    detail,
+                    visibleOpportunityIds: visibleIds,
+                });
+                logWorkUnitQueueRefreshDecision({
+                    opportunityId: oppId,
+                    actionKey: detail?.action_key,
+                    refreshRows: false,
+                    refreshSummaries,
+                    patchedRows: true,
+                    visibleRowCount: visibleIds.length,
+                });
+                if (refreshSummaries) {
+                    void fetchQueueSummaries(workUnitId, { force: true });
+                }
+                return;
+            }
+
             const refreshRows = shouldRefetchWorkUnitQueueRowsForEvent({
                 detail,
                 visibleOpportunityIds: visibleIds,
             });
-            deleteQueueRowCacheKeysForWorkUnit(queueRowClientCacheRef.current, viewScopeFingerprint, workUnitId);
+            const refreshSummaries = shouldRefreshQueueSummariesForEvent({
+                detail,
+                visibleOpportunityIds: visibleIds,
+            });
+            if (refreshRows) {
+                deleteQueueRowCacheKeysForWorkUnit(
+                    queueRowClientCacheRef.current,
+                    viewScopeFingerprint,
+                    workUnitId
+                );
+            }
             const summaries = queueSummariesRef.current;
-            const tasks: Promise<unknown>[] = [fetchQueueSummaries(workUnitId, { force: true })];
+            const tasks: Promise<unknown>[] = [];
+            if (refreshSummaries) {
+                tasks.push(fetchQueueSummaries(workUnitId, { force: true }));
+            }
             if (refreshRows) {
                 tasks.push(fetchQueueItems(workUnitId, selectedQueueKey, summaries, { force: true }));
             }
@@ -2611,10 +2681,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 opportunityId: detail?.id,
                 actionKey: detail?.action_key,
                 refreshRows,
-                refreshSummaries: true,
+                refreshSummaries,
+                patchedRows: false,
                 visibleRowCount: visibleIds.length,
             });
-            void Promise.all(tasks);
+            if (tasks.length) void Promise.all(tasks);
         };
         /** Drawer saves dispatch `adminv2:opportunity-updated` — scoped row refresh + summaries (not on drawer close). */
         window.addEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onUpdated as EventListener);
@@ -4360,7 +4431,17 @@ export default function AdminV2OpportunityWorkUnitPage() {
         queueItemsError,
     ]);
 
-    const workUnitKpiStripPlaceholder = workUnitAboveFoldPageReady && workUnitKpiMetricsPending;
+    const workUnitPageContentReady = resolveWorkUnitPageContentReady({
+        page_seeded_from_cache: workUnitPageSeededFromCache,
+        shell_ready: workUnitShellReady,
+        above_fold_ready: workUnitAboveFoldPageReady,
+    });
+
+    const workUnitKpiStripPlaceholder = workUnitKpiStripShowsPlaceholder({
+        kpi_metrics_pending: workUnitKpiMetricsPending,
+        page_seeded_from_cache: workUnitPageSeededFromCache,
+        above_fold_ready: workUnitAboveFoldPageReady,
+    });
 
     const workUnitRoutePipeline = useMemo(
         () =>
@@ -4372,8 +4453,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 department_key: dept?.key ?? undefined,
                 shell_identity_ready: workUnitShellReady,
                 oper_lane_loading: workUnitOperLaneLoading,
-                kpi_placeholder: workUnitKpiMetricsPending,
-                primary_loaded: workUnitShellReady,
+                kpi_placeholder: workUnitKpiStripPlaceholder,
+                primary_loaded: workUnitPageContentReady,
                 full_complete: workUnitAboveFoldPageReady,
                 work_unit_above_fold: workUnitAboveFold,
             }),
@@ -4385,21 +4466,22 @@ export default function AdminV2OpportunityWorkUnitPage() {
             dept?.key,
             workUnitShellReady,
             workUnitOperLaneLoading,
-            workUnitKpiMetricsPending,
+            workUnitKpiStripPlaceholder,
+            workUnitPageContentReady,
             workUnitAboveFoldPageReady,
             workUnitAboveFold,
         ]
     );
 
     useEffect(() => {
-        markWorkUnitRevealGatePhases(workUnitRevealGate, { departmentId, workUnitId });
-    }, [workUnitRevealGate, departmentId, workUnitId]);
-
-    useEffect(() => {
-        if (!workUnitShellReady) return;
+        if (!workUnitPageContentReady) return;
         markWorkUnitLaneShellChromeReal({ departmentId, workUnitId });
         markRouteBootstrapReturned("work_unit", { departmentId, workUnitId });
-    }, [workUnitShellReady, departmentId, workUnitId]);
+    }, [workUnitPageContentReady, departmentId, workUnitId]);
+
+    useEffect(() => {
+        markWorkUnitRevealGatePhases(workUnitRevealGate, { departmentId, workUnitId });
+    }, [workUnitRevealGate, departmentId, workUnitId]);
 
     useEffect(() => {
         if (!workUnitAboveFoldPageReady) return;
@@ -4554,13 +4636,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
             title={workUnitRoutePipeline.shell.title}
             subtitle={workUnitRoutePipeline.shell.subtitle ?? ""}
             data-route-shell-ready={workUnitAboveFoldPageReady ? "true" : "false"}
+            data-work-unit-page-seeded={workUnitPageSeededFromCache ? "true" : "false"}
+            data-work-unit-page-content-ready={workUnitPageContentReady ? "true" : "false"}
             {...(!workUnitAboveFoldPageReady
                 ? { "data-wu-reveal-blocked": workUnitRevealGate.reason_if_blocked.join(",") }
                 : {})}
         >
             {error && !workUnitShellReady ? (
                 <p className="text-sm text-alloy-ember px-1 py-4">{error}</p>
-            ) : !workUnitShellReady ? (
+            ) : !workUnitPageContentReady ? (
                 <WorkUnitPageLoadingGate workUnitTitle={wuName} departmentTitle={deptName} />
             ) : (
                 <>

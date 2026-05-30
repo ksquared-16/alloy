@@ -25,6 +25,8 @@ import { loadWorkspaceChildcareInquiryOptionSets } from "@/lib/workspace/workspa
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { logInquiryChildrenDebug, summarizeInquiryChildrenRows } from "@/lib/admin/drawer/inquiryChildrenDebug";
+import { buildQueueRowDisplayPatchFromInquiryChildRow } from "@/lib/admin/opportunityQueueRowDisplayPatch";
+import { dispatchOpportunityQueueUpdated } from "@/lib/admin/opportunityQueueRefreshEvent";
 import { dispatchPersonRecordUpdated } from "@/lib/admin/person/dispatchPersonRecordUpdated";
 import { resolveChildAgeDisplayLabel } from "@/lib/admin/drawer/childAgeDisplay";
 import {
@@ -571,6 +573,34 @@ export default function OpportunityInquiryChildrenSection({
             });
             if (Object.keys(ocmPatch).length > 0) {
                 await saveOcmPatch(row, ocmPatch);
+                const oid = (opportunityId ?? "").trim();
+                if (oid) {
+                    const displayName =
+                        [identityDraft.first_name, identityDraft.last_name]
+                            .filter(Boolean)
+                            .join(" ")
+                            .trim() || (row.display_name ?? "").trim();
+                    const queuePatch = buildQueueRowDisplayPatchFromInquiryChildRow(
+                        {
+                            ...row,
+                            display_name: displayName || row.display_name,
+                            first_name: identityDraft.first_name || row.first_name,
+                            last_name: identityDraft.last_name || row.last_name,
+                            dob: identityDraft.dob || row.dob,
+                            desired_program_type:
+                                st.desired_program_type || row.desired_program_type,
+                            desired_schedule_type:
+                                st.desired_schedule_type || row.desired_schedule_type,
+                            program_room_cohort_key:
+                                st.program_room_cohort_key || row.program_room_cohort_key,
+                            location_label:
+                                (st.location_id ? siteLabelById.get(st.location_id) : null) ??
+                                row.location_label,
+                        },
+                        programLabelByKey
+                    );
+                    dispatchOpportunityQueueUpdated(oid, "inquiry_children_placement", queuePatch);
+                }
             }
             markRowSaveState(row.id, "saved");
             onChildrenMutated?.();
@@ -585,6 +615,8 @@ export default function OpportunityInquiryChildrenSection({
         opportunityDesiredStartDate,
         opportunityId,
         onChildrenMutated,
+        programLabelByKey,
+        siteLabelById,
     ]);
 
     const customFieldKeys = useMemo(() => customDrawerDefs.map((d) => d.field_key), [customDrawerDefs]);

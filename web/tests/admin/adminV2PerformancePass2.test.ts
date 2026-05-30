@@ -40,7 +40,8 @@ describe("AdminV2 performance pass 2 contracts", () => {
     it("placement and family mutation keys count as lane membership", () => {
         expect(isQueueMembershipMutationActionKey("inquiry_child_placement_scope")).toBe(true);
         expect(isQueueMembershipMutationActionKey("family_contacts_registry")).toBe(true);
-        expect(isQueueMembershipMutationActionKey("person_contact_save")).toBe(true);
+        expect(isQueueMembershipMutationActionKey("person_contact_save")).toBe(false);
+        expect(isQueueMembershipMutationActionKey("inquiry_children_placement")).toBe(false);
     });
 
     it("skips row refetch for off-lane non-membership drawer header refresh", () => {
