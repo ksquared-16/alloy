@@ -84,12 +84,21 @@ export async function PATCH(
                   ? body.status_key.trim() || null
                   : null
             : undefined;
+    const date_of_birth =
+        body.date_of_birth !== undefined
+            ? body.date_of_birth === "" || body.date_of_birth == null
+                ? null
+                : typeof body.date_of_birth === "string"
+                  ? body.date_of_birth.trim().slice(0, 10) || null
+                  : null
+            : undefined;
 
     const personUpdates: Record<string, unknown> = {};
     if (first_name !== undefined) personUpdates.first_name = first_name;
     if (last_name !== undefined) personUpdates.last_name = last_name;
     if (email !== undefined) personUpdates.email = email;
     if (phone !== undefined) personUpdates.phone = phone;
+    if (date_of_birth !== undefined) personUpdates.date_of_birth = date_of_birth;
     if (status_key !== undefined) {
         const chk = await assertAllowedStatusKey(supabase, ctx.orgId, "persons", status_key);
         if (!chk.ok) {
@@ -134,7 +143,7 @@ export async function PATCH(
     const { data: updated } = await supabase
         .from("persons")
         .select(
-            "id, org_id, first_name, last_name, full_name, email, phone, status_key, is_employee, employee_id, employee_source, created_at, updated_at"
+            "id, org_id, first_name, last_name, full_name, email, phone, status_key, date_of_birth, is_employee, employee_id, employee_source, created_at, updated_at"
         )
         .eq("id", id)
         .eq("org_id", ctx.orgId)

@@ -58,4 +58,27 @@ describe("personDrawerOpenSeed", () => {
             email: "sam@example.com",
         });
     });
+
+    it("derives child seed from inquiry children with DOB and lifecycle emphasis", () => {
+        const seed = personDrawerSeedFromOpportunityRecord(
+            {
+                _inquiry_children: [
+                    {
+                        person_id: PERSON_ID,
+                        first_name: "Sophia",
+                        last_name: "Chen",
+                        dob: "2021-03-15",
+                    },
+                ],
+            },
+            PERSON_ID
+        );
+        expect(seed).toMatchObject({
+            personId: PERSON_ID,
+            first_name: "Sophia",
+            last_name: "Chen",
+            date_of_birth: "2021-03-15",
+            presentation_emphasis: "child_lifecycle",
+        });
+    });
 });

@@ -204,7 +204,8 @@ export type DrawerTabKey =
     | "notes"
     | "payments"
     | "documents"
-    | "ledger";
+    | "ledger"
+    | "lifecycle";
 
 /** Related record module: which related-entity tabs to show (e.g. jobs, schedules, contacts). */
 export interface RelatedModuleConfig {

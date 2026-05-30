@@ -48,6 +48,8 @@ interface DrawerProps {
     headerSignals?: React.ReactNode;
     /** Optional: sticky content below title/actions/signals (e.g. tabs). Only body scrolls. */
     headerExtra?: React.ReactNode;
+    /** Optional: compact strip below tab row (e.g. lifecycle rail). Only body scrolls. */
+    postTabStrip?: React.ReactNode;
     /** Optional: use higher z-index when stacking drawers (e.g. 60/70) */
     zIndexBackdrop?: number;
     zIndexPanel?: number;
@@ -84,6 +86,7 @@ export default function Drawer({
     headerActions,
     headerSignals,
     headerExtra,
+    postTabStrip,
     children,
     zIndexBackdrop = 40,
     zIndexPanel = 50,
@@ -365,6 +368,19 @@ export default function Drawer({
                         }
                     >
                         {headerExtra}
+                    </div>
+                )}
+                {postTabStrip != null && postTabStrip !== false && (
+                    <div
+                        data-adminv2-record-modal-post-tab-strip
+                        className={`px-6 ${cleaningRecordModalTone ? "pb-2 pt-0" : "pb-2 pt-0"}`}
+                        style={
+                            isV2 && cleaningRecordModalTone
+                                ? { backgroundColor: neutral.surface }
+                                : undefined
+                        }
+                    >
+                        {postTabStrip}
                     </div>
                 )}
             </div>

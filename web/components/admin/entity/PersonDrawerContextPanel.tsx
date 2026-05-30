@@ -3,15 +3,9 @@
 import RecordDrawerContextPanel from "@/components/admin/drawer/record/RecordDrawerContextPanel";
 import { resolvePersonDrawerProfileFromRecord } from "@/components/admin/entity/PersonDrawerProfileBadges";
 import { buildPersonDrawerRelationshipGroups } from "@/lib/admin/person/buildPersonDrawerRelationshipGroups";
-import {
-    personDrawerShowsChildLifecycleSurface,
-    primaryEnrollmentHint,
-} from "@/lib/admin/person/personDrawerChildLifecycleSlots";
+import { personDrawerShowsChildLifecycleSurface } from "@/lib/admin/person/personDrawerChildLifecycleSlots";
 import { personDrawerRelationshipInputFromRecord } from "@/lib/admin/person/personDrawerRelationshipInput";
-import {
-    resolvePersonDrawerRelationshipSectionModel,
-} from "@/lib/admin/person/personDrawerRelationshipSection";
-
+import { resolvePersonDrawerRelationshipSectionModel } from "@/lib/admin/person/personDrawerRelationshipSection";
 import { oppInqEyebrow } from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
 
 type OpenDrawer = (type: string, id: string) => void;
@@ -23,10 +17,9 @@ type QuickLinkRow = {
     label: string;
     group: string;
     person_id?: string | null;
-    opportunity_id?: string | null;
 };
 
-/** Compact quick links — subset of body relationship section; no duplicate enrollment detail. */
+/** Compact quick links — relationship navigation only; enrollment detail lives in Enrollment section. */
 export function buildPersonDrawerQuickLinks(record: Record<string, unknown>): QuickLinkRow[] | null {
     const profile = resolvePersonDrawerProfileFromRecord(record);
     const groups = buildPersonDrawerRelationshipGroups(personDrawerRelationshipInputFromRecord(record));
@@ -50,7 +43,7 @@ export function buildPersonDrawerQuickLinks(record: Record<string, unknown>): Qu
             rows.push({
                 key: r.person_id ?? r.display_name ?? "parent",
                 label: r.display_name?.trim() || "Unnamed",
-                group: "Parent",
+                group: childLifecycle ? "Guardian" : "Parent",
                 person_id: r.person_id,
             });
         }
@@ -87,17 +80,14 @@ export function buildPersonDrawerQuickLinks(record: Record<string, unknown>): Qu
     }
 
     if (childLifecycle) {
-        const enrollment = primaryEnrollmentHint(record);
-        const peopleLinks = rows.slice(0, enrollment ? MAX_QUICK_LINKS - 1 : MAX_QUICK_LINKS);
-        if (enrollment) {
-            peopleLinks.push({
-                key: `opp:${enrollment.opportunity_id}`,
-                label: enrollment.label,
-                group: "Enrollment",
-                opportunity_id: enrollment.opportunity_id,
-            });
+        const deduped: QuickLinkRow[] = [];
+        const seen = new Set<string>();
+        for (const row of rows) {
+            if (seen.has(row.key)) continue;
+            seen.add(row.key);
+            deduped.push(row);
         }
-        return peopleLinks.length > 0 ? peopleLinks : null;
+        return deduped.length > 0 ? deduped.slice(0, MAX_QUICK_LINKS) : null;
     }
 
     return rows.length > 0 ? rows.slice(0, MAX_QUICK_LINKS) : null;
@@ -123,15 +113,7 @@ export default function PersonDrawerContextPanel({
                 <ul className="mt-1 space-y-1 text-[12px] leading-snug text-alloy-midnight/75">
                     {quickLinks.map((row) => (
                         <li key={row.key} className="flex flex-wrap items-baseline gap-x-1.5">
-                            {row.opportunity_id ? (
-                                <button
-                                    type="button"
-                                    onClick={() => onOpenDrawer("opportunities", row.opportunity_id!)}
-                                    className="font-semibold text-alloy-blue hover:underline"
-                                >
-                                    {row.label}
-                                </button>
-                            ) : row.person_id ? (
+                            {row.person_id ? (
                                 <button
                                     type="button"
                                     onClick={() => onOpenDrawer("persons", row.person_id!)}

@@ -1,7 +1,7 @@
 # Child Profile / Person Drawer Doctrine Sprint
 
 **Date:** 2026-05-29  
-**Status:** Implemented (doctrine + `communication_opt_out` + presentation emphasis + UX pass 2)
+**Status:** Child drawer finalized (final pass complete)
 
 ---
 
@@ -118,7 +118,7 @@ The child person record is the durable lifecycle anchor. Current drawer slots an
 | Communications | — | Comms section / thread preview |
 | History | — | Activity timeline |
 
-**Pass 4 (2026-05-29):** `PersonDrawerChildLifecycleSummary` renders household/guardian/enrollment hints + lifecycle roadmap pills (future slots as dashed pills, not empty overview cards). Full configurability table: [`person_relationship_child_lifecycle_foundation.md`](./person_relationship_child_lifecycle_foundation.md).
+**Final child UX pass (2026-05-29):** Child drawer complete — deduplicated information ownership, selective green rail (summary + enrollment shell only), Family as relationship home, horizontal lifecycle stepper. Ready for Parent operating surface sprint. See [`person_relationship_child_lifecycle_foundation.md`](./person_relationship_child_lifecycle_foundation.md).
 
 `CHILD_LIFECYCLE_SECTION_SLOTS` in `personDrawerPresentationEmphasis.ts` documents reserved layout keys; only `enrollment_activity` + `relationships` render as body sections today.
 
@@ -338,7 +338,7 @@ Reference: `docs/sprints/05_2026/layout_field_behavior_semantics_phase_2.md` (de
 
 | Profile | Expected drawer behavior |
 |---------|--------------------------|
-| **Child** | Child badge; DOB/age in header; no contact section; medical visible; no communication opt-out; relationships show parents/siblings |
+| **Child** | Executive header: avatar, Child badge, age/program/location/lead chips; household summary; Family owns relationships; Child details (no duplicate name fields); Lifecycle tab; no communication opt-out |
 | **Parent** | Parent badge; email/mobile in Profile + header; communication opt-out in Consent; no medical; children in relationships |
 | **Emergency** | Contact-first; minimal sections |
 | **Visual parity** | Same `EntityDrawerSection` / lead-summary context panel tokens as Opportunity drawer |
@@ -370,6 +370,157 @@ Reference: `docs/sprints/05_2026/layout_field_behavior_semantics_phase_2.md` (de
 | `web/tests/admin/person/personDrawerPresentationEmphasis.test.ts` | Emphasis + enrollment merge tests |
 | `web/tests/admin/person/personDrawerArchitecturePass2.test.ts` | Architecture wiring tests |
 
+### Final pass — Child drawer closeout (UX correction)
+
+| File | Change |
+|------|--------|
+| `PersonDrawerChildSummary.tsx` | **Primary above-the-fold** child identity (photo, name, DOB, age, gender, program, location, status, optional guardian) |
+| `PersonDrawerChildHouseholdContext.tsx` | Secondary household context below summary |
+| `PersonDrawerChildLifecycleSnapshot.tsx` | Operational lifecycle rollup on Overview (replaces Lifecycle tab) |
+| `PersonDrawerChildOverviewSkeleton.tsx` | Child-specific loading skeleton — no generic person flash |
+| `personDrawerChildChrome.ts` | Open-hint + seed fallback for child-first paint |
+| `personDrawerChildSummaryModel.ts` | Shared summary/header resolver |
+| `personDrawerOpenSeed.ts` | `presentation_emphasis: child_lifecycle` on inquiry-child open |
+
+#### Information hierarchy (corrected)
+
+1. **Child summary** — focal identity (Opportunity Primary Contact doctrine)
+2. **Household context** — supporting
+3. **Lifecycle snapshot** — compact operational rollup with links
+4. **Family** → **Enrollment** → **Child details** (config-driven sections)
+
+#### Tabs
+
+`Overview | Related | Documents` — lifecycle is **not** a separate tab.
+
+#### Temporary vs config (this pass)
+
+| Temporary (code) | Future (`record_drawer_layouts`) |
+|------------------|----------------------------------|
+| `personDrawerChildChromeActive` open hints | `presentation_emphasis` variant selection |
+| Section order (`CHILD_LIFECYCLE_SECTION_ORDER`) | `overview_section_order` |
+| Section titles (`personDrawerChildSectionTitle`) | Section label overrides |
+| Lifecycle snapshot slot list | `section_placements_v1` built-in modules |
+| `personDrawerCrmDisplayLabel` | Vertical entity/status label config |
+| Field hide/show by role | `visible_when.roles` on placements |
+
+**Defer** person layout runtime — do not add child-specific config tables.
+
+#### Loading doctrine
+
+When child chrome is active (profile, seed hint, or `opportunity_inquiry_child` open source):
+
+- Child header + tabs paint immediately
+- `PersonDrawerChildOverviewSkeleton` replaces generic person / profile loading
+- Profile-driven section suppression applies before overview body renders
+
+---
+
+### Stabilization pass — Child drawer (May 2026)
+
+Corrective pass: stabilize without new concepts or redesign.
+
+| File | Change |
+|------|--------|
+| `collectLinkedPersonIdsFromOpportunityRecord.ts` | Prefetch includes `_inquiry_children` person ids |
+| `personDrawerOpenSeed.ts` | Inquiry-child seed with DOB + `child_lifecycle` emphasis |
+| `patchPersonDrawerFields.ts` | PATCH helper for editable child summary fields |
+| `PersonDrawerChildSummary.tsx` | Editable DOB/gender; no header duplication |
+| `PersonDrawerChildHeaderExecutive.tsx` | Operational pills only — status in title rail |
+| `PersonDrawerChildLifecycleSnapshot.tsx` | Horizontal lifecycle strip (Family Lead, Documents, Communications, Activity) |
+| `PersonDrawerVisibilitySections.tsx` | Family section owns household + guardians + siblings |
+| `personDrawerChildLifecycleSlots.ts` | Activity label; operational slot phases |
+| `AdminEntityDrawer.tsx` | Preload on opp reveal; hide Enrollment when lifecycle owns lead; child status badge |
+
+#### Information hierarchy (stabilized)
+
+1. **Header** — name, enrollment status (title rail), Child/age/DOB/gender/program/location pills
+2. **Child summary** — avatar, name, editable DOB/gender (Opportunity primary-contact doctrine)
+3. **Lifecycle strip** — compact horizontal rollup with links
+4. **Family** — household, guardians, siblings
+5. **Child details** — remaining configurable fields
+
+Enrollment section is **suppressed** when child lifecycle chrome is active (lifecycle strip links to Family Lead).
+
+#### Child open path inconsistency (May 2026 debug)
+
+**Symptom:** From the same opportunity, one inquiry child (e.g. Sophia) opens child-lifecycle drawer; another (e.g. Wrigley) opens generic person chrome.
+
+**Root causes addressed:**
+1. **Prefetch cache hit without child emphasis** — idle prefetch stored full person GET without `_drawer_presentation_emphasis`; click open skipped seed on cache hit.
+2. **Inquiry seed lookup order** — `personDrawerSeedFromOpportunityRecord` checked primary person before inquiry children.
+3. **Missing `person_id` on click row** — fell through to `customer_members` drawer instead of resolving canonical person + child seed.
+4. **customer-members GET omitted `person_id`** — member→person resolution failed on click fallback.
+
+**Fix:** Unified `openInquiryChildPersonFromOpportunity` stamps child-lifecycle context on cache hit; inquiry-child seed resolves by `person_id` or `customer_member_id`; prefetch merges child seed after GET.
+
+**Data backfill:** Ensure `customer_members.person_id` is set for household children (member→person link). Rows with only metadata `inquiry_children` and no member link remain synthetic — not openable as person until linked.
+
+---
+
+Focused tightening — no redesign, no new concepts.
+
+| File | Change |
+|------|--------|
+| `PersonDrawerChildLifecycleRail.tsx` | Child lifecycle in `postTabStrip` via shared `RecordLifecycleRail` |
+| `resolveWorkUnitQueueDefinitionForDrawer.ts` | Coerce v2 `queue_definition` for Opportunity lifecycle rail |
+| Migration `20260529220000_person_gender_field_definition.sql` | Configurable gender select on person |
+| `AdminEntityDrawer.tsx` | `personDrawerChildBodyHydrated`; status in subtitle rail; `goBack()` for linked lead |
+
+Hierarchy: subtitle status → context pills → lifecycle rail (below tabs) → child summary → Family → Child details. Profile/Basic hidden. BOS child insights deferred.
+
+#### Preload doctrine
+
+After opportunity overview reveal, background-prefetch linked person ids (primary, `_opportunity_persons`, `_inquiry_children`). Child open checks cache/seed first — no generic person shell flash.
+
+---
+
+### Final pass — Child drawer closeout (prior)
+
+| File | Change |
+|------|--------|
+| `web/lib/admin/person/personDrawerChildHeaderContext.ts` | Executive header context (avatar, age, program, location, lead status) |
+| `web/components/admin/entity/PersonDrawerChildHeaderExecutive.tsx` | Header row under title — Child badge + operational chips |
+| `web/components/admin/entity/PersonDrawerIdentityAvatar.tsx` | Person photo or initials avatar |
+| `web/lib/admin/person/personDrawerChildLifecycleActions.ts` | Lifecycle slot → tab / opportunity / comms actions |
+| `web/components/admin/entity/PersonDrawerChildLifecycleOperationalPanel.tsx` | **Lifecycle tab** — stepper + actionable module rows |
+| `web/components/admin/entity/PersonDrawerChildLifecycleSummary.tsx` | Household + primary guardian reference only |
+| `web/lib/admin/person/personDrawerPresentationProfile.ts` | Hide name fields in Child details for child profile |
+| `web/lib/admin/person/personDrawerChildLifecycleSlots.ts` | UX constant → `lifecycle_tab_operational` |
+| `web/lib/entityPresentation.ts` | `lifecycle` drawer tab key |
+| `web/components/admin/AdminEntityDrawer.tsx` | Header context, Lifecycle tab strip, progressive paint with seed |
+| `web/tests/admin/person/personDrawerChildFinalization.test.ts` | Header, tabs, actions, field suppression tests |
+
+#### Executive header (child)
+
+- **Title:** display name (unchanged)
+- **`headerRecordContext`:** avatar + chips — Child, age, program/classroom, location, lead status
+- **Right rail:** status + actions only (no duplicate Child badge / DOB meta)
+
+#### Tab strip (child lifecycle emphasis)
+
+`Overview | Lifecycle | Related | Documents`
+
+Lifecycle tab owns stage visibility + links into existing modules (enrollment → overview or opportunity; documents → Documents tab; communications → opportunity comms; activity/history → Related).
+
+#### Information ownership (final)
+
+| Information | Primary home |
+|-------------|--------------|
+| Name, age, program, location, lead status, avatar | Header executive row |
+| Household + primary guardian hint | Summary card |
+| Guardians, parents, siblings | Family |
+| Lead / enrollment detail | Enrollment section |
+| Configurable child fields | **Child details** (`basic_info`) |
+| Lifecycle stages + links | **Lifecycle tab** |
+| Documents | Documents tab |
+
+#### Loading doctrine (person drawer)
+
+- Shell, title, tabs paint when entity id matches row (including **open seed** from opportunity)
+- Body hydrates progressively; full fetch replaces seed without blocking chrome
+- Scoped to person drawer — no platform-wide performance rewrite
+
 ---
 
 ## Deferred items
@@ -378,7 +529,12 @@ Reference: `docs/sprints/05_2026/layout_field_behavior_semantics_phase_2.md` (de
 - Settings layout mutation for person (section order/hide)
 - Built-in section registry for relationships / enrollment_activity / employee panels
 - `photo_sharing_consent` field_definitions seed (org-wide)
-- Schedule / attendance / billing / communications lifecycle sections on child profile
+- Schedule / attendance / billing lifecycle **modules** (tab shows placeholders + links only)
+- Person-native Communications tab (today: link to opportunity comms when enrollment opp exists)
+- **BOS child insights** in child drawer (future: optional signal slot via layout config)
+- Parent Operating Surface sprint (next)
+- Platform-wide inquiry → lead terminology (drawer display labels only today)
+- Remove `PersonDrawerChildLifecycleRoadmap.tsx` overview component (superseded by Lifecycle tab; file retained unused)
 - Authorized pickup as structured field (notes field exists: `authorized_pickup_notes`)
 - Employee staff assignment surfaces beyond `PersonEmployeePlacementSection`
 - Remove resolver fallback once layout conditions ship per org

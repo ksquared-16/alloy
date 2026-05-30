@@ -47,6 +47,7 @@ import {
   opportunityOverviewRelationshipReadLabel,
   opportunityOverviewStatusBadgeLabel,
 } from "@/lib/admin/opportunityOverviewLabels";
+import { childLifecycleSectionSurface } from "@/lib/admin/person/personDrawerChildLifecycleSlots";
 
 const INLINE_EDIT_INPUT = "w-full rounded border border-admin-border bg-white px-2 py-1.5 text-sm text-alloy-forge focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60";
 const INLINE_EDIT_SELECT = "w-full rounded border border-admin-border bg-white px-2 py-1.5 text-sm text-alloy-forge focus:border-alloy-blue focus:outline-none disabled:opacity-60";
@@ -85,6 +86,8 @@ interface EntityDrawerOverviewProps {
   scheduleRecordLayout?: RecordLayoutConfigJson | null;
   /** Body section chrome (e.g. childcare inquiry workflow drawer). */
   sectionSurface?: "default" | "premium";
+  /** Child lifecycle person drawer — neutral section chrome; enrollment keeps premium accent. */
+  personChildLifecycleOverview?: boolean;
   /** Per-field server validation messages (opportunity/job policy enforcement). */
   fieldErrorsByKey?: Record<string, string>;
   /** Policy display chrome from `_field_policy_resolved` (required/read-only). */
@@ -563,6 +566,7 @@ export default function EntityDrawerOverview({
   scheduleOverviewRows,
   scheduleRecordLayout,
   sectionSurface = "default",
+  personChildLifecycleOverview = false,
   fieldErrorsByKey,
   fieldPolicyChromeByKey,
   fieldLabelByKey = {},
@@ -820,14 +824,17 @@ export default function EntityDrawerOverview({
     );
   };
 
-  const personPremiumOverview = entityType === "persons" && sectionSurface === "premium";
+  const personPremiumOverview =
+    entityType === "persons" && sectionSurface === "premium" && !personChildLifecycleOverview;
 
   return (
     <div
       className={`${
-        personPremiumOverview
-          ? `${oppInqLeadSummaryShellClassName} space-y-1 px-1 py-1`
-          : sectionSurface === "premium"
+        personChildLifecycleOverview
+          ? "space-y-0 pt-2 pb-0"
+          : personPremiumOverview
+            ? `${oppInqLeadSummaryShellClassName} space-y-1 px-1 py-1`
+            : sectionSurface === "premium"
             ? entityType === "persons"
               ? "space-y-0 pt-2 pb-0"
               : "space-y-0 pt-4 pb-1"
@@ -980,6 +987,9 @@ export default function EntityDrawerOverview({
         </div>
       ) : null}
       {sections.map((section: EntityDrawerSectionConfig) => {
+        const effectiveSectionSurface = personChildLifecycleOverview
+          ? childLifecycleSectionSurface(section.key)
+          : sectionSurface;
         const hasSubsections = (section.subsections?.length ?? 0) > 0;
         const hasTopFields = section.fields && section.fields.length > 0;
         const hasFields = hasTopFields || hasSubsections;
@@ -994,7 +1004,7 @@ export default function EntityDrawerOverview({
             : "grid-cols-1";
 
         const subsectionTitleClass =
-          sectionSurface === "premium"
+          effectiveSectionSurface === "premium"
             ? personPremiumOverview
               ? oppInqEyebrow
               : "text-[10px] font-semibold tracking-[0.1em] text-alloy-midnight/50 border-b border-alloy-stone/15 pb-1.5 mb-2.5"
@@ -1003,11 +1013,11 @@ export default function EntityDrawerOverview({
         const children: ReactNode =
           customContent ??
           (hasSubsections ? (
-            <div className={`${section.gridCols === 2 ? "md:col-span-2" : ""} w-full ${sectionSurface === "premium" ? "space-y-5" : "space-y-6"}`}>
+            <div className={`${section.gridCols === 2 ? "md:col-span-2" : ""} w-full ${effectiveSectionSurface === "premium" ? "space-y-5" : "space-y-6"}`}>
               {section.subsections!.map((sub) => (
                 <div key={sub.title}>
                   <p className={subsectionTitleClass}>{sub.title}</p>
-                  <div className={`grid ${sectionSurface === "premium" ? "gap-x-4 gap-y-3" : "gap-x-6 gap-y-4"} ${gridInner}`}>
+                  <div className={`grid ${effectiveSectionSurface === "premium" ? "gap-x-4 gap-y-3" : "gap-x-6 gap-y-4"} ${gridInner}`}>
                     {sub.fields.map((f) => renderOverviewField(f))}
                   </div>
                 </div>
@@ -1023,7 +1033,7 @@ export default function EntityDrawerOverview({
 
         return (
           <div key={section.key} className={sectionWrapperClass}>
-          <EntityDrawerSection config={section} surface={sectionSurface} headerRight={headerRight}>
+          <EntityDrawerSection config={section} surface={effectiveSectionSurface} headerRight={headerRight}>
             {children}
           </EntityDrawerSection>
           </div>

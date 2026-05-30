@@ -11,13 +11,23 @@ import type {
 /** Lifecycle slot phase for child drawer roadmap (not persisted). */
 export type ChildLifecycleSlotPhase = "active" | "idle" | "future";
 
+export type ChildLifecycleRoadmapSlotKey =
+    | "lead"
+    | "tour"
+    | (typeof CHILD_LIFECYCLE_SECTION_SLOTS)[number];
+
 export type ChildLifecycleSlotState = {
-    key: (typeof CHILD_LIFECYCLE_SECTION_SLOTS)[number];
+    key: ChildLifecycleRoadmapSlotKey;
     label: string;
     phase: ChildLifecycleSlotPhase;
     /** Target `record_drawer_layouts` section_key when modules ship. */
     layoutSectionKey: string;
 };
+
+const ROADMAP_PREFIX_SLOTS: Array<{ key: "lead" | "tour"; label: string; layoutSectionKey: string }> = [
+    { key: "lead", label: "Family Lead", layoutSectionKey: "lead_summary" },
+    { key: "tour", label: "Tour", layoutSectionKey: "tour_summary" },
+];
 
 const SLOT_LABELS: Record<(typeof CHILD_LIFECYCLE_SECTION_SLOTS)[number], string> = {
     enrollment_activity: "Enrollment",
@@ -26,7 +36,7 @@ const SLOT_LABELS: Record<(typeof CHILD_LIFECYCLE_SECTION_SLOTS)[number], string
     billing: "Billing",
     documents: "Documents",
     communications: "Communications",
-    history: "History",
+    history: "Activity",
 };
 
 const LAYOUT_SECTION_KEYS: Record<(typeof CHILD_LIFECYCLE_SECTION_SLOTS)[number], string> = {
@@ -47,27 +57,60 @@ export function personDrawerShowsChildLifecycleSurface(profile: PersonDrawerProf
     return resolvePersonDrawerPresentationEmphasis(profile) === "child_lifecycle";
 }
 
+/** Child drawer uses Family + Summary — quick links duplicate relationship home. */
+export function personDrawerShowsChildContextPanel(profile: PersonDrawerProfileResult): boolean {
+    return !personDrawerShowsChildLifecycleSurface(profile);
+}
+
 export function resolveChildLifecycleSlotStates(record: Record<string, unknown>): ChildLifecycleSlotState[] {
     const mirror = (record._enrollment_mirror as PersonEnrollmentMirrorRow[]) ?? [];
     const opps = (record._enrollment_opportunities as PersonEnrollmentOpportunityRow[]) ?? [];
-    const enrollmentCount = buildPersonEnrollmentActivityEntries(mirror, opps).length;
+    const enrollmentEntries = buildPersonEnrollmentActivityEntries(mirror, opps);
+    const enrollmentCount = enrollmentEntries.length;
+    const hasEnrollment = enrollmentCount > 0;
+    const primaryOpportunityId = enrollmentEntries[0]?.opportunity_id ?? null;
 
-    return CHILD_LIFECYCLE_SECTION_SLOTS.map((key) => {
+    const prefix: ChildLifecycleSlotState[] = ROADMAP_PREFIX_SLOTS.map((slot) => ({
+        key: slot.key,
+        label: slot.label,
+        phase: slot.key === "lead" ? (hasEnrollment ? "active" : "idle") : "future",
+        layoutSectionKey: slot.layoutSectionKey,
+    }));
+
+    const body = CHILD_LIFECYCLE_SECTION_SLOTS.map((key) => {
         if (key === "enrollment_activity") {
             return {
                 key,
                 label: SLOT_LABELS[key],
-                phase: enrollmentCount > 0 ? "active" : "idle",
+                phase: hasEnrollment ? ("active" as const) : ("idle" as const),
                 layoutSectionKey: LAYOUT_SECTION_KEYS[key],
-            };
+            } satisfies ChildLifecycleSlotState;
+        }
+        if (key === "documents" || key === "history") {
+            return {
+                key,
+                label: SLOT_LABELS[key],
+                phase: "idle" as const,
+                layoutSectionKey: LAYOUT_SECTION_KEYS[key],
+            } satisfies ChildLifecycleSlotState;
+        }
+        if (key === "communications") {
+            return {
+                key,
+                label: SLOT_LABELS[key],
+                phase: primaryOpportunityId ? ("active" as const) : ("idle" as const),
+                layoutSectionKey: LAYOUT_SECTION_KEYS[key],
+            } satisfies ChildLifecycleSlotState;
         }
         return {
             key,
             label: SLOT_LABELS[key],
-            phase: "future",
+            phase: "future" as const,
             layoutSectionKey: LAYOUT_SECTION_KEYS[key],
         };
     });
+
+    return [...prefix, ...body];
 }
 
 export function primaryHouseholdLabel(record: Record<string, unknown>): string | null {
@@ -80,34 +123,20 @@ export function primaryHouseholdLabel(record: Record<string, unknown>): string |
     return fromCp ? String(fromCp).trim() || null : null;
 }
 
-export function primaryEnrollmentHint(record: Record<string, unknown>): {
-    opportunity_id: string;
-    label: string;
-    status: string | null;
-} | null {
-    const mirror = (record._enrollment_mirror as PersonEnrollmentMirrorRow[]) ?? [];
-    const opps = (record._enrollment_opportunities as PersonEnrollmentOpportunityRow[]) ?? [];
-    const entries = buildPersonEnrollmentActivityEntries(mirror, opps);
-    const first = entries[0];
-    if (!first) return null;
-    return {
-        opportunity_id: first.opportunity_id,
-        label: first.opportunity_name,
-        status: first.status_label ?? first.outcome_label ?? null,
-    };
-}
-
 /** Preferred overview section order for child lifecycle emphasis. */
 export const CHILD_LIFECYCLE_SECTION_ORDER: Record<string, number> = {
-    relationships: 0,
-    enrollment_activity: 1,
-    basic_info: 10,
-    child_profile: 11,
-    medical: 12,
-    consent: 13,
-    employee_placement: 90,
+    basic_info: 3,
+    child_profile: 4,
+    relationships: 1,
+    enrollment_activity: 2,
+    medical: 5,
+    consent: 6,
+    employee_placement: 95,
     record_info: 99,
 };
+
+/** Section keys that receive premium pine-accent chrome in child lifecycle overview (none — accent lives in summary + enrollment shells). */
+export const CHILD_LIFECYCLE_PREMIUM_SECTION_KEYS = new Set<string>();
 
 export function sortOverviewSectionsForChildLifecycle<T extends { key: string }>(sections: T[]): T[] {
     return [...sections].sort((a, b) => {
@@ -116,3 +145,16 @@ export function sortOverviewSectionsForChildLifecycle<T extends { key: string }>
         return ra - rb || a.key.localeCompare(b.key);
     });
 }
+
+export function childLifecycleSectionSurface(
+    sectionKey: string
+): "default" | "premium" {
+    return CHILD_LIFECYCLE_PREMIUM_SECTION_KEYS.has(sectionKey) ? "premium" : "default";
+}
+
+/**
+ * Lifecycle UX direction (documented):
+ * - **Today:** Lifecycle snapshot section on Overview (compact operational rollup).
+ * - **Future:** expand snapshot modules when schedule/attendance/billing ship via layout placements.
+ */
+export const CHILD_LIFECYCLE_ROADMAP_UX = "overview_lifecycle_snapshot" as const;

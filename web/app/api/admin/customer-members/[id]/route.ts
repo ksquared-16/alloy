@@ -24,7 +24,7 @@ export async function GET(
     const supabase = createAdminClient();
     const { data: row, error } = await supabase
         .from("customer_members")
-        .select("id, org_id, customer_id, display_name, relationship, first_name, last_name, dob, is_active, status_key, metadata, created_at, updated_at")
+        .select("id, org_id, customer_id, person_id, display_name, relationship, first_name, last_name, dob, is_active, status_key, metadata, created_at, updated_at")
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .maybeSingle();

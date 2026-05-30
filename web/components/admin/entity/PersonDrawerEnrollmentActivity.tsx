@@ -3,14 +3,21 @@
 import {
     oppInqEyebrow,
     oppInqInnerCardCompact,
+    oppInqLeadSummaryShellClassName,
 } from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
 import type {
     PersonEnrollmentMirrorRow,
     PersonEnrollmentOpportunityRow,
 } from "@/lib/admin/person/personDrawerVisibilityTypes";
+import { personDrawerCrmDisplayLabel } from "@/lib/admin/person/personDrawerChildIdentity";
 import { useMemo } from "react";
 
 type OpenDrawer = (type: string, id: string) => void;
+
+function crmEnrollmentDisplayName(raw: string | null | undefined, fallback = "Lead"): string {
+    const trimmed = raw?.trim() || fallback;
+    return personDrawerCrmDisplayLabel(trimmed) ?? trimmed;
+}
 
 export type PersonEnrollmentActivityEntry = {
     opportunity_id: string;
@@ -36,7 +43,7 @@ export function buildPersonEnrollmentActivityEntries(
         if (!id) continue;
         byOpp.set(id, {
             opportunity_id: id,
-            opportunity_name: row.opportunity_name?.trim() || "Enrollment",
+            opportunity_name: crmEnrollmentDisplayName(row.opportunity_name),
             status_label: row.status_label?.trim() || row.status_key?.trim() || null,
             role_label: row.role_label?.trim() || null,
             program_label: null,
@@ -51,16 +58,19 @@ export function buildPersonEnrollmentActivityEntries(
         const id = String(row.opportunity_id ?? "").trim();
         if (!id) continue;
         const existing = byOpp.get(id);
-        const detailParts = [row.program_label, row.location_label, row.room_label].filter(Boolean).map(String);
         byOpp.set(id, {
             opportunity_id: id,
-            opportunity_name:
-                row.opportunity_name?.trim() || existing?.opportunity_name || "Enrollment",
-            status_label:
-                row.outcome_status_label?.trim() ||
-                row.opportunity_status_label?.trim() ||
-                existing?.status_label ||
-                null,
+            opportunity_name: crmEnrollmentDisplayName(
+                row.opportunity_name?.trim() || existing?.opportunity_name
+            ),
+            status_label: (() => {
+                const raw =
+                    row.outcome_status_label?.trim() ||
+                    row.opportunity_status_label?.trim() ||
+                    existing?.status_label ||
+                    null;
+                return raw ? personDrawerCrmDisplayLabel(raw) ?? raw : null;
+            })(),
             role_label: existing?.role_label ?? null,
             program_label: row.program_label?.trim() || existing?.program_label || null,
             location_label: row.location_label?.trim() || existing?.location_label || null,
@@ -77,10 +87,13 @@ export default function PersonDrawerEnrollmentActivity({
     mirrorRows,
     opportunityRows,
     onOpenDrawer,
+    leadSummaryShell = false,
 }: {
     mirrorRows: PersonEnrollmentMirrorRow[];
     opportunityRows: PersonEnrollmentOpportunityRow[];
     onOpenDrawer: OpenDrawer;
+    /** Pine-accent shell — single primary home for enrollment on child drawer. */
+    leadSummaryShell?: boolean;
 }) {
     const entries = useMemo(
         () => buildPersonEnrollmentActivityEntries(mirrorRows, opportunityRows),
@@ -89,21 +102,21 @@ export default function PersonDrawerEnrollmentActivity({
 
     if (entries.length === 0) return null;
 
-    return (
+    const cards = (
         <div className="space-y-2" data-person-drawer-enrollment-activity="true">
             {entries.map((entry) => (
-                <div key={entry.opportunity_id} className={oppInqInnerCardCompact}>
+                <div key={entry.opportunity_id} className={leadSummaryShell ? "px-0.5 py-0.5" : oppInqInnerCardCompact}>
                     <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
                         <button
                             type="button"
                             onClick={() => onOpenDrawer("opportunities", entry.opportunity_id)}
                             className="text-left text-[13px] font-semibold text-alloy-blue hover:underline"
                         >
-                            {entry.opportunity_name}
+                            {personDrawerCrmDisplayLabel(entry.opportunity_name) ?? entry.opportunity_name}
                         </button>
                         {entry.status_label ? (
                             <span className="text-[10px] font-medium tracking-wide text-alloy-midnight/45">
-                                {entry.status_label}
+                                {personDrawerCrmDisplayLabel(entry.status_label)}
                             </span>
                         ) : null}
                     </div>
@@ -139,4 +152,14 @@ export default function PersonDrawerEnrollmentActivity({
             ))}
         </div>
     );
+
+    if (leadSummaryShell) {
+        return (
+            <div className={oppInqLeadSummaryShellClassName} data-person-drawer-enrollment-lead-shell="true">
+                {cards}
+            </div>
+        );
+    }
+
+    return cards;
 }

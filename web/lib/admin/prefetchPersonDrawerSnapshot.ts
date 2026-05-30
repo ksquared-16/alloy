@@ -1,5 +1,9 @@
 import { entityDataMatchesDrawer } from "@/lib/admin/drawer/entityDataMatchesDrawer";
 import { logPersonPrefetch } from "@/lib/admin/drawer/personDrawerPerfLogs";
+import {
+    stampChildLifecycleOpenContextOnPersonRecord,
+    type PersonDrawerOpenSeed,
+} from "@/lib/admin/drawer/personDrawerOpenSeed";
 import { putDrawerEntitySnapshot, peekDrawerEntitySnapshot } from "@/lib/admin/drawerEntitySnapshotCache";
 
 export type PersonPrefetchSource = "opportunity_drawer_idle" | "hover" | "click";
@@ -16,13 +20,24 @@ export function isPersonDrawerSnapshotWarm(personId: string): boolean {
 /** Warm person drawer snapshot before navigation (stack back restores opportunity instantly). */
 export function prefetchPersonDrawerSnapshot(
     personId: string,
-    opts?: { source?: PersonPrefetchSource }
+    opts?: { source?: PersonPrefetchSource; childOpenSeed?: PersonDrawerOpenSeed }
 ): void {
     const source = opts?.source ?? "click";
+    const childOpenSeed = opts?.childOpenSeed;
     const id = personId.trim();
     if (!id) return;
 
     if (isPersonDrawerSnapshotWarm(id)) {
+        if (childOpenSeed?.presentation_emphasis === "child_lifecycle") {
+            const cached = peekDrawerEntitySnapshot("persons", id);
+            if (cached) {
+                putDrawerEntitySnapshot(
+                    "persons",
+                    id,
+                    stampChildLifecycleOpenContextOnPersonRecord(cached, childOpenSeed)
+                );
+            }
+        }
         logPersonPrefetch({ personId: id, source, cacheHit: true, durationMs: 0 });
         return;
     }
@@ -36,7 +51,11 @@ export function prefetchPersonDrawerSnapshot(
             if (!res.ok) return;
             const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
             if (json && typeof json === "object" && entityDataMatchesDrawer(json, id, "persons")) {
-                putDrawerEntitySnapshot("persons", id, json);
+                const stamped =
+                    childOpenSeed?.presentation_emphasis === "child_lifecycle"
+                        ? stampChildLifecycleOpenContextOnPersonRecord(json, childOpenSeed)
+                        : json;
+                putDrawerEntitySnapshot("persons", id, stamped);
             }
         })
         .catch(() => {})

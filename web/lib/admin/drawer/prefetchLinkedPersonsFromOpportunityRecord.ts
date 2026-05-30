@@ -1,5 +1,9 @@
 import { collectLinkedPersonIdsFromOpportunityRecord } from "@/lib/admin/drawer/collectLinkedPersonIdsFromOpportunityRecord";
 import {
+    cachePersonDrawerChildOpenSeed,
+    personDrawerSeedFromOpportunityRecord,
+} from "@/lib/admin/drawer/personDrawerOpenSeed";
+import {
     prefetchPersonDrawerSnapshot,
     type PersonPrefetchSource,
 } from "@/lib/admin/prefetchPersonDrawerSnapshot";
@@ -12,7 +16,8 @@ export function prefetchLinkedPersonsFromOpportunityRecord(
     const source = opts?.source ?? "opportunity_drawer_idle";
     const ids = collectLinkedPersonIdsFromOpportunityRecord(record);
     for (const personId of ids) {
-        prefetchPersonDrawerSnapshot(personId, { source });
+        const seed = personDrawerSeedFromOpportunityRecord(record, personId);
+        prefetchPersonDrawerSnapshot(personId, { source, childOpenSeed: seed ?? undefined });
     }
     return ids;
 }

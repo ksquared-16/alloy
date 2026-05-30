@@ -29,7 +29,28 @@ describe("personDrawerPresentationProfile", () => {
         };
         const out = applyPersonDrawerPresentationProfile(baseSections, profile);
         expect(out.map((s) => s.key)).toEqual(["basic_info", "medical"]);
-        expect(out[0]?.fields?.map((f) => f.key)).toEqual(["first_name", "last_name", "preferred_name"]);
+        expect(out[0]?.fields?.map((f) => f.key)).toEqual(["preferred_name"]);
+    });
+
+    it("keeps non-identity child detail fields in basic_info when present", () => {
+        const profile: PersonDrawerProfileResult = {
+            profiles: ["child"],
+            display: "child",
+            badgeLabels: ["Child"],
+        };
+        const sections = [
+            {
+                key: "basic_info",
+                title: "Profile",
+                fields: [
+                    { key: "first_name" },
+                    { key: "allergies_note", label: "Notes", span: 1 as const },
+                ],
+            },
+        ] as Parameters<typeof applyPersonDrawerPresentationProfile>[0];
+        const out = applyPersonDrawerPresentationProfile(sections, profile);
+        expect(out.map((s) => s.key)).toEqual(["basic_info"]);
+        expect(out[0]?.fields?.map((f) => f.key)).toEqual(["allergies_note"]);
     });
 
     it("hides medical and emergency for parent-like profiles and keeps messaging consent toggles", () => {

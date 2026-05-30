@@ -30,6 +30,8 @@ const HIDDEN_SECTION_KEYS_CHILD = new Set([
     "identity",
     "guardian_profile",
     "emergency",
+    "profile",
+    "basic",
 ]);
 const HIDDEN_SECTION_KEYS_PARENT = new Set([
     "record_info",
@@ -59,9 +61,14 @@ const HIDDEN_FIELD_KEYS_CHILD = new Set([
     ...HIDDEN_FIELD_KEYS_ALL,
     "email",
     "phone",
+    "status_key",
+    "first_name",
+    "last_name",
+    "full_name",
     "date_of_birth",
     "dob",
-    "status_key",
+    "gender",
+    "gender_key",
 ]);
 
 const HIDDEN_FIELD_KEYS_PARENT = new Set([
@@ -226,6 +233,28 @@ export function applyPersonDrawerPresentationProfile(
         );
     }
     return result.filter((s) => !LEGACY_ENROLLMENT_SECTION_KEYS.has(s.key));
+}
+
+/** Hide blank preferred name and other empty optional child detail fields in read presentation. */
+export function suppressEmptyChildDetailFields(
+    sections: EntityDrawerSectionConfig[],
+    record: Record<string, unknown> | null | undefined
+): EntityDrawerSectionConfig[] {
+    if (!record) return sections;
+    return sections
+        .map((section) => {
+            if (section.key !== "basic_info") return section;
+            const fields = (section.fields ?? []).filter((field) => {
+                if (field.key !== "preferred_name") return true;
+                const raw = record[field.key];
+                return raw != null && String(raw).trim() !== "";
+            });
+            return { ...section, fields };
+        })
+        .filter((section) => {
+            if (section.key === "basic_info" && (section.fields?.length ?? 0) === 0) return false;
+            return true;
+        });
 }
 
 export function personDrawerAboveFoldShowsContact(profile: PersonDrawerProfileResult): boolean {

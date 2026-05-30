@@ -7,13 +7,32 @@ import {
     personDrawerRelationshipSectionHasContent,
     resolvePersonDrawerRelationshipSectionModel,
 } from "@/lib/admin/person/personDrawerRelationshipSection";
+import { resolvePersonDrawerPresentationEmphasis } from "@/lib/admin/person/personDrawerPresentationEmphasis";
+import { primaryHouseholdLabel } from "@/lib/admin/person/personDrawerChildLifecycleSlots";
 import { resolvePersonDrawerProfileFromRecord } from "@/components/admin/entity/PersonDrawerProfileBadges";
+import type { PersonRelationshipLink } from "@/lib/admin/person/personDrawerVisibilityTypes";
 import {
     oppInqEyebrow,
     oppInqInnerCardCompact,
 } from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
 
 type OpenDrawer = (type: string, id: string) => void;
+
+function dedupeRelationshipLinks(links: PersonRelationshipLink[]): PersonRelationshipLink[] {
+    const seen = new Set<string>();
+    const out: PersonRelationshipLink[] = [];
+    for (const link of links) {
+        const key = link.person_id
+            ? `p:${link.person_id}`
+            : link.customer_member_id
+              ? `m:${link.customer_member_id}`
+              : `n:${link.display_name ?? ""}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(link);
+    }
+    return out;
+}
 
 function RelationshipLinkRow({
     row,
@@ -67,7 +86,7 @@ function GroupBlock({ title, children }: { title: string; children: ReactNode })
     );
 }
 
-/** Profile-aware family/children relationship section for person drawer overview. */
+/** Profile-aware family section — household, guardians, siblings for child emphasis. */
 export function PersonDrawerRelationshipsOverview({
     record,
     onOpenDrawer,
@@ -78,17 +97,40 @@ export function PersonDrawerRelationshipsOverview({
     const profile = resolvePersonDrawerProfileFromRecord(record);
     const groups = buildPersonDrawerRelationshipGroups(personDrawerRelationshipInputFromRecord(record));
     const model = resolvePersonDrawerRelationshipSectionModel(profile, groups);
+    const childFamilyEmphasis = resolvePersonDrawerPresentationEmphasis(profile) === "child_lifecycle";
+    const householdLabel = childFamilyEmphasis ? primaryHouseholdLabel(record) : null;
 
-    if (!personDrawerRelationshipSectionHasContent(model, groups)) {
+    if (
+        !personDrawerRelationshipSectionHasContent(model, groups) &&
+        !(childFamilyEmphasis && householdLabel)
+    ) {
         return null;
     }
 
     const openPerson = (id: string) => onOpenDrawer("persons", id);
     const openMember = (id: string) => onOpenDrawer("customer_members", id);
+    const childGuardians = dedupeRelationshipLinks([...groups.parents, ...groups.guardians]);
 
     return (
         <div className="space-y-2" data-person-drawer-relationships-grouped="true">
-            {model.showParents && groups.parents.length > 0 ? (
+            {childFamilyEmphasis && householdLabel ? (
+                <div className={oppInqInnerCardCompact} data-person-drawer-family-household="true">
+                    <h4 className={oppInqEyebrow}>Household</h4>
+                    <p className="mt-1.5 text-[13px] font-semibold text-alloy-midnight/85">{householdLabel}</p>
+                </div>
+            ) : null}
+            {childFamilyEmphasis && childGuardians.length > 0 ? (
+                <GroupBlock title="Guardians">
+                    {childGuardians.map((row) => (
+                        <RelationshipLinkRow
+                            key={row.person_id ?? row.display_name ?? "guardian"}
+                            row={row}
+                            onOpenPerson={openPerson}
+                        />
+                    ))}
+                </GroupBlock>
+            ) : null}
+            {!childFamilyEmphasis && model.showParents && groups.parents.length > 0 ? (
                 <GroupBlock title="Parents">
                     {groups.parents.map((row) => (
                         <RelationshipLinkRow
@@ -99,7 +141,7 @@ export function PersonDrawerRelationshipsOverview({
                     ))}
                 </GroupBlock>
             ) : null}
-            {model.showGuardians && groups.guardians.length > 0 ? (
+            {!childFamilyEmphasis && model.showGuardians && groups.guardians.length > 0 ? (
                 <GroupBlock title="Guardians">
                     {groups.guardians.map((row) => (
                         <RelationshipLinkRow

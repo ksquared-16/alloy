@@ -36,7 +36,7 @@ describe("person drawer architecture pass 2", () => {
             display: "child",
             badgeLabels: ["Child"],
         });
-        expect(out.map((s) => s.key)).toEqual(["enrollment_activity", "basic_info"]);
+        expect(out.map((s) => s.key)).toEqual(["enrollment_activity"]);
     });
 
     it("documents presentation emphasis module", () => {

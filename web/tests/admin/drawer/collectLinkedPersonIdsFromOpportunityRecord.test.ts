@@ -22,4 +22,12 @@ describe("collectLinkedPersonIdsFromOpportunityRecord", () => {
         });
         expect(ids).toEqual([PRIMARY]);
     });
+
+    it("collects inquiry child person ids", () => {
+        const CHILD = "33333333-3333-4333-8333-333333333333";
+        const ids = collectLinkedPersonIdsFromOpportunityRecord({
+            _inquiry_children: [{ person_id: CHILD, first_name: "Sophia" }],
+        });
+        expect(ids).toEqual([CHILD]);
+    });
 });

@@ -22,7 +22,7 @@ This pass solves **parent ↔ child** presentation for CRM demo quality while pr
 |------|------------------------------|-------|-------|
 | **Enrollment** | `enrollment_activity` | **Data-backed** | OCM mirror + opportunity-person rows; deduped in `buildPersonEnrollmentActivityEntries`; full detail in overview section when data exists |
 | **Family / relationships** | `relationships` | **Data-backed** | Household + `person_relationships`; title varies by emphasis (Family / Children) |
-| **Lifecycle roadmap** | _(above-fold, not a section)_ | **Code-driven presentation** | `PersonDrawerChildLifecycleSummary` — compact pills for orientation; not separate empty cards |
+| **Lifecycle roadmap** | `child_lifecycle_roadmap` | **Code-driven presentation** | Bottom overview section; compact pills; collapsed by default |
 | **Schedule** | `schedule_summary` | **Future layout** | Roadmap pill only (`phase: future`) |
 | **Attendance** | `attendance_summary` | **Future layout** | Roadmap pill only |
 | **Billing** | `billing_summary` | **Future layout** | Roadmap pill only |
@@ -36,15 +36,72 @@ This pass solves **parent ↔ child** presentation for CRM demo quality while pr
 
 ---
 
-## Child drawer (pass 4)
+## Child drawer (final UX pass — complete)
+
+### Information ownership (single primary home)
+
+| Information | Primary home |
+|-------------|--------------|
+| Child identity (name, age, gender) | **Child summary** + header DOB |
+| Primary guardian hint | **Child summary** (text only) |
+| All guardians, parents, siblings | **Family** section (clickable links) |
+| Lead, status, program, location | **Enrollment** section only |
+| Core editable fields | **Basic information** (config-driven) |
+| Lifecycle orientation | **Lifecycle** stepper (bottom, collapsed) |
+
+Quick links are **hidden** for child emphasis — they duplicated Family.
+
+### Visual hierarchy (green rail)
+
+| Surface | Pine left rail |
+|---------|----------------|
+| Child summary | Yes (single above-fold accent) |
+| Enrollment section content | Yes (`leadSummaryShell` on enrollment cards) |
+| Family, Basic, Medical, Lifecycle | No (default section chrome) |
+
+Parent and non-child person drawers keep existing premium overview styling.
+
+### Lifecycle roadmap UX decision
+
+| Option | Decision |
+|--------|----------|
+| **A — Compact overview stepper** | **Implemented** — horizontal stepper with Lead → Tour → Enrollment → …; informational copy; collapsed section |
+| **B — Dedicated Lifecycle tab** | **Deferred** — adopt when schedule/attendance/billing modules ship and rollups exist |
+
+`CHILD_LIFECYCLE_ROADMAP_UX = compact_overview_stepper` in `personDrawerChildLifecycleSlots.ts`.
+
+### Section order
+
+1. Child summary (above overview)
+2. Basic information
+3. Family
+4. Enrollment
+5. Medical / consent
+6. Lifecycle (bottom)
+
+---
+
+## Child drawer (pass 4 + IA pass)
 
 Above overview (not duplicated in header):
 
-1. **Context panel** — max 4 quick links (parents, guardians, siblings; one enrollment link when child emphasis)
-2. **Child profile summary** — household, guardians hint, primary enrollment link, lifecycle roadmap pills
-3. **Overview sections** (ordered for child): Family → Enrollment activity → profile/medical fields
+1. **Context panel** — max 4 relationship quick links only (guardians, siblings); **no enrollment link** (Enrollment section is primary home)
+2. **Child summary** — child name, age, household, primary guardian, lead status + program hint (no enrollment deep link)
+3. **Overview sections** (ordered): Basic information → Family → Enrollment → Medical → … → Lifecycle roadmap (bottom, collapsed by default)
 
-Header retains name, age/DOB, badges — summary does not repeat those fields.
+**IA pass (2026-05-29):** Child-first summary, unified Guardians block in Family (parents + guardians with role labels), siblings in Family, CRM lead terminology in person-drawer display labels only, lifecycle roadmap moved to bottom section (Option B).
+
+### Information hierarchy (child emphasis)
+
+| Layer | Content |
+|-------|---------|
+| Header | Name, Child badge, DOB, age |
+| Summary | Child identity, primary guardian, lead status/program hints |
+| Basic information | Config-driven core fields (first/last name, etc.; DOB in header) |
+| Family | Guardians (merged), siblings |
+| Enrollment | Full lead/enrollment cards — **single source of truth** |
+| Medical | Config-driven |
+| Lifecycle roadmap | Compact orientation pills at bottom |
 
 ---
 
@@ -194,8 +251,13 @@ Opportunity → Waitlist → Tours → **Enrollment activity** → Schedule → 
 | File | Change |
 |------|--------|
 | `web/lib/admin/person/personDrawerChildLifecycleSlots.ts` | **New** — lifecycle surface gating, slot states, section order, household/enrollment hints |
-| `web/components/admin/entity/PersonDrawerChildLifecycleSummary.tsx` | **New** — child profile summary + lifecycle roadmap |
-| `web/components/admin/entity/PersonDrawerContextPanel.tsx` | Child quick links + optional enrollment link; exported `buildPersonDrawerQuickLinks` |
+| `web/lib/admin/person/personDrawerChildIdentity.ts` | **New (IA pass)** — child identity summary, CRM display labels, primary guardian |
+| `web/components/admin/entity/PersonDrawerChildLifecycleRoadmap.tsx` | **New (IA pass)** — bottom lifecycle strip |
+| `web/components/admin/entity/PersonDrawerChildLifecycleSummary.tsx` | Child-first summary (IA pass) |
+| `web/components/admin/entity/PersonDrawerVisibilitySections.tsx` | Unified Guardians block for child Family |
+| `web/components/admin/entity/PersonDrawerContextPanel.tsx` | Relationship quick links only for child |
+| `web/components/admin/entity/PersonDrawerEnrollmentActivity.tsx` | CRM lead display labels |
+| `web/tests/admin/person/personDrawerChildFamilyIa.test.ts` | **New (IA pass)** |
 | `web/lib/admin/person/attachPersonDrawerVisibility.ts` | Project `_household_context` (customer names) |
 | `web/lib/admin/person/personDrawerVisibilityTypes.ts` | `PersonHouseholdContextRow` |
 | `web/lib/admin/person/personDrawerPresentationEmphasis.ts` | Document slot rendering status |
@@ -219,12 +281,22 @@ Opportunity → Waitlist → Tours → **Enrollment activity** → Schedule → 
 | `web/tests/admin/person/personRelationshipChildLifecycle.test.ts` | **New** |
 | `docs/sprints/05_2026/person_relationship_child_lifecycle_foundation.md` | This document |
 
+### Child drawer (final pass)
+
+- **Executive header** — avatar + age / program / location / lead chips via `PersonDrawerChildHeaderExecutive`
+- **Lifecycle tab** — `PersonDrawerChildLifecycleOperationalPanel` replaces overview roadmap section
+- **Child details** — `basic_info` renamed; first/last/preferred name hidden when shown in header
+- **Progressive paint** — seed record from opportunity open shows shell + tabs immediately
+
+See [`child_profile_person_drawer_doctrine.md`](./child_profile_person_drawer_doctrine.md) for ownership table and deferred list.
+
 ---
 
 ## Validation
 
 ```bash
 cd web && npm run test -- tests/admin/person/ tests/admin/personDrawerVisibility.test.ts
+cd web && npx tsc --noEmit
 ```
 
 ---

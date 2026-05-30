@@ -42,4 +42,30 @@ describe("prefetchLinkedPersonsFromOpportunityRecord", () => {
         expect(peekDrawerEntitySnapshot("persons", PRIMARY)?.first_name).toBe("Test");
         expect(peekDrawerEntitySnapshot("persons", LINKED)?.first_name).toBe("Test");
     });
+
+    it("prefetches inquiry child person ids", async () => {
+        const CHILD = "33333333-3333-4333-8333-333333333333";
+        const fetchMock = vi.fn().mockImplementation((url: string) =>
+            Promise.resolve({
+                ok: true,
+                json: async () => {
+                    const id = url.split("/").pop();
+                    return { id, first_name: "Sophia" };
+                },
+            })
+        );
+        vi.stubGlobal("fetch", fetchMock);
+
+        const ids = prefetchLinkedPersonsFromOpportunityRecord(
+            {
+                _inquiry_children: [{ person_id: CHILD, first_name: "Sophia" }],
+            },
+            { source: "opportunity_drawer_idle" }
+        );
+
+        expect(ids).toEqual([CHILD]);
+        await Promise.all([...__getPersonDrawerPrefetchInflightForTests().values()]);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(peekDrawerEntitySnapshot("persons", CHILD)?.first_name).toBe("Sophia");
+    });
 });

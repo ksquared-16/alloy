@@ -3,7 +3,8 @@ import { putDrawerEntitySnapshot } from "@/lib/admin/drawerEntitySnapshotCache";
 import { logPersonDrawerOpen } from "@/lib/admin/drawer/personDrawerPerfLogs";
 import {
     applyPersonDrawerOpenSeed,
-    buildPersonDrawerSeedRecord,
+    cachePersonDrawerChildOpenSeed,
+    PERSON_DRAWER_CHILD_OPEN_SOURCE,
     type PersonDrawerOpenSeed,
 } from "@/lib/admin/drawer/personDrawerOpenSeed";
 import {
@@ -25,11 +26,14 @@ export function openViewPersonFromOpportunity(args: {
     const opportunityId = args.opportunityId.trim();
     if (!personId) return false;
 
+    const openSource = args.source ?? "opportunity_primary_contact";
+    const childOpen = openSource === PERSON_DRAWER_CHILD_OPEN_SOURCE;
     const cacheHit = isPersonDrawerSnapshotWarm(personId);
     const openStartedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
-    const openSource = args.source ?? "opportunity_primary_contact";
 
-    if (!cacheHit && args.openSeed) {
+    if (childOpen && args.openSeed) {
+        cachePersonDrawerChildOpenSeed(personId, args.openSeed);
+    } else if (!cacheHit && args.openSeed) {
         const seedRecord = applyPersonDrawerOpenSeed(personId, args.openSeed);
         if (seedRecord) {
             putDrawerEntitySnapshot("persons", personId, seedRecord);
