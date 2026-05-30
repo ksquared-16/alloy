@@ -1,0 +1,125 @@
+"use client";
+
+import PersonDrawerChildSummary from "@/components/admin/entity/PersonDrawerChildSummary";
+import PersonDrawerEmployeeStatusSection from "@/components/admin/entity/PersonDrawerEmployeeStatusSection";
+import PersonDrawerHouseholdAddress from "@/components/admin/entity/PersonDrawerHouseholdAddress";
+import PersonDrawerHouseholdSection from "@/components/admin/entity/PersonDrawerHouseholdSection";
+import PersonDrawerParentHouseholdSection from "@/components/admin/entity/PersonDrawerParentHouseholdSection";
+import PersonDrawerParentSummary from "@/components/admin/entity/PersonDrawerParentSummary";
+import type { PersonDrawerChildChromeHint } from "@/lib/admin/person/personDrawerChildChrome";
+import type { PersonDrawerParentChromeHint } from "@/lib/admin/person/personDrawerParentChrome";
+import {
+    resolvePersonOperatingSections,
+    type PersonOperatingSectionKey,
+    type ResolvedPersonDrawerLayoutVariant,
+} from "@/lib/admin/person/personDrawerLayoutRuntime";
+import { readPersonEmployeePlacementValues } from "@/lib/admin/personEmployeePlacementFields";
+import { stampPersonDrawerParentHeaderContext } from "@/lib/admin/person/resolvePersonDrawerParentHouseholdModel";
+import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
+
+export type PersonDrawerOperatingSectionsProps = {
+    variant: ResolvedPersonDrawerLayoutVariant;
+    record: Record<string, unknown>;
+    personId: string | null;
+    canMutate: boolean;
+    bodyHydrated: boolean;
+    childChromeHint?: PersonDrawerChildChromeHint | null;
+    parentChromeHint?: PersonDrawerParentChromeHint | null;
+    onOpenDrawer: (type: AdminDrawerEntityType, id: string) => void;
+    onOpenLinkedPerson: (personId: string) => void;
+    onPersonUpdated: (json: Record<string, unknown>) => void;
+    onRecordUpdated: (next: Record<string, unknown>) => void;
+};
+
+function sectionEnabled(
+    sections: PersonOperatingSectionKey[],
+    key: PersonOperatingSectionKey
+): boolean {
+    return sections.includes(key);
+}
+
+/** Config-driven operating modules above EntityDrawerOverview (child/parent surfaces). */
+export default function PersonDrawerOperatingSections({
+    variant,
+    record,
+    personId,
+    canMutate,
+    bodyHydrated,
+    childChromeHint,
+    parentChromeHint,
+    onOpenDrawer,
+    onOpenLinkedPerson,
+    onPersonUpdated,
+    onRecordUpdated,
+}: PersonDrawerOperatingSectionsProps) {
+    const sections = resolvePersonOperatingSections(variant);
+    if (sections.length === 0) return null;
+
+    const layoutSource = variant.source;
+    const showHousehold = sectionEnabled(sections, "household") && bodyHydrated;
+    const isParentVariant = sections.includes("parent_summary");
+
+    return (
+        <div
+            data-person-drawer-operating-sections="true"
+            data-person-drawer-layout-variant={variant.variant_key}
+            data-person-drawer-layout-source={layoutSource}
+        >
+            {sectionEnabled(sections, "child_summary") ? (
+                <PersonDrawerChildSummary
+                    record={record}
+                    chromeHint={childChromeHint}
+                    canMutate={canMutate}
+                    onPersonUpdated={onPersonUpdated}
+                />
+            ) : null}
+            {sectionEnabled(sections, "parent_summary") ? (
+                <PersonDrawerParentSummary
+                    record={record}
+                    chromeHint={parentChromeHint}
+                    canMutate={canMutate}
+                    onPersonUpdated={onPersonUpdated}
+                />
+            ) : null}
+            {showHousehold && isParentVariant ? (
+                <PersonDrawerParentHouseholdSection
+                    record={stampPersonDrawerParentHeaderContext(record)}
+                    chromeHint={parentChromeHint}
+                    onOpenDrawer={(type, id) => onOpenDrawer(type as AdminDrawerEntityType, id)}
+                    onOpenLinkedPerson={onOpenLinkedPerson}
+                    canMutate={canMutate}
+                    onRecordUpdated={onRecordUpdated}
+                />
+            ) : null}
+            {showHousehold && !isParentVariant ? (
+                <PersonDrawerHouseholdSection
+                    record={record}
+                    onOpenDrawer={(type, id) => onOpenDrawer(type as AdminDrawerEntityType, id)}
+                    onOpenLinkedPerson={onOpenLinkedPerson}
+                    viewingPersonId={personId}
+                    dataDrawerVariant="child"
+                    canMutate={canMutate}
+                    onRecordUpdated={onRecordUpdated}
+                />
+            ) : null}
+            {sectionEnabled(sections, "household_address") && bodyHydrated ? (
+                <PersonDrawerHouseholdAddress
+                    record={record}
+                    chromeHint={parentChromeHint}
+                    canMutate={canMutate}
+                    onRecordUpdated={onRecordUpdated}
+                />
+            ) : null}
+            {sectionEnabled(sections, "employee_status") && personId && personId !== "new" && bodyHydrated ? (
+                <PersonDrawerEmployeeStatusSection
+                    personId={personId}
+                    initialValues={readPersonEmployeePlacementValues(record)}
+                    canMutate={canMutate}
+                    compactOperatingSurface
+                    deferSave
+                    onPersonUpdated={onPersonUpdated}
+                />
+            ) : null}
+        </div>
+    );
+}

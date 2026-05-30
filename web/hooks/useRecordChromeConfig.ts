@@ -7,7 +7,7 @@ import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
 const RECORD_CHROME_TTL_MS = 1500;
 
-export type RecordChromeEntityKind = "job" | "schedule" | "opportunity";
+export type RecordChromeEntityKind = "job" | "schedule" | "opportunity" | "person";
 
 /**
  * Fetches record layout + actions for a logical entity (above RRS).

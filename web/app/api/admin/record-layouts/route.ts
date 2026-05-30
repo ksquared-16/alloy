@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 
-const ALLOWED = new Set(["job", "schedule", "opportunity"]);
+const ALLOWED = new Set(["job", "schedule", "opportunity", "person"]);
 
 /**
  * GET: effective drawer record layout for a logical entity type (admin).
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 
     const entityType = (request.nextUrl.searchParams.get("entity_type") ?? "").trim().toLowerCase();
     if (!entityType || !ALLOWED.has(entityType)) {
-        return NextResponse.json({ error: "entity_type must be job, schedule, or opportunity" }, { status: 400 });
+        return NextResponse.json({ error: "entity_type must be job, schedule, opportunity, or person" }, { status: 400 });
     }
 
     const supabase = createAdminClient();

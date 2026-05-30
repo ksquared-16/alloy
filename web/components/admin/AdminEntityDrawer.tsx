@@ -95,8 +95,8 @@ import {
     type EntityDrawerFieldConfig,
 } from "@/lib/entityPresentation";
 import { OpportunityIntakeSourceSection } from "@/components/admin/opportunity/OpportunityIntakeSourceSection";
-import PersonDrawerEmployeeStatusSection from "@/components/admin/entity/PersonDrawerEmployeeStatusSection";
 import PersonDrawerOperatingActivityTab from "@/components/admin/entity/PersonDrawerOperatingActivityTab";
+import PersonDrawerOperatingSections from "@/components/admin/entity/PersonDrawerOperatingSections";
 import PersonEmployeePlacementSection from "@/components/admin/entity/PersonEmployeePlacementSection";
 import PersonDrawerHeaderMetadata, {
     formatPersonDrawerRecordNumber,
@@ -104,15 +104,10 @@ import PersonDrawerHeaderMetadata, {
 } from "@/components/admin/entity/PersonDrawerHeaderMetadata";
 import { resolvePersonDrawerOperatingBackLink } from "@/lib/admin/person/personDrawerBackLink";
 import PersonDrawerChildLifecycleRail from "@/components/admin/entity/PersonDrawerChildLifecycleRail";
-import PersonDrawerChildSummary from "@/components/admin/entity/PersonDrawerChildSummary";
 import PersonDrawerChildOverviewSkeleton from "@/components/admin/entity/PersonDrawerChildOverviewSkeleton";
 import PersonDrawerChildHeaderExecutive from "@/components/admin/entity/PersonDrawerChildHeaderExecutive";
 import PersonDrawerChildCommunicationsPlaceholder from "@/components/admin/entity/PersonDrawerChildCommunicationsPlaceholder";
 import PersonDrawerChildTitleRow from "@/components/admin/entity/PersonDrawerChildTitleRow";
-import PersonDrawerParentSummary from "@/components/admin/entity/PersonDrawerParentSummary";
-import PersonDrawerParentHouseholdSection from "@/components/admin/entity/PersonDrawerParentHouseholdSection";
-import PersonDrawerHouseholdSection from "@/components/admin/entity/PersonDrawerHouseholdSection";
-import PersonDrawerHouseholdAddress from "@/components/admin/entity/PersonDrawerHouseholdAddress";
 import PersonDrawerParentLifecycleRail from "@/components/admin/entity/PersonDrawerParentLifecycleRail";
 import PersonDrawerParentTitleRow from "@/components/admin/entity/PersonDrawerParentTitleRow";
 import PersonDrawerParentOverviewSkeleton from "@/components/admin/entity/PersonDrawerParentOverviewSkeleton";
@@ -159,7 +154,11 @@ import {
     personDrawerChildOperatingOverviewSections,
     personDrawerParentOperatingOverviewSections,
 } from "@/lib/admin/person/personDrawerOperatingOverviewSections";
-import { stampPersonDrawerParentHeaderContext } from "@/lib/admin/person/resolvePersonDrawerParentHouseholdModel";
+import {
+    filterPersonDrawerOverviewSectionsForLayoutRuntime,
+    personDrawerLayoutRuntimeActive,
+    resolvePersonDrawerLayoutVariant,
+} from "@/lib/admin/person/personDrawerLayoutRuntime";
 import { PERSON_DRAWER_CHILD_STATUS_ENTITY_TYPE } from "@/lib/admin/person/personDrawerChildStatusEntityType";
 import {
     appendLegacyPersonStatusOption,
@@ -301,6 +300,7 @@ import { GLOBAL_SEARCH_DRAWER_OPEN_SOURCE } from "@/lib/adminV2/globalRecordSear
 import { applyHouseholdPrimaryContactToRecord } from "@/lib/admin/person/applyHouseholdPrimaryContactToRecord";
 import {
     applyPersonIdentityPatchToPersonRecord,
+    applyPersonIdentityPatchToOpportunityHost,
     applyPersonPatchToOpportunityInquiryChildren,
 } from "@/lib/admin/person/applyPersonPatchToOpportunityInquiryChildren";
 import {
@@ -1480,6 +1480,12 @@ export default function AdminEntityDrawer() {
         if (String((data as { id?: unknown }).id ?? "") !== String(drawer.id)) return false;
         return String((data as { _record_surface?: string })._record_surface ?? "").trim() === "full";
     }, [data, drawer.id, drawer.type]);
+    const opportunityDrawerSnapshotIncomplete = useMemo(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return false;
+        if (!data || typeof data !== "object") return false;
+        if (String((data as { id?: unknown }).id ?? "") !== String(drawer.id)) return false;
+        return opportunityDrawerRecordNeedsRevalidate(data as Record<string, unknown>);
+    }, [data, drawer.id, drawer.type]);
     /** @deprecated alias — use opportunityPrimaryHydrateApplied for reveal gates. */
     const opportunityFullHydrateApplied = opportunityPrimaryHydrateApplied;
     /** Soft placeholders after primary reveal until `surface=full` merges. */
@@ -2418,6 +2424,10 @@ export default function AdminEntityDrawer() {
             cachedEntity != null &&
             isPersonDrawerSeedRecord(cachedEntity as Record<string, unknown>);
         if (cachedEntity && entityDataMatchesDrawer(cachedEntity, drawer.id, drawer.type)) {
+            const opportunityCacheNeedsRevalidate =
+                drawer.type === "opportunities" &&
+                drawer.id !== "new" &&
+                opportunityDrawerRecordNeedsRevalidate(cachedEntity as Record<string, unknown>);
             if (drawer.type === "persons") {
                 logPersonDrawerFetch({
                     phase: personSeedSnapshot ? "seed_cache_hit" : "cache_hit",
@@ -2433,16 +2443,30 @@ export default function AdminEntityDrawer() {
                 });
             }
             setData(cachedEntity);
-            setLoading(false);
+            setLoading(opportunityCacheNeedsRevalidate);
             setError(null);
             if (drawer.type === "opportunities" && drawer.id !== "new") {
                 opportunityDrawerBootstrapAppliedRef.current = drawer.id;
-                opportunityDrawerFirstPaintPreloadedRef.current = drawer.id;
                 setOpportunityBootstrapAppliedId(drawer.id);
-                if (String(cachedEntity._record_surface ?? "").trim() === "full") {
+                if (opportunityCacheNeedsRevalidate) {
+                    opportunityDrawerFirstPaintPreloadedRef.current = null;
                     setOpportunityDrawerEnrichmentHeld(false);
-                    setOpportunityDrawerBelowFoldRevealed(true);
-                    setOpportunityDrawerSecondaryReady(true);
+                    setOpportunityDrawerBelowFoldRevealed(false);
+                    setOpportunityDrawerSecondaryReady(false);
+                    opportunityBackgroundFullDoneRef.current = null;
+                    memberPersonGraphOverlayDoneRef.current = null;
+                    resetOpportunityDrawerHydrateGuards(drawer.id);
+                    allowOpportunityDrawerFullRefetch(drawer.id);
+                    queueMicrotask(() => {
+                        void runOpportunityBackgroundFullHydrateRef.current?.({ cacheBust: true });
+                    });
+                } else {
+                    opportunityDrawerFirstPaintPreloadedRef.current = drawer.id;
+                    if (String(cachedEntity._record_surface ?? "").trim() === "full") {
+                        setOpportunityDrawerEnrichmentHeld(false);
+                        setOpportunityDrawerBelowFoldRevealed(true);
+                        setOpportunityDrawerSecondaryReady(true);
+                    }
                 }
             }
             if (!personSeedSnapshot) {
@@ -2633,7 +2657,13 @@ export default function AdminEntityDrawer() {
             adminV2DrawerBootstrapEnabled()
         ) {
             if (opportunityDrawerBootstrapAppliedRef.current === drawer.id) {
-                setLoading(false);
+                const holdForIncompleteSnapshot =
+                    data != null &&
+                    entityDataMatchesDrawer(data, drawer.id, drawer.type) &&
+                    opportunityDrawerRecordNeedsRevalidate(data as Record<string, unknown>);
+                if (!holdForIncompleteSnapshot) {
+                    setLoading(false);
+                }
                 return;
             }
             if (opportunityDrawerBootstrapInflightRef.current === entityOpenKey) {
@@ -2801,6 +2831,13 @@ export default function AdminEntityDrawer() {
                     }
                     return merged;
                 });
+                if (drawerEntityTargetKeyRef.current === oppTargetKey) {
+                    setLoading(false);
+                    opportunityDrawerFirstPaintPreloadedRef.current = hydrateId;
+                    setOpportunityDrawerEnrichmentHeld(false);
+                    setOpportunityDrawerBelowFoldRevealed(true);
+                    setOpportunityDrawerSecondaryReady(true);
+                }
                 if (typeof window !== "undefined" && typeof performance !== "undefined") {
                     requestAnimationFrame(() => {
                         requestAnimationFrame(() => {
@@ -2820,6 +2857,9 @@ export default function AdminEntityDrawer() {
                 opportunityBackgroundFullDoneRef.current = hydrateId;
                 finishOpportunityDrawerHydrate(hydrateId, "full", "fail");
                 setOpportunityBackgroundFullHydrateFailed(true);
+                if (drawerEntityTargetKeyRef.current === oppTargetKey) {
+                    setLoading(false);
+                }
                 throw e;
             });
     }, [drawer.type, drawer.id, drawer.jobRecordSurface]);
@@ -6209,6 +6249,10 @@ export default function AdminEntityDrawer() {
     const isJobDrawerV2 = drawerShellVariant === "adminV2" && isJobExistingView;
     const recordChromeJob = useRecordChromeConfig(isJobDrawerV2 ? "job" : null, recordChromeOrgScope);
     const recordChromeSchedule = useRecordChromeConfig(drawer.type === "schedules" ? "schedule" : null, recordChromeOrgScope);
+    const recordChromePerson = useRecordChromeConfig(
+        drawer.type === "persons" && drawer.id && drawer.id !== "new" ? "person" : null,
+        recordChromeOrgScope
+    );
     const opportunityDrawerAdminV2Bootstrap =
         drawerShellVariant === "adminV2" &&
         drawer.type === "opportunities" &&
@@ -6737,6 +6781,25 @@ export default function AdminEntityDrawer() {
         personDrawerParentChromeHint,
         personChildLifecycleChrome,
     ]);
+
+    const personDrawerLayoutConfig = (recordChromePerson.layout?.config_json ?? null) as RecordLayoutConfigJson | null;
+    const personDrawerLayoutRuntimeFromDb = personDrawerLayoutRuntimeActive(personDrawerLayoutConfig);
+    const resolvedPersonLayoutVariant = useMemo(
+        () =>
+            resolvePersonDrawerLayoutVariant(personDrawerLayoutConfig, {
+                childOperatingChrome: personChildLifecycleChrome,
+                parentOperatingChrome: personParentGuardianChrome,
+                childChromeHint: personDrawerChildChromeHint,
+                parentChromeHint: personDrawerParentChromeHint,
+            }),
+        [
+            personDrawerLayoutConfig,
+            personChildLifecycleChrome,
+            personParentGuardianChrome,
+            personDrawerChildChromeHint,
+            personDrawerParentChromeHint,
+        ]
+    );
 
     const personDrawerResolvedProfile = useMemo(() => {
         if (drawer.type !== "persons" || !overviewData || (overviewData as { _create?: boolean })._create) {
@@ -7467,6 +7530,7 @@ export default function AdminEntityDrawer() {
     const opportunityDrawerCoordinatedRevealReady = useMemo(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return false;
         if (!opportunityDrawerShellSettled || error) return false;
+        if (opportunityDrawerSnapshotIncomplete) return false;
         if (!opportunityDrawerRevealCoordActive) return true;
         if (!opportunityRecordHydrationPending) return true;
         if (opportunityPrimaryHydrateApplied) return true;
@@ -7483,6 +7547,7 @@ export default function AdminEntityDrawer() {
         opportunityPrimaryHydrateApplied,
         opportunityBackgroundFullHydrateFailed,
         opportunityDrawerRevealCoordTimedOut,
+        opportunityDrawerSnapshotIncomplete,
     ]);
 
     const opportunityDrawerPrimaryContractSatisfied = useMemo(() => {
@@ -7682,20 +7747,37 @@ export default function AdminEntityDrawer() {
                 const cached = peekDrawerEntitySnapshot("opportunities", next.id);
                 const entityWarm =
                     cached != null && entityDataMatchesDrawer(cached, next.id, "opportunities");
+                const oppSwitchNeedsRevalidate =
+                    entityWarm &&
+                    opportunityDrawerRecordNeedsRevalidate(cached as Record<string, unknown>);
                 if (entityWarm) {
                     setData(cached);
-                    setLoading(false);
+                    setLoading(oppSwitchNeedsRevalidate);
                     setError(null);
                     opportunityDrawerBootstrapAppliedRef.current = next.id;
                     setOpportunityBootstrapAppliedId(next.id);
                     const surface = String((cached as { _record_surface?: string })._record_surface ?? "").trim();
-                    if (surface === "drawer_primary" || surface === "full") {
-                        opportunityDrawerFirstPaintPreloadedRef.current = next.id;
-                    }
-                    if (surface === "full") {
+                    if (!oppSwitchNeedsRevalidate) {
+                        if (surface === "drawer_primary" || surface === "full") {
+                            opportunityDrawerFirstPaintPreloadedRef.current = next.id;
+                        }
+                        if (surface === "full") {
+                            setOpportunityDrawerEnrichmentHeld(false);
+                            setOpportunityDrawerBelowFoldRevealed(true);
+                            setOpportunityDrawerSecondaryReady(true);
+                        }
+                    } else {
+                        opportunityDrawerFirstPaintPreloadedRef.current = null;
                         setOpportunityDrawerEnrichmentHeld(false);
-                        setOpportunityDrawerBelowFoldRevealed(true);
-                        setOpportunityDrawerSecondaryReady(true);
+                        setOpportunityDrawerBelowFoldRevealed(false);
+                        setOpportunityDrawerSecondaryReady(false);
+                        opportunityBackgroundFullDoneRef.current = null;
+                        memberPersonGraphOverlayDoneRef.current = null;
+                        resetOpportunityDrawerHydrateGuards(next.id);
+                        allowOpportunityDrawerFullRefetch(next.id);
+                        queueMicrotask(() => {
+                            void runOpportunityBackgroundFullHydrateRef.current?.({ cacheBust: true });
+                        });
                     }
                 }
             }
@@ -7713,7 +7795,7 @@ export default function AdminEntityDrawer() {
 
                 if (entityWarm) {
                     setData(cached);
-                    setLoading(false);
+                    setLoading(needsRevalidate);
                     setError(null);
                     opportunityDrawerBootstrapAppliedRef.current = next.id;
                     setOpportunityBootstrapAppliedId(next.id);
@@ -7948,7 +8030,7 @@ export default function AdminEntityDrawer() {
             ) {
                 setData((prev) => {
                     if (!prev) return prev;
-                    const next = applyPersonPatchToOpportunityInquiryChildren(
+                    const next = applyPersonIdentityPatchToOpportunityHost(
                         { ...(prev as Record<string, unknown>) },
                         personId,
                         mergePatch,
@@ -8250,7 +8332,8 @@ export default function AdminEntityDrawer() {
         !opportunityDrawerFirstPaintPreloaded &&
         opportunityDrawerRevealCoordActive &&
         !error &&
-        (opportunityDrawerBootstrapPending ||
+        (opportunityDrawerSnapshotIncomplete ||
+            opportunityDrawerBootstrapPending ||
             (opportunityBootstrapAppliedId === drawer.id &&
                 (!opportunityDrawerCoordinatedRevealReady || !opportunityDrawerInquiryStructuralReady)));
 
@@ -10143,15 +10226,34 @@ export default function AdminEntityDrawer() {
             overviewSections = applyPersonDrawerPresentationProfile(overviewSections, profile, fieldTypesByKey, {
                 parentOperatingChrome: personParentGuardianChrome,
             });
-            if (personParentGuardianChrome) {
+            if (
+                personDrawerLayoutRuntimeFromDb &&
+                (personParentGuardianChrome || personChildLifecycleChrome)
+            ) {
+                const titled = overviewSections.map((s) => ({
+                    ...s,
+                    title: personParentGuardianChrome
+                        ? personDrawerParentSectionTitle(s.key, s.title)
+                        : personDrawerChildSectionTitle(s.key, s.title),
+                }));
+                overviewSections = filterPersonDrawerOverviewSectionsForLayoutRuntime(
+                    titled,
+                    resolvedPersonLayoutVariant
+                );
+                if (personChildLifecycleChrome) {
+                    overviewSections = suppressEmptyChildDetailFields(
+                        overviewSections,
+                        overviewData as Record<string, unknown>
+                    );
+                }
+            } else if (personParentGuardianChrome) {
                 overviewSections = personDrawerParentOperatingOverviewSections(
                     overviewSections.map((s) => ({
                         ...s,
                         title: personDrawerParentSectionTitle(s.key, s.title),
                     }))
                 );
-            }
-            if (personChildLifecycleChrome) {
+            } else if (personChildLifecycleChrome) {
                 overviewSections = suppressEmptyChildDetailFields(
                     personDrawerChildOperatingOverviewSections(
                         sortOverviewSectionsForChildLifecycle(overviewSections)
@@ -10199,6 +10301,9 @@ export default function AdminEntityDrawer() {
         presentationType,
         recordChromeSchedule.layout,
         recordChromeOpportunity.layout,
+        recordChromePerson.layout,
+        personDrawerLayoutRuntimeFromDb,
+        resolvedPersonLayoutVariant,
         opportunityDrawerShellContract,
         opportunityDrawerPipeline,
         opportunityDrawerAboveFoldLocked,
@@ -14788,118 +14893,45 @@ export default function AdminEntityDrawer() {
                                                 personRecordChromeBodyShell &&
                                                 entityDrawerOverviewData &&
                                                 !(entityDrawerOverviewData as { _create?: boolean })._create &&
-                                                personChildLifecycleChrome &&
+                                                (personChildLifecycleChrome || personParentGuardianChrome) &&
                                                 personDrawerOperatingSummaryVisible({
-                                                    bodyHydrated: personDrawerChildBodyHydrated,
+                                                    bodyHydrated: personChildLifecycleChrome
+                                                        ? personDrawerChildBodyHydrated
+                                                        : personDrawerParentBodyHydrated,
                                                     record: entityDrawerOverviewData as Record<string, unknown>,
                                                 }) ? (
-                                                <>
-                                                    <PersonDrawerChildSummary
-                                                        record={entityDrawerOverviewData as Record<string, unknown>}
-                                                        chromeHint={personDrawerChildChromeHint}
-                                                        canMutate={!!canMutate}
-                                                        onPersonUpdated={(json) => {
-                                                            setData((prev) => (prev ? { ...prev, ...json } : prev));
-                                                            if (drawer.id) {
-                                                                putDrawerEntitySnapshot("persons", drawer.id, {
-                                                                    ...(entityDrawerOverviewData ?? {}),
-                                                                    ...json,
-                                                                });
-                                                            }
-                                                        }}
-                                                    />
-                                                    {personDrawerChildBodyHydrated ? (
-                                                        <PersonDrawerHouseholdSection
-                                                            record={entityDrawerOverviewData as Record<string, unknown>}
-                                                            onOpenDrawer={(type, id) =>
-                                                                openDrawer({ type: type as AdminDrawerEntityType, id })
-                                                            }
-                                                            onOpenLinkedPerson={(personId) =>
-                                                                openLinkedPersonFromHousehold(
-                                                                    personId,
-                                                                    entityDrawerOverviewData as Record<string, unknown>
-                                                                )
-                                                            }
-                                                            viewingPersonId={drawer.id}
-                                                            dataDrawerVariant="child"
-                                                            canMutate={!!canMutate}
-                                                            onRecordUpdated={mergePersonDrawerRecord}
-                                                        />
-                                                    ) : null}
-                                                </>
-                                            ) : null}
-                                            {drawer.type === "persons" &&
-                                                personRecordChromeBodyShell &&
-                                                entityDrawerOverviewData &&
-                                                !(entityDrawerOverviewData as { _create?: boolean })._create &&
-                                                personParentGuardianChrome &&
-                                                personDrawerOperatingSummaryVisible({
-                                                    bodyHydrated: personDrawerParentBodyHydrated,
-                                                    record: entityDrawerOverviewData as Record<string, unknown>,
-                                                }) ? (
-                                                <>
-                                                    <PersonDrawerParentSummary
-                                                        record={entityDrawerOverviewData as Record<string, unknown>}
-                                                        chromeHint={personDrawerParentChromeHint}
-                                                        canMutate={!!canMutate}
-                                                        onPersonUpdated={(json) => {
-                                                            setData((prev) => (prev ? { ...prev, ...json } : prev));
-                                                            if (drawer.id) {
-                                                                putDrawerEntitySnapshot("persons", drawer.id, {
-                                                                    ...(entityDrawerOverviewData ?? {}),
-                                                                    ...json,
-                                                                });
-                                                            }
-                                                        }}
-                                                    />
-                                                    {personDrawerParentBodyHydrated ? (
-                                                        <>
-                                                            <PersonDrawerParentHouseholdSection
-                                                                record={stampPersonDrawerParentHeaderContext(
-                                                                    entityDrawerOverviewData as Record<string, unknown>
-                                                                )}
-                                                                chromeHint={personDrawerParentChromeHint}
-                                                                onOpenDrawer={(type, id) =>
-                                                                    openDrawer({ type: type as AdminDrawerEntityType, id })
-                                                                }
-                                                                onOpenLinkedPerson={(personId) =>
-                                                                    openLinkedPersonFromHousehold(
-                                                                        personId,
-                                                                        entityDrawerOverviewData as Record<string, unknown>
-                                                                    )
-                                                                }
-                                                                canMutate={!!canMutate}
-                                                                onRecordUpdated={mergePersonDrawerRecord}
-                                                            />
-                                                            <PersonDrawerHouseholdAddress
-                                                                record={entityDrawerOverviewData as Record<string, unknown>}
-                                                                chromeHint={personDrawerParentChromeHint}
-                                                                canMutate={!!canMutate}
-                                                                onRecordUpdated={mergePersonDrawerRecord}
-                                                            />
-                                                            {drawer.id && drawer.id !== "new" ? (
-                                                                <PersonDrawerEmployeeStatusSection
-                                                                    personId={drawer.id}
-                                                                    initialValues={readPersonEmployeePlacementValues(
-                                                                        entityDrawerOverviewData as Record<string, unknown>
-                                                                    )}
-                                                                    canMutate={!!canMutate}
-                                                                    compactOperatingSurface
-                                                                    deferSave
-                                                                    onPersonUpdated={(json) => {
-                                                                        setData((prev) => (prev ? { ...prev, ...json } : prev));
-                                                                        if (drawer.id) {
-                                                                            putDrawerEntitySnapshot("persons", drawer.id, {
-                                                                                ...(entityDrawerOverviewData ?? {}),
-                                                                                ...json,
-                                                                            });
-                                                                        }
-                                                                    }}
-                                                                />
-                                                            ) : null}
-                                                        </>
-                                                    ) : null}
-                                                </>
+                                                <PersonDrawerOperatingSections
+                                                    variant={resolvedPersonLayoutVariant}
+                                                    record={entityDrawerOverviewData as Record<string, unknown>}
+                                                    personId={drawer.id}
+                                                    canMutate={!!canMutate}
+                                                    bodyHydrated={
+                                                        personChildLifecycleChrome
+                                                            ? personDrawerChildBodyHydrated
+                                                            : personDrawerParentBodyHydrated
+                                                    }
+                                                    childChromeHint={personDrawerChildChromeHint}
+                                                    parentChromeHint={personDrawerParentChromeHint}
+                                                    onOpenDrawer={(type, id) =>
+                                                        openDrawer({ type: type as AdminDrawerEntityType, id })
+                                                    }
+                                                    onOpenLinkedPerson={(personId) =>
+                                                        openLinkedPersonFromHousehold(
+                                                            personId,
+                                                            entityDrawerOverviewData as Record<string, unknown>
+                                                        )
+                                                    }
+                                                    onPersonUpdated={(json) => {
+                                                        setData((prev) => (prev ? { ...prev, ...json } : prev));
+                                                        if (drawer.id) {
+                                                            putDrawerEntitySnapshot("persons", drawer.id, {
+                                                                ...(entityDrawerOverviewData ?? {}),
+                                                                ...json,
+                                                            });
+                                                        }
+                                                    }}
+                                                    onRecordUpdated={mergePersonDrawerRecord}
+                                                />
                                             ) : null}
                                             <EntityDrawerOverview
                                                 entityType={presentationType}

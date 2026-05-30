@@ -132,8 +132,10 @@ describe("layout config audit sprint", () => {
     describe("employee status source field", () => {
         it("hides source on all person drawer employee sections", () => {
             const drawer = read("components/admin/AdminEntityDrawer.tsx");
-            expect(drawer).toContain("PersonDrawerEmployeeStatusSection");
-            expect(drawer).toMatch(/PersonEmployeePlacementSection[\s\S]*compactOperatingSurface/);
+            const operating = read("components/admin/entity/PersonDrawerOperatingSections.tsx");
+            expect(drawer).toContain("PersonDrawerOperatingSections");
+            expect(operating).toContain("PersonDrawerEmployeeStatusSection");
+            expect(operating).toContain("compactOperatingSurface");
         });
     });
 
