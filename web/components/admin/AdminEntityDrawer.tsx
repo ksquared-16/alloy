@@ -3101,31 +3101,6 @@ export default function AdminEntityDrawer() {
         }
     }, [drawer.type, drawer.id, drawerTab, personRelatedData]);
 
-    /** Preload person documents/related payload after operating drawer hydrates (tab switch feels instant). */
-    useEffect(() => {
-        if (drawer.type !== "persons" || !drawer.id || drawer.id === "new") return;
-        if (!drawerReady || !data || !dataMatchesDrawer) return;
-        if (!personChildLifecycleChrome && !personParentGuardianChrome) return;
-        if (personRelatedData || personRelatedLoading) return;
-
-        setPersonRelatedLoading(true);
-        fetch(`/api/admin/related/person/${drawer.id}`)
-            .then((r) => (r.ok ? r.json() : null))
-            .then((json: PersonRelatedPayload | null) => setPersonRelatedData(json ?? null))
-            .catch(() => setPersonRelatedData(null))
-            .finally(() => setPersonRelatedLoading(false));
-    }, [
-        drawer.type,
-        drawer.id,
-        drawerReady,
-        data,
-        dataMatchesDrawer,
-        personChildLifecycleChrome,
-        personParentGuardianChrome,
-        personRelatedData,
-        personRelatedLoading,
-    ]);
-
     useEffect(() => {
         if (drawer.type !== "customers" || !drawer.id) {
             setCustomerRelatedData(null);
@@ -7807,6 +7782,31 @@ export default function AdminEntityDrawer() {
         personParentGuardianChrome,
     ]);
 
+    /** Preload person documents/related payload after operating drawer hydrates (tab switch feels instant). */
+    useEffect(() => {
+        if (drawer.type !== "persons" || !drawer.id || drawer.id === "new") return;
+        if (!drawerReady || !data || !dataMatchesDrawer) return;
+        if (!personChildLifecycleChrome && !personParentGuardianChrome) return;
+        if (personRelatedData || personRelatedLoading) return;
+
+        setPersonRelatedLoading(true);
+        fetch(`/api/admin/related/person/${drawer.id}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then((json: PersonRelatedPayload | null) => setPersonRelatedData(json ?? null))
+            .catch(() => setPersonRelatedData(null))
+            .finally(() => setPersonRelatedLoading(false));
+    }, [
+        drawer.type,
+        drawer.id,
+        drawerReady,
+        data,
+        dataMatchesDrawer,
+        personChildLifecycleChrome,
+        personParentGuardianChrome,
+        personRelatedData,
+        personRelatedLoading,
+    ]);
+
     useEffect(() => {
         if (typeof window === "undefined") return;
         const onHouseholdPrimarySaved = (ev: Event) => {
@@ -8781,6 +8781,7 @@ export default function AdminEntityDrawer() {
                                   personId={personId}
                                   initialValues={readPersonEmployeePlacementValues(p)}
                                   canMutate={!!canMutate}
+                                  compactOperatingSurface
                                   onPersonUpdated={(json) => {
                                       setData((prev) => (prev ? { ...prev, ...json } : prev));
                                       if (drawer.id) {
@@ -12081,7 +12082,7 @@ export default function AdminEntityDrawer() {
                                 <p className="text-sm text-alloy-midnight/60">No related data.</p>
                             )}
                         </div>
-                    )}
+                    ) : null}
                     {drawerTab === "related" && drawer.type === "customer_members" && (
                         <div className="pt-2 mb-4">
                             {memberRelatedDataLoading ? (

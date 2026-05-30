@@ -131,10 +131,12 @@ describe("person drawer hardening phase 2", () => {
         expect(section).toContain('<HouseholdColumn title="Children">');
     });
 
-    it("employee status hides source and explanatory copy on person drawer", () => {
+    it("employee status has no doctrine explanatory copy", () => {
         const placement = read("components/admin/entity/PersonEmployeePlacementSection.tsx");
         expect(placement).toContain("compactOperatingSurface");
-        expect(placement).not.toContain("Mark when this person is an employee");
+        expect(placement).not.toContain("generic identity profiles");
+        expect(placement).not.toContain("waitlist employee-family priority");
+        expect(placement).not.toContain("opportunity child section");
         expect(read("components/admin/AdminEntityDrawer.tsx")).toContain("compactOperatingSurface");
     });
 
