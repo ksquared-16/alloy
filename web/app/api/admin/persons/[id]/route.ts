@@ -4,6 +4,10 @@ import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
 import { parsePersonEmployeePlacementPatchBody } from "@/lib/admin/personEmployeePlacementFields";
+import {
+    COMPLETION_REQUIREMENT_VALIDATION_ERROR,
+    enforcePersonCompletionOnPatch,
+} from "@/lib/completion/enforcePersonCompletionOnPatch";
 
 const PERSON_NATIVE_KEYS_IN_PATCH = [
     "first_name",
@@ -63,7 +67,9 @@ export async function PATCH(
     const supabase = createAdminClient();
     const { data: existing, error: fetchErr } = await supabase
         .from("persons")
-        .select("id, org_id, first_name, last_name")
+        .select(
+            "id, org_id, first_name, last_name, email, phone, status_key, date_of_birth, is_employee, employee_id, employee_source"
+        )
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
@@ -121,13 +127,36 @@ export async function PATCH(
         personUpdates.employee_source = employeePatch.updates.employee_source;
     }
 
+    const mergedForValidation: Record<string, unknown> = {
+        ...(existing as Record<string, unknown>),
+        ...body,
+        ...personUpdates,
+    };
+
+    const completionCheck = await enforcePersonCompletionOnPatch({
+        supabase,
+        orgId: ctx.orgId,
+        personId: id,
+        body,
+        existing: mergedForValidation,
+        phase: status_key !== undefined ? "status_change" : "save",
+        status_to: status_key,
+    });
+    if (!completionCheck.ok) {
+        return NextResponse.json(
+            {
+                error: completionCheck.message || COMPLETION_REQUIREMENT_VALIDATION_ERROR,
+                completion_requirements: completionCheck.validation,
+            },
+            { status: 400 }
+        );
+    }
+
     if (Object.keys(personUpdates).length > 0) {
         const fn = first_name !== undefined ? first_name : (existing as { first_name?: string | null }).first_name;
         const ln = last_name !== undefined ? last_name : (existing as { last_name?: string | null }).last_name;
         (personUpdates as Record<string, unknown>).full_name = [fn, ln].filter(Boolean).join(" ").trim() || null;
-    }
 
-    if (Object.keys(personUpdates).length > 0) {
         const { error: updateErr } = await supabase
             .from("persons")
             .update(personUpdates)

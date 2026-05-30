@@ -7,7 +7,10 @@ import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { emitEvent } from "@/lib/emitEvent";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
 import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
-import { validateStatusTransition } from "@/lib/admin/statusTransitionRules";
+import {
+    COMPLETION_REQUIREMENT_VALIDATION_ERROR,
+    enforceOpportunityCompletionOnStatusTransition,
+} from "@/lib/completion/enforceOpportunityCompletionOnStatusTransition";
 import {
     mergeOpportunityQuotePricing,
     opportunityQuotePipelineActive,
@@ -250,21 +253,26 @@ export async function PATCH(
                         inferredDepartmentId = ((wu as { department_id?: string | null }).department_id ?? null) as string | null;
                     }
                 }
-                const transition = await validateStatusTransition({
+                const transition = await enforceOpportunityCompletionOnStatusTransition({
                     supabase,
                     orgId,
-                    entityType: "opportunities",
-                    entityId: id,
+                    opportunityId: id,
+                    fromStatusKey: oldStatusKey,
+                    toStatusKey: sk.trim(),
+                    existingRow: existingRow as Record<string, unknown>,
+                    body,
                     departmentId: inferredDepartmentId,
                     workUnitId: inferredWorkUnitId,
                     actionKey: null,
-                    fromStatusKey: oldStatusKey,
-                    toStatusKey: sk.trim(),
-                    currentMetadata: (existingRow?.metadata as Record<string, unknown> | null) ?? null,
-                    payload: body,
                 });
                 if (!transition.ok) {
-                    return NextResponse.json({ error: transition.message }, { status: 400 });
+                    return NextResponse.json(
+                        {
+                            error: transition.message || COMPLETION_REQUIREMENT_VALIDATION_ERROR,
+                            completion_requirements: transition.validation,
+                        },
+                        { status: 400 }
+                    );
                 }
             }
         }
