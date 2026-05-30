@@ -97,4 +97,59 @@ describe("personDrawerPresentationProfile", () => {
         };
         expect(personDrawerRelationshipPresentation(childProfile).hideSiblings).toBe(false);
     });
+
+    it("shows communication_opt_out for parent and hides it for child", () => {
+        const sections = [
+            ...baseSections.filter((s) => s.key !== "consent"),
+            {
+                key: "consent",
+                title: "Consent",
+                fields: [
+                    { key: "communication_opt_out" },
+                    { key: "photo_sharing_consent" },
+                ],
+            },
+        ] as Parameters<typeof applyPersonDrawerPresentationProfile>[0];
+        const types = { communication_opt_out: "boolean", photo_sharing_consent: "boolean" };
+
+        const parentOut = applyPersonDrawerPresentationProfile(
+            sections,
+            { profiles: ["parent"], display: "parent", badgeLabels: ["Parent"] },
+            types
+        );
+        const parentConsent = parentOut.find((s) => s.key === "consent");
+        expect(parentConsent?.fields?.map((f) => f.key)).toEqual(["communication_opt_out"]);
+        expect(parentConsent?.fields?.[0]?.renderHint).toBe("primary_yes_no");
+
+        const childOut = applyPersonDrawerPresentationProfile(
+            sections,
+            { profiles: ["child"], display: "child", badgeLabels: ["Child"] },
+            types
+        );
+        const childConsent = childOut.find((s) => s.key === "consent");
+        expect(childConsent?.fields?.map((f) => f.key) ?? []).not.toContain("communication_opt_out");
+        expect(childConsent?.fields?.map((f) => f.key)).toEqual(["photo_sharing_consent"]);
+        const childMedical = childOut.find((s) => s.key === "medical");
+        expect(childMedical).toBeDefined();
+    });
+
+    it("shows photo_sharing_consent for child only in consent section", () => {
+        const sections = [
+            {
+                key: "consent",
+                title: "Consent",
+                fields: [{ key: "photo_sharing_consent" }, { key: "communication_opt_out" }],
+            },
+        ] as Parameters<typeof applyPersonDrawerPresentationProfile>[0];
+        const types = { photo_sharing_consent: "boolean", communication_opt_out: "boolean" };
+
+        const childOut = applyPersonDrawerPresentationProfile(
+            sections,
+            { profiles: ["child"], display: "child", badgeLabels: ["Child"] },
+            types
+        );
+        expect(childOut.find((s) => s.key === "consent")?.fields?.map((f) => f.key)).toEqual([
+            "photo_sharing_consent",
+        ]);
+    });
 });

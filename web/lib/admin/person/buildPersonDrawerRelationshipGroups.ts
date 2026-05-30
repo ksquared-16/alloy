@@ -1,5 +1,7 @@
 import type {
     PersonDrawerRelationshipGroups,
+    PersonHouseholdAdultLinkRow,
+    PersonHouseholdChildLinkRow,
     PersonRelationshipLink,
     PersonSiblingLinkRow,
 } from "@/lib/admin/person/personDrawerVisibilityTypes";
@@ -26,6 +28,10 @@ export type PersonRelationshipGroupsInput = {
         relationship?: string | null;
     }> | null;
     sibling_links?: PersonSiblingLinkRow[] | null;
+    /** Household adults on shared customer accounts (child-facing family links). */
+    household_adult_links?: PersonHouseholdAdultLinkRow[] | null;
+    /** Household child members on shared customer accounts (parent-facing links). */
+    household_child_links?: PersonHouseholdChildLinkRow[] | null;
 };
 
 const PARENT_KEYS = new Set(["parent", "primary_contact", "primary"]);
@@ -116,6 +122,30 @@ export function buildPersonDrawerRelationshipGroups(
 
     for (const row of input.sibling_links ?? []) {
         pushPersonLink(siblings, row.person_id, row.display_name, "Sibling", row.customer_member_id);
+    }
+
+    for (const adult of input.household_adult_links ?? []) {
+        const role = norm(adult.role_type);
+        const label = adult.role_label ?? adult.role_type ?? null;
+        if (PARENT_KEYS.has(role) || role === "parent") {
+            pushPersonLink(parents, adult.person_id, adult.display_name, label);
+        } else if (GUARDIAN_KEYS.has(role) || role === "guardian") {
+            pushPersonLink(guardians, adult.person_id, adult.display_name, label);
+        } else if (EMERGENCY_KEYS.has(role)) {
+            pushPersonLink(emergency, adult.person_id, adult.display_name, label);
+        } else {
+            pushPersonLink(parents, adult.person_id, adult.display_name, label);
+        }
+    }
+
+    for (const child of input.household_child_links ?? []) {
+        pushPersonLink(
+            children,
+            child.person_id,
+            child.display_name,
+            "Child",
+            child.customer_member_id
+        );
     }
 
     return {

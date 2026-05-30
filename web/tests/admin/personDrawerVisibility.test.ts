@@ -82,4 +82,22 @@ describe("buildPersonDrawerRelationshipGroups", () => {
         expect(groups.siblings).toHaveLength(1);
         expect(groups.siblings[0]?.display_name).toBe("Alex");
     });
+
+    it("includes household adults and children from shared customer accounts", () => {
+        const groups = buildPersonDrawerRelationshipGroups({
+            person_id: "child-1",
+            household_adult_links: [
+                {
+                    person_id: "adult-1",
+                    display_name: "Taylor Parent",
+                    role_type: "parent",
+                    role_label: "Parent",
+                    customer_id: "cust-1",
+                    is_primary: true,
+                },
+            ],
+            household_child_links: [],
+        });
+        expect(groups.parents[0]?.person_id).toBe("adult-1");
+    });
 });

@@ -100,15 +100,17 @@ import PersonEmployeePlacementSection from "@/components/admin/entity/PersonEmpl
 import PersonDrawerHeaderMetadata, {
     PersonDrawerHeaderContactMeta,
 } from "@/components/admin/entity/PersonDrawerHeaderMetadata";
+import PersonDrawerContextPanel from "@/components/admin/entity/PersonDrawerContextPanel";
+import PersonDrawerEnrollmentActivity from "@/components/admin/entity/PersonDrawerEnrollmentActivity";
 import PersonDrawerProfileBadges from "@/components/admin/entity/PersonDrawerProfileBadges";
 import LocationDrawerContextPanel from "@/components/admin/entity/LocationDrawerContextPanel";
 import LocationDrawerDeactivateAction from "@/components/admin/entity/LocationDrawerDeactivateAction";
 import { RecordDrawerHeaderStatusSelect } from "@/components/admin/entity/RecordDrawerHeaderStatusSelect";
 import {
-    PersonDrawerEnrollmentMirror,
-    PersonDrawerEnrollmentOpportunitiesMirror,
     PersonDrawerRelationshipsOverview,
 } from "@/components/admin/entity/PersonDrawerVisibilitySections";
+import { personDrawerHasRelationshipContent } from "@/lib/admin/person/personDrawerRelationshipVisibility";
+import { resolvePersonDrawerRelationshipSectionTitle } from "@/lib/admin/person/personDrawerRelationshipSection";
 import { resolvePersonDrawerProfileFromRecord } from "@/components/admin/entity/PersonDrawerProfileBadges";
 import {
     applyPersonDrawerPresentationProfile,
@@ -8369,11 +8371,21 @@ export default function AdminEntityDrawer() {
         if (drawer.type === "persons" && data && !(data as { _create?: boolean })._create) {
             const p = data as Record<string, unknown>;
             const personId = String(drawer.id ?? p.id ?? "").trim();
-            const enrollmentMirror = (p._enrollment_mirror as Parameters<typeof PersonDrawerEnrollmentMirror>[0]["rows"]) ?? [];
+            const profile = resolvePersonDrawerProfileFromRecord(p);
+            const enrollmentMirror = (p._enrollment_mirror as Parameters<typeof PersonDrawerEnrollmentActivity>[0]["mirrorRows"]) ?? [];
             const enrollmentOpps =
-                (p._enrollment_opportunities as Parameters<typeof PersonDrawerEnrollmentOpportunitiesMirror>[0]["rows"]) ?? [];
+                (p._enrollment_opportunities as Parameters<typeof PersonDrawerEnrollmentActivity>[0]["opportunityRows"]) ?? [];
             const openPersonDrawer = (type: string, id: string) =>
                 openDrawer({ type: type as AdminDrawerEntityType, id });
+            const hasRelationships = personDrawerHasRelationshipContent(p, profile);
+            const enrollmentActivity =
+                enrollmentMirror.length > 0 || enrollmentOpps.length > 0 ? (
+                    <PersonDrawerEnrollmentActivity
+                        mirrorRows={enrollmentMirror}
+                        opportunityRows={enrollmentOpps}
+                        onOpenDrawer={openPersonDrawer}
+                    />
+                ) : null;
             return {
                 ...(personId
                     ? {
@@ -8395,17 +8407,14 @@ export default function AdminEntityDrawer() {
                           ),
                       }
                     : {}),
-                relationships: (
-                    <PersonDrawerRelationshipsOverview record={p} onOpenDrawer={openPersonDrawer} />
-                ),
-                enrollment:
-                    enrollmentMirror.length > 0 ? (
-                        <PersonDrawerEnrollmentMirror rows={enrollmentMirror} onOpenDrawer={openPersonDrawer} />
-                    ) : undefined,
-                enrollment_opportunities:
-                    enrollmentOpps.length > 0 ? (
-                        <PersonDrawerEnrollmentOpportunitiesMirror rows={enrollmentOpps} onOpenDrawer={openPersonDrawer} />
-                    ) : undefined,
+                ...(hasRelationships
+                    ? {
+                          relationships: (
+                              <PersonDrawerRelationshipsOverview record={p} onOpenDrawer={openPersonDrawer} />
+                          ),
+                      }
+                    : {}),
+                ...(enrollmentActivity ? { enrollment_activity: enrollmentActivity } : {}),
             };
         }
         if (drawer.type === "locations" && data && !(data as { _create?: boolean })._create) {
@@ -9342,20 +9351,9 @@ export default function AdminEntityDrawer() {
                 const emp = personPres.find((s) => s.key === "employee_placement");
                 if (emp && personDrawerShouldShowEmployeePlacement(profile)) append.push(emp);
             }
-            if (!keys.has("enrollment") && enrollmentRows.length > 0) {
+            if (!keys.has("enrollment_activity") && (enrollmentRows.length > 0 || enrollmentOpps.length > 0)) {
                 append.push({
-                    key: "enrollment",
-                    title: "Enrollment",
-                    defaultExpanded: true,
-                    collapsible: true,
-                    gridCols: 1 as const,
-                    fields: [],
-                    contentLayout: "block",
-                });
-            }
-            if (!keys.has("enrollment_opportunities") && enrollmentOpps.length > 0) {
-                append.push({
-                    key: "enrollment_opportunities",
+                    key: "enrollment_activity",
                     title: "Enrollment activity",
                     defaultExpanded: true,
                     collapsible: true,
@@ -9364,11 +9362,18 @@ export default function AdminEntityDrawer() {
                     contentLayout: "block",
                 });
             }
-            if (!keys.has("relationships")) {
+            if (
+                !keys.has("relationships") &&
+                personDrawerHasRelationshipContent(
+                    overviewData as Record<string, unknown>,
+                    resolvePersonDrawerProfileFromRecord(overviewData as Record<string, unknown>)
+                )
+            ) {
+                const relProfile = resolvePersonDrawerProfileFromRecord(overviewData as Record<string, unknown>);
                 append.push({
                     key: "relationships",
-                    title: "Relationships",
-                    defaultExpanded: false,
+                    title: resolvePersonDrawerRelationshipSectionTitle(relProfile),
+                    defaultExpanded: relProfile.profiles.includes("child") || relProfile.display === "mixed",
                     collapsible: true,
                     gridCols: 1 as const,
                     fields: [],
@@ -13722,6 +13727,17 @@ export default function AdminEntityDrawer() {
                                 {drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? opportunityIntakeSourceNode : null}
                                 {drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? opportunityQuoteSummaryNode : null}
                                 {drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? opportunityQuoteIntakeNode : null}
+                                {drawer.type === "persons" &&
+                                personRecordChromeBodyShell &&
+                                entityDrawerOverviewData &&
+                                !(entityDrawerOverviewData as { _create?: boolean })._create ? (
+                                    <PersonDrawerContextPanel
+                                        record={entityDrawerOverviewData as Record<string, unknown>}
+                                        onOpenDrawer={(type, id) =>
+                                            openDrawer({ type: type as AdminDrawerEntityType, id })
+                                        }
+                                    />
+                                ) : null}
                                 <EntityDrawerOverview
                                     entityType={presentationType}
                                     data={entityDrawerOverviewData}

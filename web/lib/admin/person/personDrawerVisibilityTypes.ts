@@ -62,3 +62,21 @@ export type PersonSiblingLinkRow = {
     display_name: string | null;
     customer_id: string;
 };
+
+/** Adults on a shared household customer (projected for child-facing family links). */
+export type PersonHouseholdAdultLinkRow = {
+    person_id: string;
+    display_name: string | null;
+    role_type: string | null;
+    role_label: string | null;
+    customer_id: string;
+    is_primary: boolean;
+};
+
+/** Child members on a shared household customer (projected for parent-facing family links). */
+export type PersonHouseholdChildLinkRow = {
+    customer_member_id: string;
+    person_id: string | null;
+    display_name: string | null;
+    customer_id: string;
+};

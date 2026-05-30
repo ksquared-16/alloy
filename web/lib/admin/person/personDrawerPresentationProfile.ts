@@ -1,6 +1,9 @@
 import type { EntityDrawerFieldConfig, EntityDrawerSectionConfig } from "@/lib/entityPresentation";
 import type { PersonDrawerProfileResult } from "@/lib/admin/person/personDrawerVisibilityTypes";
 
+/** Legacy section keys superseded by `enrollment_activity`. */
+const LEGACY_ENROLLMENT_SECTION_KEYS = new Set(["enrollment", "enrollment_opportunities"]);
+
 function isChildProfile(profile: PersonDrawerProfileResult): boolean {
     return profile.profiles.includes("child");
 }
@@ -47,6 +50,7 @@ const HIDDEN_SECTION_KEYS_EMERGENCY = new Set([
     "employee_placement",
     "enrollment",
     "enrollment_opportunities",
+    "enrollment_activity",
 ]);
 
 const HIDDEN_FIELD_KEYS_ALL = new Set(["full_name", "person_number", "id", "org_id", "status"]);
@@ -76,6 +80,7 @@ const PARENT_CONSENT_FIELD_KEYS = new Set([
     "email_opt_out",
     "marketing_opt_out",
     "messaging_opt_out",
+    "communication_opt_out",
 ]);
 
 const CHILD_CONSENT_FIELD_KEYS = new Set([
@@ -91,15 +96,13 @@ function isConsentSection(sectionKey: string): boolean {
 
 function shouldShowConsentField(
     fieldKey: string,
-    fieldType: string | undefined,
+    _fieldType: string | undefined,
     profile: PersonDrawerProfileResult
 ): boolean {
     const child = isChildProfile(profile);
     const parentLike = isParentLikeProfile(profile) && !child;
-    if (fieldType === "boolean") return true;
     if (parentLike && PARENT_CONSENT_FIELD_KEYS.has(fieldKey)) return true;
     if (child && CHILD_CONSENT_FIELD_KEYS.has(fieldKey)) return true;
-    if (/consent|opt_out|opt-out/i.test(fieldKey) && fieldType === "boolean") return true;
     return false;
 }
 
@@ -217,9 +220,12 @@ export function applyPersonDrawerPresentationProfile(
         });
 
     if (parentLike) {
-        return mergeParentContactFieldsIntoBasicInfo(result, sections);
+        return mergeParentContactFieldsIntoBasicInfo(
+            result.filter((s) => !LEGACY_ENROLLMENT_SECTION_KEYS.has(s.key)),
+            sections
+        );
     }
-    return result;
+    return result.filter((s) => !LEGACY_ENROLLMENT_SECTION_KEYS.has(s.key));
 }
 
 export function personDrawerAboveFoldShowsContact(profile: PersonDrawerProfileResult): boolean {
@@ -250,3 +256,5 @@ export function personDrawerRelationshipPresentation(profile: PersonDrawerProfil
 export function personDrawerShouldShowEmployeePlacement(profile: PersonDrawerProfileResult): boolean {
     return profile.profiles.includes("employee");
 }
+
+export { resolvePersonDrawerPresentationEmphasis, personDrawerEmphasisCandidates } from "@/lib/admin/person/personDrawerPresentationEmphasis";

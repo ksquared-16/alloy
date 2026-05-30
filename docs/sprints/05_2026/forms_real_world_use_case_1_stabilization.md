@@ -135,6 +135,53 @@ Setup rail no longer treats Test as required. `liveReady` when publish + configu
 
 Primary setup shows **Lead routing**: school/site, pipeline, starting status.
 
+## Location-specific share links + duplicate form (May 2026)
+
+### Doctrine
+
+- **Do not** duplicate the whole form definition just to route to different locations.
+- Same questions + different location = **same form**, **different public/share links**.
+- Each link stores its own `default_location_id` (and optional work unit) in `form_public_links.metadata`.
+- **Duplicate form** is for reuse/variations — not the primary multi-location pattern.
+
+### Location-specific links
+
+**Share form → Location-specific links** (also under Advanced → Manage all share links):
+
+1. Publish the form and set **Capture new enrollment lead**
+2. **Create location-specific link** with:
+   - Link name (e.g. `Website Inquiry — West Campus`)
+   - Location / site
+   - Optional pipeline (defaults to enrollment routing)
+3. Copy iframe embed code immediately after creation (token shown once)
+4. Repeat for each Firefly site (West, North, Riverbend)
+
+Each link gets a unique embed URL. Submissions route opportunities to the link’s location.
+
+Setup status (`linkOutcomeConfigured`, lead routing display) is evaluated **per selected link**.
+
+### Duplicate form
+
+**Duplicate form** in Form Detail header:
+
+- `POST /api/admin/forms/[formId]/duplicate`
+- Creates `Copy of {Form Name}` with a new key
+- Copies latest **draft** schema if present; otherwise latest **published** schema
+- Copies form metadata/intent; does **not** copy submissions, public links, or packet sessions
+- New form starts as draft-only (unpublished)
+
+### Firefly demo manual steps
+
+1. One **Website Inquiry** form — publish once
+2. Create three location-specific links (West Campus, North Campus, Riverbend Campus)
+3. Copy each iframe into the matching page on the demo website
+4. Submit through each iframe — confirm `new_inquiry` leads show the correct school/site
+
+### Tests
+
+- `web/tests/forms/locationSpecificPublicLinkMetadata.test.ts`
+- `web/tests/forms/duplicateFormDefinitionForAdmin.test.ts`
+
 ## Related
 
 - Prior authoring blockers: [forms_authoring_stability.md](./forms_authoring_stability.md)
