@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatPhoneUS } from "@/lib/adminFormatters";
+import { formatPhoneUS, formatPhoneUSForEdit } from "@/lib/adminFormatters";
 
 describe("formatPhoneUS", () => {
     it("returns em dash for null or empty", () => {
@@ -19,5 +19,10 @@ describe("formatPhoneUS", () => {
         expect(formatPhoneUS("1-555-123-4567")).toBe("(555) 123-4567");
         expect(formatPhoneUS("(555) 123-4567")).toBe("(555) 123-4567");
         expect(formatPhoneUS("4444444444")).toBe("(444) 444-4444");
+    });
+
+    it("formatPhoneUSForEdit returns empty string for null and formats E.164", () => {
+        expect(formatPhoneUSForEdit(null)).toBe("");
+        expect(formatPhoneUSForEdit("+14444444444")).toBe("(444) 444-4444");
     });
 });

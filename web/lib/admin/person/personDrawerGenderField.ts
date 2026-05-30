@@ -7,11 +7,11 @@ type FieldDefRow = {
 };
 
 /** Config-driven gender select options from person `_field_definitions`. */
+/** Fallback only when `_field_definitions` / option_set is not hydrated. */
 const DEFAULT_PERSON_GENDER_OPTIONS: FieldOption[] = [
-    { value: "female", label: "Female" },
     { value: "male", label: "Male" },
-    { value: "non_binary", label: "Non-binary" },
-    { value: "prefer_not_to_say", label: "Prefer not to say" },
+    { value: "female", label: "Female" },
+    { value: "not_specified", label: "Not Specified" },
 ];
 
 export function personDrawerGenderSelectOptions(record: Record<string, unknown>): FieldOption[] {

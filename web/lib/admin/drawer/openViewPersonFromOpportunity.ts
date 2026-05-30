@@ -66,7 +66,7 @@ export function openViewPersonFromOpportunity(args: {
 
     if (!cacheHit) {
         try {
-            prefetchPersonDrawerSnapshot(personId, { source: "click" });
+            prefetchPersonDrawerSnapshot(personId, { source: "click", openSeed: args.openSeed ?? undefined });
         } catch {
             /* prefetch must not block open */
         }

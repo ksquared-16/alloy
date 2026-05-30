@@ -19,8 +19,10 @@ import {
     formatGlobalSearchHitPrimaryName,
     formatGlobalSearchHitSecondaryLine,
     formatGlobalSearchHitMetaLine,
-    globalSearchLeadDisplayLabel,
+    globalSearchLeadPrimaryName,
+    globalSearchPresentationLinesForHit,
 } from "@/lib/admin/globalSearch/globalRecordSearchResultPresentation";
+import { globalSearchAgeLabelFromDob } from "@/lib/admin/globalSearch/globalRecordSearchAgeLabel";
 import { humanizeGlobalSearchStatusLabel } from "@/lib/admin/globalSearch/globalRecordSearchStatusLabel";
 import { globalSearchRecordAllowedBySiteScope } from "@/lib/admin/globalSearch/globalRecordSearchScope";
 import {
@@ -195,6 +197,7 @@ const mitchellFixtures = {
             last_name: "Mitchell",
             relationship: "child",
             status_key: "active",
+            dob: "2022-03-15",
         },
         {
             id: MITCHELL_CHILDREN[1],
@@ -674,6 +677,9 @@ describe("drawer open targets", () => {
 
 describe("presentation helpers", () => {
     it("formatGlobalSearchHitSecondaryLine follows typography hierarchy", () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date("2026-05-29T12:00:00Z"));
+
         const childLine = formatGlobalSearchHitSecondaryLine({
             entity_type: "customer_members",
             entity_id: CHILD_MEMBER,
@@ -685,37 +691,123 @@ describe("presentation helpers", () => {
             lead_short_label: "Chen",
             status_label: "Tour Scheduled",
             location_label: "North Campus",
+            age_label: "4y 2mo",
         });
-        expect(childLine).toBe("Child · Chen Household · North Campus");
+        expect(childLine).toBe("Child · 4y 2mo · Chen Household · North Campus");
+
+        const childInCluster = formatGlobalSearchHitSecondaryLine(
+            {
+                entity_type: "customer_members",
+                entity_id: CHILD_MEMBER,
+                group: "children",
+                name: "Ethan Mitchell",
+                type_label: "Child",
+                household_name: "Mitchell Household",
+                opportunity_name: "Family Inquiry - Mitchell",
+                lead_short_label: "Mitchell",
+                status_label: "Lost",
+                location_label: "South Campus",
+                age_label: "4y 2mo",
+            },
+            { inCluster: true }
+        );
+        expect(childInCluster).toBe("Child · 4y 2mo");
 
         const leadLine = formatGlobalSearchHitSecondaryLine({
             entity_type: "opportunities",
             entity_id: OPP_ID,
             group: "leads",
-            name: "Family Inquiry - Chen",
+            name: "Mitchell",
             type_label: "Lead",
-            household_name: "Chen Household",
-            opportunity_name: "Family Inquiry - Chen",
-            lead_short_label: "Chen",
-            status_label: "Tour Completed",
-            location_label: "North Campus",
+            household_name: "Mitchell Household",
+            opportunity_name: "Family Inquiry - Mitchell",
+            lead_short_label: "Mitchell",
+            status_label: "Lost",
+            location_label: "South Campus",
         });
-        expect(leadLine).toBe("Lead · North Campus");
+        expect(leadLine).toBe("Lead · South Campus");
 
         expect(
             formatGlobalSearchHitPrimaryName({
                 entity_type: "opportunities",
                 entity_id: OPP_ID,
                 group: "leads",
-                name: "Family Inquiry - Chen",
+                name: "Mitchell",
                 type_label: "Lead",
-                household_name: null,
-                opportunity_name: null,
-                lead_short_label: null,
-                status_label: null,
-                location_label: "North Campus",
+                household_name: "Mitchell Household",
+                opportunity_name: "Family Inquiry - Mitchell",
+                lead_short_label: "Mitchell",
+                status_label: "Lost",
+                location_label: "South Campus",
             })
-        ).toBe("Family Inquiry - Chen / North Campus");
+        ).toBe("Mitchell");
+
+        vi.useRealTimers();
+    });
+
+    it("child row includes age when DOB is available and omits when unavailable", () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date("2026-05-29T12:00:00Z"));
+        expect(globalSearchAgeLabelFromDob("2022-03-15")).toBe("4y 2mo");
+        expect(globalSearchAgeLabelFromDob(null)).toBeNull();
+
+        const withAge = formatGlobalSearchHitSecondaryLine({
+            entity_type: "customer_members",
+            entity_id: "x",
+            group: "children",
+            name: "Ethan Mitchell",
+            type_label: "Child",
+            household_name: null,
+            opportunity_name: null,
+            lead_short_label: null,
+            status_label: null,
+            location_label: "South Campus",
+            age_label: globalSearchAgeLabelFromDob("2022-03-15"),
+        });
+        expect(withAge).toContain("4y 2mo");
+
+        const withoutAge = formatGlobalSearchHitSecondaryLine({
+            entity_type: "customer_members",
+            entity_id: "y",
+            group: "children",
+            name: "No Dob Child",
+            type_label: "Child",
+            household_name: null,
+            opportunity_name: null,
+            lead_short_label: null,
+            status_label: null,
+            location_label: "South Campus",
+            age_label: null,
+        });
+        expect(withoutAge).toBe("Child · South Campus");
+        vi.useRealTimers();
+    });
+
+    it("presentation never surfaces Family inquiry boilerplate", () => {
+        const hit: import("@/lib/admin/globalSearch/globalRecordSearchTypes").GlobalRecordSearchHit = {
+            entity_type: "opportunities",
+            entity_id: OPP_ID,
+            group: "leads",
+            name: "Mitchell",
+            type_label: "Lead",
+            household_name: "Mitchell Household",
+            opportunity_name: "Family Inquiry - Mitchell",
+            lead_short_label: "Mitchell",
+            status_label: "Lost",
+            location_label: "South Campus",
+        };
+        const lines = [
+            ...globalSearchPresentationLinesForHit(hit),
+            formatGlobalSearchClusterContextLine({
+                household_name: hit.household_name,
+                lead_short_label: hit.lead_short_label,
+                location_label: hit.location_label,
+            }) ?? "",
+        ];
+        for (const line of lines) {
+            expect(line.toLowerCase()).not.toContain("family inquiry");
+        }
+        expect(globalSearchLeadPrimaryName(hit)).toBe("Mitchell");
     });
 
     it("formatGlobalSearchHitMetaLine includes secondary and status without Family lead", () => {
@@ -745,9 +837,8 @@ describe("presentation helpers", () => {
         expect(src).not.toContain("alloy-blue");
     });
 
-    it("globalSearchCrmDisplayLabel maps inquiry to Lead", () => {
+    it("globalSearchCrmDisplayLabel maps inquiry to Lead in legacy helper only", () => {
         expect(globalSearchCrmDisplayLabel("Inquiry")).toBe("Lead");
-        expect(globalSearchLeadDisplayLabel("Family Inquiry - Chen")).toBe("Lead");
     });
 
     it("humanizeGlobalSearchStatusLabel title-cases raw keys", () => {
@@ -833,6 +924,13 @@ describe("runGlobalRecordSearch — Mitchell household completeness", () => {
             "Cara Mitchell",
             "Drew Mitchell",
         ]);
+
+        const ava = childHits.find((h) => h.name === "Ava Mitchell");
+        expect(ava?.age_label).toBeTruthy();
+
+        const lead = results.find((r) => r.group === "leads");
+        expect(lead?.name).toBe("Mitchell");
+        expect(lead?.name.toLowerCase()).not.toContain("family inquiry");
 
         const mitchellCluster = clusters.find((c) => c.household_name === "Mitchell Household");
         expect(mitchellCluster?.children).toHaveLength(4);

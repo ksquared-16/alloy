@@ -74,7 +74,10 @@ export function openPersonDrawerFromHousehold(args: {
 
     if (!cacheHit) {
         try {
-            prefetchPersonDrawerSnapshot(personId, { source: "click", openSeed: seed ?? undefined });
+            prefetchPersonDrawerSnapshot(personId, {
+                source: "click",
+                openSeed: seed ?? undefined,
+            });
         } catch {
             /* non-fatal */
         }

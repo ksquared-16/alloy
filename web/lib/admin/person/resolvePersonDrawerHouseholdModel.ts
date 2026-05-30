@@ -403,3 +403,25 @@ export function viewingPersonHouseholdDisplayName(record: Record<string, unknown
         "Unnamed"
     );
 }
+
+/** Viewing person as guardian for a household — includes self (excluded from guardians column). */
+export function resolveViewingPersonGuardianForCustomer(
+    record: Record<string, unknown>,
+    customer_id: string,
+    viewingPersonId: string | null
+): PersonDrawerHouseholdMember | null {
+    const pid = trimOrNull(viewingPersonId);
+    if (!pid) return null;
+
+    const adultLinks = ((record._household_adult_links as PersonHouseholdAdultLinkRow[] | undefined) ?? []).filter(
+        (link) => link.customer_id === customer_id && trimOrNull(link.person_id) === pid
+    );
+
+    for (const link of adultLinks) {
+        const role = normPersonDrawerHouseholdRole(link.role_type);
+        if (!PERSON_DRAWER_HOUSEHOLD_PARENT_GUARDIAN_ROLES.has(role)) continue;
+        return adultMemberFromLink(link);
+    }
+
+    return null;
+}

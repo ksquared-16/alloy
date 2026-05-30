@@ -65,7 +65,16 @@ export function buildInquiryChildPersonOpenSeed(
     personId: string
 ): PersonDrawerOpenSeed {
     const merged = inquiryChildRowFromOpportunityRecord(opportunityRecord, row);
-    return personDrawerSeedFromInquiryChildRow(merged, personId);
+    const seed = personDrawerSeedFromInquiryChildRow(merged, personId);
+    const opportunityId = String(opportunityRecord.id ?? "").trim();
+    const opportunityName =
+        String(opportunityRecord._opportunity_name ?? opportunityRecord.name ?? "").trim() || undefined;
+    if (!opportunityId && !opportunityName) return seed;
+    return {
+        ...seed,
+        ...(opportunityId ? { opportunity_id: opportunityId } : {}),
+        ...(opportunityName ? { opportunity_name: opportunityName } : {}),
+    };
 }
 
 export function isSyntheticInquiryChildMemberId(customerMemberId: string | null | undefined): boolean {

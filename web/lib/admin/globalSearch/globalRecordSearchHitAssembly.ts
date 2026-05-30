@@ -1,5 +1,8 @@
 import { resolveGlobalSearchChildDrawerTarget, isGlobalSearchAdminV2DrawerEntityType } from "@/lib/admin/globalSearch/globalRecordSearchDrawerTarget";
-import { globalSearchLeadShortLabel } from "@/lib/admin/globalSearch/globalRecordSearchResultPresentation";
+import {
+    globalSearchLeadPrimaryName,
+    globalSearchLeadShortLabel,
+} from "@/lib/admin/globalSearch/globalRecordSearchResultPresentation";
 import { humanizeGlobalSearchStatusLabel } from "@/lib/admin/globalSearch/globalRecordSearchStatusLabel";
 import type {
     GlobalRecordSearchGroupKey,
@@ -23,12 +26,22 @@ type AssembleArgs = {
     person_id?: string | null;
     customer_id?: string | null;
     opportunity_id?: string | null;
+    age_label?: string | null;
 };
 
 export function assembleGlobalSearchHit(args: AssembleArgs): GlobalRecordSearchHit {
     const household = args.household_name?.trim() || null;
     const oppRaw = args.opportunity_name?.trim() || null;
     const leadShort = globalSearchLeadShortLabel(oppRaw, household);
+    const displayName =
+        args.group === "leads"
+            ? globalSearchLeadPrimaryName({
+                  name: args.name,
+                  lead_short_label: leadShort,
+                  household_name: household,
+                  opportunity_name: oppRaw,
+              })
+            : args.name;
     const statusKey = args.status_key?.trim() || null;
     const status =
         (statusKey && args.status_labels ? humanizeGlobalSearchStatusLabel(statusKey, args.status_labels) : null) ??
@@ -62,7 +75,7 @@ export function assembleGlobalSearchHit(args: AssembleArgs): GlobalRecordSearchH
         entity_type: args.entity_type,
         entity_id: args.entity_id,
         group: args.group,
-        name: args.name,
+        name: displayName,
         type_label: args.type_label,
         household_name: household,
         opportunity_name: oppRaw,
@@ -73,6 +86,7 @@ export function assembleGlobalSearchHit(args: AssembleArgs): GlobalRecordSearchH
         customer_id: customerId,
         opportunity_id: oppId,
         cluster_key: clusterKey,
+        age_label: args.age_label?.trim() || null,
         open_entity_type,
         open_entity_id,
     };

@@ -6,6 +6,8 @@ import { findInquiryChildInOpportunityRecord } from "@/lib/admin/drawer/inquiryC
 import { primaryPersonIdFromOpportunityRecord } from "@/lib/admin/drawer/linkedRecordFieldEditing";
 import { primaryPersonCardValuesFromRecord } from "@/lib/admin/drawer/primaryPersonCardEdit";
 import type { PersonContactCardValues } from "@/lib/admin/drawer/primaryPersonCardEdit";
+import { entityDataMatchesDrawer } from "@/lib/admin/drawer/entityDataMatchesDrawer";
+import { personDrawerOpenSeedFromPersonRecord } from "@/lib/admin/drawer/personDrawerOpenSeedFromPersonRecord";
 import { putDrawerEntitySnapshot, peekDrawerEntitySnapshot } from "@/lib/admin/drawerEntitySnapshotCache";
 
 export const PERSON_DRAWER_SEED_SURFACE = "drawer_seed";
@@ -19,6 +21,12 @@ export type PersonDrawerOpenSeed = {
     phone?: string;
     display_name?: string;
     date_of_birth?: string;
+    /** Inquiry/OCM placement hints for child header pills before hydrate. */
+    program_label?: string;
+    location_label?: string;
+    placement_status_label?: string;
+    opportunity_id?: string;
+    opportunity_name?: string;
     /** First-paint drawer chrome before profile joins hydrate. */
     presentation_emphasis?: "child_lifecycle" | "guardian_communication";
 };
@@ -57,6 +65,26 @@ export function buildPersonDrawerSeedRecord(seed: PersonDrawerOpenSeed): Record<
     const first_name = trimOrNull(seed.first_name) ?? "";
     const last_name = trimOrNull(seed.last_name) ?? "";
     const display = personDrawerDisplayNameFromSeed(seed);
+    const program_label = trimOrNull(seed.program_label);
+    const location_label = trimOrNull(seed.location_label);
+    const placement_status_label = trimOrNull(seed.placement_status_label);
+    const opportunity_id = trimOrNull(seed.opportunity_id);
+    const opportunity_name = trimOrNull(seed.opportunity_name);
+    const enrollmentMirrorStub =
+        seed.presentation_emphasis === PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS &&
+        (program_label || location_label || placement_status_label || opportunity_id)
+            ? [
+                  {
+                      id: `drawer-seed-${id}`,
+                      program_label,
+                      location_label,
+                      opportunity_id,
+                      opportunity_name,
+                      outcome_status_label: placement_status_label,
+                  },
+              ]
+            : undefined;
+
     return {
         id,
         first_name,
@@ -72,6 +100,7 @@ export function buildPersonDrawerSeedRecord(seed: PersonDrawerOpenSeed): Record<
         ...(seed.presentation_emphasis === PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS
             ? { _drawer_presentation_emphasis: PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS }
             : {}),
+        ...(enrollmentMirrorStub ? { _enrollment_mirror: enrollmentMirrorStub } : {}),
     };
 }
 
@@ -86,6 +115,9 @@ type InquiryChildSeedRowLike = {
     first_name?: string | null;
     last_name?: string | null;
     dob?: string | null;
+    desired_program_label?: string | null;
+    location_label?: string | null;
+    outcome_status_label?: string | null;
 };
 
 /** Build child-lifecycle open seed from a resolved inquiry child row. */
@@ -103,6 +135,9 @@ export function personDrawerSeedFromInquiryChildRow(
         last_name: last ?? undefined,
         display_name: display ?? undefined,
         date_of_birth: trimOrNull(row.dob) ?? undefined,
+        program_label: trimOrNull(row.desired_program_label) ?? undefined,
+        location_label: trimOrNull(row.location_label) ?? undefined,
+        placement_status_label: trimOrNull(row.outcome_status_label) ?? undefined,
         presentation_emphasis: PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS,
     };
 }
@@ -268,4 +303,64 @@ export function applyPersonDrawerOpenSeed(
 ): Record<string, unknown> | null {
     if (!seed || seed.personId.trim() !== personId.trim()) return null;
     return buildPersonDrawerSeedRecord(seed);
+}
+
+function resolveTransitionOpenSeed(args: {
+    personId: string;
+    openSeed?: PersonDrawerOpenSeed | null;
+    fromPersonRecord?: Record<string, unknown> | null;
+    opportunityRecord?: Record<string, unknown> | null;
+}): PersonDrawerOpenSeed | null {
+    const pid = args.personId.trim();
+    if (!pid) return null;
+    if (args.openSeed && args.openSeed.personId.trim() === pid) return args.openSeed;
+    if (args.opportunityRecord) {
+        const fromOpp = personDrawerSeedFromOpportunityRecord(args.opportunityRecord, pid);
+        if (fromOpp) return fromOpp;
+    }
+    if (args.fromPersonRecord) {
+        return personDrawerOpenSeedFromPersonRecord(args.fromPersonRecord, pid);
+    }
+    return null;
+}
+
+/** Stamp typed open seed onto cache or build a seed row for drawer transition first paint. */
+export function resolvePersonDrawerTransitionSnapshot(args: {
+    personId: string;
+    openSeed?: PersonDrawerOpenSeed | null;
+    fromPersonRecord?: Record<string, unknown> | null;
+    opportunityRecord?: Record<string, unknown> | null;
+}): Record<string, unknown> | null {
+    const pid = args.personId.trim();
+    if (!pid) return null;
+
+    const seed = resolveTransitionOpenSeed(args);
+    const cached = peekDrawerEntitySnapshot("persons", pid);
+
+    if (seed?.presentation_emphasis === PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS) {
+        const stamped = cachePersonDrawerChildOpenSeed(pid, seed);
+        if (stamped) return stamped;
+    }
+    if (seed?.presentation_emphasis === PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS) {
+        const stamped = cachePersonDrawerParentOpenSeed(pid, seed);
+        if (stamped) return stamped;
+    }
+
+    if (cached && entityDataMatchesDrawer(cached, pid, "persons")) {
+        if (seed?.presentation_emphasis === PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS) {
+            return stampChildLifecycleOpenContextOnPersonRecord(cached, seed);
+        }
+        if (seed?.presentation_emphasis === PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS) {
+            return stampParentGuardianOpenContextOnPersonRecord(cached, seed);
+        }
+        return cached;
+    }
+
+    if (seed) {
+        const seedRecord = buildPersonDrawerSeedRecord(seed);
+        putDrawerEntitySnapshot("persons", pid, seedRecord);
+        return seedRecord;
+    }
+
+    return null;
 }

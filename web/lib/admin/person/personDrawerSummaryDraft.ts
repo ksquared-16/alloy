@@ -7,6 +7,7 @@ import {
     personDrawerDobIsoFromRecord,
 } from "@/lib/admin/person/patchPersonDrawerFields";
 import { personDrawerGenderStoredValue } from "@/lib/admin/person/personDrawerGenderField";
+import { formatPhoneUSForEdit } from "@/lib/adminFormatters";
 import { resolvePersonDrawerParentSummaryModel } from "@/lib/admin/person/personDrawerParentSummaryModel";
 
 export type ParentSummaryDraft = {
@@ -24,7 +25,7 @@ export function parentSummaryDraftFromRecord(record: Record<string, unknown>): P
         first_name: String(record.first_name ?? "").trim(),
         last_name: String(record.last_name ?? "").trim(),
         email: String(record.email ?? "").trim(),
-        phone: String(record.phone ?? "").trim(),
+        phone: formatPhoneUSForEdit(record.phone as string | null | undefined),
         preferred_contact_method: summary.preferred_contact_method ?? "",
         communication_opt_out: summary.communication_opt_out,
     };

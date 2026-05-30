@@ -82,11 +82,11 @@ export function launchGlobalRecordSearchOpen(detail: GlobalRecordSearchOpenDetai
     if (!entity_id || typeof window === "undefined") return null;
 
     if (adminV2PathHasDrawerHost(window.location.pathname)) {
-        dispatchGlobalRecordSearchOpen({ open_entity_type: entity_type, open_entity_id: entity_id });
+        dispatchGlobalRecordSearchOpen(detail);
         return null;
     }
 
-    storeGlobalRecordSearchOpenIntent({ open_entity_type: entity_type, open_entity_id: entity_id });
+    storeGlobalRecordSearchOpenIntent(detail);
     return "/adminV2/workspace";
 }
 

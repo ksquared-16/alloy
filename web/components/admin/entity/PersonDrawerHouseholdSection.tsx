@@ -21,6 +21,8 @@ import {
 } from "@/lib/admin/person/personDrawerHouseholdUnlinkedChild";
 import {
     resolvePersonDrawerHouseholdModel,
+    resolveViewingPersonGuardianForCustomer,
+    viewingPersonHouseholdDisplayName,
     type PersonDrawerHouseholdChildMember,
     type PersonDrawerHouseholdMember,
 } from "@/lib/admin/person/resolvePersonDrawerHouseholdModel";
@@ -38,6 +40,107 @@ function RoleChip({ label }: { label: string }) {
     );
 }
 
+function HouseholdPrimaryContactControl({
+    customerId,
+    personId,
+    displayName,
+    isPrimary,
+    canMutate,
+    onPrimarySet,
+    dataViewingPerson = false,
+}: {
+    customerId: string;
+    personId: string;
+    displayName: string;
+    isPrimary: boolean;
+    canMutate: boolean;
+    onPrimarySet: (customerId: string, personId: string) => Promise<void>;
+    dataViewingPerson?: boolean;
+}) {
+    const [saving, setSaving] = useState(false);
+
+    const setPrimary = useCallback(async () => {
+        if (isPrimary || !canMutate || saving) return;
+        setSaving(true);
+        try {
+            await onPrimarySet(customerId, personId);
+        } finally {
+            setSaving(false);
+        }
+    }, [canMutate, customerId, isPrimary, onPrimarySet, personId, saving]);
+
+    if (!canMutate || isPrimary) return null;
+
+    return (
+        <label
+            className="mt-1.5 flex cursor-pointer items-center gap-1.5 text-[11px] text-alloy-midnight/55"
+            data-person-drawer-primary-contact-control="true"
+            data-person-drawer-viewing-person-primary={dataViewingPerson ? "true" : undefined}
+            onClick={(e) => e.stopPropagation()}
+        >
+            <input
+                type="radio"
+                name={`household-primary-${customerId}`}
+                checked={isPrimary}
+                disabled={saving || isPrimary}
+                onChange={() => void setPrimary()}
+                className="h-3 w-3 border-alloy-stone/40 text-alloy-blue focus:ring-alloy-blue/30"
+                aria-label={`Set ${displayName} as primary contact`}
+            />
+            <span>Set as primary contact</span>
+        </label>
+    );
+}
+
+function ViewingPersonPrimaryContactCard({
+    row,
+    customerId,
+    canMutate,
+    onPrimarySet,
+}: {
+    row: PersonDrawerHouseholdMember;
+    customerId: string;
+    canMutate: boolean;
+    onPrimarySet: (customerId: string, personId: string) => Promise<void>;
+}) {
+    const personId = row.person_id;
+    if (!personId) return null;
+
+    return (
+        <li>
+            <div
+                className={`${HOUSEHOLD_PERSON_CARD_CLASS} border-alloy-blue/20 bg-alloy-blue/[0.03]`}
+                data-person-drawer-viewing-person-primary-card="true"
+            >
+                <PersonDrawerIdentityAvatar
+                    displayName={row.display_name}
+                    initials={row.initials}
+                    photoUrl={row.photo_url}
+                    size="sm"
+                />
+                <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] font-semibold text-alloy-midnight/90">{row.display_name}</p>
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">You</p>
+                    {row.is_primary ? (
+                        <div className="mt-1">
+                            <RoleChip label="Primary" />
+                        </div>
+                    ) : null}
+                    <HouseholdPrimaryContactControl
+                        customerId={customerId}
+                        personId={personId}
+                        displayName={row.display_name}
+                        isPrimary={row.is_primary}
+                        canMutate={canMutate}
+                        onPrimarySet={onPrimarySet}
+                        dataViewingPerson
+                    />
+                </div>
+            </div>
+        </li>
+    );
+}
+
 function GuardianCard({
     row,
     customerId,
@@ -51,38 +154,19 @@ function GuardianCard({
     onOpenPerson: (id: string) => void;
     onPrimarySet: (customerId: string, personId: string) => Promise<void>;
 }) {
-    const [saving, setSaving] = useState(false);
     const isPrimary = row.is_primary;
     const personId = row.person_id;
 
-    const setPrimary = useCallback(async () => {
-        if (!personId || isPrimary || !canMutate || saving) return;
-        setSaving(true);
-        try {
-            await onPrimarySet(customerId, personId);
-        } finally {
-            setSaving(false);
-        }
-    }, [canMutate, customerId, isPrimary, onPrimarySet, personId, saving]);
-
     const primaryControl =
         personId && canMutate ? (
-            <label
-                className="mt-1.5 flex cursor-pointer items-center gap-1.5 text-[11px] text-alloy-midnight/55"
-                data-person-drawer-primary-contact-control="true"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <input
-                    type="radio"
-                    name={`household-primary-${customerId}`}
-                    checked={isPrimary}
-                    disabled={saving || isPrimary}
-                    onChange={() => void setPrimary()}
-                    className="h-3 w-3 border-alloy-stone/40 text-alloy-blue focus:ring-alloy-blue/30"
-                    aria-label={`Set ${row.display_name} as primary contact`}
-                />
-                <span>{isPrimary ? "Primary contact" : "Set as primary contact"}</span>
-            </label>
+            <HouseholdPrimaryContactControl
+                customerId={customerId}
+                personId={personId}
+                displayName={row.display_name}
+                isPrimary={isPrimary}
+                canMutate={canMutate}
+                onPrimarySet={onPrimarySet}
+            />
         ) : null;
 
     const body = (
@@ -336,20 +420,55 @@ export default function PersonDrawerHouseholdSection({
                                     data-person-drawer-household-columns="paired"
                                 >
                                     <HouseholdColumn title="Guardians">
-                                        {group.guardians.length > 0 ? (
-                                            group.guardians.map((row) => (
-                                                <GuardianCard
-                                                    key={row.person_id ?? row.display_name}
-                                                    row={row}
-                                                    customerId={group.customer_id}
-                                                    canMutate={canMutate}
-                                                    onOpenPerson={openPerson}
-                                                    onPrimarySet={handlePrimarySet}
-                                                />
-                                            ))
-                                        ) : (
-                                            <li className="text-[11px] text-alloy-midnight/40">—</li>
-                                        )}
+                                        {(() => {
+                                            const viewingGuardian =
+                                                isParentDrawer && viewingId
+                                                    ? resolveViewingPersonGuardianForCustomer(
+                                                          record,
+                                                          group.customer_id,
+                                                          viewingId
+                                                      )
+                                                    : null;
+                                            const viewingName =
+                                                viewingGuardian?.display_name ??
+                                                (viewingId ? viewingPersonHouseholdDisplayName(record) : null);
+                                            const hasGuardianRows =
+                                                Boolean(viewingGuardian) || group.guardians.length > 0;
+
+                                            if (!hasGuardianRows) {
+                                                return (
+                                                    <li className="text-[11px] text-alloy-midnight/40">—</li>
+                                                );
+                                            }
+
+                                            return (
+                                                <>
+                                                    {viewingGuardian ? (
+                                                        <ViewingPersonPrimaryContactCard
+                                                            key={`viewing-${viewingGuardian.person_id}`}
+                                                            row={{
+                                                                ...viewingGuardian,
+                                                                display_name:
+                                                                    viewingName ?? viewingGuardian.display_name,
+                                                            }}
+                                                            customerId={group.customer_id}
+                                                            canMutate={canMutate}
+                                                            onPrimarySet={handlePrimarySet}
+                                                        />
+                                                    ) : null}
+                                                    {group.guardians.map((row) => (
+                                                        <GuardianCard
+                                                            key={row.person_id ?? row.display_name}
+                                                            row={row}
+                                                            customerId={group.customer_id}
+                                                            canMutate={canMutate}
+                                                            onOpenPerson={openPerson}
+                                                            onPrimarySet={handlePrimarySet}
+                                                        />
+                                                    ))}
+                                                </>
+                                            );
+                                        })()}
                                     </HouseholdColumn>
                                     <HouseholdColumn title="Children">
                                         {group.children.length > 0 ? (

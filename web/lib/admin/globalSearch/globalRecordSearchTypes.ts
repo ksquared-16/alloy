@@ -26,6 +26,8 @@ export type GlobalRecordSearchHit = {
     customer_id?: string | null;
     opportunity_id?: string | null;
     cluster_key?: string | null;
+    /** Compact age for child rows — e.g. 4y 2mo */
+    age_label?: string | null;
     /** AdminV2 drawer open target — never customer_members/contacts. */
     open_entity_type?: GlobalSearchAdminV2DrawerEntityType | null;
     open_entity_id?: string | null;

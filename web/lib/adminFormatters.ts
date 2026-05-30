@@ -187,6 +187,13 @@ export function formatPhoneUS(value: string | null | undefined): string {
     return `(${area}) ${mid}-${last}`;
 }
 
+/** Format US phone for editable inputs; empty string when no value. */
+export function formatPhoneUSForEdit(value: string | null | undefined): string {
+    if (value == null || String(value).trim() === "") return "";
+    const formatted = formatPhoneUS(value);
+    return formatted === "—" ? String(value).trim() : formatted;
+}
+
 /** @deprecated Prefer formatDateTimeUtcAudit. */
 export function formatDateTime(value: string | number | Date | null | undefined): string {
     return formatDateTimeUtcAudit(value);

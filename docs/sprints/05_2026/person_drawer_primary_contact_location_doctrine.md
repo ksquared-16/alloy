@@ -49,7 +49,9 @@ Code: `web/lib/admin/person/personDrawerLocationCategoryOwnership.ts`
 
 **UI:** Guardian cards — radio “Set as primary contact”; **Primary** badge only (no Parent/Guardian chips).
 
-Code: `setHouseholdPrimaryContact.ts`, `patchHouseholdPrimaryContact.ts`, `PersonDrawerHouseholdSection.tsx`
+When viewing a **parent/guardian record**, the viewing person is excluded from the guardians column but receives a **“You”** card in that column with the same primary-contact control (`ViewingPersonPrimaryContactCard` in `PersonDrawerHouseholdSection.tsx`).
+
+Code: `setHouseholdPrimaryContact.ts`, `patchHouseholdPrimaryContact.ts`, `PersonDrawerHouseholdSection.tsx`, `resolveViewingPersonGuardianForCustomer`
 
 ## Household address edit path
 

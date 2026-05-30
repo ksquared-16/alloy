@@ -26,6 +26,7 @@ import {
     type GlobalSearchChildMemberRow,
 } from "@/lib/admin/globalSearch/globalRecordSearchHouseholdChildren";
 import { assembleGlobalSearchHit } from "@/lib/admin/globalSearch/globalRecordSearchHitAssembly";
+import { globalSearchAgeLabelFromDob } from "@/lib/admin/globalSearch/globalRecordSearchAgeLabel";
 import { globalSearchPersonTypeLabel } from "@/lib/admin/globalSearch/globalRecordSearchPersonPresentation";
 import { personRowIsChildRelationship } from "@/lib/admin/globalSearch/globalRecordSearchPersonPresentation";
 import { globalSearchRecordAllowedBySiteScope } from "@/lib/admin/globalSearch/globalRecordSearchScope";
@@ -73,6 +74,37 @@ function memberDisplayName(m: {
     return parts || `Child ${m.id.slice(0, 8)}…`;
 }
 
+async function resolveChildAgeLabelsByMemberId(
+    supabase: SupabaseClient,
+    orgId: string,
+    rows: GlobalSearchChildMemberRow[]
+): Promise<Map<string, string | null>> {
+    const out = new Map<string, string | null>();
+    const personIds = [...new Set(rows.map((r) => String(r.person_id ?? "").trim()).filter(Boolean))];
+    const personDobById = new Map<string, string | null>();
+
+    if (personIds.length) {
+        const { data, error } = await supabase
+            .from("persons")
+            .select("id, date_of_birth")
+            .eq("org_id", orgId)
+            .in("id", personIds);
+        if (error) throw new Error(error.message);
+        for (const row of data ?? []) {
+            const id = String((row as { id?: string }).id ?? "");
+            const dob = (row as { date_of_birth?: string | null }).date_of_birth ?? null;
+            if (id) personDobById.set(id, dob != null ? String(dob) : null);
+        }
+    }
+
+    for (const m of rows) {
+        const personId = String(m.person_id ?? "").trim();
+        const dob = personId ? personDobById.get(personId) ?? m.dob ?? null : m.dob ?? null;
+        out.set(String(m.id), globalSearchAgeLabelFromDob(dob));
+    }
+    return out;
+}
+
 async function buildChildHitsFromMemberRows(
     supabase: SupabaseClient,
     orgId: string,
@@ -84,13 +116,16 @@ async function buildChildHitsFromMemberRows(
     if (!rows.length) return [];
 
     const customerIds = rows.map((r) => r.customer_id);
-    const contextByCustomer = await fetchCustomerEnrollmentContextByCustomerIds(
-        supabase,
-        orgId,
-        customerIds,
-        accessDim,
-        oppStatusLabels
-    );
+    const [contextByCustomer, ageByMemberId] = await Promise.all([
+        fetchCustomerEnrollmentContextByCustomerIds(
+            supabase,
+            orgId,
+            customerIds,
+            accessDim,
+            oppStatusLabels
+        ),
+        resolveChildAgeLabelsByMemberId(supabase, orgId, rows),
+    ]);
 
     const hits: GlobalRecordSearchHit[] = [];
     for (const m of rows) {
@@ -111,6 +146,7 @@ async function buildChildHitsFromMemberRows(
             person_id: m.person_id ?? null,
             customer_id: String(m.customer_id),
             opportunity_id: ctx?.opportunity_id ?? null,
+            age_label: ageByMemberId.get(String(m.id)) ?? null,
         });
         const hit = applySiteScopeToHit(assembled, accessDim, ctx?.location_id);
         if (hit) hits.push(hit);
@@ -130,7 +166,7 @@ async function searchChildrenDirectMemberRows(
     if (CRM_ENTITY_SEARCH_UUID_RE.test(rawQ)) {
         const { data, error } = await supabase
             .from("customer_members")
-            .select("id, customer_id, person_id, display_name, first_name, last_name, relationship, status_key")
+            .select("id, customer_id, person_id, display_name, first_name, last_name, relationship, status_key, dob")
             .eq("org_id", orgId)
             .eq("id", rawQ)
             .maybeSingle();
@@ -142,7 +178,7 @@ async function searchChildrenDirectMemberRows(
     const q = () =>
         supabase
             .from("customer_members")
-            .select("id, customer_id, person_id, display_name, first_name, last_name, relationship, status_key")
+            .select("id, customer_id, person_id, display_name, first_name, last_name, relationship, status_key, dob")
             .eq("org_id", orgId)
             .limit(fetchCap);
     const [dn, fn, ln] = await Promise.all([
