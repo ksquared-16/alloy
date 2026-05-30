@@ -16,10 +16,9 @@ import type {
 export { formatRequirementValidationSummary } from "@/lib/completion/requirementValidationResult";
 
 /**
- * Primary completion guardrails evaluator — reusable from PATCH routes, actions, and BOS.
+ * Completion Guardrails Foundation — primary evaluator (Sprint B).
  *
- * BOS integration: consume `RequirementValidationResult` directly; use
- * `formatRequirementValidationSummary` for operator-facing copy.
+ * Bootstrap code rules only; not admin-configured. See docs/sprints/05_2026/required_fields_completion_guardrails_policy.md.
  */
 export function evaluateCompletionRequirements(
     ctx: CompletionEvaluationContext

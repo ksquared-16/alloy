@@ -1866,8 +1866,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
             suppressQueueFetchEffectOnceRef.current = false;
             if (!seededWorkUnitShellRef.current) {
                 firstUsefulPaintMarkedRef.current = false;
-                setWorkUnit(null);
-                setDept(null);
+                setWorkUnit((prev) => (prev?.id === workUnitId ? prev : null));
+                setDept((prev) =>
+                    prev && String(prev.id ?? "") === String(departmentId) ? prev : null
+                );
             }
             setOq(null);
             setNeedsAttentionWorkUnitId(null);
@@ -4431,15 +4433,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
         queueItemsError,
     ]);
 
+    const workUnitPageSeededWarm =
+        workUnitPageSeededFromCache || seededWorkUnitShellRef.current;
+
     const workUnitPageContentReady = resolveWorkUnitPageContentReady({
-        page_seeded_from_cache: workUnitPageSeededFromCache,
+        page_seeded_from_cache: workUnitPageSeededWarm,
         shell_ready: workUnitShellReady,
         above_fold_ready: workUnitAboveFoldPageReady,
     });
 
     const workUnitKpiStripPlaceholder = workUnitKpiStripShowsPlaceholder({
         kpi_metrics_pending: workUnitKpiMetricsPending,
-        page_seeded_from_cache: workUnitPageSeededFromCache,
+        page_seeded_from_cache: workUnitPageSeededWarm,
         above_fold_ready: workUnitAboveFoldPageReady,
     });
 

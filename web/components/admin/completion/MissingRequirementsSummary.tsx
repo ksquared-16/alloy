@@ -1,12 +1,19 @@
 "use client";
 
 import type { RequirementValidationResult } from "@/lib/completion/requirementValidationTypes";
+import {
+    COMPLETION_FOUNDATION_PREVIEW_NOTE,
+    COMPLETION_SUMMARY_DEFAULT_TITLE,
+    COMPLETION_SUMMARY_EMPTY_PREVIEW,
+} from "@/lib/completion/completionGuardrailsCopy";
 
 type MissingRequirementsSummaryProps = {
     result: RequirementValidationResult;
     title?: string;
     className?: string;
     compact?: boolean;
+    /** When true (default in compact mode), show foundation-scope disclaimer. */
+    showFoundationNote?: boolean;
 };
 
 function toneClass(level: "block" | "warn" | "rec"): string {
@@ -45,27 +52,39 @@ function RequirementList({
 }
 
 /**
- * Compact missing-requirements panel — blocking, warnings, and recommendations
- * without field-by-field red clutter.
+ * Compact completion preview panel — blocking, warnings, and recommendations.
+ * Sprint B foundation only; does not imply required fields are fully configured in Settings.
  */
 export default function MissingRequirementsSummary({
     result,
-    title = "Missing before next step",
+    title = COMPLETION_SUMMARY_DEFAULT_TITLE,
     className = "",
     compact = false,
+    showFoundationNote,
 }: MissingRequirementsSummaryProps) {
+    const foundationNoteVisible = showFoundationNote ?? compact;
     const hasAny =
         result.blocking.length > 0 || result.warnings.length > 0 || result.recommendations.length > 0;
 
     if (!hasAny) {
         return (
-            <p
-                className="text-[11px] leading-snug text-alloy-midnight/50"
-                data-completion-requirements-empty="true"
-                data-review-assist-calm="true"
-            >
-                No missing requirements flagged.
-            </p>
+            <div className={className} data-completion-requirements-summary="true">
+                <p
+                    className="text-[11px] leading-snug text-alloy-midnight/50"
+                    data-completion-requirements-empty="true"
+                    data-review-assist-calm="true"
+                >
+                    {COMPLETION_SUMMARY_EMPTY_PREVIEW}
+                </p>
+                {foundationNoteVisible ? (
+                    <p
+                        className="mt-1 text-[10px] leading-snug text-alloy-midnight/40"
+                        data-completion-foundation-note="true"
+                    >
+                        {COMPLETION_FOUNDATION_PREVIEW_NOTE}
+                    </p>
+                ) : null}
+            </div>
         );
     }
 
@@ -108,6 +127,14 @@ export default function MissingRequirementsSummary({
                     </p>
                     <RequirementList items={result.recommendations} tone="rec" prefix="rec-" />
                 </div>
+            ) : null}
+            {foundationNoteVisible ? (
+                <p
+                    className="mt-2 text-[10px] leading-snug text-alloy-midnight/40"
+                    data-completion-foundation-note="true"
+                >
+                    {COMPLETION_FOUNDATION_PREVIEW_NOTE}
+                </p>
             ) : null}
         </div>
     );

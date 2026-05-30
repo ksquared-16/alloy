@@ -1,6 +1,6 @@
-# Person Layout Runtime + Completion Guardrails Reconciliation
+# Person Layout Runtime + Completion Guardrails Foundation Reconciliation
 
-Mini sprint (May 2026). Reconciles **Sprint A** (layout runtime v1) with **Sprint B** (contextual completion guardrails).
+Mini sprint (May 2026). Reconciles **Sprint A** (layout runtime v1) with **Sprint B** (**Completion Guardrails Foundation** — framework + bootstrap rules, not admin-configured required fields).
 
 ## What matched (no change needed)
 

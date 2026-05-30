@@ -1,22 +1,29 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import MissingRequirementsSummary from "@/components/admin/completion/MissingRequirementsSummary";
+import {
+    COMPLETION_FOUNDATION_PREVIEW_NOTE,
+    COMPLETION_SUMMARY_DEFAULT_TITLE,
+    COMPLETION_SUMMARY_EMPTY_PREVIEW,
+} from "@/lib/completion/completionGuardrailsCopy";
 import type { RequirementValidationResult } from "@/lib/completion/requirementValidationTypes";
 
 describe("MissingRequirementsSummary", () => {
-    it("renders empty state when no violations", () => {
+    it("renders empty preview state with foundation note", () => {
         const result: RequirementValidationResult = {
             ok: true,
             blocking: [],
             warnings: [],
             recommendations: [],
         };
-        const html = renderToStaticMarkup(<MissingRequirementsSummary result={result} />);
-        expect(html).toContain("No missing requirements flagged");
+        const html = renderToStaticMarkup(<MissingRequirementsSummary result={result} compact />);
+        expect(html).toContain(COMPLETION_SUMMARY_EMPTY_PREVIEW);
+        expect(html).toContain(COMPLETION_FOUNDATION_PREVIEW_NOTE);
         expect(html).toContain('data-completion-requirements-empty="true"');
+        expect(html).toContain('data-completion-foundation-note="true"');
     });
 
-    it("renders blocking and warning sections", () => {
+    it("renders blocking and warning sections with foundation disclaimer", () => {
         const result: RequirementValidationResult = {
             ok: false,
             blocking: [
@@ -45,11 +52,14 @@ describe("MissingRequirementsSummary", () => {
             ],
             recommendations: [],
         };
-        const html = renderToStaticMarkup(<MissingRequirementsSummary result={result} title="Missing before next step" />);
-        expect(html).toContain("Missing before next step");
+        const html = renderToStaticMarkup(
+            <MissingRequirementsSummary result={result} title={COMPLETION_SUMMARY_DEFAULT_TITLE} compact />
+        );
+        expect(html).toContain(COMPLETION_SUMMARY_DEFAULT_TITLE);
         expect(html).toContain("Last name");
         expect(html).toContain('data-completion-requirements-blocking="true"');
         expect(html).toContain('data-completion-requirements-warnings="true"');
         expect(html).toContain("Email or phone");
+        expect(html).toContain(COMPLETION_FOUNDATION_PREVIEW_NOTE);
     });
 });

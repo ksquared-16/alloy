@@ -41,7 +41,7 @@ export default function PersonDrawerParentSummaryBosPanel({
             <p className={INQUIRY_RIGHT_COLUMN_GROUP_LABEL_CLASS}>Assist</p>
             {!hasBlocking ? (
                 <p className="mt-1.5 text-[11px] leading-snug text-alloy-midnight/50" data-review-assist-calm="true">
-                    No urgent action flagged.
+                    No urgent action flagged in preview.
                 </p>
             ) : null}
             <div className="mt-2">

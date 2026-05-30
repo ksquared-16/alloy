@@ -5,57 +5,53 @@ import {
     inquiryChildOcmPlacementLabelsIncomplete,
     opportunityDrawerRecordNeedsRevalidate,
     opportunityDrawerRestoreShouldHoldLoading,
+    snapshotCanRenderDrawerFrame,
+    snapshotCanRenderHeaderActions,
+    snapshotCanRenderOverviewBody,
+    snapshotInquiryChildrenNeedHydrate,
+    snapshotNeedsFullRevalidate,
 } from "@/lib/admin/drawer/opportunityDrawerRecordNeedsRevalidate";
 
 const webRoot = join(__dirname, "..", "..", "..");
 
 describe("opportunityDrawerRecordNeedsRevalidate", () => {
-    it("requires revalidate when record surface is not full", () => {
-        expect(opportunityDrawerRecordNeedsRevalidate({ _record_surface: "drawer_primary" })).toBe(true);
+    it("typed drawer_primary snapshot can render frame and header without full hydrate", () => {
+        const primary = { _record_surface: "drawer_primary", id: "opp-1" };
+        expect(snapshotCanRenderDrawerFrame(primary)).toBe(true);
+        expect(snapshotCanRenderHeaderActions(primary)).toBe(true);
+        expect(snapshotCanRenderOverviewBody(primary)).toBe(true);
+        expect(opportunityDrawerRestoreShouldHoldLoading(primary)).toBe(false);
+        expect(snapshotNeedsFullRevalidate(primary)).toBe(true);
+        expect(opportunityDrawerRecordNeedsRevalidate(primary)).toBe(true);
     });
 
-    it("requires revalidate when _inquiry_children key is missing on full surface", () => {
-        expect(
-            opportunityDrawerRecordNeedsRevalidate({
-                _record_surface: "full",
-            })
-        ).toBe(true);
+    it("snapshotNeedsFullRevalidate when _inquiry_children key is missing on full surface", () => {
+        const full = { _record_surface: "full" };
+        expect(snapshotNeedsFullRevalidate(full)).toBe(true);
+        expect(snapshotInquiryChildrenNeedHydrate(full)).toBe(true);
+        expect(snapshotCanRenderDrawerFrame(full)).toBe(true);
+        expect(opportunityDrawerRestoreShouldHoldLoading(full)).toBe(false);
     });
 
-    it("requires revalidate when inquiry child has program type but no label", () => {
-        expect(
-            opportunityDrawerRecordNeedsRevalidate({
-                _record_surface: "full",
-                _inquiry_children: [{ desired_program_type: "toddler", desired_program_label: null }],
-            })
-        ).toBe(true);
-    });
-
-    it("requires revalidate when schedule type lacks label", () => {
+    it("snapshotInquiryChildrenNeedHydrate when inquiry child has program type but no label", () => {
         expect(
             inquiryChildOcmPlacementLabelsIncomplete({
-                desired_schedule_type: "full_day",
-                desired_schedule_label: null,
+                desired_program_type: "toddler",
+                desired_program_label: null,
             })
         ).toBe(true);
-        expect(
-            opportunityDrawerRecordNeedsRevalidate({
-                _record_surface: "full",
-                _inquiry_children: [
-                    {
-                        desired_program_type: "toddler",
-                        desired_program_label: "Toddler",
-                        desired_schedule_type: "full_day",
-                        desired_schedule_label: null,
-                    },
-                ],
-            })
-        ).toBe(true);
+        const record = {
+            _record_surface: "full",
+            _inquiry_children: [{ desired_program_type: "toddler", desired_program_label: null }],
+        };
+        expect(snapshotInquiryChildrenNeedHydrate(record)).toBe(true);
+        expect(snapshotNeedsFullRevalidate(record)).toBe(true);
+        expect(snapshotCanRenderDrawerFrame(record)).toBe(true);
     });
 
-    it("does not require revalidate when full surface has resolved inquiry labels", () => {
+    it("does not need full revalidate when full surface has resolved inquiry labels", () => {
         expect(
-            opportunityDrawerRecordNeedsRevalidate({
+            snapshotNeedsFullRevalidate({
                 _record_surface: "full",
                 _inquiry_children: [
                     {
@@ -71,24 +67,19 @@ describe("opportunityDrawerRecordNeedsRevalidate", () => {
         ).toBe(false);
     });
 
-    it("restore hold matches revalidate", () => {
-        const incomplete = { _record_surface: "drawer_primary" as const };
-        expect(opportunityDrawerRestoreShouldHoldLoading(incomplete)).toBe(
-            opportunityDrawerRecordNeedsRevalidate(incomplete)
-        );
-    });
-
-    it("AdminEntityDrawer holds loading shell for incomplete opportunity restore", () => {
+    it("AdminEntityDrawer uses split snapshot guards and does not block chrome on inquiry pending", () => {
         const drawer = readFileSync(
             join(webRoot, "components/admin/AdminEntityDrawer.tsx"),
             "utf8"
         );
-        expect(drawer).toContain("opportunityDrawerRecordNeedsRevalidate");
-        expect(drawer).toContain("opportunityDrawerSnapshotIncomplete");
-        expect(drawer).toContain("setLoading(needsRevalidate)");
+        expect(drawer).toContain("snapshotNeedsFullRevalidate");
+        expect(drawer).toContain("snapshotCanRenderDrawerFrame");
+        expect(drawer).toContain("opportunityDrawerInquiryChildrenSnapshotPending");
+        expect(drawer).not.toContain("opportunityDrawerSnapshotIncomplete");
         expect(drawer).toContain("runOpportunityBackgroundFullHydrateRef.current?.({ cacheBust: true })");
         expect(drawer).toContain('prev.type === "persons"');
         expect(drawer).toContain("applyPersonIdentityPatchToOpportunityHost");
+        expect(drawer).toContain("personDrawerHasTypedOpenSnapshot");
     });
 
     it("goBack clears person drawer open seed when restoring opportunity", () => {
