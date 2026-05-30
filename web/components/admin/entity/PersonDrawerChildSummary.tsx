@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import PersonDrawerChildSummaryBosPanel from "@/components/admin/entity/PersonDrawerChildSummaryBosPanel";
 import PersonDrawerIdentityAvatar from "@/components/admin/entity/PersonDrawerIdentityAvatar";
 import {
     oppInqEyebrow,
@@ -10,11 +11,15 @@ import {
 import { personDrawerChildChromeActive } from "@/lib/admin/person/personDrawerChildChrome";
 import type { PersonDrawerChildChromeHint } from "@/lib/admin/person/personDrawerChildChrome";
 import {
+    PERSON_DRAWER_CHILD_ENROLLMENT_DATE_KEY,
+    PERSON_DRAWER_CHILD_START_DATE_KEY,
+    personDrawerChildDateIsoFromRecord,
+} from "@/lib/admin/person/personDrawerChildLifecycleFields";
+import {
     patchPersonDrawerFields,
     personDrawerDobIsoFromRecord,
 } from "@/lib/admin/person/patchPersonDrawerFields";
 import {
-    personDrawerGenderDisplayLabel,
     personDrawerGenderSelectOptions,
     personDrawerGenderStoredValue,
 } from "@/lib/admin/person/personDrawerGenderField";
@@ -24,7 +29,45 @@ function compactFieldClassName(): string {
     return `${oppInqFieldInput} !py-1 !text-[13px]`;
 }
 
-/** Child identity hero — avatar, name, editable DOB/gender; age lives in title row only. */
+function SummaryFieldRow({
+    children,
+    className = "",
+}: {
+    children: ReactNode;
+    className?: string;
+}) {
+    return (
+        <div className={`grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 ${className}`}>{children}</div>
+    );
+}
+
+function DateField({
+    label,
+    value,
+    disabled,
+    onCommit,
+}: {
+    label: string;
+    value: string;
+    disabled: boolean;
+    onCommit: (next: string) => void;
+}) {
+    return (
+        <label className="flex min-w-0 flex-col gap-0.5">
+            <span className={oppInqEyebrow}>{label}</span>
+            <input
+                type="date"
+                value={value}
+                disabled={disabled}
+                onChange={(e) => onCommit(e.target.value)}
+                onBlur={(e) => onCommit(e.target.value)}
+                className={compactFieldClassName()}
+            />
+        </label>
+    );
+}
+
+/** Child identity hero — editable name/DOB/gender/dates + BOS assist column. */
 export default function PersonDrawerChildSummary({
     record,
     chromeHint,
@@ -47,6 +90,12 @@ export default function PersonDrawerChildSummary({
     const [lastName, setLastName] = useState(String(record.last_name ?? "").trim());
     const [dob, setDob] = useState(personDrawerDobIsoFromRecord(record));
     const [gender, setGender] = useState(personDrawerGenderStoredValue(record));
+    const [enrollmentDate, setEnrollmentDate] = useState(
+        personDrawerChildDateIsoFromRecord(record, PERSON_DRAWER_CHILD_ENROLLMENT_DATE_KEY)
+    );
+    const [startDate, setStartDate] = useState(
+        personDrawerChildDateIsoFromRecord(record, PERSON_DRAWER_CHILD_START_DATE_KEY)
+    );
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
@@ -54,6 +103,8 @@ export default function PersonDrawerChildSummary({
         setLastName(String(record.last_name ?? "").trim());
         setDob(personDrawerDobIsoFromRecord(record));
         setGender(personDrawerGenderStoredValue(record));
+        setEnrollmentDate(personDrawerChildDateIsoFromRecord(record, PERSON_DRAWER_CHILD_ENROLLMENT_DATE_KEY));
+        setStartDate(personDrawerChildDateIsoFromRecord(record, PERSON_DRAWER_CHILD_START_DATE_KEY));
     }, [record]);
 
     const saveFields = useCallback(
@@ -85,96 +136,116 @@ export default function PersonDrawerChildSummary({
                     size="lg"
                 />
                 <div className="min-w-0 flex-1 space-y-2">
-                    <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        <input
-                            type="text"
-                            value={firstName}
-                            disabled={!canMutate || saving}
-                            onChange={(e) => setFirstName(e.target.value)}
-                            onBlur={() => {
-                                const next = firstName.trim();
-                                const prev = String(record.first_name ?? "").trim();
-                                if (next === prev) return;
-                                void saveFields({ first_name: next || null });
-                            }}
-                            className={`${compactFieldClassName()} min-w-[6rem] max-w-[10rem] flex-1 font-semibold text-alloy-midnight`}
-                            placeholder="First name"
-                            autoComplete="given-name"
-                            aria-label="First name"
-                        />
-                        <input
-                            type="text"
-                            value={lastName}
-                            disabled={!canMutate || saving}
-                            onChange={(e) => setLastName(e.target.value)}
-                            onBlur={() => {
-                                const next = lastName.trim();
-                                const prev = String(record.last_name ?? "").trim();
-                                if (next === prev) return;
-                                void saveFields({ last_name: next || null });
-                            }}
-                            className={`${compactFieldClassName()} min-w-[6rem] max-w-[12rem] flex-1 font-semibold text-alloy-midnight`}
-                            placeholder="Last name"
-                            autoComplete="family-name"
-                            aria-label="Last name"
-                        />
-                    </div>
-                    <div className="flex min-w-0 flex-wrap items-end gap-x-3 gap-y-2">
-                        <label className="flex min-w-[8.5rem] flex-col gap-0.5">
-                            <span className={oppInqEyebrow}>DOB</span>
+                    <SummaryFieldRow>
+                        <label className="flex min-w-0 flex-col gap-0.5">
+                            <span className={oppInqEyebrow}>Child first name</span>
                             <input
-                                type="date"
-                                value={dob}
+                                type="text"
+                                value={firstName}
                                 disabled={!canMutate || saving}
-                                onChange={(e) => setDob(e.target.value)}
+                                onChange={(e) => setFirstName(e.target.value)}
                                 onBlur={() => {
-                                    const next = dob.trim();
-                                    const prev = personDrawerDobIsoFromRecord(record);
+                                    const next = firstName.trim();
+                                    const prev = String(record.first_name ?? "").trim();
                                     if (next === prev) return;
-                                    void saveFields({ date_of_birth: next || null });
+                                    void saveFields({ first_name: next || null });
                                 }}
-                                className={compactFieldClassName()}
+                                className={`${compactFieldClassName()} font-semibold text-alloy-midnight`}
+                                placeholder="First name"
+                                autoComplete="given-name"
+                                aria-label="Child first name"
                             />
                         </label>
-                        <label className="flex min-w-[7.5rem] flex-col gap-0.5">
-                            <span className={oppInqEyebrow}>Gender</span>
-                            {genderOptions.length > 0 ? (
-                                <select
-                                    value={gender}
-                                    disabled={!canMutate || saving}
-                                    onChange={(e) => {
-                                        const next = e.target.value;
-                                        setGender(next);
-                                        void saveFields({ gender: next || null });
-                                    }}
-                                    className={compactFieldClassName()}
-                                >
-                                    <option value="">—</option>
-                                    {genderOptions.map((opt) => (
-                                        <option key={opt.value} value={opt.value}>
-                                            {opt.label}
-                                        </option>
-                                    ))}
-                                </select>
-                            ) : (
-                                <input
-                                    type="text"
-                                    value={personDrawerGenderDisplayLabel(record) ?? gender}
-                                    disabled={!canMutate || saving}
-                                    onChange={(e) => setGender(e.target.value)}
-                                    onBlur={() => {
-                                        const next = gender.trim();
-                                        const prev = personDrawerGenderStoredValue(record);
-                                        if (next === prev) return;
-                                        void saveFields({ gender: next || null });
-                                    }}
-                                    className={compactFieldClassName()}
-                                    placeholder="—"
-                                />
-                            )}
+                        <label className="flex min-w-0 flex-col gap-0.5">
+                            <span className={oppInqEyebrow}>Child last name</span>
+                            <input
+                                type="text"
+                                value={lastName}
+                                disabled={!canMutate || saving}
+                                onChange={(e) => setLastName(e.target.value)}
+                                onBlur={() => {
+                                    const next = lastName.trim();
+                                    const prev = String(record.last_name ?? "").trim();
+                                    if (next === prev) return;
+                                    void saveFields({ last_name: next || null });
+                                }}
+                                className={`${compactFieldClassName()} font-semibold text-alloy-midnight`}
+                                placeholder="Last name"
+                                autoComplete="family-name"
+                                aria-label="Child last name"
+                            />
                         </label>
-                    </div>
+                    </SummaryFieldRow>
+                    <SummaryFieldRow>
+                        <DateField
+                            label="DOB"
+                            value={dob}
+                            disabled={!canMutate || saving}
+                            onCommit={(next) => {
+                                setDob(next);
+                                const prev = personDrawerDobIsoFromRecord(record);
+                                if (next.trim() === prev) return;
+                                void saveFields({ date_of_birth: next.trim() || null });
+                            }}
+                        />
+                        <label className="flex min-w-0 flex-col gap-0.5">
+                            <span className={oppInqEyebrow}>Gender</span>
+                            <select
+                                value={gender}
+                                disabled={!canMutate || saving}
+                                onChange={(e) => {
+                                    const next = e.target.value;
+                                    setGender(next);
+                                    void saveFields({ gender: next || null });
+                                }}
+                                className={compactFieldClassName()}
+                                data-person-drawer-gender-select="true"
+                            >
+                                <option value="">—</option>
+                                {genderOptions.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>
+                                        {opt.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    </SummaryFieldRow>
+                    <SummaryFieldRow>
+                        <DateField
+                            label="Enrollment date"
+                            value={enrollmentDate}
+                            disabled={!canMutate || saving}
+                            onCommit={(next) => {
+                                setEnrollmentDate(next);
+                                const prev = personDrawerChildDateIsoFromRecord(
+                                    record,
+                                    PERSON_DRAWER_CHILD_ENROLLMENT_DATE_KEY
+                                );
+                                if (next.trim() === prev) return;
+                                void saveFields({ [PERSON_DRAWER_CHILD_ENROLLMENT_DATE_KEY]: next.trim() || null });
+                            }}
+                        />
+                        <DateField
+                            label="Start date"
+                            value={startDate}
+                            disabled={!canMutate || saving}
+                            onCommit={(next) => {
+                                setStartDate(next);
+                                const prev = personDrawerChildDateIsoFromRecord(
+                                    record,
+                                    PERSON_DRAWER_CHILD_START_DATE_KEY
+                                );
+                                if (next.trim() === prev) return;
+                                void saveFields({ [PERSON_DRAWER_CHILD_START_DATE_KEY]: next.trim() || null });
+                            }}
+                        />
+                    </SummaryFieldRow>
                 </div>
+                <PersonDrawerChildSummaryBosPanel
+                    personId={personId}
+                    primaryOpportunityId={summary.primary_opportunity_id}
+                    overviewData={record}
+                />
             </div>
         </section>
     );

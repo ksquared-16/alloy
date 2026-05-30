@@ -133,19 +133,20 @@ describe("child header and summary model", () => {
         expect(summary.status_label).toBe("Family Lead");
     });
 
-    it("child summary hero leads with identity fields — DOB/gender only, no age pill", () => {
+    it("child summary hero leads with identity fields — DOB/gender/dates, gender select only", () => {
         const src = readFileSync(
             join(process.cwd(), "components/admin/entity/PersonDrawerChildSummary.tsx"),
             "utf8"
         );
-        expect(src).toContain('aria-label="First name"');
-        expect(src).toContain('aria-label="Last name"');
+        expect(src).toContain('aria-label="Child first name"');
+        expect(src).toContain('aria-label="Child last name"');
         expect(src).toContain("PersonDrawerIdentityAvatar");
         expect(src).toContain('type="date"');
         expect(src).toContain("patchPersonDrawerFields");
-        expect(src).toContain("Gender");
+        expect(src).toContain('data-person-drawer-gender-select="true"');
+        expect(src).toContain("Enrollment date");
+        expect(src).toContain("Start date");
         expect(src).not.toContain("personDrawerChildAgeLabel");
-        expect(src).not.toContain("age_label");
     });
 
     it("child title row shows name with Child and age pills inline", () => {
@@ -173,16 +174,11 @@ describe("child header and summary model", () => {
     it("AdminEntityDrawer uses person status dropdown for child — not opportunity enrollment mirror", () => {
         const src = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
         expect(src).toContain("data-person-drawer-child-header-subtitle");
-        expect(src).toContain("drawerHeaderStatusReady");
-        expect(src).toContain("personDrawerPaintReady");
-        expect(src).toContain("{drawerStatusBadge ? <span className=\"shrink-0\">{drawerStatusBadge}</span> : null}");
+        expect(src).toContain("personDrawerChildHeaderStatus");
+        expect(src).toContain('data-person-drawer-child-header-status="true"');
         expect(src).toContain("PersonDrawerChildTitleRow");
-        expect(src).toContain('entityLabel="Person"');
         expect(src).not.toMatch(
             /personChildLifecycleChrome[\s\S]{0,220}resolvePersonDrawerChildSummaryModel[\s\S]{0,120}status_label/
-        );
-        expect(src).not.toMatch(
-            /personChildLifecycleChrome[\s\S]{0,400}\{drawerStatusBadge\}[\s\S]{0,80}\{drawerHeaderActions\}/
         );
     });
 
@@ -211,7 +207,8 @@ describe("family consolidation", () => {
         expect(src).toContain("Primary guardian");
         expect(src).toContain("Other adults");
         expect(src).toContain("Siblings");
-        expect(src).toContain("dedupePersonRelationshipLinks");
+        expect(src).toContain("resolvePersonDrawerChildFamilyModel");
+        expect(src).toContain("data-person-drawer-family-source-note");
     });
 });
 

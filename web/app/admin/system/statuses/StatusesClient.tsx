@@ -11,6 +11,11 @@ import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import type { StatusDef } from "@/app/api/admin/status-definitions/route";
 import { ADMIN_STATUS_DEFINITIONS_ENTITY_TYPES } from "@/lib/admin/statusDefinitionsAdminEntityTypes";
+import {
+    slugifyStatusKey,
+    STATUS_KEY_REGEX,
+    uniqueStatusKey,
+} from "@/lib/admin/slugifyAdminKey";
 
 /** Canonical admin-configurable workflow statuses (kept in sync with GET /api/admin/status-definitions unscoped list). */
 const ENTITY_TYPES = ADMIN_STATUS_DEFINITIONS_ENTITY_TYPES;
@@ -82,6 +87,8 @@ export default function StatusesClient({
     const [modalEntityType, setModalEntityType] = useState("");
     const [modalKey, setModalKey] = useState("");
     const [modalLabel, setModalLabel] = useState("");
+    const [modalAdvancedKey, setModalAdvancedKey] = useState(false);
+    const [modalKeyManual, setModalKeyManual] = useState(false);
     const [modalSortOrder, setModalSortOrder] = useState(100);
     const [modalSaving, setModalSaving] = useState(false);
     const [modalError, setModalError] = useState<string | null>(null);
@@ -133,6 +140,8 @@ export default function StatusesClient({
         }
         setModalKey("");
         setModalLabel("");
+        setModalAdvancedKey(false);
+        setModalKeyManual(false);
         setModalSortOrder(100);
         setModalError(null);
         setModalOpen(true);
@@ -140,9 +149,25 @@ export default function StatusesClient({
 
     const handleCreate = async () => {
         if (!canMutate) return;
-        const key = modalKey.trim().toLowerCase();
-        if (!/^[a-z0-9_]{2,32}$/.test(key)) {
+        const label = modalLabel.trim();
+        if (!label) {
+            setModalError("Status label is required.");
+            return;
+        }
+        const reserved = new Set(
+            (statusesByEntityType[modalEntityType] ?? []).map((s) => s.status_key)
+        );
+        const key = (
+            modalAdvancedKey && modalKey.trim()
+                ? modalKey.trim().toLowerCase()
+                : uniqueStatusKey(label, reserved)
+        );
+        if (!STATUS_KEY_REGEX.test(key)) {
             setModalError("Key must be 2–32 characters: lowercase letters, numbers, underscores only.");
+            return;
+        }
+        if (reserved.has(key)) {
+            setModalError("A status with this key already exists for this entity type.");
             return;
         }
         setModalSaving(true);
@@ -238,6 +263,20 @@ export default function StatusesClient({
         }
         return map;
     }, [statuses]);
+
+    const modalPreviewStatusKey = useMemo(() => {
+        const label = modalLabel.trim();
+        if (!label) return "";
+        const reserved = new Set(
+            (statusesByEntityType[modalEntityType] ?? []).map((s) => s.status_key)
+        );
+        return uniqueStatusKey(label, reserved);
+    }, [modalLabel, modalEntityType, statusesByEntityType]);
+
+    useEffect(() => {
+        if (!modalOpen || modalAdvancedKey || modalKeyManual) return;
+        setModalKey(modalPreviewStatusKey);
+    }, [modalOpen, modalAdvancedKey, modalKeyManual, modalPreviewStatusKey]);
 
     const allowedSet = useMemo(() => new Set<string>(ENTITY_TYPES as unknown as string[]), []);
 
@@ -535,25 +574,53 @@ export default function StatusesClient({
                                 </div>
                             )}
                             <div>
-                                <label className="block text-xs font-medium text-[#59678b] mb-0.5">Status key (lowercase, 2–32 chars)</label>
-                                <input
-                                    type="text"
-                                    value={modalKey}
-                                    onChange={(e) => setModalKey(e.target.value)}
-                                    placeholder="e.g. pending_approval"
-                                    className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
-                                />
-                            </div>
-                            <div>
                                 <label className="block text-xs font-medium text-[#59678b] mb-0.5">Status label</label>
                                 <input
                                     type="text"
                                     value={modalLabel}
                                     onChange={(e) => setModalLabel(e.target.value)}
-                                    placeholder="Display name"
+                                    placeholder="e.g. Future Start"
                                     className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
                                 />
                             </div>
+                            {!modalAdvancedKey ? (
+                                <p className="text-xs text-[#59678b]">
+                                    Status key will be{" "}
+                                    <code className="rounded bg-[#eef0f4] px-1 py-0.5">
+                                        {modalPreviewStatusKey || "…"}
+                                    </code>
+                                </p>
+                            ) : (
+                                <div>
+                                    <label className="block text-xs font-medium text-[#59678b] mb-0.5">
+                                        Status key (advanced override)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={modalKey}
+                                        onChange={(e) => {
+                                            setModalKeyManual(true);
+                                            setModalKey(e.target.value);
+                                        }}
+                                        placeholder="e.g. future_start"
+                                        className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                    />
+                                </div>
+                            )}
+                            <label className="flex items-center gap-2 text-xs text-[#59678b]">
+                                <input
+                                    type="checkbox"
+                                    checked={modalAdvancedKey}
+                                    onChange={(e) => {
+                                        setModalAdvancedKey(e.target.checked);
+                                        if (!e.target.checked) {
+                                            setModalKeyManual(false);
+                                            setModalKey(modalPreviewStatusKey);
+                                        }
+                                    }}
+                                />
+                                Advanced (edit status key manually)
+                            </label>
                             <div>
                                 <label className="block text-xs font-medium text-[#59678b] mb-0.5">Sort order (optional)</label>
                                 <input

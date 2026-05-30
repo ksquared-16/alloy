@@ -6,7 +6,14 @@ import type { PersonDrawerChildChromeHint } from "@/lib/admin/person/personDrawe
 import { personDrawerCrmDisplayLabel } from "@/lib/admin/person/personDrawerChildIdentity";
 import { resolvePersonDrawerChildSummaryModel } from "@/lib/admin/person/personDrawerChildSummaryModel";
 
-/** Enrollment-owned context — program, location, linked family lead (not person identity). */
+function familyLeadPillLabel(statusLabel: string | null, opportunityName: string | null): string {
+    const status = personDrawerCrmDisplayLabel(statusLabel);
+    if (status) return `Family Lead: ${status}`;
+    if (opportunityName?.trim()) return `Open Family Lead`;
+    return "Open Family Lead";
+}
+
+/** Linked opportunity context — small pill, not child status. */
 export default function PersonDrawerChildEnrollmentContext({
     record,
     chromeHint,
@@ -19,41 +26,35 @@ export default function PersonDrawerChildEnrollmentContext({
     if (!personDrawerChildChromeActive(record, chromeHint)) return null;
 
     const summary = resolvePersonDrawerChildSummaryModel(record);
-    const leadLabel = personDrawerCrmDisplayLabel(summary.status_label);
     const opportunityId = summary.primary_opportunity_id;
-    const hasContext =
-        summary.program_label ||
-        summary.location_label ||
-        (leadLabel && opportunityId) ||
-        summary.primary_guardian;
+    const mirror = (record._enrollment_mirror as { opportunity_name?: string | null }[] | undefined)?.[0];
+    const opportunityName = mirror?.opportunity_name?.trim() || null;
 
-    if (!hasContext) return null;
+    const hasLeadLink = Boolean(opportunityId && onOpenLeadOpportunity);
+    const hasProgramOrLocation = summary.program_label || summary.location_label;
+
+    if (!hasLeadLink && !hasProgramOrLocation) return null;
 
     return (
         <div
-            className="mb-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5 rounded-lg border border-alloy-stone/12 bg-alloy-stone/[0.03] px-3 py-2"
+            className="mb-2 flex min-w-0 flex-wrap items-center gap-1.5 px-0.5"
             data-person-drawer-enrollment-context="true"
         >
-            <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/45">
-                Enrollment
-            </span>
             {summary.program_label ? (
                 <span className={personDrawerRolePillClassName}>{summary.program_label}</span>
             ) : null}
             {summary.location_label ? (
                 <span className={personDrawerRolePillClassName}>{summary.location_label}</span>
             ) : null}
-            {leadLabel && opportunityId && onOpenLeadOpportunity ? (
+            {hasLeadLink ? (
                 <button
                     type="button"
-                    onClick={() => onOpenLeadOpportunity(opportunityId)}
-                    className="text-[12px] font-medium text-alloy-blue hover:underline"
+                    onClick={() => onOpenLeadOpportunity!(opportunityId!)}
+                    className={`${personDrawerRolePillClassName} cursor-pointer hover:border-alloy-blue/45 hover:bg-alloy-blue/[0.12]`}
                     data-person-drawer-family-lead-link="true"
                 >
-                    {leadLabel}
+                    {familyLeadPillLabel(summary.status_label, opportunityName)}
                 </button>
-            ) : leadLabel ? (
-                <span className="text-[12px] font-medium text-alloy-midnight/70">{leadLabel}</span>
             ) : null}
         </div>
     );

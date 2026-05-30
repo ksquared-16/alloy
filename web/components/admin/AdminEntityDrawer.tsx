@@ -264,6 +264,7 @@ import { prefetchLinkedPersonsFromOpportunityRecord } from "@/lib/admin/drawer/p
 import RecordLifecycleRail from "@/components/admin/drawer/RecordLifecycleRail";
 import RecordLifecycleRailSkeleton from "@/components/admin/drawer/RecordLifecycleRailSkeleton";
 import { resolveRecordLifecycleRailModel } from "@/lib/admin/drawer/resolveRecordLifecycleRailModel";
+import { resolveOpportunityDrawerQueueDefinition } from "@/lib/admin/drawer/resolveOpportunityDrawerQueueDefinition";
 import {
     peekDrawerStackRestoreSnapshot,
     putDrawerStackRestoreSnapshot,
@@ -10063,6 +10064,112 @@ export default function AdminEntityDrawer() {
         setFormData,
     ]);
 
+    const personDrawerChildHeaderStatus = useMemo(() => {
+        if (drawer.type !== "persons" || !personChildLifecycleChrome) return null;
+        if (!overviewData || (overviewData as { _create?: boolean })._create) return null;
+        if (!personDrawerPaintReady) {
+            return (
+                <div className="flex min-w-0 max-w-[11rem] shrink flex-col gap-0.5 sm:max-w-[15rem]">
+                    <span className="sr-only">Child status</span>
+                    <div
+                        className="h-9 w-full skeleton-pulse rounded-full border border-alloy-stone/20 bg-alloy-stone/8"
+                        aria-hidden
+                        data-person-status-skeleton="true"
+                    />
+                </div>
+            );
+        }
+
+        const d = overviewData as Record<string, unknown>;
+        const currentStatus = String(formData.status_key ?? d.status_key ?? "").trim();
+        const statusDisplayLabel =
+            String((d as { _status_display?: string | null })._status_display ?? "").trim() ||
+            getStatusLabel(currentStatus) ||
+            currentStatus ||
+            null;
+
+        if (!currentStatus && statusDefsLoading) {
+            return (
+                <div className="flex min-w-0 max-w-[11rem] shrink flex-col gap-0.5 sm:max-w-[15rem]">
+                    <span className="sr-only">Child status</span>
+                    <div
+                        className="h-9 w-full skeleton-pulse rounded-full border border-alloy-stone/20 bg-alloy-stone/8"
+                        aria-hidden
+                        data-person-status-skeleton="true"
+                    />
+                </div>
+            );
+        }
+
+        let statusOptions =
+            statusDefsForDrawer
+                ?.filter((s) => s.is_active !== false)
+                .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)) ?? [];
+        if (currentStatus && !statusOptions.some((s) => s.status_key === currentStatus)) {
+            statusOptions = [
+                ...statusOptions,
+                {
+                    status_key: currentStatus,
+                    status_label: statusDisplayLabel ?? currentStatus,
+                    sort_order: 9999,
+                    is_active: true,
+                },
+            ];
+        }
+
+        return (
+            <div
+                className="flex min-w-0 max-w-[11rem] shrink flex-col gap-0.5 sm:max-w-[15rem]"
+                data-person-drawer-child-header-status="true"
+            >
+                <span className="sr-only">Child status</span>
+                <select
+                    value={currentStatus}
+                    disabled={!canMutate || statusDefsLoading}
+                    onChange={(e) => {
+                        const nextKey = e.target.value.trim();
+                        setFormData((prev) => ({ ...prev, status_key: nextKey || null }));
+                        if (!drawer.id || drawer.id === "new" || !canMutate) return;
+                        void fetch(`/api/admin/persons/${encodeURIComponent(drawer.id)}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ status_key: nextKey || null }),
+                        })
+                            .then(async (res) => {
+                                const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+                                if (!res.ok) throw new Error(String(json.error ?? "Save failed"));
+                                setData((prev) => (prev ? { ...prev, ...json } : prev));
+                                refetch();
+                            })
+                            .catch((e) => setSaveError((e as Error).message));
+                    }}
+                    className="w-full min-w-0 rounded-full border border-alloy-stone/30 bg-white px-3 py-2 text-[12px] font-semibold text-alloy-midnight/90 shadow-md shadow-alloy-stone/10 ring-1 ring-alloy-stone/10 focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20 disabled:opacity-60"
+                    aria-label="Child status"
+                    data-record-drawer-header-status="select"
+                >
+                    <option value="">— None —</option>
+                    {statusOptions.map((s) => (
+                        <option key={s.status_key} value={s.status_key}>
+                            {s.status_label ?? s.status_key}
+                        </option>
+                    ))}
+                </select>
+            </div>
+        );
+    }, [
+        drawer.type,
+        drawer.id,
+        personChildLifecycleChrome,
+        personDrawerPaintReady,
+        overviewData,
+        formData.status_key,
+        statusDefsForDrawer,
+        statusDefsLoading,
+        canMutate,
+        getStatusLabel,
+        refetch,
+    ]);
+
     const opportunityChildLifecycleSummary = useMemo((): OpportunityChildLifecycleSummary | null => {
         if (drawer.type !== "opportunities" || !overviewData || (overviewData as { _create?: boolean })._create) {
             return null;
@@ -10073,19 +10180,21 @@ export default function AdminEntityDrawer() {
     }, [drawer.type, overviewData]);
 
     const opportunityDrawerLifecycleRail = useMemo(() => {
-        if (!opportunityInquiryWorkflowDrawer || drawer.type !== "opportunities") return null;
+        if (drawer.type !== "opportunities" || !isOpportunityRecordModalTarget) return null;
         if (!drawer.id || drawer.id === "new") return null;
 
         const d = overviewData as Record<string, unknown> | null;
         const currentStatus = String(formData.status_key ?? d?.status_key ?? "").trim() || null;
-        const qd = opportunityQueueDefinition;
+        const qd = resolveOpportunityDrawerQueueDefinition(opportunityQueueDefinition, {
+            allowEnrollmentFallback: opportunityInquiryWorkflowDrawer,
+        });
         const model = resolveRecordLifecycleRailModel({
             queueDefinition: qd,
             currentStatusKey: currentStatus,
         });
 
         const railLoading =
-            !qd &&
+            !opportunityQueueDefinition &&
             (opportunityDrawerBootstrapPending || opportunityDrawerPrimaryLoadingVisible);
 
         if (model && model.steps.length > 0) {
@@ -10098,18 +10207,19 @@ export default function AdminEntityDrawer() {
             );
         }
 
-        if (railLoading) {
+        if (railLoading || (opportunityInquiryWorkflowDrawer && !qd)) {
             return <RecordLifecycleRailSkeleton stepCount={6} />;
         }
 
         return null;
     }, [
-        opportunityInquiryWorkflowDrawer,
         drawer.type,
         drawer.id,
+        isOpportunityRecordModalTarget,
         overviewData,
         formData.status_key,
         opportunityQueueDefinition,
+        opportunityInquiryWorkflowDrawer,
         opportunityDrawerBootstrapPending,
         opportunityDrawerPrimaryLoadingVisible,
     ]);
@@ -10167,7 +10277,7 @@ export default function AdminEntityDrawer() {
 
     const drawerPostTabStrip =
         isOpportunityRecordModalTarget &&
-        opportunityInquiryWorkflowDrawer &&
+        drawer.type === "opportunities" &&
         opportunityDrawerLifecycleRail
             ? opportunityDrawerLifecycleRail
             : personRecordChromeBodyShell &&
@@ -10712,7 +10822,9 @@ export default function AdminEntityDrawer() {
           !(overviewData as { _create?: boolean })._create ? (
             <div className="mt-0.5" data-person-drawer-child-header-subtitle="true">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] leading-snug text-alloy-midnight/75">
-                    {drawerStatusBadge ? <span className="shrink-0">{drawerStatusBadge}</span> : null}
+                    {personDrawerChildHeaderStatus ? (
+                        <span className="shrink-0">{personDrawerChildHeaderStatus}</span>
+                    ) : null}
                     {formatPersonDrawerRecordNumber(overviewData as Record<string, unknown>) ? (
                         <span className="font-medium text-alloy-midnight/80">
                             {formatPersonDrawerRecordNumber(overviewData as Record<string, unknown>)}

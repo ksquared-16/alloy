@@ -101,11 +101,15 @@ describe("Opportunity drawer lifecycle rail wiring", () => {
         expect(shell).toContain("resolveWorkUnitQueueDefinitionForDrawer");
     });
 
-    it("shows opportunity lifecycle rail whenever memo resolves content — not gated on overview reveal", () => {
+    it("shows opportunity lifecycle rail for adminV2 opportunity modals with enrollment fallback", () => {
         const shell = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
         expect(shell).toMatch(/drawerPostTabStrip[\s\S]{0,220}opportunityDrawerLifecycleRail/);
+        expect(shell).toContain("resolveOpportunityDrawerQueueDefinition");
         expect(shell).not.toMatch(
             /drawerPostTabStrip[\s\S]{0,220}opportunityDrawerOverviewRevealReady[\s\S]{0,120}opportunityDrawerLifecycleRail/
+        );
+        expect(shell).not.toMatch(
+            /drawerPostTabStrip[\s\S]{0,180}opportunityInquiryWorkflowDrawer[\s\S]{0,80}opportunityDrawerLifecycleRail/
         );
     });
 

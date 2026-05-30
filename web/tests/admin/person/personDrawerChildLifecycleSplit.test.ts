@@ -116,12 +116,11 @@ describe("child lifecycle split wiring", () => {
 
     it("person status dropdown is separate from opportunity enrollment status", () => {
         const drawer = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(drawer).toContain("drawerHeaderStatusReady");
-        expect(drawer).toContain('drawer.type === "persons"');
-        expect(drawer).toContain("RecordDrawerHeaderStatusSelect");
-        expect(drawer).toContain("status_key");
+        expect(drawer).toContain("personDrawerChildHeaderStatus");
+        expect(drawer).toContain('aria-label="Child status"');
+        expect(drawer).toContain("statusDefsForDrawer");
         expect(drawer).not.toMatch(
-            /personChildLifecycleChrome[\s\S]{0,400}opportunity_status_key[\s\S]{0,120}RecordDrawerHeaderStatusSelect/
+            /personChildLifecycleChrome[\s\S]{0,400}opportunity_status_key[\s\S]{0,120}personDrawerChildHeaderStatus/
         );
     });
 

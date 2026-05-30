@@ -2,17 +2,14 @@
 
 import type { ReactNode } from "react";
 import { buildPersonDrawerRelationshipGroups } from "@/lib/admin/person/buildPersonDrawerRelationshipGroups";
-import { dedupePersonRelationshipLinks } from "@/lib/admin/person/dedupePersonRelationshipLinks";
-import { resolvePersonDrawerPrimaryGuardian } from "@/lib/admin/person/personDrawerChildIdentity";
 import { personDrawerRelationshipInputFromRecord } from "@/lib/admin/person/personDrawerRelationshipInput";
 import {
     personDrawerRelationshipSectionHasContent,
     resolvePersonDrawerRelationshipSectionModel,
 } from "@/lib/admin/person/personDrawerRelationshipSection";
 import { resolvePersonDrawerPresentationEmphasis } from "@/lib/admin/person/personDrawerPresentationEmphasis";
-import { primaryHouseholdLabel } from "@/lib/admin/person/personDrawerChildLifecycleSlots";
+import { resolvePersonDrawerChildFamilyModel } from "@/lib/admin/person/resolvePersonDrawerChildFamilyModel";
 import { resolvePersonDrawerProfileFromRecord } from "@/components/admin/entity/PersonDrawerProfileBadges";
-import type { PersonRelationshipLink } from "@/lib/admin/person/personDrawerVisibilityTypes";
 import {
     oppInqEyebrow,
     oppInqInnerCardCompact,
@@ -20,17 +17,6 @@ import {
 } from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
 
 type OpenDrawer = (type: string, id: string) => void;
-
-function guardianMatchesPrimary(
-    row: PersonRelationshipLink,
-    primary: ReturnType<typeof resolvePersonDrawerPrimaryGuardian>
-): boolean {
-    if (!primary) return false;
-    if (primary.person_id && row.person_id === primary.person_id) return true;
-    const rowName = row.display_name?.trim().toLowerCase();
-    const primaryName = primary.display_name.trim().toLowerCase();
-    return Boolean(rowName && primaryName && rowName === primaryName);
-}
 
 function RelationshipLinkRow({
     row,
@@ -96,29 +82,25 @@ export function PersonDrawerRelationshipsOverview({
     const groups = buildPersonDrawerRelationshipGroups(personDrawerRelationshipInputFromRecord(record));
     const model = resolvePersonDrawerRelationshipSectionModel(profile, groups);
     const childFamilyEmphasis = resolvePersonDrawerPresentationEmphasis(profile) === "child_lifecycle";
-    const householdLabel = childFamilyEmphasis ? primaryHouseholdLabel(record) : null;
-    const primaryGuardian = childFamilyEmphasis ? resolvePersonDrawerPrimaryGuardian(record) : null;
+    const familyPreview = childFamilyEmphasis ? resolvePersonDrawerChildFamilyModel(record) : null;
 
     if (
         !personDrawerRelationshipSectionHasContent(model, groups) &&
-        !(childFamilyEmphasis && (householdLabel || primaryGuardian))
+        !(childFamilyEmphasis && (familyPreview?.household_label || familyPreview?.primary_adult))
     ) {
         return null;
     }
 
     const openPerson = (id: string) => onOpenDrawer("persons", id);
     const openMember = (id: string) => onOpenDrawer("customer_members", id);
-    const childGuardians = dedupePersonRelationshipLinks([...groups.parents, ...groups.guardians]);
-    const additionalGuardians = primaryGuardian
-        ? childGuardians.filter((row) => !guardianMatchesPrimary(row, primaryGuardian))
-        : childGuardians.slice(1);
     const siblings = groups.siblings;
 
     if (childFamilyEmphasis) {
+        const family = resolvePersonDrawerChildFamilyModel(record);
         const hasFamilyContent =
-            householdLabel ||
-            primaryGuardian ||
-            additionalGuardians.length > 0 ||
+            family.household_label ||
+            family.primary_adult ||
+            family.other_adults.length > 0 ||
             siblings.length > 0;
 
         if (!hasFamilyContent) return null;
@@ -130,31 +112,37 @@ export function PersonDrawerRelationshipsOverview({
                 data-person-drawer-family-emphasis="true"
             >
                 <h4 className={`${oppInqEyebrow} px-0.5`}>Family & household</h4>
-                <div className={`${oppInqInnerCardCompact} mt-2`} data-person-drawer-family-household="true">
-                    {householdLabel ? (
+                <div className={`${oppInqInnerCardCompact} mt-2 space-y-3`} data-person-drawer-family-household="true">
+                    {family.household_label ? (
                         <div>
                             <h5 className={oppInqEyebrow}>Household</h5>
-                            <p className="mt-1 text-[14px] font-semibold text-alloy-midnight/90">{householdLabel}</p>
+                            <p className="mt-1 text-[14px] font-semibold text-alloy-midnight/90">
+                                {family.household_label}
+                            </p>
                         </div>
                     ) : null}
-                    {primaryGuardian ? (
+                    {family.primary_adult ? (
                         <GroupBlock title="Primary guardian">
                             <RelationshipLinkRow
                                 row={{
-                                    person_id: primaryGuardian.person_id,
-                                    display_name: primaryGuardian.display_name,
-                                    relationship_label: primaryGuardian.role_label,
+                                    person_id: family.primary_adult.person_id,
+                                    display_name: family.primary_adult.display_name,
+                                    relationship_label: family.primary_adult.role_label,
                                 }}
                                 onOpenPerson={openPerson}
                             />
                         </GroupBlock>
                     ) : null}
-                    {additionalGuardians.length > 0 ? (
+                    {family.other_adults.length > 0 ? (
                         <GroupBlock title="Other adults">
-                            {additionalGuardians.map((row) => (
+                            {family.other_adults.map((row) => (
                                 <RelationshipLinkRow
-                                    key={row.person_id ?? row.display_name ?? "guardian"}
-                                    row={row}
+                                    key={row.person_id ?? row.display_name}
+                                    row={{
+                                        person_id: row.person_id,
+                                        display_name: row.display_name,
+                                        relationship_label: row.role_label,
+                                    }}
                                     onOpenPerson={openPerson}
                                 />
                             ))}
@@ -171,6 +159,14 @@ export function PersonDrawerRelationshipsOverview({
                                 />
                             ))}
                         </GroupBlock>
+                    ) : null}
+                    {family.other_adults.length > 0 ? (
+                        <p
+                            className="text-[10px] leading-snug text-alloy-midnight/45"
+                            data-person-drawer-family-source-note="true"
+                        >
+                            {family.source_note}
+                        </p>
                     ) : null}
                 </div>
             </div>

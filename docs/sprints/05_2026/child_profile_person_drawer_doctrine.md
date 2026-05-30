@@ -495,8 +495,8 @@ Approved audit direction — child drawer as **operating surface**, not Person e
 1. **Header** — name + Child + age pill (once); person `status_key` dropdown in subtitle rail (`persons.status_key`, not opportunity status)  
 2. **Tabs** — Overview \| Activity (related) \| Documents  
 3. **Post-tab strip** — compact module shortcuts only (Documents, Communications, Activity, Schedule/Attendance/Billing soon)  
-4. **Child summary** — identity hero (editable name/DOB/gender — no duplicate age)  
-5. **Enrollment context** — program, location, family lead link  
+4. **Child summary** — two-column grid: name, DOB/gender, enrollment/start dates + BOS assist panel  
+5. **Enrollment context** — program/location pills + `Family Lead: {opp status}` pill (not child status)  
 6. **Family & household** — account, primary guardian, other adults, siblings  
 7. **Medical / child details** — config-driven remainder  
 
