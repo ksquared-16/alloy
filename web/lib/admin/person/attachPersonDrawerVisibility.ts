@@ -357,6 +357,22 @@ export async function attachPersonDrawerVisibility(
         }
     }
 
+    if (householdCustomerIds.length > 0) {
+        const { data: customerRows } = await supabase
+            .from("customers")
+            .select("id, name")
+            .eq("org_id", orgId)
+            .in("id", householdCustomerIds);
+        out._household_context = (customerRows ?? []).map(
+            (c: { id: string; name?: string | null }) => ({
+                customer_id: c.id,
+                customer_name: trimOrNull(c.name),
+            })
+        );
+    } else {
+        out._household_context = [];
+    }
+
     out._enrollment_mirror = enrollmentMirror;
     out._enrollment_opportunities = enrollmentOpportunities;
     out._sibling_links = siblingLinks;

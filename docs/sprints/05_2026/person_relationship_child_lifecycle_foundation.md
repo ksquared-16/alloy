@@ -1,7 +1,7 @@
 # Person Relationship & Child Lifecycle Foundation
 
 **Date:** 2026-05-29  
-**Status:** Implemented (parent/child relationship presentation foundation)  
+**Status:** Implemented (parent/child relationships + child lifecycle surface polish)  
 **Parent doc:** [`child_profile_person_drawer_doctrine.md`](./child_profile_person_drawer_doctrine.md)
 
 ---
@@ -11,6 +11,40 @@
 **Person** is the canonical identity entity. Child, parent, guardian, emergency contact, employee, volunteer, and authorized pickup are **roles and relationships** — not separate identity systems or drawer architectures.
 
 This pass solves **parent ↔ child** presentation for CRM demo quality while preserving extension points for future roles without another refactor.
+
+**Pass 4 (2026-05-29):** Child drawer lifecycle surface — profile summary, lifecycle roadmap pills, section ordering, and configurability documentation. No new entity systems or future modules.
+
+---
+
+## Lifecycle slot configurability
+
+| Slot | `section_key` (future layout) | Today | Notes |
+|------|------------------------------|-------|-------|
+| **Enrollment** | `enrollment_activity` | **Data-backed** | OCM mirror + opportunity-person rows; deduped in `buildPersonEnrollmentActivityEntries`; full detail in overview section when data exists |
+| **Family / relationships** | `relationships` | **Data-backed** | Household + `person_relationships`; title varies by emphasis (Family / Children) |
+| **Lifecycle roadmap** | _(above-fold, not a section)_ | **Code-driven presentation** | `PersonDrawerChildLifecycleSummary` — compact pills for orientation; not separate empty cards |
+| **Schedule** | `schedule_summary` | **Future layout** | Roadmap pill only (`phase: future`) |
+| **Attendance** | `attendance_summary` | **Future layout** | Roadmap pill only |
+| **Billing** | `billing_summary` | **Future layout** | Roadmap pill only |
+| **Documents** | `document_history` | **Future layout** | Roadmap pill only |
+| **Communications** | `communications` | **Future layout** | Roadmap pill only |
+| **History** | `history` | **Future layout** | Roadmap pill only |
+
+**Gating:** `personDrawerShowsChildLifecycleSurface(profile)` — true when `resolvePersonDrawerPresentationEmphasis(profile) === "child_lifecycle"`. Parent/guardian emphasis never renders child lifecycle summary or roadmap.
+
+**Future target:** `record_drawer_layouts.config_json` sections with `visible_when.roles includes child` and `section_key` matching the layout keys above. Code-driven slots are documented in `CHILD_LIFECYCLE_SECTION_SLOTS` and `personDrawerChildLifecycleSlots.ts` until layout runtime ships.
+
+---
+
+## Child drawer (pass 4)
+
+Above overview (not duplicated in header):
+
+1. **Context panel** — max 4 quick links (parents, guardians, siblings; one enrollment link when child emphasis)
+2. **Child profile summary** — household, guardians hint, primary enrollment link, lifecycle roadmap pills
+3. **Overview sections** (ordered for child): Family → Enrollment activity → profile/medical fields
+
+Header retains name, age/DOB, badges — summary does not repeat those fields.
 
 ---
 
@@ -65,7 +99,7 @@ This pass solves **parent ↔ child** presentation for CRM demo quality while pr
 GET /api/admin/entity/persons/{id}
   → _person_relationships, _customer_persons, _compatibility_members
   → attachPersonDrawerVisibility
-      → _household_adult_links, _household_child_links, _sibling_links, enrollment mirrors
+      → _household_context, _household_adult_links, _household_child_links, _sibling_links, enrollment mirrors
   → personDrawerRelationshipInputFromRecord
   → buildPersonDrawerRelationshipGroups (merge + dedupe)
   → resolvePersonDrawerRelationshipSectionModel (profile emphasis)
@@ -97,12 +131,13 @@ Modules (isolated for future layout config):
 ### Child drawer
 
 - **Family** premium section from household adults + person edges
-- **Enrollment activity** section (lifecycle direction preserved)
+- **Child profile summary** + lifecycle roadmap (pass 4) — role-gated, not a person type
+- **Enrollment activity** section when data exists (deduped)
 - Siblings in Family section when present
 
 ### Context panel
 
-- **Quick links** only (max 4) — no enrollment duplication, no full relationship repeat
+- **Quick links** only (max 4) — child emphasis may include one enrollment link; full enrollment in body section only
 
 ---
 
@@ -131,9 +166,15 @@ Future role examples (same table + type registry, not new entities):
 
 ## Child lifecycle direction (structure)
 
-Reserved section slots (`CHILD_LIFECYCLE_SECTION_SLOTS`) — only `enrollment_activity` + `relationships`/`Family` render today:
+Reserved section slots (`CHILD_LIFECYCLE_SECTION_SLOTS`):
 
 Opportunity → Waitlist → Tours → **Enrollment activity** → Schedule → Attendance → Billing → Documents → Communications → History
+
+| Renders today | Mechanism |
+|---------------|-----------|
+| Enrollment activity (body section) | Real data when mirror/opportunity rows exist |
+| Lifecycle roadmap pills | Code-driven summary strip; future slots show dashed “Later” pills — **not** empty overview cards |
+| Schedule … History | Layout placeholders only (`layoutSectionKey` documented) |
 
 ---
 
@@ -149,6 +190,20 @@ Opportunity → Waitlist → Tours → **Enrollment activity** → Schedule → 
 ---
 
 ## Files changed (this pass)
+
+| File | Change |
+|------|--------|
+| `web/lib/admin/person/personDrawerChildLifecycleSlots.ts` | **New** — lifecycle surface gating, slot states, section order, household/enrollment hints |
+| `web/components/admin/entity/PersonDrawerChildLifecycleSummary.tsx` | **New** — child profile summary + lifecycle roadmap |
+| `web/components/admin/entity/PersonDrawerContextPanel.tsx` | Child quick links + optional enrollment link; exported `buildPersonDrawerQuickLinks` |
+| `web/lib/admin/person/attachPersonDrawerVisibility.ts` | Project `_household_context` (customer names) |
+| `web/lib/admin/person/personDrawerVisibilityTypes.ts` | `PersonHouseholdContextRow` |
+| `web/lib/admin/person/personDrawerPresentationEmphasis.ts` | Document slot rendering status |
+| `web/components/admin/AdminEntityDrawer.tsx` | Wire summary; child section ordering |
+| `web/tests/admin/person/personDrawerChildLifecycleSurface.test.ts` | **New** |
+| `docs/sprints/05_2026/person_relationship_child_lifecycle_foundation.md` | Pass 4 lifecycle configurability |
+
+### Prior pass files
 
 | File | Change |
 |------|--------|

@@ -73,6 +73,12 @@ export type PersonHouseholdAdultLinkRow = {
     is_primary: boolean;
 };
 
+/** Household customer names for child profile summary (read-only projection). */
+export type PersonHouseholdContextRow = {
+    customer_id: string;
+    customer_name: string | null;
+};
+
 /** Child members on a shared household customer (projected for parent-facing family links). */
 export type PersonHouseholdChildLinkRow = {
     customer_member_id: string;

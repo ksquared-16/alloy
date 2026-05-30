@@ -101,6 +101,7 @@ import PersonDrawerHeaderMetadata, {
     PersonDrawerHeaderContactMeta,
 } from "@/components/admin/entity/PersonDrawerHeaderMetadata";
 import PersonDrawerContextPanel from "@/components/admin/entity/PersonDrawerContextPanel";
+import PersonDrawerChildLifecycleSummary from "@/components/admin/entity/PersonDrawerChildLifecycleSummary";
 import PersonDrawerEnrollmentActivity from "@/components/admin/entity/PersonDrawerEnrollmentActivity";
 import PersonDrawerProfileBadges from "@/components/admin/entity/PersonDrawerProfileBadges";
 import LocationDrawerContextPanel from "@/components/admin/entity/LocationDrawerContextPanel";
@@ -116,6 +117,10 @@ import {
     applyPersonDrawerPresentationProfile,
     personDrawerShouldShowEmployeePlacement,
 } from "@/lib/admin/person/personDrawerPresentationProfile";
+import {
+    personDrawerShowsChildLifecycleSurface,
+    sortOverviewSectionsForChildLifecycle,
+} from "@/lib/admin/person/personDrawerChildLifecycleSlots";
 import {
     applyLocationDrawerPresentation,
     locationCustomContentKeysForKind,
@@ -9613,6 +9618,9 @@ export default function AdminEntityDrawer() {
                 fieldTypesByKey[d.field_key] = d.field_type;
             }
             overviewSections = applyPersonDrawerPresentationProfile(overviewSections, profile, fieldTypesByKey);
+            if (personDrawerShowsChildLifecycleSurface(profile)) {
+                overviewSections = sortOverviewSectionsForChildLifecycle(overviewSections);
+            }
         }
         if (drawer.type === "locations" && overviewData && !(overviewData as { _create?: boolean })._create) {
             const locRec = overviewData as Record<string, unknown>;
@@ -13732,6 +13740,22 @@ export default function AdminEntityDrawer() {
                                 entityDrawerOverviewData &&
                                 !(entityDrawerOverviewData as { _create?: boolean })._create ? (
                                     <PersonDrawerContextPanel
+                                        record={entityDrawerOverviewData as Record<string, unknown>}
+                                        onOpenDrawer={(type, id) =>
+                                            openDrawer({ type: type as AdminDrawerEntityType, id })
+                                        }
+                                    />
+                                ) : null}
+                                {drawer.type === "persons" &&
+                                personRecordChromeBodyShell &&
+                                entityDrawerOverviewData &&
+                                !(entityDrawerOverviewData as { _create?: boolean })._create &&
+                                personDrawerShowsChildLifecycleSurface(
+                                    resolvePersonDrawerProfileFromRecord(
+                                        entityDrawerOverviewData as Record<string, unknown>
+                                    )
+                                ) ? (
+                                    <PersonDrawerChildLifecycleSummary
                                         record={entityDrawerOverviewData as Record<string, unknown>}
                                         onOpenDrawer={(type, id) =>
                                             openDrawer({ type: type as AdminDrawerEntityType, id })

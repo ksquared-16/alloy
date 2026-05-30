@@ -63,8 +63,9 @@ export function personDrawerIsMixedRolePresentation(profile: PersonDrawerProfile
 }
 
 /**
- * Lifecycle section slots the child emphasis should eventually surface (config placeholders).
- * Not rendered until modules exist — documents evolution path only.
+ * Lifecycle section slots for child emphasis.
+ * `enrollment_activity` is data-backed today; roadmap pills in `PersonDrawerChildLifecycleSummary`
+ * preview future layout keys until `record_drawer_layouts` + `visible_when.roles` ship.
  */
 export const CHILD_LIFECYCLE_SECTION_SLOTS = [
     "enrollment_activity",

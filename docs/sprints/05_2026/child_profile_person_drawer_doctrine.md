@@ -118,7 +118,9 @@ The child person record is the durable lifecycle anchor. Current drawer slots an
 | Communications | — | Comms section / thread preview |
 | History | — | Activity timeline |
 
-`CHILD_LIFECYCLE_SECTION_SLOTS` in `personDrawerPresentationEmphasis.ts` documents reserved section keys without rendering empty placeholders.
+**Pass 4 (2026-05-29):** `PersonDrawerChildLifecycleSummary` renders household/guardian/enrollment hints + lifecycle roadmap pills (future slots as dashed pills, not empty overview cards). Full configurability table: [`person_relationship_child_lifecycle_foundation.md`](./person_relationship_child_lifecycle_foundation.md).
+
+`CHILD_LIFECYCLE_SECTION_SLOTS` in `personDrawerPresentationEmphasis.ts` documents reserved layout keys; only `enrollment_activity` + `relationships` render as body sections today.
 
 ---
 
