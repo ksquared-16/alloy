@@ -96,6 +96,7 @@ export type InquiryChildCompletionSnapshot = {
     location_id?: string | null;
     desired_program_type?: string | null;
     program_room_cohort_key?: string | null;
+    desired_schedule_type?: string | null;
     desired_start_date?: string | null;
     outcome_status_key?: string | null;
 };

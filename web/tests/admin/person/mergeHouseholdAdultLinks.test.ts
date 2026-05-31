@@ -12,6 +12,7 @@ describe("mergeHouseholdAdultLinks", () => {
                 role_type: "parent",
                 role_label: "Parent",
                 is_primary: true,
+                is_household_primary_contact: true,
             },
             {
                 person_id: "ava-1",
@@ -20,6 +21,7 @@ describe("mergeHouseholdAdultLinks", () => {
                 role_type: "guardian",
                 role_label: "Guardian",
                 is_primary: false,
+                is_household_primary_contact: false,
             },
             {
                 person_id: "ava-1",
@@ -28,6 +30,7 @@ describe("mergeHouseholdAdultLinks", () => {
                 role_type: "primary_contact",
                 role_label: "Primary contact",
                 is_primary: false,
+                is_household_primary_contact: false,
             },
         ];
 
@@ -47,6 +50,7 @@ describe("mergeHouseholdAdultLinks", () => {
                 role_type: "parent",
                 role_label: "Parent",
                 is_primary: true,
+                is_household_primary_contact: true,
             },
             {
                 person_id: "jordan-1",
@@ -55,6 +59,7 @@ describe("mergeHouseholdAdultLinks", () => {
                 role_type: "guardian",
                 role_label: "Guardian",
                 is_primary: false,
+                is_household_primary_contact: false,
             },
         ];
         expect(mergeHouseholdAdultLinks(rows)).toHaveLength(2);

@@ -13,6 +13,7 @@ import {
     type OpportunityPacketPendingSession,
 } from "@/components/admin/opportunity/OpportunityPacketPendingReviewList";
 import { OpportunityPacketReviewModal } from "@/components/admin/opportunity/OpportunityPacketReviewModal";
+import { ADMINV2_OPEN_ENROLLMENT_PACKET_REVIEW } from "@/lib/admin/actions/enrollmentActionClient";
 
 type ReviewWarning = { kind?: string; message?: string; field_key?: string };
 
@@ -44,7 +45,7 @@ export function OpportunityPacketReviewOverview({
     const [open, setOpen] = useState(false);
     const [activeSession, setActiveSession] = useState<EnrollmentPacketSessionRow | null>(null);
 
-    const load = useCallback(async () => {
+    const load = useCallback(async (): Promise<EnrollmentPacketSessionRow[]> => {
         setLoading(true);
         setErr(null);
         try {
@@ -56,10 +57,13 @@ export function OpportunityPacketReviewOverview({
                 error?: string;
             };
             if (!res.ok) throw new Error(j.error ?? "Could not load packets");
-            setSessions(Array.isArray(j.sessions) ? j.sessions : []);
+            const next = Array.isArray(j.sessions) ? j.sessions : [];
+            setSessions(next);
+            return next;
         } catch (e) {
             setErr(e instanceof Error ? e.message : "Load failed");
             setSessions([]);
+            return [];
         } finally {
             setLoading(false);
         }
@@ -80,6 +84,25 @@ export function OpportunityPacketReviewOverview({
         return () => window.removeEventListener("adminv2:opportunity-updated", onOpp as EventListener);
     }, [opportunityId, load]);
 
+    useEffect(() => {
+        const onOpenReview = (ev: Event) => {
+            const ce = ev as CustomEvent<{ opportunity_id?: string }>;
+            const id = typeof ce.detail?.opportunity_id === "string" ? ce.detail.opportunity_id.trim() : "";
+            if (!id || id !== opportunityId || open) return;
+            void load().then((loaded) => {
+                const pendingNow = enrollmentPacketSessionsPendingReview(loaded) as EnrollmentPacketSessionRow[];
+                if (pendingNow.length > 0) {
+                    setActiveSession(pendingNow[0]!);
+                    setOpen(true);
+                }
+            });
+        };
+        if (typeof window === "undefined") return;
+        window.addEventListener(ADMINV2_OPEN_ENROLLMENT_PACKET_REVIEW, onOpenReview as EventListener);
+        return () =>
+            window.removeEventListener(ADMINV2_OPEN_ENROLLMENT_PACKET_REVIEW, onOpenReview as EventListener);
+    }, [opportunityId, load, open]);
+
     const pending = enrollmentPacketSessionsPendingReview(sessions) as EnrollmentPacketSessionRow[];
     const reviewedHead = enrollmentPacketReviewedHeadSession(sessions);
 
@@ -93,7 +116,7 @@ export function OpportunityPacketReviewOverview({
         onInvalidate();
         window.dispatchEvent(
             new CustomEvent("adminv2:opportunity-updated", {
-                detail: { id: opportunityId, action_key: "packet_review" },
+                detail: { id: opportunityId, action_key: "review_enrollment_packet" },
             })
         );
         await load();

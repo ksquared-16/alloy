@@ -129,6 +129,7 @@ describe("CrmCompactQueuePreview operational read L0", () => {
                     roomContext: null,
                     ageContext: "",
                     attentionReason: null,
+                    familyNote: null,
                     operationalReadPreview: slot,
                     operationalNextHint: null,
                 }}
@@ -169,6 +170,7 @@ describe("CrmCompactQueuePreview operational read L0", () => {
                     roomContext: null,
                     ageContext: "",
                     attentionReason: null,
+                    familyNote: null,
                     operationalReadPreview: resolved,
                     operationalNextHint: null,
                 }}
@@ -208,6 +210,7 @@ describe("CrmCompactQueuePreview operational read L0", () => {
                     roomContext: null,
                     ageContext: "",
                     attentionReason: null,
+                    familyNote: null,
                     operationalReadPreview: resolved,
                     operationalNextHint: null,
                 }}

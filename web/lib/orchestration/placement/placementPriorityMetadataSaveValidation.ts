@@ -2,6 +2,8 @@ import { parsePlacementPriorityLayerStrict } from "@/lib/orchestration/placement
 import { getPlacementProfileFromRegistry } from "@/lib/orchestration/placement/placementPresetRegistry";
 import {
     effectivePriorityRuleEnabledSet,
+    normalizePriorityRuleEnabledKeysForProfile,
+    normalizePriorityRuleOrderForProfile,
     validatePriorityRuleEnabledKeysForProfile,
     validatePriorityRuleOrderForProfile,
 } from "@/lib/orchestration/placement/placementPriorityRuleOrder";
@@ -53,12 +55,14 @@ export function validateMergedWorkUnitMetadataForPlacementSave(
             return { ok: false, error: "placement_priority_v1.priority_rule_enabled_keys requires priority_rule_order." };
         }
         if (pro != null && pro.length > 0) {
-            const ro = validatePriorityRuleOrderForProfile(preset, pro);
+            const normalized = normalizePriorityRuleOrderForProfile(preset, pro);
+            const ro = validatePriorityRuleOrderForProfile(preset, normalized);
             if (!ro.ok) {
                 return { ok: false, error: ro.error };
             }
-            const eff = effectivePriorityRuleEnabledSet(pro, pEn, preset.fallback_bucket_key);
-            const ve = validatePriorityRuleEnabledKeysForProfile(preset, pro, eff);
+            const enabledNormalized = normalizePriorityRuleEnabledKeysForProfile(preset, normalized, pEn);
+            const eff = effectivePriorityRuleEnabledSet(normalized, enabledNormalized, preset.fallback_bucket_key);
+            const ve = validatePriorityRuleEnabledKeysForProfile(preset, normalized, eff);
             if (!ve.ok) {
                 return { ok: false, error: ve.error };
             }

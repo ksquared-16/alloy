@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildOpportunityDrawerPipelineState } from "@/lib/adminV2/drawerPipeline";
+import type { DrawerShellContract } from "@/lib/adminV2/drawerPipeline/types";
 
 const root = resolve(__dirname, "../..");
 
@@ -76,7 +77,7 @@ describe("AdminV2 performance pass 4 contracts", () => {
         const shell = {
             entity_type: "opportunity" as const,
             layout_version: "test",
-            tabs: ["overview"],
+            tabs: ["overview"] as const,
             overview_sections: [
                 {
                     key: "inquiry_children",
@@ -86,10 +87,10 @@ describe("AdminV2 performance pass 4 contracts", () => {
                     fields: [],
                 },
             ],
-            section_slots: [{ section_key: "inquiry_children", lifecycle: "immediate" }],
+            section_slots: [{ section_key: "inquiry_children", lifecycle: "immediate" as const }],
             geometry: { summary_right_column_reserved: true, family_contacts_in_summary: true },
             layout_config_snapshot: {},
-        };
+        } satisfies DrawerShellContract;
         const primary = buildOpportunityDrawerPipelineState({
             shell,
             record: { id: "o1", _record_surface: "drawer_primary" },

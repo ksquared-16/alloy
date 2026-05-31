@@ -2,6 +2,7 @@ import type { ActivitySignalResult } from "@/lib/admin/activitySignals";
 import { computeOperationalAttentionAttachment } from "@/lib/admin/operationalAttentionEntityAttachment";
 import { buildLegacyAttentionSuggestionCompat } from "@/lib/adminV2/bos/recommendations/adapters/buildLegacySuggestionCompat";
 import { attachOperationalRecommendationBundle } from "@/lib/adminV2/bos/recommendations/adapters/attachOperationalRecommendationBundle";
+import { enrichOperationalRecommendationWithActionPreflight } from "@/lib/adminV2/bos/recommendations/preflight/enrichOperationalRecommendationPreflight";
 import { buildOperationalSummaryDeterministic } from "@/lib/ai/buildOperationalSummary";
 
 function readEmbeddedActivitySignal(row: Record<string, unknown>): ActivitySignalResult | null {
@@ -70,7 +71,7 @@ export function recomputeOpportunityDrawerOperationalAttention(
     let _operational_summary = null;
 
     if (!attn._operational_attention_error && attn._operational_attention && orgId) {
-        _operational_recommendation =
+        const baseRecommendation =
             attachOperationalRecommendationBundle({
                 orgId,
                 opportunityRow: row,
@@ -79,6 +80,9 @@ export function recomputeOpportunityDrawerOperationalAttention(
                 workUnitId,
                 nowMs,
             })._operational_recommendation ?? null;
+        _operational_recommendation = baseRecommendation
+            ? enrichOperationalRecommendationWithActionPreflight(baseRecommendation, row)
+            : null;
 
         const legacyInput = {
             opportunity: opportunityRowToSuggestionInput(row),

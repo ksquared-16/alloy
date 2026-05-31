@@ -5,6 +5,7 @@ import {
     validateMarkLostPayload,
 } from "@/lib/admin/actions/entryLifecycleActions";
 import { CREATE_LEAD_ACTION_ENTITY_ID, isCreateLeadExecuteRequest } from "@/lib/admin/actions/createLeadActionConstants";
+import { QUALIFICATION_STATUS_KEY } from "@/lib/admin/actions/universalActionConstants";
 
 vi.mock("@/lib/admin/statusDefinitionsResolve", () => ({
     assertAllowedStatusKey: vi.fn().mockResolvedValue({ ok: true }),
@@ -104,6 +105,16 @@ describe("assertMoveToQualificationAllowed", () => {
         const sb = supabaseForMove("new_inquiry", { email: "parent@example.com", phone: null });
         const res = await assertMoveToQualificationAllowed(sb as never, "org-1", "opp-1", {
             allowed_from_status_keys: ["new_inquiry"],
+        });
+        expect(res.ok).toBe(true);
+    });
+
+    it("does not require contact_attempted status for qualification transition", async () => {
+        expect(QUALIFICATION_STATUS_KEY).toBe("qualification");
+        const sb = supabaseForMove("new_inquiry", { email: "parent@example.com", phone: null });
+        const res = await assertMoveToQualificationAllowed(sb as never, "org-1", "opp-1", {
+            allowed_from_status_keys: ["new_inquiry"],
+            status_key: QUALIFICATION_STATUS_KEY,
         });
         expect(res.ok).toBe(true);
     });

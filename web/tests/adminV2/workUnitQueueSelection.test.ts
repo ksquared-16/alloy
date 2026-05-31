@@ -143,7 +143,7 @@ describe("WorkUnitQueueSelection", () => {
         expect(workUnitQueuePillKeySelected("tour_scheduled", "tours", "", wu)).toBe(true);
         expect(
             workUnitQueueSelectionFetchQueueKey(
-                { workUnitId: "wu-1", queueKey: "tour_scheduled", source: "dept_queue" },
+                { queueKey: "tour_scheduled" },
                 wu
             )
         ).toBe("tours");

@@ -22,8 +22,9 @@ describe("BOS recommendation content regression", () => {
         expect(band).not.toContain("line-clamp-1");
     });
 
-    it("Inquiry summary avoids duplicate BOS when review assist band is present", () => {
+    it("Inquiry summary avoids duplicate BOS — CTA lives in drawer header only", () => {
         const rightCol = read("components/admin/opportunity/OpportunityInquirySummaryRightColumn.tsx");
-        expect(rightCol).toContain("const showStandaloneBos = !assistLoading && !reviewAssist");
+        expect(rightCol).not.toContain("BosDrawerAssistCta");
+        expect(rightCol).not.toContain("showStandaloneBos");
     });
 });

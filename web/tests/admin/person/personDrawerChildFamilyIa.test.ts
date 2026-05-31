@@ -22,6 +22,7 @@ describe("child family section IA", () => {
                     role_label: "Parent",
                     customer_id: "cust-1",
                     is_primary: true,
+                is_household_primary_contact: true,
                 },
             ],
             sibling_links: [
@@ -51,6 +52,7 @@ describe("child family section IA", () => {
                     role_label: "Parent",
                     customer_id: "cust-1",
                     is_primary: true,
+                is_household_primary_contact: true,
                 },
                 {
                     person_id: "guard-1",
@@ -59,6 +61,7 @@ describe("child family section IA", () => {
                     role_label: "Guardian",
                     customer_id: "cust-1",
                     is_primary: false,
+                is_household_primary_contact: false,
                 },
             ],
         });

@@ -76,15 +76,24 @@ describe("validateMergedWorkUnitMetadataForPlacementSave", () => {
         expect(validateMergedWorkUnitMetadataForPlacementSave({ other: 1 }).ok).toBe(true);
     });
 
-    it("rejects invalid priority_rule_order for childcare preset", () => {
+    it("normalizes legacy short priority_rule_order for childcare preset", () => {
         const r = validateMergedWorkUnitMetadataForPlacementSave({
             placement_priority_v1: {
                 ...validLayer,
                 priority_rule_order: ["tier_staff_community", "tier_general_waitlist"],
             },
         });
-        expect(r.ok).toBe(false);
-        if (!r.ok) expect(r.error).toMatch(/exactly once/i);
+        expect(r.ok).toBe(true);
+    });
+
+    it("strips unknown bucket keys and normalizes order on save", () => {
+        const r = validateMergedWorkUnitMetadataForPlacementSave({
+            placement_priority_v1: {
+                ...validLayer,
+                priority_rule_order: ["tier_fake_bucket", "tier_general_waitlist"],
+            },
+        });
+        expect(r.ok).toBe(true);
     });
 
     it("rejects priority_rule_enabled_keys without priority_rule_order", () => {

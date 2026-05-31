@@ -1,6 +1,7 @@
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import type { SubmissionInboxRow } from "@/lib/forms/submissionInboxPresentation";
 import { SubmissionQuickReviewModal } from "@/components/forms/workspace/SubmissionQuickReviewModal";
 
 vi.mock("@/contexts/AdminAuthContext", () => ({
@@ -107,7 +108,7 @@ describe("SubmissionQuickReviewModal IC-6", () => {
                     payload: {
                         ...autoOpRow.payload,
                         signatures: { guardian: { signed_at: "2026-05-27T18:09:16.000Z" } },
-                    },
+                    } as SubmissionInboxRow["payload"],
                 }}
                 formName="Medication Authorization"
                 viewerTz="UTC"

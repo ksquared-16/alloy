@@ -24,6 +24,7 @@ describe("workUnitQueueLaneDisplay", () => {
     it("ready lane with loading uses ready state not skeleton", () => {
         const model = buildWorkUnitAboveFoldRenderModel({
             work_unit_shell_ready: true,
+            reserve_actions_rail: false,
             queue_summaries: [{ key: "waitlist", label: "Waitlist", priority: "standard", count: 3 }],
             queue_summaries_error: null,
             queue_pill_sections: null,

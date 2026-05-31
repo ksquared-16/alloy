@@ -4,6 +4,8 @@ import {
     applyPlacementPriorityEffectiveProfile,
     CHILDCARE_ENROLLMENT_WAITLIST_PRIORITY_RULE_ORDER_V1,
     effectivePriorityRuleEnabledSet,
+    expandOperatorPriorityRuleOrderForProfile,
+    normalizePriorityRuleOrderForProfile,
     reorderPriorityRuleMoveDownEnabled,
     reorderPriorityRuleMoveUpEnabled,
     validatePriorityRuleEnabledKeysForProfile,
@@ -21,6 +23,7 @@ const BASE_INPUT = {
 
 const childcare = CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1;
 const orderFull = [...CHILDCARE_ENROLLMENT_WAITLIST_PRIORITY_RULE_ORDER_V1];
+const fullOrder = expandOperatorPriorityRuleOrderForProfile(childcare, orderFull);
 const fb = childcare.fallback_bucket_key;
 
 describe("validatePriorityRuleOrderForProfile", () => {
@@ -31,21 +34,31 @@ describe("validatePriorityRuleOrderForProfile", () => {
     });
 
     it("rejects duplicates", () => {
-        const bad = ["tier_staff_community", "tier_staff_community", "tier_sibling_enrolled", fb];
+        const bad = ["tier_employee_family", "tier_employee_family", "tier_sibling_enrolled", fb];
         const r = validatePriorityRuleOrderForProfile(childcare, bad);
         expect(r.ok).toBe(false);
     });
 
     it("rejects when standard is not last", () => {
-        const bad = [fb, "tier_staff_community", "tier_sibling_enrolled", "tier_sister_center"];
+        const bad = [fb, "tier_employee_family", "tier_sibling_enrolled", "tier_sister_center"];
         const r = validatePriorityRuleOrderForProfile(childcare, bad);
         expect(r.ok).toBe(false);
     });
 });
 
+describe("normalizePriorityRuleOrderForProfile", () => {
+    it("migrates legacy tier_staff_community to tier_employee_family and preserves deferred staff tier", () => {
+        const normalized = normalizePriorityRuleOrderForProfile(childcare, ["tier_staff_community", fb]);
+        expect(normalized[0]).toBe("tier_employee_family");
+        expect(normalized).toContain("tier_staff_community");
+        expect(normalized[normalized.length - 1]).toBe(fb);
+        expect(normalized.length).toBe(5);
+    });
+});
+
 describe("validatePriorityRuleEnabledKeysForProfile", () => {
     it("requires fallback in enabled set", () => {
-        const enabled = new Set(["tier_staff_community", "tier_sibling_enrolled"]);
+        const enabled = new Set(["tier_employee_family", "tier_sibling_enrolled"]);
         const r = validatePriorityRuleEnabledKeysForProfile(childcare, orderFull, enabled);
         expect(r.ok).toBe(false);
     });
@@ -63,11 +76,11 @@ describe("reorderPriorityRuleMoveUpEnabled / MoveDownEnabled", () => {
 
     it("move up swaps two enabled neighbors", () => {
         const next = reorderPriorityRuleMoveUpEnabled(base, allOn, fb, 2);
-        expect(next).toEqual(["tier_staff_community", "tier_sister_center", "tier_sibling_enrolled", fb]);
+        expect(next).toEqual(["tier_employee_family", "tier_sister_center", "tier_sibling_enrolled", fb]);
     });
 
     it("move up skips disabled middle tier", () => {
-        const enabled = new Set(["tier_staff_community", "tier_sister_center", fb]);
+        const enabled = new Set(["tier_employee_family", "tier_sister_center", fb]);
         const next = reorderPriorityRuleMoveUpEnabled(base, enabled, fb, 2);
         expect(next).not.toBeNull();
         expect(next![next!.length - 1]).toBe(fb);
@@ -84,9 +97,9 @@ describe("reorderPriorityRuleMoveUpEnabled / MoveDownEnabled", () => {
 });
 
 describe("applyPlacementPriorityEffectiveProfile", () => {
-    it("disabled sibling tier: staff wins when both staff and sibling facts true", () => {
-        const enabled = new Set(["tier_staff_community", "tier_sister_center", fb]);
-        const profile = applyPlacementPriorityEffectiveProfile(childcare, orderFull, [...enabled]);
+    it("disabled sibling tier: employee wins when both employee and sibling facts true", () => {
+        const enabled = new Set(["tier_employee_family", "tier_sister_center", fb]);
+        const profile = applyPlacementPriorityEffectiveProfile(childcare, fullOrder, [...enabled]);
         const facts: FactBag = {
             flag_employee_household: { presence: "present", value: true },
             flag_sibling_enrolled: { presence: "present", value: true },
@@ -94,11 +107,11 @@ describe("applyPlacementPriorityEffectiveProfile", () => {
         };
         const r = evaluatePlacementPriority({ ...BASE_INPUT, facts, profile });
         expect(r.ok).toBe(true);
-        if (r.ok) expect(r.value.snapshot.bucket_key).toBe("tier_staff_community");
+        if (r.ok) expect(r.value.snapshot.bucket_key).toBe("tier_employee_family");
     });
 
     it("program_room_group stays first in sort_tuple", () => {
-        const profile = applyPlacementPriorityEffectiveProfile(childcare, orderFull, undefined);
+        const profile = applyPlacementPriorityEffectiveProfile(childcare, fullOrder, undefined);
         const facts: FactBag = {
             program_room_group: { presence: "present", value: "Infant" },
             flag_sibling_enrolled: { presence: "present", value: true },

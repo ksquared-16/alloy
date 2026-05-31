@@ -88,6 +88,21 @@ export function evaluatePersonCompletionRequirements(
     const dob = values.date_of_birth ?? values.dob;
     const startDate = values[PERSON_DRAWER_CHILD_START_DATE_KEY] ?? values.start_date;
     const statusKey = trimOrNull(values.status_key);
+    const isEmployee = values.is_employee === true;
+    const employeeId = values.employee_id ?? values.employeeId;
+
+    if (isEmployee && completionValueEmpty(employeeId)) {
+        violations.push(
+            fieldMissingViolation(ctx, {
+                field_key: "employee_id",
+                label: "Employee ID",
+                requirement_type: "recommended_non_blocking",
+                blocking_level: "recommendation",
+                missing_reason: "Employee ID is recommended for employee families (used for waitlist priority).",
+                section_key: "employee_status",
+            })
+        );
+    }
 
     if (completionValueEmpty(firstName)) {
         violations.push(

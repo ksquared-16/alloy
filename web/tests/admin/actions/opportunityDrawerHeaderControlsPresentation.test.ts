@@ -18,9 +18,12 @@ function read(rel: string): string {
 describe("opportunity drawer header controls presentation", () => {
     it("title rail renders Work with BOS and Actions via header controls", () => {
         const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("OpportunityDrawerHeaderControls");
-        expect(drawer).toContain("data-opportunity-header-actions-rail");
         const controls = read("components/admin/opportunity/OpportunityDrawerHeaderControls.tsx");
+        expect(drawer).toContain("OpportunityDrawerHeaderControls");
+        expect(drawer).toContain("actionPreflightBlocked");
+        expect(drawer).toContain("useOpportunityDrawerActionPreflight");
+        expect(controls).toContain("ActionPreflightBlockedPanel");
+        expect(drawer).toContain("data-opportunity-header-actions-rail");
         expect(controls).toContain("BosDrawerAssistCta");
         expect(controls).toContain("OpportunityDrawerHeaderActionsMenu");
         expect(controls).toContain('data-opportunity-header-controls="true"');
@@ -40,7 +43,7 @@ describe("opportunity drawer header controls presentation", () => {
 
     it("does not render primary/secondary action pills in header", () => {
         const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).not.toMatch(/headerActions\?\.primary.*OpportunityDrawerHeaderActionButton/s);
+        expect(drawer).not.toMatch(/headerActions\?\.primary[\s\S]*OpportunityDrawerHeaderActionButton/);
         expect(drawer).not.toMatch(/\.primary\s*\?\?\s*\[\]\)\.map\(\(a\)/);
     });
 

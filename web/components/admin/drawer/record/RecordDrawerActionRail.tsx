@@ -22,9 +22,13 @@ export const OPPORTUNITY_DRAWER_HEADER_ACTIONS_ROW_CLASS = RECORD_DRAWER_HEADER_
 
 export function recordDrawerHeaderActionsPanelClassName(
     inquiryWorkflow: boolean,
-    align: "start" | "end" = "end"
+    align: "start" | "end" = "end",
+    bare = false
 ): string {
     const alignCls = align === "end" ? "justify-end" : "justify-start";
+    if (bare) {
+        return `flex flex-nowrap items-center gap-2 ${alignCls}`;
+    }
     const chrome = inquiryWorkflow
         ? "rounded-xl border border-admin-border/45 bg-white/80 px-3 py-2.5 shadow-sm ring-1 ring-alloy-stone/10"
         : "rounded-lg border border-admin-border/45 bg-white/70 px-2.5 py-1.5 shadow-sm";
@@ -69,6 +73,8 @@ type ActionRailProps = {
     inquiryWorkflow?: boolean;
     align?: "start" | "end";
     className?: string;
+    /** When true, omit card chrome — inline header controls only. */
+    bare?: boolean;
     "data-drawer-slot"?: string;
 };
 
@@ -77,15 +83,17 @@ export function RecordDrawerActionRail({
     inquiryWorkflow = false,
     align = "end",
     className,
+    bare = false,
     "data-drawer-slot": dataDrawerSlot,
 }: ActionRailProps) {
     return (
         <div
-            className={[recordDrawerHeaderActionsPanelClassName(inquiryWorkflow, align), className]
+            className={[recordDrawerHeaderActionsPanelClassName(inquiryWorkflow, align, bare), className]
                 .filter(Boolean)
                 .join(" ")}
             data-record-drawer-action-rail="true"
             data-opportunity-record-actions={inquiryWorkflow ? "true" : undefined}
+            data-opportunity-header-controls-bare={bare ? "true" : undefined}
             data-drawer-slot={dataDrawerSlot}
         >
             {children}

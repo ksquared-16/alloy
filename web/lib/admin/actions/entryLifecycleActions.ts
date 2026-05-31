@@ -6,10 +6,8 @@ import { ensureCustomerForPersonNative } from "@/lib/bookingPersonCustomerResolv
 import { ensureCustomerPersonsPrimaryLink } from "@/lib/bookingCustomerPersonLink";
 import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
 import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
-import {
-    NEW_LEAD_STATUS_KEY,
-    QUALIFICATION_STATUS_KEY,
-} from "@/lib/admin/actions/createLeadActionConstants";
+import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
+import { QUALIFICATION_STATUS_KEY } from "@/lib/admin/actions/universalActionConstants";
 import type { ExecuteAdminActionCtx } from "@/lib/admin/actions/executeAdminAction";
 
 export type EntryLifecycleActionError = { ok: false; error: string; status: number };

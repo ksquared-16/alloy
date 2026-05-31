@@ -8,7 +8,7 @@ const fb = CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1.fallback_bucket_key;
 const all = new Set(CHILDCARE_ENROLLMENT_WAITLIST_PRIORITY_RULE_ORDER_V1);
 
 describe("PriorityRuleOrderEditor", () => {
-    it("renders rule labels, checkboxes, and move controls", () => {
+    it("renders operator factor labels, source mapping, and move controls", () => {
         const html = renderToStaticMarkup(
             <PriorityRuleOrderEditor
                 order={[...CHILDCARE_ENROLLMENT_WAITLIST_PRIORITY_RULE_ORDER_V1]}
@@ -18,11 +18,15 @@ describe("PriorityRuleOrderEditor", () => {
                 onEnabledKeysChange={() => {}}
             />
         );
-        expect(html).toContain("Priority rule order");
+        expect(html).toContain("Employee families");
+        expect(html).toContain("Person → Employee = Yes");
+        expect(html).toContain("persons.is_employee");
+        expect(html).toContain("Outcome = Enrolled");
+        expect(html).toContain("same location");
+        expect(html).toContain("different location");
         expect(html).toContain("Move up");
         expect(html).toContain("Move down");
-        expect(html).toContain("Sibling enrolled at center");
         expect(html).toContain("(always on · last)");
-        expect(html).toContain('type="checkbox"');
+        expect(html).not.toContain("Priority rule order");
     });
 });

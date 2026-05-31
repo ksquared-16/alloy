@@ -79,6 +79,7 @@ describe("workUnitQueuePillPolish", () => {
         const pillKey = "__attention_bucket:stale_quote";
         const model = buildWorkUnitAboveFoldRenderModel({
             work_unit_shell_ready: true,
+            reserve_actions_rail: false,
             queue_summaries: [
                 {
                     key: "__attention_bucket:stale_quote",
@@ -97,8 +98,6 @@ describe("workUnitQueuePillPolish", () => {
                             key: "__attention_bucket:stale_quote",
                             label: "Stale quote",
                             priority: "attention",
-                            count: 3,
-                            counts_deferred: false,
                         },
                     ],
                 },
@@ -124,6 +123,7 @@ describe("workUnitQueuePillPolish", () => {
     it("counts_deferred renders skeleton count state in above-fold model", () => {
         const model = buildWorkUnitAboveFoldRenderModel({
             work_unit_shell_ready: true,
+            reserve_actions_rail: false,
             queue_summaries: [
                 {
                     key: "enrolled",
@@ -153,6 +153,7 @@ describe("workUnitQueuePillPolish", () => {
     it("waitlist candidate grain chip keeps unit in aria only, not pill badge copy", () => {
         const model = buildWorkUnitAboveFoldRenderModel({
             work_unit_shell_ready: true,
+            reserve_actions_rail: false,
             queue_summaries: [
                 {
                     key: "waitlist",
@@ -185,6 +186,7 @@ describe("workUnitQueuePillPolish", () => {
     it("suppresses Other pill and active queue description when config flags set", () => {
         const model = buildWorkUnitAboveFoldRenderModel({
             work_unit_shell_ready: true,
+            reserve_actions_rail: false,
             queue_summaries: [
                 {
                     key: "new_leads",
@@ -199,7 +201,7 @@ describe("workUnitQueuePillPolish", () => {
                 {
                     key: "pipeline",
                     label: "Work Units",
-                    queues: [{ key: "new_leads", label: "New Leads", priority: "standard", count: 18 }],
+                    queues: [{ key: "new_leads", label: "New Leads", priority: "standard" }],
                 },
             ],
             queue_tab_placeholders: null,
@@ -225,6 +227,7 @@ describe("workUnitQueuePillPolish", () => {
         const wu = RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2;
         const model = buildWorkUnitAboveFoldRenderModel({
             work_unit_shell_ready: true,
+            reserve_actions_rail: false,
             queue_summaries: [
                 {
                     key: "tours",

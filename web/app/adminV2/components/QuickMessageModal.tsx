@@ -78,6 +78,7 @@ export type QuickMessageModalSeed = {
     phone?: string | null;
     /** Record-scoped launch — load linked contacts for opportunity (no global search). */
     recordScoped?: boolean;
+    defaultChannel?: "email" | "sms";
 };
 
 export interface QuickMessageModalProps {
@@ -158,7 +159,7 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
             setSearchHits([]);
             setSearchErr(null);
             setSelectedRecipients([]);
-            setChannel("email");
+            setChannel(seed?.defaultChannel === "sms" ? "sms" : "email");
             setSubject("");
             setBody("");
             setSendErr(null);

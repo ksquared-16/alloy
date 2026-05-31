@@ -33,7 +33,7 @@ const minimalAttention = (): OpportunityAttentionResult => ({
     waiting: { bucket: "none", since_iso: null, active: false },
     priority_score: 1,
     priority_breakdown: [],
-    auxiliary: {},
+    auxiliary: { activity_stale: null },
     resolver_version: 2,
     computed_at_iso: "2026-05-13T12:00:00.000Z",
 });

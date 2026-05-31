@@ -4,6 +4,33 @@ import { __testing } from "@/lib/orchestration/placement/repair/placementCandida
 const { planPlacementCandidateOcmRepair } = __testing;
 
 describe("placementCandidateOcmRepair", () => {
+    it("repairs cohort label when key matches but label is stale", () => {
+        const planResult = planPlacementCandidateOcmRepair({
+            candidate: {
+                id: "pc_1",
+                opportunity_customer_member_id: "ocm_1",
+                site_id: "site_a",
+                program_room_cohort_key: "infant",
+                program_room_group_label: "Infant",
+                is_synthetic_fallback: false,
+            },
+            ocm: {
+                id: "ocm_1",
+                location_id: "site_a",
+                program_room_cohort_key: "toddler_2_3_years",
+                metadata: { program_room_group_label: "Toddler — 2–3 years" },
+            },
+        });
+        if (typeof planResult === "string") {
+            expect.fail(`unexpected ${planResult}`);
+            return;
+        }
+        expect(planResult.repairCohort).toBe(true);
+        expect(planResult.repairCohortLabel).toBe(true);
+        expect(planResult.nextCohortKey).toBe("toddler_2_3_years");
+        expect(planResult.nextCohortLabel).toContain("Toddler");
+    });
+
     it("repairs site and cohort from OCM when candidate differs", () => {
         const plan = planPlacementCandidateOcmRepair({
             candidate: {
@@ -11,6 +38,7 @@ describe("placementCandidateOcmRepair", () => {
                 opportunity_customer_member_id: "ocm_1",
                 site_id: "site_opp",
                 program_room_cohort_key: "old_cohort",
+                program_room_group_label: "Old",
                 is_synthetic_fallback: false,
             },
             ocm: {
@@ -35,6 +63,7 @@ describe("placementCandidateOcmRepair", () => {
                 opportunity_customer_member_id: "ocm_1",
                 site_id: "site_opp",
                 program_room_cohort_key: "toddler",
+                program_room_group_label: "Toddler",
                 is_synthetic_fallback: false,
             },
             ocm: { id: "ocm_1", location_id: null, program_room_cohort_key: null },
@@ -57,6 +86,7 @@ describe("placementCandidateOcmRepair", () => {
                     opportunity_customer_member_id: null,
                     site_id: "site_a",
                     program_room_cohort_key: "x",
+                    program_room_group_label: "X",
                     is_synthetic_fallback: true,
                 },
                 ocm: null,

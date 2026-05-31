@@ -164,6 +164,6 @@ describe("buildOpportunityPlacementFacts", () => {
             profile: CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1,
         });
         expect(r.ok).toBe(true);
-        if (r.ok) expect(r.value.snapshot.bucket_key).toBe("tier_staff_community");
+        if (r.ok) expect(r.value.snapshot.bucket_key).toBe("tier_employee_family");
     });
 });

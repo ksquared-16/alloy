@@ -24,7 +24,7 @@ describe("resolvePlacementCandidateCohortForQueue", () => {
         const sophia = resolvePlacementCandidateCohortForQueue({
             storedKey: "preschool_3_4_years_pre_k_4_5_years_young_toddler_18_24_months",
             storedLabel: "Preschool — 3–4 years · Pre-K — 4–5 years · Young Toddler — 18–24 months",
-            dateOfBirth: "2024-06-01",
+            dateOfBirth: "2024-09-01",
         });
         const mia = resolvePlacementCandidateCohortForQueue({
             storedKey: "preschool_3_4_years_pre_k_4_5_years_young_toddler_18_24_months",
@@ -38,12 +38,43 @@ describe("resolvePlacementCandidateCohortForQueue", () => {
         expect(new Set([liam.program_room_cohort_key, mia.program_room_cohort_key, sophia.program_room_cohort_key]).size).toBe(3);
     });
 
+    it("prefers OCM toddler cohort over stale candidate infant", () => {
+        const cohort = resolvePlacementCandidateCohortForQueue({
+            storedKey: "infant",
+            storedLabel: "Infant",
+            ocmProgramRoomCohortKey: "toddler_2_3_years",
+            ocmMetadata: { program_room_group_label: "Toddler — 2–3 years" },
+        });
+        expect(cohort.program_room_cohort_key).toBe("toddler_2_3_years");
+        expect(cohort.program_room_group_label).toContain("Toddler");
+    });
+
+    it("prefers OCM desired_program_type over stale program_room_cohort_key", () => {
+        const riley = resolvePlacementCandidateCohortForQueue({
+            storedKey: "infant",
+            storedLabel: "Infant",
+            ocmProgramRoomCohortKey: "infant",
+            desiredProgramType: "toddler",
+        });
+        expect(riley.program_room_cohort_key).toMatch(/toddler/i);
+
+        const quinn = resolvePlacementCandidateCohortForQueue({
+            storedKey: "preschool",
+            storedLabel: "Preschool",
+            ocmProgramRoomCohortKey: "preschool",
+            desiredProgramType: "infant",
+        });
+        expect(quinn.program_room_cohort_key).toMatch(/infant/i);
+    });
+
     it("resolvePlacementCandidateCohortFromMember prefers member metadata over opportunity merge", () => {
         const out = resolvePlacementCandidateCohortFromMember({
             ocmMetadata: { program_label: "Toddler — 2–3 years" },
             dateOfBirth: null,
         });
         expect(out.program_room_group_label).toBe("Toddler — 2–3 years");
-        expect(looksLikeCombinedProgramRoomCohort(out.program_room_cohort_key, out.program_room_group_label)).toBe(false);
+        expect(looksLikeCombinedProgramRoomCohort(out.program_room_cohort_key, out.program_room_group_label)).toBe(
+            false
+        );
     });
 });

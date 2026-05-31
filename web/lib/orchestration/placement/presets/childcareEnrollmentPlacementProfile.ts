@@ -1,4 +1,9 @@
 import type { PlacementProfile } from "@/lib/orchestration/placement/placementPriorityTypes";
+import {
+    TIER_EMPLOYEE_FAMILY_BUCKET,
+    TIER_GENERAL_WAITLIST_BUCKET,
+    TIER_STAFF_COMMUNITY_LEGACY_BUCKET,
+} from "@/lib/orchestration/placement/placementBucketLabels";
 
 /**
  * Childcare enrollment waitlist placement profile — **preset only** (Card 3).
@@ -10,8 +15,13 @@ export const CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1 = {
     domain: "childcare_enrollment",
     buckets: [
         {
-            bucket_key: "tier_staff_community",
+            bucket_key: TIER_EMPLOYEE_FAMILY_BUCKET,
             priority_order: 10,
+            label_key: "bucket_employee_family",
+        },
+        {
+            bucket_key: TIER_STAFF_COMMUNITY_LEGACY_BUCKET,
+            priority_order: 15,
             label_key: "bucket_staff_community",
         },
         {
@@ -25,7 +35,7 @@ export const CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1 = {
             label_key: "bucket_sister_center",
         },
         {
-            bucket_key: "tier_general_waitlist",
+            bucket_key: TIER_GENERAL_WAITLIST_BUCKET,
             priority_order: 100,
             label_key: "bucket_standard_family",
         },
@@ -33,14 +43,18 @@ export const CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1 = {
     rules: [
         {
             rule_order: 10,
+            when: { fact_eq: { key: "flag_employee_household", value: true } },
+            assign_bucket_key: TIER_EMPLOYEE_FAMILY_BUCKET,
+        },
+        {
+            rule_order: 15,
             when: {
                 any: [
-                    { fact_eq: { key: "flag_employee_household", value: true } },
                     { fact_eq: { key: "flag_staff_household", value: true } },
                     { fact_eq: { key: "flag_community_priority", value: true } },
                 ],
             },
-            assign_bucket_key: "tier_staff_community",
+            assign_bucket_key: TIER_STAFF_COMMUNITY_LEGACY_BUCKET,
         },
         {
             rule_order: 20,
@@ -53,7 +67,7 @@ export const CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1 = {
             assign_bucket_key: "tier_sister_center",
         },
     ],
-    fallback_bucket_key: "tier_general_waitlist",
+    fallback_bucket_key: TIER_GENERAL_WAITLIST_BUCKET,
     tie_breakers: [
         { kind: "fact", field: "wait_since", direction: "asc" },
         { kind: "fact", field: "desired_start_date", direction: "asc" },
@@ -66,6 +80,7 @@ export const CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1 = {
     required_fact_keys: [],
     warn_if_unknown_fact_keys: ["flag_sibling_enrolled"],
     labels: {
+        bucket_employee_family: "Employee family",
         bucket_staff_community: "Staff / community priority",
         bucket_sibling_enrolled: "Sibling enrolled at center",
         bucket_sister_center: "Sister center priority",
@@ -79,3 +94,11 @@ export const CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1 = {
             "Sibling enrollment not verified; ordering uses wait dates within this program / room group.",
     },
 } satisfies PlacementProfile;
+
+/** Operator-configurable factor order (staff/community tier omitted — deferred). */
+export const CHILDCARE_ENROLLMENT_WAITLIST_OPERATOR_FACTOR_ORDER: readonly string[] = [
+    TIER_EMPLOYEE_FAMILY_BUCKET,
+    "tier_sibling_enrolled",
+    "tier_sister_center",
+    TIER_GENERAL_WAITLIST_BUCKET,
+] as const;

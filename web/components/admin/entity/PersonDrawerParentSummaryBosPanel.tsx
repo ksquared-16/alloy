@@ -2,7 +2,6 @@
 
 import { useMemo } from "react";
 import MissingRequirementsSummary from "@/components/admin/completion/MissingRequirementsSummary";
-import BosDrawerAssistCta from "@/components/admin/drawer/BosDrawerAssistCta";
 import {
     INQUIRY_RIGHT_COLUMN_GROUP_LABEL_CLASS,
     INQUIRY_SUMMARY_RIGHT_COLUMN_ROOT_CLASS,
@@ -46,13 +45,6 @@ export default function PersonDrawerParentSummaryBosPanel({
             ) : null}
             <div className="mt-2">
                 <MissingRequirementsSummary result={completionPreview} compact />
-            </div>
-            <div className="mt-2 border-t border-alloy-stone/10 pt-2">
-                <BosDrawerAssistCta
-                    entityId={personId}
-                    overviewData={overviewData}
-                    opportunitySingular="Parent"
-                />
             </div>
         </aside>
     );

@@ -68,6 +68,7 @@ describe("BOS operational closeout", () => {
                     roomContext: null,
                     ageContext: "",
                     attentionReason: null,
+                    familyNote: null,
                     operationalReadPreview: slot,
                     operationalNextHint: null,
                 }}

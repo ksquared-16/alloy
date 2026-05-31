@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { formatOpportunityActivityTimelineEvent } from "@/lib/admin/opportunityActivityTimelineFormat";
+import type { SubmissionInboxRow } from "@/lib/forms/submissionInboxPresentation";
 import { buildOpportunityIntakeSourceViewModel } from "@/lib/forms/opportunityIntakeSourcePresentation";
 
 describe("opportunityIntakeSourcePresentation", () => {
@@ -13,7 +14,7 @@ describe("opportunityIntakeSourcePresentation", () => {
             payload: {
                 values: { guardian_full_name: "Jordan Test" },
                 meta: { intake_auto_operationalized: true, intake_needs_review: false },
-            },
+            } as SubmissionInboxRow["payload"],
         });
         expect(vm?.sourceLine).toContain("Enrollment Lead — Demo");
         expect(vm?.nextStepLine).toContain("Continue enrollment");

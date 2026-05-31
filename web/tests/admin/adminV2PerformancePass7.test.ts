@@ -5,6 +5,7 @@ import {
     assessOpportunityAboveFoldPresentationReady,
     isOpportunityAboveFoldPresentationReady,
 } from "@/lib/admin/drawer/opportunityAboveFoldPresentationReady";
+import type { RecordDrawerShellContract } from "@/lib/adminV2/shellContracts/types";
 import {
     displaySafeLabel,
     isRawInternalDisplayValue,
@@ -64,7 +65,7 @@ describe("AdminV2 performance pass 7 — presentation gate", () => {
             entity_type: "opportunity" as const,
             inquiry_drawer_mode: "workflow_v1" as const,
             layout_version: "1",
-            tabs: ["overview"],
+            tabs: ["overview"] as const,
             overview_sections: [],
             section_slots: [{ section_key: "inquiry_children", lifecycle: "reserved_placeholder" as const }],
             geometry: {
@@ -76,7 +77,7 @@ describe("AdminV2 performance pass 7 — presentation gate", () => {
                 communications_tab: false,
             },
             layout_config: {},
-        };
+        } as RecordDrawerShellContract;
         const blocked = assessOpportunityAboveFoldPresentationReady(record, shell, {
             family_contacts_in_summary: true,
             summary_right_column_reserved: true,
@@ -131,7 +132,7 @@ describe("AdminV2 performance pass 7 — presentation gate", () => {
             entity_type: "opportunity" as const,
             inquiry_drawer_mode: "workflow_v1" as const,
             layout_version: "1",
-            tabs: ["overview"],
+            tabs: ["overview"] as const,
             overview_sections: [],
             section_slots: [],
             geometry: {
@@ -143,7 +144,7 @@ describe("AdminV2 performance pass 7 — presentation gate", () => {
                 communications_tab: false,
             },
             layout_config: {},
-        };
+        } as RecordDrawerShellContract;
         const pending = assessOpportunityAboveFoldPresentationReady(record, shell, {
             what_matters_reserved: true,
             tour_bookings_fetch_armed: false,

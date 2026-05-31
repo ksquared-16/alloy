@@ -51,11 +51,12 @@ import {
 loadEnv({ path: resolve(process.cwd(), ".env.local") });
 loadEnv({ path: resolve(process.cwd(), ".env") });
 
-const ORG_ID = process.env.ORG_ID?.trim();
-if (!ORG_ID) {
+const orgIdRaw = process.env.ORG_ID?.trim();
+if (!orgIdRaw) {
     console.error("ORG_ID is required");
     process.exit(1);
 }
+const ORG_ID = orgIdRaw;
 
 const OPPORTUNITY_NAME = (process.env.OPPORTUNITY_NAME ?? "Williams").trim().toLowerCase();
 const OPPORTUNITY_ID = process.env.OPPORTUNITY_ID?.trim() || null;
@@ -149,6 +150,7 @@ async function main() {
         .eq("key", WORK_UNIT_KEY)
         .maybeSingle();
     if (wuErr || !wu?.id) throw new Error(wuErr?.message ?? "work unit not found");
+    const workUnitId = wu.id;
 
     const { data: dept } = await supabase
         .from("departments")
@@ -187,8 +189,8 @@ async function main() {
         );
         process.exit(1);
     }
-
-    const customerId = String((opp as { customer_id?: string }).customer_id ?? "").trim();
+    const opportunity = opp;
+    const customerId = String((opportunity as { customer_id?: string }).customer_id ?? "").trim();
 
     const { data: cpRows } = await supabase
         .from("customer_persons")
@@ -380,7 +382,7 @@ async function main() {
             loadWaitlistCandidateGrainQueueItems({
                 supabase,
                 orgId: ORG_ID,
-                workUnitId: wu.id,
+                workUnitId,
                 ctx: grainCtx,
                 recordScopeConstraints: null,
                 limit: 200,
@@ -396,7 +398,7 @@ async function main() {
             loadWaitlistCandidateGrainQueueItems({
                 supabase,
                 orgId: ORG_ID,
-                workUnitId: wu.id,
+                workUnitId,
                 ctx: grainCtx,
                 recordScopeConstraints: null,
                 limit: 200,
@@ -412,7 +414,7 @@ async function main() {
             countWaitlistCandidateGrainItems({
                 supabase,
                 orgId: ORG_ID,
-                workUnitId: wu.id,
+                workUnitId,
                 ctx: grainCtx,
                 recordScopeConstraints: null,
             })
@@ -421,7 +423,7 @@ async function main() {
 
     function projectRows(rows: Array<Record<string, unknown>> | undefined) {
         return (rows ?? [])
-            .filter((r) => readOpportunityIdFromRow(r) === String(opp.id))
+            .filter((r) => readOpportunityIdFromRow(r) === String(opportunity.id))
             .map((r) => {
                 const wr = r._placement_waitlist_row as Record<string, unknown> | undefined;
                 const vm = parsePlacementWaitlistCandidateRowVm(wr);

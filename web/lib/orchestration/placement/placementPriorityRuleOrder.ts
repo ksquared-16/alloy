@@ -1,27 +1,155 @@
 import type { PlacementProfile } from "@/lib/orchestration/placement/placementPriorityTypes";
-import { CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1 } from "@/lib/orchestration/placement/presets/childcareEnrollmentPlacementProfile";
+import {
+    TIER_EMPLOYEE_FAMILY_BUCKET,
+    TIER_GENERAL_WAITLIST_BUCKET,
+    TIER_STAFF_COMMUNITY_LEGACY_BUCKET,
+} from "@/lib/orchestration/placement/placementBucketLabels";
+import {
+    CHILDCARE_ENROLLMENT_WAITLIST_OPERATOR_FACTOR_ORDER,
+    CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1,
+} from "@/lib/orchestration/placement/presets/childcareEnrollmentPlacementProfile";
+import { CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V2 } from "@/lib/orchestration/placement/presets/childcareEnrollmentPlacementProfileV2";
+import { getPlacementProfileFromRegistry } from "@/lib/orchestration/placement/placementPresetRegistry";
 
-/** Default bucket evaluation / sort tier order for childcare enrollment waitlist V1 (fallback must stay last). */
-export const CHILDCARE_ENROLLMENT_WAITLIST_PRIORITY_RULE_ORDER_V1: readonly string[] = [
-    "tier_staff_community",
-    "tier_sibling_enrolled",
-    "tier_sister_center",
-    "tier_general_waitlist",
-] as const;
+/** Operator-configurable factor order (settings UI + ranking QA defaults). */
+export const CHILDCARE_ENROLLMENT_WAITLIST_PRIORITY_RULE_ORDER_V1: readonly string[] =
+    CHILDCARE_ENROLLMENT_WAITLIST_OPERATOR_FACTOR_ORDER;
+
+/** @deprecated Use {@link CHILDCARE_ENROLLMENT_WAITLIST_PRIORITY_RULE_ORDER_V1}. */
+export const CHILDCARE_ENROLLMENT_WAITLIST_OPERATOR_PRIORITY_RULE_ORDER =
+    CHILDCARE_ENROLLMENT_WAITLIST_PRIORITY_RULE_ORDER_V1;
 
 /** Operator-facing labels — one line per reorderable tier (community is evaluated with staff in this preset). */
 export const CHILDCARE_PRIORITY_RULE_ORDER_LABELS_V1: Record<string, string> = {
-    tier_staff_community: "Employee, staff, or community priority",
+    [TIER_EMPLOYEE_FAMILY_BUCKET]: "Employee families",
     tier_sibling_enrolled: "Sibling enrolled at center",
     tier_sister_center: "Sister center transfer",
-    tier_general_waitlist: "Standard family (no higher rule matched)",
+    [TIER_GENERAL_WAITLIST_BUCKET]: "Standard family (no higher rule matched)",
 };
 
-export function defaultPriorityRuleOrderForProfileId(profileId: string): string[] | null {
-    if (profileId.trim() === CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1.profile_id) {
-        return [...CHILDCARE_ENROLLMENT_WAITLIST_PRIORITY_RULE_ORDER_V1];
+export function migrateLegacyPriorityBucketKey(bucketKey: string): string {
+    const k = bucketKey.trim();
+    if (k === TIER_STAFF_COMMUNITY_LEGACY_BUCKET) return TIER_EMPLOYEE_FAMILY_BUCKET;
+    return k;
+}
+
+export function fullDefaultPriorityRuleOrderForProfile(profile: PlacementProfile): string[] {
+    return [...profile.buckets]
+        .sort((a, b) => a.priority_order - b.priority_order)
+        .map((b) => b.bucket_key);
+}
+
+/** Normalize saved metadata order: legacy keys, missing deferred buckets, fallback last. */
+export function normalizePriorityRuleOrderForProfile(
+    profile: PlacementProfile,
+    order: readonly string[]
+): string[] {
+    const expectedOrder = fullDefaultPriorityRuleOrderForProfile(profile);
+    const expected = new Set(expectedOrder);
+    const seen = new Set<string>();
+    const merged: string[] = [];
+
+    for (const raw of order) {
+        const k = migrateLegacyPriorityBucketKey(typeof raw === "string" ? raw : "");
+        if (!k || !expected.has(k) || seen.has(k)) continue;
+        seen.add(k);
+        merged.push(k);
     }
-    return null;
+    for (const k of expectedOrder) {
+        if (!seen.has(k)) merged.push(k);
+    }
+
+    const fb = profile.fallback_bucket_key;
+    const withoutFallback = merged.filter((k) => k !== fb);
+    return [...withoutFallback, fb];
+}
+
+export function operatorPriorityRuleOrderFromFullOrder(
+    fullOrder: readonly string[],
+    operatorKeys: readonly string[] = CHILDCARE_ENROLLMENT_WAITLIST_OPERATOR_FACTOR_ORDER
+): string[] {
+    const op = new Set(operatorKeys);
+    return fullOrder.filter((k) => op.has(k));
+}
+
+/** Default enabled tiers when metadata omits `priority_rule_enabled_keys` — operator factors only. */
+export function resolveDefaultPriorityRuleEnabledKeysForOrder(
+    order: readonly string[],
+    operatorKeys: readonly string[] = CHILDCARE_ENROLLMENT_WAITLIST_OPERATOR_FACTOR_ORDER
+): string[] | undefined {
+    const operatorOrder = operatorPriorityRuleOrderFromFullOrder(order, operatorKeys);
+    return operatorOrder.length > 0 ? operatorOrder : undefined;
+}
+
+/** Expand operator factor order into full profile bucket order (inserts deferred tiers). */
+export function expandOperatorPriorityRuleOrderForProfile(
+    profile: PlacementProfile,
+    operatorOrder: readonly string[]
+): string[] {
+    const fullDefault = fullDefaultPriorityRuleOrderForProfile(profile);
+    const opSet = new Set<string>(CHILDCARE_ENROLLMENT_WAITLIST_OPERATOR_FACTOR_ORDER);
+    const deferred = fullDefault.filter((k) => !opSet.has(k));
+    const fb = profile.fallback_bucket_key;
+
+    const seen = new Set<string>();
+    const core: string[] = [];
+    for (const raw of operatorOrder) {
+        const k = migrateLegacyPriorityBucketKey(raw);
+        if (!k || k === fb || !opSet.has(k) || seen.has(k)) continue;
+        seen.add(k);
+        core.push(k);
+    }
+    for (const k of CHILDCARE_ENROLLMENT_WAITLIST_OPERATOR_FACTOR_ORDER) {
+        if (k === fb || seen.has(k)) continue;
+        core.push(k);
+        seen.add(k);
+    }
+
+    const out = [...core];
+    for (const d of deferred) {
+        if (seen.has(d)) continue;
+        const empIdx = out.indexOf(TIER_EMPLOYEE_FAMILY_BUCKET);
+        const at = empIdx >= 0 ? empIdx + 1 : out.length;
+        out.splice(at, 0, d);
+        seen.add(d);
+    }
+
+    return [...out.filter((k) => k !== fb), fb];
+}
+
+export function normalizePriorityRuleEnabledKeysForProfile(
+    profile: PlacementProfile,
+    fullOrder: readonly string[],
+    enabledKeys: readonly string[] | null | undefined
+): string[] | undefined {
+    if (!enabledKeys?.length) return enabledKeys ? [] : undefined;
+    const orderSet = new Set(fullOrder.map((k) => k.trim()));
+    const out = new Set<string>();
+    for (const raw of enabledKeys) {
+        const k = migrateLegacyPriorityBucketKey(typeof raw === "string" ? raw : "");
+        if (k && orderSet.has(k)) out.add(k);
+    }
+    out.add(profile.fallback_bucket_key);
+    return fullOrder.filter((k) => out.has(k));
+}
+
+export function defaultPriorityRuleOrderForProfileId(profileId: string): string[] | null {
+    const id = profileId.trim();
+    if (
+        id === CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1.profile_id ||
+        id === CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V2.profile_id
+    ) {
+        return [...CHILDCARE_ENROLLMENT_WAITLIST_OPERATOR_FACTOR_ORDER];
+    }
+    const profile = getPlacementProfileFromRegistry(id);
+    if (!profile) return null;
+    return operatorPriorityRuleOrderFromFullOrder(fullDefaultPriorityRuleOrderForProfile(profile));
+}
+
+export function defaultFullPriorityRuleOrderForProfileId(profileId: string): string[] | null {
+    const profile = getPlacementProfileFromRegistry(profileId.trim());
+    if (!profile) return null;
+    return fullDefaultPriorityRuleOrderForProfile(profile);
 }
 
 /** Stable array for metadata: keys in `order` that appear in `enabled`. */
@@ -154,7 +282,11 @@ export function applyPlacementPriorityEffectiveProfile(
     enabledKeys: readonly string[] | null | undefined
 ): PlacementProfile {
     const ordered = applyPriorityRuleOrderToProfile(profile, order);
-    const enabled = effectivePriorityRuleEnabledSet(order, enabledKeys, profile.fallback_bucket_key);
+    const enabled = effectivePriorityRuleEnabledSet(
+        order,
+        enabledKeys ?? resolveDefaultPriorityRuleEnabledKeysForOrder(order),
+        profile.fallback_bucket_key
+    );
     const ve = validatePriorityRuleEnabledKeysForProfile(profile, order, enabled);
     if (!ve.ok) throw new Error(ve.error);
 

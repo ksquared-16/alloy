@@ -8,7 +8,7 @@ import {
 } from "@/lib/adminV2/bos/recommendations/adapters/buildLegacySuggestionCompat";
 import { tryBuildOperationalRecommendationFromAttention } from "@/lib/adminV2/bos/recommendations/adapters/tryBuildOperationalRecommendationFromAttention";
 import { projectOperationalRecommendationQueuePreview } from "@/lib/adminV2/bos/recommendations/adapters/projectOperationalRecommendationQueuePreview";
-import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
+import type { OpportunityAttentionReasonCode, OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
 
 const ORG_ID = "22222222-2222-4222-8222-222222222222";
 const ENTITY_ID = "11111111-1111-4111-8111-111111111111";
@@ -30,13 +30,20 @@ const LEGACY_PREVIEW_KEYS = ["next_label", "why_line"] as const;
 
 function attentionFixture(
     overrides: Partial<OpportunityAttentionResult> & {
-        primaryCode?: string;
+        primaryCode?: OpportunityAttentionReasonCode;
         primaryLabel?: string;
         waiting?: OpportunityAttentionResult["waiting"];
     } = {}
 ): OpportunityAttentionResult {
-    const primaryCode = overrides.primaryCode ?? "stale_new_inquiry";
-    const primaryLabel = overrides.primaryLabel ?? "New inquiry is stale";
+    const {
+        primaryCode = "stale_new_inquiry",
+        primaryLabel = "New inquiry is stale",
+        primary_reason: primaryReasonOverride,
+        reasons: reasonsOverride,
+        waiting: waitingOverride,
+        ...rest
+    } = overrides;
+
     const primary = {
         code: primaryCode,
         label: primaryLabel,
@@ -44,19 +51,18 @@ function attentionFixture(
         sla_tier: "breached" as const,
         sla_clock_confidence: "high" as const,
     };
+
     return {
         needs_attention: true,
-        reasons: [primary],
-        primary_reason: primary,
-        waiting: overrides.waiting ?? { bucket: "none", since_iso: null, active: false },
+        waiting: waitingOverride ?? { bucket: "none", since_iso: null, active: false },
         priority_score: 80,
         priority_breakdown: [],
         auxiliary: { activity_stale: null },
         resolver_version: 2,
         computed_at_iso: NOW_ISO,
-        ...overrides,
-        primary_reason: overrides.primary_reason ?? primary,
-        reasons: overrides.reasons ?? [primary],
+        ...rest,
+        reasons: reasonsOverride ?? [primary],
+        primary_reason: primaryReasonOverride ?? primary,
     };
 }
 

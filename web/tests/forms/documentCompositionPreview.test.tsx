@@ -69,8 +69,8 @@ describe("DocumentCompositionPreview FD-12", () => {
         const composition = patchSchemaComposition(baseSchema, {
             version: 1,
             blocks: [
-                { id: "r1", type: "field_region", title: "Primary", field_ids: ["f1", "f2"], order: 0 },
-                { id: "r2", type: "field_region", title: "Secondary", field_ids: ["f3"], order: 1 },
+                { id: "r1", type: "field_region", layout: "one_column", title: "Primary", field_ids: ["f1", "f2"], order: 0 },
+                { id: "r2", type: "field_region", layout: "one_column", title: "Secondary", field_ids: ["f3"], order: 1 },
             ],
         });
 

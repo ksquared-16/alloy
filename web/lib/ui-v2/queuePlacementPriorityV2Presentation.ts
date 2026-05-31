@@ -7,7 +7,7 @@ import type {
     QueueRowPlacementCandidateLineVm,
     QueueRowPlacementPriorityV2Vm,
 } from "@/lib/ui-v2/workspace-types";
-import { CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1 } from "@/lib/orchestration/placement/presets/childcareEnrollmentPlacementProfile";
+import { formatPlacementBucketLabel as formatPlacementBucketLabelCore } from "@/lib/orchestration/placement/placementBucketLabels";
 import {
     UNSPECIFIED_PROGRAM_SECTION,
     formatPlacementWaitlistProgramShortLabel,
@@ -15,23 +15,14 @@ import {
 } from "@/lib/ui-v2/queuePlacementPriorityPresentation";
 import { formatDateUtcAudit } from "@/lib/adminFormatters";
 
+export { formatPlacementBucketLabelCore as formatPlacementBucketLabel };
+
+const formatPlacementBucketLabel = formatPlacementBucketLabelCore;
+
 const LINK_MODE_LABELS: Record<string, string> = {
     preferred_together: "Preferred together",
     strictly_together: "Must enroll together",
 };
-
-const BUCKET_LABEL_BY_KEY = new Map<string, string>(
-    CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1.buckets.map((b) => {
-        const label = CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1.labels[b.label_key as keyof typeof CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1.labels];
-        return [b.bucket_key, label ?? b.bucket_key];
-    })
-);
-
-export function formatPlacementBucketLabel(bucketKey: string): string {
-    const k = bucketKey.trim();
-    if (!k) return "Waitlist";
-    return BUCKET_LABEL_BY_KEY.get(k) ?? k.replace(/^tier_/, "").replace(/_/g, " ");
-}
 
 function humanizeCohortSlug(slug: string): string {
     const t = slug.trim();

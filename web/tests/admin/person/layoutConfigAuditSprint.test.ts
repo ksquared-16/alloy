@@ -105,7 +105,7 @@ describe("layout config audit sprint", () => {
                 open_entity_type: "persons",
                 open_entity_id: "p1",
                 personDrawerOpenSeed: {
-                    person_id: "p1",
+                    personId: "p1",
                     presentation_emphasis: PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS,
                 },
             });

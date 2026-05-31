@@ -16,7 +16,7 @@ import {
     validateOperationalRecommendationV1,
 } from "@/lib/adminV2/bos/recommendations";
 import { buildTestOperationalRecommendationInput } from "@/tests/adminV2/bos/recommendations/buildOperationalRecommendationV1.test";
-import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
+import type { OpportunityAttentionReasonCode, OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
 
 const ORG_ID = "22222222-2222-4222-8222-222222222222";
 const ENTITY_ID = "11111111-1111-4111-8111-111111111111";
@@ -34,7 +34,7 @@ const VALID_ACTION_FAMILIES = new Set<AttentionSuggestionActionFamily>([
 ]);
 
 type ParityCase = {
-    primaryCode: string;
+    primaryCode: OpportunityAttentionReasonCode;
     primaryLabel: string;
     statusKey: string;
     waiting?: OpportunityAttentionResult["waiting"];
@@ -198,7 +198,7 @@ describe("legacy ↔ canonical structural parity", () => {
 
     it("maps waiting_on_internal alias through waiting_on_staff catalog parity", () => {
         const attention = attentionFixture({
-            primaryCode: "waiting_on_internal",
+            primaryCode: "waiting_on_internal" as OpportunityAttentionReasonCode,
             primaryLabel: "Waiting on staff",
             statusKey: "application_started",
             waiting: { bucket: "waiting_on_staff", since_iso: "2026-05-18T12:00:00.000Z", active: true },
@@ -256,6 +256,7 @@ describe("projectRecommendationPreviewToLegacyAttentionSuggestionPreview", () =>
             orgId: ORG_ID,
             opportunityRow: opportunityRow("new_inquiry"),
             attention,
+            activity: null,
             nowMs: NOW_MS,
             sourceSurface: "queue_enrich",
         });

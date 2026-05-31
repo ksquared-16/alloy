@@ -5,7 +5,7 @@ import {
     buildConfigAssistApplyOutcomePresentation,
     proposalTouchesLayoutIntegrity,
 } from "@/lib/agent/configLayoutAssist/configLayoutAssistApplyPresentation";
-import type { ConfigurationProposalV1 } from "@/lib/agent/configLayoutAssist/configurationProposalV1";
+import type { ConfigurationProposalV1, ConfigurationOperationBaseV1 } from "@/lib/agent/configLayoutAssist/configurationProposalV1";
 import type { ApplyOperationResult } from "@/lib/agent/configLayoutAssist/apply/configurationProposalApply";
 
 const FORBIDDEN = [/AI selected/i, /Apply complete/i, /Mutation denied/i];
@@ -45,7 +45,7 @@ function fixtureProposal(): ConfigurationProposalV1 {
         ],
         warnings: [],
         metadata: {},
-    } as ConfigurationProposalV1;
+    } as unknown as ConfigurationProposalV1;
 }
 
 describe("configLayoutAssistApplyPresentation", () => {
@@ -77,8 +77,11 @@ describe("configLayoutAssistApplyPresentation", () => {
                         kind: "update_field",
                         entity_type: "opportunities",
                         field_key: "preferred_start",
+                        before: {},
                         after: { label: "Preferred Start Date" },
-                    },
+                        rationale: ["Align label with operator vocabulary"],
+                        required_permissions: [],
+                    } satisfies ConfigurationOperationBaseV1,
                 ],
             },
             applyResults: results,

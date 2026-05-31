@@ -76,14 +76,14 @@ describe("evaluatePlacementPriority", () => {
         if (!r.ok) expect(r.code).toBe("FACT_CONSTRAINT_VIOLATION");
     });
 
-    it("first matching bucket wins (staff before sibling when both true)", () => {
+    it("first matching bucket wins (employee before sibling when both true)", () => {
         const r = evalChildcare({
             flag_employee_household: { presence: "present", value: true },
             flag_sibling_enrolled: { presence: "present", value: true },
             wait_since: { presence: "present", value: "2024-01-01T00:00:00.000Z" },
         });
         expect(r.ok).toBe(true);
-        if (r.ok) expect(r.value.snapshot.bucket_key).toBe("tier_staff_community");
+        if (r.ok) expect(r.value.snapshot.bucket_key).toBe("tier_employee_family");
     });
 
     it("sibling bucket when sibling flag true and not staff/community", () => {

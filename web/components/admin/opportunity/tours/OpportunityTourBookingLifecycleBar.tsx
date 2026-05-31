@@ -5,6 +5,10 @@ import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import { TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS } from "@/lib/tours/constants";
 import { resolveTourDrawerBookingUiState } from "@/lib/tours/opportunity/resolveTourDrawerBookingUiState";
 import { OpportunityTourSlotSchedulePanel } from "@/components/admin/opportunity/tours/OpportunityTourSlotSchedulePanel";
+import {
+    dispatchOpportunityTourUpdated,
+    postTourBookingAction,
+} from "@/lib/tours/actions/tourBookingActionClient";
 
 const ACTIVE = new Set<string>(TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS);
 
@@ -104,24 +108,19 @@ export function OpportunityTourBookingLifecycleBar(props: Props) {
 
     const primary = uiState.kind === "active_booking" ? uiState.primary : null;
 
-    const postBookingAction = async (path: string, body?: Record<string, unknown>) => {
+    const postBookingAction = async (
+        path: "/confirm" | "/complete" | "/no-show" | "/cancel",
+        actionKey: string,
+        body?: Record<string, unknown>
+    ) => {
         if (!primary) return;
         setSaving(true);
         setErr(null);
         try {
-            const res = await fetch(`/api/admin/tours/bookings/${encodeURIComponent(primary.id)}${path}`, {
-                method: "POST",
-                credentials: "include",
-                headers: { "Content-Type": "application/json" },
-                body: body ? JSON.stringify(body) : "{}",
-            });
-            const j = (await res.json()) as { error?: string };
-            if (!res.ok) throw new Error(j.error ?? res.statusText);
+            await postTourBookingAction(primary.id, path, body);
             await load();
             await onRefresh();
-            window.dispatchEvent(
-                new CustomEvent("adminv2:opportunity-updated", { detail: { id: opportunityId, action_key: "tour_booking" } })
-            );
+            dispatchOpportunityTourUpdated(opportunityId, actionKey);
         } catch (e) {
             setErr(e instanceof Error ? e.message : String(e));
         } finally {
@@ -202,7 +201,7 @@ export function OpportunityTourBookingLifecycleBar(props: Props) {
                     type="button"
                     className="rounded border border-red-200 bg-white px-2 py-1 text-[11px] font-semibold text-red-800 disabled:opacity-50"
                     disabled={saving || !canMutate || !canReschedule}
-                    onClick={() => void postBookingAction("/cancel", { canceled_by: "admin" })}
+                    onClick={() => void postBookingAction("/cancel", "cancel_tour", { canceled_by: "admin" })}
                 >
                     Cancel
                 </button>
@@ -210,7 +209,7 @@ export function OpportunityTourBookingLifecycleBar(props: Props) {
                     type="button"
                     className="rounded border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight disabled:opacity-50"
                     disabled={saving || !canMutate || !canComplete}
-                    onClick={() => void postBookingAction("/complete")}
+                    onClick={() => void postBookingAction("/complete", "record_tour_outcome", { outcome: "completed" })}
                 >
                     Complete
                 </button>
@@ -218,7 +217,7 @@ export function OpportunityTourBookingLifecycleBar(props: Props) {
                     type="button"
                     className="rounded border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight disabled:opacity-50"
                     disabled={saving || !canMutate || !canComplete}
-                    onClick={() => void postBookingAction("/no-show")}
+                    onClick={() => void postBookingAction("/no-show", "record_tour_outcome", { outcome: "no_show" })}
                 >
                     No-show
                 </button>
@@ -227,7 +226,7 @@ export function OpportunityTourBookingLifecycleBar(props: Props) {
                         type="button"
                         className="rounded border border-alloy-pine/40 bg-alloy-pine/10 px-2 py-1 text-[11px] font-semibold text-alloy-pine disabled:opacity-50"
                         disabled={saving || !canMutate}
-                        onClick={() => void postBookingAction("/confirm")}
+                        onClick={() => void postBookingAction("/confirm", "confirm_tour")}
                     >
                         Confirm
                     </button>
@@ -253,11 +252,7 @@ export function OpportunityTourBookingLifecycleBar(props: Props) {
                                 setRescheduleOpen(false);
                                 await load();
                                 await onRefresh();
-                                window.dispatchEvent(
-                                    new CustomEvent("adminv2:opportunity-updated", {
-                                        detail: { id: opportunityId, action_key: "tour_booking" },
-                                    })
-                                );
+                                dispatchOpportunityTourUpdated(opportunityId, "reschedule_tour");
                             }}
                         />
                     </div>

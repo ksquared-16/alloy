@@ -11,6 +11,9 @@ import { getPlacementProfileFromRegistry } from "@/lib/orchestration/placement/p
 import {
     applyPlacementPriorityEffectiveProfile,
     effectivePriorityRuleEnabledSet,
+    normalizePriorityRuleEnabledKeysForProfile,
+    normalizePriorityRuleOrderForProfile,
+    resolveDefaultPriorityRuleEnabledKeysForOrder,
     validatePriorityRuleEnabledKeysForProfile,
     validatePriorityRuleOrderForProfile,
 } from "@/lib/orchestration/placement/placementPriorityRuleOrder";
@@ -105,8 +108,14 @@ export function resolvePlacementQueueConfig(params: ResolvePlacementQueueConfigP
         strict_required_facts: strictFromBehavior,
     };
 
-    const ord = merged.priority_rule_order;
-    if (ord?.length) {
+    const ordRaw = merged.priority_rule_order;
+    if (ordRaw?.length) {
+        const ord = normalizePriorityRuleOrderForProfile(profileForEval, ordRaw);
+        const enabledNormalized = normalizePriorityRuleEnabledKeysForProfile(
+            profileForEval,
+            ord,
+            merged.priority_rule_enabled_keys ?? resolveDefaultPriorityRuleEnabledKeysForOrder(ord)
+        );
         const ro = validatePriorityRuleOrderForProfile(profileForEval, ord);
         if (!ro.ok) {
             return { status: "disabled", queue_key: qk, reason: ro.error };
@@ -114,13 +123,13 @@ export function resolvePlacementQueueConfig(params: ResolvePlacementQueueConfigP
         const en = validatePriorityRuleEnabledKeysForProfile(
             profileForEval,
             ord,
-            effectivePriorityRuleEnabledSet(ord, merged.priority_rule_enabled_keys, profileForEval.fallback_bucket_key)
+            effectivePriorityRuleEnabledSet(ord, enabledNormalized, profileForEval.fallback_bucket_key)
         );
         if (!en.ok) {
             return { status: "disabled", queue_key: qk, reason: en.error };
         }
         try {
-            profileForEval = applyPlacementPriorityEffectiveProfile(profileForEval, ord, merged.priority_rule_enabled_keys);
+            profileForEval = applyPlacementPriorityEffectiveProfile(profileForEval, ord, enabledNormalized);
         } catch (e) {
             const msg = e instanceof Error && e.message ? e.message : "placement priority rule config invalid";
             return { status: "disabled", queue_key: qk, reason: msg };

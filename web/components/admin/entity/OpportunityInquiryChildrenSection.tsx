@@ -27,6 +27,11 @@ import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { logInquiryChildrenDebug, summarizeInquiryChildrenRows } from "@/lib/admin/drawer/inquiryChildrenDebug";
 import { buildQueueRowDisplayPatchFromInquiryChildRow } from "@/lib/admin/opportunityQueueRowDisplayPatch";
 import { dispatchOpportunityQueueUpdated } from "@/lib/admin/opportunityQueueRefreshEvent";
+import {
+    ADMINV2_OPPORTUNITY_FOCUS_INQUIRY_CHILDREN,
+    scrollToInquiryChildrenSection,
+    type InquiryChildrenFocusField,
+} from "@/lib/admin/actions/enrollmentActionClient";
 import { dispatchPersonRecordUpdated } from "@/lib/admin/person/dispatchPersonRecordUpdated";
 import { resolveChildAgeDisplayLabel } from "@/lib/admin/drawer/childAgeDisplay";
 import {
@@ -728,6 +733,20 @@ export default function OpportunityInquiryChildrenSection({
         });
     }, [rows]);
 
+    useEffect(() => {
+        const oppId = opportunityId?.trim() ?? "";
+        if (!oppId || typeof window === "undefined") return;
+        const onFocus = (ev: Event) => {
+            const ce = ev as CustomEvent<{ opportunity_id?: string | null; field?: InquiryChildrenFocusField | null }>;
+            const id = typeof ce.detail?.opportunity_id === "string" ? ce.detail.opportunity_id.trim() : "";
+            if (!id || id !== oppId) return;
+            scrollToInquiryChildrenSection(ce.detail?.field ?? null);
+        };
+        window.addEventListener(ADMINV2_OPPORTUNITY_FOCUS_INQUIRY_CHILDREN, onFocus as EventListener);
+        return () =>
+            window.removeEventListener(ADMINV2_OPPORTUNITY_FOCUS_INQUIRY_CHILDREN, onFocus as EventListener);
+    }, [opportunityId]);
+
     const reservedRowCount = Math.max(shellReservedRowCount, recordDetailPending ? 1 : 0);
 
     if (!rows.length && reservedRowCount > 0) {
@@ -1042,7 +1061,7 @@ export default function OpportunityInquiryChildrenSection({
                                     )}
                                 </div>
                                 {showDesiredStartColumn ? (
-                                    <div className={INQUIRY_CHILD_CELL}>
+                                    <div className={INQUIRY_CHILD_CELL} data-inquiry-field="desired_start_date">
                                         <div className={INQUIRY_CHILD_MOBILE_LABEL}>
                                             {desiredStartLabel}
                                         </div>
@@ -1208,7 +1227,7 @@ export default function OpportunityInquiryChildrenSection({
                                         <span className={readOnlyText}>{fallbackProgram}</span>
                                     )}
                                 </div>
-                                <div className={INQUIRY_CHILD_CELL}>
+                                <div className={INQUIRY_CHILD_CELL} data-inquiry-field="program_room_cohort_key">
                                     <div className={INQUIRY_CHILD_MOBILE_LABEL}>{roomLabel}</div>
                                     {rowCanEdit ? (
                                         <select
@@ -1242,7 +1261,7 @@ export default function OpportunityInquiryChildrenSection({
                                         <span className={readOnlyText}>{fallbackCohort}</span>
                                     )}
                                 </div>
-                                <div className={INQUIRY_CHILD_CELL}>
+                                <div className={INQUIRY_CHILD_CELL} data-inquiry-field="desired_schedule_type">
                                     <div className={INQUIRY_CHILD_MOBILE_LABEL}>{scheduleLabel}</div>
                                     {rowCanEdit ? (
                                         <select

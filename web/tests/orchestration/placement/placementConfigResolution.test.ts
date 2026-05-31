@@ -172,8 +172,14 @@ describe("resolvePlacementQueueConfig", () => {
         if (r.status === "enabled") expect(r.options.profile_revision_mismatch).toBe(true);
     });
 
-    it("applies priority_rule_order so sibling rule is evaluated before staff", () => {
-        const order = ["tier_sibling_enrolled", "tier_staff_community", "tier_sister_center", "tier_general_waitlist"];
+    it("applies priority_rule_order so sibling rule is evaluated before employee", () => {
+        const order = [
+            "tier_sibling_enrolled",
+            "tier_employee_family",
+            "tier_staff_community",
+            "tier_sister_center",
+            "tier_general_waitlist",
+        ];
         const r = resolvePlacementQueueConfig({
             departmentMetadata: {},
             workUnitMetadata: {
@@ -193,7 +199,7 @@ describe("resolvePlacementQueueConfig", () => {
         }
     });
 
-    it("disabled when priority_rule_order length wrong", () => {
+    it("normalizes legacy short priority_rule_order instead of disabling", () => {
         const r = resolvePlacementQueueConfig({
             departmentMetadata: {},
             workUnitMetadata: {
@@ -206,11 +212,12 @@ describe("resolvePlacementQueueConfig", () => {
             },
             queue_key: "waitlisted",
         });
-        expect(r.status).toBe("disabled");
+        expect(r.status).toBe("enabled");
     });
 
     it("omits disabled tier rules from effective profile", () => {
         const order = [
+            "tier_employee_family",
             "tier_staff_community",
             "tier_sibling_enrolled",
             "tier_sister_center",
@@ -225,7 +232,7 @@ describe("resolvePlacementQueueConfig", () => {
                     profile_id: childcareId,
                     queue_keys_enabled: ["waitlisted"],
                     priority_rule_order: order,
-                    priority_rule_enabled_keys: ["tier_staff_community", "tier_sister_center", "tier_general_waitlist"],
+                    priority_rule_enabled_keys: ["tier_employee_family", "tier_sister_center", "tier_general_waitlist"],
                 },
             },
             queue_key: "waitlisted",

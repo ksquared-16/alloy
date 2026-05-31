@@ -1,6 +1,26 @@
 import { describe, expect, it } from "vitest";
 
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { buildEnrollmentOpportunityQueueItemVm } from "@/lib/workspace/viewModels/enrollmentWorkUnitViewModel";
+
+function registryAction(
+    key: string,
+    label: string,
+    action_type: string,
+    payload: Record<string, unknown>
+): ResolvedActionForClient {
+    return {
+        key,
+        label,
+        description: null,
+        action_type,
+        icon: null,
+        style: null,
+        display_style: "button",
+        payload,
+        workflow_id: null,
+    };
+}
 
 describe("enrollment work-unit queue quick actions", () => {
     it("does not show Message from preview JSON without a placement", () => {
@@ -39,12 +59,7 @@ describe("enrollment work-unit queue quick actions", () => {
                 workUnitKey: "new_inquiry",
                 previewActions: ["open", "message"],
                 queueRowRegistryPlacements: [
-                    {
-                        key: "quick_message",
-                        label: "Message",
-                        action_type: "ui_intent",
-                        payload: { intent: "quick_message" },
-                    },
+                    registryAction("quick_message", "Message", "ui_intent", { intent: "quick_message" }),
                 ],
             }
         );
@@ -63,12 +78,9 @@ describe("enrollment work-unit queue quick actions", () => {
                 workUnitKey: "new_inquiry",
                 previewActions: ["open"],
                 queueRowRegistryPlacements: [
-                    {
-                        key: "update_status_add_note",
-                        label: "Update status",
-                        action_type: "open_form",
-                        payload: { form_key: "update_status_add_note" },
-                    },
+                    registryAction("update_status_add_note", "Update status", "open_form", {
+                        form_key: "update_status_add_note",
+                    }),
                 ],
             }
         );

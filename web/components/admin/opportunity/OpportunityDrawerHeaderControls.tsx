@@ -5,6 +5,8 @@ import { DrawerHeaderAttentionBlock } from "@/components/admin/drawer/DrawerHead
 import type { OpportunityQueuePreviewSeed } from "@/lib/adminV2/bos/activeOperationalContext";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { OpportunityDrawerHeaderActionsMenu } from "@/components/admin/opportunity/OpportunityDrawerHeaderActionsMenu";
+import { ActionPreflightBlockedPanel } from "@/components/admin/opportunity/ActionPreflightBlockedPanel";
+import type { ActionPreflightUiPayload } from "@/lib/admin/actions/actionPreflightPresentation";
 
 type Props = {
     opportunityId: string;
@@ -17,6 +19,8 @@ type Props = {
     canMutate: boolean;
     actionLoadingKey?: string | null;
     onActionSelect: (action: ResolvedActionForClient) => void;
+    actionPreflightBlocked?: ActionPreflightUiPayload | null;
+    onDismissActionPreflightBlocked?: () => void;
 };
 
 /** Title rail: controls top-right; full-width left-aligned attention context below. */
@@ -31,6 +35,8 @@ export function OpportunityDrawerHeaderControls({
     canMutate,
     actionLoadingKey = null,
     onActionSelect,
+    actionPreflightBlocked = null,
+    onDismissActionPreflightBlocked,
 }: Props) {
     return (
         <div
@@ -60,6 +66,13 @@ export function OpportunityDrawerHeaderControls({
                 :   null}
             </div>
             <DrawerHeaderAttentionBlock overviewData={overviewData} />
+            {actionPreflightBlocked ?
+                <ActionPreflightBlockedPanel
+                    opportunityId={opportunityId}
+                    preflight={actionPreflightBlocked}
+                    onDismiss={onDismissActionPreflightBlocked}
+                />
+            :   null}
         </div>
     );
 }

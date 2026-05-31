@@ -36,6 +36,7 @@ const schema: FormSchemaV1 = {
                 type: "text",
                 content:
                     "I, {{guardian_full_name}}, authorize {{child_first_name}} {{child_last_name}} to receive medication.",
+                format: "plain",
             },
         ],
     },

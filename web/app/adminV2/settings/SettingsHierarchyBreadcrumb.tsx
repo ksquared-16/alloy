@@ -83,7 +83,7 @@ function crumbsForPath(path: string): Crumb[] {
     }
 
     if (tail === "/placement-priority" || tail.startsWith("/placement-priority")) {
-        base.push({ label: "Waitlist priority", href: null });
+        base.push({ label: "Waitlist Ranking Policy", href: null });
         return base;
     }
 

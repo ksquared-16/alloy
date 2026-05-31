@@ -47,6 +47,7 @@ describe("buildPersonEnrollmentActivityEntries", () => {
                     location_label: "Main campus",
                     program_label: "Preschool",
                     room_label: "Room A",
+                    location_id: null,
                     outcome_status_key: null,
                     outcome_status_label: null,
                 },

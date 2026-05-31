@@ -20,14 +20,13 @@ function read(rel: string): string {
 
 describe("AdminV2 performance pass 3 — bootstrap breakdown instrumentation", () => {
     it("strips __server_perf in production attach helper", () => {
-        const prev = process.env.NODE_ENV;
-        process.env.NODE_ENV = "production";
+        vi.stubEnv("NODE_ENV", "production");
         try {
             const out = attachBootstrapServerPerf({ ok: true }, { route_gate_ms: 12 });
             expect(out).toEqual({ ok: true });
             expect("__server_perf" in out).toBe(false);
         } finally {
-            process.env.NODE_ENV = prev;
+            vi.unstubAllEnvs();
         }
     });
 
@@ -43,8 +42,7 @@ describe("AdminV2 performance pass 3 — bootstrap breakdown instrumentation", (
     });
 
     it("breakdown helpers are no-ops in production", () => {
-        const prev = process.env.NODE_ENV;
-        process.env.NODE_ENV = "production";
+        vi.stubEnv("NODE_ENV", "production");
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         try {
             expect(adminV2BootstrapBreakdownEnabled()).toBe(false);
@@ -64,7 +62,7 @@ describe("AdminV2 performance pass 3 — bootstrap breakdown instrumentation", (
             expect(warn).not.toHaveBeenCalled();
         } finally {
             warn.mockRestore();
-            process.env.NODE_ENV = prev;
+            vi.unstubAllEnvs();
         }
     });
 

@@ -4,7 +4,7 @@ import { attachOperationalRecommendationBundle } from "@/lib/adminV2/bos/recomme
 import { mapAttentionReasonToCatalogKey } from "@/lib/adminV2/bos/recommendations/adapters/mapAttentionReasonToCatalogKey";
 import { validateOperationalRecommendationV1 } from "@/lib/adminV2/bos/recommendations";
 import type { ActivitySignalResult } from "@/lib/admin/activitySignals";
-import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
+import type { OpportunityAttentionReasonCode, OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
 
 const ORG_ID = "22222222-2222-4222-8222-222222222222";
 const ENTITY_ID = "11111111-1111-4111-8111-111111111111";
@@ -30,16 +30,22 @@ function baseOpportunityRow(overrides: Record<string, unknown> = {}): Record<str
 
 function attentionFixture(
     overrides: Partial<OpportunityAttentionResult> & {
-        primaryCode?: string;
+        primaryCode?: OpportunityAttentionReasonCode;
         primaryLabel?: string;
         severity?: "low" | "medium" | "high" | "critical";
         slaTier?: "ok" | "approaching" | "breached";
     } = {}
 ): OpportunityAttentionResult {
-    const primaryCode = overrides.primaryCode ?? "stale_new_inquiry";
-    const primaryLabel = overrides.primaryLabel ?? "New inquiry is stale";
-    const severity = overrides.severity ?? "high";
-    const slaTier = overrides.slaTier ?? "breached";
+    const {
+        primaryCode = "stale_new_inquiry",
+        primaryLabel = "New inquiry is stale",
+        severity = "high",
+        slaTier = "breached",
+        primary_reason: primaryReasonOverride,
+        reasons: reasonsOverride,
+        waiting: waitingOverride,
+        ...rest
+    } = overrides;
 
     const primary = {
         code: primaryCode,
@@ -51,17 +57,15 @@ function attentionFixture(
 
     return {
         needs_attention: true,
-        reasons: [primary],
-        primary_reason: primary,
-        waiting: { bucket: "none", since_iso: null, active: false },
+        waiting: waitingOverride ?? { bucket: "none", since_iso: null, active: false },
         priority_score: 80,
         priority_breakdown: [],
         auxiliary: { activity_stale: null },
         resolver_version: 2,
         computed_at_iso: "2026-05-20T12:00:00.000Z",
-        ...overrides,
-        primary_reason: overrides.primary_reason ?? primary,
-        reasons: overrides.reasons ?? [primary],
+        ...rest,
+        reasons: reasonsOverride ?? [primary],
+        primary_reason: primaryReasonOverride ?? primary,
     };
 }
 
@@ -86,7 +90,7 @@ describe("mapAttentionReasonToCatalogKey", () => {
 
     it("maps waiting_on_internal alias to waiting_on_staff catalog key", () => {
         const attention = attentionFixture({
-            primaryCode: "waiting_on_internal",
+            primaryCode: "waiting_on_internal" as OpportunityAttentionReasonCode,
             primaryLabel: "Waiting on staff",
             waiting: {
                 bucket: "waiting_on_staff",

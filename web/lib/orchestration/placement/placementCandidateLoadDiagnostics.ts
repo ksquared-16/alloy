@@ -4,15 +4,16 @@
  */
 
 import { shouldUseRecordSourcedHouseholdPlacementFacts } from "@/lib/orchestration/placement/householdPlacementFacts";
+import type { PlacementCandidateProjectionMismatch } from "@/lib/orchestration/placement/resolvePlacementCandidateChildDisplayName";
 
 export type PlacementSiteLoadSource = "ocm" | "opportunity_fallback" | "candidate_existing" | "unknown";
 export type PlacementCohortLoadSource = "ocm" | "candidate_existing" | "derived_from_dob" | "unknown";
 export type HouseholdFactLoadSource = "record_join" | "metadata_fallback" | "unknown";
-
 export type PlacementCandidateLoadDiagnostics = {
     site_source: PlacementSiteLoadSource;
     cohort_source: PlacementCohortLoadSource;
     household_fact_source: HouseholdFactLoadSource;
+    projection_mismatch?: PlacementCandidateProjectionMismatch;
 };
 
 function safeMeta(raw: unknown): Record<string, unknown> {
@@ -56,6 +57,7 @@ export function resolvePlacementSiteLoadSource(params: {
 
 export function resolvePlacementCohortLoadSource(params: {
     storedCohortKey?: string | null;
+    resolvedCohortKey?: string | null;
     ocmCohortKey?: string | null;
     /** When cohort was repaired from member/DOB heuristics at load time. */
     cohortRepairedFromMember?: boolean;
@@ -63,7 +65,9 @@ export function resolvePlacementCohortLoadSource(params: {
 }): PlacementCohortLoadSource {
     const ocmKey = (params.ocmCohortKey ?? "").trim();
     const stored = (params.storedCohortKey ?? "").trim();
-    if (ocmKey && stored === ocmKey) return "ocm";
+    const resolved = (params.resolvedCohortKey ?? params.storedCohortKey ?? "").trim();
+    if (ocmKey && resolved === ocmKey) return "ocm";
+    if (ocmKey && stored && stored !== ocmKey && resolved === ocmKey) return "ocm";
     if (params.cohortDerivedFromDob) return "derived_from_dob";
     if (stored) return "candidate_existing";
     if (params.cohortRepairedFromMember) return "derived_from_dob";
@@ -85,6 +89,7 @@ export function resolveHouseholdFactLoadSource(params: {
 export function resolvePlacementCandidateLoadDiagnostics(params: {
     candidateSiteId?: string | null;
     storedCohortKey?: string | null;
+    resolvedCohortKey?: string | null;
     ocmLocationId?: string | null;
     ocmCohortKey?: string | null;
     opportunityLocationId?: string | null;
@@ -102,6 +107,7 @@ export function resolvePlacementCandidateLoadDiagnostics(params: {
         }),
         cohort_source: resolvePlacementCohortLoadSource({
             storedCohortKey: params.storedCohortKey,
+            resolvedCohortKey: params.resolvedCohortKey,
             ocmCohortKey: params.ocmCohortKey,
             cohortRepairedFromMember: params.cohortRepairedFromMember,
             cohortDerivedFromDob: params.cohortDerivedFromDob,

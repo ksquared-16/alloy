@@ -31,6 +31,22 @@ Underlying modals and API routes are unchanged.
 
 No new columns; ordering uses existing `action_placements.order_index`.
 
+## Header exposure doctrine (2026-06-02)
+
+**Capabilities ≠ drawer pills.** `action_definitions` rows remain available for BOS, tasks, workflows, API, queue rows, record sections, and Settings. Default **record_header** placements are curated lifecycle actions only.
+
+| Surface | Default exposure |
+|---------|------------------|
+| Drawer header controls | **Work with BOS** + **Actions** dropdown (no pills, no card chrome) |
+| Universal comms (`send_email`, `send_sms`, `call_parent`, …) | **Not** default header placements — use Communications tab, BOS, or explicit Settings placement |
+| `add_family_member` | `family_contacts` record section (not header) |
+| `update_status_add_note` | Queue row / enrollment workflows (not default header) |
+| BOS | `Work with BOS` in drawer title rail via `OpportunityDrawerHeaderControls` (not duplicated in inquiry summary) |
+
+Operators may still add any action to record_header via **Settings → Action buttons**; the header always renders one stable **Actions** control regardless of count.
+
+Migration: `20260602210000_fix_opportunity_header_action_overexposure.sql`
+
 ## Ordering
 
 - Drawer header respects `action_placements.order_index` (lower first) via `resolveActionsForContext`.

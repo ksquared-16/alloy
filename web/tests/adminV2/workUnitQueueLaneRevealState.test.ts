@@ -54,6 +54,7 @@ describe("workUnitQueueLaneRevealState", () => {
     it("above-fold queue lane uses held — never row skeleton loading", () => {
         const model = buildWorkUnitAboveFoldRenderModel({
             work_unit_shell_ready: true,
+            reserve_actions_rail: false,
             queue_summaries: [{ key: "tours", label: "Tours", priority: "standard", count: 1 }],
             queue_summaries_error: null,
             queue_pill_sections: null,

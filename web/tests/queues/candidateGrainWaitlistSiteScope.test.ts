@@ -12,8 +12,8 @@ describe("passesWaitlistCandidateLocationScope", () => {
             site_id: north,
             opportunities: { id: "opp-1", location_id: south },
         } as Parameters<typeof passesWaitlistCandidateLocationScope>[0];
-        expect(passesWaitlistCandidateLocationScope(row, { locationIds: [north], impossible: false })).toBe(true);
-        expect(passesWaitlistCandidateLocationScope(row, { locationIds: [south], impossible: false })).toBe(false);
+        expect(passesWaitlistCandidateLocationScope(row, { workUnitIds: null, locationIds: [north], impossible: false })).toBe(true);
+        expect(passesWaitlistCandidateLocationScope(row, { workUnitIds: null, locationIds: [south], impossible: false })).toBe(false);
     });
 
     it("falls back to opportunity location_id when candidate site missing", () => {
@@ -21,8 +21,8 @@ describe("passesWaitlistCandidateLocationScope", () => {
             site_id: null,
             opportunities: { id: "opp-2", location_id: south },
         } as Parameters<typeof passesWaitlistCandidateLocationScope>[0];
-        expect(passesWaitlistCandidateLocationScope(row, { locationIds: [south], impossible: false })).toBe(true);
-        expect(passesWaitlistCandidateLocationScope(row, { locationIds: [north], impossible: false })).toBe(false);
+        expect(passesWaitlistCandidateLocationScope(row, { workUnitIds: null, locationIds: [south], impossible: false })).toBe(true);
+        expect(passesWaitlistCandidateLocationScope(row, { workUnitIds: null, locationIds: [north], impossible: false })).toBe(false);
     });
 
     it("passes all rows when location scope unrestricted", () => {

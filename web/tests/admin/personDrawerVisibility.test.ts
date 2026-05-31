@@ -94,6 +94,7 @@ describe("buildPersonDrawerRelationshipGroups", () => {
                     role_label: "Parent",
                     customer_id: "cust-1",
                     is_primary: true,
+                is_household_primary_contact: true,
                 },
             ],
             household_child_links: [],

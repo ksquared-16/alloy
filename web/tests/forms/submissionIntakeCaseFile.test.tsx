@@ -1,6 +1,7 @@
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { CASE_FILE_SECTION_ORDER } from "@/lib/forms/review/formsReviewPresentation";
 import { SubmissionIntakeCaseFileContent } from "@/components/forms/review/SubmissionIntakeCaseFileContent";
 import type { SubmissionIntakeCaseFileRow } from "@/components/forms/review/SubmissionIntakeCaseFileContent";
 import { buildEntityConnectionRows } from "@/lib/forms/submissionOutcomeSummary";
@@ -48,7 +49,7 @@ function renderCaseFile(overrides: Partial<React.ComponentProps<typeof Submissio
     return renderToStaticMarkup(
         <SubmissionIntakeCaseFileContent
             row={row}
-            schema={{ title: "Enrollment intake", version: 1, fields: [] }}
+            schema={{ schema_version: 1, title: "Enrollment intake", sections: [], fields: [] }}
             viewerTimezone="UTC"
             canMutate
             lifecycle={{ headline: "Submitted — linkage needs review", notes: ["Intake flagged for operator review."] }}

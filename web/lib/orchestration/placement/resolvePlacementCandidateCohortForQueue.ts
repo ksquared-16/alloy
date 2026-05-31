@@ -131,6 +131,8 @@ export function resolvePlacementCandidateCohortFromMember(input: {
 export function resolvePlacementCandidateCohortForQueue(input: {
     storedKey: string;
     storedLabel: string;
+    /** Authoritative OCM child placement scope when linked. */
+    ocmProgramRoomCohortKey?: string | null;
     candidateMetadata?: Record<string, unknown> | null;
     ocmMetadata?: Record<string, unknown> | null;
     desiredProgramType?: string | null;
@@ -138,11 +140,56 @@ export function resolvePlacementCandidateCohortForQueue(input: {
 }): { program_room_cohort_key: string; program_room_group_label: string } {
     const storedKey = input.storedKey.trim();
     const storedLabel = input.storedLabel.trim();
+    const ocmKey = (input.ocmProgramRoomCohortKey ?? "").trim();
+    const desiredType = (input.desiredProgramType ?? "").trim();
 
     const toStored = (key: string, label: string) => {
         const n = normalizePlacementWaitlistCohort(key, label);
         return { program_room_cohort_key: n.cohortKey, program_room_group_label: n.cohortLabel };
     };
+
+    // Inquiry drawer canonical program key — align queue sections/labels with OCM desired_program_type.
+    if (desiredType) {
+        const fromDesired =
+            resolveFromMemberSources({
+                ocmMetadata: input.ocmMetadata,
+                candidateMetadata: input.candidateMetadata,
+                desiredProgramType: desiredType,
+                dateOfBirth: input.dateOfBirth,
+            }) ??
+            resolveProgramRoomCohort({
+                metadata: safeMeta(input.ocmMetadata),
+                desired_program_type: desiredType,
+            });
+        if (
+            fromDesired.program_room_cohort_key &&
+            fromDesired.program_room_cohort_key !== "unknown_program_room" &&
+            !looksLikeCombinedProgramRoomCohort(
+                fromDesired.program_room_cohort_key,
+                fromDesired.program_room_group_label
+            )
+        ) {
+            const desiredKey = fromDesired.program_room_cohort_key.trim();
+            if (!storedKey || storedKey !== desiredKey || (ocmKey && ocmKey !== desiredKey)) {
+                return toStored(fromDesired.program_room_cohort_key, fromDesired.program_room_group_label);
+            }
+        }
+    }
+
+    if (ocmKey) {
+        const storedIsCombined = looksLikeCombinedProgramRoomCohort(storedKey, storedLabel);
+        const storedDiffers = Boolean(storedKey && storedKey !== ocmKey);
+        if (!storedKey || storedIsCombined || storedDiffers) {
+            const fromOcm = resolvePlacementCandidateCohortFromMember({
+                ocmMetadata: input.ocmMetadata,
+                candidateMetadata: input.candidateMetadata,
+                desiredProgramType: input.desiredProgramType,
+                programRoomCohortKey: ocmKey,
+                dateOfBirth: input.dateOfBirth,
+            });
+            return toStored(fromOcm.program_room_cohort_key, fromOcm.program_room_group_label);
+        }
+    }
 
     if (!looksLikeCombinedProgramRoomCohort(storedKey, storedLabel)) {
         return toStored(storedKey, storedLabel);

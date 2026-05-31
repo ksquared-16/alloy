@@ -66,13 +66,12 @@ describe("BOS final quality pass", () => {
         expect(html).toContain("review_assist");
     });
 
-    it("Review Assist calm state shows compact copy and BOS wiring without blank reserve", () => {
+    it("Review Assist calm state shows compact copy without duplicate BOS CTA", () => {
         const rightCol = readFileSync(
             join(webRoot, "components/admin/opportunity/OpportunityInquirySummaryRightColumn.tsx"),
             "utf8"
         );
-        expect(rightCol).toContain("BosDrawerAssistCta");
-        expect(rightCol).toContain('"bos_only"');
+        expect(rightCol).not.toContain("BosDrawerAssistCta");
         expect(rightCol).toContain('data-review-assist-calm="true"');
         expect(rightCol).toContain("No urgent action flagged.");
         expect(rightCol).not.toContain('data-review-assist-placeholder="reserved"');

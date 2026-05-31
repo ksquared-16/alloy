@@ -169,12 +169,14 @@ describe("intakeCaseLifecycleEvents IC-5", () => {
         });
 
         expect(emitEventMock).toHaveBeenCalledTimes(2);
-        const types = emitEventMock.mock.calls.map(
-            (call) => (call[0] as { event_type: string }).event_type
+        const types = (emitEventMock.mock.calls as unknown as Array<[{ event_type: string }]>).map(
+            (call) => call[0].event_type
         );
         expect(types).toEqual(["intake_case_created", "intake_case_operationalized"]);
 
-        const firstPayload = (emitEventMock.mock.calls[0]![0] as { payload: Record<string, unknown> }).payload;
+        const firstPayload = (emitEventMock.mock.calls as unknown as Array<
+            [{ payload: Record<string, unknown> }]
+        >)[0]![0].payload;
         expect(firstPayload.case_key).toBe(`opportunity:${OPP}`);
         expect(firstPayload.source).toBe("forms_intake");
     });
@@ -210,8 +212,8 @@ describe("form_submitted unchanged (IC-5 isolation)", () => {
             },
         });
 
-        const types = emitEventMock.mock.calls.map(
-            (call) => (call[0] as { event_type: string }).event_type
+        const types = (emitEventMock.mock.calls as unknown as Array<[{ event_type: string }]>).map(
+            (call) => call[0].event_type
         );
         expect(types).not.toContain("form_submitted");
         expect(types).toEqual(["intake_case_created", "intake_case_linked"]);

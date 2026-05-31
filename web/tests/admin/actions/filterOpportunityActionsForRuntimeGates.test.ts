@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { filterOpportunityActionsForRuntimeGates } from "@/lib/admin/actions/filterOpportunityActionsForRuntimeGates";
-import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
+import { emptyResolvedActionsBySlot, type ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 
 vi.mock("@/lib/admin/drawer/drawerHeaderAttentionPresentation", () => ({
     opportunityHasReviewableEnrollmentPacket: vi.fn(),
@@ -13,6 +13,7 @@ const mockHasReviewable = vi.mocked(opportunityHasReviewableEnrollmentPacket);
 const supabase = {} as Parameters<typeof filterOpportunityActionsForRuntimeGates>[0];
 
 const actionsWithReviewPacket: ResolvedActionsBySlot = {
+    ...emptyResolvedActionsBySlot(),
     overflow: [
         { key: "review_enrollment_packet", label: "Review packet", kind: "ui_intent" } as never,
         { key: "send_email", label: "Email", kind: "ui_intent" } as never,
@@ -34,6 +35,7 @@ describe("filterOpportunityActionsForRuntimeGates", () => {
 
     it("passes through when review packet not in resolved actions", async () => {
         const actions: ResolvedActionsBySlot = {
+            ...emptyResolvedActionsBySlot(),
             overflow: [{ key: "send_email", label: "Email", kind: "ui_intent" } as never],
         };
         const result = await filterOpportunityActionsForRuntimeGates(

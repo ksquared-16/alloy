@@ -32,7 +32,7 @@ async function loadInquiryChildrenForOpportunity(
     const { data: ocmRows } = await supabase
         .from("opportunity_customer_members")
         .select(
-            "id, customer_member_id, location_id, desired_program_type, program_room_cohort_key, desired_start_date, outcome_status_key"
+            "id, customer_member_id, location_id, desired_program_type, program_room_cohort_key, desired_schedule_type, desired_start_date, outcome_status_key"
         )
         .eq("org_id", orgId)
         .eq("opportunity_id", opportunityId);
@@ -43,6 +43,7 @@ async function loadInquiryChildrenForOpportunity(
         location_id?: string | null;
         desired_program_type?: string | null;
         program_room_cohort_key?: string | null;
+        desired_schedule_type?: string | null;
         desired_start_date?: string | null;
         outcome_status_key?: string | null;
     }>;
@@ -82,6 +83,7 @@ async function loadInquiryChildrenForOpportunity(
             location_id: ocm.location_id ?? null,
             desired_program_type: ocm.desired_program_type ?? null,
             program_room_cohort_key: ocm.program_room_cohort_key ?? null,
+            desired_schedule_type: ocm.desired_schedule_type ?? null,
             desired_start_date: ocm.desired_start_date ?? null,
             outcome_status_key: ocm.outcome_status_key ?? null,
         };

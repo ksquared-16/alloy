@@ -1,8 +1,8 @@
 /**
  * Idempotent repair: align placement_candidates.site_id / program_room_cohort_key with OCM child scope (Card 3).
  */
-
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolvePlacementCandidateCohortFromMember } from "@/lib/orchestration/placement/resolvePlacementCandidateCohortForQueue";
 
 export type PlacementCandidateOcmRepairOptions = {
     orgId: string;
@@ -39,6 +39,8 @@ type OcmRow = {
     id: string;
     location_id: string | null;
     program_room_cohort_key: string | null;
+    desired_program_type?: string | null;
+    metadata?: Record<string, unknown> | null;
 };
 
 function safeMeta(raw: unknown): Record<string, unknown> {
@@ -54,10 +56,13 @@ export type PlacementCandidateOcmRepairPlan = {
     candidateId: string;
     repairSite: boolean;
     repairCohort: boolean;
+    repairCohortLabel: boolean;
     nextSiteId: string | null;
     nextCohortKey: string | null;
+    nextCohortLabel: string | null;
     previousSiteId: string | null;
     previousCohortKey: string | null;
+    previousCohortLabel: string | null;
     diagnosticsOnly: boolean;
     missingOcmSite: boolean;
     missingOcmCohort: boolean;
@@ -70,6 +75,7 @@ export function planPlacementCandidateOcmRepair(params: {
         | "opportunity_customer_member_id"
         | "site_id"
         | "program_room_cohort_key"
+        | "program_room_group_label"
         | "is_synthetic_fallback"
     >;
     ocm: OcmRow | null;
@@ -89,21 +95,35 @@ export function planPlacementCandidateOcmRepair(params: {
     const ocmCohort = trimId(params.ocm.program_room_cohort_key);
     const prevSite = trimId(params.candidate.site_id) || null;
     const prevCohort = trimId(params.candidate.program_room_cohort_key) || null;
+    const prevLabel = trimId(params.candidate.program_room_group_label) || null;
+
+    const resolvedCohort = ocmCohort
+        ? resolvePlacementCandidateCohortFromMember({
+              ocmMetadata: safeMeta(params.ocm.metadata),
+              desiredProgramType: params.ocm.desired_program_type ?? null,
+              programRoomCohortKey: ocmCohort,
+          })
+        : null;
+    const nextLabel = resolvedCohort?.program_room_group_label?.trim() || null;
 
     const repairSite = Boolean(ocmSite) && prevSite !== ocmSite;
     const repairCohort = Boolean(ocmCohort) && prevCohort !== ocmCohort;
+    const repairCohortLabel = Boolean(nextLabel) && prevLabel !== nextLabel;
     const missingOcmSite = !ocmSite;
     const missingOcmCohort = !ocmCohort;
 
-    if (!repairSite && !repairCohort) {
+    if (!repairSite && !repairCohort && !repairCohortLabel) {
         return {
             candidateId: params.candidate.id,
             repairSite: false,
             repairCohort: false,
+            repairCohortLabel: false,
             nextSiteId: prevSite,
             nextCohortKey: prevCohort,
+            nextCohortLabel: prevLabel,
             previousSiteId: prevSite,
             previousCohortKey: prevCohort,
+            previousCohortLabel: prevLabel,
             diagnosticsOnly: missingOcmSite || missingOcmCohort,
             missingOcmSite,
             missingOcmCohort,
@@ -114,10 +134,13 @@ export function planPlacementCandidateOcmRepair(params: {
         candidateId: params.candidate.id,
         repairSite,
         repairCohort,
+        repairCohortLabel,
         nextSiteId: repairSite ? ocmSite : prevSite,
         nextCohortKey: repairCohort ? ocmCohort : prevCohort,
+        nextCohortLabel: repairCohortLabel ? nextLabel : prevLabel,
         previousSiteId: prevSite,
         previousCohortKey: prevCohort,
+        previousCohortLabel: prevLabel,
         diagnosticsOnly: false,
         missingOcmSite,
         missingOcmCohort,
@@ -144,6 +167,12 @@ function buildRepairMetadata(
             ? {
                   previous_program_room_cohort_key: plan.previousCohortKey,
                   repaired_cohort: true,
+              }
+            : {}),
+        ...(plan.repairCohortLabel
+            ? {
+                  previous_program_room_group_label: plan.previousCohortLabel,
+                  repaired_cohort_label: true,
               }
             : {}),
     };
@@ -221,7 +250,7 @@ export async function runPlacementCandidateOcmRepair(
     if (ocmIds.length) {
         const { data: ocmRows, error: ocmErr } = await supabase
             .from("opportunity_customer_members")
-            .select("id, location_id, program_room_cohort_key")
+            .select("id, location_id, program_room_cohort_key, desired_program_type, metadata")
             .eq("org_id", orgId)
             .in("id", ocmIds);
         if (ocmErr) {
@@ -249,7 +278,7 @@ export async function runPlacementCandidateOcmRepair(
         if (planResult.missingOcmSite) counts.missing_ocm_site += 1;
         if (planResult.missingOcmCohort) counts.missing_ocm_cohort += 1;
 
-        if (!planResult.repairSite && !planResult.repairCohort) {
+        if (!planResult.repairSite && !planResult.repairCohort && !planResult.repairCohortLabel) {
             counts.unchanged += 1;
             if (planResult.diagnosticsOnly && !dryRun) {
                 const patchMeta = buildRepairMetadata(planResult, safeMeta(candidate.metadata));
@@ -269,6 +298,7 @@ export async function runPlacementCandidateOcmRepair(
         if (dryRun) {
             if (planResult.repairSite) counts.repaired_site += 1;
             if (planResult.repairCohort) counts.repaired_cohort += 1;
+            if (planResult.repairCohortLabel) counts.repaired_cohort += 1;
             continue;
         }
 
@@ -276,6 +306,7 @@ export async function runPlacementCandidateOcmRepair(
         const update: Record<string, unknown> = { metadata: patchMeta };
         if (planResult.repairSite) update.site_id = planResult.nextSiteId;
         if (planResult.repairCohort) update.program_room_cohort_key = planResult.nextCohortKey;
+        if (planResult.repairCohortLabel) update.program_room_group_label = planResult.nextCohortLabel;
 
         const { error } = await supabase
             .from("placement_candidates")
@@ -289,7 +320,7 @@ export async function runPlacementCandidateOcmRepair(
             continue;
         }
         if (planResult.repairSite) counts.repaired_site += 1;
-        if (planResult.repairCohort) counts.repaired_cohort += 1;
+        if (planResult.repairCohort || planResult.repairCohortLabel) counts.repaired_cohort += 1;
     }
 
     return { counts, error_messages };

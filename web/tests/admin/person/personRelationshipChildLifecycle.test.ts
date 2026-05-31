@@ -39,6 +39,7 @@ describe("household relationship links", () => {
                     role_label: "Parent",
                     customer_id: "cust-1",
                     is_primary: true,
+                is_household_primary_contact: true,
                 },
             ],
         });
@@ -118,6 +119,7 @@ describe("personDrawerHasRelationshipContent", () => {
                             role_label: "Parent",
                             customer_id: "cust-1",
                             is_primary: true,
+                is_household_primary_contact: true,
                         },
                     ],
                 },
@@ -140,6 +142,7 @@ describe("mixed role presentation", () => {
                     role_label: "Parent",
                     customer_id: "cust-1",
                     is_primary: false,
+                is_household_primary_contact: false,
                 },
             ],
             household_child_links: [

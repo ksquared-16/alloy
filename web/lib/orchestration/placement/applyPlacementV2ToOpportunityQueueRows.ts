@@ -11,6 +11,7 @@ import {
 } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
 import { evaluatePlacementCandidate } from "@/lib/orchestration/placement/adapters/placementCandidateFacts";
 import type { PlacementCandidatesByOpportunityId } from "@/lib/orchestration/placement/bulkLoadPlacementCandidatesByOpportunity";
+import { filterPlacementCandidateBundlesForQueueDisplay } from "@/lib/orchestration/placement/filterPlacementCandidateBundlesForQueueDisplay";
 import type { HouseholdPlacementFactContextByCustomerId } from "@/lib/orchestration/placement/bulkLoadHouseholdPlacementFactContext";
 import { extractHouseholdFactSources } from "@/lib/orchestration/placement/householdPlacementFacts";
 import { buildPlacementCandidateFacts } from "@/lib/orchestration/placement/adapters/placementCandidateFacts";
@@ -167,7 +168,9 @@ export function applyPlacementV2ToOpportunityQueueRows(params: {
             continue;
         }
 
-        const bundles = params.candidatesByOpportunityId.get(core.id) ?? [];
+        const bundles = filterPlacementCandidateBundlesForQueueDisplay(
+            params.candidatesByOpportunityId.get(core.id) ?? []
+        );
         if (!bundles.length) {
             if (params.v1FallbackForEmpty !== false) {
                 v1FallbackRows.push({ index: enriched.length, row });

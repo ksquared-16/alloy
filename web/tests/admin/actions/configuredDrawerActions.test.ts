@@ -41,7 +41,9 @@ describe("configured drawer actions", () => {
     it("Send form header button only appears via configured placements", () => {
         const drawer = read("components/admin/AdminEntityDrawer.tsx");
         expect(drawer).not.toMatch(/label="Send form"/);
-        expect(drawer).toContain("opportunityRecordHeaderActionsForUi ?? opportunityResolvedHeaderActions");
+        expect(drawer).toContain("OpportunityDrawerHeaderControls");
+        expect(drawer).toContain("flattenOpportunityRecordHeaderActionsForMenu");
+        expect(drawer).not.toMatch(/headerActions\?\.primary[\s\S]*OpportunityDrawerHeaderActionButton/);
     });
 
     it("send_enrollment_packet opens modal via ui_intent handler", () => {
@@ -63,6 +65,32 @@ describe("configured drawer actions", () => {
 
         const registry = read("lib/admin/actions/actionDefinitionRegistry.ts");
         expect(registry).toContain('key: "send_enrollment_packet"');
+    });
+
+    it("phase 3 enrollment actions route through registry client", () => {
+        const client = read("lib/admin/actions/applyRegistryResolvedActionClient.ts");
+        expect(client).toContain("review_enrollment_packet");
+        expect(client).toContain("request_missing_information");
+        expect(client).toContain("assign_classroom");
+        expect(client).toContain("dispatchOpenEnrollmentPacketReview");
+        expect(client).toContain("dispatchFocusInquiryChildren");
+
+        const migration = readFileSync(
+            resolve(webRoot, "../supabase/migrations/20260602200000_phase3_enrollment_canonical_action_alignment.sql"),
+            "utf8"
+        );
+        expect(migration).toContain("'review_enrollment_packet'");
+        expect(migration).toContain("'request_missing_information'");
+        expect(migration).toContain("'assign_classroom'");
+    });
+
+    it("header overexposure fix deactivates universal default header placements", () => {
+        const migration = readFileSync(
+            resolve(webRoot, "../supabase/migrations/20260602210000_fix_opportunity_header_action_overexposure.sql"),
+            "utf8"
+        );
+        expect(migration).toContain("'send_email'");
+        expect(migration).toContain("is_active = false");
     });
 
     it("drawer header resolver sorts actions by placement order_index", () => {

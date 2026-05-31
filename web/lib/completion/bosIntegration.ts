@@ -17,6 +17,13 @@ export {
 } from "@/lib/completion/evaluateCompletionRequirements";
 
 export {
+    evaluateEffectiveRequirements,
+    evaluateEffectiveRequirementsAsync,
+    evaluateOpportunityActionPreflight,
+    effectiveRequirementsToValidationResult,
+} from "@/lib/completion/evaluateEffectiveRequirements";
+
+export {
     toBosCompletionRequirementPayload,
     validateStatusTransitionStructured,
     type BosCompletionRequirementPayload,

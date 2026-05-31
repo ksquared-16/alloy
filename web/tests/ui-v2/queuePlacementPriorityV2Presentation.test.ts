@@ -48,7 +48,7 @@ describe("queuePlacementPriorityV2Presentation", () => {
         expect(vm?.evaluated).toBe(true);
         expect(vm?.candidateCount).toBe(2);
         expect(vm?.childCountLabel).toBe("2 children waitlisted");
-        expect(vm?.familyBucketLabel).toBe(formatPlacementBucketLabel("tier_staff_community"));
+        expect(vm?.familyBucketLabel).toBe(formatPlacementBucketLabel("tier_employee_family"));
         expect(vm?.primaryCohortLabel).toBe("Toddler (2 years)");
         expect(vm?.candidates).toHaveLength(2);
         expect(vm?.candidates[1]?.linkModeLabel).toBe("Preferred together");

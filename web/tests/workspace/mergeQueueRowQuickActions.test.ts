@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { normalizeEnrollmentQueueRowPreviewActions } from "@/lib/ui-v2/enrollmentQueueRowPreviewPolicy";
 import {
     mergeQueueRowQuickActions,
@@ -7,13 +8,32 @@ import {
 } from "@/lib/workspace/viewModels/mergeQueueRowQuickActions";
 
 const baseRow = {
-    previewActions: ["open"] as const,
+    previewActions: ["open"] as Array<"open" | "call" | "email" | "message">,
     opportunityId: "opp-1",
     personId: "person-1",
     displayName: "Jane",
     email: "j@example.com",
     phone: "5551234567",
 };
+
+function registryAction(
+    key: string,
+    label: string,
+    action_type: string,
+    payload: Record<string, unknown>
+): ResolvedActionForClient {
+    return {
+        key,
+        label,
+        description: null,
+        action_type,
+        icon: null,
+        style: null,
+        display_style: "button",
+        payload,
+        workflow_id: null,
+    };
+}
 
 describe("mergeQueueRowQuickActions", () => {
     it("strips call and email from enrollment preview actions", () => {
@@ -34,12 +54,7 @@ describe("mergeQueueRowQuickActions", () => {
         const actions = mergeQueueRowQuickActions({
             previewActions: ["open", "message"],
             registryPlacements: [
-                {
-                    key: "quick_message",
-                    label: "Message",
-                    action_type: "ui_intent",
-                    payload: { intent: "quick_message" },
-                },
+                registryAction("quick_message", "Message", "ui_intent", { intent: "quick_message" }),
             ],
             enrollmentLike: true,
             row: { ...baseRow, previewActions: ["open", "message"] },
@@ -59,12 +74,7 @@ describe("mergeQueueRowQuickActions", () => {
         const withBos = mergeQueueRowQuickActions({
             previewActions: ["open"],
             registryPlacements: [
-                {
-                    key: "ask_bos",
-                    label: "Ask BOS",
-                    action_type: "ui_intent",
-                    payload: { intent: "ask_bos" },
-                },
+                registryAction("ask_bos", "Ask BOS", "ui_intent", { intent: "ask_bos" }),
             ],
             enrollmentLike: true,
             row: baseRow,
@@ -76,12 +86,9 @@ describe("mergeQueueRowQuickActions", () => {
         const actions = mergeQueueRowQuickActions({
             previewActions: ["open", "message"],
             registryPlacements: [
-                {
-                    key: "update_status_add_note",
-                    label: "Update status",
-                    action_type: "open_form",
-                    payload: { form_key: "update_status_add_note" },
-                },
+                registryAction("update_status_add_note", "Update status", "open_form", {
+                    form_key: "update_status_add_note",
+                }),
             ],
             enrollmentLike: true,
             row: { ...baseRow, previewActions: ["open", "message"] },

@@ -47,6 +47,11 @@ describe("patchWorkUnitQueuePreviewRow", () => {
                 contactDisplayName: "Sam Lee",
                 contactPhoneDisplay: "555-111-2222",
                 contactEmail: "old@example.com",
+                contactSnippet: null,
+                programContext: null,
+                roomContext: null,
+                ageContext: null,
+                attentionReason: null,
                 familyNote: null,
             },
         };

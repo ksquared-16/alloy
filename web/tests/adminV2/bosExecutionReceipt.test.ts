@@ -51,7 +51,7 @@ describe("bosExecutionReceipt", () => {
                     field_type: "text",
                 },
             ],
-        } as ConfigurationProposalV1;
+        } as unknown as ConfigurationProposalV1;
         const outcome = buildConfigAssistApplyOutcomePresentation({
             proposal,
             applyResults: [

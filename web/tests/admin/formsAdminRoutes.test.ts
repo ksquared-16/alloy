@@ -917,7 +917,7 @@ describe("Admin forms routes", () => {
 
     it("returns 401 when context fails unauthenticated", async () => {
         mockGetAdminContext.mockResolvedValue({ ok: false, status: 401 });
-        const res = await listForms();
+        const res = await listForms(new NextRequest("http://x"));
         expect(res.status).toBe(401);
     });
 

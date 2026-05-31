@@ -87,6 +87,8 @@ function extractRelatedFromRecord(record: Record<string, unknown>) {
                       typeof row.desired_program_type === "string" ? row.desired_program_type : null,
                   program_room_cohort_key:
                       typeof row.program_room_cohort_key === "string" ? row.program_room_cohort_key : null,
+                  desired_schedule_type:
+                      typeof row.desired_schedule_type === "string" ? row.desired_schedule_type : null,
                   desired_start_date:
                       typeof row.desired_start_date === "string" ? row.desired_start_date : null,
                   outcome_status_key:

@@ -145,8 +145,8 @@ function runPureChecks(): QaCheck[] {
         household,
     });
     checks.push({
-        name: "v2_employee_record_tier_staff",
-        ok: staffTier.ok === true && staffTier.value.snapshot.bucket_key === "tier_staff_community",
+        name: "v2_employee_record_tier_employee_family",
+        ok: staffTier.ok === true && staffTier.value.snapshot.bucket_key === "tier_employee_family",
     });
 
     const v1Facts = buildOpportunityPlacementFacts(
@@ -163,7 +163,7 @@ function runPureChecks(): QaCheck[] {
     });
     checks.push({
         name: "v1_metadata_employee_still_applies",
-        ok: v1Eval.ok && v1Eval.value.snapshot.bucket_key === "tier_staff_community",
+        ok: v1Eval.ok && v1Eval.value.snapshot.bucket_key === "tier_employee_family",
     });
 
     const policy = evaluatePlacementCandidate({

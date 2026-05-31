@@ -16,6 +16,7 @@ describe("prefetchWorkUnitOperationalBootstrap", () => {
     it("builds operational-bootstrap URL with route focus queue when set", () => {
         const url = buildWorkUnitOperationalBootstrapUrl("wu-1", {
             departmentId: "dept-1",
+            workUnitId: "wu-1",
             selectedSiteId: "site-9",
             focusQueue: "enrolled",
             attentionBucket: "stale_quote",
@@ -52,7 +53,7 @@ describe("prefetchWorkUnitOperationalBootstrap", () => {
         });
 
         expect(fetchMock).toHaveBeenCalledTimes(1);
-        const [calledUrl] = fetchMock.mock.calls[0] as [string];
+        const [calledUrl] = (fetchMock.mock.calls[0] ?? []) as unknown as [string];
         expect(calledUrl).toContain("/api/admin/work-units/wu-1/operational-bootstrap");
     });
 

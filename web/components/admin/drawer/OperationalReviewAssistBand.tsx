@@ -42,6 +42,8 @@ type Props = {
     bosAssistSlot?: ReactNode;
     urgencyChipContext?: QueueUrgencyChipContext;
     priorityExplanation?: OperationalPriorityExplainability | null;
+    /** When true, chips and operational read live in the drawer header — body shows recommendation only. */
+    bodyOnlyAttention?: boolean;
 };
 
 function SupportingDetailDisclosure({ detail }: { detail: ResolvedDrawerSupportingDetail }) {
@@ -121,11 +123,12 @@ export default function OperationalReviewAssistBand({
     bosAssistSlot,
     urgencyChipContext,
     priorityExplanation = null,
+    bodyOnlyAttention = false,
 }: Props) {
     const chrome = variant === "chrome";
     const drawerChipLabel = drawerUrgencyChipLabel(display, urgencyChipContext);
-    const showChip = shouldShowDrawerUrgencyChip(display, urgencyChipContext);
-    const showEscalationChip = Boolean(display.escalationChipLabel?.trim());
+    const showChip = !bodyOnlyAttention && shouldShowDrawerUrgencyChip(display, urgencyChipContext);
+    const showEscalationChip = !bodyOnlyAttention && Boolean(display.escalationChipLabel?.trim());
     const trustLines = readinessChrome?.trustLines ?? [];
     const showLikely = shouldShowDrawerLikelyOutcome(display, variant);
     const showWhatChanged = shouldShowDrawerWhatChanged(display);
@@ -138,6 +141,10 @@ export default function OperationalReviewAssistBand({
             Boolean(priorityExplanation?.compactReason) ||
             Boolean(supportingDetail) ||
             Boolean(draftSlot));
+
+    if (chrome && bodyOnlyAttention && !chromeHasExpandableDetail && !draftSlot && !enhanceSlot) {
+        return null;
+    }
 
     const urgencyChips =
         showChip || showEscalationChip ? (
@@ -211,23 +218,27 @@ export default function OperationalReviewAssistBand({
                     data-review-assist-compact-body="true"
                 >
                     <div className="flex min-w-0 flex-wrap items-start gap-1.5">
-                        {suppressSectionBrandLabel ? urgencyChips : null}
-                        <p
-                            data-review-assist-row="operational_read"
-                            className={clsx(
-                                opInsightSummaryCompact,
-                                "min-w-0 flex-1 font-medium text-alloy-midnight",
-                            )}
-                        >
-                            {display.operationalRead}
-                        </p>
+                        {suppressSectionBrandLabel && !bodyOnlyAttention ? urgencyChips : null}
+                        {!bodyOnlyAttention ?
+                            <p
+                                data-review-assist-row="operational_read"
+                                className={clsx(
+                                    opInsightSummaryCompact,
+                                    "min-w-0 flex-1 font-medium text-alloy-midnight",
+                                )}
+                            >
+                                {display.operationalRead}
+                            </p>
+                        :   null}
                     </div>
-                    <p
-                        data-review-assist-row="do_next"
-                        className={clsx(opInsightSummaryCompact, "min-w-0 text-alloy-midnight/85")}
-                    >
-                        {display.doNext}
-                    </p>
+                    {!bodyOnlyAttention ?
+                        <p
+                            data-review-assist-row="do_next"
+                            className={clsx(opInsightSummaryCompact, "min-w-0 text-alloy-midnight/85")}
+                        >
+                            {display.doNext}
+                        </p>
+                    :   null}
                     {chromeHasExpandableDetail ? (
                         <details className="text-[10px] leading-snug text-alloy-midnight/65">
                             <summary

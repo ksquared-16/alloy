@@ -20,8 +20,8 @@ const multiSectionSchema = patchSchemaComposition(schema, {
     version: 1,
     blocks: [
         { id: "h1", type: "heading", content: "Enrollment intake", level: "h1", order: 0 },
-        { id: "r1", type: "field_region", title: "Family details", field_ids: ["child_first_name"], order: 1 },
-        { id: "r2", type: "field_region", title: "Additional", field_ids: [], order: 2 },
+        { id: "r1", type: "field_region", layout: "one_column", title: "Family details", field_ids: ["child_first_name"], order: 1 },
+        { id: "r2", type: "field_region", layout: "one_column", title: "Additional", field_ids: [], order: 2 },
     ],
 });
 

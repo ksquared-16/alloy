@@ -61,7 +61,19 @@ export async function POST(request: NextRequest) {
 
     if (!result.ok) {
         return NextResponse.json(
-            { ok: false, correlation_id: result.correlation_id, error: result.error, execution_result: null },
+            {
+                ok: false,
+                correlation_id: result.correlation_id,
+                error: result.error,
+                execution_result: null,
+                ...(result.completion_requirements ?
+                    { completion_requirements: result.completion_requirements }
+                :   {}),
+                ...(result.effective_requirements ?
+                    { effective_requirements: result.effective_requirements }
+                :   {}),
+                ...(result.action_preflight ? { action_preflight: result.action_preflight } : {}),
+            },
             { status: result.status }
         );
     }

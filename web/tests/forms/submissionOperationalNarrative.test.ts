@@ -24,7 +24,7 @@ const row = (overrides: Partial<SubmissionInboxRow> = {}): SubmissionInboxRow =>
             child_last_name: "Duck",
         },
         meta: {},
-    },
+    } as SubmissionInboxRow["payload"],
     ...overrides,
 });
 
@@ -39,7 +39,7 @@ describe("submissionOperationalNarrative sprint closeout", () => {
                         intake_opportunity_match: "created",
                         intake_needs_review: true,
                     },
-                },
+                } as SubmissionInboxRow["payload"],
             })
         );
 
@@ -89,7 +89,7 @@ describe("submissionOperationalNarrative sprint closeout", () => {
                         intake_matched_person_display_name: "Jane Doe",
                         intake_needs_review: true,
                     },
-                },
+                } as SubmissionInboxRow["payload"],
             })
         );
         expect(narrative.headline).toMatch(/Possible existing family match/i);

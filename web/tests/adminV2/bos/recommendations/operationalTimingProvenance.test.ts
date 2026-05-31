@@ -33,7 +33,7 @@ function minimalAttention(slaTier: "ok" | "approaching" | "breached" = "breached
         waiting: { bucket: "none", since_iso: null, active: false },
         priority_score: 42,
         priority_breakdown: [],
-        auxiliary: {},
+        auxiliary: { activity_stale: null },
         resolver_version: 2,
         computed_at_iso: "2026-05-21T10:00:00.000Z",
     };

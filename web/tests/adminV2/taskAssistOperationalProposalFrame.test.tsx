@@ -18,7 +18,7 @@ const reminderPath = join(
 );
 
 const draftBootstrap: TaskAssistCommandBootstrap = {
-    intent_type: "send_message",
+    intent_type: "draft_message",
     channel_hint: "sms",
     instruction: "Follow up on tour",
     timing_hint_text: null,

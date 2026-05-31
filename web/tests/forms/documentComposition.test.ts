@@ -8,7 +8,7 @@ describe("documentComposition FD-4", () => {
             version: 1,
             blocks: [
                 { id: "b2", type: "heading", content: "Section", order: 2 },
-                { id: "b1", type: "text", content: "Intro", order: 1 },
+                { id: "b1", type: "text", content: "Intro", format: "plain", order: 1 },
             ],
         });
 

@@ -176,8 +176,8 @@ function runPureRankingChecks(): QaCheck[] {
         household,
     });
     checks.push({
-        name: "employee_record_tier_staff",
-        ok: staffEval.ok === true && staffEval.value.snapshot.bucket_key === "tier_staff_community",
+        name: "employee_record_tier_employee_family",
+        ok: staffEval.ok === true && staffEval.value.snapshot.bucket_key === "tier_employee_family",
     });
 
     const policy = evaluatePlacementCandidate({
@@ -353,6 +353,7 @@ async function main() {
                 work_unit_key: WORK_UNIT_KEY,
                 shadow_mode: shadowMode,
                 bucket_label_map: {
+                    tier_employee_family: mapPlacementBucketToRankingLabel("tier_employee_family"),
                     tier_staff_community: mapPlacementBucketToRankingLabel("tier_staff_community"),
                     tier_sibling_enrolled: mapPlacementBucketToRankingLabel("tier_sibling_enrolled"),
                     tier_sister_center: mapPlacementBucketToRankingLabel("tier_sister_center"),

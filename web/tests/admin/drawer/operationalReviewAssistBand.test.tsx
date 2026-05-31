@@ -378,8 +378,8 @@ describe("OperationalAttentionHeaderStrip Card 2.1 integration", () => {
                 }}
             />,
         );
-        expect(html).toContain("New inquiry needs timely response");
-        expect(html).toContain("Send a warm first response");
+        expect(html).not.toContain("New inquiry needs timely response");
+        expect(html).not.toContain("Send a warm first response");
         expect(html).not.toContain("Operational attention: New inquiry is stale.");
         expect(html).not.toContain("Suggested next step");
         expect(html).toContain('data-drawer-slot="operational_review_assist"');
@@ -397,9 +397,9 @@ describe("OperationalAttentionHeaderStrip Card 2.1 integration", () => {
                 }}
             />,
         );
-        expect(html).toContain('data-review-assist-row="operational_read"');
-        expect(html).toContain("New inquiry is stale.");
-        expect(html).toContain("Respond to new request");
+        expect(html).not.toContain('data-review-assist-row="do_next"');
+        expect(html).not.toContain('data-review-assist-row="operational_read"');
+        expect(html).toContain("More guidance");
         expect(html).not.toContain("Needs attention:");
     });
 

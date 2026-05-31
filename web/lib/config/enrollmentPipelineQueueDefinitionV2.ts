@@ -83,15 +83,23 @@ export const RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2 = {
             key: "communications_followup",
             label: "Follow Up",
             icon: "phone",
-            description: "Staff has attempted contact; conversation may be in progress.",
+            description: "Qualification and follow-up — gathering fit before tour or waitlist.",
             domain: "communications_followup",
             grain: "case",
-            aliases: ["contacted", "contact_attempted"],
+            aliases: ["contacted", "contact_attempted", "qualification"],
             filters: [
-                { type: "case_status", operator: "in", values: ["contact_attempted", "contacted"] },
+                {
+                    type: "case_status",
+                    operator: "in",
+                    values: ["contact_attempted", "contacted", "qualification"],
+                },
             ],
             filters_compat_v1: [
-                { type: "status", operator: "in", values: ["contact_attempted", "contacted"] },
+                {
+                    type: "status",
+                    operator: "in",
+                    values: ["contact_attempted", "contacted", "qualification"],
+                },
             ],
             sort: [{ field: "updated_at", direction: "desc" }],
             limit: 50,

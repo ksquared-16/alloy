@@ -9,7 +9,7 @@ import { projectOperationalRecommendationQueuePreview } from "@/lib/adminV2/bos/
 import { tryBuildOperationalRecommendationFromAttention } from "@/lib/adminV2/bos/recommendations/adapters/tryBuildOperationalRecommendationFromAttention";
 import { OPERATIONAL_RECOMMENDATION_MAX_LENGTHS } from "@/lib/adminV2/bos/recommendations/types";
 import { sortNeedsAttentionFilteredRows } from "@/lib/queues/needsAttentionQueuePrioritySort";
-import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
+import type { OpportunityAttentionReasonCode, OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
 
 const ORG_ID = "22222222-2222-4222-8222-222222222222";
 const ENTITY_ID = "11111111-1111-4111-8111-111111111111";
@@ -25,16 +25,22 @@ const QUEUE_PREVIEW_KEYS = [
 
 function attentionFixture(
     overrides: Partial<OpportunityAttentionResult> & {
-        primaryCode?: string;
+        primaryCode?: OpportunityAttentionReasonCode;
         primaryLabel?: string;
         severity?: "low" | "medium" | "high" | "critical";
         slaTier?: "ok" | "approaching" | "breached";
     } = {}
 ): OpportunityAttentionResult {
-    const primaryCode = overrides.primaryCode ?? "stale_new_inquiry";
-    const primaryLabel = overrides.primaryLabel ?? "New inquiry is stale";
-    const severity = overrides.severity ?? "high";
-    const slaTier = overrides.slaTier ?? "breached";
+    const {
+        primaryCode = "stale_new_inquiry",
+        primaryLabel = "New inquiry is stale",
+        severity = "high",
+        slaTier = "breached",
+        primary_reason: primaryReasonOverride,
+        reasons: reasonsOverride,
+        waiting: waitingOverride,
+        ...rest
+    } = overrides;
 
     const primary = {
         code: primaryCode,
@@ -46,17 +52,15 @@ function attentionFixture(
 
     return {
         needs_attention: true,
-        reasons: [primary],
-        primary_reason: primary,
-        waiting: { bucket: "none", since_iso: null, active: false },
+        waiting: waitingOverride ?? { bucket: "none", since_iso: null, active: false },
         priority_score: 80,
         priority_breakdown: [],
         auxiliary: { activity_stale: null },
         resolver_version: 2,
         computed_at_iso: "2026-05-20T12:00:00.000Z",
-        ...overrides,
-        primary_reason: overrides.primary_reason ?? primary,
-        reasons: overrides.reasons ?? [primary],
+        ...rest,
+        reasons: reasonsOverride ?? [primary],
+        primary_reason: primaryReasonOverride ?? primary,
     };
 }
 
@@ -232,7 +236,11 @@ describe("queue row projection integration", () => {
                 customerName: String(row.name),
             })
         );
-        const sortedAfter = sortNeedsAttentionFilteredRows(enriched, map, [{ column: "name", ascending: true }]);
+        const sortedAfter = sortNeedsAttentionFilteredRows(
+            enriched as unknown as Parameters<typeof sortNeedsAttentionFilteredRows>[0],
+            map,
+            [{ column: "name", ascending: true }]
+        );
         expect(enriched).toHaveLength(rows.length);
         expect(sortedBefore.map((r) => r.id)).toEqual(["a", "b"]);
         expect(sortedAfter.map((r) => r.id)).toEqual(["a", "b"]);

@@ -53,7 +53,7 @@ describe("applyPlacementCandidateOverrides", () => {
         });
         expect(out.policy_snapshot.bucket_key).toBe("tier_general_waitlist");
         expect(out.effective.bucket_key).toBe("tier_staff_community");
-        expect(out.effective.bucket_priority_order).toBe(10);
+        expect(out.effective.bucket_priority_order).toBe(15);
         expect(out.applied[0]?.policy_bucket_key).toBe("tier_general_waitlist");
         expect(out.applied[0]?.effective_bucket_key).toBe("tier_staff_community");
     });

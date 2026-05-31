@@ -118,11 +118,22 @@ export default function TopNavBar() {
         email: detail.email,
         phone: detail.phone,
         recordScoped: detail.recordScoped ?? Boolean(opportunityId),
+        defaultChannel: detail.defaultChannel,
       });
       setQuickMessageOpen(true);
     };
     window.addEventListener(ADMINV2_OPEN_QUICK_MESSAGE_EVENT, onLaunch);
     return () => window.removeEventListener(ADMINV2_OPEN_QUICK_MESSAGE_EVENT, onLaunch);
+  }, []);
+
+  useEffect(() => {
+    const onOpenTasks = () => {
+      if (!isTaskAssistV1UiEnabled()) return;
+      prefetchWorkspaceOperationalTasks("open");
+      setTasksModalOpen(true);
+    };
+    window.addEventListener("adminv2:open-tasks-panel", onOpenTasks);
+    return () => window.removeEventListener("adminv2:open-tasks-panel", onOpenTasks);
   }, []);
 
   useEffect(() => {

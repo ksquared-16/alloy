@@ -45,17 +45,17 @@ describe("Lead Summary density + BOS regression", () => {
         expect(family).toContain('variant !== "summary" ?');
     });
 
-    it("Review Assist calm state keeps BOS wiring without blank placeholder reserve", () => {
+    it("Review Assist calm state keeps summary content without duplicate BOS CTA", () => {
         const rightCol = read("components/admin/opportunity/OpportunityInquirySummaryRightColumn.tsx");
-        expect(rightCol).toContain("BosDrawerAssistCta");
-        expect(rightCol).toContain('"bos_only"');
+        expect(rightCol).not.toContain("BosDrawerAssistCta");
+        expect(rightCol).toContain('"calm"');
         expect(rightCol).not.toContain('data-review-assist-placeholder="reserved"');
         expect(rightCol).not.toContain("min-h-[3.25rem]");
     });
 
-    it("Review Assist routes actionable payload through attention strip with BOS assist id", () => {
+    it("Review Assist routes actionable payload through attention strip without BOS CTA", () => {
         const rightCol = read("components/admin/opportunity/OpportunityInquirySummaryRightColumn.tsx");
-        expect(rightCol).toContain("bosAssistEntityId={opportunityId}");
+        expect(rightCol).not.toContain("bosAssistEntityId");
         expect(rightCol).toContain("_operational_recommendation");
         expect(rightCol).toContain("_operational_attention");
         expect(rightCol).toContain("OperationalAttentionHeaderStrip");

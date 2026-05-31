@@ -3,6 +3,7 @@ import { formatInTimeZone } from "date-fns-tz";
 import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 import { validateStatusTransition } from "@/lib/admin/statusTransitionRules";
 import type { TourBookingRow } from "@/lib/tours/bookings/types";
+import { OPPORTUNITY_TOUR_COMPLETED_DATE_METADATA_KEY } from "@/lib/admin/actions/lifecycleActionMetadataKeys";
 import { updateOpportunityStatusWithEvent } from "@/lib/opportunities/updateOpportunityStatusWithEvent";
 import { isValidIanaTimeZone, UTC_FALLBACK_IANA } from "@/lib/admin/timezoneContract";
 
@@ -187,6 +188,12 @@ async function patchOpportunityTerminalFromTour(input: {
     if (!opp) throw new Error("tour_booking: opportunity not found for integration");
 
     const md = asMetadataRecord(opp.metadata);
+    if (newOppStatus === TOUR_BOOKING_OPPORTUNITY_STATUS.completed) {
+        const existing = md[OPPORTUNITY_TOUR_COMPLETED_DATE_METADATA_KEY];
+        if (existing == null || String(existing).trim() === "") {
+            md[OPPORTUNITY_TOUR_COMPLETED_DATE_METADATA_KEY] = new Date().toISOString().slice(0, 10);
+        }
+    }
     await assertTransition(supabase, orgId, opportunityId, opp.status_key ?? null, newOppStatus, md, opp.work_unit_id, booking.id);
 
     const { error } = await updateOpportunityStatusWithEvent({

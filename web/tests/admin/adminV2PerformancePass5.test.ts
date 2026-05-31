@@ -102,7 +102,6 @@ describe("AdminV2 performance pass 5 contracts", () => {
             first_paint_gates_active: true,
             enrichment_layout_ready: false,
             below_fold_enrichment_ready: false,
-            full_hydrate_ready: false,
             task_assist_enabled: false,
         });
         const full = buildOpportunityDrawerPipelineState({
@@ -121,7 +120,6 @@ describe("AdminV2 performance pass 5 contracts", () => {
             first_paint_gates_active: true,
             enrichment_layout_ready: true,
             below_fold_enrichment_ready: false,
-            full_hydrate_ready: true,
             task_assist_enabled: true,
         });
         expect(primary.above_fold.inquiry_summary?.column_mode).toBe(full.above_fold.inquiry_summary?.column_mode);

@@ -11,8 +11,15 @@ export function firstNestedRecord<T>(value: T | T[] | null | undefined): T | nul
 export type NormalizedCustomerMemberNested = {
     display_name: string | null;
     person_id: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
     metadata?: Record<string, unknown> | null;
-    persons?: { date_of_birth?: string | null } | null;
+    persons?: {
+        date_of_birth?: string | null;
+        first_name?: string | null;
+        last_name?: string | null;
+        full_name?: string | null;
+    } | null;
 };
 
 export function normalizeCustomerMemberNested(
@@ -28,6 +35,8 @@ export function normalizeCustomerMemberNested(
     return {
         display_name: member.display_name ?? null,
         person_id: member.person_id ?? null,
+        first_name: member.first_name ?? null,
+        last_name: member.last_name ?? null,
         metadata: member.metadata ?? null,
         persons: persons ?? null,
     };

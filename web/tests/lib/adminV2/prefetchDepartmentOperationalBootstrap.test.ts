@@ -33,7 +33,7 @@ describe("prefetchDepartmentOperationalBootstrap", () => {
         await prefetchDepartmentOperationalBootstrap("dept-abc");
 
         expect(fetchMock).toHaveBeenCalledTimes(1);
-        const [calledUrl] = fetchMock.mock.calls[0] as [string];
+        const [calledUrl] = (fetchMock.mock.calls[0] ?? []) as unknown as [string];
         expect(calledUrl).toContain("/api/admin/departments/dept-abc/operational-bootstrap");
     });
 

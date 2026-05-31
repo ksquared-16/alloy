@@ -394,7 +394,8 @@ Use this table when aligning seeds, queues, and action conditions. Matrix labels
 | Matrix lifecycle | Matrix label | Current Alloy `status_key` (enrollment pipeline) | Notes |
 |------------------|--------------|--------------------------------------------------|-------|
 | New Lead | New Lead | `new_inquiry` | Label often "New Inquiry" in CRM |
-| Qualification | Qualification | `contact_attempted` (partial) | No dedicated qualification status today |
+| Qualification | Qualification | `qualification` | Canonical lifecycle status (Phase 1B — `20260602180000`) |
+| *(legacy)* | Contact attempted | `contact_attempted` | Retained for historical records; not lifecycle doctrine |
 | Tour | Tour | `tour_scheduled`, `tour_completed`, `tour_no_show`, `follow_up_attempted` | Execution substates should not become permanent statuses per doctrine |
 | Enrollment | Enrollment | `enrolling` | |
 | Waitlist | Waitlist | `waitlisted` | Parking lot |

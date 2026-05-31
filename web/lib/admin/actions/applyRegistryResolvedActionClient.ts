@@ -7,11 +7,19 @@ import {
     type ContextualActionInvocation,
 } from "@/lib/admin/actions/contextualActionInvocation";
 import { invalidateCommunicationsDrawerPrefetch } from "@/lib/admin/communications/communicationsDrawerPrefetch";
+import {
+    dispatchFocusInquiryChildren,
+    dispatchOpenEnrollmentPacketReview,
+    type InquiryChildrenFocusField,
+} from "@/lib/admin/actions/enrollmentActionClient";
 import { ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS } from "@/lib/adminV2/opportunityDrawerTaskEvents";
 import {
     ADMINV2_OPEN_TOUR_OUTCOME_MODAL,
     ADMINV2_OPEN_TOUR_SCHEDULE_MODAL,
 } from "@/lib/tours/actions/tourBookingActionClient";
+import { dispatchActionPreflightBlocked } from "@/lib/admin/actions/actionPreflightDrawerEvents";
+import { formatRequirementValidationSummary } from "@/lib/completion/requirementValidationResult";
+import type { RequirementValidationResult } from "@/lib/completion/requirementValidationTypes";
 
 export type RegistryActionSurfaceContext = {
     surface: string;
@@ -337,6 +345,36 @@ export async function applyRegistryResolvedActionClient(
             }
             return { ok: true };
         }
+        if (actionKey === "review_enrollment_packet" || intent === "review_enrollment_packet") {
+            if (!eid) return { ok: false, error: "entity_id required" };
+            dispatchOpenEnrollmentPacketReview(eid);
+            return { ok: true };
+        }
+        if (actionKey === "request_missing_information" || intent === "request_missing_information") {
+            if (eid && typeof window !== "undefined") {
+                window.dispatchEvent(new CustomEvent("adminv2:open-send-form", { detail: { opportunity_id: eid } }));
+            }
+            return { ok: true };
+        }
+        if (
+            actionKey === "assign_classroom" ||
+            actionKey === "assign_schedule" ||
+            actionKey === "set_start_date" ||
+            intent === "assign_classroom" ||
+            intent === "assign_schedule" ||
+            intent === "set_start_date"
+        ) {
+            if (!eid) return { ok: false, error: "entity_id required" };
+            const field =
+                (p.focus_field != null ? String(p.focus_field).trim() : "") ||
+                (actionKey === "assign_classroom" || intent === "assign_classroom"
+                    ? "program_room_cohort_key"
+                    : actionKey === "assign_schedule" || intent === "assign_schedule"
+                      ? "desired_schedule_type"
+                      : "desired_start_date");
+            dispatchFocusInquiryChildren(eid, field as InquiryChildrenFocusField);
+            return { ok: true };
+        }
         if (message) {
             window.alert(message);
             return { ok: true };
@@ -364,6 +402,8 @@ export async function applyRegistryResolvedActionClient(
     const json = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
         error?: string;
+        completion_requirements?: RequirementValidationResult;
+        action_preflight?: import("@/lib/admin/actions/actionPreflightPresentation").ActionPreflightUiPayload;
         execution_result?: Record<string, unknown> & {
             kind?: string;
             href?: string;
@@ -372,8 +412,27 @@ export async function applyRegistryResolvedActionClient(
         };
     };
     if (!res.ok || !json.ok) {
-        console.warn("[applyRegistryResolvedActionClient] execute failed", json.error);
-        return { ok: false, error: json.error ?? "Execute failed" };
+        const completion = json.completion_requirements;
+        const preflight = json.action_preflight;
+        const summary =
+            preflight?.summary ||
+            (completion ? formatRequirementValidationSummary(completion) : "") ||
+            json.error ||
+            "Execute failed";
+        console.warn("[applyRegistryResolvedActionClient] execute failed", summary);
+        dispatchActionPreflightBlocked({
+            action_key: a.key,
+            opportunity_id: entityId,
+            error: summary,
+            completion_requirements: completion,
+            action_preflight: preflight,
+        });
+        return {
+            ok: false,
+            error: summary,
+            completion_requirements: completion,
+            action_preflight: preflight,
+        };
     }
     const er = json.execution_result;
     if (er?.kind === "open_drawer") {

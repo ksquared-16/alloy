@@ -21,6 +21,7 @@ describe("DocumentCompositionPreview inline tokens FD-15", () => {
                     id: "t1",
                     type: "text",
                     content: "I, {{guardian_full_name}}, agree.",
+                    format: "plain",
                     order: 0,
                 },
             ],

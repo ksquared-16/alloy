@@ -50,8 +50,8 @@ describe("documentCompositionUsability FD-13", () => {
         const comp = patchSchemaComposition(baseSchema, {
             version: 1,
             blocks: [
-                { id: "r1", type: "field_region", title: "A", field_ids: ["f1"], order: 0 },
-                { id: "r2", type: "field_region", title: "B", field_ids: ["f2"], order: 1 },
+                { id: "r1", type: "field_region", layout: "one_column", title: "A", field_ids: ["f1"], order: 0 },
+                { id: "r2", type: "field_region", layout: "one_column", title: "B", field_ids: ["f2"], order: 1 },
             ],
         }).document_composition!;
 
@@ -64,8 +64,8 @@ describe("documentCompositionUsability FD-13", () => {
         const comp = patchSchemaComposition(baseSchema, {
             version: 1,
             blocks: [
-                { id: "r1", type: "field_region", title: "Primary", field_ids: ["f1", "f2"], order: 0 },
-                { id: "r2", type: "field_region", title: "Secondary", field_ids: ["f3"], order: 1 },
+                { id: "r1", type: "field_region", layout: "one_column", title: "Primary", field_ids: ["f1", "f2"], order: 0 },
+                { id: "r2", type: "field_region", layout: "one_column", title: "Secondary", field_ids: ["f3"], order: 1 },
             ],
         }).document_composition!;
 
@@ -79,7 +79,7 @@ describe("documentCompositionUsability FD-13", () => {
     it("reorders fields within a region", () => {
         const comp = patchSchemaComposition(baseSchema, {
             version: 1,
-            blocks: [{ id: "r1", type: "field_region", field_ids: ["f1", "f2", "f3"], order: 0 }],
+            blocks: [{ id: "r1", type: "field_region", layout: "one_column", field_ids: ["f1", "f2", "f3"], order: 0 }],
         }).document_composition!;
 
         const moved = moveFieldInRegion(comp, "r1", "f3", -1);
@@ -91,8 +91,8 @@ describe("documentCompositionUsability FD-13", () => {
         const comp = patchSchemaComposition(baseSchema, {
             version: 1,
             blocks: [
-                { id: "r1", type: "field_region", field_ids: ["f2"], order: 0 },
-                { id: "r2", type: "field_region", field_ids: ["f1", "f3"], order: 1 },
+                { id: "r1", type: "field_region", layout: "one_column", field_ids: ["f2"], order: 0 },
+                { id: "r2", type: "field_region", layout: "one_column", field_ids: ["f1", "f3"], order: 1 },
             ],
         }).document_composition!;
 
@@ -103,6 +103,7 @@ describe("documentCompositionUsability FD-13", () => {
         const block = {
             id: "empty",
             type: "field_region" as const,
+            layout: "one_column" as const,
             title: "Empty",
             field_ids: [] as string[],
             order: 0,
@@ -111,7 +112,7 @@ describe("documentCompositionUsability FD-13", () => {
 
         const comp = patchSchemaComposition(baseSchema, {
             version: 1,
-            blocks: [block, { id: "r2", type: "field_region", field_ids: ["f1"], order: 1 }],
+            blocks: [block, { id: "r2", type: "field_region", layout: "one_column", field_ids: ["f1"], order: 1 }],
         }).document_composition!;
 
         const next = removeCompositionBlock(comp, "empty");
@@ -122,8 +123,8 @@ describe("documentCompositionUsability FD-13", () => {
         const comp = patchSchemaComposition(baseSchema, {
             version: 1,
             blocks: [
-                { id: "r1", type: "field_region", field_ids: ["f1"], order: 0 },
-                { id: "r2", type: "field_region", field_ids: ["f2"], order: 1 },
+                { id: "r1", type: "field_region", layout: "one_column", field_ids: ["f1"], order: 0 },
+                { id: "r2", type: "field_region", layout: "one_column", field_ids: ["f2"], order: 1 },
             ],
         }).document_composition!;
 

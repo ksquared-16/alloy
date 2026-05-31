@@ -397,6 +397,12 @@ export async function loadWaitlistCandidateGrainQueueItems(params: {
             activeOnly: false,
         });
 
+        const householdFactsByCustomerId = await loadPlacementEvaluationHouseholdContext({
+            supabase: params.supabase,
+            orgId: params.orgId,
+            candidatesByOpportunityId,
+        });
+
         const oppRows = opportunityIds
             .map((id) => enrichedByOppId.get(id))
             .filter((r): r is Record<string, unknown> => r != null);

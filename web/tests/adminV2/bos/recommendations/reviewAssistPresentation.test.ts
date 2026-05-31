@@ -14,6 +14,7 @@ const baseDisplay = (): ResolvedDrawerRecommendationDisplay => ({
     urgencyBand: "p1_today",
     urgencyLabel: "Today",
     urgencyReason: "No response in several days",
+    source: "canonical_drawer_strip",
 });
 
 describe("reviewAssistPresentation", () => {

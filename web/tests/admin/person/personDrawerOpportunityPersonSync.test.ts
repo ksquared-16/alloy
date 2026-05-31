@@ -109,7 +109,7 @@ describe("person drawer ↔ opportunity person identity sync", () => {
         const edit = read("lib/admin/drawer/inquiryChildFieldEdit.ts");
         expect(edit).toContain("patchLinkedPersonFromOpportunityDrawer");
         expect(edit).toContain("date_of_birth");
-        expect(edit).not.toMatch(/patchOpportunityCustomerMember.*date_of_birth/s);
+        expect(edit).not.toMatch(/patchOpportunityCustomerMember[\s\S]*date_of_birth/);
     });
 
     it("uses Alloy unsaved modal instead of window.confirm", () => {

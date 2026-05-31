@@ -178,6 +178,10 @@ export function evaluateOpportunityCompletionRequirements(
         }
     }
 
+    const approveEnrollmentAction =
+        trimOrNull(ctx.action_key) === "approve_enrollment" &&
+        (ctx.phase === "action" || ctx.phase === "status_change");
+
     if (targetStatus && ENROLLED_STATUSES.has(targetStatus)) {
         for (const child of children) {
             const childId = trimOrNull(child.person_id) ?? trimOrNull(child.id) ?? "unknown";
@@ -194,7 +198,7 @@ export function evaluateOpportunityCompletionRequirements(
                     })
                 );
             }
-            if (completionValueEmpty(child.desired_start_date)) {
+            if (!approveEnrollmentAction && completionValueEmpty(child.desired_start_date)) {
                 violations.push(
                     oppViolation(ctx, {
                         entity_type: "inquiry_child",
@@ -209,6 +213,8 @@ export function evaluateOpportunityCompletionRequirements(
             }
         }
     }
+
+    // Approve-enrollment field gates live in lifecycleActionRequirementCatalog (action_execute preflight).
 
     return buildRequirementValidationResult(violations);
 }

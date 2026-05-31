@@ -80,6 +80,12 @@ import { MarkLostModal } from "@/components/admin/opportunity/actions/MarkLostMo
 import { AddNoteModal } from "@/components/admin/opportunity/actions/AddNoteModal";
 import { RecordTourOutcomeModal } from "@/components/admin/opportunity/actions/RecordTourOutcomeModal";
 import {
+    ADMINV2_OPEN_ENROLLMENT_PACKET_REVIEW,
+    ADMINV2_OPPORTUNITY_FOCUS_INQUIRY_CHILDREN,
+    scrollToInquiryChildrenSection,
+    type InquiryChildrenFocusField,
+} from "@/lib/admin/actions/enrollmentActionClient";
+import {
     ADMINV2_OPEN_TOUR_OUTCOME_MODAL,
     ADMINV2_OPEN_TOUR_SCHEDULE_MODAL,
 } from "@/lib/tours/actions/tourBookingActionClient";
@@ -109,6 +115,7 @@ import PersonDrawerHeaderMetadata, {
     formatPersonDrawerRecordNumber,
     PersonDrawerHeaderContactMeta,
 } from "@/components/admin/entity/PersonDrawerHeaderMetadata";
+import { PersonDrawerHeaderControls } from "@/components/admin/entity/PersonDrawerHeaderControls";
 import { resolvePersonDrawerOperatingBackLink } from "@/lib/admin/person/personDrawerBackLink";
 import PersonDrawerChildLifecycleRail from "@/components/admin/entity/PersonDrawerChildLifecycleRail";
 import PersonDrawerChildOverviewSkeleton from "@/components/admin/entity/PersonDrawerChildOverviewSkeleton";
@@ -207,6 +214,11 @@ import {
 } from "@/lib/admin/drawer/drawerSaveErrors";
 import OpportunityDrawerHeaderActionButton from "@/components/admin/opportunity/OpportunityDrawerHeaderActionButton";
 import OpportunityDrawerHeaderActionsPanel from "@/components/admin/opportunity/OpportunityDrawerHeaderActionsPanel";
+import { OpportunityDrawerHeaderControls } from "@/components/admin/opportunity/OpportunityDrawerHeaderControls";
+import { dispatchActionPreflightBlocked } from "@/lib/admin/actions/actionPreflightDrawerEvents";
+import { useOpportunityDrawerActionPreflight } from "@/lib/admin/actions/useOpportunityDrawerActionPreflight";
+import type { ActionPreflightUiPayload } from "@/lib/admin/actions/actionPreflightPresentation";
+import { flattenOpportunityRecordHeaderActionsForMenu } from "@/lib/admin/actions/flattenOpportunityRecordHeaderActionsForMenu";
 import { OpportunityChildLifecycleSummaryStrip } from "@/components/admin/opportunity/OpportunityChildLifecycleSummaryStrip";
 import type { OpportunityChildLifecycleSummary } from "@/lib/opportunities/buildOpportunityChildLifecycleSummary";
 import OpportunityRecordSectionRegistryActions from "@/components/admin/opportunity/OpportunityRecordSectionRegistryActions";
@@ -1556,6 +1568,9 @@ export default function AdminEntityDrawer() {
     const [workflowActionAdvanced, setWorkflowActionAdvanced] = useState<Record<number, boolean>>({});
     const [jobActionLoading, setJobActionLoading] = useState<string | null>(null);
     const [opportunityActionLoading, setOpportunityActionLoading] = useState<string | null>(null);
+    const opportunityDrawerActionPreflight = useOpportunityDrawerActionPreflight(
+        drawer.type === "opportunities" && drawer.id && drawer.id !== "new" ? drawer.id : null
+    );
     const [opportunityResolvedHeaderActions, setOpportunityResolvedHeaderActions] = useState<ResolvedActionsBySlot | null>(null);
     const [opportunityResolvedHeaderLoading, setOpportunityResolvedHeaderLoading] = useState(false);
     const [opportunityTourBookingsId, setOpportunityTourBookingsId] = useState<string | null>(null);
@@ -1572,12 +1587,15 @@ export default function AdminEntityDrawer() {
             optimistic as TourBookingRow | null
         );
     }, [data, opportunityRecordHeaderActiveTours]);
-    const opportunityRecordHeaderActionsForUi = useMemo(() => {
+    const opportunityRecordHeaderMenuActions = useMemo(() => {
         const base = opportunityResolvedHeaderActions;
-        if (!base || !opportunityInquiryTourBookingsForDisplay.length) return base;
-        const relabel = (arr: ResolvedActionForClient[]) =>
-            arr.map((a) => (a.key === "schedule_tour" ? { ...a, label: "Reschedule tour" } : a));
-        return {
+        if (!base) return [];
+        const relabel =
+            opportunityInquiryTourBookingsForDisplay.length > 0
+                ? (arr: ResolvedActionForClient[]) =>
+                      arr.map((a) => (a.key === "schedule_tour" ? { ...a, label: "Reschedule tour" } : a))
+                : (arr: ResolvedActionForClient[]) => arr;
+        const relabeled: typeof base = {
             ...base,
             primary: relabel(base.primary ?? []),
             secondary: relabel(base.secondary ?? []),
@@ -1586,7 +1604,8 @@ export default function AdminEntityDrawer() {
             row_inline: relabel(base.row_inline ?? []),
             header: relabel(base.header ?? []),
         };
-    }, [opportunityResolvedHeaderActions, opportunityInquiryTourBookingsForDisplay]);
+        return flattenOpportunityRecordHeaderActionsForMenu(relabeled);
+    }, [opportunityResolvedHeaderActions, opportunityInquiryTourBookingsForDisplay.length]);
     const opportunityDrawerPresentationGateOpenedAtRef = useRef<number | null>(null);
     const [opportunityDrawerPresentationGateTimedOut, setOpportunityDrawerPresentationGateTimedOut] =
         useState(false);
@@ -3833,6 +3852,7 @@ export default function AdminEntityDrawer() {
             }
             setOpportunityActionLoading(a.key);
             setSaveError(null);
+            opportunityDrawerActionPreflight.clearBlocked();
             try {
                 const workUnitId =
                     data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
@@ -3852,6 +3872,8 @@ export default function AdminEntityDrawer() {
                 const json = (await res.json().catch(() => ({}))) as {
                     ok?: boolean;
                     error?: string;
+                    action_preflight?: ActionPreflightUiPayload;
+                    completion_requirements?: import("@/lib/completion/requirementValidationTypes").RequirementValidationResult;
                     execution_result?: Record<string, unknown> & {
                         row?: Record<string, unknown>;
                         kind?: string;
@@ -3859,9 +3881,20 @@ export default function AdminEntityDrawer() {
                     };
                 };
                 if (!res.ok || !json.ok) {
-                    setSaveError(json.error ?? "Action failed");
+                    if (json.action_preflight) {
+                        dispatchActionPreflightBlocked({
+                            action_key: a.key,
+                            opportunity_id: drawer.id,
+                            error: json.error,
+                            completion_requirements: json.completion_requirements,
+                            action_preflight: json.action_preflight,
+                        });
+                    } else {
+                        setSaveError(json.error ?? "Action failed");
+                    }
                     return;
                 }
+                opportunityDrawerActionPreflight.clearBlocked();
                 const er = json.execution_result;
                 if (er?.kind === "start_workflow" && typeof er.workflow_run_id === "string" && er.workflow_run_id.trim()) {
                     const rid = er.workflow_run_id.trim();
@@ -3892,6 +3925,7 @@ export default function AdminEntityDrawer() {
             drawer.type,
             drawer.opportunityWorkspaceContext?.department_id,
             openDrawer,
+            opportunityDrawerActionPreflight.clearBlocked,
             opportunityWorkUnitDepartmentId,
             refetch,
             router,
@@ -3983,9 +4017,31 @@ export default function AdminEntityDrawer() {
             if (!id || drawer.type !== "opportunities" || drawer.id !== id) return;
             setDrawerTab("documents");
         };
+        const onOpenEnrollmentPacketReview = (ev: Event) => {
+            const ce = ev as CustomEvent<{ opportunity_id?: string }>;
+            const id = typeof ce.detail?.opportunity_id === "string" ? ce.detail.opportunity_id.trim() : "";
+            if (!id || drawer.type !== "opportunities" || drawer.id !== id) return;
+            setDrawerTab("overview");
+            window.setTimeout(() => {
+                window.dispatchEvent(
+                    new CustomEvent(ADMINV2_OPEN_ENROLLMENT_PACKET_REVIEW, {
+                        detail: { opportunity_id: id },
+                    })
+                );
+            }, 80);
+        };
+        const onFocusInquiryChildren = (ev: Event) => {
+            const ce = ev as CustomEvent<{ opportunity_id?: string; field?: InquiryChildrenFocusField | null }>;
+            const id = typeof ce.detail?.opportunity_id === "string" ? ce.detail.opportunity_id.trim() : "";
+            if (!id || drawer.type !== "opportunities" || drawer.id !== id) return;
+            setDrawerTab("overview");
+            window.setTimeout(() => scrollToInquiryChildrenSection(ce.detail?.field ?? null), 80);
+        };
         window.addEventListener("adminv2:open-send-form", onOpenSendForm as EventListener);
         window.addEventListener("adminv2:open-enrollment-packet", onOpenEnrollmentPacket as EventListener);
         window.addEventListener("adminv2:opportunity-focus-documents", onFocusDocuments as EventListener);
+        window.addEventListener(ADMINV2_OPEN_ENROLLMENT_PACKET_REVIEW, onOpenEnrollmentPacketReview as EventListener);
+        window.addEventListener(ADMINV2_OPPORTUNITY_FOCUS_INQUIRY_CHILDREN, onFocusInquiryChildren as EventListener);
         const onOpenTourSchedule = (ev: Event) => {
             const ce = ev as CustomEvent<{ opportunity_id?: string; action_key?: string }>;
             const id = typeof ce.detail?.opportunity_id === "string" ? ce.detail.opportunity_id.trim() : "";
@@ -4032,6 +4088,8 @@ export default function AdminEntityDrawer() {
             window.removeEventListener("adminv2:open-send-form", onOpenSendForm as EventListener);
             window.removeEventListener("adminv2:open-enrollment-packet", onOpenEnrollmentPacket as EventListener);
             window.removeEventListener("adminv2:opportunity-focus-documents", onFocusDocuments as EventListener);
+            window.removeEventListener(ADMINV2_OPEN_ENROLLMENT_PACKET_REVIEW, onOpenEnrollmentPacketReview as EventListener);
+            window.removeEventListener(ADMINV2_OPPORTUNITY_FOCUS_INQUIRY_CHILDREN, onFocusInquiryChildren as EventListener);
             window.removeEventListener(ADMINV2_OPEN_TOUR_SCHEDULE_MODAL, onOpenTourSchedule as EventListener);
             window.removeEventListener(ADMINV2_OPEN_TOUR_OUTCOME_MODAL, onOpenTourOutcome as EventListener);
         };
@@ -6961,7 +7019,7 @@ export default function AdminEntityDrawer() {
         isOpportunityExistingView && drawer.id && data != null && entityRowReady
             ? (
                 <div
-                    className={`flex flex-col items-end gap-1.5 ${opportunityHeaderActionsExpectRegistry ||
+                    className={`flex w-full min-w-0 shrink-0 flex-col items-stretch gap-1.5 ${opportunityHeaderActionsExpectRegistry ||
                             opportunityDrawerAboveFoldLayoutLocked(
                                 opportunityDrawerLayoutFrozen,
                                 opportunityDrawerBelowFoldRevealed
@@ -6976,55 +7034,34 @@ export default function AdminEntityDrawer() {
                                 : "max-w-full"
                             : ""
                         }`}
+                    data-opportunity-header-actions-rail="true"
                 >
-                    <OpportunityDrawerHeaderActionsPanel
-                        inquiryWorkflow={opportunityInquiryWorkflowDrawer}
-                        align="end"
-                    >
-                        {(() => {
-                            if (opportunityHeaderActionsShowSkeleton) {
-                                return <DrawerWorkflowHeaderQuickActionsSkeleton />;
-                            }
-                            return (
-                                <>
-                                    {useOpportunityActionRegistryHeader ?
-                                        <>
-                                            {((opportunityRecordHeaderActionsForUi ?? opportunityResolvedHeaderActions)?.primary ?? []).map((a) => (
-                                                <OpportunityDrawerHeaderActionButton
-                                                    key={a.key}
-                                                    label={a.label}
-                                                    inquiryWorkflow={opportunityInquiryWorkflowDrawer}
-                                                    disabled={!canMutate || !!opportunityActionLoading}
-                                                    busy={opportunityActionLoading === a.key}
-                                                    onClick={() => void handleResolvedOpportunityHeaderAction(a)}
-                                                />
-                                            ))}
-                                            {((opportunityRecordHeaderActionsForUi ?? opportunityResolvedHeaderActions)?.secondary ?? []).map((a) => (
-                                                <OpportunityDrawerHeaderActionButton
-                                                    key={a.key}
-                                                    label={a.label}
-                                                    inquiryWorkflow={opportunityInquiryWorkflowDrawer}
-                                                    disabled={!canMutate || !!opportunityActionLoading}
-                                                    busy={opportunityActionLoading === a.key}
-                                                    onClick={() => void handleResolvedOpportunityHeaderAction(a)}
-                                                />
-                                            ))}
-                                            {((opportunityRecordHeaderActionsForUi ?? opportunityResolvedHeaderActions)?.overflow ?? []).map((a) => (
-                                                <OpportunityDrawerHeaderActionButton
-                                                    key={a.key}
-                                                    label={a.label}
-                                                    inquiryWorkflow={opportunityInquiryWorkflowDrawer}
-                                                    disabled={!canMutate || !!opportunityActionLoading}
-                                                    busy={opportunityActionLoading === a.key}
-                                                    onClick={() => void handleResolvedOpportunityHeaderAction(a)}
-                                                />
-                                            ))}
-                                        </>
-                                        : null}
-                                </>
-                            );
-                        })()}
-                    </OpportunityDrawerHeaderActionsPanel>
+                    {(() => {
+                        if (opportunityHeaderActionsShowSkeleton) {
+                            return <DrawerWorkflowHeaderQuickActionsSkeleton />;
+                        }
+                        if (!drawer.id) return null;
+                        return (
+                            <OpportunityDrawerHeaderControls
+                                opportunityId={drawer.id}
+                                overviewData={
+                                    entityDataMatchesDrawer(data, drawer.id) ?
+                                        (data as Record<string, unknown>)
+                                    :   {}
+                                }
+                                opportunitySingular={opportunitySingular}
+                                queuePreviewSeed={drawer.opportunityQueuePreviewSeed ?? null}
+                                inquiryWorkflow={opportunityInquiryWorkflowDrawer}
+                                menuActions={opportunityRecordHeaderMenuActions}
+                                showRegistryActions={!!useOpportunityActionRegistryHeader}
+                                canMutate={!!canMutate}
+                                actionLoadingKey={opportunityActionLoading}
+                                onActionSelect={(a) => void handleResolvedOpportunityHeaderAction(a)}
+                                actionPreflightBlocked={opportunityDrawerActionPreflight.blocked}
+                                onDismissActionPreflightBlocked={opportunityDrawerActionPreflight.clearBlocked}
+                            />
+                        );
+                    })()}
                     {drawer.id &&
                         drawer.id !== "new" &&
                         isTaskAssistV1UiEnabled() &&
@@ -11949,6 +11986,7 @@ export default function AdminEntityDrawer() {
     const personHeaderTitleRailRight =
         personRecordChromeBodyShell &&
             drawer.type === "persons" &&
+            drawer.id &&
             overviewData &&
             !(overviewData as { _create?: boolean })._create ? (
             personChildLifecycleChrome ? (
@@ -11958,19 +11996,32 @@ export default function AdminEntityDrawer() {
                         chromeHint={personDrawerChildChromeHint}
                         onOpenLeadOpportunity={openPersonDrawerChildLeadOpportunity}
                     />
-                    <div className="flex flex-wrap items-center justify-end gap-2">{drawerHeaderActions}</div>
+                    <PersonDrawerHeaderControls
+                        personId={drawer.id}
+                        overviewData={overviewData as Record<string, unknown>}
+                        opportunitySingular="Child"
+                        actionsSlot={drawerHeaderActions}
+                    />
                 </div>
             ) : personParentGuardianChrome ? (
-                <div className="flex flex-col items-end gap-1">
-                    <div className="flex flex-wrap items-center justify-end gap-2">{drawerHeaderActions}</div>
-                </div>
+                <PersonDrawerHeaderControls
+                    personId={drawer.id}
+                    overviewData={overviewData as Record<string, unknown>}
+                    opportunitySingular="Parent"
+                    actionsSlot={drawerHeaderActions}
+                />
             ) : (
                 <div className="flex flex-col items-end gap-1">
                     <div className="flex flex-wrap items-center justify-end gap-2">
                         <PersonDrawerProfileBadges record={overviewData as Record<string, unknown>} />
                         {drawerStatusBadge}
-                        {drawerHeaderActions}
                     </div>
+                    <PersonDrawerHeaderControls
+                        personId={drawer.id}
+                        overviewData={overviewData as Record<string, unknown>}
+                        opportunitySingular="Person"
+                        actionsSlot={drawerHeaderActions}
+                    />
                     <PersonDrawerHeaderContactMeta record={overviewData as Record<string, unknown>} />
                 </div>
             )

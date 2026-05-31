@@ -1,6 +1,7 @@
 import React from "react";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import type { SubmissionInboxRow } from "@/lib/forms/submissionInboxPresentation";
 import { IntakeWorkspaceHubView } from "@/components/forms/workspace/IntakeWorkspaceHubView";
 import { IntakeWorkspaceFilterPanelView } from "@/components/forms/workspace/IntakeWorkspaceFilterPanelView";
 import { buildIntakeWorkspaceFilterPanel } from "@/lib/forms/intakeWorkspaceFilters";
@@ -40,7 +41,7 @@ describe("IntakeWorkspaceHubView IC-3", () => {
                                 intake_needs_review: true,
                                 intake_resolution_path: "created_records",
                             },
-                        },
+                        } as SubmissionInboxRow["payload"],
                     },
                 ]}
                 packets={[{ id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", name: "Onboarding" }]}

@@ -56,6 +56,7 @@ describe("workUnitAboveFoldPillSections", () => {
     it("above-fold model exposes count without unit text in chip payload", () => {
         const model = buildWorkUnitAboveFoldRenderModel({
             work_unit_shell_ready: true,
+            reserve_actions_rail: false,
             queue_summaries: [
                 {
                     key: "new_leads",
@@ -76,10 +77,6 @@ describe("workUnitAboveFoldPillSections", () => {
                             key: "new_leads",
                             label: "New Leads",
                             priority: "standard",
-                            count: 18,
-                            counts_deferred: false,
-                            grain: "case",
-                            domain: "new_leads",
                         },
                     ],
                 },

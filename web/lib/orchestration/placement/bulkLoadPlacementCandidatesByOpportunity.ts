@@ -17,6 +17,10 @@ import {
     type NormalizedPlacementLinkMemberRow,
 } from "@/lib/orchestration/placement/normalizeSupabaseNestedRelation";
 import {
+    detectPlacementCandidateProjectionMismatch,
+    resolvePlacementCandidateChildDisplayName,
+} from "@/lib/orchestration/placement/resolvePlacementCandidateChildDisplayName";
+import {
     looksLikeCombinedProgramRoomCohort,
     resolvePlacementCandidateCohortForQueue,
 } from "@/lib/orchestration/placement/resolvePlacementCandidateCohortForQueue";
@@ -75,7 +79,7 @@ export async function bulkLoadPlacementCandidatesByOpportunity(params: {
     let q = params.supabase
         .from("placement_candidates")
         .select(
-            "id, org_id, opportunity_id, customer_id, opportunity_customer_member_id, customer_member_id, person_id, site_id, is_synthetic_fallback, program_room_cohort_key, program_room_group_label, wait_since, desired_start_date, status, seed_key, metadata, customer_members(display_name, person_id, metadata, persons(date_of_birth)), opportunity_customer_members(id, location_id, program_room_cohort_key, metadata, desired_program_type, customer_members(display_name, person_id, metadata, persons(date_of_birth)))"
+            "id, org_id, opportunity_id, customer_id, opportunity_customer_member_id, customer_member_id, person_id, site_id, is_synthetic_fallback, program_room_cohort_key, program_room_group_label, wait_since, desired_start_date, status, seed_key, metadata, customer_members(first_name, last_name, display_name, person_id, metadata, persons(first_name, last_name, full_name, date_of_birth)), opportunity_customer_members(id, location_id, program_room_cohort_key, metadata, desired_program_type, customer_members(first_name, last_name, display_name, person_id, metadata, persons(first_name, last_name, full_name, date_of_birth)))"
         )
         .eq("org_id", params.orgId)
         .in("opportunity_id", ids);
@@ -220,17 +224,18 @@ export async function bulkLoadPlacementCandidatesByOpportunity(params: {
             c.metadata != null && typeof c.metadata === "object" && !Array.isArray(c.metadata)
                 ? (c.metadata as Record<string, unknown>)
                 : null;
-        const displayName =
-            c.opportunity_customer_members?.customer_members?.display_name?.trim() ||
-            c.customer_members?.display_name?.trim() ||
-            (meta && typeof meta.display_name === "string" ? meta.display_name.trim() : "") ||
-            null;
-
         const ocm = c.opportunity_customer_members;
+        const displayName = resolvePlacementCandidateChildDisplayName({
+            ocmMember: ocm?.customer_members ?? null,
+            candidateMember: c.customer_members,
+            candidateMetadata: meta,
+        });
+
         const memberForCohort = ocm?.customer_members ?? c.customer_members;
         const cohort = resolvePlacementCandidateCohortForQueue({
             storedKey: c.program_room_cohort_key ?? "",
             storedLabel: c.program_room_group_label ?? "",
+            ocmProgramRoomCohortKey: ocm?.program_room_cohort_key ?? null,
             candidateMetadata: meta,
             ocmMetadata:
                 ocm?.metadata != null && typeof ocm.metadata === "object" && !Array.isArray(ocm.metadata)
@@ -243,19 +248,36 @@ export async function bulkLoadPlacementCandidatesByOpportunity(params: {
         const linkGroup = linkByCandidate.get(c.id) ?? null;
         const linkMode = linkGroup?.link_mode ?? "independent";
 
-        const cohortRepairedFromMember = looksLikeCombinedProgramRoomCohort(
-            c.program_room_cohort_key ?? "",
-            c.program_room_group_label ?? ""
-        );
+        const cohortRepairedFromMember =
+            looksLikeCombinedProgramRoomCohort(c.program_room_cohort_key ?? "", c.program_room_group_label ?? "") ||
+            Boolean(
+                (ocm?.program_room_cohort_key ?? "").trim() &&
+                    (c.program_room_cohort_key ?? "").trim() &&
+                    (ocm?.program_room_cohort_key ?? "").trim() !== (c.program_room_cohort_key ?? "").trim()
+            );
+        const projectionMismatch = detectPlacementCandidateProjectionMismatch({
+            candidateStoredCohortKey: c.program_room_cohort_key,
+            ocmCohortKey: ocm?.program_room_cohort_key,
+            resolvedCohortKey: cohort.program_room_cohort_key,
+            candidateSiteId: c.site_id,
+            ocmLocationId: ocm?.location_id ?? null,
+            candidateMember: c.customer_members,
+            ocmMember: ocm?.customer_members ?? null,
+            candidateMetadata: meta,
+        });
         const loadDiagnostics = placementLoadDiagnosticsEnabled()
-            ? resolvePlacementCandidateLoadDiagnostics({
-                  candidateSiteId: c.site_id,
-                  storedCohortKey: cohort.program_room_cohort_key,
-                  ocmLocationId: ocm?.location_id ?? null,
-                  ocmCohortKey: ocm?.program_room_cohort_key ?? null,
-                  candidateMetadata: meta,
-                  cohortRepairedFromMember,
-              })
+            ? {
+                  ...resolvePlacementCandidateLoadDiagnostics({
+                      candidateSiteId: c.site_id,
+                      storedCohortKey: c.program_room_cohort_key,
+                      resolvedCohortKey: cohort.program_room_cohort_key,
+                      ocmLocationId: ocm?.location_id ?? null,
+                      ocmCohortKey: ocm?.program_room_cohort_key ?? null,
+                      candidateMetadata: meta,
+                      cohortRepairedFromMember,
+                  }),
+                  projection_mismatch: projectionMismatch,
+              }
             : undefined;
 
         const bundle: PlacementCandidateQueueBundle = {

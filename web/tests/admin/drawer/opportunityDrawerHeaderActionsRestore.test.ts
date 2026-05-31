@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { emptyResolvedActionsBySlot } from "@/lib/admin/actions/types";
+import { emptyResolvedActionsBySlot, type ResolvedActionForClient } from "@/lib/admin/actions/types";
 import {
     __clearOpportunityDrawerHeaderActionsCacheForTests,
     peekOpportunityDrawerHeaderActionsCache,
@@ -20,9 +20,20 @@ function readSrc(rel: string): string {
 describe("opportunity drawer header actions cache", () => {
     it("stores and restores header actions by opportunity id", () => {
         __clearOpportunityDrawerHeaderActionsCacheForTests();
+        const act = (key: string, label: string): ResolvedActionForClient => ({
+            key,
+            label,
+            description: null,
+            action_type: "ui_intent",
+            icon: null,
+            style: null,
+            display_style: "button",
+            payload: {},
+            workflow_id: null,
+        });
         const actions = {
             ...emptyResolvedActionsBySlot(),
-            primary: [{ key: "schedule_tour", label: "Schedule tour", kind: "action" as const }],
+            primary: [act("schedule_tour", "Schedule tour")],
         };
         putOpportunityDrawerHeaderActionsCache("opp-1", actions, "/api/admin/actions?x=1");
         const cached = peekOpportunityDrawerHeaderActionsCache("opp-1");

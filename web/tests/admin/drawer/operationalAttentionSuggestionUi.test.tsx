@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { CrmCompactQueuePreview } from "@/app/adminV2/components/workspace/blocks/QueueBlock";
 import OperationalAttentionDrawerPanel from "@/components/admin/drawer/OperationalAttentionDrawerPanel";
 import OperationalAttentionHeaderStrip from "@/components/admin/drawer/OperationalAttentionHeaderStrip";
+import type { CrmCompactRowSemanticSlots } from "@/lib/ui-v2/workspace-types";
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
 import { suggestedContentForReason } from "@/lib/agent/needsAttentionSuggestion/suggestedContentTemplates";
 import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
@@ -236,12 +237,14 @@ describe("CrmCompactQueuePreview operational read L0", () => {
                     attentionReason: null,
                     operationalReadPreview: {
                         operationalRead: "Respond to new request — New inquiry is stale.",
+                        whyNow: "New inquiry is stale.",
                         urgencyChipLabel: "Today",
                         urgencyBand: "p1_today",
                         typeCue: null,
                         staleCue: null,
                         previewBoundary: "Preview",
                         source: "canonical_queue_preview",
+                        priorityExplanation: null,
                     },
                     operationalNextHint: null,
                 })}

@@ -85,7 +85,7 @@ This catalog is the **single vocabulary** for business operations in the childca
 | **missing** | 26 |
 | **Total catalog actions** | 34 |
 
-Partial keys today: `send_form`, `schedule_tour`, `reschedule_tour`, `send_enrollment_packet`, `mark_lost`, `review_enrollment_packet`, `reserve_spot`, `assign_classroom`.
+Partial keys today: `send_form`, `schedule_tour`, `reschedule_tour`, `confirm_tour`, `record_tour_outcome`, `send_enrollment_packet`, `mark_lost`, `review_enrollment_packet`, `request_missing_information`, `assign_classroom`, `assign_schedule`, `set_start_date`, `reserve_spot`.
 
 *(Platform adjunct actions in [Appendix A](#appendix-a--platform-adjunct-actions-not-in-matrix) are excluded from this count.)*
 
@@ -108,8 +108,8 @@ Available across active pipeline stages unless customer policy or stage overlay 
 | **requirement_gates** | Parent/guardian phone on record or selected contact |
 | **side_effects** | Log contact activity; optional task auto-complete |
 | **default_placements** | `record_header` secondary; `queue_row` row_inline |
-| **implementation_status** | **missing** |
-| **notes** | Today collapsed into `quick_message`. BOS `send_first_response` should map here with `channel: phone`. Prefer click-to-call + activity log, not autonomous dial. |
+| **implementation_status** | **existing** (Phase 1B — tel: intent; no autonomous dial) |
+| **notes** | Routes to `tel:` when phone on file. Legacy `quick_message` retained. BOS phone intents should map here. |
 
 ### `send_email`
 
@@ -124,8 +124,8 @@ Available across active pipeline stages unless customer policy or stage overlay 
 | **requirement_gates** | Parent email or deliverable contact |
 | **side_effects** | Open composer → operator sends → thread + activity |
 | **default_placements** | `record_header` secondary; `queue_row` row_inline |
-| **implementation_status** | **missing** |
-| **notes** | Comms infrastructure exists; no canonical `action_definitions` key. Task Assist `draft_email` → this key with `mode: draft`. |
+| **implementation_status** | **existing** (Phase 1B — Quick Message composer, email channel) |
+| **notes** | Reuses Quick Message modal. Legacy `quick_message` retained without default placements. |
 
 ### `send_sms`
 
@@ -140,8 +140,8 @@ Available across active pipeline stages unless customer policy or stage overlay 
 | **requirement_gates** | Parent mobile or SMS-capable contact |
 | **side_effects** | Open composer → operator sends → thread + activity |
 | **default_placements** | `record_header` secondary; `queue_row` row_inline |
-| **implementation_status** | **missing** |
-| **notes** | Same as `send_email`. BOS `reply_to_inbound` / draft SMS intents map here. |
+| **implementation_status** | **existing** (Phase 1B — Quick Message composer, SMS channel) |
+| **notes** | Reuses Quick Message modal. BOS draft SMS intents should map here. |
 
 ### `add_note`
 
@@ -156,8 +156,8 @@ Available across active pipeline stages unless customer policy or stage overlay 
 | **requirement_gates** | Note body required |
 | **side_effects** | Activity timeline entry; no status change |
 | **default_placements** | `record_header` overflow |
-| **implementation_status** | **missing** |
-| **notes** | Distinct from `update_status_add_note`. Lost/Withdrawn matrix requires note-capable actions. |
+| **implementation_status** | **existing** (Phase 1B — `append_note` execute path) |
+| **notes** | Distinct from `update_status_add_note`. Note body required via structured error. |
 
 ### `create_task`
 
@@ -172,8 +172,8 @@ Available across active pipeline stages unless customer policy or stage overlay 
 | **requirement_gates** | Task title; optional assignee, due date |
 | **side_effects** | Create work item linked to opportunity / person |
 | **default_placements** | `record_header` overflow |
-| **implementation_status** | **missing** |
-| **notes** | Follow-up Needed (tour) should create tasks via workflow referencing this key. |
+| **implementation_status** | **existing** (Phase 1B — opens tasks panel / drawer task focus) |
+| **notes** | Opens My Tasks panel; drawer operational-tasks focus when record open. Full BOS task recommendations deferred. |
 
 ### `upload_document`
 
@@ -188,8 +188,8 @@ Available across active pipeline stages unless customer policy or stage overlay 
 | **requirement_gates** | File + document type |
 | **side_effects** | `documents` row linked to opportunity / customer |
 | **default_placements** | `record_header` secondary (enrollment+ condition) |
-| **implementation_status** | **missing** |
-| **notes** | Document upload exists on drawer; not registry-backed. |
+| **implementation_status** | **existing** (Phase 1B — drawer documents tab intent; enrollment+ placement) |
+| **notes** | Opens opportunity drawer documents tab; upload UI unchanged. |
 
 ### `send_form`
 
@@ -204,8 +204,8 @@ Available across active pipeline stages unless customer policy or stage overlay 
 | **requirement_gates** | Form definition selected; parent contact method for delivery |
 | **side_effects** | Mint/send form link; activity + optional workflow |
 | **default_placements** | `record_header` secondary |
-| **implementation_status** | **partial** |
-| **notes** | Global `send_form` is `ui_intent` only (`20260529200000`). Composer path exists in drawer; upgrade to `open_form` or `start_workflow`. |
+| **implementation_status** | **existing** (Phase 1B — default placement added; composer unchanged) |
+| **notes** | Global `send_form` ui_intent (`20260529200000`). Composer via drawer + `adminv2:open-send-form`. |
 
 ---
 
@@ -225,7 +225,7 @@ Available across active pipeline stages unless customer policy or stage overlay 
 | **side_effects** | Create opportunity + person/customer links; `status_key = new_inquiry`; activity |
 | **default_placements** | `right_rail` primary (enrollment dept) |
 | **implementation_status** | **existing** (Phase 1A — `20260602170000`) |
-| **notes** | Replaces `create_inquiry` ui_intent stub over time. Intake auto-op creates leads without this action — manual/API parity via execute API. Qualification uses `contact_attempted` until a dedicated status exists. |
+| **notes** | Replaces `create_inquiry` ui_intent stub over time. Intake auto-op creates leads without this action — manual/API parity via execute API. |
 
 ---
 
@@ -244,10 +244,10 @@ Matrix lifecycle actions for **New Lead** and **Qualification**. `schedule_tour`
 | **universal** | false |
 | **trigger_types** | button, workflow, api |
 | **requirement_gates** | Parent phone or email; parent identity fields |
-| **side_effects** | Status → qualification proxy (`contact_attempted` until status consolidation); activity |
+| **side_effects** | Status → `qualification`; activity |
 | **default_placements** | `record_header` primary (new_lead); `queue_row` row_inline |
-| **implementation_status** | **existing** (Phase 1A — `20260602170000`) |
-| **notes** | Replaces `qualify_opportunity` and status side effect of `contact_attempted` over time. Does not imply contact occurred — use universal comms separately. Maps to `contact_attempted` until qualification status exists. |
+| **implementation_status** | **existing** (Phase 1B — `20260602180000`) |
+| **notes** | Replaces `qualify_opportunity` and status side effect of `contact_attempted` over time. Does not imply contact occurred — use universal comms separately. Legacy `contact_attempted` records remain valid. |
 
 ### `schedule_tour`
 
@@ -262,8 +262,8 @@ Matrix lifecycle actions for **New Lead** and **Qualification**. `schedule_tour`
 | **requirement_gates** | Tour date + time; location; parent contact for reminders |
 | **side_effects** | Create/update `tour_bookings`; status → `tour_scheduled`; workflow + activity |
 | **default_placements** | `record_header` secondary |
-| **implementation_status** | **partial** |
-| **notes** | Global def `update_status`; org override `start_workflow`. Condition: `metadata.tour_date` missing. Not the same as tour slot panel internals. |
+| **implementation_status** | **existing** (Phase 2 alignment — `20260602190000`) |
+| **notes** | `open_form` → `OpportunityTourScheduleActionModal` (slot booking when site set). Legacy metadata execute path retained for no-site fallback. Org overrides preserved. |
 
 ### `move_to_waitlist`
 
@@ -314,8 +314,8 @@ Matrix lifecycle actions for **New Lead** and **Qualification**. `schedule_tour`
 | **requirement_gates** | Active tour booking in confirmable state |
 | **side_effects** | Booking status → confirmed; activity; optional reminder workflow |
 | **default_placements** | `record_section` / tour block (or header when booking active) |
-| **implementation_status** | **missing** |
-| **notes** | Implemented only in `OpportunityTourBookingLifecycleBar` POST `/confirm` — not registry. |
+| **implementation_status** | **existing** (Phase 2 alignment — `20260602190000`) |
+| **notes** | `ui_intent` / execute → `confirmTourBooking`. Tour bar and registry share booking API. |
 
 ### `reschedule_tour`
 
@@ -330,8 +330,8 @@ Matrix lifecycle actions for **New Lead** and **Qualification**. `schedule_tour`
 | **requirement_gates** | Existing tour booking; new slot |
 | **side_effects** | Booking reschedule; metadata/tour_date update; activity |
 | **default_placements** | `record_header` secondary |
-| **implementation_status** | **partial** |
-| **notes** | Org-scoped `reschedule_tour` def exists; condition `metadata.tour_date` exists. Shares form/workflow with schedule. |
+| **implementation_status** | **existing** (Phase 2 alignment — `20260602190000`) |
+| **notes** | Same modal as schedule; placement when `metadata.tour_date` exists. Tour bar reschedule uses slot panel directly. |
 
 ### `record_tour_outcome`
 
@@ -345,8 +345,8 @@ Matrix lifecycle actions for **New Lead** and **Qualification**. `schedule_tour`
 | **trigger_types** | button, api |
 | **requirement_gates** | Tour booking completed or no-show; outcome enum required |
 | **side_effects** | Booking terminal state; opportunity status per outcome (enroll path, waitlist, lost, follow-up task); activity |
-| **implementation_status** | **missing** |
-| **notes** | Today split across `/complete`, `/no-show` on tour bar + manual status updates. **Follow-up Needed** is task/attention, not status. |
+| **implementation_status** | **existing** (Phase 2 alignment — `20260602190000`) |
+| **notes** | `open_form` → outcome modal → execute → `/complete` or `/no-show` service paths. Tour bar buttons emit same canonical key. |
 
 ### `send_enrollment_packet`
 
@@ -449,8 +449,8 @@ Matrix lifecycle actions for **New Lead** and **Qualification**. `schedule_tour`
 | **requirement_gates** | Pending packet session exists |
 | **side_effects** | Opens review modal / console; PATCH review decision; workflow event |
 | **default_placements** | `record_header` primary when pending review |
-| **implementation_status** | **partial** |
-| **notes** | `OpportunityPacketReviewOverview` + API exist; no `action_definitions` row. Activity uses ad hoc `packet_review` key. |
+| **implementation_status** | **existing** (Phase 3) |
+| **notes** | `OpportunityPacketReviewOverview` + API; registry `ui_intent` routes to existing modal. Activity key: `review_enrollment_packet`. |
 
 ### `request_missing_information`
 
@@ -465,8 +465,8 @@ Matrix lifecycle actions for **New Lead** and **Qualification**. `schedule_tour`
 | **requirement_gates** | Identified missing fields or packet needs_correction |
 | **side_effects** | Send form/packet section / comms; create follow-up task |
 | **default_placements** | `record_header` secondary |
-| **implementation_status** | **missing** |
-| **notes** | May compose `send_form` + `create_task` in workflow; still expose single canonical key. |
+| **implementation_status** | **existing** (Phase 3) |
+| **notes** | Routes to send-form composer (`request_missing_information` ui_intent). BOS `missing_information` objective parallel. |
 
 ### `approve_enrollment`
 
@@ -481,8 +481,8 @@ Matrix lifecycle actions for **New Lead** and **Qualification**. `schedule_tour`
 | **requirement_gates** | Paperwork approved; classroom; schedule; start date; child identity; parent contact; deposit/registration per policy |
 | **side_effects** | Status → `enrolled` (or ready-to-activate); enrollment date automation; activity; welcome comms workflow |
 | **default_placements** | `record_header` primary (enrollment) |
-| **implementation_status** | **missing** |
-| **notes** | **legacy_replacement** for `mark_won`, `convert_to_enrolled_placeholder`. Requirement engine attachment critical. |
+| **implementation_status** | **stub** (Phase 3b) |
+| **notes** | **legacy_replacement** for `mark_won`, `convert_to_enrolled_placeholder`. Requirement engine attachment critical. Not activated until gates exist. |
 
 ### `reserve_spot`
 
@@ -497,8 +497,8 @@ Matrix lifecycle actions for **New Lead** and **Qualification**. `schedule_tour`
 | **requirement_gates** | Program/location capacity policy; child member on opportunity |
 | **side_effects** | Placement hold / candidate state; activity |
 | **default_placements** | `record_section` / placement or queue row (waitlist/enrollment) |
-| **implementation_status** | **partial** |
-| **notes** | Waitlist orchestration + placement candidates exist; no unified action def. |
+| **implementation_status** | **stub** (Phase 3b) |
+| **notes** | Waitlist orchestration + placement candidates exist; no unified action def yet. |
 
 ### `assign_classroom`
 
@@ -513,8 +513,8 @@ Matrix lifecycle actions for **New Lead** and **Qualification**. `schedule_tour`
 | **requirement_gates** | Room/cohort available for program |
 | **side_effects** | Update member placement fields; activity |
 | **default_placements** | `record_section` / inquiry_children or placement panel |
-| **implementation_status** | **partial** |
-| **notes** | Placement UI in workspace/drawer; not registry action. |
+| **implementation_status** | **existing** (Phase 3) |
+| **notes** | Registry ui_intent focuses inquiry children `program_room_cohort_key`; OCM PATCH unchanged. |
 
 ### `assign_schedule`
 
@@ -529,8 +529,8 @@ Matrix lifecycle actions for **New Lead** and **Qualification**. `schedule_tour`
 | **requirement_gates** | Schedule template selected |
 | **side_effects** | Schedule assignment record; activity |
 | **default_placements** | `record_section` / participation |
-| **implementation_status** | **missing** |
-| **notes** | Field edits may exist without canonical action. |
+| **implementation_status** | **existing** (Phase 3) |
+| **notes** | Registry ui_intent focuses inquiry children `desired_schedule_type`. |
 
 ### `set_start_date`
 
@@ -545,8 +545,8 @@ Matrix lifecycle actions for **New Lead** and **Qualification**. `schedule_tour`
 | **requirement_gates** | Valid start date vs program rules |
 | **side_effects** | Member start date; may trigger activation automation |
 | **default_placements** | `record_section` / participation |
-| **implementation_status** | **missing** |
-| **notes** | Required before `approve_enrollment`. |
+| **implementation_status** | **existing** (Phase 3) |
+| **notes** | Registry ui_intent focuses inquiry children `desired_start_date`. Required before `approve_enrollment`. |
 
 ### `collect_registration_fee`
 

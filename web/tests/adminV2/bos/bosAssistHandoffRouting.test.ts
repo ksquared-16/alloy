@@ -187,17 +187,17 @@ describe("queue BOS handoff preview", () => {
 });
 
 describe("BOS assist CTA placement", () => {
-    it("uses Work with BOS label and compact button inside Review Assist", () => {
+    it("uses Work with BOS label in drawer header controls", () => {
         expect(BOS_ASSIST_CTA_DRAWER).toBe("Work with BOS");
         const cta = readFileSync(join(webRoot, "components/admin/drawer/BosDrawerAssistCta.tsx"), "utf8");
         expect(cta).toContain("OpportunityDrawerHeaderActionButton");
-        expect(cta).not.toContain("OPPORTUNITY_DRAWER_SECTION_SECONDARY_BUTTON_CLASS");
+        expect(cta).toContain("bare");
         expect(cta).toContain('data-bos-assist-button="true"');
-        const strip = readFileSync(
-            join(webRoot, "components/admin/drawer/OperationalAttentionHeaderStrip.tsx"),
+        const controls = readFileSync(
+            join(webRoot, "components/admin/opportunity/OpportunityDrawerHeaderControls.tsx"),
             "utf8"
         );
-        expect(strip).toContain("BosDrawerAssistCta");
+        expect(controls).toContain("BosDrawerAssistCta");
     });
 
     it("handoff passes taskAssistHandoffIntent through focus detail", () => {

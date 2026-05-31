@@ -82,8 +82,8 @@ export default function AdminV2SettingsIndexPage() {
                         <SettingsLink href="/adminV2/settings/work-units" title="Work units & queues">
                             Queue lanes in the workspace.
                         </SettingsLink>
-                        <SettingsLink href="/adminV2/settings/placement-priority" title="Waitlist priority">
-                            Priority for waitlisted families.
+                        <SettingsLink href="/adminV2/settings/placement-priority" title="Waitlist Ranking Policy">
+                            Priority factors and ranking order for waitlisted families.
                         </SettingsLink>
                         <SettingsLink href="/adminV2/settings/kpis" title="Workspace metrics">
                             Dashboard KPIs.

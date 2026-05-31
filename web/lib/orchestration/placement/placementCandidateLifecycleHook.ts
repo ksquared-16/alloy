@@ -5,6 +5,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { __testing as backfillTesting } from "@/lib/orchestration/placement/backfill/placementCandidateBackfill";
+import { syncPlacementCandidateFromOcm } from "@/lib/orchestration/placement/syncPlacementCandidateFromOcm";
 
 const { buildCandidateRowsForOpportunity, normalizeOcmRow } = backfillTesting;
 
@@ -91,6 +92,11 @@ export async function ensurePlacementCandidateForWaitlistedChild(
         .eq("seed_key", row.seed_key)
         .maybeSingle();
     if ((existing as { id?: string } | null)?.id) {
+        await syncPlacementCandidateFromOcm(supabase, {
+            orgId: params.orgId,
+            opportunityId: params.opportunityId,
+            opportunityCustomerMemberId: params.opportunityCustomerMemberId,
+        });
         return { attempted: true, created: false, skipped_reason: "already_exists" };
     }
 

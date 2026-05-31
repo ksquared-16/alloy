@@ -162,7 +162,7 @@ describe("inquiry summary right_column atomic structure", () => {
             "utf8"
         );
         expect(rightCol).toContain("INQUIRY_SUMMARY_RIGHT_COLUMN_ROOT_CLASS");
-        expect(rightCol).toContain("BosDrawerAssistCta");
+        expect(rightCol).not.toContain("BosDrawerAssistCta");
         expect((rightCol.match(/<TaskRowSkeleton \/>/g) ?? []).length).toBe(1);
     });
 });

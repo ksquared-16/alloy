@@ -12,6 +12,7 @@ import {
 } from "@/lib/fields/inquiryChildFieldRegistry";
 import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
 import { validateInquiryChildPlacementPatch } from "@/lib/admin/drawer/inquiryChildPlacementScope";
+import { syncPlacementCandidateFromOcm } from "@/lib/orchestration/placement/syncPlacementCandidateFromOcm";
 
 export async function PATCH(
     request: NextRequest,
@@ -165,6 +166,19 @@ export async function PATCH(
     }
     if (!data) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    try {
+        await syncPlacementCandidateFromOcm(supabase, {
+            orgId: ctx.orgId,
+            opportunityCustomerMemberId: id,
+            opportunityId: String((data as { opportunity_id: string }).opportunity_id),
+        });
+    } catch (e) {
+        console.warn(
+            "[opportunity-customer-members PATCH] placement candidate sync",
+            e instanceof Error ? e.message : e
+        );
     }
 
     return NextResponse.json(data);

@@ -26,6 +26,24 @@ import {
     validateMarkLostPayload,
     validateOpportunityStatusTransitionForAction,
 } from "@/lib/admin/actions/entryLifecycleActions";
+import {
+    executeConfirmTourAction,
+    executeRecordTourOutcomeAction,
+} from "@/lib/admin/actions/executeTourBookingActions";
+import {
+    APPROVE_ENROLLMENT_ACTION_KEY,
+    ENROLLED_STATUS_KEY,
+} from "@/lib/admin/actions/enrollmentApprovalConstants";
+import {
+    mergeEnrollmentDateMetadata,
+    stampChildEnrollmentDatesIfBlank,
+    todayEnrollmentDateIso,
+} from "@/lib/admin/actions/executeApproveEnrollmentAction";
+import type { RequirementValidationResult } from "@/lib/completion/requirementValidationTypes";
+import { preflightOpportunityActionOrNull } from "@/lib/admin/actions/adminActionPreflight";
+import { applyMetadataAutoPopulate } from "@/lib/completion/applyAutoPopulateInstructions";
+import { autoPopulateForLifecycleAction } from "@/lib/completion/lifecycleActionRequirementCatalog";
+import { WAITLISTED_STATUS_KEY } from "@/lib/admin/actions/lifecycleActionMetadataKeys";
 
 export type ExecuteAdminActionCtx = {
     orgId: string;
@@ -53,7 +71,15 @@ export type ExecuteAdminActionResult =
           correlation_id: string;
           execution_result: Record<string, unknown>;
       }
-    | { ok: false; correlation_id: string; error: string; status: number };
+    | {
+          ok: false;
+          correlation_id: string;
+          error: string;
+          status: number;
+          completion_requirements?: RequirementValidationResult;
+          effective_requirements?: import("@/lib/completion/effectiveRequirementsTypes").EffectiveRequirementsResult;
+          action_preflight?: import("@/lib/admin/actions/actionPreflightPresentation").ActionPreflightUiPayload;
+      };
 
 function mergePayload(
     schemaDefaults: Record<string, unknown> | null | undefined,
@@ -308,6 +334,53 @@ export async function executeAdminAction(
     }
 
     const merged = mergePayload(def.payload_schema, input.payload);
+
+    if (table === "opportunities") {
+        const preflightFail = await preflightOpportunityActionOrNull(correlationId, {
+            supabase,
+            orgId: ctx.orgId,
+            opportunityId: entityId,
+            actionKey,
+            payload: merged,
+            departmentId: input.context?.department_id ?? null,
+            workUnitId: input.context?.work_unit_id ?? null,
+        });
+        if (preflightFail) return preflightFail;
+    }
+
+    if (actionKey === "confirm_tour" || actionKey === "record_tour_outcome") {
+        if (table !== "opportunities") {
+            return {
+                ok: false,
+                correlation_id: correlationId,
+                error: "Tour booking actions support opportunities only",
+                status: 400,
+            };
+        }
+        if (!(await assertRowOrg(supabase, "opportunities", entityId, ctx.orgId)).ok) {
+            return { ok: false, correlation_id: correlationId, error: "Not found", status: 404 };
+        }
+        if (actionKey === "confirm_tour") {
+            const bookingId = merged.booking_id != null ? String(merged.booking_id).trim() : null;
+            const confirmed = await executeConfirmTourAction(supabase, ctx, entityId, bookingId);
+            if (!confirmed.ok) {
+                return { ok: false, correlation_id: correlationId, error: confirmed.error, status: confirmed.status };
+            }
+            return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
+                kind: "confirm_tour",
+                booking_id: confirmed.booking_id,
+            });
+        }
+        const outcome = await executeRecordTourOutcomeAction(supabase, ctx, entityId, merged);
+        if (!outcome.ok) {
+            return { ok: false, correlation_id: correlationId, error: outcome.error, status: outcome.status };
+        }
+        return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
+            kind: "record_tour_outcome",
+            booking_id: outcome.booking_id,
+            outcome: outcome.outcome,
+        });
+    }
 
     switch (def.action_type) {
         case "open_form": {
@@ -651,6 +724,56 @@ export async function executeAdminAction(
                     console.error("[executeAdminAction] emitStatusChangedEvent (open_form.after)", e);
                 }
             }
+            if (submitActionType === "append_note" || formKey === "add_note") {
+                if (table !== "opportunities") {
+                    return {
+                        ok: false,
+                        correlation_id: correlationId,
+                        error: "append_note supports opportunities only",
+                        status: 400,
+                    };
+                }
+                if (!(await assertRowOrg(supabase, "opportunities", entityId, ctx.orgId)).ok) {
+                    return { ok: false, correlation_id: correlationId, error: "Not found", status: 404 };
+                }
+                const note = merged.note != null ? String(merged.note).trim() : "";
+                if (!note) {
+                    return { ok: false, correlation_id: correlationId, error: "Note body is required.", status: 400 };
+                }
+                const { data: existing } = await supabase
+                    .from("opportunities")
+                    .select("metadata, status_key")
+                    .eq("id", entityId)
+                    .eq("org_id", ctx.orgId)
+                    .maybeSingle();
+                if (!existing) {
+                    return { ok: false, correlation_id: correlationId, error: "Not found", status: 404 };
+                }
+                const md = ((existing as { metadata?: Record<string, unknown> | null }).metadata ?? null) as Record<
+                    string,
+                    unknown
+                > | null;
+                const nextMd: Record<string, unknown> = { ...(md && typeof md === "object" ? md : {}) };
+                const prev = typeof nextMd.notes === "string" ? String(nextMd.notes) : "";
+                const ts = new Date().toISOString();
+                const line = `[${ts}] ${note}`;
+                nextMd.notes = prev && prev.trim() ? `${prev.trim()}\n${line}` : line;
+                const { data: updated, error: upErr } = await supabase
+                    .from("opportunities")
+                    .update({ metadata: nextMd })
+                    .eq("id", entityId)
+                    .eq("org_id", ctx.orgId)
+                    .select()
+                    .single();
+                if (upErr || !updated) {
+                    return { ok: false, correlation_id: correlationId, error: upErr?.message ?? "Update failed", status: 400 };
+                }
+                return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
+                    kind: "append_note",
+                    row: updated as Record<string, unknown>,
+                });
+            }
+
             if (submitActionType === "update_status") {
                 if (table !== "opportunities") {
                     return { ok: false, correlation_id: correlationId, error: "open_form submit_action_type=update_status supports opportunities only", status: 400 };
@@ -790,7 +913,7 @@ export async function executeAdminAction(
                 return {
                     ok: false,
                     correlation_id: correlationId,
-                    error: "open_form v1 supports submit_action_type=start_workflow or update_status",
+                    error: "open_form v1 supports submit_action_type=start_workflow, update_status, or append_note",
                     status: 400,
                 };
             }
@@ -959,6 +1082,10 @@ export async function executeAdminAction(
                 merged.status_key = QUALIFICATION_STATUS_KEY;
             }
 
+            if (actionKey === "move_to_waitlist") {
+                merged.status_key = WAITLISTED_STATUS_KEY;
+            }
+
             let statusKey = merged.status_key != null ? String(merged.status_key).trim() : "";
             if (!statusKey) {
                 return { ok: false, correlation_id: correlationId, error: "update_status requires payload_schema.status_key", status: 400 };
@@ -977,6 +1104,11 @@ export async function executeAdminAction(
                 statusKey = "lost";
             }
 
+            if (actionKey === APPROVE_ENROLLMENT_ACTION_KEY) {
+                merged.status_key = ENROLLED_STATUS_KEY;
+                statusKey = ENROLLED_STATUS_KEY;
+            }
+
             const transitionCtx = await validateOpportunityStatusTransitionForAction(supabase, ctx, {
                 actionKey,
                 entityId,
@@ -989,9 +1121,26 @@ export async function executeAdminAction(
             }
             const existing = transitionCtx.existing;
             const oldStatusKey = transitionCtx.oldStatusKey;
+
             const updates: Record<string, unknown> = { status_key: statusKey };
             if (merged.lost_reason != null) {
                 updates.lost_reason = String(merged.lost_reason);
+            }
+            if (actionKey === APPROVE_ENROLLMENT_ACTION_KEY || actionKey === "move_to_waitlist") {
+                const existingMd =
+                    (existing.metadata as Record<string, unknown> | null | undefined) ?? null;
+                const auto = autoPopulateForLifecycleAction(actionKey, {
+                    opportunityId: entityId,
+                    payload: merged,
+                });
+                updates.metadata = applyMetadataAutoPopulate(existingMd, auto);
+                if (actionKey === APPROVE_ENROLLMENT_ACTION_KEY) {
+                    const enrollmentDate = todayEnrollmentDateIso();
+                    updates.metadata = mergeEnrollmentDateMetadata(
+                        updates.metadata as Record<string, unknown>,
+                        enrollmentDate
+                    );
+                }
             }
             await normalizeOpportunityWritePayload(supabase, updates, "executeAdminAction:update_status");
             const { data: updated, error: upErr } = await supabase
@@ -1003,6 +1152,28 @@ export async function executeAdminAction(
                 .single();
             if (upErr || !updated) {
                 return { ok: false, correlation_id: correlationId, error: upErr?.message ?? "Update failed", status: 400 };
+            }
+            if (actionKey === APPROVE_ENROLLMENT_ACTION_KEY) {
+                const updatedMd = (updated as { metadata?: Record<string, unknown> | null }).metadata;
+                const enrollmentDate =
+                    updatedMd &&
+                    typeof updatedMd === "object" &&
+                    !Array.isArray(updatedMd) &&
+                    typeof updatedMd.enrollment_date === "string"
+                        ? String(updatedMd.enrollment_date).trim().slice(0, 10)
+                        : "";
+                if (enrollmentDate) {
+                    try {
+                        await stampChildEnrollmentDatesIfBlank(
+                            supabase,
+                            ctx.orgId,
+                            entityId,
+                            enrollmentDate
+                        );
+                    } catch (e) {
+                        console.error("[executeAdminAction] stampChildEnrollmentDatesIfBlank", e);
+                    }
+                }
             }
             const newStatusKey = (updated as { status_key?: string | null }).status_key ?? null;
             const metadata: Record<string, unknown> = {};
@@ -1028,7 +1199,12 @@ export async function executeAdminAction(
                 console.error("[executeAdminAction] emitStatusChangedEvent", e);
             }
             return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
-                kind: actionKey === "move_to_qualification" ? "move_to_qualification" : "update_status",
+                kind:
+                    actionKey === "move_to_qualification"
+                        ? "move_to_qualification"
+                        : actionKey === APPROVE_ENROLLMENT_ACTION_KEY
+                          ? APPROVE_ENROLLMENT_ACTION_KEY
+                          : "update_status",
                 entity: "opportunities",
                 id: entityId,
                 row: updated,
