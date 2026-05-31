@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ActionSurface, ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { emptyResolvedActionsBySlot } from "@/lib/admin/actions/types";
+import { filterOpportunityActionsForRuntimeGates } from "@/lib/admin/actions/filterOpportunityActionsForRuntimeGates";
 
 export type ResolveActionsQuery = {
     orgId: string;
@@ -257,5 +258,11 @@ export async function resolveActionsForContext(
         }
     }
 
-    return out;
+    return filterOpportunityActionsForRuntimeGates(
+        supabase,
+        query.orgId,
+        query.entityType,
+        query.entityId,
+        out
+    );
 }

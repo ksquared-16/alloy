@@ -2,7 +2,6 @@
 
 import { memo, useMemo } from "react";
 import type { DrawerInquirySummaryRightColumnRenderModel } from "@/lib/adminV2/drawerPipeline/types";
-import { resolveDrawerReviewAssistViewModel } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceViewModels";
 import { operationalTaskUrgencyBadge } from "@/lib/agent/taskAssist/taskAssistOperationalUrgency";
 import {
     INQUIRY_RIGHT_COLUMN_EMPTY_ROW_CLASS,
@@ -10,9 +9,9 @@ import {
     INQUIRY_RIGHT_COLUMN_TASKS_BODY_CLASS,
     INQUIRY_SUMMARY_RIGHT_COLUMN_ROOT_CLASS,
 } from "@/lib/admin/drawer/opportunityInquiryRightColumnGeometry";
-import BosDrawerAssistCta from "@/components/admin/drawer/BosDrawerAssistCta";
-import OperationalAttentionHeaderStrip from "@/components/admin/drawer/OperationalAttentionHeaderStrip";
 import OpportunityOperationalCompactStrip from "@/components/admin/opportunity/OpportunityOperationalCompactStrip";
+import OperationalAttentionHeaderStrip from "@/components/admin/drawer/OperationalAttentionHeaderStrip";
+import { isDrawerHeaderAttentionVisible } from "@/lib/admin/drawer/drawerHeaderAttentionPresentation";
 
 const CHIP =
     "inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium leading-snug";
@@ -51,57 +50,68 @@ function ReviewAssistSkeleton() {
 function InquirySummaryReviewAssist({
     overviewData,
     assistLoading,
-    opportunityId,
-    opportunitySingular = "Inquiry",
     reviewAssistReserved = true,
 }: {
     overviewData: Record<string, unknown>;
     assistLoading?: boolean;
-    opportunityId: string;
     opportunitySingular?: string;
-    /** When true, slot stays in DOM even before BOS payload arrives (loading doctrine). */
     reviewAssistReserved?: boolean;
 }) {
     const hasAssist =
         overviewData._operational_recommendation != null || overviewData._operational_attention != null;
-    const reviewAssist = hasAssist ? resolveDrawerReviewAssistViewModel(overviewData) : null;
-    const showStandaloneBos = !assistLoading && !reviewAssist;
+    const headerAttentionVisible = isDrawerHeaderAttentionVisible(overviewData);
 
-    if (!reviewAssistReserved && !assistLoading && !hasAssist && !showStandaloneBos) {
+    if (!reviewAssistReserved && !assistLoading && !hasAssist) {
         return null;
     }
 
-    return (
-        <div
-            className="min-w-0 shrink-0 space-y-1"
-            data-drawer-slot="inquiry_summary_review_assist"
-            data-review-assist-slot={
-                hasAssist ? "ready" : assistLoading ? "skeleton" : showStandaloneBos ? "bos_only" : "calm"
-            }
-        >
-            {assistLoading && !hasAssist ? <ReviewAssistSkeleton /> : null}
-            {hasAssist ? (
+    if (assistLoading && !hasAssist) {
+        return (
+            <div
+                className="min-w-0 shrink-0 space-y-1"
+                data-drawer-slot="inquiry_summary_review_assist"
+                data-review-assist-slot="skeleton"
+            >
+                <ReviewAssistSkeleton />
+            </div>
+        );
+    }
+
+    if (headerAttentionVisible) {
+        return null;
+    }
+
+    if (!hasAssist && !assistLoading) {
+        return (
+            <div
+                className="min-w-0 shrink-0 space-y-1"
+                data-drawer-slot="inquiry_summary_review_assist"
+                data-review-assist-slot="calm"
+            >
+                <p className="text-[11px] leading-snug text-alloy-midnight/50" data-review-assist-calm="true">
+                    No urgent action flagged.
+                </p>
+            </div>
+        );
+    }
+
+    if (hasAssist) {
+        return (
+            <div
+                className="min-w-0 shrink-0 space-y-1"
+                data-drawer-slot="inquiry_summary_review_assist"
+                data-review-assist-slot="ready"
+            >
                 <OperationalAttentionHeaderStrip
                     variant="chrome"
                     overviewData={overviewData}
                     suppressSectionBrandLabel
-                    bosAssistEntityId={opportunityId}
-                    opportunitySingular={opportunitySingular}
                 />
-            ) : assistLoading ? null : reviewAssist ? null : (
-                <p className="text-[11px] leading-snug text-alloy-midnight/50" data-review-assist-calm="true">
-                    No urgent action flagged.
-                </p>
-            )}
-            {showStandaloneBos ? (
-                <BosDrawerAssistCta
-                    entityId={opportunityId}
-                    overviewData={overviewData}
-                    opportunitySingular={opportunitySingular}
-                />
-            ) : null}
-        </div>
-    );
+            </div>
+        );
+    }
+
+    return null;
 }
 
 function TasksSection({ model }: { model: DrawerInquirySummaryRightColumnRenderModel["tasks"] }) {
@@ -214,7 +224,6 @@ function OpportunityInquirySummaryRightColumnInner({
             <InquirySummaryReviewAssist
                 overviewData={record}
                 assistLoading={reviewAssistLoading}
-                opportunityId={opportunityId}
                 opportunitySingular={opportunitySingular}
                 reviewAssistReserved
             />
