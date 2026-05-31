@@ -91,6 +91,7 @@ If implementation must change doctrine, **update docs with the code** and record
 - **Do not** log PII-heavy payloads in perf hooks.
 - Treat archived DEPLOYMENT/OPERATIONS as **non-authoritative** until reconciled with production.
 - **Do not** expose service-role Supabase to the browser (see `system/api-contracts.md`).
+- Before **`staging`** deploys with `web/` changes: **`npm run verify:module-imports`** and **`npm run build`** (see **Frontend TypeScript before deploy**).
 
 ### Frontend TypeScript before deploy
 
@@ -100,6 +101,14 @@ Vercel runs **`next build` → TypeScript** (`tsc`), which is stricter than Vite
 2. Ensure every type used in props/interfaces is **imported** — prefer `import type { Foo } from "…"` when `Foo` is type-only.
 
 **Recurring failure:** `Cannot find name 'X'` when a refactor drops a type import but leaves `X` in a props interface (e.g. `SystemFieldRegistryEntry` in `FormFieldAuthoringCard.tsx`, OI-4B May 2026). Cursor rule: `.cursor/rules/alloy-development-guardrails.mdc` § TypeScript.
+
+**Recurring failure (May 2026 — staging deploy `41910a1`):** Turbopack **`Module not found: Can't resolve '@/lib/...'`** when tracked files import **new modules that were never `git add`ed**. Local dev and Vitest can pass because the files exist on disk; Vercel only sees committed paths.
+
+1. After adding imports to new files under `web/lib/**`, run **`cd web && npm run verify:module-imports`** (fails if tracked code imports missing or untracked modules).
+2. Run **`cd web && npm run build`** before merging to **`staging`**.
+3. In the same commit as import changes, include the **new module files and their tests**.
+
+Example missing modules from that incident: `filterPlacementCandidateBundlesForQueueDisplay.ts`, `placementBucketLabels.ts`, `resolvePlacementCandidateChildDisplayName.ts`.
 
 ## Known gaps / risks
 

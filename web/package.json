@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "verify:module-imports": "tsx --tsconfig tsconfig.json scripts/verifyWebModuleImports.ts",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",

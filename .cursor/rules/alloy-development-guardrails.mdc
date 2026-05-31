@@ -51,6 +51,7 @@ Use audit -> design -> build for substantial work.
 Prefer focused checks first:
 
 - `cd web && npx tsc --noEmit` — **required before merge** on any `web/` TypeScript change (catches errors Vitest may miss).
+- `cd web && npm run verify:module-imports` — **required before staging deploy** when adding `@/lib/**` imports; catches new files not committed (Vercel `Module not found`).
 - `cd web && npm run lint`
 - `cd web && npm run test -- <relevant test path>` when changing covered behavior
 - Add or update tests when touching shared behavior, API contracts, migrations, workflow effects, permissions, forms, communications, or queues.
