@@ -6337,7 +6337,7 @@ export default function AdminEntityDrawer() {
                 !!drawer.id &&
                 drawer.id !== "new" &&
                 (opportunityDrawerFirstPaintPreloadedRef.current === drawer.id ||
-                    opportunityDrawerBootstrapAppliedId === drawer.id);
+                    opportunityDrawerBootstrapAppliedRef.current === drawer.id);
             return opportunityDrawerWorkflowTabMountEnabled(
                 true,
                 opportunityDrawerVisitedTabsRef.current,
@@ -6350,7 +6350,6 @@ export default function AdminEntityDrawer() {
             opportunityDrawerTabVisitTick,
             drawer.type,
             drawer.id,
-            opportunityDrawerBootstrapAppliedId,
         ]
     );
 
