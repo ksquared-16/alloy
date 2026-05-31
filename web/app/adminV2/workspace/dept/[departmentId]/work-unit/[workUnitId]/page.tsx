@@ -64,10 +64,14 @@ import {
 } from "@/lib/workspace/workUnitQueueRowFetchApply";
 import {
     peekCachedQueueItemsForPill,
-    resolveWorkUnitQueueLaneItemsReady,
-    resolveWorkUnitQueueTabSwitchRefreshing,
+    resolveWorkUnitQueueRowsRefreshing,
     touchCachedQueueItemsForPill,
 } from "@/lib/workspace/workUnitQueueLaneDisplay";
+import {
+    resolveWorkUnitQueueLaneRevealState,
+    workUnitQueueLaneMayPaintRows,
+    workUnitQueueLaneRevealSettled,
+} from "@/lib/workspace/workUnitQueueLaneRevealState";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
@@ -2911,6 +2915,54 @@ export default function AdminV2OpportunityWorkUnitPage() {
         queueItemsLoading,
     ]);
 
+    const workUnitLaneReveal = useMemo(() => {
+        const activeQueue =
+            queueSummaries && workUnit
+                ? findQueueSummaryForSelection(queueSummaries, workUnit, selectedQueueKey) ?? queueSummaries[0]
+                : null;
+        const activeQueueKey = String(activeQueue?.key ?? "");
+        const state = resolveWorkUnitQueueLaneRevealState({
+            lane_authority_ready: wuQueueLaneAuthorityReady,
+            work_unit_id: workUnitId ?? null,
+            selected_queue_key: selectedQueueKey,
+            active_queue_key: activeQueueKey,
+            attention_bucket_key: attentionBucketKey.trim(),
+            lane_unmapped_only: laneUnmappedOnly,
+            view_scope_fingerprint: viewScopeFingerprint,
+            queue_definition: workUnit?.queue_definition,
+            cache: queueRowClientCacheRef.current,
+            queue_items: queueItems,
+            queue_items_loading: queueItemsLoading,
+            queue_items_error: queueItemsError,
+        });
+        return {
+            state,
+            activeQueueKey,
+            settled: workUnitQueueLaneRevealSettled(state),
+            mayPaintRows: workUnitQueueLaneMayPaintRows(state),
+        };
+    }, [
+        queueSummaries,
+        workUnit,
+        selectedQueueKey,
+        attentionBucketKey,
+        laneUnmappedOnly,
+        viewScopeFingerprint,
+        workUnitId,
+        wuQueueLaneAuthorityReady,
+        queueItems,
+        queueItemsLoading,
+        queueItemsError,
+    ]);
+
+    const [wuInitialLaneRevealDone, setWuInitialLaneRevealDone] = useState(false);
+    useEffect(() => {
+        if (workUnitLaneReveal.settled && !wuInitialLaneRevealDone) {
+            setWuInitialLaneRevealDone(true);
+            primaryLaneRowsSettledOnceRef.current = true;
+        }
+    }, [workUnitLaneReveal.settled, wuInitialLaneRevealDone]);
+
     const queueModel = useMemo<WorkUnitWorkspaceModel | null>(() => {
         if (!workUnit || !dept) return null;
 
@@ -3331,40 +3383,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         b
                     )
             );
-        const hasBufferedRows = bufferMatchesLane && queueRowsBufferRef.current.length > 0;
-        const queueLaneMismatch =
-            queueItemsKey !== "" &&
-            activeQueueKey !== "" &&
-            !workUnitQueuePillKeysEquivalent(
-                workUnit ? { queue_definition: workUnit.queue_definition } : null,
-                queueItemsKey,
-                activeQueueKey
-            );
-        const cacheHasLanePayload = Boolean(
-            workUnitId &&
-                selectedQueueKey &&
-                peekCachedQueueItemsForPill({
-                    cache: queueRowClientCacheRef.current,
-                    viewScopeFingerprint,
-                    workUnitId,
-                    pillKey: selectedQueueKey,
-                    attentionBucketKey: attentionBucketKey.trim(),
-                    unmappedOnly: laneUnmappedOnly,
-                    queueDefinition: workUnit?.queue_definition,
-                })
-        );
-        const rowsRefreshing = resolveWorkUnitQueueTabSwitchRefreshing({
+        const laneMayPaint = workUnitLaneReveal.mayPaintRows;
+        const rowsRefreshing = resolveWorkUnitQueueRowsRefreshing({
+            lane_reveal_settled: laneMayPaint,
             queue_items_loading: queueItemsLoading,
             bootstrap_loading: loading,
-            has_work_unit: Boolean(workUnit),
-            selected_queue_key: selectedQueueKey,
-            queue_items_error: queueItemsError,
-            has_buffered_rows: hasBufferedRows,
-            queue_items: queueItems,
-            queue_lane_mismatch: queueLaneMismatch,
-            cache_has_lane_payload: cacheHasLanePayload,
         });
-        const displayItems = rowsRefreshing && hasBufferedRows ? queueRowsBufferRef.current : liveVmItems;
+        const displayItems = laneMayPaint ? liveVmItems : [];
         queueDisplayItemsRef.current = displayItems;
 
         const laneTitle = workUnit.name ?? "Queue";
@@ -3460,12 +3485,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
             laneInterpretation:
                 entity === "job"
                     ? {
-                          laneStatusLine: rowsRefreshing
-                              ? activeQueue?.label?.trim()
-                                  ? `Refreshing ${activeQueue.label.trim()}…`
-                                  : "Refreshing queue…"
-                              : queueItemsLoading
-                                ? "Loading queue items…"
+                          laneStatusLine: !laneMayPaint
+                              ? ""
+                              : rowsRefreshing
+                                ? activeQueue?.label?.trim()
+                                    ? `Refreshing ${activeQueue.label.trim()}…`
+                                    : "Refreshing queue…"
                                 : `Queue: ${activeQueue?.key ?? "—"} · ${laneCountCaption}`,
                           recommendedActionLine: "Open a row to view the record in the drawer.",
                       }
@@ -3493,6 +3518,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 rollupSummary: undefined,
                 queueEntityType: entity,
                 rowsLoading: false,
+                rowsHeld: !laneMayPaint,
                 rowsRefreshing,
                 ...(workUnitGroupHeaders ? { workUnitGroupHeaders } : {}),
             },
@@ -3523,6 +3549,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
         normalizedQueueDef,
         recordFilters,
         selectedSiteId,
+        workUnitLaneReveal.mayPaintRows,
+        workUnitLaneReveal.settled,
     ]);
 
     const queueUiPresentationFlags = useMemo(
@@ -4408,26 +4436,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const reserveWorkUnitActionsRail = isEnrollmentLikeDepartmentKey(dept?.key);
 
     const workUnitAboveFold = useMemo(() => {
-        const cacheHasLanePayload = Boolean(
-            workUnitId &&
-                selectedQueueKey &&
-                peekCachedQueueItemsForPill({
-                    cache: queueRowClientCacheRef.current,
-                    viewScopeFingerprint,
-                    workUnitId,
-                    pillKey: selectedQueueKey,
-                    attentionBucketKey: attentionBucketKey.trim(),
-                    unmappedOnly: laneUnmappedOnly,
-                    queueDefinition: workUnit?.queue_definition,
-                })
-        );
-        const queueLaneItemsReady = resolveWorkUnitQueueLaneItemsReady({
-            queue_items: queueItems,
-            queue_items_loading: queueItemsLoading,
-            queue_items_error: queueItemsError,
-            cache_has_lane_payload: cacheHasLanePayload,
-        });
-
         if (!workUnitShellReady) {
             return buildWorkUnitAboveFoldPlaceholder({ reserve_actions_rail: reserveWorkUnitActionsRail });
         }
@@ -4485,7 +4493,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             unmapped_pill_count: unmappedPillCount,
             enrollment_right_rail_resolved: enrollmentRightRailResolved,
             queue_items_loading: queueItemsLoading,
-            queue_items_ready: queueLaneItemsReady,
+            queue_lane_reveal_state: workUnitLaneReveal.state,
             queue_items_error: queueItemsError,
             authoritative_badge_for_selected_tab: workUnitChipBadgeContext.authoritative_badge_for_selected_tab,
             reconcile_picker_count_zero: workUnitChipBadgeContext.reconcile_picker_count_zero === true,
@@ -4521,6 +4529,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         workUnitId,
         viewScopeFingerprint,
         workUnit?.queue_definition,
+        workUnitLaneReveal.state,
     ]);
 
     const workUnitRouteShellPlaceholder = useMemo(
@@ -4550,16 +4559,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
             reserve_actions_rail: reserveWorkUnitActionsRail,
             enrollment_actions_settled: enrollmentActionsSettled,
         });
-        const queue_rows_buffer_valid =
-            queueRowsBufferWorkUnitIdRef.current === workUnitId && queueRowsBufferRef.current.length > 0;
         const rows_ready = workUnitRevealRowsReady({
             lane_authority_ready: wuQueueLaneAuthorityReady,
             queue_summaries: queueSummaries,
             queue_summaries_error: queueSummariesError,
-            queue_items: queueItems,
-            queue_items_loading: queueItemsLoading,
-            queue_items_error: queueItemsError,
-            queue_rows_buffer_valid,
+            lane_reveal_settled: workUnitLaneReveal.settled,
         });
         return computeWorkUnitRevealGate({
             shell_ready,
@@ -4577,51 +4581,22 @@ export default function AdminV2OpportunityWorkUnitPage() {
         reserveWorkUnitActionsRail,
         enrollmentActionsSettled,
         wuQueueLaneAuthorityReady,
-        queueItems,
-        queueItemsLoading,
-        queueItemsError,
-        workUnitId,
+        workUnitLaneReveal.settled,
     ]);
 
     const workUnitAboveFoldPageReady = workUnitRevealGate.above_fold_ready;
 
-    /** Queue-first reveal — KPI strip and automation footer defer until the lane is useful. */
-    const workUnitQueueRevealReady = useMemo(() => {
-        if (!workUnitShellReady) return false;
-        if (!wuQueueLaneAuthorityReady) return false;
-        if (queueSummaries === null && !queueSummariesError) return false;
-        if (queueSummariesError && !queueSummaries) return true;
-        if (!queueSummaries) return false;
-        const bufferValid =
-            queueRowsBufferWorkUnitIdRef.current === workUnitId && queueRowsBufferRef.current.length > 0;
-        if (bufferValid) return true;
-        if (queueItems !== null && !queueItemsLoading) return true;
-        if (queueItemsError) return true;
-        return queueSummaries.length === 0;
-    }, [
-        workUnitShellReady,
-        workUnitId,
-        wuQueueLaneAuthorityReady,
-        queueSummaries,
-        queueSummariesError,
-        queueItems,
-        queueItemsLoading,
-        queueItemsError,
-    ]);
-
-    const workUnitPageSeededWarm =
-        workUnitPageSeededFromCache || seededWorkUnitShellRef.current;
+    const workUnitQueueRevealReady = workUnitLaneReveal.settled;
 
     const workUnitPageContentReady = resolveWorkUnitPageContentReady({
-        page_seeded_from_cache: workUnitPageSeededWarm,
         shell_ready: workUnitShellReady,
-        above_fold_ready: workUnitAboveFoldPageReady,
+        initial_lane_reveal_settled: wuInitialLaneRevealDone,
+        lane_reveal_settled: workUnitLaneReveal.settled,
     });
 
     const workUnitKpiStripPlaceholder = workUnitKpiStripShowsPlaceholder({
         kpi_metrics_pending: workUnitKpiMetricsPending,
-        page_seeded_from_cache: workUnitPageSeededWarm,
-        above_fold_ready: workUnitAboveFoldPageReady,
+        lane_reveal_settled: workUnitLaneReveal.settled,
     });
 
     const workUnitRoutePipeline = useMemo(
@@ -4781,7 +4756,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     }, [wuPlacementRows, workUnitKpiMetricsPending, departmentId, workUnitId]);
 
     useEffect(() => {
-        if (workUnitAboveFold.queue_lane.state === "skeleton") {
+        if (workUnitAboveFold.queue_lane.state === "held") {
             markWorkUnitLaneQueueRowsPlaceholder();
         }
     }, [workUnitAboveFold.queue_lane.state]);

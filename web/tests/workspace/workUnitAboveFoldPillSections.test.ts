@@ -93,7 +93,7 @@ describe("workUnitAboveFoldPillSections", () => {
             unmapped_pill_count: null,
             enrollment_right_rail_resolved: null,
             queue_items_loading: false,
-            queue_items_ready: true,
+            queue_lane_reveal_state: "ready_with_rows",
             queue_items_error: null,
         });
         const chip = model.header.sections[0]?.chips[0];

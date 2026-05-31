@@ -1197,7 +1197,7 @@ function WorkUnitQueueLane({
           aria-busy={Boolean(queue.rowsRefreshing)}
           role="list"
         >
-        {queue.rowsLoading && queue.items.length === 0
+        {queue.rowsLoading && !queue.rowsHeld && queue.items.length === 0
           ? Array.from({ length: ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT }, (_, i) => (
               <WorkUnitQueueLaneRowSkeleton key={`queue-row-skel-${i}`} />
             ))

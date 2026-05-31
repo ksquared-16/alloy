@@ -322,6 +322,7 @@ import {
     snapshotInquiryChildrenNeedHydrate,
     snapshotNeedsFullRevalidate,
 } from "@/lib/admin/drawer/opportunityDrawerRecordNeedsRevalidate";
+import { composeAdminV2DrawerRuntime } from "@/lib/adminV2/runtime/contract";
 import { logDrawerBackRestore, logPersonDrawerOpen } from "@/lib/admin/drawer/personDrawerPerfLogs";
 import { dispatchOpportunityQueueUpdated, dispatchOpportunityQueueUpdatedBroadcast } from "@/lib/admin/opportunityQueueRefreshEvent";
 import { primaryPersonIdFromOpportunityRecord } from "@/lib/admin/drawer/linkedRecordFieldEditing";
@@ -7668,11 +7669,69 @@ export default function AdminEntityDrawer() {
     const opportunityDrawerAboveFoldPresentationReady =
         opportunityDrawerAboveFoldPresentationReport.ready || opportunityDrawerPresentationGateTimedOut;
 
-    const opportunityDrawerOverviewRevealReady =
-        opportunityDrawerTypedSnapshotFirstPaint ||
-        (opportunityDrawerCoordinatedRevealReady &&
-            opportunityDrawerInquiryStructuralReady &&
-            (!opportunityInquiryWorkflowDrawer || opportunityDrawerAboveFoldPresentationReady));
+    const opportunityDrawerRuntimePlan = useMemo(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new" || !overviewData) {
+            return null;
+        }
+        const record = overviewData as Record<string, unknown>;
+        return composeAdminV2DrawerRuntime({
+            entityType: "opportunities",
+            surface: "opportunity",
+            drawerId: drawer.id,
+            activeTab: drawerTab,
+            record,
+            error,
+            typedSnapshot: opportunityDrawerTypedSnapshotFirstPaint,
+            bodyHydrated:
+                opportunityPrimaryHydrateApplied || opportunityFullRecordHydrateApplied,
+            fullHydrateReady: opportunityFullRecordHydrateApplied,
+            frameReady: snapshotCanRenderDrawerFrame(record),
+            headerActionsResolved: opportunityRegistryHeaderReady,
+            headerActionsLoading: opportunityResolvedHeaderLoading,
+            headerActionsExpectRegistry: opportunityHeaderActionsExpectRegistry,
+            inquiryWorkflow: opportunityInquiryWorkflowDrawer,
+            belowFoldRevealed: opportunityDrawerBelowFoldRevealed,
+            presentationReady: opportunityDrawerAboveFoldPresentationReady,
+            primaryContractReady: opportunityDrawerPrimaryContractSatisfied,
+            needsBackgroundHydrate: snapshotNeedsFullRevalidate(record),
+        });
+    }, [
+        drawer.type,
+        drawer.id,
+        drawerTab,
+        overviewData,
+        error,
+        opportunityDrawerTypedSnapshotFirstPaint,
+        opportunityPrimaryHydrateApplied,
+        opportunityFullRecordHydrateApplied,
+        opportunityRegistryHeaderReady,
+        opportunityResolvedHeaderLoading,
+        opportunityHeaderActionsExpectRegistry,
+        opportunityInquiryWorkflowDrawer,
+        opportunityDrawerBelowFoldRevealed,
+        opportunityDrawerAboveFoldPresentationReady,
+        opportunityDrawerPrimaryContractSatisfied,
+    ]);
+
+    const opportunityDrawerOverviewRevealReady = opportunityInquiryWorkflowDrawer
+        ? (opportunityDrawerRuntimePlan?.canRevealDrawerFrame ?? false)
+        : opportunityDrawerTypedSnapshotFirstPaint ||
+          (opportunityDrawerCoordinatedRevealReady &&
+              opportunityDrawerInquiryStructuralReady &&
+              (!opportunityInquiryWorkflowDrawer || opportunityDrawerAboveFoldPresentationReady));
+
+    /** Release above-fold layout lock when primary surface is coordinated — BOS/right column paints with summary. */
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        if (opportunityDrawerOverviewRevealReady && opportunityDrawerPrimaryContractSatisfied) {
+            setOpportunityDrawerBelowFoldRevealed(true);
+        }
+    }, [
+        drawer.type,
+        drawer.id,
+        opportunityDrawerOverviewRevealReady,
+        opportunityDrawerPrimaryContractSatisfied,
+    ]);
 
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
@@ -7854,9 +7913,9 @@ export default function AdminEntityDrawer() {
                     const surface = String((cached as { _record_surface?: string })._record_surface ?? "").trim();
                     if (restoreCanRenderFrame) {
                         opportunityDrawerFirstPaintPreloadedRef.current = next.id;
+                        setOpportunityDrawerBelowFoldRevealed(true);
                         if (surface === "full" && !needsBackgroundHydrate) {
                             setOpportunityDrawerEnrichmentHeld(false);
-                            setOpportunityDrawerBelowFoldRevealed(true);
                             setOpportunityDrawerSecondaryReady(true);
                         }
                     } else if (needsBackgroundHydrate) {
@@ -8626,6 +8685,59 @@ export default function AdminEntityDrawer() {
         personDrawerPaintReady &&
         (drawerReady || personDrawerTypedBodySnapshot);
 
+    const personDrawerRuntimeSurface = personChildLifecycleChrome
+        ? "child"
+        : personParentGuardianChrome
+          ? "parent"
+          : "generic";
+
+    const personDrawerRuntimePlan = useMemo(() => {
+        if (drawer.type !== "persons" || !drawer.id || drawer.id === "new" || !overviewData) {
+            return null;
+        }
+        const record = overviewData as Record<string, unknown>;
+        return composeAdminV2DrawerRuntime({
+            entityType: "persons",
+            surface: personDrawerRuntimeSurface,
+            drawerId: drawer.id,
+            activeTab: drawerTab,
+            record,
+            error,
+            typedSnapshot: personDrawerTypedBodySnapshot,
+            bodyHydrated:
+                personChildLifecycleChrome
+                    ? personDrawerChildBodyHydrated
+                    : personParentGuardianChrome
+                      ? personDrawerParentBodyHydrated
+                      : drawerReady,
+            fullHydrateReady: drawerReady && dataMatchesDrawer,
+            frameReady: personDrawerPaintReady,
+            headerActionsResolved: true,
+            headerActionsLoading: false,
+            headerActionsExpectRegistry: false,
+            inquiryWorkflow: false,
+            belowFoldRevealed: true,
+            presentationReady: true,
+            primaryContractReady: true,
+            needsBackgroundHydrate: false,
+        });
+    }, [
+        drawer.type,
+        drawer.id,
+        drawerTab,
+        overviewData,
+        error,
+        personDrawerRuntimeSurface,
+        personDrawerTypedBodySnapshot,
+        personChildLifecycleChrome,
+        personParentGuardianChrome,
+        personDrawerChildBodyHydrated,
+        personDrawerParentBodyHydrated,
+        personDrawerPaintReady,
+        drawerReady,
+        dataMatchesDrawer,
+    ]);
+
     const personDrawerOverviewReady =
         personDrawerPaintReady &&
         (personChildLifecycleChrome
@@ -8644,8 +8756,8 @@ export default function AdminEntityDrawer() {
         drawer.id !== "new" &&
         !error &&
         personChildLifecycleChrome &&
-        !personDrawerChildBodyHydrated &&
-        !personDrawerTypedBodySnapshot;
+        personDrawerRuntimePlan != null &&
+        !personDrawerRuntimePlan.canRevealDrawerFrame;
 
     const personDrawerParentOverviewPending =
         drawer.type === "persons" &&
@@ -8653,8 +8765,8 @@ export default function AdminEntityDrawer() {
         drawer.id !== "new" &&
         !error &&
         personParentGuardianChrome &&
-        !personDrawerParentBodyHydrated &&
-        !personDrawerTypedBodySnapshot;
+        personDrawerRuntimePlan != null &&
+        !personDrawerRuntimePlan.canRevealDrawerFrame;
 
     const personDrawerHasTypedOpenSnapshot =
         isPersonDrawerSnapshotWarm(String(drawer.id)) ||

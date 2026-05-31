@@ -87,13 +87,13 @@ describe("drawerCoordinatedFirstPaintRegression", () => {
         expect(operating).toContain("showHouseholdReserve");
     });
 
-    it("warm work-unit queue lane treats cached rows as ready", () => {
+    it("work-unit lane uses coordinated reveal state not row skeleton", () => {
         const page = readSrc(
             "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx"
         );
-        expect(page).toContain("warmLaneRetain");
-        expect(page).toContain("resolveWorkUnitQueueLaneItemsReady");
-        expect(page).toContain("touchCachedQueueItemsForPill");
+        expect(page).toContain("resolveWorkUnitQueueLaneRevealState");
+        expect(page).toContain("queue_lane_reveal_state");
+        expect(page).toContain("rowsHeld");
     });
 
     it("workspace cache primed skips loading gate flash", () => {

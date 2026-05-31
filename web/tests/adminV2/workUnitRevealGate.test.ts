@@ -78,16 +78,13 @@ describe("workUnitRevealGate", () => {
         ).toBe(true);
     });
 
-    it("rows_ready accepts settled items, empty summaries, or error", () => {
+    it("rows_ready requires lane_reveal_settled", () => {
         expect(
             workUnitRevealRowsReady({
                 lane_authority_ready: true,
                 queue_summaries: [],
                 queue_summaries_error: null,
-                queue_items: null,
-                queue_items_loading: false,
-                queue_items_error: null,
-                queue_rows_buffer_valid: false,
+                lane_reveal_settled: true,
             })
         ).toBe(true);
 
@@ -96,22 +93,16 @@ describe("workUnitRevealGate", () => {
                 lane_authority_ready: true,
                 queue_summaries: [{ key: "pipeline" }],
                 queue_summaries_error: null,
-                queue_items: { items: [] },
-                queue_items_loading: false,
-                queue_items_error: null,
-                queue_rows_buffer_valid: false,
+                lane_reveal_settled: true,
             })
         ).toBe(true);
 
         expect(
             workUnitRevealRowsReady({
-                lane_authority_ready: false,
+                lane_authority_ready: true,
                 queue_summaries: [{ key: "pipeline" }],
                 queue_summaries_error: null,
-                queue_items: null,
-                queue_items_loading: true,
-                queue_items_error: null,
-                queue_rows_buffer_valid: false,
+                lane_reveal_settled: false,
             })
         ).toBe(false);
     });

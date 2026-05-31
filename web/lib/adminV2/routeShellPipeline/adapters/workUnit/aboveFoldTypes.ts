@@ -2,7 +2,7 @@ import type { ActionsVm } from "@/lib/ui-v2/workspace-types";
 
 export const WORK_UNIT_ATTENTION_BUCKET_PILL_PREFIX = "__attention_bucket:";
 
-export type WorkUnitAboveFoldSlotState = "skeleton" | "ready";
+export type WorkUnitAboveFoldSlotState = "skeleton" | "ready" | "held";
 
 export type WorkUnitAboveFoldChipCount = "skeleton" | "emdash" | number;
 
@@ -86,5 +86,9 @@ export function workUnitAboveFoldAtomicPaintReady(model: WorkUnitAboveFoldRender
 }
 
 export function workUnitAboveFoldQueueRowsLoading(model: WorkUnitAboveFoldRenderModel): boolean {
-    return model.queue_lane.visible && model.queue_lane.state === "skeleton";
+    return false;
+}
+
+export function workUnitAboveFoldQueueRowsHeld(model: WorkUnitAboveFoldRenderModel): boolean {
+    return model.queue_lane.visible && model.queue_lane.state === "held";
 }

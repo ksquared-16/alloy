@@ -441,6 +441,8 @@ export type QueueVm = {
    * Work-unit lane: while true, suppress empty-state copy ("No records") — rows are still loading or tab switched.
    */
   rowsLoading?: boolean;
+  /** Lane body held — no row skeleton; coordinated gate until settled rows/empty/error. */
+  rowsHeld?: boolean;
   /**
    * Work-unit lane: prior rows visible while newer rows load — dimmed / non-interactive, not emptied.
    * (Separate from rowsLoading skeleton when there was no prior list.)

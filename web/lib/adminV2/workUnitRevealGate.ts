@@ -41,10 +41,10 @@ export type WorkUnitRevealRowsReadyInput = {
     lane_authority_ready: boolean;
     queue_summaries: { length: number } | null;
     queue_summaries_error: string | null;
-    queue_items: unknown;
-    queue_items_loading: boolean;
-    queue_items_error: string | null;
-    queue_rows_buffer_valid: boolean;
+    /** Selected lane has a settled display state (rows, cache, empty, or error). */
+    lane_reveal_settled: boolean;
+    /** @deprecated Buffer must not bypass coordinated lane reveal. */
+    queue_rows_buffer_valid?: boolean;
 };
 
 let gateStartMs: number | null = null;
@@ -139,8 +139,5 @@ export function workUnitRevealRowsReady(input: WorkUnitRevealRowsReadyInput): bo
     if (!input.lane_authority_ready) return false;
     if (input.queue_summaries_error && input.queue_summaries === null) return true;
     if (input.queue_summaries && input.queue_summaries.length === 0) return true;
-    if (input.queue_rows_buffer_valid) return true;
-    if (input.queue_items !== null && !input.queue_items_loading) return true;
-    if (input.queue_items_error) return true;
-    return false;
+    return input.lane_reveal_settled;
 }

@@ -20,6 +20,7 @@ import {
     type WorkUnitAboveFoldRenderModel,
     type WorkUnitAboveFoldSlotState,
 } from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/aboveFoldTypes";
+import type { WorkUnitQueueLaneRevealState } from "@/lib/workspace/workUnitQueueLaneRevealState";
 
 export type WorkUnitQueueSummaryInput = {
     key: string;
@@ -61,7 +62,7 @@ export type BuildWorkUnitAboveFoldRenderModelInput = {
     unmapped_pill_count: number | null;
     enrollment_right_rail_resolved: ResolvedActionForClient[] | null;
     queue_items_loading: boolean;
-    queue_items_ready: boolean;
+    queue_lane_reveal_state: WorkUnitQueueLaneRevealState;
     queue_items_error: string | null;
     authoritative_badge_for_selected_tab?: number;
     reconcile_picker_count_zero?: boolean;
@@ -228,8 +229,9 @@ function resolveActionsRailState(input: BuildWorkUnitAboveFoldRenderModelInput):
 function resolveQueueLaneState(input: BuildWorkUnitAboveFoldRenderModelInput): WorkUnitAboveFoldSlotState {
     if (!input.work_unit_shell_ready) return "skeleton";
     if (input.queue_items_error) return "ready";
-    if (input.queue_items_ready) return "ready";
-    return "skeleton";
+    const state = input.queue_lane_reveal_state;
+    if (state === "hidden_until_settled") return "held";
+    return "ready";
 }
 
 function enrollmentActionsRail(input: BuildWorkUnitAboveFoldRenderModelInput): ActionsVm {
@@ -318,7 +320,7 @@ export function buildWorkUnitAboveFoldPlaceholder(input: {
         unmapped_pill_count: null,
         enrollment_right_rail_resolved: null,
         queue_items_loading: true,
-        queue_items_ready: false,
+        queue_lane_reveal_state: "hidden_until_settled",
         queue_items_error: null,
     });
 }

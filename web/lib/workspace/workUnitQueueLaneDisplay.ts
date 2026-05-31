@@ -75,41 +75,22 @@ export function touchCachedQueueItemsForPill<T extends WorkUnitQueueItemsPayload
     return touchQueueRowCacheOnHit(args.cache, logicalKey)?.payload ?? null;
 }
 
-/**
- * Above-fold queue lane is "ready" when the lane has a settled or displayable row payload —
- * not only when `items.length > 0` (empty lanes and cache-backed refresh must not skeleton forever).
- */
+/** @deprecated Prefer `workUnitQueueLaneRevealSettled` + `resolveWorkUnitQueueLaneRevealState`. */
 export function resolveWorkUnitQueueLaneItemsReady(args: {
-    queue_items: WorkUnitQueueItemsPayload | null;
-    queue_items_loading: boolean;
-    queue_items_error: string | null;
-    cache_has_lane_payload: boolean;
+    lane_reveal_settled: boolean;
 }): boolean {
-    if (args.queue_items_error) return true;
-    if (args.cache_has_lane_payload) return true;
-    if (args.queue_items != null) return true;
-    return false;
+    return args.lane_reveal_settled;
 }
 
-/** True when we should show buffered rows during an in-flight lane fetch (not skeleton-only). */
-export function resolveWorkUnitQueueTabSwitchRefreshing(args: {
+/** Background refresh shimmer only when settled rows are already visible. */
+export function resolveWorkUnitQueueRowsRefreshing(args: {
+    lane_reveal_settled: boolean;
     queue_items_loading: boolean;
     bootstrap_loading: boolean;
-    has_work_unit: boolean;
-    selected_queue_key: string | null;
-    queue_items_error: string | null;
-    has_buffered_rows: boolean;
-    queue_items: WorkUnitQueueItemsPayload | null;
-    queue_lane_mismatch: boolean;
-    cache_has_lane_payload: boolean;
 }): boolean {
-    if (!args.queue_items_loading || args.bootstrap_loading || !args.has_work_unit) return false;
-    if (!args.selected_queue_key || args.queue_items_error) return false;
-    if (args.has_buffered_rows && (args.queue_items === null || args.queue_lane_mismatch)) {
-        return true;
-    }
-    if (args.cache_has_lane_payload && (args.queue_items === null || args.queue_lane_mismatch)) {
-        return true;
-    }
-    return false;
+    return (
+        args.lane_reveal_settled &&
+        args.queue_items_loading &&
+        !args.bootstrap_loading
+    );
 }

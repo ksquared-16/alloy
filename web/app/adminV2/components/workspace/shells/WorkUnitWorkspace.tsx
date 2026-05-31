@@ -8,7 +8,10 @@ import type { OpportunityDrawerIntentContext } from "@/lib/admin/opportunityDraw
 import type {
     WorkUnitAboveFoldRenderModel,
 } from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/aboveFoldTypes";
-import { workUnitAboveFoldQueueRowsLoading } from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/aboveFoldTypes";
+import {
+    workUnitAboveFoldQueueRowsHeld,
+    workUnitAboveFoldQueueRowsLoading,
+} from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/aboveFoldTypes";
 import {
     WorkUnitAboveFoldHeaderChips,
     type WorkUnitAboveFoldHeaderHandlers,
@@ -86,6 +89,8 @@ export default function WorkUnitWorkspace({
     () => ({
       ...model.primaryQueue,
       rowsLoading: workUnitAboveFoldQueueRowsLoading(aboveFold),
+      rowsHeld:
+        model.primaryQueue.rowsHeld === true || workUnitAboveFoldQueueRowsHeld(aboveFold),
     }),
     [model.primaryQueue, aboveFold]
   );

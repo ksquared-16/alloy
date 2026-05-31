@@ -64,12 +64,15 @@ export default function PersonDrawerOperatingSections({
         viewing_person_id: personId,
     });
     const householdHasContent = householdModel.groups.length > 0;
-    const showHousehold = sectionEnabled(sections, "household") && bodyHydrated && householdHasContent;
+    const showHousehold =
+        sectionEnabled(sections, "household") &&
+        (bodyHydrated || typedSnapshot) &&
+        householdHasContent;
     const showHouseholdReserve =
         sectionEnabled(sections, "household") && typedSnapshot && !householdHasContent;
-    const showAddressReserve = sectionEnabled(sections, "household_address") && typedSnapshot;
-    const showAddressContent =
-        sectionEnabled(sections, "household_address") && bodyHydrated && !typedSnapshot;
+    const showAddressReserve =
+        sectionEnabled(sections, "household_address") && typedSnapshot && !bodyHydrated;
+    const showAddressContent = sectionEnabled(sections, "household_address") && bodyHydrated;
     const isParentVariant = sections.includes("parent_summary");
 
     return (
@@ -100,6 +103,7 @@ export default function PersonDrawerOperatingSections({
                 <PersonDrawerSectionCoordinatedReserve
                     title={isParentVariant ? "Household" : "Household & relationships"}
                     lines={isParentVariant ? 3 : 2}
+                    variant="household"
                 />
             ) : null}
             {showHousehold && isParentVariant ? (
@@ -124,7 +128,7 @@ export default function PersonDrawerOperatingSections({
                 />
             ) : null}
             {showAddressReserve ? (
-                <PersonDrawerSectionCoordinatedReserve title="Address" lines={2} />
+                <PersonDrawerSectionCoordinatedReserve title="Address" lines={2} variant="address" />
             ) : null}
             {showAddressContent ? (
                 <PersonDrawerHouseholdAddress

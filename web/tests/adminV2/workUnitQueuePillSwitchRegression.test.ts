@@ -11,7 +11,7 @@ describe("workUnitQueuePillSwitchRegression", () => {
     it("page applies view-scoped cache on pill change and does not clear row buffer", () => {
         const src = readFileSync(PAGE, "utf8");
         expect(src).toContain("touchCachedQueueItemsForPill");
-        expect(src).toContain("resolveWorkUnitQueueLaneItemsReady");
+        expect(src).toContain("resolveWorkUnitQueueLaneRevealState");
         expect(src).not.toMatch(
             /if \(!sameQueue\) \{\s*\n\s*queueRowsBufferWorkUnitIdRef\.current = workUnitId;\s*\n\s*queueRowsBufferRef\.current = \[\]/
         );

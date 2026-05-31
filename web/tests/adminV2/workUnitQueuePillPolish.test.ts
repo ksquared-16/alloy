@@ -112,7 +112,7 @@ describe("workUnitQueuePillPolish", () => {
             unmapped_pill_count: null,
             enrollment_right_rail_resolved: null,
             queue_items_loading: false,
-            queue_items_ready: true,
+            queue_lane_reveal_state: "ready_with_rows",
             queue_items_error: null,
         });
         const chip = model.header.sections[0]?.chips[0];
@@ -144,7 +144,7 @@ describe("workUnitQueuePillPolish", () => {
             unmapped_pill_count: null,
             enrollment_right_rail_resolved: null,
             queue_items_loading: false,
-            queue_items_ready: false,
+            queue_lane_reveal_state: "hidden_until_settled",
             queue_items_error: null,
         });
         expect(model.header.sections[0]?.chips[0]?.count).toBe("skeleton");
@@ -174,7 +174,7 @@ describe("workUnitQueuePillPolish", () => {
             unmapped_pill_count: null,
             enrollment_right_rail_resolved: null,
             queue_items_loading: false,
-            queue_items_ready: true,
+            queue_lane_reveal_state: "ready_with_rows",
             queue_items_error: null,
         });
         const chip = model.header.sections[0]?.chips[0];
@@ -211,7 +211,7 @@ describe("workUnitQueuePillPolish", () => {
             unmapped_pill_count: 5,
             enrollment_right_rail_resolved: null,
             queue_items_loading: false,
-            queue_items_ready: true,
+            queue_lane_reveal_state: "ready_with_rows",
             queue_items_error: null,
             suppress_other_pill: true,
             suppress_active_queue_description: true,
@@ -244,7 +244,7 @@ describe("workUnitQueuePillPolish", () => {
             unmapped_pill_count: null,
             enrollment_right_rail_resolved: null,
             queue_items_loading: false,
-            queue_items_ready: true,
+            queue_lane_reveal_state: "ready_with_rows",
             queue_items_error: null,
             queue_definition: wu,
         });

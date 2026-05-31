@@ -58,6 +58,8 @@ All authoritative reads must come from:
 
 **AdminV2 dept runtime reference (2026-05-20):** `/adminV2/workspace/dept/[departmentId]` is the locked premium runtime pattern — single `operational-bootstrap`, shell-first nav, paired oper reveal, bundled KPI/actions. Replication target for work-unit; details in **`docs/sprints/05_2026/adminv2_performance_scope_lock.md`** Appendix.
 
+**AdminV2 runtime contract (2026-05):** Composer-owned reveal for drawers and work-unit lanes — no section-local skeleton/pop-in. See **`docs/system/adminv2-runtime-contract.md`** and `web/lib/adminV2/runtime/contract/`.
+
 **AdminV2 performance closeout (May 2026 — shipped):** Reveal doctrine (`adminv2_reveal_doctrine.md`), route shell pipeline gates, WU operational bootstrap + session cache, sticky workspace site filter, generic drawer pipeline, drawer queue prev/next with adjacent prefetch, **route-owned WU queue selection** (`workUnitQueueSelection.ts` — URL `?queue=` beats bootstrap default lane; bootstrap accepts `focus_queue`). Closeout UX fixes and regression tests: **`docs/sprints/05_2026/completed/adminv2_performance_closeout.md`**. Broad speed sprint **paused**; remaining bottlenecks (late drawer hydrates, dept attention weight) are scoped follow-ons only.
 
 **Child lifecycle + work-unit convergence (May 2026 — closed):** **`docs/sprints/05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`** — grain-aware queues, v2 `queue_definition`, candidate-grain waitlist + child-grain enrollment runtime, read-only case rollups, strict-mode readiness tooling (activation deferred), filter/search UX. **Future:** Settings Config Management for domain/NA presentation (no full CRUD in closeout).
