@@ -63,12 +63,14 @@ const MAX_MERGE_THREADS = 10;
 const SUCCESS_TOAST_MS = 4500;
 /** Default visible rows in the conversation strip (rest behind “View older messages”). */
 const DEFAULT_VISIBLE_MESSAGE_COUNT = 3;
-/** Fixed scroll area height when composer is stacked under the thread (narrow / non-split). */
+/** Cap comms body so thread scrolls internally instead of growing the drawer scroll host. */
+const COMMS_DRAWER_BODY_HEIGHT_CLASS = "max-h-[min(72vh,calc(100dvh-15rem))] min-h-[22rem]";
+/** Thread scroll — narrow stacked layout (controls/composer above thread). */
 const CONVERSATION_SCROLL_HEIGHT_CLASS_STACKED =
-    "h-[min(13rem,34vh)] max-h-[min(20rem,44vh)] shrink-0 min-h-[10.5rem]";
-/** Taller thread column when composer sits beside recipients (wide). */
+    "min-h-[10.5rem] flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-2 py-1";
+/** Thread scroll — wide split layout (thread-only left column). */
 const CONVERSATION_SCROLL_CLASS_SPLIT =
-    "min-h-[11rem] flex-1 max-h-[min(22rem,50vh)] shrink-0 overflow-x-hidden overflow-y-auto px-2 py-1 lg:min-h-[14rem] lg:max-h-[min(28rem,56vh)]";
+    "min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-2 py-1";
 
 function shouldLogCommsLoad(): boolean {
     if (typeof window === "undefined") return process.env.NODE_ENV !== "production";
@@ -1222,29 +1224,6 @@ export default function CommunicationsDrawerSection({
             </div>
         ) : null;
 
-    const composerSplitLeft: ReactNode =
-        showDrawerComposerChrome && composerEntity ? (
-            <div className="w-full min-w-0">
-                <div className={COMPOSER_LABEL}>Recipients</div>
-                {composerBindingsShell}
-                <div className="mt-1.5 space-y-1">{composerRecipientsBlock}</div>
-            </div>
-        ) : null;
-
-    const composerSplitRight: ReactNode =
-        showDrawerComposerChrome && composerEntity ? (
-            <div className="w-full min-w-0 rounded-xl border border-alloy-stone/12 bg-white/[0.97] px-2 py-1.5 shadow-sm">
-                <div className={COMPOSER_LABEL}>Message</div>
-                {anyOutboundReady ? (
-                    composerSendBlock
-                ) : (
-                    <p className="text-[10px] leading-snug text-alloy-midnight/55">
-                        Configure an active outbound binding for this channel to compose here.
-                    </p>
-                )}
-            </div>
-        ) : null;
-
     const useWideComposerSplit = Boolean(showDrawerComposerChrome && composerEntity);
 
     const inboundUnreadCountForFilter = (f: ViewFilter) =>
@@ -1449,9 +1428,52 @@ export default function CommunicationsDrawerSection({
         </p>
     ) : null;
 
+    const composerSplitWorkspaceRight: ReactNode =
+        showDrawerComposerChrome && composerEntity ? (
+            <div
+                className="order-1 flex min-h-0 min-w-0 flex-col gap-1.5 overflow-hidden lg:order-2 lg:h-full"
+                data-comms-compose-workspace="true"
+            >
+                <div className="shrink-0 space-y-1.5" data-comms-compose-controls="true">
+                    {channelFilterTabs}
+                    <div className="w-full min-w-0">
+                        <div className={COMPOSER_LABEL}>Recipients</div>
+                        {composerBindingsShell}
+                        <div className="mt-1.5 space-y-1">{composerRecipientsBlock}</div>
+                    </div>
+                </div>
+                <div className="min-h-0 w-full min-w-0 shrink-0 rounded-xl border border-alloy-stone/12 bg-white/[0.97] px-2 py-1.5 shadow-sm lg:shrink-0">
+                    <div className={COMPOSER_LABEL}>Message</div>
+                    {anyOutboundReady ? (
+                        composerSendBlock
+                    ) : (
+                        <p className="text-[10px] leading-snug text-alloy-midnight/55">
+                            Configure an active outbound binding for this channel to compose here.
+                        </p>
+                    )}
+                </div>
+            </div>
+        ) : null;
+
+    const threadPaneOnly: ReactNode = (
+        <div
+            className="order-2 flex min-h-[12rem] min-w-0 max-h-[min(44vh,28rem)] flex-1 flex-col overflow-hidden lg:order-1 lg:max-h-none lg:min-h-0"
+            data-comms-thread-pane="true"
+        >
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-stone/15 bg-[linear-gradient(180deg,rgba(246,247,249,0.88)_0%,#ffffff_100%)] shadow-sm">
+                <div
+                    ref={conversationScrollRef}
+                    className={`comms-drawer-conversation min-h-0 ${CONVERSATION_SCROLL_CLASS_SPLIT}`}
+                >
+                    {conversationPaneBody}
+                </div>
+            </div>
+        </div>
+    );
+
     return (
-        <div className={`flex min-h-0 min-w-0 flex-1 flex-col ${className}`}>
-            <section className="flex min-h-0 flex-1 flex-col gap-1">
+        <div className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${className}`}>
+            <section className="flex min-h-0 flex-1 flex-col gap-1 overflow-hidden">
                 {headerTitle}
                 {description}
 
@@ -1459,42 +1481,29 @@ export default function CommunicationsDrawerSection({
                     <CommsQuietSkeletonLines dense={Boolean(embedded)} />
                 ) : useWideComposerSplit ? (
                     <div
-                        className="flex min-h-0 flex-1 flex-col gap-1.5 lg:grid lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(22rem,0.4fr)_minmax(32rem,0.6fr)] lg:items-stretch lg:gap-2"
+                        className={`flex min-h-0 flex-1 flex-col gap-1.5 overflow-hidden ${COMMS_DRAWER_BODY_HEIGHT_CLASS} lg:grid lg:grid-cols-[minmax(22rem,0.4fr)_minmax(32rem,0.6fr)] lg:items-stretch lg:gap-2 lg:overflow-hidden`}
                         data-comms-split-layout="thread-left-composer-right"
                     >
-                        <div className="flex min-h-0 min-w-0 flex-col gap-1.5">
-                            {channelFilterTabs}
-                            {composerSplitLeft}
-                            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-stone/15 bg-[linear-gradient(180deg,rgba(246,247,249,0.88)_0%,#ffffff_100%)] shadow-sm">
+                        {threadPaneOnly}
+                        {composerSplitWorkspaceRight}
+                    </div>
+                ) : (
+                    <div
+                        className={`flex min-h-0 flex-1 flex-col gap-1.5 overflow-hidden ${COMMS_DRAWER_BODY_HEIGHT_CLASS}`}
+                    >
+                        {composerSplitWorkspaceRight}
+                        <div
+                            className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden min-h-[12rem]"
+                            data-comms-thread-pane="true"
+                        >
+                            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-stone/15 bg-[linear-gradient(180deg,rgba(246,247,249,0.88)_0%,#ffffff_100%)] shadow-sm">
                                 <div
                                     ref={conversationScrollRef}
-                                    className={`comms-drawer-conversation min-h-0 ${CONVERSATION_SCROLL_CLASS_SPLIT}`}
+                                    className={`comms-drawer-conversation min-h-0 ${CONVERSATION_SCROLL_HEIGHT_CLASS_STACKED}`}
                                 >
                                     {conversationPaneBody}
                                 </div>
                             </div>
-                        </div>
-                        <div className="flex min-h-0 min-w-0 flex-col gap-1.5">
-                            {composerSplitRight}
-                        </div>
-                    </div>
-                ) : (
-                    <div className="flex min-h-0 flex-1 flex-col gap-1.5">
-                        {channelFilterTabs}
-
-                        <div className="flex shrink-0 flex-col overflow-hidden rounded-xl border border-alloy-stone/15 bg-[linear-gradient(180deg,rgba(246,247,249,0.88)_0%,#ffffff_100%)] shadow-sm">
-                            <div
-                                ref={conversationScrollRef}
-                                className={`comms-drawer-conversation min-h-0 overflow-x-hidden overflow-y-auto px-2 py-1 ${CONVERSATION_SCROLL_HEIGHT_CLASS_STACKED}`}
-                            >
-                                {conversationPaneBody}
-                            </div>
-
-                            {composerBlockInner ? (
-                                <div className="shrink-0 border-t border-alloy-stone/12 bg-white/[0.97] px-2 py-1">
-                                    {composerBlockInner}
-                                </div>
-                            ) : null}
                         </div>
                     </div>
                 )}

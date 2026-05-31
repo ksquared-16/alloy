@@ -13759,10 +13759,14 @@ export default function AdminEntityDrawer() {
                             personParentGuardianChrome &&
                             drawer.id &&
                             drawer.id !== "new" ? (
-                            <div className="pt-2" data-person-drawer-parent-comms="true">
+                            <div
+                                className="flex min-h-0 flex-1 flex-col overflow-hidden pt-2 min-h-[22rem] h-[min(72vh,calc(100dvh-15rem))]"
+                                data-person-drawer-parent-comms="true"
+                            >
                                 <CommunicationsDrawerSection
                                     key={drawer.id}
                                     embedded
+                                    className="min-h-0 flex-1"
                                     apiEntityType="persons"
                                     entityId={drawer.id}
                                     active={drawerTab === "communications"}
@@ -13776,9 +13780,13 @@ export default function AdminEntityDrawer() {
                                     drawer.id &&
                                     drawer.id !== "new" &&
                                     opportunityRecordGateWorkflowLayout ? (
-                                    <div className="pt-2 space-y-3" data-admin-opportunity-comms-panel="true">
+                                    <div
+                                        className="flex min-h-0 flex-1 flex-col overflow-hidden pt-2 min-h-[22rem] h-[min(72vh,calc(100dvh-15rem))]"
+                                        data-admin-opportunity-comms-panel="true"
+                                    >
                                         <CommunicationsDrawerSection
                                             embedded
+                                            className="min-h-0 flex-1"
                                             apiEntityType="opportunities"
                                             entityId={drawer.id}
                                             active={drawerTab === "communications"}

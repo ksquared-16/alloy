@@ -93,8 +93,16 @@ describe("communications tab split layout", () => {
         const comms = readSrc("components/admin/communications/CommunicationsDrawerSection.tsx");
         expect(comms).toContain('data-comms-split-layout="thread-left-composer-right"');
         expect(comms).toContain("lg:grid-cols-[minmax(22rem,0.4fr)_minmax(32rem,0.6fr)]");
-        expect(comms).toMatch(
-            /useWideComposerSplit[\s\S]*channelFilterTabs[\s\S]*composerSplitLeft[\s\S]*conversationPaneBody[\s\S]*composerSplitRight/
-        );
+        expect(comms).toContain('data-comms-thread-pane="true"');
+        expect(comms).toContain('data-comms-compose-workspace="true"');
+        expect(comms).toContain('data-comms-compose-controls="true"');
+        expect(comms).toContain("lg:grid-cols-[minmax(22rem,0.4fr)_minmax(32rem,0.6fr)]");
+        expect(comms).toContain("COMMS_DRAWER_BODY_HEIGHT_CLASS");
+        expect(comms).toContain("{threadPaneOnly}");
+        expect(comms).toContain("{composerSplitWorkspaceRight}");
+        expect(comms).toContain("{channelFilterTabs}");
+        expect(comms).toContain("{composerRecipientsBlock}");
+        expect(comms).toContain("{composerSendBlock}");
+        expect(comms).not.toContain("composerSplitLeft");
     });
 });
