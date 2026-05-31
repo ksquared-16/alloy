@@ -224,8 +224,8 @@ Available across active pipeline stages unless customer policy or stage overlay 
 | **requirement_gates** | Parent first + last name; phone or email |
 | **side_effects** | Create opportunity + person/customer links; `status_key = new_inquiry`; activity |
 | **default_placements** | `right_rail` primary (enrollment dept) |
-| **implementation_status** | **missing** |
-| **notes** | Replaces `create_inquiry` ui_intent stub. Intake auto-op creates leads without this action — manual/API parity required. |
+| **implementation_status** | **existing** (Phase 1A — `20260602170000`) |
+| **notes** | Replaces `create_inquiry` ui_intent stub over time. Intake auto-op creates leads without this action — manual/API parity via execute API. Qualification uses `contact_attempted` until a dedicated status exists. |
 
 ---
 
@@ -246,8 +246,8 @@ Matrix lifecycle actions for **New Lead** and **Qualification**. `schedule_tour`
 | **requirement_gates** | Parent phone or email; parent identity fields |
 | **side_effects** | Status → qualification proxy (`contact_attempted` until status consolidation); activity |
 | **default_placements** | `record_header` primary (new_lead); `queue_row` row_inline |
-| **implementation_status** | **missing** |
-| **notes** | Replaces `qualify_opportunity` and status side effect of `contact_attempted`. Does not imply contact occurred — use universal comms separately. |
+| **implementation_status** | **existing** (Phase 1A — `20260602170000`) |
+| **notes** | Replaces `qualify_opportunity` and status side effect of `contact_attempted` over time. Does not imply contact occurred — use universal comms separately. Maps to `contact_attempted` until qualification status exists. |
 
 ### `schedule_tour`
 
@@ -294,8 +294,8 @@ Matrix lifecycle actions for **New Lead** and **Qualification**. `schedule_tour`
 | **requirement_gates** | **Lost reason required** (transition rules) |
 | **side_effects** | Status → `lost`; activity with reason |
 | **default_placements** | `record_header` overflow |
-| **implementation_status** | **partial** |
-| **notes** | Global `mark_lost` `update_status` exists; reason enforcement incomplete. Key is already canonical — tighten gates in Phase 1. |
+| **implementation_status** | **existing** (Phase 1A — `20260602170000`) |
+| **notes** | `open_form` → `update_status` to `lost` with `lost_reason` required via transition rules + payload validation. Visible on pipeline stages via `status_key_in` placement conditions. |
 
 ---
 

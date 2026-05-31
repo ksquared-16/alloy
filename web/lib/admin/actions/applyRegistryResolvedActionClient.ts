@@ -25,6 +25,7 @@ export type ApplyRegistryResolvedActionHost = {
     router: { push: (href: string) => void; refresh: () => void };
     openDrawer: (opts: DrawerOpenOpts) => void;
     openForm?: (opts: { form_key: string; action: ResolvedActionForClient }) => void;
+    openCreateLead?: () => void;
     /**
      * Optional invalidation hook to refresh local data without blowing away UI state.
      * When omitted, we fall back to `router.refresh()` (legacy behavior).
@@ -51,6 +52,23 @@ export async function applyRegistryResolvedActionClient(
 ): Promise<ApplyRegistryResolvedActionResult> {
     if (a.action_type === "open_form") {
         const formKey = a.payload?.form_key != null ? String(a.payload.form_key).trim() : "";
+        if (formKey === "create_lead") {
+            if (host.openCreateLead) {
+                host.openCreateLead();
+                return { ok: true };
+            }
+            if (typeof window !== "undefined") {
+                window.dispatchEvent(
+                    new CustomEvent("adminv2:open-create-lead", {
+                        detail: {
+                            department_id: host.departmentId ?? null,
+                            work_unit_id: host.workUnitId ?? null,
+                        },
+                    })
+                );
+            }
+            return { ok: true };
+        }
         if (formKey && host.openForm) {
             host.openForm({ form_key: formKey, action: a });
         }

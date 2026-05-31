@@ -76,6 +76,7 @@ import {
 import { AssignmentStatusBadge, StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
 import { OpportunityTourScheduleActionModal } from "@/components/admin/opportunity/tours/OpportunityTourScheduleActionModal";
 import { ContactAttemptedModal } from "@/components/admin/opportunity/actions/ContactAttemptedModal";
+import { MarkLostModal } from "@/components/admin/opportunity/actions/MarkLostModal";
 import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions/UpdateStatusAddNoteModal";
 import { AddRelatedPersonModal } from "@/components/admin/opportunity/actions/AddRelatedPersonModal";
 import { AddFamilyMemberModal } from "@/components/admin/opportunity/actions/AddFamilyMemberModal";
@@ -17358,6 +17359,58 @@ export default function AdminEntityDrawer() {
                                     entity_id: drawer.id,
                                     context: { surface: "record_header", work_unit_id: workUnitId },
                                     payload,
+                                }),
+                            });
+                            const json = (await res.json().catch(() => ({}))) as {
+                                ok?: boolean;
+                                error?: string;
+                                execution_result?: Record<string, unknown> & { row?: Record<string, unknown> };
+                            };
+                            if (!res.ok || !json.ok) {
+                                throw new Error(json.error ?? "Action failed");
+                            }
+                            const row = json.execution_result?.row;
+                            if (row && typeof row === "object") {
+                                setData((prev) => (prev && typeof prev === "object" ? { ...prev, ...row } : prev));
+                            }
+                            setActionFormState(null);
+                            refetch();
+                            window.dispatchEvent(
+                                new CustomEvent("adminv2:opportunity-updated", { detail: { id: drawer.id, action_key: actionKey } })
+                            );
+                        } finally {
+                            setOpportunityActionLoading(null);
+                        }
+                    }}
+                />
+                <MarkLostModal
+                    open={actionFormState?.form_key === "mark_lost"}
+                    onClose={() => setActionFormState(null)}
+                    title={actionFormState?.action?.label ?? "Mark lost"}
+                    onSubmit={async (payload) => {
+                        if (!drawer.id || drawer.id === "new" || drawer.type !== "opportunities") return;
+                        const actionKey = actionFormState?.action?.key ? String(actionFormState.action.key) : "mark_lost";
+                        setOpportunityActionLoading(actionKey);
+                        setSaveError(null);
+                        try {
+                            const workUnitId =
+                                data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
+                                    ? String((data as { work_unit_id?: unknown }).work_unit_id)
+                                    : null;
+                            const res = await fetch("/api/admin/actions/execute", {
+                                method: "POST",
+                                credentials: "include",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    action_key: actionKey,
+                                    entity_type: "opportunity",
+                                    entity_id: drawer.id,
+                                    context: { surface: "record_header", work_unit_id: workUnitId },
+                                    payload: {
+                                        lost_reason: payload.lost_reason,
+                                        ...(payload.note ? { note: payload.note } : {}),
+                                        status_key: "lost",
+                                    },
                                 }),
                             });
                             const json = (await res.json().catch(() => ({}))) as {

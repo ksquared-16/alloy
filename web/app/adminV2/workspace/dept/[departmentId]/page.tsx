@@ -31,6 +31,8 @@ import type { WorkspaceAction } from "@/lib/ui-v2/workspace-actions";
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
+import { CreateLeadModal } from "@/components/admin/opportunity/actions/CreateLeadModal";
+import { executeCreateLeadFromModal } from "@/lib/admin/actions/entryLifecycleActionClient";
 import {
     REGISTRY_RIGHT_RAIL_ACTION_ID_PREFIX,
     mergeEnrollmentRightRailActions,
@@ -353,6 +355,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
     const [deptThroughputPresentation, setDeptThroughputPresentation] =
         useState<DeptThroughputPresentation | null>(null);
     const [deptOperPanelTitleLocked, setDeptOperPanelTitleLocked] = useState("Work Unit Queue");
+    const [createLeadOpen, setCreateLeadOpen] = useState(false);
 
     const primaryWorkUnit = useMemo(() => {
         const list = deptWorkUnits ?? [];
@@ -1514,6 +1517,16 @@ export default function AdminV2WorkspaceDepartmentPage() {
 
     const needsAttentionHref = needsAttentionSummary.href;
 
+    useEffect(() => {
+        const onOpenCreateLead = (ev: Event) => {
+            const detail = (ev as CustomEvent<{ department_id?: string | null }>).detail;
+            if (detail?.department_id && detail.department_id !== departmentId) return;
+            setCreateLeadOpen(true);
+        };
+        window.addEventListener("adminv2:open-create-lead", onOpenCreateLead);
+        return () => window.removeEventListener("adminv2:open-create-lead", onOpenCreateLead);
+    }, [departmentId]);
+
     const sortedDeptAttentionBuckets = useMemo(() => {
         const list = deptAttentionBuckets ?? [];
         return [...list].sort((a, b) =>
@@ -1534,6 +1547,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 await applyRegistryResolvedActionClient(resolved, {
                     router,
                     openDrawer,
+                    openCreateLead: () => setCreateLeadOpen(true),
                     departmentId,
                     workUnitId: primaryWorkUnit?.id ?? null,
                     needsAttentionHref,
@@ -1781,6 +1795,20 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     }
                 />
             )}
+            <CreateLeadModal
+                open={createLeadOpen}
+                onClose={() => setCreateLeadOpen(false)}
+                onSubmit={async (payload) => {
+                    const opportunityId = await executeCreateLeadFromModal({
+                        payload,
+                        departmentId,
+                        workUnitId: primaryWorkUnit?.id ?? null,
+                        surface: "right_rail",
+                    });
+                    openDrawer({ type: "opportunities", id: opportunityId });
+                    router.refresh();
+                }}
+            />
         </WorkspaceChrome>
     );
 }

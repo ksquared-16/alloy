@@ -7,6 +7,7 @@ import { adminActionsOrgTag } from "@/lib/admin/actions/cacheTags";
 import { executeAdminAction } from "@/lib/admin/actions/executeAdminAction";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { CREATE_LEAD_ACTION_ENTITY_ID } from "@/lib/admin/actions/createLeadActionConstants";
 
 type ExecuteBody = {
     action_key?: string;
@@ -35,9 +36,13 @@ export async function POST(request: NextRequest) {
 
     const actionKey = body.action_key != null ? String(body.action_key).trim() : "";
     const entityType = body.entity_type != null ? String(body.entity_type).trim() : "";
-    const entityId = body.entity_id != null ? String(body.entity_id).trim() : "";
-    if (!actionKey || !entityType || !entityId) {
+    let entityId = body.entity_id != null ? String(body.entity_id).trim() : "";
+    const createLead = actionKey === "create_lead";
+    if (!actionKey || !entityType || (!entityId && !createLead)) {
         return NextResponse.json({ error: "action_key, entity_type, and entity_id are required" }, { status: 400 });
+    }
+    if (createLead && !entityId) {
+        entityId = CREATE_LEAD_ACTION_ENTITY_ID;
     }
 
     const t0 = Date.now();

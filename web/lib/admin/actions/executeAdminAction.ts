@@ -15,6 +15,17 @@ import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunit
 import { executeWorkflowRun } from "@/lib/workflowRun";
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import { accessScopeRestrictsData, assertEntityDrawerRecordReadable } from "@/lib/admin/accessScope";
+import {
+    CREATE_LEAD_ACTION_ENTITY_ID,
+    isCreateLeadExecuteRequest,
+    QUALIFICATION_STATUS_KEY,
+} from "@/lib/admin/actions/createLeadActionConstants";
+import {
+    assertMoveToQualificationAllowed,
+    executeCreateLeadAction,
+    validateMarkLostPayload,
+    validateOpportunityStatusTransitionForAction,
+} from "@/lib/admin/actions/entryLifecycleActions";
 
 export type ExecuteAdminActionCtx = {
     orgId: string;
@@ -226,20 +237,50 @@ export async function executeAdminAction(
 ): Promise<ExecuteAdminActionResult> {
     const correlationId = randomUUID();
     const actionKey = String(input.actionKey ?? "").trim();
-    const entityId = String(input.entityId ?? "").trim();
+    const entityIdRaw = String(input.entityId ?? "").trim();
     const entityTypeRaw = String(input.entityType ?? "").trim();
-    if (!actionKey || !entityId || !entityTypeRaw) {
+    const createLeadRequest = isCreateLeadExecuteRequest(actionKey, entityIdRaw);
+    if (!actionKey || !entityTypeRaw) {
+        return { ok: false, correlation_id: correlationId, error: "action_key and entity_type are required", status: 400 };
+    }
+    if (!entityIdRaw && !createLeadRequest) {
         return { ok: false, correlation_id: correlationId, error: "action_key, entity_type, and entity_id are required", status: 400 };
     }
+    const entityId = createLeadRequest ? CREATE_LEAD_ACTION_ENTITY_ID : entityIdRaw;
 
     const table = mapEntityToTable(entityTypeRaw);
-    if (!table) {
+    if (!table && !createLeadRequest) {
         return { ok: false, correlation_id: correlationId, error: "Unsupported entity_type", status: 400 };
     }
 
     const def = await findDefinitionForOrg(supabase, ctx.orgId, actionKey);
     if (!def) {
         return { ok: false, correlation_id: correlationId, error: "Unknown or inactive action", status: 404 };
+    }
+
+    if (createLeadRequest) {
+        const mergedCreate = mergePayload(def.payload_schema, input.payload);
+        const created = await executeCreateLeadAction(supabase, ctx, {
+            merged: mergedCreate,
+            context: input.context,
+        });
+        if (!created.ok) {
+            return { ok: false, correlation_id: correlationId, error: created.error, status: created.status };
+        }
+        return await withActionExecutedEmit(
+            supabase,
+            ctx,
+            correlationId,
+            actionKey,
+            entityTypeRaw,
+            created.opportunity_id,
+            {
+                kind: "create_lead",
+                opportunity_id: created.opportunity_id,
+                person_id: created.person_id,
+                customer_id: created.customer_id,
+            }
+        );
     }
 
     if (def.entity_type != null && String(def.entity_type).trim() !== "") {
@@ -257,6 +298,9 @@ export async function executeAdminAction(
 
     const scopeDim = ctx.accessScope ?? null;
     if (scopeDim && accessScopeRestrictsData(scopeDim)) {
+        if (!table) {
+            return { ok: false, correlation_id: correlationId, error: "Unsupported entity_type", status: 400 };
+        }
         const okTarget = await assertEntityDrawerRecordReadable(supabase, ctx.orgId, scopeDim, table, entityId);
         if (!okTarget) {
             return { ok: false, correlation_id: correlationId, error: "Not found", status: 404 };
@@ -270,6 +314,12 @@ export async function executeAdminAction(
             const formKey = merged.form_key != null ? String(merged.form_key).trim() : "";
             if (!formKey) {
                 return { ok: false, correlation_id: correlationId, error: "open_form requires payload_schema.form_key", status: 400 };
+            }
+            if (formKey === "mark_lost") {
+                const lostCheck = await validateMarkLostPayload(merged);
+                if (!lostCheck.ok) {
+                    return { ok: false, correlation_id: correlationId, error: lostCheck.error, status: lostCheck.status };
+                }
             }
             const required =
                 Array.isArray(merged.required_fields) && merged.required_fields.every((x) => typeof x === "string")
@@ -685,6 +735,13 @@ export async function executeAdminAction(
                 }
 
                 const _openFormStatusPatch: Record<string, unknown> = { status_key: statusKey, metadata: nextMd };
+                if (formKey === "mark_lost" || actionKey === "mark_lost") {
+                    const lostCheck = await validateMarkLostPayload(merged);
+                    if (!lostCheck.ok) {
+                        return { ok: false, correlation_id: correlationId, error: lostCheck.error, status: lostCheck.status };
+                    }
+                    _openFormStatusPatch.lost_reason = lostCheck.lostReason;
+                }
                 await normalizeOpportunityWritePayload(supabase, _openFormStatusPatch, "executeAdminAction:open_form.submit:update_status");
                 const { data: updated, error: upErr } = await supabase
                     .from("opportunities")
@@ -893,7 +950,16 @@ export async function executeAdminAction(
             if (!(await assertRowOrg(supabase, "opportunities", entityId, ctx.orgId)).ok) {
                 return { ok: false, correlation_id: correlationId, error: "Not found", status: 404 };
             }
-            const statusKey = merged.status_key != null ? String(merged.status_key).trim() : "";
+
+            if (actionKey === "move_to_qualification") {
+                const pre = await assertMoveToQualificationAllowed(supabase, ctx.orgId, entityId, merged);
+                if (!pre.ok) {
+                    return { ok: false, correlation_id: correlationId, error: pre.error, status: pre.status };
+                }
+                merged.status_key = QUALIFICATION_STATUS_KEY;
+            }
+
+            let statusKey = merged.status_key != null ? String(merged.status_key).trim() : "";
             if (!statusKey) {
                 return { ok: false, correlation_id: correlationId, error: "update_status requires payload_schema.status_key", status: 400 };
             }
@@ -901,48 +967,28 @@ export async function executeAdminAction(
             if (!chk.ok) {
                 return { ok: false, correlation_id: correlationId, error: chk.message, status: 400 };
             }
-            const { data: existing } = await supabase
-                .from("opportunities")
-                .select("status_key, customer_id, primary_contact_id, primary_person_id, metadata, work_unit_id")
-                .eq("id", entityId)
-                .eq("org_id", ctx.orgId)
-                .maybeSingle();
-            if (!existing) {
-                return { ok: false, correlation_id: correlationId, error: "Not found", status: 404 };
+
+            if (actionKey === "mark_lost") {
+                const lostCheck = await validateMarkLostPayload(merged);
+                if (!lostCheck.ok) {
+                    return { ok: false, correlation_id: correlationId, error: lostCheck.error, status: lostCheck.status };
+                }
+                merged.lost_reason = lostCheck.lostReason;
+                statusKey = "lost";
             }
-            const oldStatusKey = (existing as { status_key?: string | null }).status_key ?? null;
-            const md = ((existing as { metadata?: Record<string, unknown> | null }).metadata ?? null) as Record<string, unknown> | null;
-            const contextWorkUnitId =
-                (input.context?.work_unit_id != null ? String(input.context.work_unit_id).trim() : "") ||
-                ((existing as { work_unit_id?: string | null }).work_unit_id ?? "") ||
-                null;
-            let contextDepartmentId =
-                (input.context?.department_id != null ? String(input.context.department_id).trim() : "") || null;
-            if (!contextDepartmentId && contextWorkUnitId) {
-                const { data: wu } = await supabase
-                    .from("work_units")
-                    .select("department_id")
-                    .eq("id", contextWorkUnitId)
-                    .eq("org_id", ctx.orgId)
-                    .maybeSingle();
-                contextDepartmentId = (wu as { department_id?: string | null } | null)?.department_id ?? null;
-            }
-            const transition = await validateStatusTransition({
-                supabase,
-                orgId: ctx.orgId,
-                entityType: "opportunities",
+
+            const transitionCtx = await validateOpportunityStatusTransitionForAction(supabase, ctx, {
+                actionKey,
                 entityId,
-                departmentId: contextDepartmentId,
-                workUnitId: contextWorkUnitId,
-                actionKey: actionKey,
-                fromStatusKey: oldStatusKey,
                 toStatusKey: statusKey,
-                currentMetadata: md,
-                payload: merged,
+                merged,
+                context: input.context,
             });
-            if (!transition.ok) {
-                return { ok: false, correlation_id: correlationId, error: transition.message, status: 400 };
+            if (!transitionCtx.ok) {
+                return { ok: false, correlation_id: correlationId, error: transitionCtx.error, status: transitionCtx.status };
             }
+            const existing = transitionCtx.existing;
+            const oldStatusKey = transitionCtx.oldStatusKey;
             const updates: Record<string, unknown> = { status_key: statusKey };
             if (merged.lost_reason != null) {
                 updates.lost_reason = String(merged.lost_reason);
@@ -982,7 +1028,7 @@ export async function executeAdminAction(
                 console.error("[executeAdminAction] emitStatusChangedEvent", e);
             }
             return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
-                kind: "update_status",
+                kind: actionKey === "move_to_qualification" ? "move_to_qualification" : "update_status",
                 entity: "opportunities",
                 id: entityId,
                 row: updated,

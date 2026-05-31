@@ -247,6 +247,12 @@ import { alloyPerfGet, alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import type { NeedsAttentionBucketWithCount } from "@/lib/opportunities/needsAttentionBuckets";
 import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions/UpdateStatusAddNoteModal";
 import { ContactAttemptedModal } from "@/components/admin/opportunity/actions/ContactAttemptedModal";
+import { CreateLeadModal } from "@/components/admin/opportunity/actions/CreateLeadModal";
+import { MarkLostModal } from "@/components/admin/opportunity/actions/MarkLostModal";
+import {
+    executeCreateLeadFromModal,
+    executeMarkLostFromModal,
+} from "@/lib/admin/actions/entryLifecycleActionClient";
 import { formatActivityRelativeShort } from "@/lib/admin/activitySignals";
 import { formatPhoneUS } from "@/lib/adminFormatters";
 import { formatOpportunityQueueNotesPreview, formatOpportunityQueueNotesPreviewParts } from "@/lib/admin/opportunityActivityTimelineFormat";
@@ -664,6 +670,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [updateStatusTargetId, setUpdateStatusTargetId] = useState<string | null>(null);
     const [contactAttemptedOpen, setContactAttemptedOpen] = useState(false);
     const [contactAttemptedTargetId, setContactAttemptedTargetId] = useState<string | null>(null);
+    const [createLeadOpen, setCreateLeadOpen] = useState(false);
+    const [markLostOpen, setMarkLostOpen] = useState(false);
+    const [markLostTargetId, setMarkLostTargetId] = useState<string | null>(null);
 
     const queueDef = useMemo<QueueDefinitionV1 | null>(() => {
         if (!workUnit?.queue_definition) return null;
@@ -4030,6 +4039,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 const out = await applyRegistryResolvedActionClient(resolved, {
                     router,
                     openDrawer,
+                    openCreateLead: () => setCreateLeadOpen(true),
                     openForm: () => {
                         // Action forms are currently owned by the opportunity drawer (v1 scope).
                         // Right-rail actions in the enrollment work unit do not use forms yet.
@@ -4148,6 +4158,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     if (formKey === "contact_attempted") {
                         setContactAttemptedTargetId(action.itemId);
                         setContactAttemptedOpen(true);
+                        return;
+                    }
+                    if (formKey === "mark_lost") {
+                        setMarkLostTargetId(action.itemId);
+                        setMarkLostOpen(true);
                         return;
                     }
                 }
@@ -4928,6 +4943,43 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 entity_type: "opportunity",
                                 entity_id: contactAttemptedTargetId,
                                 action_key: "contact_attempted",
+                            });
+                        }}
+                    />
+                    <CreateLeadModal
+                        open={createLeadOpen}
+                        onClose={() => setCreateLeadOpen(false)}
+                        onSubmit={async (payload) => {
+                            const opportunityId = await executeCreateLeadFromModal({
+                                payload,
+                                departmentId,
+                                workUnitId: workUnit?.id ?? null,
+                                surface: "right_rail",
+                            });
+                            invalidate({ entity_type: "opportunity", entity_id: opportunityId, action_key: "create_lead" });
+                            openDrawer(buildOpportunityDrawerOpenParams(opportunityId));
+                        }}
+                    />
+                    <MarkLostModal
+                        open={markLostOpen}
+                        onClose={() => {
+                            setMarkLostOpen(false);
+                            setMarkLostTargetId(null);
+                        }}
+                        onSubmit={async (payload) => {
+                            if (!markLostTargetId) return;
+                            await executeMarkLostFromModal({
+                                opportunityId: markLostTargetId,
+                                lost_reason: payload.lost_reason,
+                                note: payload.note,
+                                departmentId,
+                                workUnitId: workUnit?.id ?? null,
+                                surface: "queue_row",
+                            });
+                            invalidate({
+                                entity_type: "opportunity",
+                                entity_id: markLostTargetId,
+                                action_key: "mark_lost",
                             });
                         }}
                     />

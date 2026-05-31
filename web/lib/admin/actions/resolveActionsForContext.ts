@@ -69,7 +69,8 @@ function passesPlacementScope(
     return true;
 }
 
-function passesConditionConfig(
+/** Exported for unit tests — evaluates placement + definition condition_config against opportunity context. */
+export function evaluateActionPlacementCondition(
     defCfg: Record<string, unknown> | null | undefined,
     placementCfg: Record<string, unknown> | null | undefined,
     statusKey: string | null,
@@ -83,6 +84,13 @@ function passesConditionConfig(
     const ne = cfg.status_key_not_equals;
     if (ne != null && String(ne).trim() !== "") {
         if ((statusKey ?? "").trim() === String(ne).trim()) return false;
+    }
+
+    const statusIn = cfg.status_key_in;
+    if (Array.isArray(statusIn) && statusIn.length > 0) {
+        const sk = (statusKey ?? "").trim();
+        const allowed = statusIn.map((x) => String(x).trim()).filter(Boolean);
+        if (!sk || !allowed.includes(sk)) return false;
     }
 
     // v1 minimal metadata existence checks (used for Enrollment tour schedule/reschedule).
@@ -204,7 +212,7 @@ export async function resolveActionsForContext(
             const psk = row.section_key != null ? String(row.section_key).trim() : "";
             if (!psk || psk !== recordSectionKey) continue;
         }
-        if (!passesConditionConfig(d.condition_config, row.condition_config, statusKey, oppMetadata)) continue;
+        if (!evaluateActionPlacementCondition(d.condition_config, row.condition_config, statusKey, oppMetadata)) continue;
 
         const payload = (d.payload_schema && typeof d.payload_schema === "object" ? d.payload_schema : {}) as Record<string, unknown>;
         resolved.push({
