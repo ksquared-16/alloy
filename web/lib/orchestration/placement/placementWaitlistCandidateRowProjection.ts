@@ -39,6 +39,12 @@ export type PlacementWaitlistCandidateRowProjection = {
     shadow_mode: boolean;
     /** Card 6 — optional informational forecast hints (max one shown in queue UI). */
     forecast_hints?: string[];
+    /** Card 1 — runtime-derived position within org category section (not persisted). */
+    runtime_position?: number;
+    runtime_position_total?: number;
+    runtime_position_label?: string;
+    runtime_position_mode?: "preview" | "live";
+    runtime_position_section_key?: string;
 };
 
 export function placementCandidateQueueRowId(opportunityId: string, candidateId: string): string {

@@ -224,14 +224,12 @@ export function buildPlacementV2QueueHint(params: {
 }): string | undefined {
     const parts: string[] = [];
     if (params.shadowMode) {
-        parts.push(
-            params.candidateRowLayout
-                ? "Placement preview — section order may differ from priority policy while shadow mode is on."
-                : "Placement preview (V2) — list order may not match priority until shadow mode is off."
-        );
+        parts.push("Priority preview");
+    } else if (params.candidateRowLayout) {
+        parts.push("Ordered by priority");
     }
     if (params.placementProjectionHint?.trim()) {
         parts.push(params.placementProjectionHint.trim());
     }
-    return parts.length ? parts.join(" ") : undefined;
+    return parts.length ? parts.join(" · ") : undefined;
 }

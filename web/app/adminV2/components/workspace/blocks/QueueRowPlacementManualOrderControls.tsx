@@ -1,29 +1,26 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { dispatchOpportunityQueueUpdatedBroadcast } from "@/lib/admin/opportunityQueueRefreshEvent";
 import type { QueueRowPlacementWaitlistCandidateVm } from "@/lib/ui-v2/workspace-types";
 
 type Props = {
     row: QueueRowPlacementWaitlistCandidateVm;
-    indexInSection: number;
-    sectionSize: number;
 };
 
-type PendingMove = "up" | "down" | "reset";
+type PendingAction = "adjust" | "reset";
 
-function targetPinOrdinal(indexInSection: number, direction: "up" | "down"): number {
-    const newIndex = direction === "up" ? indexInSection - 1 : indexInSection + 1;
-    return newIndex + 1;
-}
-
-export function QueueRowPlacementManualOrderControls({ row, indexInSection, sectionSize }: Props) {
-    const [pending, setPending] = useState<PendingMove | null>(null);
+export function QueueRowPlacementManualOrderControls({ row }: Props) {
+    const [pending, setPending] = useState<PendingAction | null>(null);
+    const [desiredPosition, setDesiredPosition] = useState(1);
     const [note, setNote] = useState("");
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [mounted, setMounted] = useState(false);
+
+    const sectionTotal = row.runtimePositionTotal ?? 1;
+    const currentPosition = row.runtimePosition ?? sectionTotal;
 
     useEffect(() => setMounted(true), []);
 
@@ -36,8 +33,10 @@ export function QueueRowPlacementManualOrderControls({ row, indexInSection, sect
         };
     }, [pending]);
 
-    const canMoveUp = indexInSection > 0;
-    const canMoveDown = indexInSection >= 0 && indexInSection < sectionSize - 1;
+    const positionOptions = useMemo(
+        () => Array.from({ length: Math.max(1, sectionTotal) }, (_, i) => i + 1),
+        [sectionTotal]
+    );
 
     const close = useCallback(() => {
         setPending(null);
@@ -47,6 +46,23 @@ export function QueueRowPlacementManualOrderControls({ row, indexInSection, sect
 
     const refreshQueue = useCallback(() => {
         dispatchOpportunityQueueUpdatedBroadcast("placement_manual_order");
+    }, []);
+
+    const openAdjust = useCallback((e: React.MouseEvent) => {
+        e.stopPropagation();
+        e.preventDefault();
+        setDesiredPosition(currentPosition);
+        setPending("adjust");
+        setNote("");
+        setError(null);
+    }, [currentPosition]);
+
+    const openReset = useCallback((e: React.MouseEvent) => {
+        e.stopPropagation();
+        e.preventDefault();
+        setPending("reset");
+        setNote("");
+        setError(null);
     }, []);
 
     const submit = useCallback(async () => {
@@ -60,23 +76,38 @@ export function QueueRowPlacementManualOrderControls({ row, indexInSection, sect
         setBusy(true);
         setError(null);
         try {
-            const body: Record<string, unknown> =
-                pending === "reset"
-                    ? { action: "reset", reason }
-                    : {
-                          action: "move",
-                          reason,
-                          pin_ordinal: targetPinOrdinal(indexInSection, pending),
-                          direction: pending,
-                      };
-
-            const res = await fetch(`/api/admin/placement-candidates/${row.placementCandidateId}/manual-position`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(body),
-            });
-            const data = (await res.json()) as { error?: string };
-            if (!res.ok) throw new Error(data.error || "Could not save adjustment");
+            if (pending === "reset") {
+                const res = await fetch(`/api/admin/placement-candidates/${row.placementCandidateId}/manual-position`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        action: "reset",
+                        reason,
+                        from_position: currentPosition,
+                        position_total: sectionTotal,
+                        section_key: row.runtimePositionSectionKey ?? null,
+                    }),
+                });
+                const data = (await res.json()) as { error?: string };
+                if (!res.ok) throw new Error(data.error || "Could not clear adjustment");
+            } else {
+                const toPosition = Math.min(sectionTotal, Math.max(1, Math.trunc(desiredPosition)));
+                const res = await fetch(`/api/admin/placement-candidates/${row.placementCandidateId}/manual-position`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        action: "move",
+                        reason,
+                        pin_ordinal: toPosition,
+                        from_position: currentPosition,
+                        to_position: toPosition,
+                        position_total: sectionTotal,
+                        section_key: row.runtimePositionSectionKey ?? null,
+                    }),
+                });
+                const data = (await res.json()) as { error?: string };
+                if (!res.ok) throw new Error(data.error || "Could not save adjustment");
+            }
 
             close();
             refreshQueue();
@@ -85,25 +116,21 @@ export function QueueRowPlacementManualOrderControls({ row, indexInSection, sect
         } finally {
             setBusy(false);
         }
-    }, [pending, note, indexInSection, row.placementCandidateId, close, refreshQueue]);
+    }, [
+        pending,
+        note,
+        row.placementCandidateId,
+        row.runtimePositionSectionKey,
+        currentPosition,
+        sectionTotal,
+        desiredPosition,
+        close,
+        refreshQueue,
+    ]);
 
-    const openMove = useCallback((direction: "up" | "down", e: React.MouseEvent) => {
-        e.stopPropagation();
-        e.preventDefault();
-        setPending(direction);
-        setNote("");
-        setError(null);
-    }, []);
+    if (sectionTotal < 1) return null;
 
-    const openReset = useCallback((e: React.MouseEvent) => {
-        e.stopPropagation();
-        e.preventDefault();
-        setPending("reset");
-        setNote("");
-        setError(null);
-    }, []);
-
-    if (sectionSize < 2 && !row.hasManualPositionAdjustment) return null;
+    const currentPositionLabel = `${currentPosition}/${sectionTotal}`;
 
     const modal =
         pending && mounted
@@ -117,16 +144,52 @@ export function QueueRowPlacementManualOrderControls({ row, indexInSection, sect
                           className="adminv2-ws-manual-order-dialog"
                           role="dialog"
                           aria-modal="true"
-                          aria-label="Manual waitlist adjustment"
+                          aria-label="Adjust waitlist position"
                           onClick={(e) => e.stopPropagation()}
                       >
                           <h3 className="adminv2-ws-manual-order-dialog__title">
-                              {pending === "reset" ? "Reset manual adjustment" : "Adjust waitlist position"}
+                              {pending === "reset" ? "Clear adjustment" : "Adjust position"}
                           </h3>
                           <p className="adminv2-ws-manual-order-dialog__context">
                               {row.childDisplayName} · {row.cohortLabel}
-                              {pending === "up" ? " · Move up" : pending === "down" ? " · Move down" : ""}
                           </p>
+                          {pending === "adjust" ? (
+                              <>
+                                  <p className="adminv2-ws-manual-order-dialog__position-line">
+                                      Current position: <strong>{currentPositionLabel}</strong>
+                                  </p>
+                                  <label className="adminv2-ws-manual-order-dialog__field">
+                                      <span className="adminv2-ws-manual-order-dialog__field-label">
+                                          Desired position
+                                      </span>
+                                      <select
+                                          className="adminv2-ws-manual-order-dialog__select"
+                                          value={desiredPosition}
+                                          onChange={(e) => setDesiredPosition(Number.parseInt(e.target.value, 10))}
+                                      >
+                                          {positionOptions.map((n) => (
+                                              <option key={n} value={n}>
+                                                  {n} / {sectionTotal}
+                                              </option>
+                                          ))}
+                                      </select>
+                                  </label>
+                                  <div className="adminv2-ws-manual-order-dialog__shortcuts">
+                                      <button
+                                          type="button"
+                                          className="adminv2-ws-manual-order-dialog__shortcut"
+                                          disabled={currentPosition === 1}
+                                          onClick={() => setDesiredPosition(1)}
+                                      >
+                                          Move to top
+                                      </button>
+                                  </div>
+                              </>
+                          ) : (
+                              <p className="adminv2-ws-manual-order-dialog__position-line">
+                                  Clear manual adjustment for position {currentPositionLabel}?
+                              </p>
+                          )}
                           <label className="adminv2-ws-manual-order-dialog__field">
                               <span className="adminv2-ws-manual-order-dialog__field-label">
                                   Why are you adjusting this waitlist position?
@@ -155,7 +218,11 @@ export function QueueRowPlacementManualOrderControls({ row, indexInSection, sect
                                   disabled={busy || !note.trim()}
                                   onClick={() => void submit()}
                               >
-                                  {busy ? "Saving…" : pending === "reset" ? "Reset adjustment" : "Apply adjustment"}
+                                  {busy
+                                      ? "Saving…"
+                                      : pending === "reset"
+                                        ? "Clear adjustment"
+                                        : "Apply"}
                               </button>
                           </div>
                       </div>
@@ -171,39 +238,22 @@ export function QueueRowPlacementManualOrderControls({ row, indexInSection, sect
                 data-queue-placement="manual-order"
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="adminv2-ws-queue-manual-order__pill" title="Adjust order">
-                    <button
-                        type="button"
-                        className="adminv2-ws-queue-manual-order__btn"
-                        aria-label="Move up"
-                        title="Move up"
-                        disabled={!canMoveUp}
-                        onClick={(e) => openMove("up", e)}
-                    >
-                        ↑
-                    </button>
-                    <button
-                        type="button"
-                        className="adminv2-ws-queue-manual-order__btn"
-                        aria-label="Move down"
-                        title="Move down"
-                        disabled={!canMoveDown}
-                        onClick={(e) => openMove("down", e)}
-                    >
-                        ↓
-                    </button>
-                    <span className="adminv2-ws-queue-manual-order__hint" aria-hidden>
-                        Adjust
-                    </span>
-                </div>
+                <button
+                    type="button"
+                    className="adminv2-ws-queue-manual-order__adjust"
+                    title="Adjust waitlist position"
+                    onClick={openAdjust}
+                >
+                    Adjust position
+                </button>
                 {row.hasManualPositionAdjustment ? (
                     <button
                         type="button"
                         className="adminv2-ws-queue-manual-order__reset"
-                        title="Reset adjustment"
+                        title="Clear adjustment"
                         onClick={openReset}
                     >
-                        Reset
+                        Clear adjustment
                     </button>
                 ) : null}
             </div>

@@ -32,6 +32,8 @@
     "qa:waitlist:priority-facts": "tsx --tsconfig tsconfig.json scripts/qaWaitlistPriorityFactTruth.ts",
     "qa:waitlist:demo": "tsx --tsconfig tsconfig.json scripts/qaWaitlistDemoWalkthrough.ts",
     "qa:waitlist:override": "tsx --tsconfig tsconfig.json scripts/qaWaitlistOverrideBrowserGate.ts",
+    "qa:waitlist:ranking": "tsx --tsconfig tsconfig.json scripts/qaWaitlistRankingValidation.ts",
+    "qa:waitlist:shadow-mode": "tsx --tsconfig tsconfig.json scripts/qaWaitlistShadowModeToggle.ts",
     "qa:waitlist:trace": "tsx --tsconfig tsconfig.json scripts/debugWaitlistHayesRenderTrace.ts",
     "typecheck": "tsc -p tsconfig.json",
     "dev:seed:access-validation": "tsx --tsconfig tsconfig.json scripts/seedAccessValidationDemo.ts",

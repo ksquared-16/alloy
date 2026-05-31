@@ -14,6 +14,19 @@ vi.mock("@/lib/emitEvent", () => ({
 }));
 
 describe("buildManualOrderActivitySummary", () => {
+    it("formats move with from/to positions", () => {
+        expect(
+            buildManualOrderActivitySummary({
+                action: "updated",
+                childDisplayName: "Mia Hayes",
+                cohortLabel: "Pre-K — 4–5 years",
+                fromPosition: 10,
+                toPosition: 1,
+                positionTotal: 10,
+            })
+        ).toBe("Mia Hayes moved from position 10/10 to 1/10 within Pre-K — 4–5 years waitlist.");
+    });
+
     it("formats created move up summary", () => {
         expect(
             buildManualOrderActivitySummary({
@@ -86,6 +99,10 @@ describe("emitPlacementManualOrderActivity", () => {
             reason: "Sibling starting soon",
             direction: "up",
             pinOrdinal: 1,
+            fromPosition: 10,
+            toPosition: 1,
+            positionTotal: 10,
+            sectionKey: "toddler",
         });
 
         expect(emitEventMock).toHaveBeenCalledWith(
@@ -103,9 +120,13 @@ describe("emitPlacementManualOrderActivity", () => {
                     action: "created",
                     direction: "up",
                     pin_ordinal: 1,
+                    from_position: 10,
+                    to_position: 1,
+                    position_total: 10,
+                    section_key: "toddler",
                     reason: "Sibling starting soon",
                     actor_user_id: "user-1",
-                    summary: "Mia Hayes moved higher within Pre-K — 4–5 years waitlist.",
+                    summary: "Mia Hayes moved from position 10/10 to 1/10 within Pre-K — 4–5 years waitlist.",
                 }),
             })
         );

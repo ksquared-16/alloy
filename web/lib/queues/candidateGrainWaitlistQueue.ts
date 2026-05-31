@@ -16,6 +16,7 @@ import {
 } from "@/lib/orchestration/placement/placementWaitlistCandidateRowProjection";
 import { resolvePlacementQueueConfig } from "@/lib/orchestration/placement/resolvePlacementQueueConfig";
 import { sortPlacementCandidateQueueRows } from "@/lib/orchestration/placement/sortPlacementCandidateQueueRows";
+import { assignWaitlistCandidateRuntimePositions } from "@/lib/orchestration/placement/waitlistCandidateRuntimePosition";
 import type { PlacementCandidateStatus } from "@/lib/orchestration/placement/placementCandidateTypes";
 import { PLACEMENT_CANDIDATE_STATUSES } from "@/lib/orchestration/placement/placementCandidateTypes";
 
@@ -387,6 +388,7 @@ export async function loadWaitlistCandidateGrainQueueItems(params: {
         });
         placementDiagnostics = v2Out.diagnostics;
         expandedRows = sortPlacementCandidateQueueRows(expandedRows, shadowMode);
+        assignWaitlistCandidateRuntimePositions(expandedRows, shadowMode);
     } else {
         expandedRows = page.map((row) => {
             const opp = enrichedByOppId.get(row.opportunity_id) ?? (opportunityPreviewFromCandidateRow(row) as Record<string, unknown>);

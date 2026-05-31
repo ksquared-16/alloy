@@ -23,6 +23,11 @@ export type EmitPlacementManualOrderActivityInput = {
     reason: string;
     direction?: ManualOrderMoveDirection | null;
     pinOrdinal?: number | null;
+    fromPosition?: number | null;
+    toPosition?: number | null;
+    positionTotal?: number | null;
+    sectionKey?: string | null;
+    siteId?: string | null;
 };
 
 type CandidateActivityRow = {
@@ -30,6 +35,7 @@ type CandidateActivityRow = {
     opportunity_id: string;
     program_room_cohort_key: string;
     program_room_group_label: string | null;
+    site_id: string | null;
     customer_members: { display_name: string | null } | null;
     opportunity_customer_members: {
         customer_members: { display_name: string | null } | null;
@@ -49,6 +55,7 @@ async function loadCandidateActivityContext(
             opportunity_id,
             program_room_cohort_key,
             program_room_group_label,
+            site_id,
             customer_members (display_name),
             opportunity_customer_members (customer_members (display_name))
         `
@@ -65,11 +72,32 @@ export function buildManualOrderActivitySummary(input: {
     childDisplayName: string;
     cohortLabel: string;
     direction?: ManualOrderMoveDirection | null;
+    fromPosition?: number | null;
+    toPosition?: number | null;
+    positionTotal?: number | null;
 }): string {
     const child = input.childDisplayName.trim() || "Child";
     const cohort = input.cohortLabel.trim() || "waitlist";
     if (input.action === "released") {
+        if (
+            input.fromPosition != null &&
+            input.positionTotal != null &&
+            input.fromPosition >= 1 &&
+            input.positionTotal >= 1
+        ) {
+            return `${child} cleared manual adjustment from position ${input.fromPosition}/${input.positionTotal} within ${cohort} waitlist.`;
+        }
         return `${child} returned to policy-based ordering.`;
+    }
+    if (
+        input.fromPosition != null &&
+        input.toPosition != null &&
+        input.positionTotal != null &&
+        input.fromPosition >= 1 &&
+        input.toPosition >= 1 &&
+        input.positionTotal >= 1
+    ) {
+        return `${child} moved from position ${input.fromPosition}/${input.positionTotal} to ${input.toPosition}/${input.positionTotal} within ${cohort} waitlist.`;
     }
     const movePhrase =
         input.direction === "up"
@@ -115,6 +143,9 @@ export async function emitPlacementManualOrderActivity(
         childDisplayName,
         cohortLabel,
         direction: input.direction,
+        fromPosition: input.fromPosition,
+        toPosition: input.toPosition ?? input.pinOrdinal,
+        positionTotal: input.positionTotal,
     });
 
     const occurredAt = new Date().toISOString();
@@ -132,9 +163,14 @@ export async function emitPlacementManualOrderActivity(
             program_room_cohort_key: candidate.program_room_cohort_key,
             cohort_label: cohortLabel,
             child_display_name: childDisplayName,
+            site_id: candidate.site_id?.trim() || input.siteId?.trim() || null,
+            section_key: input.sectionKey?.trim() || null,
             action: input.action,
             direction: input.direction ?? null,
             pin_ordinal: input.pinOrdinal ?? null,
+            from_position: input.fromPosition ?? null,
+            to_position: input.toPosition ?? input.pinOrdinal ?? null,
+            position_total: input.positionTotal ?? null,
             reason: input.reason.trim(),
             actor_user_id: input.actorUserId,
             summary,

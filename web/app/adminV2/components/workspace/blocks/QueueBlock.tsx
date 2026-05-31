@@ -1080,22 +1080,6 @@ function WorkUnitQueueLane({
     return m;
   }, [displayQueueItems]);
 
-  const placementCandidateCohortMeta = useMemo(() => {
-    const bySection = new Map<string, string[]>();
-    for (const item of displayQueueItems) {
-      const sk = workUnitSectionKey(item);
-      if (!sk || !item.placementWaitlistCandidate) continue;
-      const list = bySection.get(sk) ?? [];
-      list.push(item.id);
-      bySection.set(sk, list);
-    }
-    const meta = new Map<string, { indexInSection: number; sectionSize: number }>();
-    for (const ids of bySection.values()) {
-      ids.forEach((id, i) => meta.set(id, { indexInSection: i, sectionSize: ids.length }));
-    }
-    return meta;
-  }, [displayQueueItems]);
-
   useEffect(() => {
     if (!WAITLIST_SECTION_LIVE_DIAG_ENABLED || !waitlistSectionPlan) return;
     for (const header of waitlistSectionPlan.headers) {
@@ -1129,8 +1113,10 @@ function WorkUnitQueueLane({
   }, [hasV2PlacementRows, displayQueueItems]);
 
   const placementLaneHint = useMemo(() => {
-    const v2Shadow = displayQueueItems.some((i) => i.placementPriorityV2?.shadowMode === true);
-    if (hasV2PlacementRows) {
+    const v2Shadow = displayQueueItems.some(
+      (i) => i.placementPriorityV2?.shadowMode === true || i.placementWaitlistCandidate?.shadowMode === true
+    );
+    if (hasV2PlacementRows || hasCandidatePlacementRows) {
       return buildPlacementV2QueueHint({
         shadowMode: v2Shadow,
         placementProjectionHint: queue.placementProjectionHint,
@@ -1234,10 +1220,8 @@ function WorkUnitQueueLane({
           const valueShown = (crm?.commercialValue ?? item.valueLabel)?.trim() ?? "";
           const hasValue = Boolean(valueShown);
           const actionEntityId = queueItemOpportunityId(item);
-          const cohortMeta =
-            item.placementWaitlistCandidate && placementShowBucketChip
-              ? placementCandidateCohortMeta.get(item.id)
-              : undefined;
+          const showManualOrderControls =
+            item.placementWaitlistCandidate != null && placementShowBucketChip;
 
           const headerCfg = sectionKey ? queue.workUnitGroupHeaders?.[sectionKey] : undefined;
           const count = sectionKey ? (groupCounts.get(sectionKey) ?? 0) : 0;
@@ -1330,12 +1314,8 @@ function WorkUnitQueueLane({
                     }`}
                     data-enrollment-row-layout="split_actions"
                   >
-                    {cohortMeta ? (
-                      <QueueRowPlacementManualOrderControls
-                        row={item.placementWaitlistCandidate!}
-                        indexInSection={cohortMeta.indexInSection}
-                        sectionSize={cohortMeta.sectionSize}
-                      />
+                    {showManualOrderControls ? (
+                      <QueueRowPlacementManualOrderControls row={item.placementWaitlistCandidate!} />
                     ) : null}
                     <div className="adminv2-ws-enrollment-crm-row__content">
                       <CrmCompactQueuePreview

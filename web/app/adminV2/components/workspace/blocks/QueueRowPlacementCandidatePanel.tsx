@@ -70,6 +70,14 @@ export function QueueRowPlacementCandidateMetaChips({ row, siteLabel }: MetaProp
     return (
         <div className="adminv2-ws-queue-placement-candidate__meta" data-queue-placement="candidate-meta">
             <div className="adminv2-ws-queue-placement-candidate__meta-row">
+                {row.runtimePositionLabel ? (
+                    <span
+                        className="adminv2-ws-queue-placement-candidate__position"
+                        title={row.runtimePositionHelp ?? undefined}
+                    >
+                        {row.runtimePositionLabel}
+                    </span>
+                ) : null}
                 <span className="adminv2-ws-queue-placement-rule-chip" title={row.bucketLabel}>
                     {row.bucketLabel}
                 </span>

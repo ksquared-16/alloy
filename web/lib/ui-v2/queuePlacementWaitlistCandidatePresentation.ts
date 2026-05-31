@@ -6,6 +6,7 @@ import type { PlacementWaitlistCandidateRowProjection } from "@/lib/orchestratio
 import { normalizePlacementWaitlistCohort } from "@/lib/orchestration/placement/normalizePlacementWaitlistCohort";
 import { formatPlacementBucketLabel } from "@/lib/ui-v2/queuePlacementPriorityV2Presentation";
 import { resolveWaitlistQueueSection } from "@/lib/orchestration/placement/waitlistQueueSectionPresentation";
+import { WAITLIST_RUNTIME_POSITION_HELP } from "@/lib/orchestration/placement/waitlistCandidateRuntimePosition";
 import { formatDateUtcAudit } from "@/lib/adminFormatters";
 import type { QueueRowPlacementWaitlistCandidateVm } from "@/lib/ui-v2/workspace-types";
 
@@ -72,6 +73,32 @@ export function parsePlacementWaitlistCandidateRowVm(
         manualAdjustmentReason: pinOverrides[0]?.reason ?? null,
         pinOverrideId: pinOverrides[0]?.id ?? null,
         shadowMode: o.shadow_mode === true,
+        ...(typeof o.runtime_position === "number" &&
+        Number.isFinite(o.runtime_position) &&
+        o.runtime_position >= 1 &&
+        typeof o.runtime_position_total === "number" &&
+        Number.isFinite(o.runtime_position_total) &&
+        o.runtime_position_total >= 1
+            ? {
+                  runtimePosition: Math.trunc(o.runtime_position),
+                  runtimePositionTotal: Math.trunc(o.runtime_position_total),
+                  runtimePositionLabel:
+                      typeof o.runtime_position_label === "string" && o.runtime_position_label.trim()
+                          ? o.runtime_position_label.trim()
+                          : undefined,
+                  runtimePositionMode:
+                      o.runtime_position_mode === "preview" || o.runtime_position_mode === "live"
+                          ? o.runtime_position_mode
+                          : o.shadow_mode === true
+                            ? "preview"
+                            : "live",
+                  runtimePositionSectionKey:
+                      typeof o.runtime_position_section_key === "string"
+                          ? o.runtime_position_section_key.trim()
+                          : undefined,
+                  runtimePositionHelp: WAITLIST_RUNTIME_POSITION_HELP,
+              }
+            : {}),
         forecastHints: (o.forecast_hints ?? o.placement_priority_v2?.forecast_hints ?? []).filter(
             (h): h is string => typeof h === "string" && h.trim().length > 0
         ),

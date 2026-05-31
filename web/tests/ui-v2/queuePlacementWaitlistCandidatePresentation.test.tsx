@@ -266,40 +266,48 @@ describe("QueueRowPlacementCandidateMetaChips", () => {
         expect(html).toContain("Expected opening soon");
         expect(html).toContain("adminv2-ws-queue-placement-candidate__forecast-chip");
     });
+
+    it("shows runtime position label with help tooltip", () => {
+        const html = renderToStaticMarkup(
+            <QueueRowPlacementCandidateMetaChips
+                row={{
+                    ...sampleRow,
+                    runtimePositionLabel: "Preview position 3/10",
+                    runtimePositionHelp:
+                        "Position is calculated from the current priority rules and filters. It is not a permanent stored rank.",
+                }}
+            />
+        );
+        expect(html).toContain("Preview position 3/10");
+        expect(html).toContain("not a permanent stored rank");
+    });
 });
 
 describe("QueueRowPlacementManualOrderControls", () => {
-    it("renders inline move up/down controls", () => {
-        const html = renderToStaticMarkup(
-            <QueueRowPlacementManualOrderControls row={sampleRow} indexInSection={1} sectionSize={3} />
-        );
-        expect(html).toContain('aria-label="Move up"');
-        expect(html).toContain('aria-label="Move down"');
-        expect(html).toContain('title="Adjust order"');
-        expect(html).toContain("Adjust");
-        expect(html).not.toContain("Adjust order</span>");
-        expect(html).not.toContain("Preview");
-        expect(html).not.toContain("Override");
-    });
-
-    it("disables move up on first row in cohort", () => {
-        const html = renderToStaticMarkup(
-            <QueueRowPlacementManualOrderControls row={sampleRow} indexInSection={0} sectionSize={3} />
-        );
-        expect(html).toContain('aria-label="Move up"');
-        expect(html).toMatch(/<button[^>]*aria-label="Move up"[^>]*disabled/);
-    });
-
-    it("shows reset when manual adjustment active", () => {
+    it("renders adjust position action", () => {
         const html = renderToStaticMarkup(
             <QueueRowPlacementManualOrderControls
-                row={{ ...sampleRow, hasManualPositionAdjustment: true, manualAdjustmentReason: "Ops review" }}
-                indexInSection={1}
-                sectionSize={3}
+                row={{ ...sampleRow, runtimePosition: 2, runtimePositionTotal: 3 }}
             />
         );
-        expect(html).toContain(">Reset</button>");
-        expect(html).toContain('title="Reset adjustment"');
+        expect(html).toContain("Adjust position");
+        expect(html).not.toContain("Move up");
+    });
+
+    it("shows clear adjustment when manual adjustment active", () => {
+        const html = renderToStaticMarkup(
+            <QueueRowPlacementManualOrderControls
+                row={{
+                    ...sampleRow,
+                    hasManualPositionAdjustment: true,
+                    manualAdjustmentReason: "Ops review",
+                    runtimePosition: 1,
+                    runtimePositionTotal: 3,
+                }}
+            />
+        );
+        expect(html).toContain("Clear adjustment");
+        expect(html).toContain('title="Clear adjustment"');
     });
 });
 
@@ -314,8 +322,12 @@ describe("QueueRowPlacementCandidateContext", () => {
 describe("buildPlacementV2QueueHint", () => {
     it("uses lane-level shadow copy for candidate rows", () => {
         const hint = buildPlacementV2QueueHint({ shadowMode: true, candidateRowLayout: true });
-        expect(hint).toContain("section order may differ");
-        expect(hint).not.toContain("list order may not match priority until shadow mode is off");
+        expect(hint).toBe("Priority preview");
+    });
+
+    it("uses live ordering cue when shadow is off", () => {
+        const hint = buildPlacementV2QueueHint({ shadowMode: false, candidateRowLayout: true });
+        expect(hint).toBe("Ordered by priority");
     });
 });
 

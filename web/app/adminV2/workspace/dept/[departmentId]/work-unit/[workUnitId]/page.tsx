@@ -296,6 +296,7 @@ import {
 } from "@/lib/ui-v2/queuePlacementWaitlistCandidatePresentation";
 import { waitlistQueueItemGrouping } from "@/lib/orchestration/placement/waitlistQueueSectionPresentation";
 import { sortPlacementCandidateQueueRows } from "@/lib/orchestration/placement/sortPlacementCandidateQueueRows";
+import { assignWaitlistCandidateRuntimePositions } from "@/lib/orchestration/placement/waitlistCandidateRuntimePosition";
 import { readOpportunityIdFromQueueRow } from "@/lib/orchestration/placement/placementWaitlistCandidateRowProjection";
 import { parseQueueRowGrainContext } from "@/lib/queues/queueRowGrainContext";
 
@@ -3107,10 +3108,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
         const waitlistShadowMode =
             queueItems?.placement_projection_diagnostics?.shadow_mode !== false;
         const rowsForQueueVm = waitlistCandidateSourceRows
-            ? sortPlacementCandidateQueueRows(
-                  filteredSourceRows as Array<Record<string, unknown>>,
-                  waitlistShadowMode
-              )
+            ? (() => {
+                  const sorted = sortPlacementCandidateQueueRows(
+                      filteredSourceRows as Array<Record<string, unknown>>,
+                      waitlistShadowMode
+                  );
+                  assignWaitlistCandidateRuntimePositions(sorted, waitlistShadowMode);
+                  return sorted;
+              })()
             : filteredSourceRows;
 
         const previewCfg = queueUi?.row_preview ?? {

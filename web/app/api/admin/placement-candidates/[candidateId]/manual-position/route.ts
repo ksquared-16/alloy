@@ -10,6 +10,19 @@ import {
     upsertPlacementPinOverride,
 } from "@/lib/orchestration/placement/placementOverrideMutations";
 
+function readOptionalInt(raw: unknown): number | null {
+    if (typeof raw === "number" && Number.isFinite(raw)) return Math.trunc(raw);
+    if (typeof raw === "string" && raw.trim()) {
+        const n = Number.parseInt(raw.trim(), 10);
+        return Number.isFinite(n) ? n : null;
+    }
+    return null;
+}
+
+function readOptionalString(raw: unknown): string | null {
+    return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+}
+
 async function assertCandidateOpportunityScope(
     supabase: ReturnType<typeof createAdminClient>,
     orgId: string,
@@ -66,6 +79,11 @@ export async function POST(
 
     const reason = typeof body.reason === "string" ? body.reason.trim() : "";
     const action = typeof body.action === "string" ? body.action.trim() : "move";
+    const fromPosition = readOptionalInt(body.from_position);
+    const toPosition = readOptionalInt(body.to_position);
+    const positionTotal = readOptionalInt(body.position_total);
+    const sectionKey = readOptionalString(body.section_key);
+    const siteId = readOptionalString(body.site_id);
 
     if (action === "reset") {
         const result = await releaseManualPositionOverrides(supabase, {
@@ -74,6 +92,10 @@ export async function POST(
             role: ctx.role,
             placementCandidateId: candidateId,
             release_reason: reason || "Reset manual adjustment",
+            fromPosition,
+            positionTotal,
+            sectionKey,
+            siteId,
         });
         if (!result.ok) {
             return NextResponse.json({ error: result.error }, { status: result.status });
@@ -87,7 +109,7 @@ export async function POST(
             ? pinOrdinalRaw
             : typeof pinOrdinalRaw === "string"
               ? Number.parseInt(pinOrdinalRaw, 10)
-              : NaN;
+              : toPosition ?? NaN;
 
     if (!Number.isFinite(pinOrdinal)) {
         return NextResponse.json({ error: "pin_ordinal is required for manual position" }, { status: 400 });
@@ -104,6 +126,11 @@ export async function POST(
             body.direction === "up" || body.direction === "down"
                 ? body.direction
                 : null,
+        fromPosition,
+        toPosition: toPosition ?? pinOrdinal,
+        positionTotal,
+        sectionKey,
+        siteId,
     });
 
     if (!result.ok) {

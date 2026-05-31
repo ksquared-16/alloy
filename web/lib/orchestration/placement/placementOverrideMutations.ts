@@ -36,6 +36,7 @@ type CandidateRow = {
     opportunity_id: string;
     program_room_cohort_key: string;
     status: string;
+    site_id: string | null;
 };
 
 async function loadCandidate(
@@ -45,7 +46,7 @@ async function loadCandidate(
 ): Promise<CandidateRow | null> {
     const { data, error } = await supabase
         .from("placement_candidates")
-        .select("id, org_id, opportunity_id, program_room_cohort_key, status")
+        .select("id, org_id, opportunity_id, program_room_cohort_key, status, site_id")
         .eq("org_id", orgId)
         .eq("id", candidateId)
         .maybeSingle();
@@ -128,6 +129,23 @@ export type UpsertPlacementPinOverrideInput = {
     pin_ordinal: number;
     reason: string;
     direction?: "up" | "down" | null;
+    fromPosition?: number | null;
+    toPosition?: number | null;
+    positionTotal?: number | null;
+    sectionKey?: string | null;
+    siteId?: string | null;
+};
+
+export type ReleaseManualPositionOverridesInput = {
+    orgId: string;
+    userId: string;
+    role: string;
+    placementCandidateId: string;
+    release_reason: string;
+    fromPosition?: number | null;
+    positionTotal?: number | null;
+    sectionKey?: string | null;
+    siteId?: string | null;
 };
 
 /** Create or update active pin override for manual waitlist position (Card 5.1). */
@@ -198,6 +216,11 @@ export async function upsertPlacementPinOverride(
             reason,
             direction: input.direction ?? null,
             pinOrdinal,
+            fromPosition: input.fromPosition ?? null,
+            toPosition: input.toPosition ?? pinOrdinal,
+            positionTotal: input.positionTotal ?? null,
+            sectionKey: input.sectionKey ?? null,
+            siteId: input.siteId ?? candidate.site_id ?? null,
         });
 
         return { ok: true, override: data as Record<string, unknown> };
@@ -222,6 +245,11 @@ export async function upsertPlacementPinOverride(
             reason,
             direction: input.direction ?? null,
             pinOrdinal,
+            fromPosition: input.fromPosition ?? null,
+            toPosition: input.toPosition ?? pinOrdinal,
+            positionTotal: input.positionTotal ?? null,
+            sectionKey: input.sectionKey ?? null,
+            siteId: input.siteId ?? candidate.site_id ?? null,
         });
     }
     return created;
@@ -230,7 +258,7 @@ export async function upsertPlacementPinOverride(
 /** Release active pin override(s) for manual position reset. */
 export async function releaseManualPositionOverrides(
     supabase: SupabaseClient,
-    input: Omit<ReleasePlacementOverrideInput, "overrideId"> & { release_reason: string }
+    input: ReleaseManualPositionOverridesInput
 ): Promise<{ ok: true; released_ids: string[] } | { ok: false; status: number; error: string }> {
     const candidate = await loadCandidate(supabase, input.orgId, input.placementCandidateId);
     if (!candidate) return { ok: false, status: 404, error: "Placement candidate not found" };
@@ -268,6 +296,10 @@ export async function releaseManualPositionOverrides(
         placementOverrideId: released[0]!,
         action: "released",
         reason: input.release_reason,
+        fromPosition: input.fromPosition ?? null,
+        positionTotal: input.positionTotal ?? null,
+        sectionKey: input.sectionKey ?? null,
+        siteId: input.siteId ?? candidate.site_id ?? null,
     });
 
     return { ok: true, released_ids: released };

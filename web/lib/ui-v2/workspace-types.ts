@@ -319,6 +319,13 @@ export type QueueRowPlacementWaitlistCandidateVm = {
   manualAdjustmentReason: string | null;
   pinOverrideId: string | null;
   shadowMode: boolean;
+  /** Runtime position within org category section (loaded/filter scope). */
+  runtimePosition?: number;
+  runtimePositionTotal?: number;
+  runtimePositionLabel?: string;
+  runtimePositionMode?: "preview" | "live";
+  runtimePositionSectionKey?: string;
+  runtimePositionHelp?: string;
   /** Card 6 — optional forecast hint labels (informational only). */
   forecastHints: string[];
   siblingLabel: string | null;
