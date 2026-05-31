@@ -9,7 +9,6 @@ export type {
     AdminV2DrawerRuntimePlan,
     AdminV2DrawerSurface,
     AdminV2QueueLaneRevealState,
-    AdminV2RouteRevealMode,
     ComposeAdminV2DrawerRuntimeInput,
     DrawerSectionFallbackMode,
     DrawerSectionRenderContext,
@@ -31,6 +30,8 @@ export {
     adminV2DrawerTabsPremountWhenSurfaceReady,
     adminV2DrawerWorkflowTabsToPremount,
 } from "@/lib/adminV2/runtime/contract/drawerTabsContract";
+
+export type { AdminV2RouteRevealMode } from "@/lib/adminV2/runtime/contract/routeRevealPolicy";
 
 export {
     adminV2QueueLaneDisplayDecision,
