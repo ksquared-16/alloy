@@ -17,16 +17,21 @@ type Props = {
     overviewData: Record<string, unknown>;
     opportunitySingular?: string;
     queuePreviewSeed?: OpportunityQueuePreviewSeed | null;
+    /** Title-rail header — no card chrome wrapper. */
+    bare?: boolean;
+    inquiryWorkflow?: boolean;
 };
 
 /**
- * Native Review Assist BOS handoff — uses the same header action button primitive as registry drawer actions.
+ * Native Review Assist BOS handoff — shares header button primitive with registry drawer actions.
  */
 export default function BosDrawerAssistCta({
     entityId,
     overviewData,
     opportunitySingular = "Inquiry",
     queuePreviewSeed = null,
+    bare = false,
+    inquiryWorkflow = true,
 }: Props) {
     const globalAssistant = useGlobalAssistantOptional();
     const { userEmail } = useAdminAuth();
@@ -35,28 +40,30 @@ export default function BosDrawerAssistCta({
 
     const operatorDisplayName = operatorDisplayNameFromEmail(userEmail);
 
+    const button = (
+        <OpportunityDrawerHeaderActionButton
+            label={BOS_ASSIST_CTA_DRAWER}
+            inquiryWorkflow={inquiryWorkflow}
+            data-drawer-action="bos_assist"
+            data-bos-assist-button="true"
+            onClick={() =>
+                triggerBosDrawerAssistHandoff({
+                    globalAssistant,
+                    entityId: id,
+                    overviewData,
+                    queuePreviewSeed,
+                    opportunitySingular,
+                    operatorDisplayName,
+                })
+            }
+        />
+    );
+
+    if (bare) return button;
+
     return (
-        <OpportunityDrawerHeaderActionsPanel
-            inquiryWorkflow
-            align="start"
-            data-drawer-slot="bos_assist_cta"
-        >
-            <OpportunityDrawerHeaderActionButton
-                label={BOS_ASSIST_CTA_DRAWER}
-                inquiryWorkflow
-                data-drawer-action="bos_assist"
-                data-bos-assist-button="true"
-                onClick={() =>
-                    triggerBosDrawerAssistHandoff({
-                        globalAssistant,
-                        entityId: id,
-                        overviewData,
-                        queuePreviewSeed,
-                        opportunitySingular,
-                        operatorDisplayName,
-                    })
-                }
-            />
+        <OpportunityDrawerHeaderActionsPanel inquiryWorkflow align="start" data-drawer-slot="bos_assist_cta">
+            {button}
         </OpportunityDrawerHeaderActionsPanel>
     );
 }

@@ -13,6 +13,8 @@ export type QuickMessageLaunchSeed = {
     originatingSurface?: ContextualActionSurface;
     /** When true with opportunityId, load linked contacts via drawer-recipients (no global search). */
     recordScoped?: boolean;
+    /** Pre-select composer channel when opening from canonical send_email / send_sms actions. */
+    defaultChannel?: "email" | "sms";
 };
 
 export const ADMINV2_OPEN_QUICK_MESSAGE_EVENT = "adminv2:open-quick-message";

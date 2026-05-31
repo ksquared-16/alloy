@@ -34,6 +34,8 @@ export type ContextualActionInvocation = {
     org_id?: string | null;
     queue_preview?: QueueBosHandoffPreview | null;
     bos_source_surface?: GlobalAssistantSourceSurface;
+    /** Pre-select composer channel (canonical send_email / send_sms). */
+    defaultChannel?: "email" | "sms";
 };
 
 export type QueueRowActionPayload = {
@@ -105,6 +107,7 @@ export async function launchContextualQuickMessage(invocation: ContextualActionI
         phone: invocation.phone,
         originatingSurface: invocation.surface,
         recordScoped: true,
+        defaultChannel: invocation.defaultChannel,
     });
 }
 
