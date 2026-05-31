@@ -77,6 +77,12 @@ import { AssignmentStatusBadge, StatusBadge, getStatusVariant } from "@/componen
 import { OpportunityTourScheduleActionModal } from "@/components/admin/opportunity/tours/OpportunityTourScheduleActionModal";
 import { ContactAttemptedModal } from "@/components/admin/opportunity/actions/ContactAttemptedModal";
 import { MarkLostModal } from "@/components/admin/opportunity/actions/MarkLostModal";
+import { AddNoteModal } from "@/components/admin/opportunity/actions/AddNoteModal";
+import { RecordTourOutcomeModal } from "@/components/admin/opportunity/actions/RecordTourOutcomeModal";
+import {
+    ADMINV2_OPEN_TOUR_OUTCOME_MODAL,
+    ADMINV2_OPEN_TOUR_SCHEDULE_MODAL,
+} from "@/lib/tours/actions/tourBookingActionClient";
 import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions/UpdateStatusAddNoteModal";
 import { AddRelatedPersonModal } from "@/components/admin/opportunity/actions/AddRelatedPersonModal";
 import { AddFamilyMemberModal } from "@/components/admin/opportunity/actions/AddFamilyMemberModal";
@@ -3971,11 +3977,63 @@ export default function AdminEntityDrawer() {
             if (!id || drawer.type !== "opportunities" || drawer.id !== id) return;
             setOppLaunchPacketOpen(true);
         };
+        const onFocusDocuments = (ev: Event) => {
+            const ce = ev as CustomEvent<{ opportunity_id?: string }>;
+            const id = typeof ce.detail?.opportunity_id === "string" ? ce.detail.opportunity_id.trim() : "";
+            if (!id || drawer.type !== "opportunities" || drawer.id !== id) return;
+            setDrawerTab("documents");
+        };
         window.addEventListener("adminv2:open-send-form", onOpenSendForm as EventListener);
         window.addEventListener("adminv2:open-enrollment-packet", onOpenEnrollmentPacket as EventListener);
+        window.addEventListener("adminv2:opportunity-focus-documents", onFocusDocuments as EventListener);
+        const onOpenTourSchedule = (ev: Event) => {
+            const ce = ev as CustomEvent<{ opportunity_id?: string; action_key?: string }>;
+            const id = typeof ce.detail?.opportunity_id === "string" ? ce.detail.opportunity_id.trim() : "";
+            if (!id || drawer.type !== "opportunities" || drawer.id !== id) return;
+            setActionFormState({
+                form_key: "schedule_tour",
+                action: {
+                    key: ce.detail?.action_key === "reschedule_tour" ? "reschedule_tour" : "schedule_tour",
+                    label: ce.detail?.action_key === "reschedule_tour" ? "Reschedule tour" : "Schedule tour",
+                    description: null,
+                    action_type: "open_form",
+                    icon: null,
+                    style: null,
+                    display_style: "button",
+                    payload: { form_key: "schedule_tour" },
+                    workflow_id: null,
+                },
+                executeContext: { surface: "record_header" },
+            });
+        };
+        const onOpenTourOutcome = (ev: Event) => {
+            const ce = ev as CustomEvent<{ opportunity_id?: string }>;
+            const id = typeof ce.detail?.opportunity_id === "string" ? ce.detail.opportunity_id.trim() : "";
+            if (!id || drawer.type !== "opportunities" || drawer.id !== id) return;
+            setActionFormState({
+                form_key: "record_tour_outcome",
+                action: {
+                    key: "record_tour_outcome",
+                    label: "Record tour outcome",
+                    description: null,
+                    action_type: "open_form",
+                    icon: null,
+                    style: null,
+                    display_style: "button",
+                    payload: { form_key: "record_tour_outcome" },
+                    workflow_id: null,
+                },
+                executeContext: { surface: "record_header" },
+            });
+        };
+        window.addEventListener(ADMINV2_OPEN_TOUR_SCHEDULE_MODAL, onOpenTourSchedule as EventListener);
+        window.addEventListener(ADMINV2_OPEN_TOUR_OUTCOME_MODAL, onOpenTourOutcome as EventListener);
         return () => {
             window.removeEventListener("adminv2:open-send-form", onOpenSendForm as EventListener);
             window.removeEventListener("adminv2:open-enrollment-packet", onOpenEnrollmentPacket as EventListener);
+            window.removeEventListener("adminv2:opportunity-focus-documents", onFocusDocuments as EventListener);
+            window.removeEventListener(ADMINV2_OPEN_TOUR_SCHEDULE_MODAL, onOpenTourSchedule as EventListener);
+            window.removeEventListener(ADMINV2_OPEN_TOUR_OUTCOME_MODAL, onOpenTourOutcome as EventListener);
         };
     }, [drawer.type, drawer.id]);
 
@@ -17159,7 +17217,11 @@ export default function AdminEntityDrawer() {
                     onPaymentOutcome={(o) => setPaymentToast(o)}
                 />
                 <OpportunityTourScheduleActionModal
-                    open={actionFormState?.form_key === "schedule_tour" && drawer.type === "opportunities"}
+                    open={
+                        (actionFormState?.form_key === "schedule_tour" ||
+                            actionFormState?.action?.key === "reschedule_tour") &&
+                        drawer.type === "opportunities"
+                    }
                     onClose={() => setActionFormState(null)}
                     title={actionFormState?.action?.label ?? "Schedule tour"}
                     submitLabel={actionFormState?.action?.label ?? "Save"}
@@ -17335,6 +17397,46 @@ export default function AdminEntityDrawer() {
                         }
                     }}
                 />
+                <RecordTourOutcomeModal
+                    open={actionFormState?.form_key === "record_tour_outcome"}
+                    onClose={() => setActionFormState(null)}
+                    title={actionFormState?.action?.label ?? "Record tour outcome"}
+                    onSubmit={async (payload) => {
+                        if (!drawer.id || drawer.id === "new" || drawer.type !== "opportunities") return;
+                        const actionKey = actionFormState?.action?.key ? String(actionFormState.action.key) : "record_tour_outcome";
+                        setOpportunityActionLoading(actionKey);
+                        setSaveError(null);
+                        try {
+                            const workUnitId =
+                                data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
+                                    ? String((data as { work_unit_id?: unknown }).work_unit_id)
+                                    : null;
+                            const res = await fetch("/api/admin/actions/execute", {
+                                method: "POST",
+                                credentials: "include",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    action_key: actionKey,
+                                    entity_type: "opportunity",
+                                    entity_id: drawer.id,
+                                    context: { surface: "record_header", work_unit_id: workUnitId },
+                                    payload: { outcome: payload.outcome },
+                                }),
+                            });
+                            const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+                            if (!res.ok || !json.ok) {
+                                throw new Error(json.error ?? "Action failed");
+                            }
+                            setActionFormState(null);
+                            refetch();
+                            window.dispatchEvent(
+                                new CustomEvent("adminv2:opportunity-updated", { detail: { id: drawer.id, action_key: actionKey } })
+                            );
+                        } finally {
+                            setOpportunityActionLoading(null);
+                        }
+                    }}
+                />
                 <ContactAttemptedModal
                     open={actionFormState?.form_key === "contact_attempted"}
                     onClose={() => setActionFormState(null)}
@@ -17411,6 +17513,54 @@ export default function AdminEntityDrawer() {
                                         ...(payload.note ? { note: payload.note } : {}),
                                         status_key: "lost",
                                     },
+                                }),
+                            });
+                            const json = (await res.json().catch(() => ({}))) as {
+                                ok?: boolean;
+                                error?: string;
+                                execution_result?: Record<string, unknown> & { row?: Record<string, unknown> };
+                            };
+                            if (!res.ok || !json.ok) {
+                                throw new Error(json.error ?? "Action failed");
+                            }
+                            const row = json.execution_result?.row;
+                            if (row && typeof row === "object") {
+                                setData((prev) => (prev && typeof prev === "object" ? { ...prev, ...row } : prev));
+                            }
+                            setActionFormState(null);
+                            refetch();
+                            window.dispatchEvent(
+                                new CustomEvent("adminv2:opportunity-updated", { detail: { id: drawer.id, action_key: actionKey } })
+                            );
+                        } finally {
+                            setOpportunityActionLoading(null);
+                        }
+                    }}
+                />
+                <AddNoteModal
+                    open={actionFormState?.form_key === "add_note"}
+                    onClose={() => setActionFormState(null)}
+                    title={actionFormState?.action?.label ?? "Add note"}
+                    onSubmit={async (payload) => {
+                        if (!drawer.id || drawer.id === "new" || drawer.type !== "opportunities") return;
+                        const actionKey = actionFormState?.action?.key ? String(actionFormState.action.key) : "add_note";
+                        setOpportunityActionLoading(actionKey);
+                        setSaveError(null);
+                        try {
+                            const workUnitId =
+                                data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
+                                    ? String((data as { work_unit_id?: unknown }).work_unit_id)
+                                    : null;
+                            const res = await fetch("/api/admin/actions/execute", {
+                                method: "POST",
+                                credentials: "include",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    action_key: actionKey,
+                                    entity_type: "opportunity",
+                                    entity_id: drawer.id,
+                                    context: { surface: "record_header", work_unit_id: workUnitId },
+                                    payload: { note: payload.note },
                                 }),
                             });
                             const json = (await res.json().catch(() => ({}))) as {

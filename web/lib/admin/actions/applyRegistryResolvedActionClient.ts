@@ -7,6 +7,11 @@ import {
     type ContextualActionInvocation,
 } from "@/lib/admin/actions/contextualActionInvocation";
 import { invalidateCommunicationsDrawerPrefetch } from "@/lib/admin/communications/communicationsDrawerPrefetch";
+import { ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS } from "@/lib/adminV2/opportunityDrawerTaskEvents";
+import {
+    ADMINV2_OPEN_TOUR_OUTCOME_MODAL,
+    ADMINV2_OPEN_TOUR_SCHEDULE_MODAL,
+} from "@/lib/tours/actions/tourBookingActionClient";
 
 export type RegistryActionSurfaceContext = {
     surface: string;
@@ -69,6 +74,19 @@ export async function applyRegistryResolvedActionClient(
             }
             return { ok: true };
         }
+        if (formKey === "record_tour_outcome") {
+            if (host.openForm) {
+                host.openForm({ form_key: formKey, action: a });
+                return { ok: true };
+            }
+            const oid = host.entityId?.trim();
+            if (oid && typeof window !== "undefined") {
+                window.dispatchEvent(
+                    new CustomEvent(ADMINV2_OPEN_TOUR_OUTCOME_MODAL, { detail: { opportunity_id: oid } })
+                );
+            }
+            return { ok: true };
+        }
         if (formKey && host.openForm) {
             host.openForm({ form_key: formKey, action: a });
         }
@@ -115,7 +133,107 @@ export async function applyRegistryResolvedActionClient(
     if (a.action_type === "ui_intent") {
         const p = a.payload && typeof a.payload === "object" ? (a.payload as Record<string, unknown>) : {};
         const intent = p.intent != null ? String(p.intent).trim() : "";
+        const actionKey = a.key.trim();
         const message = p.message != null ? String(p.message).trim() : "";
+        const invocation = invocationFromApplyRegistryHost(host);
+        const eid = invocation?.opportunity_id?.trim() || host.entityId?.trim() || "";
+
+        if (actionKey === "confirm_tour" || intent === "confirm_tour") {
+            if (!eid) return { ok: false, error: "entity_id required" };
+            const res = await fetch("/api/admin/actions/execute", {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    action_key: "confirm_tour",
+                    entity_type: "opportunity",
+                    entity_id: eid,
+                    context: host.context,
+                }),
+            });
+            const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+            if (!res.ok || !json.ok) {
+                return { ok: false, error: json.error ?? "Confirm tour failed" };
+            }
+            if (host.invalidate) host.invalidate({ entity_type: "opportunity", entity_id: eid, action_key: "confirm_tour" });
+            else host.router.refresh();
+            return { ok: true };
+        }
+        if (actionKey === "send_email" || intent === "send_email") {
+            if (!eid) return { ok: false, error: "entity_id required" };
+            await launchContextualQuickMessage({
+                surface: invocation?.surface ?? "record_drawer",
+                record_id: eid,
+                entity_type: "opportunity",
+                opportunity_id: eid,
+                person_id: invocation?.person_id ?? null,
+                display_name: invocation?.display_name ?? null,
+                email: invocation?.email ?? null,
+                phone: invocation?.phone ?? null,
+                department_id: invocation?.department_id ?? host.departmentId ?? null,
+                work_unit_id: invocation?.work_unit_id ?? host.workUnitId ?? null,
+                bos_source_surface: invocation?.bos_source_surface,
+                defaultChannel: "email",
+            });
+            return { ok: true };
+        }
+        if (actionKey === "send_sms" || intent === "send_sms") {
+            if (!eid) return { ok: false, error: "entity_id required" };
+            await launchContextualQuickMessage({
+                surface: invocation?.surface ?? "record_drawer",
+                record_id: eid,
+                entity_type: "opportunity",
+                opportunity_id: eid,
+                person_id: invocation?.person_id ?? null,
+                display_name: invocation?.display_name ?? null,
+                email: invocation?.email ?? null,
+                phone: invocation?.phone ?? null,
+                department_id: invocation?.department_id ?? host.departmentId ?? null,
+                work_unit_id: invocation?.work_unit_id ?? host.workUnitId ?? null,
+                bos_source_surface: invocation?.bos_source_surface,
+                defaultChannel: "sms",
+            });
+            return { ok: true };
+        }
+        if (actionKey === "call_parent" || intent === "call_parent") {
+            const phone =
+                invocation?.phone?.trim() ||
+                (p.phone != null ? String(p.phone).trim() : "") ||
+                (p.phone_e164 != null ? String(p.phone_e164).trim() : "");
+            if (!phone) {
+                window.alert("No parent phone on file. Add contact info before calling.");
+                return { ok: false, error: "No parent phone on file." };
+            }
+            const digits = phone.replace(/\D/g, "");
+            window.location.href = digits ? `tel:${digits}` : `tel:${phone}`;
+            return { ok: true };
+        }
+        if (actionKey === "create_task" || intent === "create_task") {
+            if (eid && typeof window !== "undefined") {
+                window.dispatchEvent(
+                    new CustomEvent(ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS, {
+                        detail: { opportunity_id: eid },
+                    })
+                );
+            }
+            if (typeof window !== "undefined") {
+                window.dispatchEvent(
+                    new CustomEvent("adminv2:open-tasks-panel", {
+                        detail: { opportunity_id: eid || null },
+                    })
+                );
+            }
+            return { ok: true };
+        }
+        if (actionKey === "upload_document" || intent === "upload_document") {
+            if (eid && typeof window !== "undefined") {
+                window.dispatchEvent(
+                    new CustomEvent("adminv2:opportunity-focus-documents", { detail: { opportunity_id: eid } })
+                );
+            }
+            return { ok: true };
+        }
+
         if (intent === "review_automations") {
             host.router.push("/adminV2/workflows");
             return { ok: true };
