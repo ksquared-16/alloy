@@ -1,7 +1,7 @@
 # Canonical Action Catalog v1
 
 **Path:** `docs/sprints/05_2026/canonical_action_catalog_v1.md`  
-**Status:** Phase 0 draft — review before migrations  
+**Status:** Phase 0A stubs seeded (`20260602160000_canonical_action_catalog_v1_stubs.sql`) — inactive global definitions only  
 **Version:** `canonical_action_catalog_v1`  
 **Scope:** Childcare enrollment pipeline — canonical business capabilities (not UI placements).
 
@@ -711,11 +711,27 @@ Until BOS catalog migrates, map prose keys → canonical:
 
 ---
 
-## Proposed Supabase migration plan (after catalog review)
+## Phase 0A — Inactive catalog stubs (shipped)
 
-**Do not run until Phase 0 sign-off.** Minimal, definitions-only first pass:
+**Migration:** `supabase/migrations/20260602160000_canonical_action_catalog_v1_stubs.sql`
 
-### Migration A — `canonical_action_catalog_v1_seed` (definitions only)
+| Operation | Count | Notes |
+|-----------|------:|-------|
+| **INSERT** | 30 | Global `org_id` NULL, `is_active = false`, `action_type = ui_intent`, `payload_schema.catalog_status = stub` |
+| **UPDATE** | 4 | Merge `payload_schema.catalog` only — preserve `is_active` and execution payload |
+| **Total catalog keys** | 34 | All childcare v1 catalog actions |
+
+**Updated globals (metadata only, still active):** `send_form`, `schedule_tour`, `mark_lost`, `send_enrollment_packet`.
+
+**Catalog metadata location:** `action_definitions.payload_schema.catalog` (table has no `config_json`). Fields: `catalog_version`, `doctrine_source`, `implementation_status`, `lifecycle_stage`, `lifecycle_stages`, `action_category`, `scope`, `universal`, `expected_triggers`.
+
+**Runtime:** Stubs do not resolve in UI (`is_active = false`). No `action_placements` added. Legacy keys unchanged.
+
+---
+
+## Proposed Supabase migration plan (remaining)
+
+### Migration A — `canonical_action_catalog_v1_seed` (definitions only) — **DONE as 0A**
 
 1. Insert **global** (`org_id` NULL) rows for all **missing** catalog keys with:
    - `is_active = false` (or `true` with `ui_intent` + `"catalog_status":"stub"`) until handlers ship

@@ -195,7 +195,17 @@ Phase 1 placement migration will repoint to canonical definition IDs with `lifec
 
 ---
 
-## Proposed migration SQL sketch (review only — not applied)
+## Phase 0A migration (applied)
+
+**File:** `supabase/migrations/20260602160000_canonical_action_catalog_v1_stubs.sql`
+
+- Inserts 30 inactive global stubs for catalog keys without a global row.
+- Updates 4 existing globals with `payload_schema.catalog` only (`send_form`, `schedule_tour`, `mark_lost`, `send_enrollment_packet`).
+- Does not deactivate legacy keys or add placements.
+
+---
+
+## Proposed migration SQL sketch (Phase 0B — not applied)
 
 ```sql
 -- Migration A (sketch): insert inactive canonical stubs
