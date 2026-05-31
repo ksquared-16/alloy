@@ -234,13 +234,9 @@ describe("child module nav — below tabs, no enrollment pipeline", () => {
         expect(src).toContain("personDrawerChildBodyHydrated");
         expect(src).toContain("PersonDrawerChildOverviewSkeleton");
         expect(src).toContain("personDrawerChildOverviewPending");
-        expect(src).toContain("PersonDrawerChildSummary");
-        expect(src).toMatch(
-            /personChildLifecycleChrome[\s\S]{0,240}isPersonDrawerSeedRecord/
-        );
-        expect(src).toMatch(
-            /personDrawerChildOverviewPending && !personDrawerPaintReady/
-        );
+        expect(src).toContain("PersonDrawerOperatingSections");
+        expect(src).toContain("personDrawerTypedBodySnapshot");
+        expect(src).toContain("!personDrawerTypedBodySnapshot");
     });
 });
 

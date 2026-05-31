@@ -866,24 +866,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
         wuLanePreviewBundleDoneRef.current = false;
         wuDeferredSummaryHydrateDoneRef.current = false;
         queueItemsLastFetchSigRef.current = null;
-        queueRowLeaseSigsRef.current.clear();
-        queueRowClientCacheRef.current.clear();
-        queueRowsBufferRef.current = [];
-        queueRowsBufferQueueKeyRef.current = null;
-        queueRowsBufferWorkUnitIdRef.current = null;
         wuBootstrapAttentionRef.current = null;
         setWuBootstrapAttentionBuckets(null);
         primaryLaneRowsSettledOnceRef.current = false;
         userLaneTouchedRef.current = false;
         skipNextQueueFetchEffectRef.current = false;
 
-        setQueueSummaries(null);
-        setQueueSummariesError(null);
-        setQueueSummariesRoute(null);
-        setQueueItems(null);
-        setQueueItemsError(null);
-        setQueueItemsRoute(null);
-        setQueueItemsLoading(false);
         setWuPrimaryLaneTimedOut(false);
 
         initialLocationRef.current = readWorkUnitInitialLocationParams();
@@ -894,6 +882,32 @@ export default function AdminV2OpportunityWorkUnitPage() {
             : null;
         routeQueueSelectionRef.current = routeSelection;
         explicitRouteQueueLockedRef.current = isExplicitWorkUnitQueueSelection(routeSelection);
+
+        const pageCacheHitEarly =
+            orgId ?
+                readWorkUnitPageCache(orgId, departmentId, workUnitId, principalUserId, accessScopeFingerprint)
+            :   null;
+        const warmLaneRetain = Boolean(
+            pageCacheHitEarly &&
+            pageCacheHitEarly.departmentId === departmentId &&
+            pageCacheHitEarly.workUnit.id === workUnitId
+        );
+
+        if (!warmLaneRetain) {
+            queueRowLeaseSigsRef.current.clear();
+            queueRowClientCacheRef.current.clear();
+            queueRowsBufferRef.current = [];
+            queueRowsBufferQueueKeyRef.current = null;
+            queueRowsBufferWorkUnitIdRef.current = null;
+            setQueueSummaries(null);
+            setQueueSummariesError(null);
+            setQueueSummariesRoute(null);
+            setQueueItems(null);
+            setQueueItemsError(null);
+            setQueueItemsRoute(null);
+            setQueueItemsLoading(false);
+        }
+
         recordAdminV2RouteChurnAttempt("work-unit-lane-init");
         if (routeSelection) {
             setSelectedQueueKeyTraced(
@@ -912,18 +926,51 @@ export default function AdminV2OpportunityWorkUnitPage() {
         clearWorkUnitBootstrapSessionForEntity(departmentId, workUnitId);
         if (!orgId) return;
         setWorkUnit((prev) => (prev?.id === workUnitId ? prev : null));
-        const hit = readWorkUnitPageCache(orgId, departmentId, workUnitId, principalUserId, accessScopeFingerprint);
-        if (!hit || hit.departmentId !== departmentId || hit.workUnit.id !== workUnitId) {
+        if (!pageCacheHitEarly || pageCacheHitEarly.departmentId !== departmentId || pageCacheHitEarly.workUnit.id !== workUnitId) {
             seededWorkUnitShellRef.current = false;
             setWorkUnitPageSeededFromCache(false);
             return;
         }
         seededWorkUnitShellRef.current = true;
         setWorkUnitPageSeededFromCache(true);
-        setDept(hit.dept);
-        setWorkUnit(hit.workUnit as WorkUnitRow);
+        setDept(pageCacheHitEarly.dept);
+        setWorkUnit(pageCacheHitEarly.workUnit as WorkUnitRow);
         setError(null);
         setLoading(false);
+
+        if (warmLaneRetain && routeSelection) {
+            const pillKey = workUnitActivePillKeyFromSelection(routeSelection);
+            const abSnap = String(routeSelection.attentionBucketKey ?? "").trim();
+            const resolvedFetch = resolveWorkUnitFetchQueueKeyFromPill(
+                pillKey,
+                abSnap,
+                { queue_definition: pageCacheHitEarly.workUnit.queue_definition }
+            );
+            const apiQueueKey = resolvedFetch.queueKey;
+            if (apiQueueKey) {
+                const logicalKey = queueRowLogicalCacheKey(
+                    accessScopeFingerprint,
+                    workUnitId,
+                    apiQueueKey,
+                    init.unmapped,
+                    abSnap
+                );
+                const ent = touchQueueRowCacheOnHit(queueRowClientCacheRef.current, logicalKey);
+                if (ent?.payload) {
+                    setQueueItems(ent.payload);
+                    setQueueItemsError(null);
+                    setQueueItemsLoading(false);
+                    logQueueRowClientCache({
+                        event: "hit",
+                        work_unit_id: workUnitId,
+                        queue_key: apiQueueKey,
+                        pill_key: pillKey,
+                        attention_bucket_key: abSnap || undefined,
+                        age_ms: Date.now() - ent.fetchedAt,
+                    });
+                }
+            }
+        }
     }, [
         departmentId,
         workUnitId,
@@ -1906,7 +1953,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 );
                 if (!primaryKey) return;
                 parallelPrimaryRowStartedRef.current = true;
-                setQueueItemsLoading(true);
                 const routeSel = routeQueueSelectionRef.current;
                 const pillKey =
                     routeSel && routeSel.queueKey === primaryKey
@@ -1916,6 +1962,34 @@ export default function AdminV2OpportunityWorkUnitPage() {
                           })
                         : primaryKey;
                 const abForFetch = initialLocationRef.current.attentionBucket.trim();
+                const resolvedFetch = resolveWorkUnitFetchQueueKeyFromPill(
+                    pillKey,
+                    abForFetch,
+                    { queue_definition: cachedWu.queue_definition }
+                );
+                const apiQueueKey = resolvedFetch.queueKey;
+                if (apiQueueKey) {
+                    const logicalKey = queueRowLogicalCacheKey(
+                        accessScopeFingerprint,
+                        workUnitId,
+                        apiQueueKey,
+                        initialLocationRef.current.unmapped,
+                        abForFetch
+                    );
+                    const ent = touchQueueRowCacheOnHit(queueRowClientCacheRef.current, logicalKey);
+                    if (ent?.payload) {
+                        setQueueItems(ent.payload);
+                        setQueueItemsLoading(false);
+                        void fetchQueueItemsRef.current(workUnitId, pillKey, null, {
+                            ...(primaryKey.trim().toLowerCase() === "needs_attention" && abForFetch
+                                ? { attentionBucketOverride: abForFetch }
+                                : {}),
+                            quietStaleRefresh: true,
+                        });
+                        return;
+                    }
+                }
+                setQueueItemsLoading(true);
                 void fetchQueueItemsRef.current(workUnitId, pillKey, null, {
                     ...(primaryKey.trim().toLowerCase() === "needs_attention" && abForFetch
                         ? { attentionBucketOverride: abForFetch }
@@ -2879,8 +2953,31 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 ? String((queueItems.queue as { key?: string }).key ?? "")
                 : "";
 
-        const entity = queueItems?.queue.entity_type ?? activeQueue?.entity_type ?? "job";
-        const rawList = (queueItems?.items ?? []) as unknown[];
+        let queueItemsForDisplay = queueItems;
+        if (!queueItemsForDisplay && activeQueueKey && workUnitId) {
+            const resolvedFetch = resolveWorkUnitFetchQueueKeyFromPill(
+                selectedQueueKey ?? activeQueueKey,
+                attentionBucketKey,
+                workUnit ? { queue_definition: workUnit.queue_definition } : undefined
+            );
+            const apiQueueKey = resolvedFetch.queueKey;
+            if (apiQueueKey) {
+                const logicalKey = queueRowLogicalCacheKey(
+                    viewScopeFingerprint,
+                    workUnitId,
+                    apiQueueKey,
+                    laneUnmappedOnly,
+                    attentionBucketKey.trim()
+                );
+                const ent = peekFreshQueueRowCache(queueRowClientCacheRef.current, logicalKey);
+                if (ent?.payload) {
+                    queueItemsForDisplay = ent.payload;
+                }
+            }
+        }
+
+        const entity = queueItemsForDisplay?.queue.entity_type ?? activeQueue?.entity_type ?? "job";
+        const rawList = (queueItemsForDisplay?.items ?? []) as unknown[];
 
         const unmappedClientFilter =
             laneUnmappedOnly &&

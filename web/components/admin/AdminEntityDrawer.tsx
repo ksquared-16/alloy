@@ -281,6 +281,7 @@ import {
 } from "@/lib/admin/drawerEntitySnapshotCache";
 import { openInquiryChildPersonFromOpportunitySync } from "@/lib/admin/drawer/openInquiryChildPersonFromOpportunity";
 import {
+    applyPersonDrawerOpenSeed,
     isPersonDrawerSeedRecord,
     PERSON_DRAWER_CHILD_OPEN_SOURCE,
     resolvePersonDrawerTransitionSnapshot,
@@ -2501,7 +2502,16 @@ export default function AdminEntityDrawer() {
             setOpportunityDrawerTabVisitTick((n) => n + 1);
             setDrawerTab("overview");
         }
+        const personOpenSeedRecord =
+            drawer.type === "persons" && drawer.id && drawer.id !== "new"
+                ? applyPersonDrawerOpenSeed(drawer.id, drawer.personDrawerOpenSeed) ??
+                  resolvePersonDrawerTransitionSnapshot({
+                      personId: drawer.id,
+                      openSeed: drawer.personDrawerOpenSeed,
+                  })
+                : null;
         setData((prev) => {
+            if (personOpenSeedRecord) return personOpenSeedRecord;
             if (!prev) return null;
             const loadedId = String((prev as { id?: unknown }).id ?? "").trim();
             if (loadedId && loadedId === String(drawer.id ?? "").trim()) return prev;
@@ -2515,7 +2525,12 @@ export default function AdminEntityDrawer() {
         setVendorRelatedData(null);
         setLocationDocuments([]);
         setOpportunityRelatedData(null);
-        setLoading(true);
+        if (personOpenSeedRecord) {
+            putDrawerEntitySnapshot("persons", drawer.id, personOpenSeedRecord);
+            setLoading(false);
+        } else {
+            setLoading(true);
+        }
         setError(null);
         setIsEditing(false);
         if (drawer.type === "opportunities" && drawer.id !== "new") {
@@ -7538,8 +7553,16 @@ export default function AdminEntityDrawer() {
      * One coordinated overview reveal — bootstrap shell waits for in-flight full hydrate (or cap)
      * so inquiry sections do not pop in sequentially.
      */
+    const opportunityDrawerTypedSnapshotFirstPaint = useMemo(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return false;
+        if (opportunityDrawerFirstPaintPreloadedRef.current !== drawer.id) return false;
+        if (!overviewData || (overviewData as { _create?: boolean })._create) return false;
+        return snapshotCanRenderDrawerFrame(overviewData as Record<string, unknown>);
+    }, [drawer.type, drawer.id, overviewData, opportunityBootstrapAppliedId]);
+
     const opportunityDrawerCoordinatedRevealReady = useMemo(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return false;
+        if (opportunityDrawerTypedSnapshotFirstPaint) return true;
         if (!opportunityDrawerShellSettled || error) return false;
         if (!opportunityDrawerRevealCoordActive) return true;
         if (!opportunityRecordHydrationPending) return true;
@@ -7557,6 +7580,7 @@ export default function AdminEntityDrawer() {
         opportunityPrimaryHydrateApplied,
         opportunityBackgroundFullHydrateFailed,
         opportunityDrawerRevealCoordTimedOut,
+        opportunityDrawerTypedSnapshotFirstPaint,
     ]);
 
     const opportunityDrawerPrimaryContractSatisfied = useMemo(() => {
@@ -7570,6 +7594,7 @@ export default function AdminEntityDrawer() {
 
     const opportunityDrawerInquiryStructuralReady = useMemo(() => {
         if (!opportunityInquiryWorkflowDrawer || !drawer.id || drawer.id === "new") return true;
+        if (opportunityDrawerTypedSnapshotFirstPaint) return true;
         return opportunityInquiryDrawerShellStructurallyReady({
             shellContractPresent: opportunityDrawerShellContract != null,
             primaryContractSatisfied: opportunityDrawerPrimaryContractSatisfied,
@@ -7583,6 +7608,7 @@ export default function AdminEntityDrawer() {
         opportunityDrawerShellContract,
         opportunityDrawerPrimaryContractSatisfied,
         overviewData,
+        opportunityDrawerTypedSnapshotFirstPaint,
     ]);
 
     const opportunityDrawerAboveFoldPresentationReport = useMemo(() => {
@@ -7630,9 +7656,10 @@ export default function AdminEntityDrawer() {
         opportunityDrawerAboveFoldPresentationReport.ready || opportunityDrawerPresentationGateTimedOut;
 
     const opportunityDrawerOverviewRevealReady =
-        opportunityDrawerCoordinatedRevealReady &&
-        opportunityDrawerInquiryStructuralReady &&
-        (!opportunityInquiryWorkflowDrawer || opportunityDrawerAboveFoldPresentationReady);
+        opportunityDrawerTypedSnapshotFirstPaint ||
+        (opportunityDrawerCoordinatedRevealReady &&
+            opportunityDrawerInquiryStructuralReady &&
+            (!opportunityInquiryWorkflowDrawer || opportunityDrawerAboveFoldPresentationReady));
 
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
@@ -8344,6 +8371,7 @@ export default function AdminEntityDrawer() {
         opportunityDrawerFirstPaintPreloadedRef.current === drawer.id;
 
     const opportunityDrawerPrimaryLoadingVisible =
+        !opportunityDrawerTypedSnapshotFirstPaint &&
         !opportunityDrawerFirstPaintPreloaded &&
         opportunityDrawerRevealCoordActive &&
         !error &&
@@ -8574,17 +8602,19 @@ export default function AdminEntityDrawer() {
         (dataMatchesDrawer || personDrawerFirstPaintRecord != null) &&
         (drawerReady || isPersonDrawerSeedRecord(overviewData as Record<string, unknown>));
 
+    const personDrawerTypedBodySnapshot =
+        isPersonDrawerSeedRecord((data ?? overviewData) as Record<string, unknown>) ||
+        Boolean(drawer.personDrawerOpenSeed?.personId === drawer.id);
+
     const personDrawerChildBodyHydrated =
         personChildLifecycleChrome &&
         personDrawerPaintReady &&
-        !isPersonDrawerSeedRecord(data as Record<string, unknown>) &&
-        drawerReady;
+        (drawerReady || personDrawerTypedBodySnapshot);
 
     const personDrawerParentBodyHydrated =
         personParentGuardianChrome &&
         personDrawerPaintReady &&
-        !isPersonDrawerSeedRecord(data as Record<string, unknown>) &&
-        drawerReady;
+        (drawerReady || personDrawerTypedBodySnapshot);
 
     const personDrawerOverviewReady =
         personDrawerPaintReady &&
@@ -8604,7 +8634,8 @@ export default function AdminEntityDrawer() {
         drawer.id !== "new" &&
         !error &&
         personChildLifecycleChrome &&
-        !personDrawerChildBodyHydrated;
+        !personDrawerChildBodyHydrated &&
+        !personDrawerTypedBodySnapshot;
 
     const personDrawerParentOverviewPending =
         drawer.type === "persons" &&
@@ -8612,7 +8643,8 @@ export default function AdminEntityDrawer() {
         drawer.id !== "new" &&
         !error &&
         personParentGuardianChrome &&
-        !personDrawerParentBodyHydrated;
+        !personDrawerParentBodyHydrated &&
+        !personDrawerTypedBodySnapshot;
 
     const personDrawerHasTypedOpenSnapshot =
         isPersonDrawerSnapshotWarm(String(drawer.id)) ||
@@ -8626,6 +8658,7 @@ export default function AdminEntityDrawer() {
         !error &&
         !personDrawerPaintReady &&
         !personDrawerHasTypedOpenSnapshot &&
+        !personDrawerTypedBodySnapshot &&
         loading;
 
     useEffect(() => {

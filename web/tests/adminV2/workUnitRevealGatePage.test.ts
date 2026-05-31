@@ -16,6 +16,8 @@ describe("work-unit above-fold reveal gate (page)", () => {
         expect(page).toContain("workUnitAboveFoldPageReady");
         expect(page).toContain("workUnitPageSeededFromCache");
         expect(page).toContain("setWorkUnitPageSeededFromCache");
+        expect(page).toContain("warmLaneRetain");
+        expect(page).toContain("queueItemsForDisplay");
         expect(page).toContain("workUnitPageContentReady");
         expect(page).toContain("resolveWorkUnitPageContentReady");
         expect(page).toContain("WorkUnitPageLoadingGate");
