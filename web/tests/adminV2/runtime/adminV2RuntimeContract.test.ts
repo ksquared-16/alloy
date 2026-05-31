@@ -115,6 +115,35 @@ describe("AdminV2 drawer tabs contract", () => {
         expect(adminV2DrawerHeaderActionsTabIndependent({ inquiryWorkflow: true })).toBe(true);
     });
 
+    it("can reveal header actions on communications tab before below-fold without blocking on tab", () => {
+        const plan = composeAdminV2DrawerRuntime({
+            entityType: "opportunities",
+            surface: "opportunity",
+            drawerId: "opp-1",
+            activeTab: "communications",
+            record: {
+                id: "opp-1",
+                _record_surface: "drawer_primary",
+                metadata: { tour_date: "2026-06-01" },
+                _customer_name: "Test",
+            },
+            error: null,
+            typedSnapshot: false,
+            bodyHydrated: true,
+            fullHydrateReady: false,
+            frameReady: true,
+            headerActionsResolved: true,
+            headerActionsLoading: false,
+            headerActionsExpectRegistry: true,
+            inquiryWorkflow: true,
+            belowFoldRevealed: false,
+            presentationReady: true,
+            primaryContractReady: true,
+            needsBackgroundHydrate: false,
+        });
+        expect(plan.canRevealHeaderActions).toBe(true);
+    });
+
     it("workflow tabs pre-mount when drawer surface is ready", () => {
         expect(
             adminV2DrawerTabsPremountWhenSurfaceReady({

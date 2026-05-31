@@ -1458,12 +1458,13 @@ export default function CommunicationsDrawerSection({
                 {loadingThreads ? (
                     <CommsQuietSkeletonLines dense={Boolean(embedded)} />
                 ) : useWideComposerSplit ? (
-                    <div className="flex min-h-0 flex-1 flex-col gap-1.5 lg:flex-row lg:items-stretch lg:gap-2">
-                        <div className="flex min-h-0 min-w-0 flex-col gap-1.5 lg:w-[min(33%,17rem)] lg:max-w-[18rem] lg:shrink-0">
+                    <div
+                        className="flex min-h-0 flex-1 flex-col gap-1.5 lg:flex-row lg:items-stretch lg:gap-2"
+                        data-comms-split-layout="thread-left-composer-right"
+                    >
+                        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5 lg:max-w-[58%]">
                             {channelFilterTabs}
                             {composerSplitLeft}
-                        </div>
-                        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5">
                             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-stone/15 bg-[linear-gradient(180deg,rgba(246,247,249,0.88)_0%,#ffffff_100%)] shadow-sm">
                                 <div
                                     ref={conversationScrollRef}
@@ -1472,6 +1473,8 @@ export default function CommunicationsDrawerSection({
                                     {conversationPaneBody}
                                 </div>
                             </div>
+                        </div>
+                        <div className="flex min-h-0 min-w-0 flex-col gap-1.5 lg:w-[min(42%,22rem)] lg:max-w-[24rem] lg:shrink-0">
                             {composerSplitRight}
                         </div>
                     </div>

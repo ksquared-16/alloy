@@ -318,6 +318,10 @@ import {
     putDrawerStackRestoreSnapshot,
 } from "@/lib/admin/drawer/drawerStackRestoreSnapshot";
 import {
+    peekOpportunityDrawerHeaderActionsCache,
+    putOpportunityDrawerHeaderActionsCache,
+} from "@/lib/admin/drawer/opportunityDrawerHeaderActionsCache";
+import {
     snapshotCanRenderDrawerFrame,
     snapshotInquiryChildrenNeedHydrate,
     snapshotNeedsFullRevalidate,
@@ -1770,6 +1774,8 @@ export default function AdminEntityDrawer() {
     const opportunityInteractiveMarkedRef = useRef<string | null>(null);
     /** Dedupes identical `record_header` resolutions on refetch. */
     const opportunityHeaderResolvedSigRef = useRef<string | null>(null);
+    const opportunityResolvedHeaderActionsRef = useRef<ResolvedActionsBySlot | null>(null);
+    opportunityResolvedHeaderActionsRef.current = opportunityResolvedHeaderActions;
     const opportunityDrawerBootstrapAppliedRef = useRef<string | null>(null);
     const opportunityDrawerBootstrapEntityKeyRef = useRef<string | null>(null);
     const opportunityDrawerBootstrapInflightRef = useRef<string | null>(null);
@@ -2337,6 +2343,7 @@ export default function AdminEntityDrawer() {
         setData(merged);
         setOpportunityDrawerEnrichmentHeld(preload.enrichmentHeldUntilInteraction);
         setOpportunityResolvedHeaderActions(preload.headerActions);
+        putOpportunityDrawerHeaderActionsCache(drawer.id, preload.headerActions, opportunityHeaderResolvedSigRef.current);
         setOpportunityResolvedHeaderLoading(false);
         if (boot.work_unit?.queue_definition) {
             setOpportunityQueueDefinition(
@@ -2589,6 +2596,7 @@ export default function AdminEntityDrawer() {
             if (boot.record_header_actions) {
                 setOpportunityResolvedHeaderActions(boot.record_header_actions);
                 opportunityHeaderResolvedSigRef.current = "bootstrap";
+                putOpportunityDrawerHeaderActionsCache(drawer.id, boot.record_header_actions, "bootstrap");
             }
             setOpportunityResolvedHeaderLoading(false);
             if (boot.work_unit?.queue_definition) {
@@ -4082,8 +4090,10 @@ export default function AdminEntityDrawer() {
                 if (typeof window !== "undefined" && typeof performance !== "undefined") {
                     alloyPerfSet("drawer_header_actions_response", performance.now());
                 }
-                setOpportunityResolvedHeaderActions(j.actions ?? null);
+                const resolved = j.actions ?? null;
+                setOpportunityResolvedHeaderActions(resolved);
                 opportunityHeaderResolvedSigRef.current = actionsUrl;
+                putOpportunityDrawerHeaderActionsCache(drawer.id, resolved, actionsUrl);
                 if (timingEnabled) {
                     console.info("[timing][drawer]", {
                         key: `opportunities:${drawer.id}`,
@@ -4171,8 +4181,10 @@ export default function AdminEntityDrawer() {
                     if (typeof window !== "undefined" && typeof performance !== "undefined") {
                         alloyPerfSet("drawer_header_actions_response", performance.now());
                     }
-                    setOpportunityResolvedHeaderActions(j.actions ?? null);
+                    const refetched = j.actions ?? null;
+                    setOpportunityResolvedHeaderActions(refetched);
                     opportunityHeaderResolvedSigRef.current = actionsUrl;
+                    putOpportunityDrawerHeaderActionsCache(drawer.id, refetched, actionsUrl);
                     if (timingEnabled) {
                         console.info("[timing][drawer]", {
                             key: `opportunities:${drawer.id}`,
@@ -7803,6 +7815,14 @@ export default function AdminEntityDrawer() {
                         opportunityDrawerFirstPaintPreloaded:
                             opportunityDrawerFirstPaintPreloadedRef.current === prev.id,
                     });
+                    const headerActions = opportunityResolvedHeaderActionsRef.current;
+                    if (headerActions) {
+                        putOpportunityDrawerHeaderActionsCache(
+                            prev.id,
+                            headerActions,
+                            opportunityHeaderResolvedSigRef.current
+                        );
+                    }
                 }
                 if (data && entityDataMatchesDrawer(data, prev.id, "opportunities")) {
                     const transitioned = resolvePersonDrawerTransitionSnapshot({
@@ -7904,6 +7924,7 @@ export default function AdminEntityDrawer() {
 
                 personLinkedPersonsPrefetchedRef.current = null;
 
+                const headerActionsCache = peekOpportunityDrawerHeaderActionsCache(next.id);
                 if (entityWarm) {
                     setData(cached);
                     setLoading(!restoreCanRenderFrame);
@@ -7946,6 +7967,11 @@ export default function AdminEntityDrawer() {
                     if (shell.opportunityDrawerFirstPaintPreloaded && restoreCanRenderFrame) {
                         opportunityDrawerFirstPaintPreloadedRef.current = next.id;
                     }
+                }
+                if (headerActionsCache) {
+                    setOpportunityResolvedHeaderActions(headerActionsCache.actions);
+                    setOpportunityResolvedHeaderLoading(false);
+                    opportunityHeaderResolvedSigRef.current = headerActionsCache.resolvedSig;
                 }
                 if (needsBackgroundHydrate) {
                     allowOpportunityDrawerFullRefetch(next.id);
@@ -11804,7 +11830,11 @@ export default function AdminEntityDrawer() {
         opportunityDrawerQueueBootstrap && Boolean(opportunityQueuePreviewSeed?.title?.trim());
 
     const opportunityHeaderTitleRailStable =
-        opportunityDrawerTypedSnapshotFirstPaint || opportunityDrawerOverviewRevealReady;
+        opportunityDrawerTypedSnapshotFirstPaint ||
+        opportunityDrawerOverviewRevealReady ||
+        (opportunityInquiryWorkflowDrawer &&
+            entityRowReady &&
+            opportunityRegistryHeaderReady);
 
     const opportunityDrawerHeaderCalmLoading =
         drawer.type === "opportunities" &&

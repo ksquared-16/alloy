@@ -103,7 +103,10 @@ export function composeAdminV2DrawerRuntime(
     const canRevealHeaderActions =
         drawerSurfaceReady &&
         headerActionsReady &&
-        (headerActionsTabIndependent || input.belowFoldRevealed || input.typedSnapshot);
+        (headerActionsTabIndependent ||
+            input.belowFoldRevealed ||
+            input.typedSnapshot ||
+            input.headerActionsResolved);
 
     const canRevealActiveTab = adminV2DrawerCanRevealActiveTab({
         inquiryWorkflow: input.inquiryWorkflow,
