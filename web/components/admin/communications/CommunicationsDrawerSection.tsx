@@ -1459,10 +1459,10 @@ export default function CommunicationsDrawerSection({
                     <CommsQuietSkeletonLines dense={Boolean(embedded)} />
                 ) : useWideComposerSplit ? (
                     <div
-                        className="flex min-h-0 flex-1 flex-col gap-1.5 lg:flex-row lg:items-stretch lg:gap-2"
+                        className="flex min-h-0 flex-1 flex-col gap-1.5 lg:grid lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(22rem,0.4fr)_minmax(32rem,0.6fr)] lg:items-stretch lg:gap-2"
                         data-comms-split-layout="thread-left-composer-right"
                     >
-                        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5 lg:max-w-[58%]">
+                        <div className="flex min-h-0 min-w-0 flex-col gap-1.5">
                             {channelFilterTabs}
                             {composerSplitLeft}
                             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-stone/15 bg-[linear-gradient(180deg,rgba(246,247,249,0.88)_0%,#ffffff_100%)] shadow-sm">
@@ -1474,7 +1474,7 @@ export default function CommunicationsDrawerSection({
                                 </div>
                             </div>
                         </div>
-                        <div className="flex min-h-0 min-w-0 flex-col gap-1.5 lg:w-[min(42%,22rem)] lg:max-w-[24rem] lg:shrink-0">
+                        <div className="flex min-h-0 min-w-0 flex-col gap-1.5">
                             {composerSplitRight}
                         </div>
                     </div>

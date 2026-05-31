@@ -92,6 +92,7 @@ describe("communications tab split layout", () => {
     it("renders thread on the left and composer on the right", () => {
         const comms = readSrc("components/admin/communications/CommunicationsDrawerSection.tsx");
         expect(comms).toContain('data-comms-split-layout="thread-left-composer-right"');
+        expect(comms).toContain("lg:grid-cols-[minmax(22rem,0.4fr)_minmax(32rem,0.6fr)]");
         expect(comms).toMatch(
             /useWideComposerSplit[\s\S]*channelFilterTabs[\s\S]*composerSplitLeft[\s\S]*conversationPaneBody[\s\S]*composerSplitRight/
         );
