@@ -62,6 +62,12 @@ import {
     queueRowsBufferMatchesActiveLane,
     shouldApplyWorkUnitQueueRowsResponse,
 } from "@/lib/workspace/workUnitQueueRowFetchApply";
+import {
+    peekCachedQueueItemsForPill,
+    resolveWorkUnitQueueLaneItemsReady,
+    resolveWorkUnitQueueTabSwitchRefreshing,
+    touchCachedQueueItemsForPill,
+} from "@/lib/workspace/workUnitQueueLaneDisplay";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
@@ -860,15 +866,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
         bootstrapPrimaryRowKeyRef.current = null;
         bootstrapPrimaryRowFetchScheduledRef.current = false;
         suppressQueueFetchEffectOnceRef.current = false;
-        queueItemsRequestSeq.current += 1;
-        queueSummariesRequestSeq.current += 1;
         wuDeferredQueueKeysRef.current = [];
         wuLanePreviewBundleDoneRef.current = false;
         wuDeferredSummaryHydrateDoneRef.current = false;
-        queueItemsLastFetchSigRef.current = null;
         wuBootstrapAttentionRef.current = null;
         setWuBootstrapAttentionBuckets(null);
-        primaryLaneRowsSettledOnceRef.current = false;
         userLaneTouchedRef.current = false;
         skipNextQueueFetchEffectRef.current = false;
 
@@ -894,6 +896,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
         );
 
         if (!warmLaneRetain) {
+            queueItemsRequestSeq.current += 1;
+            queueSummariesRequestSeq.current += 1;
+            queueItemsLastFetchSigRef.current = null;
+            primaryLaneRowsSettledOnceRef.current = false;
             queueRowLeaseSigsRef.current.clear();
             queueRowClientCacheRef.current.clear();
             queueRowsBufferRef.current = [];
@@ -947,28 +953,41 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 { queue_definition: pageCacheHitEarly.workUnit.queue_definition }
             );
             const apiQueueKey = resolvedFetch.queueKey;
-            if (apiQueueKey) {
-                const logicalKey = queueRowLogicalCacheKey(
-                    accessScopeFingerprint,
-                    workUnitId,
-                    apiQueueKey,
-                    init.unmapped,
-                    abSnap
-                );
-                const ent = touchQueueRowCacheOnHit(queueRowClientCacheRef.current, logicalKey);
-                if (ent?.payload) {
-                    setQueueItems(ent.payload);
-                    setQueueItemsError(null);
-                    setQueueItemsLoading(false);
-                    logQueueRowClientCache({
-                        event: "hit",
-                        work_unit_id: workUnitId,
-                        queue_key: apiQueueKey,
-                        pill_key: pillKey,
-                        attention_bucket_key: abSnap || undefined,
-                        age_ms: Date.now() - ent.fetchedAt,
-                    });
-                }
+            const cachedPayload = touchCachedQueueItemsForPill({
+                cache: queueRowClientCacheRef.current,
+                viewScopeFingerprint,
+                workUnitId,
+                pillKey,
+                attentionBucketKey: abSnap,
+                unmappedOnly: init.unmapped,
+                queueDefinition: pageCacheHitEarly.workUnit.queue_definition,
+            });
+            if (cachedPayload) {
+                setQueueItems(cachedPayload);
+                setQueueItemsError(null);
+                setQueueItemsLoading(false);
+                primaryLaneRowsSettledOnceRef.current = true;
+                logQueueRowClientCache({
+                    event: "hit",
+                    work_unit_id: workUnitId,
+                    queue_key: apiQueueKey,
+                    pill_key: pillKey,
+                    attention_bucket_key: abSnap || undefined,
+                    age_ms: null,
+                });
+            } else {
+                setQueueItems((prev) => {
+                    if (!prev?.queue || typeof prev.queue !== "object") return null;
+                    const pk = String((prev.queue as { key?: string }).key ?? "").trim();
+                    if (!pk || !apiQueueKey) return null;
+                    return workUnitQueuePillKeysEquivalent(
+                        { queue_definition: pageCacheHitEarly.workUnit.queue_definition },
+                        pk,
+                        apiQueueKey
+                    )
+                        ? prev
+                        : null;
+                });
             }
         }
     }, [
@@ -977,6 +996,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         orgId,
         principalUserId,
         accessScopeFingerprint,
+        viewScopeFingerprint,
         setSelectedQueueKeyTraced,
     ]);
 
@@ -1495,6 +1515,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
             }
             if (!options?.force && fetchSig === queueItemsLastFetchSigRef.current) {
                 lease.delete(fetchSig);
+                const ent = touchQueueRowCacheOnHit(cache, logicalKey);
+                if (ent) {
+                    setQueueItems(ent.payload);
+                    setQueueItemsError(null);
+                    setQueueItemsLoading(false);
+                } else {
+                    setQueueItemsLoading(false);
+                }
                 if (pendingQueueTabPerfRef.current && typeof window !== "undefined" && typeof performance !== "undefined") {
                     pendingQueueTabPerfRef.current = false;
                     alloyPerfSet("queue_tab_rows_ready", performance.now());
@@ -1526,8 +1554,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 }
             } finally {
                 queueRowLeaseSigsRef.current.delete(fetchSig);
-                if (seq === queueItemsRequestSeq.current) {
+                if (
+                    seq === queueItemsRequestSeq.current ||
+                    queueRowLeaseSigsRef.current.size === 0
+                ) {
                     setQueueItemsLoading(false);
+                }
+                if (seq === queueItemsRequestSeq.current) {
                     requestWorkUnitDeferredSupplement();
                 }
             }
@@ -1649,9 +1682,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 alloyPerfSet("queue_tab_change_start", performance.now());
             }
             if (!sameQueue) {
-                queueRowsBufferWorkUnitIdRef.current = workUnitId;
-                queueRowsBufferRef.current = [];
-                queueRowsBufferQueueKeyRef.current = null;
                 const clearedFilters = clearLaneScopedWorkUnitRecordFilters(recordFiltersRef.current);
                 setRecordFilters(clearedFilters);
                 replaceWorkUnitQueueRecordFiltersInLocation(clearedFilters);
@@ -1691,6 +1721,26 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 });
             }
             if (workUnitId) {
+                const abForLane =
+                    resolvedPill.attentionBucketOverride !== undefined
+                        ? String(resolvedPill.attentionBucketOverride ?? "").trim()
+                        : na
+                          ? ""
+                          : attentionBucketKeyRef.current.trim();
+                const cachedLane = touchCachedQueueItemsForPill({
+                    cache: queueRowClientCacheRef.current,
+                    viewScopeFingerprint,
+                    workUnitId,
+                    pillKey: nextKey,
+                    attentionBucketKey: abForLane,
+                    unmappedOnly: unmappedActive,
+                    queueDefinition: wu?.queue_definition,
+                });
+                if (cachedLane) {
+                    setQueueItems(cachedLane);
+                    setQueueItemsError(null);
+                    setQueueItemsLoading(false);
+                }
                 suppressQueueFetchEffectOnceRef.current = true;
                 void fetchQueueItems(workUnitId, nextKey, null, {
                     force: false,
@@ -1705,7 +1755,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 });
             }
         },
-        [fetchQueueItems, setSelectedQueueKeyTraced, workUnitId]
+        [fetchQueueItems, setSelectedQueueKeyTraced, viewScopeFingerprint, workUnitId]
     );
 
     const handleAttentionBucketSelect = useCallback(
@@ -1968,26 +2018,25 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     { queue_definition: cachedWu.queue_definition }
                 );
                 const apiQueueKey = resolvedFetch.queueKey;
-                if (apiQueueKey) {
-                    const logicalKey = queueRowLogicalCacheKey(
-                        accessScopeFingerprint,
-                        workUnitId,
-                        apiQueueKey,
-                        initialLocationRef.current.unmapped,
-                        abForFetch
-                    );
-                    const ent = touchQueueRowCacheOnHit(queueRowClientCacheRef.current, logicalKey);
-                    if (ent?.payload) {
-                        setQueueItems(ent.payload);
-                        setQueueItemsLoading(false);
-                        void fetchQueueItemsRef.current(workUnitId, pillKey, null, {
-                            ...(primaryKey.trim().toLowerCase() === "needs_attention" && abForFetch
-                                ? { attentionBucketOverride: abForFetch }
-                                : {}),
-                            quietStaleRefresh: true,
-                        });
-                        return;
-                    }
+                const cachedPrimary = touchCachedQueueItemsForPill({
+                    cache: queueRowClientCacheRef.current,
+                    viewScopeFingerprint,
+                    workUnitId,
+                    pillKey,
+                    attentionBucketKey: abForFetch,
+                    unmappedOnly: initialLocationRef.current.unmapped,
+                    queueDefinition: cachedWu.queue_definition,
+                });
+                if (cachedPrimary) {
+                    setQueueItems(cachedPrimary);
+                    setQueueItemsLoading(false);
+                    void fetchQueueItemsRef.current(workUnitId, pillKey, null, {
+                        ...(primaryKey.trim().toLowerCase() === "needs_attention" && abForFetch
+                            ? { attentionBucketOverride: abForFetch }
+                            : {}),
+                        quietStaleRefresh: true,
+                    });
+                    return;
                 }
                 setQueueItemsLoading(true);
                 void fetchQueueItemsRef.current(workUnitId, pillKey, null, {
@@ -3291,19 +3340,31 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 queueItemsKey,
                 activeQueueKey
             );
-        const tabSwitchInFlight =
-            Boolean(
-                queueItemsLoading &&
-                    !loading &&
-                    workUnit &&
-                    selectedQueueKey &&
-                    !queueItemsError &&
-                    hasBufferedRows &&
-                    (queueItems === null || queueLaneMismatch)
-            );
-        /** During lane transitions, always show buffered rows so we never flash another lane's hydrated list. */
-        const rowsRefreshing = tabSwitchInFlight;
-        const displayItems = rowsRefreshing ? queueRowsBufferRef.current : liveVmItems;
+        const cacheHasLanePayload = Boolean(
+            workUnitId &&
+                selectedQueueKey &&
+                peekCachedQueueItemsForPill({
+                    cache: queueRowClientCacheRef.current,
+                    viewScopeFingerprint,
+                    workUnitId,
+                    pillKey: selectedQueueKey,
+                    attentionBucketKey: attentionBucketKey.trim(),
+                    unmappedOnly: laneUnmappedOnly,
+                    queueDefinition: workUnit?.queue_definition,
+                })
+        );
+        const rowsRefreshing = resolveWorkUnitQueueTabSwitchRefreshing({
+            queue_items_loading: queueItemsLoading,
+            bootstrap_loading: loading,
+            has_work_unit: Boolean(workUnit),
+            selected_queue_key: selectedQueueKey,
+            queue_items_error: queueItemsError,
+            has_buffered_rows: hasBufferedRows,
+            queue_items: queueItems,
+            queue_lane_mismatch: queueLaneMismatch,
+            cache_has_lane_payload: cacheHasLanePayload,
+        });
+        const displayItems = rowsRefreshing && hasBufferedRows ? queueRowsBufferRef.current : liveVmItems;
         queueDisplayItemsRef.current = displayItems;
 
         const laneTitle = workUnit.name ?? "Queue";
@@ -4347,10 +4408,25 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const reserveWorkUnitActionsRail = isEnrollmentLikeDepartmentKey(dept?.key);
 
     const workUnitAboveFold = useMemo(() => {
-        const queueLaneItemsReady =
-            Boolean(oq?.items?.length) ||
-            (queueItems !== null && !queueItemsLoading) ||
-            Boolean(queueItemsError);
+        const cacheHasLanePayload = Boolean(
+            workUnitId &&
+                selectedQueueKey &&
+                peekCachedQueueItemsForPill({
+                    cache: queueRowClientCacheRef.current,
+                    viewScopeFingerprint,
+                    workUnitId,
+                    pillKey: selectedQueueKey,
+                    attentionBucketKey: attentionBucketKey.trim(),
+                    unmappedOnly: laneUnmappedOnly,
+                    queueDefinition: workUnit?.queue_definition,
+                })
+        );
+        const queueLaneItemsReady = resolveWorkUnitQueueLaneItemsReady({
+            queue_items: queueItems,
+            queue_items_loading: queueItemsLoading,
+            queue_items_error: queueItemsError,
+            cache_has_lane_payload: cacheHasLanePayload,
+        });
 
         if (!workUnitShellReady) {
             return buildWorkUnitAboveFoldPlaceholder({ reserve_actions_rail: reserveWorkUnitActionsRail });
@@ -4442,6 +4518,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
         workUnitChipBadgeContext,
         queueUiPresentationFlags.suppressOtherPill,
         queueUiPresentationFlags.suppressActiveQueueDescription,
+        workUnitId,
+        viewScopeFingerprint,
+        workUnit?.queue_definition,
     ]);
 
     const workUnitRouteShellPlaceholder = useMemo(

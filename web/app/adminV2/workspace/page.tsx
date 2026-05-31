@@ -92,6 +92,7 @@ function buildWorkspaceQuickRollup(
 export default function AdminV2WorkspaceIndexPage() {
     const { orgName: orgNameFromContext, orgId, principalUserId, accessScopeFingerprint } = useWorkspaceOrg();
     const hydratedCacheRef = useRef(false);
+    const [workspaceCachePrimed, setWorkspaceCachePrimed] = useState(false);
     const [departments, setDepartments] = useState<WorkspaceRootDepartmentRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -113,11 +114,14 @@ export default function AdminV2WorkspaceIndexPage() {
     useLayoutEffect(() => {
         resetWorkspaceRevealGatePerf();
         hydratedCacheRef.current = false;
+        setWorkspaceCachePrimed(false);
         setFetchSettledEmpty(false);
         const hit = readWorkspaceRootCache(orgId, principalUserId, accessScopeFingerprint);
         if (!hit?.departments?.length) return;
         hydratedCacheRef.current = true;
+        setWorkspaceCachePrimed(true);
         setDepartments(hit.departments);
+        setFetchSettledEmpty(false);
         setDeptTileStats(hit.deptTileStats);
         setMetrics(hit.metrics);
         setOrgOpportunityKpis(hit.orgOpportunityKpis ?? null);
@@ -358,19 +362,20 @@ export default function AdminV2WorkspaceIndexPage() {
     }, [orgId, principalUserId, accessScopeFingerprint]);
 
     const workspaceRevealGate = useMemo(() => {
-        const departments_resolved = !loading;
+        const cachePrimed = workspaceCachePrimed;
+        const departments_resolved = !loading || cachePrimed;
         const shell_ready = workspaceRevealShellReady({
-            bootstrap_loading: loading,
+            bootstrap_loading: loading && !cachePrimed,
             departments_resolved,
         });
         const department_tiles_ready = workspaceRevealDepartmentTilesReady({
-            bootstrap_loading: loading,
+            bootstrap_loading: loading && !cachePrimed,
             has_departments: departments.length > 0,
             fetch_settled_empty: fetchSettledEmpty,
         });
         const tile_counts_ready = workspaceRevealTileCountsReady({
             has_departments: departments.length > 0,
-            quick_rollup_applied: metrics !== null,
+            quick_rollup_applied: metrics !== null || cachePrimed,
             fetch_settled_empty: fetchSettledEmpty,
         });
         return computeWorkspaceRevealGate({
@@ -380,7 +385,7 @@ export default function AdminV2WorkspaceIndexPage() {
             kpi_region_ready: workspaceRevealKpiRegionReady(),
             actions_ready: workspaceRevealActionsReady(),
         });
-    }, [loading, departments.length, fetchSettledEmpty, metrics]);
+    }, [loading, departments.length, fetchSettledEmpty, metrics, workspaceCachePrimed]);
 
     const workspaceAboveFoldPageReady = workspaceRevealGate.above_fold_ready;
 

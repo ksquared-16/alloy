@@ -105,6 +105,7 @@ import PersonDrawerHeaderMetadata, {
 import { resolvePersonDrawerOperatingBackLink } from "@/lib/admin/person/personDrawerBackLink";
 import PersonDrawerChildLifecycleRail from "@/components/admin/entity/PersonDrawerChildLifecycleRail";
 import PersonDrawerChildOverviewSkeleton from "@/components/admin/entity/PersonDrawerChildOverviewSkeleton";
+import PersonDrawerSectionCoordinatedReserve from "@/components/admin/entity/PersonDrawerSectionCoordinatedReserve";
 import PersonDrawerChildHeaderExecutive from "@/components/admin/entity/PersonDrawerChildHeaderExecutive";
 import PersonDrawerChildCommunicationsPlaceholder from "@/components/admin/entity/PersonDrawerChildCommunicationsPlaceholder";
 import PersonDrawerChildTitleRow from "@/components/admin/entity/PersonDrawerChildTitleRow";
@@ -6331,13 +6332,26 @@ export default function AdminEntityDrawer() {
     const opportunityWorkflowTabMount = useCallback(
         (tab: DrawerTabKey) => {
             if (!opportunityWorkflowTabSessionActive) return false;
+            const drawerSurfaceReady =
+                drawer.type === "opportunities" &&
+                !!drawer.id &&
+                drawer.id !== "new" &&
+                (opportunityDrawerFirstPaintPreloadedRef.current === drawer.id ||
+                    opportunityDrawerBootstrapAppliedId === drawer.id);
             return opportunityDrawerWorkflowTabMountEnabled(
                 true,
                 opportunityDrawerVisitedTabsRef.current,
-                tab
+                tab,
+                drawerSurfaceReady
             );
         },
-        [opportunityWorkflowTabSessionActive, opportunityDrawerTabVisitTick]
+        [
+            opportunityWorkflowTabSessionActive,
+            opportunityDrawerTabVisitTick,
+            drawer.type,
+            drawer.id,
+            opportunityDrawerBootstrapAppliedId,
+        ]
     );
 
     const renderOpportunityWorkflowTabPane = useCallback(
@@ -8354,15 +8368,12 @@ export default function AdminEntityDrawer() {
 
     useLayoutEffect(() => {
         if (!drawer.id || drawer.id === "new") return;
-        if (drawer.type === "opportunities" && drawerShellVariant === "adminV2" && adminV2DrawerBootstrapEnabled()) {
-            return;
-        }
         if (drawer.type === "opportunities") {
             scheduleDeferredCommunicationsDrawerPrefetch("opportunities", drawer.id);
         } else if (drawer.type === "jobs") {
             scheduleDeferredCommunicationsDrawerPrefetch("jobs", drawer.id);
         }
-    }, [drawer.type, drawer.id, drawerShellVariant]);
+    }, [drawer.type, drawer.id]);
 
     const opportunityDrawerFirstPaintPreloaded =
         drawer.type === "opportunities" &&
@@ -8463,7 +8474,7 @@ export default function AdminEntityDrawer() {
     /** Lead Summary right column is above the fold — arm when primary contract is ready (no scroll intersection). */
     const inquirySummaryFetchEnabled =
         opportunityInquiryWorkflowDrawer &&
-        opportunityDrawerPrimaryContractSatisfied &&
+        (opportunityDrawerTypedSnapshotFirstPaint || opportunityDrawerPrimaryContractSatisfied) &&
         Boolean(drawer.id) &&
         drawer.id !== "new";
     const opportunityRegistrySectionActionsFetchEnabled =
@@ -9484,17 +9495,6 @@ export default function AdminEntityDrawer() {
                     />
                 );
             }
-            if (oppCfg?.inquiry_drawer_mode === "workflow_v1" && opportunityDrawerEnrichmentLayoutReady) {
-                out.inquiry_tuition = (
-                    <div className="min-w-0 space-y-1.5 text-sm text-alloy-midnight/70">
-                        <p className="text-[13px] font-semibold text-alloy-midnight/85">Tuition / pricing</p>
-                        <p className="text-xs leading-relaxed text-alloy-midnight/60">
-                            Estimated tuition will tie to program, schedule, and discounts from the inquiry header. Billing integration
-                            is upcoming.
-                        </p>
-                    </div>
-                );
-            }
             const order = oppCfg?.overview_section_order ?? null;
             const allowInquiryChildren =
                 oppCfg?.inquiry_drawer_mode === "workflow_v1" ||
@@ -10119,17 +10119,8 @@ export default function AdminEntityDrawer() {
                         locked: true,
                     });
                 }
-                const tuitionSection: EntityDrawerSectionConfig = {
-                    key: "inquiry_tuition",
-                    title: "Tuition / pricing",
-                    defaultExpanded: false,
-                    collapsible: true,
-                    gridCols: 1,
-                    fields: [],
-                    locked: true,
-                };
-                const injected = new Set<string>([...virtuals.map((v) => v.key), tuitionSection.key]);
-                result = [...virtuals, tuitionSection, ...result.filter((s) => !injected.has(s.key))];
+                const injected = new Set<string>(virtuals.map((v) => v.key));
+                result = [...virtuals, ...result.filter((s) => !injected.has(s.key))];
             }
         }
         if (drawer.type === "jobs" && overviewData && !(overviewData as { _create?: boolean })._create) {
@@ -10231,9 +10222,9 @@ export default function AdminEntityDrawer() {
                 );
             }
             const stripPricingKeys = new Set(["pricing", "tuition", "tuition_pricing", "fee_schedule"]);
-            if (overviewSections.some((s) => s.key === "inquiry_tuition")) {
-                overviewSections = overviewSections.filter((s) => !stripPricingKeys.has(s.key));
-            }
+            overviewSections = overviewSections.filter(
+                (s) => s.key !== "inquiry_tuition" && !stripPricingKeys.has(s.key)
+            );
             overviewSections = overviewSections.filter((s) => !isOpportunityTourFollowUpSection(s));
             overviewSections = overviewSections.filter((s) => !isOpportunityWorkflowStandaloneExternalDuplicate(overviewSections, s));
             overviewSections = overviewSections.filter((s) => !OPPORTUNITY_WORKFLOW_V1_LEGACY_OVERVIEW_SECTION_KEYS.has(s.key));
@@ -11701,6 +11692,9 @@ export default function AdminEntityDrawer() {
     const opportunityWorkflowHeaderUsesQueuePreview =
         opportunityDrawerQueueBootstrap && Boolean(opportunityQueuePreviewSeed?.title?.trim());
 
+    const opportunityHeaderTitleRailStable =
+        opportunityDrawerTypedSnapshotFirstPaint || opportunityDrawerOverviewRevealReady;
+
     const opportunityDrawerHeaderCalmLoading =
         drawer.type === "opportunities" &&
         opportunityInquiryWorkflowDrawer &&
@@ -11708,16 +11702,11 @@ export default function AdminEntityDrawer() {
         drawer.id !== "new" &&
         opportunityDrawerFirstPaintPreloadedRef.current !== drawer.id &&
         !error &&
-        !opportunityDrawerOverviewRevealReady;
+        !opportunityHeaderTitleRailStable;
 
     const opportunityWorkflowHeaderChromePending =
-        opportunityDrawerPrimaryLoadingVisible ||
-        (drawer.type === "opportunities" &&
-            opportunityInquiryWorkflowDrawerShell &&
-            !!drawer.id &&
-            drawer.id !== "new" &&
-            !(overviewData && (overviewData as { _create?: boolean })._create) &&
-            !opportunityDrawerCoordinatedRevealReady);
+        opportunityDrawerPrimaryLoadingVisible &&
+        !opportunityHeaderTitleRailStable;
 
     const headerSubtitleForDrawer = opportunityDrawerHeaderCalmLoading ? null : (
         opportunityInquiryWorkflowDrawer && !opportunityDrawerOverviewRevealReady ? (
@@ -11790,7 +11779,7 @@ export default function AdminEntityDrawer() {
     const personHeaderRecordContext = undefined;
 
     const headerTitleRightForDrawer = opportunityDrawerHeaderCalmLoading ? null : (
-        opportunityTitleRailActive && !opportunityDrawerOverviewRevealReady ? (
+        opportunityTitleRailActive && !opportunityHeaderTitleRailStable ? (
             <DrawerWorkflowHeaderQuickActionsSkeleton />
         ) : opportunityWorkflowHeaderChromePending ? (
             <DrawerWorkflowHeaderQuickActionsSkeleton />
@@ -11804,7 +11793,7 @@ export default function AdminEntityDrawer() {
     );
 
     const headerSignalsForDrawer = opportunityDrawerHeaderCalmLoading ? null : (
-        opportunityInquiryWorkflowDrawer && !opportunityDrawerOverviewRevealReady ? null
+        opportunityInquiryWorkflowDrawer && !opportunityHeaderTitleRailStable ? null
             : opportunityWorkflowHeaderChromePending ? null
                 : drawerGateLoading && isJobRecordModalTarget && drawer.type === "jobs" ? (
                     <div className="min-h-[3.25rem] w-full" aria-busy="true">
@@ -13690,11 +13679,25 @@ export default function AdminEntityDrawer() {
                                                     <div className="mt-1 flex flex-wrap items-center gap-2">
                                                         <button
                                                             type="button"
-                                                            disabled
-                                                            className="rounded-md border border-alloy-stone/25 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/40"
-                                                            title="Coming soon"
+                                                            disabled={!canMutate}
+                                                            onClick={() => {
+                                                                const el = document.querySelector<HTMLTextAreaElement>(
+                                                                    '[data-opportunity-notes-follow-up="true"]'
+                                                                );
+                                                                el?.focus();
+                                                            }}
+                                                            className="rounded-md border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight/75 hover:border-alloy-blue/35 hover:text-alloy-blue disabled:opacity-50"
                                                         >
                                                             Add note
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            disabled={!canMutate || !nonJobFormDirty}
+                                                            onClick={() => void saveEdit()}
+                                                            className="rounded-md border border-alloy-blue/40 bg-alloy-blue px-2 py-1 text-[11px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                                                            data-opportunity-notes-save="true"
+                                                        >
+                                                            Save changes
                                                         </button>
                                                         <button
                                                             type="button"
@@ -13705,13 +13708,11 @@ export default function AdminEntityDrawer() {
                                                         </button>
                                                     </div>
                                                     <textarea
+                                                        data-opportunity-notes-follow-up="true"
                                                         value={followNotesValue}
                                                         onChange={(e) =>
                                                             setFormData((prev) => ({ ...prev, follow_up_notes: e.target.value }))
                                                         }
-                                                        onBlur={() => {
-                                                            if (nonJobFormDirty) saveEdit();
-                                                        }}
                                                         rows={3}
                                                         disabled={!canMutate}
                                                         placeholder="Add follow-up notes…"
@@ -14504,7 +14505,10 @@ export default function AdminEntityDrawer() {
                                                                     showTourFromPrimaryOnly || showTourFromBookings;
                                                                 const tourDisplayReady =
                                                                     !showWhatMattersTourSlot ||
-                                                                    (inquiryTourFetchArmed && opportunityTourBookingsFetchSettled);
+                                                                    showTourFromPrimaryOnly ||
+                                                                    (showTourFromBookings &&
+                                                                        inquiryTourFetchArmed &&
+                                                                        opportunityTourBookingsFetchSettled);
                                                                 const taskPreview = inqModel?.task_preview;
 
                                                                 return (
@@ -14789,13 +14793,17 @@ export default function AdminEntityDrawer() {
                                                                                             fetchEnabled={inquirySummaryFetchEnabled}
                                                                                             opportunitySingular={opportunitySingular}
                                                                                             reviewAssistLoading={
+                                                                                                !opportunityDrawerTypedSnapshotFirstPaint &&
                                                                                                 !opportunityPrimaryHydrateApplied &&
                                                                                                 !(d as Record<string, unknown>)
                                                                                                     ._operational_recommendation &&
                                                                                                 !(d as Record<string, unknown>)
                                                                                                     ._operational_attention &&
                                                                                                 !(d as Record<string, unknown>)
-                                                                                                    ._operational_attention_error
+                                                                                                    ._operational_attention_error &&
+                                                                                                !(
+                                                                                                    d as Record<string, unknown>
+                                                                                                )._inquiry_summary_tasks
                                                                                             }
                                                                                         />
                                                                                     ) : null}
@@ -14976,6 +14984,11 @@ export default function AdminEntityDrawer() {
                                                     }}
                                                     onRecordUpdated={mergePersonDrawerRecord}
                                                 />
+                                            ) : null}
+                                            {personChildLifecycleChrome &&
+                                            personDrawerTypedBodySnapshot &&
+                                            !useConfigDrivenOverview ? (
+                                                <PersonDrawerSectionCoordinatedReserve title="Medical" lines={2} />
                                             ) : null}
                                             <EntityDrawerOverview
                                                 entityType={presentationType}

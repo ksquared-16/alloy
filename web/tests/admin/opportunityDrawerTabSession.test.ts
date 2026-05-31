@@ -23,20 +23,20 @@ describe("opportunityDrawerTabSession", () => {
         expect(adminV2DrawerTabPanelHostStyle()).toEqual({ minHeight: "22rem" });
     });
 
-    it("seeds overview as visited on new drawer session", () => {
+    it("pre-mounts all workflow tabs on new drawer session for coordinated first paint", () => {
         const visited = createOpportunityDrawerTabVisitSet();
         expect(visited.has("overview")).toBe(true);
-        expect(visited.has("communications")).toBe(false);
-        markOpportunityDrawerTabVisited(visited, "communications");
         expect(visited.has("communications")).toBe(true);
+        expect(visited.has("notes")).toBe(true);
     });
 
-    it("mounts only visited workflow tabs", () => {
+    it("mounts visited tabs; drawerSurfaceReady mounts all workflow tabs", () => {
         const visited = createOpportunityDrawerTabVisitSet();
         expect(opportunityDrawerWorkflowTabMountEnabled(true, visited, "overview")).toBe(true);
-        expect(opportunityDrawerWorkflowTabMountEnabled(true, visited, "activity")).toBe(false);
-        markOpportunityDrawerTabVisited(visited, "activity");
-        expect(opportunityDrawerWorkflowTabMountEnabled(true, visited, "activity")).toBe(true);
+        expect(opportunityDrawerWorkflowTabMountEnabled(true, visited, "communications", true)).toBe(true);
+        const cold = new Set(["overview"] as const);
+        expect(opportunityDrawerWorkflowTabMountEnabled(true, cold, "communications")).toBe(false);
+        expect(opportunityDrawerWorkflowTabMountEnabled(true, cold, "communications", true)).toBe(true);
     });
 
     it("uses hidden/block pane classes without unmounting", () => {

@@ -6,6 +6,9 @@ import PersonDrawerHouseholdAddress from "@/components/admin/entity/PersonDrawer
 import PersonDrawerHouseholdSection from "@/components/admin/entity/PersonDrawerHouseholdSection";
 import PersonDrawerParentHouseholdSection from "@/components/admin/entity/PersonDrawerParentHouseholdSection";
 import PersonDrawerParentSummary from "@/components/admin/entity/PersonDrawerParentSummary";
+import PersonDrawerSectionCoordinatedReserve from "@/components/admin/entity/PersonDrawerSectionCoordinatedReserve";
+import { isPersonDrawerSeedRecord } from "@/lib/admin/drawer/personDrawerOpenSeed";
+import { resolvePersonDrawerHouseholdModel } from "@/lib/admin/person/resolvePersonDrawerHouseholdModel";
 import type { PersonDrawerChildChromeHint } from "@/lib/admin/person/personDrawerChildChrome";
 import type { PersonDrawerParentChromeHint } from "@/lib/admin/person/personDrawerParentChrome";
 import {
@@ -56,7 +59,17 @@ export default function PersonDrawerOperatingSections({
     if (sections.length === 0) return null;
 
     const layoutSource = variant.source;
-    const showHousehold = sectionEnabled(sections, "household") && bodyHydrated;
+    const typedSnapshot = isPersonDrawerSeedRecord(record);
+    const householdModel = resolvePersonDrawerHouseholdModel(record, {
+        viewing_person_id: personId,
+    });
+    const householdHasContent = householdModel.groups.length > 0;
+    const showHousehold = sectionEnabled(sections, "household") && bodyHydrated && householdHasContent;
+    const showHouseholdReserve =
+        sectionEnabled(sections, "household") && typedSnapshot && !householdHasContent;
+    const showAddressReserve = sectionEnabled(sections, "household_address") && typedSnapshot;
+    const showAddressContent =
+        sectionEnabled(sections, "household_address") && bodyHydrated && !typedSnapshot;
     const isParentVariant = sections.includes("parent_summary");
 
     return (
@@ -83,6 +96,12 @@ export default function PersonDrawerOperatingSections({
                     onPersonUpdated={onPersonUpdated}
                 />
             ) : null}
+            {showHouseholdReserve ? (
+                <PersonDrawerSectionCoordinatedReserve
+                    title={isParentVariant ? "Household" : "Household & relationships"}
+                    lines={isParentVariant ? 3 : 2}
+                />
+            ) : null}
             {showHousehold && isParentVariant ? (
                 <PersonDrawerParentHouseholdSection
                     record={stampPersonDrawerParentHeaderContext(record)}
@@ -104,7 +123,10 @@ export default function PersonDrawerOperatingSections({
                     onRecordUpdated={onRecordUpdated}
                 />
             ) : null}
-            {sectionEnabled(sections, "household_address") && bodyHydrated ? (
+            {showAddressReserve ? (
+                <PersonDrawerSectionCoordinatedReserve title="Address" lines={2} />
+            ) : null}
+            {showAddressContent ? (
                 <PersonDrawerHouseholdAddress
                     record={record}
                     chromeHint={parentChromeHint}

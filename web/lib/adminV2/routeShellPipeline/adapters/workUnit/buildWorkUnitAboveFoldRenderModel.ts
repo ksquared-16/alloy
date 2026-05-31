@@ -228,7 +228,7 @@ function resolveActionsRailState(input: BuildWorkUnitAboveFoldRenderModelInput):
 function resolveQueueLaneState(input: BuildWorkUnitAboveFoldRenderModelInput): WorkUnitAboveFoldSlotState {
     if (!input.work_unit_shell_ready) return "skeleton";
     if (input.queue_items_error) return "ready";
-    if (input.queue_items_ready && !input.queue_items_loading) return "ready";
+    if (input.queue_items_ready) return "ready";
     return "skeleton";
 }
 
