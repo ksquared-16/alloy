@@ -282,7 +282,9 @@ async function attachPlacementToEnrichedOpportunityItems(params: {
             householdFactsByCustomerId,
             v1FallbackForEmpty: true,
         });
-        const expanded = expandOpportunityRowsToPlacementCandidateRows(out.rows);
+        const expanded = expandOpportunityRowsToPlacementCandidateRows(out.rows, {
+            householdFactsByCustomerId,
+        });
         const sorted = sortPlacementCandidateQueueRows(expanded.rows, out.diagnostics.shadow_mode);
         const stripped = sorted.map((row) => {
             const { __placement_v2_sort_tuple: _t, ...rest } = row;

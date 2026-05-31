@@ -16,6 +16,13 @@ describe("waitlist regression invariants", () => {
         expect(src).not.toMatch(/shadow_mode:\s*false/);
     });
 
+    it("runs full V2 evaluation on queue_reveal so priority pills reflect household facts", () => {
+        const src = read("lib/queues/candidateGrainWaitlistQueue.ts");
+        expect(src).toContain("applyPlacementV2ToOpportunityQueueRows");
+        expect(src).toContain("loadPlacementEvaluationHouseholdContext");
+        expect(src).toContain("skipPlacementProjection ? true : placementResolved.options.shadow_mode");
+    });
+
     it("groups waitlist by org program category, not room duplicates", () => {
         const presentation = read("lib/orchestration/placement/waitlistQueueSectionPresentation.ts");
         expect(presentation).toContain("resolveWaitlistQueueSection");

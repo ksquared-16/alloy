@@ -5,7 +5,13 @@
 
 import type { PlacementLinkMode } from "@/lib/orchestration/placement/placementCandidateTypes";
 import type { PlacementPriorityV2CandidatePreview } from "@/lib/orchestration/placement/applyPlacementV2ToOpportunityQueueRows";
+import type { HouseholdPlacementFactContextByCustomerId } from "@/lib/orchestration/placement/bulkLoadHouseholdPlacementFactContext";
+import {
+    resolveEnrolledSiblingDisplayRefs,
+    type HouseholdEnrolledSiblingDisplayRef,
+} from "@/lib/orchestration/placement/householdPlacementFacts";
 import { normalizePlacementWaitlistCohort } from "@/lib/orchestration/placement/normalizePlacementWaitlistCohort";
+import { resolvePlacementWaitlistChildDisplayLabel } from "@/lib/orchestration/placement/resolvePlacementCandidateChildDisplayName";
 
 export type PlacementWaitlistSiblingCohortRef = {
     placement_candidate_id: string;
@@ -15,11 +21,15 @@ export type PlacementWaitlistSiblingCohortRef = {
     link_mode?: PlacementLinkMode;
 };
 
+export type PlacementWaitlistEnrolledSiblingRef = HouseholdEnrolledSiblingDisplayRef;
+
 export type PlacementWaitlistSiblingContext = {
     has_siblings_on_waitlist: boolean;
     sibling_candidate_count: number;
     sibling_cohorts: PlacementWaitlistSiblingCohortRef[];
     link_mode: PlacementLinkMode;
+    enrolled_siblings?: PlacementWaitlistEnrolledSiblingRef[];
+    display_diagnostics?: string | null;
 };
 
 export type PlacementWaitlistCandidateRowProjection = {
@@ -45,6 +55,7 @@ export type PlacementWaitlistCandidateRowProjection = {
     runtime_position_label?: string;
     runtime_position_mode?: "preview" | "live";
     runtime_position_section_key?: string;
+    runtime_position_precedence_note?: string;
 };
 
 export function placementCandidateQueueRowId(opportunityId: string, candidateId: string): string {
@@ -96,7 +107,10 @@ function buildSiblingContext(
             );
             return {
                 placement_candidate_id: s.placement_candidate_id,
-                child_display_name: s.child_display_name?.trim() || "Child",
+                child_display_name: resolvePlacementWaitlistChildDisplayLabel({
+                    childDisplayName: s.child_display_name,
+                    isSyntheticFallback: false,
+                }),
                 program_room_group_label: normalized.cohortLabel,
                 program_room_cohort_key: normalized.cohortKey,
                 link_mode: s.link_mode,
@@ -129,12 +143,18 @@ function stripOpportunityPresentationFromCandidateRow(row: Record<string, unknow
     return out;
 }
 
+export type ExpandToPlacementCandidateRowsOptions = {
+    householdFactsByCustomerId?: HouseholdPlacementFactContextByCustomerId;
+    locationLabelsById?: ReadonlyMap<string, string>;
+};
+
 /**
  * Fan out evaluated V2 opportunity rows into one queue row per placement candidate.
  * V1 fallback / non-v2 rows pass through unchanged.
  */
 export function expandOpportunityRowsToPlacementCandidateRows(
-    rows: Array<Record<string, unknown>>
+    rows: Array<Record<string, unknown>>,
+    options?: ExpandToPlacementCandidateRowsOptions
 ): ExpandToPlacementCandidateRowsResult {
     const out: Array<Record<string, unknown>> = [];
     let expanded = 0;
@@ -167,6 +187,18 @@ export function expandOpportunityRowsToPlacementCandidateRows(
         const familyName = readFamilyDisplayName(row);
         const parentName = readParentDisplayName(row);
         const allCandidates = candidates as PlacementPriorityV2CandidatePreview[];
+        const customerId =
+            typeof row.customer_id === "string" ? row.customer_id.trim()
+            : typeof row._customer_id === "string" ? row._customer_id.trim()
+            : "";
+        const household =
+            customerId && options?.householdFactsByCustomerId ?
+                options.householdFactsByCustomerId.get(customerId) ?? null
+            :   null;
+        const candidateSiteId =
+            typeof row.location_id === "string" ? row.location_id.trim()
+            : typeof row.site_id === "string" ? row.site_id.trim()
+            : null;
 
         for (const cand of allCandidates) {
             const candidateId = cand.placement_candidate_id?.trim();
@@ -177,11 +209,38 @@ export function expandOpportunityRowsToPlacementCandidateRows(
                 cand.program_room_group_label
             );
 
+            const siblingContext = buildSiblingContext(candidateId, allCandidates);
+            if (household) {
+                const pcMatch = household.active_placement_candidates.find(
+                    (pc) => pc.placement_candidate_id === candidateId
+                );
+                const enrolled = resolveEnrolledSiblingDisplayRefs(
+                    household,
+                    {
+                        placement_candidate_id: candidateId,
+                        opportunity_customer_member_id: pcMatch?.opportunity_customer_member_id ?? null,
+                        customer_member_id: pcMatch?.customer_member_id ?? null,
+                        site_id: candidateSiteId,
+                    },
+                    options?.locationLabelsById ?? null
+                );
+                siblingContext.enrolled_siblings = enrolled;
+                if (
+                    (cand.bucket === "tier_sibling_enrolled" || cand.policy_bucket === "tier_sibling_enrolled") &&
+                    enrolled.every((s) => !s.child_display_name?.trim())
+                ) {
+                    siblingContext.display_diagnostics = "enrolled_sibling_names_missing_in_household_load";
+                }
+            }
+
             const projection: PlacementWaitlistCandidateRowProjection = {
                 row_projection: "placement_candidate",
                 placement_candidate_id: candidateId,
                 opportunity_id: opportunityId,
-                child_display_name: cand.child_display_name?.trim() || "Child",
+                child_display_name: resolvePlacementWaitlistChildDisplayLabel({
+                    childDisplayName: cand.child_display_name,
+                    isSyntheticFallback: cand.is_synthetic_fallback === true,
+                }),
                 family_display_name: familyName,
                 parent_display_name: parentName,
                 program_room_cohort_key: cohortKey,
@@ -189,7 +248,7 @@ export function expandOpportunityRowsToPlacementCandidateRows(
                 bucket: cand.bucket,
                 wait_since: cand.wait_since ?? null,
                 is_synthetic_fallback: cand.is_synthetic_fallback === true,
-                sibling_context: buildSiblingContext(candidateId, allCandidates),
+                sibling_context: siblingContext,
                 placement_priority_v2: {
                     ...cand,
                     program_room_cohort_key: cohortKey,

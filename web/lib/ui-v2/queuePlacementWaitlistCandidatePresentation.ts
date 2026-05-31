@@ -5,10 +5,12 @@
 import type { PlacementWaitlistCandidateRowProjection } from "@/lib/orchestration/placement/placementWaitlistCandidateRowProjection";
 import { normalizePlacementWaitlistCohort } from "@/lib/orchestration/placement/normalizePlacementWaitlistCohort";
 import { formatPlacementBucketLabel } from "@/lib/ui-v2/queuePlacementPriorityV2Presentation";
+import { resolvePlacementWaitlistChildDisplayLabel } from "@/lib/orchestration/placement/resolvePlacementCandidateChildDisplayName";
 import { resolveWaitlistQueueSection } from "@/lib/orchestration/placement/waitlistQueueSectionPresentation";
 import { WAITLIST_RUNTIME_POSITION_HELP } from "@/lib/orchestration/placement/waitlistCandidateRuntimePosition";
 import { formatDateUtcAudit } from "@/lib/adminFormatters";
 import type { QueueRowPlacementWaitlistCandidateVm } from "@/lib/ui-v2/workspace-types";
+import { buildWaitlistSiblingContextLines } from "@/lib/ui-v2/waitlistSiblingDisplayContext";
 
 const LINK_LABELS: Record<string, string> = {
     preferred_together: "Preferred together",
@@ -39,6 +41,36 @@ export function parsePlacementWaitlistCandidateRowVm(
     const linkLabel = linkMode !== "independent" ? (LINK_LABELS[linkMode] ?? linkMode) : null;
 
     const siblingCount = o.sibling_context?.sibling_candidate_count ?? 0;
+    const siblingCohorts = (o.sibling_context?.sibling_cohorts ?? []).map((s) => {
+        const sib = normalizePlacementWaitlistCohort(
+            s.program_room_cohort_key,
+            s.program_room_group_label
+        );
+        return {
+            placementCandidateId: s.placement_candidate_id,
+            childDisplayName: s.child_display_name,
+            cohortLabel: sib.cohortLabel,
+            linkModeLabel:
+                s.link_mode && s.link_mode !== "independent"
+                    ? (LINK_LABELS[s.link_mode] ?? s.link_mode)
+                    : null,
+        };
+    });
+
+    const siblingContextBuilt = buildWaitlistSiblingContextLines({
+        siblingContext: o.sibling_context ?? {
+            has_siblings_on_waitlist: false,
+            sibling_candidate_count: 0,
+            sibling_cohorts: [],
+            link_mode: "independent",
+        },
+        bucketKey: o.bucket,
+        waitlistedSiblings: siblingCohorts.map((s) => ({
+            childDisplayName: s.childDisplayName,
+            cohortLabel: s.cohortLabel,
+        })),
+    });
+
     const siblingLabel =
         siblingCount === 1
             ? "1 sibling also waitlisted"
@@ -56,7 +88,10 @@ export function parsePlacementWaitlistCandidateRowVm(
     return {
         placementCandidateId: o.placement_candidate_id,
         opportunityId: o.opportunity_id,
-        childDisplayName: o.child_display_name?.trim() || "Child",
+        childDisplayName: resolvePlacementWaitlistChildDisplayLabel({
+            childDisplayName: o.child_display_name,
+            isSyntheticFallback: o.is_synthetic_fallback === true,
+        }),
         familyDisplayName: o.family_display_name?.trim() || "Family",
         parentDisplayName: o.parent_display_name?.trim() || null,
         cohortKey,
@@ -96,28 +131,29 @@ export function parsePlacementWaitlistCandidateRowVm(
                       typeof o.runtime_position_section_key === "string"
                           ? o.runtime_position_section_key.trim()
                           : undefined,
-                  runtimePositionHelp: WAITLIST_RUNTIME_POSITION_HELP,
+                  runtimePositionHelp: [
+                      WAITLIST_RUNTIME_POSITION_HELP,
+                      typeof o.runtime_position_precedence_note === "string" &&
+                      o.runtime_position_precedence_note.trim()
+                          ? o.runtime_position_precedence_note.trim()
+                          : null,
+                  ]
+                      .filter(Boolean)
+                      .join(" "),
+                  runtimePositionPrecedenceNote:
+                      typeof o.runtime_position_precedence_note === "string" &&
+                      o.runtime_position_precedence_note.trim()
+                          ? o.runtime_position_precedence_note.trim()
+                          : undefined,
               }
             : {}),
         forecastHints: (o.forecast_hints ?? o.placement_priority_v2?.forecast_hints ?? []).filter(
             (h): h is string => typeof h === "string" && h.trim().length > 0
         ),
         siblingLabel,
-        siblingCohorts: (o.sibling_context?.sibling_cohorts ?? []).map((s) => {
-            const sib = normalizePlacementWaitlistCohort(
-                s.program_room_cohort_key,
-                s.program_room_group_label
-            );
-            return {
-            placementCandidateId: s.placement_candidate_id,
-            childDisplayName: s.child_display_name,
-            cohortLabel: sib.cohortLabel,
-            linkModeLabel:
-                s.link_mode && s.link_mode !== "independent"
-                    ? (LINK_LABELS[s.link_mode] ?? s.link_mode)
-                    : null,
-        };
-        }),
+        siblingCohorts,
+        siblingContextLines: siblingContextBuilt.lines,
+        siblingContextDiagnostics: siblingContextBuilt.diagnostics,
     };
 }
 

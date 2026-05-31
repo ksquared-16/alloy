@@ -6323,6 +6323,40 @@
   white-space: nowrap;
 }
 
+[data-ws-surface="work_unit"] .adminv2-ws-queue-waitlist-left-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+[data-ws-surface="work_unit"] .adminv2-ws-queue-waitlist-left-meta__position {
+  font-size: 11px;
+  font-weight: 550;
+  line-height: 1.2;
+  color: color-mix(in srgb, var(--d-muted) 22%, var(--d-text-primary, #273f52));
+}
+
+[data-ws-surface="work_unit"] .adminv2-ws-queue-waitlist-left-meta__adjust,
+[data-ws-surface="work_unit"] .adminv2-ws-queue-waitlist-left-meta__reset {
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: color-mix(in srgb, var(--d-muted) 35%, var(--d-text-primary, #273f52));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+[data-ws-surface="work_unit"] .adminv2-ws-queue-waitlist-left-meta__adjust:hover,
+[data-ws-surface="work_unit"] .adminv2-ws-queue-waitlist-left-meta__reset:hover {
+  color: var(--d-text-primary, #273f52);
+}
+
 [data-ws-surface="work_unit"] .adminv2-ws-enrollment-crm-row--manual-order {
   align-items: center;
 }
@@ -6669,6 +6703,14 @@
   background: color-mix(in srgb, var(--d-surface) 96%, var(--d-muted));
   color: color-mix(in srgb, var(--d-muted) 35%, var(--d-text-primary, #273f52));
   max-width: 100%;
+}
+
+[data-ws-surface="work_unit"] .adminv2-ws-queue-placement-candidate__sibling-line {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.25;
+  color: color-mix(in srgb, var(--d-muted) 82%, var(--d-text-primary, #273f52));
 }
 
 [data-ws-surface="work_unit"] .adminv2-ws-queue-placement-candidate__sibling-toggle {

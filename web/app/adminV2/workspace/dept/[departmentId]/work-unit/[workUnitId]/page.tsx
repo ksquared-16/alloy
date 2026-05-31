@@ -249,6 +249,7 @@ import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions
 import { ContactAttemptedModal } from "@/components/admin/opportunity/actions/ContactAttemptedModal";
 import { CreateLeadModal } from "@/components/admin/opportunity/actions/CreateLeadModal";
 import { MarkLostModal } from "@/components/admin/opportunity/actions/MarkLostModal";
+import { AddNoteModal } from "@/components/admin/opportunity/actions/AddNoteModal";
 import {
     executeCreateLeadFromModal,
     executeMarkLostFromModal,
@@ -673,6 +674,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [createLeadOpen, setCreateLeadOpen] = useState(false);
     const [markLostOpen, setMarkLostOpen] = useState(false);
     const [markLostTargetId, setMarkLostTargetId] = useState<string | null>(null);
+    const [addNoteOpen, setAddNoteOpen] = useState(false);
+    const [addNoteTargetId, setAddNoteTargetId] = useState<string | null>(null);
 
     const queueDef = useMemo<QueueDefinitionV1 | null>(() => {
         if (!workUnit?.queue_definition) return null;
@@ -2318,7 +2321,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 setQueueItemsError(null);
                                 setQueueItemsRoute(pl.route);
                                 setQueueItemsLoading(inlineIncomplete);
-                                suppressQueueFetchEffectOnceRef.current = !inlineIncomplete;
+                                suppressQueueFetchEffectOnceRef.current = true;
                                 const primaryAb =
                                     authoritativePrimary.trim().toLowerCase() === "needs_attention"
                                         ? abInit
@@ -2333,14 +2336,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 );
                                 primaryLaneRowsSettledOnceRef.current = true;
                                 primaryLaneHydratedInline = true;
-                                if (inlineIncomplete) {
-                                    void fetchQueueItemsRef.current(workUnitId, pillKey, qs, {
-                                        ...(authoritativePrimary.trim().toLowerCase() === "needs_attention" &&
-                                        abInit
-                                            ? { attentionBucketOverride: abInit }
-                                            : {}),
-                                    });
-                                }
+                                void fetchQueueItemsRef.current(workUnitId, pillKey, qs, {
+                                    force: true,
+                                    ...(primaryAb ? { attentionBucketOverride: primaryAb } : {}),
+                                });
                                 if (typeof window !== "undefined" && typeof performance !== "undefined") {
                                     const laneAt = performance.now();
                                     alloyPerfSet("work_unit_primary_lane_ready", laneAt);
@@ -3254,7 +3253,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     waitlistCandidate?.parentDisplayName,
                 ].filter(Boolean);
                 const waitlistHouseholdContext = waitlistCandidate
-                    ? waitlistCandidate.parentDisplayName?.trim() || null
+                    ? null
                     : householdContextParts.length
                       ? householdContextParts.join(" · ")
                       : null;
@@ -4165,6 +4164,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         setMarkLostOpen(true);
                         return;
                     }
+                    if (formKey === "add_note") {
+                        setAddNoteTargetId(action.itemId);
+                        setAddNoteOpen(true);
+                        return;
+                    }
                 }
                 if (resolved) {
                     logAdminV2QueueRowClick({
@@ -4980,6 +4984,39 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 entity_type: "opportunity",
                                 entity_id: markLostTargetId,
                                 action_key: "mark_lost",
+                            });
+                        }}
+                    />
+                    <AddNoteModal
+                        open={addNoteOpen}
+                        onClose={() => {
+                            setAddNoteOpen(false);
+                            setAddNoteTargetId(null);
+                        }}
+                        onSubmit={async (payload) => {
+                            if (!addNoteTargetId) return;
+                            const res = await fetch("/api/admin/actions/execute", {
+                                method: "POST",
+                                credentials: "include",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    action_key: "add_note",
+                                    entity_type: "opportunity",
+                                    entity_id: addNoteTargetId,
+                                    context: {
+                                        surface: "queue_row",
+                                        work_unit_id: workUnit?.id ?? null,
+                                        department_id: departmentId,
+                                    },
+                                    payload: { note: payload.note },
+                                }),
+                            });
+                            const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+                            if (!res.ok || !json.ok) throw new Error(json.error ?? "Add note failed");
+                            invalidate({
+                                entity_type: "opportunity",
+                                entity_id: addNoteTargetId,
+                                action_key: "add_note",
                             });
                         }}
                     />

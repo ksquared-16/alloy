@@ -7,11 +7,12 @@ import type { QueueRowPlacementWaitlistCandidateVm } from "@/lib/ui-v2/workspace
 
 type Props = {
     row: QueueRowPlacementWaitlistCandidateVm;
+    layout?: "inline" | "gutter";
 };
 
 type PendingAction = "adjust" | "reset";
 
-export function QueueRowPlacementManualOrderControls({ row }: Props) {
+export function QueueRowPlacementManualOrderControls({ row, layout = "inline" }: Props) {
     const [pending, setPending] = useState<PendingAction | null>(null);
     const [desiredPosition, setDesiredPosition] = useState(1);
     const [note, setNote] = useState("");
@@ -31,6 +32,21 @@ export function QueueRowPlacementManualOrderControls({ row }: Props) {
         return () => {
             document.body.style.overflow = prev;
         };
+    }, [pending]);
+
+    useEffect(() => {
+        if (!pending) return;
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "Escape") {
+                e.preventDefault();
+                e.stopPropagation();
+                setPending(null);
+                setNote("");
+                setError(null);
+            }
+        };
+        window.addEventListener("keydown", onKeyDown, true);
+        return () => window.removeEventListener("keydown", onKeyDown, true);
     }, [pending]);
 
     const positionOptions = useMemo(
@@ -138,13 +154,19 @@ export function QueueRowPlacementManualOrderControls({ row }: Props) {
                   <div
                       className="adminv2-ws-manual-order-dialog-backdrop"
                       role="presentation"
-                      onClick={close}
+                      onMouseDown={(e) => {
+                          if (e.target !== e.currentTarget) return;
+                          e.preventDefault();
+                          e.stopPropagation();
+                          close();
+                      }}
                   >
                       <div
                           className="adminv2-ws-manual-order-dialog"
                           role="dialog"
                           aria-modal="true"
                           aria-label="Adjust waitlist position"
+                          onMouseDown={(e) => e.stopPropagation()}
                           onClick={(e) => e.stopPropagation()}
                       >
                           <h3 className="adminv2-ws-manual-order-dialog__title">
@@ -208,7 +230,10 @@ export function QueueRowPlacementManualOrderControls({ row }: Props) {
                               <button
                                   type="button"
                                   className="adminv2-ws-manual-order-dialog__btn adminv2-ws-manual-order-dialog__btn--cancel"
-                                  onClick={close}
+                                  onClick={(e) => {
+                                      e.stopPropagation();
+                                      close();
+                                  }}
                               >
                                   Cancel
                               </button>
@@ -216,7 +241,10 @@ export function QueueRowPlacementManualOrderControls({ row }: Props) {
                                   type="button"
                                   className="adminv2-ws-manual-order-dialog__btn adminv2-ws-manual-order-dialog__btn--primary"
                                   disabled={busy || !note.trim()}
-                                  onClick={() => void submit()}
+                                  onClick={(e) => {
+                                      e.stopPropagation();
+                                      void submit();
+                                  }}
                               >
                                   {busy
                                       ? "Saving…"
@@ -231,16 +259,41 @@ export function QueueRowPlacementManualOrderControls({ row }: Props) {
               )
             : null;
 
+    if (layout === "gutter") {
+        return (
+            <>
+                <div
+                    className="adminv2-ws-queue-manual-order"
+                    data-queue-placement="manual-order"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <button type="button" className="adminv2-ws-queue-manual-order__adjust" onClick={openAdjust}>
+                        Adjust position
+                    </button>
+                </div>
+                {modal}
+            </>
+        );
+    }
+
     return (
         <>
             <div
-                className="adminv2-ws-queue-manual-order"
-                data-queue-placement="manual-order"
+                className="adminv2-ws-queue-waitlist-left-meta"
+                data-queue-placement="waitlist-left-meta"
                 onClick={(e) => e.stopPropagation()}
             >
+                {row.runtimePositionLabel ? (
+                    <span
+                        className="adminv2-ws-queue-waitlist-left-meta__position"
+                        title={row.runtimePositionHelp ?? undefined}
+                    >
+                        {row.runtimePositionLabel}
+                    </span>
+                ) : null}
                 <button
                     type="button"
-                    className="adminv2-ws-queue-manual-order__adjust"
+                    className="adminv2-ws-queue-waitlist-left-meta__adjust"
                     title="Adjust waitlist position"
                     onClick={openAdjust}
                 >
@@ -249,7 +302,7 @@ export function QueueRowPlacementManualOrderControls({ row }: Props) {
                 {row.hasManualPositionAdjustment ? (
                     <button
                         type="button"
-                        className="adminv2-ws-queue-manual-order__reset"
+                        className="adminv2-ws-queue-waitlist-left-meta__reset"
                         title="Clear adjustment"
                         onClick={openReset}
                     >

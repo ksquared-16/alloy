@@ -5,6 +5,7 @@ import {
     assignWaitlistCandidateRuntimePositions,
     formatWaitlistRuntimePositionLabel,
     readWaitlistCandidateSectionKey,
+    stripPrimaryGroupFromPlacementSortTuple,
     waitlistVisibleOrderMatchesPriority,
     WAITLIST_RUNTIME_POSITION_HELP,
 } from "@/lib/orchestration/placement/waitlistCandidateRuntimePosition";
@@ -15,7 +16,11 @@ function candidateRow(params: {
     cohortLabel: string;
     sortTuple: Array<string | number | null>;
     shadow?: boolean;
+    pinOverride?: { id: string; reason: string };
 }): Record<string, unknown> {
+    const activeOverrides = params.pinOverride ?
+        [{ id: params.pinOverride.id, override_kind: "pin", reason: params.pinOverride.reason }]
+    :   [];
     return {
         id: params.id,
         __placement_v2_sort_tuple: params.sortTuple,
@@ -40,7 +45,8 @@ function candidateRow(params: {
                 bucket: "tier_general_waitlist",
                 sort_tuple: params.sortTuple,
                 link_mode: "independent",
-                active_override_kinds: [],
+                active_override_kinds: params.pinOverride ? ["pin"] : [],
+                active_overrides: activeOverrides,
             },
             shadow_mode: params.shadow ?? false,
         },
@@ -181,6 +187,88 @@ describe("waitlistCandidateRuntimePosition", () => {
         expect(formatWaitlistRuntimePositionLabel("preview", 3, 10)).toBe("Preview position 3/10");
         expect(formatWaitlistRuntimePositionLabel("live", 3, 10)).toBe("Position 3/10");
         expect(WAITLIST_RUNTIME_POSITION_HELP).toContain("not a permanent stored rank");
+    });
+
+    it("ranks employee preview #1 within section when cohort keys differ", () => {
+        const rows = [
+            candidateRow({
+                id: "pc-general",
+                cohortKey: "aaa_room",
+                cohortLabel: "Toddler Room A",
+                sortTuple: ["aaa_room", 50, "2024-06-01", "2024-09-01", "pc-general"],
+            }),
+            candidateRow({
+                id: "pc-employee",
+                cohortKey: "zzz_room",
+                cohortLabel: "Toddler Room Z",
+                sortTuple: ["zzz_room", 10, "2024-06-02", "2024-09-01", "pc-employee"],
+            }),
+        ];
+        assignWaitlistCandidateRuntimePositions(rows, true);
+        const general = rows[0]!._placement_waitlist_row as { runtime_position?: number };
+        const employee = rows[1]!._placement_waitlist_row as { runtime_position?: number };
+        expect(employee.runtime_position).toBe(1);
+        expect(general.runtime_position).toBe(2);
+        expect(stripPrimaryGroupFromPlacementSortTuple(["aaa_room", 50, 1])).toEqual([50, 1]);
+    });
+
+    it("manual pin beats employee and adds precedence note on preview row", () => {
+        const rows = [
+            candidateRow({
+                id: "pc-employee",
+                cohortKey: "toddler",
+                cohortLabel: "Toddler",
+                sortTuple: ["toddler", 10, "2024-06-01", "2024-09-01", "pc-employee"],
+            }),
+            candidateRow({
+                id: "pc-pinned",
+                cohortKey: "toddler",
+                cohortLabel: "Toddler",
+                sortTuple: ["toddler", 1, 50, "2024-06-02", "2024-09-01", "pc-pinned"],
+                pinOverride: { id: "ov-1", reason: "Director pin" },
+            }),
+        ];
+        assignWaitlistCandidateRuntimePositions(rows, true);
+        const employee = rows[0]!._placement_waitlist_row as {
+            runtime_position?: number;
+            runtime_position_precedence_note?: string;
+        };
+        const pinned = rows[1]!._placement_waitlist_row as { runtime_position?: number };
+        expect(pinned.runtime_position).toBe(1);
+        expect(employee.runtime_position).toBe(2);
+        expect(employee.runtime_position_precedence_note).toContain("manually adjusted");
+    });
+
+    it("employee with best bucket is preview 1/N when no override beats it", () => {
+        const rows = [
+            candidateRow({
+                id: "pc-sibling",
+                cohortKey: "infant",
+                cohortLabel: "Infant",
+                sortTuple: ["infant", 20, "2024-06-01", "2024-09-01", "pc-sibling"],
+            }),
+            candidateRow({
+                id: "pc-employee",
+                cohortKey: "infant",
+                cohortLabel: "Infant",
+                sortTuple: ["infant", 10, "2024-06-02", "2024-09-01", "pc-employee"],
+            }),
+            candidateRow({
+                id: "pc-general",
+                cohortKey: "infant",
+                cohortLabel: "Infant",
+                sortTuple: ["infant", 50, "2024-06-03", "2024-09-01", "pc-general"],
+            }),
+        ];
+        assignWaitlistCandidateRuntimePositions(rows, true);
+        const employee = rows[1]!._placement_waitlist_row as {
+            runtime_position?: number;
+            runtime_position_total?: number;
+            runtime_position_label?: string;
+        };
+        expect(employee.runtime_position).toBe(1);
+        expect(employee.runtime_position_total).toBe(3);
+        expect(employee.runtime_position_label).toBe("Preview position 1/3");
     });
 });
 

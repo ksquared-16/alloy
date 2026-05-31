@@ -9,6 +9,8 @@ import type { NormalizedQueueEntry, NormalizedQueueDefinitionDocument } from "@/
 import { parseQueueFilterStub } from "@/lib/config/queueDefinitionV2Runtime";
 import { applyPlacementV2ToOpportunityQueueRows } from "@/lib/orchestration/placement/applyPlacementV2ToOpportunityQueueRows";
 import { bulkLoadPlacementCandidatesByOpportunity } from "@/lib/orchestration/placement/bulkLoadPlacementCandidatesByOpportunity";
+import { filterPlacementCandidateBundlesForQueueDisplay } from "@/lib/orchestration/placement/filterPlacementCandidateBundlesForQueueDisplay";
+import { TIER_GENERAL_WAITLIST_BUCKET } from "@/lib/orchestration/placement/placementBucketLabels";
 import { loadPlacementEvaluationHouseholdContext } from "@/lib/orchestration/placement/loadPlacementEvaluationHouseholdContext";
 import {
     expandOpportunityRowsToPlacementCandidateRows,
@@ -339,11 +341,7 @@ export async function loadWaitlistCandidateGrainQueueItems(params: {
     let placementDiagnostics: WaitlistCandidateGrainLoadResult["placementDiagnostics"] = null;
     let expandedRows: Array<Record<string, unknown>> = [];
 
-    if (
-        !skipPlacementProjection &&
-        placementResolved.status === "enabled" &&
-        placementResolved.engine_version === "v2"
-    ) {
+    if (placementResolved.status === "enabled" && placementResolved.engine_version === "v2") {
         const candidatesByOpportunityId = await bulkLoadPlacementCandidatesByOpportunity({
             supabase: params.supabase,
             orgId: params.orgId,
@@ -357,7 +355,7 @@ export async function loadWaitlistCandidateGrainQueueItems(params: {
             candidatesByOpportunityId,
         });
 
-        shadowMode = placementResolved.options.shadow_mode;
+        shadowMode = skipPlacementProjection ? true : placementResolved.options.shadow_mode;
         const oppRows = opportunityIds
             .map((id) => enrichedByOppId.get(id))
             .filter((r): r is Record<string, unknown> => r != null);
@@ -374,7 +372,9 @@ export async function loadWaitlistCandidateGrainQueueItems(params: {
             householdFactsByCustomerId,
             v1FallbackForEmpty: true,
         });
-        const expanded = expandOpportunityRowsToPlacementCandidateRows(v2Out.rows);
+        const expanded = expandOpportunityRowsToPlacementCandidateRows(v2Out.rows, {
+            householdFactsByCustomerId,
+        });
         expandedRows = expanded.rows.filter((row) => {
             const proj = row._placement_waitlist_row as { placement_candidate_id?: string } | undefined;
             const cid = proj?.placement_candidate_id?.trim();
@@ -390,45 +390,66 @@ export async function loadWaitlistCandidateGrainQueueItems(params: {
         expandedRows = sortPlacementCandidateQueueRows(expandedRows, shadowMode);
         assignWaitlistCandidateRuntimePositions(expandedRows, shadowMode);
     } else {
-        expandedRows = page.map((row) => {
-            const opp = enrichedByOppId.get(row.opportunity_id) ?? (opportunityPreviewFromCandidateRow(row) as Record<string, unknown>);
-            const ocmStatus = readOcmOutcomeStatus(row);
+        const candidatesByOpportunityId = await bulkLoadPlacementCandidatesByOpportunity({
+            supabase: params.supabase,
+            orgId: params.orgId,
+            opportunityIds,
+            activeOnly: false,
+        });
+
+        const oppRows = opportunityIds
+            .map((id) => enrichedByOppId.get(id))
+            .filter((r): r is Record<string, unknown> => r != null);
+
+        const revealRows = oppRows.map((row) => {
+            const oppId = typeof row.id === "string" ? row.id.trim() : "";
+            const bundles = filterPlacementCandidateBundlesForQueueDisplay(
+                candidatesByOpportunityId.get(oppId) ?? []
+            );
             return {
-                ...opp,
-                id: `pcrow:${row.opportunity_id}:${row.id}`,
-                opportunity_id: row.opportunity_id,
-                row_grain: "candidate",
-                placement_candidate_id: row.id,
-                opportunity_customer_member_id: row.opportunity_customer_member_id,
-                child_lifecycle_status: ocmStatus,
-                candidate_status: row.status,
-                _placement_waitlist_row: {
-                    row_projection: "placement_candidate",
-                    placement_candidate_id: row.id,
-                    opportunity_id: row.opportunity_id,
-                    child_display_name: "Child",
-                    family_display_name: typeof opp.name === "string" ? opp.name : "Family",
-                    program_room_cohort_key: row.program_room_cohort_key ?? "",
-                    program_room_group_label: row.program_room_group_label ?? "",
-                    bucket: "unknown",
-                    sibling_context: {
-                        has_siblings_on_waitlist: false,
-                        sibling_candidate_count: 0,
-                        sibling_cohorts: [],
-                        link_mode: "independent",
-                    },
-                    placement_priority_v2: {
-                        placement_candidate_id: row.id,
-                        program_room_cohort_key: row.program_room_cohort_key ?? "",
-                        bucket: "unknown",
-                        sort_tuple: [],
-                        link_mode: "independent",
-                        active_override_kinds: [],
-                    },
+                ...row,
+                _placement_priority_v2: {
+                    projection_mode: "family_row",
+                    evaluated: true,
                     shadow_mode: true,
+                    candidates: bundles.map((b) => ({
+                        placement_candidate_id: b.candidate.id,
+                        child_display_name: b.child_display_name,
+                        program_room_cohort_key: b.candidate.program_room_cohort_key,
+                        program_room_group_label: b.candidate.program_room_group_label,
+                        bucket: TIER_GENERAL_WAITLIST_BUCKET,
+                        sort_tuple: [] as Array<string | number | null>,
+                        link_mode: b.link_mode,
+                        active_override_kinds: [] as string[],
+                        is_synthetic_fallback: b.candidate.is_synthetic_fallback === true,
+                        wait_since: b.candidate.wait_since,
+                    })),
+                    family_rollup: {
+                        bucket: TIER_GENERAL_WAITLIST_BUCKET,
+                        sort_tuple: [] as Array<string | number | null>,
+                        candidate_count: bundles.length,
+                    },
                 },
             };
         });
+
+        const expanded = expandOpportunityRowsToPlacementCandidateRows(revealRows, {
+            householdFactsByCustomerId,
+        });
+        expandedRows = expanded.rows.filter((row) => {
+            const proj = row._placement_waitlist_row as { placement_candidate_id?: string } | undefined;
+            const cid = proj?.placement_candidate_id?.trim();
+            if (cid && candidateIdSet.has(cid)) return true;
+            const id = typeof row.id === "string" ? row.id : "";
+            if (id.startsWith("pcrow:")) {
+                const parts = id.split(":");
+                return parts.length >= 3 && candidateIdSet.has(parts[2]!);
+            }
+            return false;
+        });
+        shadowMode = true;
+        expandedRows = sortPlacementCandidateQueueRows(expandedRows, shadowMode);
+        assignWaitlistCandidateRuntimePositions(expandedRows, shadowMode);
     }
 
     for (const row of expandedRows) {

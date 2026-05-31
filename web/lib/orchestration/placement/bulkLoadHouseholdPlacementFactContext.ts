@@ -4,6 +4,8 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { HouseholdPlacementFactHouseholdSlice } from "@/lib/orchestration/placement/householdPlacementFacts";
+import { resolvePlacementCandidateChildDisplayName } from "@/lib/orchestration/placement/resolvePlacementCandidateChildDisplayName";
+import { resolvePlacementCandidateCohortForQueue } from "@/lib/orchestration/placement/resolvePlacementCandidateCohortForQueue";
 
 export type HouseholdPlacementFactContextByCustomerId = Map<string, HouseholdPlacementFactHouseholdSlice>;
 
@@ -32,7 +34,7 @@ export async function bulkLoadHouseholdPlacementFactContext(params: {
     const { data: ocmRows, error: ocmErr } = await params.supabase
         .from("opportunity_customer_members")
         .select(
-            "id, customer_member_id, outcome_status_key, location_id, opportunities!inner(customer_id)"
+            "id, customer_member_id, outcome_status_key, location_id, program_room_cohort_key, desired_program_type, customer_members(display_name, first_name, last_name, persons(first_name, last_name)), opportunities!inner(customer_id)"
         )
         .eq("org_id", params.orgId)
         .in("opportunities.customer_id", ids);
@@ -47,16 +49,38 @@ export async function bulkLoadHouseholdPlacementFactContext(params: {
             customer_member_id: string;
             outcome_status_key: string | null;
             location_id?: string | null;
+            program_room_cohort_key?: string | null;
+            desired_program_type?: string | null;
+            customer_members?: {
+                display_name?: string | null;
+                first_name?: string | null;
+                last_name?: string | null;
+                persons?: { first_name?: string | null; last_name?: string | null } | null;
+            } | null;
             opportunities: { customer_id: string } | { customer_id: string }[];
         };
         const opp = Array.isArray(row.opportunities) ? row.opportunities[0] : row.opportunities;
         const customerId = (opp?.customer_id ?? "").trim();
         if (!customerId || !out.has(customerId)) continue;
+
+        const childDisplayName =
+            resolvePlacementCandidateChildDisplayName({ ocmMember: row.customer_members ?? null }) ??
+            null;
+        const cohort = resolvePlacementCandidateCohortForQueue({
+            storedKey: row.program_room_cohort_key ?? "",
+            storedLabel: row.program_room_cohort_key ?? "",
+            ocmProgramRoomCohortKey: row.program_room_cohort_key,
+            desiredProgramType: row.desired_program_type,
+        });
+
         out.get(customerId)!.inquiry_children.push({
             opportunity_customer_member_id: String(row.id),
             customer_member_id: String(row.customer_member_id),
             outcome_status_key: row.outcome_status_key,
             location_id: row.location_id ?? null,
+            child_display_name: childDisplayName,
+            program_room_cohort_key: cohort.program_room_cohort_key,
+            desired_program_type: row.desired_program_type ?? null,
         });
     }
 

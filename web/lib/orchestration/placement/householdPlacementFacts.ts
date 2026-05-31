@@ -4,6 +4,7 @@
  */
 
 import type { FactBag, FactValue } from "@/lib/orchestration/placement/placementPriorityTypes";
+import { normalizePlacementWaitlistCohort } from "@/lib/orchestration/placement/normalizePlacementWaitlistCohort";
 import {
     CHILDCARE_PLACEMENT_FACT_FLAG_EMPLOYEE_HOUSEHOLD,
     CHILDCARE_PLACEMENT_FACT_FLAG_SIBLING_ENROLLED,
@@ -19,6 +20,10 @@ export type HouseholdInquiryChildRecord = {
     person_id?: string | null;
     outcome_status_key?: string | null;
     location_id?: string | null;
+    /** Presentation — loaded for queue sibling context lines only. */
+    child_display_name?: string | null;
+    program_room_cohort_key?: string | null;
+    desired_program_type?: string | null;
 };
 
 export type HouseholdActivePlacementCandidateRecord = {
@@ -92,6 +97,41 @@ function enrolledSiblings(
         if (isSelfChild(row, candidate)) return false;
         const key = (row.outcome_status_key ?? "").trim();
         return ENROLLED_SIBLING_OUTCOME_STATUS_KEYS.has(key);
+    });
+}
+
+export type HouseholdEnrolledSiblingDisplayRef = {
+    child_display_name: string | null;
+    cohort_label: string | null;
+    location_id: string | null;
+    location_label: string | null;
+    same_site_as_candidate: boolean;
+};
+
+/** Presentation-only enrolled sibling refs for queue row context (no ranking effect). */
+export function resolveEnrolledSiblingDisplayRefs(
+    household: HouseholdPlacementFactHouseholdSlice,
+    candidate: HouseholdPlacementFactCandidateContext,
+    locationLabelsById?: ReadonlyMap<string, string> | null
+): HouseholdEnrolledSiblingDisplayRef[] {
+    const site = (candidate.site_id ?? "").trim();
+    return enrolledSiblings(household, candidate).map((row) => {
+        const rowSite = (row.location_id ?? "").trim();
+        const locationLabel =
+            rowSite && locationLabelsById?.get(rowSite) ?
+                locationLabelsById.get(rowSite)!.trim() || null
+            :   null;
+        const { cohortLabel } = normalizePlacementWaitlistCohort(
+            row.program_room_cohort_key,
+            row.program_room_cohort_key
+        );
+        return {
+            child_display_name: row.child_display_name ?? null,
+            cohort_label: cohortLabel || row.program_room_cohort_key || null,
+            location_id: rowSite || null,
+            location_label: locationLabel,
+            same_site_as_candidate: Boolean(site && rowSite && site === rowSite),
+        };
     });
 }
 

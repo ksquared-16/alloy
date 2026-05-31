@@ -7,6 +7,7 @@ import {
     type PersonEmployeePlacementValues,
 } from "@/lib/admin/personEmployeePlacementFields";
 import { patchLinkedPersonFromOpportunityDrawer } from "@/lib/admin/drawer/linkedRecordFieldEditing";
+import { dispatchOpportunityQueueUpdatedBroadcast } from "@/lib/admin/opportunityQueueRefreshEvent";
 import { registerPersonDrawerEditSection } from "@/lib/admin/person/personDrawerEditingCoordinator";
 
 const INPUT_CLASS =
@@ -70,6 +71,7 @@ export default function PersonEmployeePlacementSection({
             setSavedFlash(true);
             window.setTimeout(() => setSavedFlash(false), 2000);
             onPersonUpdated?.(result.json);
+            dispatchOpportunityQueueUpdatedBroadcast("person_employee_updated");
         } catch (e) {
             setSaveError(e instanceof Error ? e.message : "Save failed");
             setDraft(baselineRef.current);

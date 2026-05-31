@@ -114,3 +114,16 @@ export function parsePersonEmployeePlacementPatchBody(
 
     return { ok: true, updates: out };
 }
+
+const PERSON_EMPLOYEE_PLACEMENT_PATCH_KEYS = new Set([
+    "is_employee",
+    "employee_id",
+    "employee_source",
+]);
+
+/** True when PATCH body only touches native employee placement columns. */
+export function isPersonEmployeePlacementOnlyPatch(body: Record<string, unknown>): boolean {
+    const keys = Object.keys(body).filter((k) => body[k] !== undefined);
+    if (!keys.length) return false;
+    return keys.every((k) => PERSON_EMPLOYEE_PLACEMENT_PATCH_KEYS.has(k));
+}

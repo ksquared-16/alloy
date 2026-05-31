@@ -4,7 +4,9 @@ import {
     resolveCustomerHouseholdPrimaryContactPersonId,
 } from "@/lib/admin/person/householdPrimaryContact";
 import { resolvePersonDrawerProfile } from "@/lib/admin/person/resolvePersonDrawerProfile";
+import { isPersonEmployeePlacementOnlyPatch } from "@/lib/admin/personEmployeePlacementFields";
 import { evaluateCompletionRequirements } from "@/lib/completion/evaluateCompletionRequirements";
+import { evaluatePersonCompletionRequirements } from "@/lib/completion/evaluatePersonCompletionRequirements";
 import type { CompletionEvaluationContext } from "@/lib/completion/requirementValidationTypes";
 import { formatRequirementValidationSummary } from "@/lib/completion/requirementValidationResult";
 import type { RequirementValidationResult } from "@/lib/completion/requirementValidationTypes";
@@ -161,6 +163,17 @@ export async function enforcePersonCompletionOnPatch(
     };
 
     const validation = evaluateCompletionRequirements(ctx);
+    const personOnly = evaluatePersonCompletionRequirements(ctx);
+
+    if (isPersonEmployeePlacementOnlyPatch(input.body)) {
+        if (personOnly.ok) return { ok: true, validation: personOnly };
+        return {
+            ok: false,
+            validation: personOnly,
+            message: formatRequirementValidationSummary(personOnly) || COMPLETION_REQUIREMENT_VALIDATION_ERROR,
+        };
+    }
+
     if (validation.ok) return { ok: true, validation };
 
     return {

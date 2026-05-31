@@ -47,6 +47,8 @@ const sampleRow: QueueRowPlacementWaitlistCandidateVm = {
             linkModeLabel: null,
         },
     ],
+    siblingContextLines: ["Sibling also waitlisted: Sophia Hayes — Young Toddler — 18–24 months"],
+    siblingContextDiagnostics: null,
 };
 
 function wantAll(_f: QueueUiRowPreviewField) {
@@ -90,7 +92,8 @@ describe("queuePlacementWaitlistCandidatePresentation", () => {
             shadow_mode: true,
         });
         expect(vm?.cohortLabel).toBe("Preschool — 3–4 years");
-        expect(vm?.siblingLabel).toBe("1 sibling also waitlisted");
+        expect(vm?.siblingContextLines[0]).toContain("Sophia Hayes");
+        expect(vm?.siblingContextLines[0]).toContain("Young Toddler");
         expect(vm?.activeOverrides).toEqual([]);
         expect(vm?.hasManualPositionAdjustment).toBe(false);
         expect(vm?.cohortSectionTitle).not.toMatch(/Young Toddler/);
@@ -267,23 +270,57 @@ describe("QueueRowPlacementCandidateMetaChips", () => {
         expect(html).toContain("adminv2-ws-queue-placement-candidate__forecast-chip");
     });
 
-    it("shows runtime position label with help tooltip", () => {
+    it("does not duplicate runtime position in meta chips", () => {
         const html = renderToStaticMarkup(
             <QueueRowPlacementCandidateMetaChips
                 row={{
                     ...sampleRow,
                     runtimePositionLabel: "Preview position 3/10",
-                    runtimePositionHelp:
-                        "Position is calculated from the current priority rules and filters. It is not a permanent stored rank.",
                 }}
             />
         );
-        expect(html).toContain("Preview position 3/10");
-        expect(html).toContain("not a permanent stored rank");
+        expect(html).not.toContain("Preview position 3/10");
     });
 });
 
 describe("QueueRowPlacementManualOrderControls", () => {
+    it("stacks preview position above adjust in left identity", () => {
+        const html = renderToStaticMarkup(
+            <QueueRowPlacementManualOrderControls
+                row={{
+                    ...sampleRow,
+                    runtimePosition: 1,
+                    runtimePositionTotal: 3,
+                    runtimePositionLabel: "Preview position 1/3",
+                }}
+            />
+        );
+        const positionIdx = html.indexOf("Preview position 1/3");
+        const adjustIdx = html.indexOf("Adjust position");
+        expect(positionIdx).toBeGreaterThan(-1);
+        expect(adjustIdx).toBeGreaterThan(positionIdx);
+        expect(html).toContain('data-queue-placement="waitlist-left-meta"');
+    });
+
+    it("shows runtime position label in inline left meta", () => {
+        const html = renderToStaticMarkup(
+            <QueueRowPlacementManualOrderControls
+                row={{
+                    ...sampleRow,
+                    runtimePosition: 3,
+                    runtimePositionTotal: 10,
+                    runtimePositionLabel: "Preview position 3/10",
+                    runtimePositionHelp:
+                        "Position is calculated from the current priority rules and filters. It is not a permanent stored rank. Ranked below manually adjusted row(s) in this program section.",
+                }}
+            />
+        );
+        expect(html).toContain("Preview position 3/10");
+        expect(html).toContain("Adjust position");
+        expect(html).toContain('data-queue-placement="waitlist-left-meta"');
+        expect(html).toContain("manually adjusted");
+    });
+
     it("renders adjust position action", () => {
         const html = renderToStaticMarkup(
             <QueueRowPlacementManualOrderControls
@@ -312,10 +349,33 @@ describe("QueueRowPlacementManualOrderControls", () => {
 });
 
 describe("QueueRowPlacementCandidateContext", () => {
-    it("shows sibling indicator as secondary context", () => {
+    it("shows sibling details inline without expand toggle", () => {
         const html = renderToStaticMarkup(<QueueRowPlacementCandidateContext row={sampleRow} />);
-        expect(html).toContain("1 sibling also waitlisted");
-        expect(html).not.toContain("Preschool — 3–4 years");
+        expect(html).toContain("Sibling also waitlisted: Sophia Hayes");
+        expect(html).not.toContain("1 sibling also waitlisted");
+        expect(html).not.toContain("sibling-toggle");
+        expect(html).not.toContain("▸");
+    });
+
+    it("shows enrolled sibling line when present", () => {
+        const html = renderToStaticMarkup(
+            <QueueRowPlacementCandidateContext
+                row={{
+                    ...sampleRow,
+                    siblingContextLines: ["Sibling enrolled: Jordan Patel — Preschool"],
+                }}
+            />
+        );
+        expect(html).toContain("Sibling enrolled: Jordan Patel — Preschool");
+    });
+});
+
+describe("QueueBlock left identity (candidate grain)", () => {
+    it("does not render parent name under family title for candidate rows", () => {
+        const html = renderToStaticMarkup(
+            <QueueRowPlacementCandidateContext row={sampleRow} />
+        );
+        expect(html).not.toContain("Jordan Hayes");
     });
 });
 
@@ -336,8 +396,8 @@ describe("QueueRowPlacementCandidatePanel", () => {
         const html = renderToStaticMarkup(<QueueRowPlacementCandidatePanel row={sampleRow} statusLabel="Waitlisted" />);
         expect(html).toContain("Standard family");
         expect(html).not.toContain("Preschool — 3–4 years");
-        expect(html).not.toContain("Young Toddler");
         expect(html).not.toContain("#1");
-        expect(html).toContain("1 sibling also waitlisted");
+        expect(html).toContain("Sibling also waitlisted: Sophia Hayes");
+        expect(html).toContain("Young Toddler — 18–24 months");
     });
 });

@@ -30,8 +30,7 @@ import { QueueRowPlacementPriorityStrip } from "@/app/adminV2/components/workspa
 import {
     QueueRowPlacementCandidateContext,
     QueueRowPlacementCandidateMetaChips,
-} from "@/app/adminV2/components/workspace/blocks/QueueRowPlacementCandidatePanel";
-import { QueueRowPlacementManualOrderControls } from "@/app/adminV2/components/workspace/blocks/QueueRowPlacementManualOrderControls";
+} from "@/app/adminV2/components/workspace/blocks/QueueRowPlacementCandidatePanel";import { QueueRowPlacementManualOrderControls } from "@/app/adminV2/components/workspace/blocks/QueueRowPlacementManualOrderControls";
 import { QueueRowPlacementPriorityV2Panel } from "@/app/adminV2/components/workspace/blocks/QueueRowPlacementPriorityV2Panel";
 import { WorkUnitQueueLaneRowSkeleton } from "@/components/admin/workspace/WorkUnitQueueCompactRowSkeleton";
 import { ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT } from "@/lib/ui-v2/adminV2LoadingGeometry";
@@ -793,7 +792,7 @@ export function CrmCompactQueuePreview({
               <span className="adminv2-ws-crm-queue-preview__title" title={slots.primaryIdentity}>
                 {slots.primaryIdentity}
               </span>
-              {slots.waitlistHouseholdContext?.trim() ? (
+              {!waitlistCandidateRow && slots.waitlistHouseholdContext?.trim() ? (
                 <span
                   className="adminv2-ws-crm-queue-preview__household-context text-[11px] text-alloy-midnight/65"
                   data-queue-preview-slot="waitlist_household"
@@ -810,6 +809,9 @@ export function CrmCompactQueuePreview({
                 </span>
               ) : null}
             </div>
+            {waitlistCandidateRow ? (
+              <QueueRowPlacementManualOrderControls row={waitlistCandidateRow} layout="inline" />
+            ) : null}
             {waitlistCandidateRow ? <QueueRowPlacementCandidateContext row={waitlistCandidateRow} /> : null}
             {slots.attentionReason?.trim() && !operationalRead?.operationalRead ? (
               <div className="adminv2-ws-crm-queue-preview__attention-headline">{slots.attentionReason.trim()}</div>
@@ -1220,9 +1222,6 @@ function WorkUnitQueueLane({
           const valueShown = (crm?.commercialValue ?? item.valueLabel)?.trim() ?? "";
           const hasValue = Boolean(valueShown);
           const actionEntityId = queueItemOpportunityId(item);
-          const showManualOrderControls =
-            item.placementWaitlistCandidate != null && placementShowBucketChip;
-
           const headerCfg = sectionKey ? queue.workUnitGroupHeaders?.[sectionKey] : undefined;
           const count = sectionKey ? (groupCounts.get(sectionKey) ?? 0) : 0;
           const rowMode = placementWaitlistGroupRowMode(
@@ -1307,16 +1306,9 @@ function WorkUnitQueueLane({
               >
                 {crm ? (
                   <div
-                    className={`adminv2-ws-enrollment-crm-row adminv2-ws-enrollment-crm-row--split${
-                      item.placementWaitlistCandidate && placementShowBucketChip
-                        ? " adminv2-ws-enrollment-crm-row--manual-order"
-                        : ""
-                    }`}
+                    className="adminv2-ws-enrollment-crm-row adminv2-ws-enrollment-crm-row--split"
                     data-enrollment-row-layout="split_actions"
                   >
-                    {showManualOrderControls ? (
-                      <QueueRowPlacementManualOrderControls row={item.placementWaitlistCandidate!} />
-                    ) : null}
                     <div className="adminv2-ws-enrollment-crm-row__content">
                       <CrmCompactQueuePreview
                         slots={crm}

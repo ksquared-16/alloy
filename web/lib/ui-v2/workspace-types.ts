@@ -326,6 +326,7 @@ export type QueueRowPlacementWaitlistCandidateVm = {
   runtimePositionMode?: "preview" | "live";
   runtimePositionSectionKey?: string;
   runtimePositionHelp?: string;
+  runtimePositionPrecedenceNote?: string;
   /** Card 6 — optional forecast hint labels (informational only). */
   forecastHints: string[];
   siblingLabel: string | null;
@@ -335,6 +336,8 @@ export type QueueRowPlacementWaitlistCandidateVm = {
     cohortLabel: string;
     linkModeLabel: string | null;
   }>;
+  siblingContextLines: string[];
+  siblingContextDiagnostics: string | null;
 };
 
 /** One child placement line under a family row (read-only). */

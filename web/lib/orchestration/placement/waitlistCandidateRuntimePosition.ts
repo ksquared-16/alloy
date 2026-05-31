@@ -19,6 +19,8 @@ export type WaitlistRuntimePositionFields = {
     runtime_position_mode: WaitlistRuntimePositionMode;
     /** Org-level category section key used for scoping (e.g. `toddler`). */
     runtime_position_section_key?: string;
+    /** Preview-only hint when manual pin(s) rank above this row in the section. */
+    runtime_position_precedence_note?: string;
 };
 
 export function formatWaitlistRuntimePositionLabel(
@@ -44,6 +46,27 @@ function readSortTuple(row: Record<string, unknown>): Array<string | number | nu
         }
     }
     return null;
+}
+
+/** Drop `primary_group_fact_key` (first tuple slot) for within-section priority rank. */
+export function stripPrimaryGroupFromPlacementSortTuple(
+    tuple: Array<string | number | null>
+): Array<string | number | null> {
+    if (tuple.length <= 1) return [...tuple];
+    return tuple.slice(1);
+}
+
+function readRowActiveOverrideKinds(row: Record<string, unknown>): string[] {
+    const wr = row._placement_waitlist_row;
+    if (wr == null || typeof wr !== "object" || Array.isArray(wr)) return [];
+    const pv2 = (wr as { placement_priority_v2?: { active_override_kinds?: unknown } }).placement_priority_v2;
+    const kinds = pv2?.active_override_kinds;
+    if (!Array.isArray(kinds)) return [];
+    return kinds.filter((k): k is string => typeof k === "string" && k.trim().length > 0);
+}
+
+function rowHasManualPinOverride(row: Record<string, unknown>): boolean {
+    return readRowActiveOverrideKinds(row).includes("pin");
 }
 
 /** Org-level category section key for one candidate queue row. */
@@ -75,7 +98,10 @@ function compareWaitlistCandidateRowsByPriority(
     if (hasA && !hasB) return -1;
     if (!hasA && hasB) return 1;
     if (hasA && hasB) {
-        const c = comparePlacementSortTuples(ta!, tb!);
+        const c = comparePlacementSortTuples(
+            stripPrimaryGroupFromPlacementSortTuple(ta!),
+            stripPrimaryGroupFromPlacementSortTuple(tb!)
+        );
         if (c !== 0) return c;
     }
     return String(a.id ?? "").localeCompare(String(b.id ?? ""));
@@ -125,12 +151,22 @@ export function assignWaitlistCandidateRuntimePositions(
 
         rankIndices.forEach((rowIdx, rank) => {
             const position = rank + 1;
+            const beatenByManualPin =
+                shadowMode &&
+                position > 1 &&
+                rankIndices.slice(0, rank).some((higherIdx) => rowHasManualPinOverride(rows[higherIdx]!));
             writeRuntimePositionOnRow(rows[rowIdx]!, {
                 runtime_position: position,
                 runtime_position_total: total,
                 runtime_position_label: formatWaitlistRuntimePositionLabel(mode, position, total),
                 runtime_position_mode: mode,
                 runtime_position_section_key: sectionKey,
+                ...(beatenByManualPin ?
+                    {
+                        runtime_position_precedence_note:
+                            "Ranked below manually adjusted row(s) in this program section.",
+                    }
+                :   {}),
             });
         });
     }

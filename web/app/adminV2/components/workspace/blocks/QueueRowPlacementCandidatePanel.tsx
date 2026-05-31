@@ -1,6 +1,5 @@
 "use client";
 
-import { useCallback, useState } from "react";
 import type { QueueRowPlacementWaitlistCandidateVm } from "@/lib/ui-v2/workspace-types";
 
 type SiblingContextProps = {
@@ -9,51 +8,28 @@ type SiblingContextProps = {
 
 /** Left column: sibling + link context (secondary to family identity + Child/Program columns). */
 export function QueueRowPlacementCandidateContext({ row }: SiblingContextProps) {
-    const [siblingsExpanded, setSiblingsExpanded] = useState(false);
-    const hasSiblings = Boolean(row.siblingLabel && row.siblingCohorts.length > 0);
+    const lines = row.siblingContextLines ?? [];
+    const hasLines = lines.length > 0;
 
-    const toggleSiblings = useCallback((e: React.MouseEvent | React.KeyboardEvent) => {
-        e.stopPropagation();
-        e.preventDefault();
-        if (!hasSiblings) return;
-        setSiblingsExpanded((v) => !v);
-    }, [hasSiblings]);
-
-    if (!hasSiblings && !row.linkModeLabel) return null;
+    if (!hasLines && !row.linkModeLabel) return null;
 
     return (
         <div className="adminv2-ws-queue-placement-candidate__context" data-queue-placement="candidate-context">
             {row.linkModeLabel ? (
                 <p className="adminv2-ws-queue-placement-candidate__link-note">{row.linkModeLabel}</p>
             ) : null}
-            {hasSiblings ? (
-                <>
-                    <button
-                        type="button"
-                        className="adminv2-ws-queue-placement-candidate__sibling-toggle"
-                        aria-expanded={siblingsExpanded}
-                        onClick={toggleSiblings}
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") toggleSiblings(e);
-                        }}
+            {hasLines ?
+                lines.map((line) => (
+                    <p
+                        key={line}
+                        className="adminv2-ws-queue-placement-candidate__sibling-line"
+                        data-queue-placement="sibling-context"
+                        title={row.siblingContextDiagnostics ?? undefined}
                     >
-                        <span className="adminv2-ws-queue-placement-candidate__sibling-chevron" aria-hidden>
-                            {siblingsExpanded ? "▾" : "▸"}
-                        </span>
-                        <span>{row.siblingLabel}</span>
-                    </button>
-                    {siblingsExpanded ? (
-                        <ul className="adminv2-ws-queue-placement-candidate__sibling-list" role="list">
-                            {row.siblingCohorts.map((s) => (
-                                <li key={s.placementCandidateId} className="adminv2-ws-queue-placement-candidate__sibling-line">
-                                    {s.childDisplayName} — {s.cohortLabel}
-                                    {s.linkModeLabel ? ` · ${s.linkModeLabel}` : ""}
-                                </li>
-                            ))}
-                        </ul>
-                    ) : null}
-                </>
-            ) : null}
+                        {line}
+                    </p>
+                ))
+            :   null}
         </div>
     );
 }
@@ -70,14 +46,6 @@ export function QueueRowPlacementCandidateMetaChips({ row, siteLabel }: MetaProp
     return (
         <div className="adminv2-ws-queue-placement-candidate__meta" data-queue-placement="candidate-meta">
             <div className="adminv2-ws-queue-placement-candidate__meta-row">
-                {row.runtimePositionLabel ? (
-                    <span
-                        className="adminv2-ws-queue-placement-candidate__position"
-                        title={row.runtimePositionHelp ?? undefined}
-                    >
-                        {row.runtimePositionLabel}
-                    </span>
-                ) : null}
                 <span className="adminv2-ws-queue-placement-rule-chip" title={row.bucketLabel}>
                     {row.bucketLabel}
                 </span>

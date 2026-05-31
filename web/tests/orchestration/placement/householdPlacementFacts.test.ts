@@ -79,6 +79,21 @@ describe("householdPlacementFacts", () => {
         expect(facts.flag_sister_center).toMatchObject({ presence: "present", value: true });
     });
 
+    it("includes guardian customer_persons rows (not only primary_contact role)", () => {
+        const guardianHousehold: HouseholdPlacementFactHouseholdSlice = {
+            customer_id: "cust_1",
+            inquiry_children: [household.inquiry_children[0]!],
+            active_placement_candidates: [],
+            household_persons: [{ person_id: "person_guardian", is_employee: true, employee_id: "E-99" }],
+        };
+        const facts = resolveHouseholdPlacementFactsForCandidate(guardianHousehold, candidateCtx);
+        expect(facts.flag_employee_household).toMatchObject({
+            presence: "present",
+            value: true,
+            source: "persons.is_employee:person_guardian",
+        });
+    });
+
     it("resolves same-site vs sister-site from candidate site", () => {
         const factsAtB = resolveHouseholdPlacementFactsForCandidate(household, {
             ...candidateCtx,
@@ -144,7 +159,7 @@ describe("householdPlacementFacts", () => {
         });
         expect(r.ok).toBe(true);
         if (!r.ok) return;
-        expect(r.value.snapshot.bucket_key).toBe("tier_staff_community");
+        expect(r.value.snapshot.bucket_key).toBe("tier_employee_family");
     });
 
     it("buildPlacementCandidateFacts ignores metadata flags when household slice provided", () => {

@@ -105,6 +105,16 @@ describe("opportunityQueueRefreshEvent", () => {
         expect(isQueueMembershipMutationActionKey("inline_save")).toBe(true);
         expect(isQueueMembershipMutationActionKey("customer_member_inline_save")).toBe(true);
         expect(isQueueMembershipMutationActionKey("family_contacts_registry")).toBe(true);
+        expect(isQueueMembershipMutationActionKey("person_employee_updated")).toBe(true);
+    });
+
+    it("refetches waitlist rows for person_employee_updated broadcast", () => {
+        expect(
+            shouldRefetchWorkUnitQueueRowsForEvent({
+                detail: { action_key: "person_employee_updated" },
+                visibleOpportunityIds: ["opp-1"],
+            })
+        ).toBe(true);
     });
 
     it("work-unit page patches rows before conditional cache delete", () => {

@@ -92,6 +92,8 @@ describe("queueRowGrainContext", () => {
                 forecastHints: [],
                 siblingLabel: null,
                 siblingCohorts: [],
+                siblingContextLines: [],
+                siblingContextDiagnostics: null,
             },
         };
 
