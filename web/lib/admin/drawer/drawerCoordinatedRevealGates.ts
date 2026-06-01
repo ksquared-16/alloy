@@ -1,6 +1,5 @@
 import { opportunityDrawerHeaderActionsReady } from "@/lib/admin/drawer/drawerFirstPaintReadiness";
 import { opportunityInquirySummaryRightPanelFromPrimaryOnly } from "@/lib/admin/drawer/opportunityDrawerFirstPaintContract";
-import { isPersonDrawerSeedRecord } from "@/lib/admin/drawer/personDrawerOpenSeed";
 
 /** Opportunity above-fold must not reveal until header, actions, summary, and BOS column are ready or reserved. */
 export function opportunityDrawerAboveFoldCoordinatedReady(args: {
@@ -58,7 +57,6 @@ export function personDrawerHouseholdAddressCoordinatedReady(args: {
     has_content: boolean;
 }): boolean {
     if (!args.section_enabled) return true;
-    if (args.has_content) return true;
-    if (isPersonDrawerSeedRecord(args.record)) return true;
-    return args.body_hydrated;
+    if (!args.body_hydrated) return false;
+    return args.has_content;
 }

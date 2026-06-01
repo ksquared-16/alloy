@@ -80,6 +80,8 @@ describe("opportunity header actions restore wiring", () => {
                 _record_surface: "drawer_primary",
                 metadata: { tour_date: "2026-06-01" },
                 _customer_name: "Test",
+                next_follow_up_at: "2026-06-15T10:00:00Z",
+                _inquiry_children: [{ person_id: "c1", display_name: "Child", desired_program_label: "Toddler" }],
             },
             error: null,
             typedSnapshot: false,

@@ -43,11 +43,17 @@ describe("drawerCoordinatedFirstPaintRegression", () => {
         ).toBe(true);
     });
 
-    it("person coordinated body accepts typed snapshot before full hydrate", () => {
+    it("person coordinated body requires full hydrate — no typed snapshot shortcut", () => {
         expect(
             personDrawerCoordinatedBodyReady({
                 typed_snapshot: true,
                 body_hydrated: false,
+            })
+        ).toBe(false);
+        expect(
+            personDrawerCoordinatedBodyReady({
+                typed_snapshot: false,
+                body_hydrated: true,
             })
         ).toBe(true);
         expect(
@@ -56,7 +62,7 @@ describe("drawerCoordinatedFirstPaintRegression", () => {
                 coordinated_body_ready: true,
                 section_has_content: false,
             })
-        ).toBe(true);
+        ).toBe(false);
     });
 
     it("opportunity header actions stay on title rail across tabs", () => {
@@ -79,12 +85,12 @@ describe("drawerCoordinatedFirstPaintRegression", () => {
         expect(drawer).not.toContain("out.inquiry_tuition");
     });
 
-    it("child seed uses section reserves instead of full overview skeleton", () => {
+    it("child seed holds reveal until hydrate — no section reserves", () => {
         const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("PersonDrawerSectionCoordinatedReserve");
-        expect(drawer).toContain("!personDrawerTypedBodySnapshot");
+        expect(drawer).toContain("personDrawerRuntimePlan?.canRevealDrawerFrame");
         const operating = readSrc("components/admin/entity/PersonDrawerOperatingSections.tsx");
-        expect(operating).toContain("showHouseholdReserve");
+        expect(operating).not.toContain("showHouseholdReserve");
+        expect(operating).not.toContain("PersonDrawerSectionCoordinatedReserve");
     });
 
     it("work-unit lane uses coordinated reveal state not row skeleton", () => {

@@ -100,7 +100,7 @@ export function shouldDeferOpportunityDrawerSecondaryReveal(aboveFoldLocked: boo
 
 /**
  * Workflow overview sections for layout-stable open.
- * When above-fold locked: deferred sections unmounted, inquiry_children last + collapsed.
+ * When above-fold locked: below-fold enrichments stay collapsed; inquiry_children stays expanded.
  */
 export function stabilizeOpportunityWorkflowOverviewSections(
     sections: EntityDrawerSectionConfig[],

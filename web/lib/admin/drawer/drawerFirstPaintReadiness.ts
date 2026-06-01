@@ -54,13 +54,16 @@ export function personDrawerCoordinatedBodyReady(args: {
     typed_snapshot: boolean;
     body_hydrated: boolean;
 }): boolean {
-    return args.typed_snapshot || args.body_hydrated;
+    void args.typed_snapshot;
+    return args.body_hydrated;
 }
 
+/** Above-fold person sections must not show empty reserves — hold reveal instead. */
 export function personDrawerSectionShowsCoordinatedReserve(args: {
     section_enabled: boolean;
     coordinated_body_ready: boolean;
     section_has_content: boolean;
 }): boolean {
-    return args.section_enabled && args.coordinated_body_ready && !args.section_has_content;
+    void args;
+    return false;
 }

@@ -8,6 +8,7 @@ import type { OpportunityWorkspaceContext } from "@/contexts/AdminDrawerContext"
 import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
 import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { opportunityDrawerPrimaryContractReady } from "@/lib/admin/drawer/opportunityDrawerFirstPaintContract";
+import { opportunityDrawerComposedAboveFoldReady } from "@/lib/admin/drawer/drawerAboveFoldCoordinatedReveal";
 import { markOpportunityDrawerHydrateDone } from "@/lib/admin/opportunityDrawerHydrateGuards";
 import { fetchOpportunityDrawerFullEntity, isOpportunityDrawerFullWarm } from "@/lib/admin/opportunityDrawerFullPrefetch";
 import {
@@ -67,7 +68,12 @@ export function opportunityDrawerComposedRevealReady(preload: OpportunityDrawerO
     if (!opportunityDrawerPrimaryContractReady(preload.primaryEntity, preload.opportunityId)) return false;
     if (preload.headerActions == null || typeof preload.headerActions !== "object") return false;
     if (preload.bootstrap?.entity == null) return false;
-    return true;
+    const paintRecord = (preload.fullEntity ?? preload.primaryEntity) as Record<string, unknown>;
+    return opportunityDrawerComposedAboveFoldReady({
+        primaryEntity: paintRecord,
+        opportunityId: preload.opportunityId,
+        inquiryChildrenSectionVisible: true,
+    });
 }
 
 /** @deprecated alias — same as {@link opportunityDrawerComposedRevealReady} */
@@ -187,6 +193,20 @@ export async function loadOpportunityDrawerComposedOpen(
     let fullEntity: Record<string, unknown> | null = null;
     if (peekedFull && String(peekedFull._record_surface ?? "").trim() === "full") {
         fullEntity = peekedFull;
+    }
+
+    let paintEntity = fullEntity ?? primaryEntity;
+    if (
+        !opportunityDrawerComposedAboveFoldReady({
+            primaryEntity: paintEntity,
+            opportunityId: id,
+            inquiryChildrenSectionVisible: true,
+        })
+    ) {
+        fullEntity = await fullP.catch(() => null);
+        if (fullEntity && String(fullEntity._record_surface ?? "").trim() === "full") {
+            paintEntity = fullEntity;
+        }
     }
 
     const enrichmentHeldUntilInteraction = fullEntity == null;

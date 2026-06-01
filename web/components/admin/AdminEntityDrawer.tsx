@@ -118,7 +118,6 @@ import { PersonDrawerHeaderControls } from "@/components/admin/entity/PersonDraw
 import { resolvePersonDrawerOperatingBackLink } from "@/lib/admin/person/personDrawerBackLink";
 import PersonDrawerChildLifecycleRail from "@/components/admin/entity/PersonDrawerChildLifecycleRail";
 import PersonDrawerChildOverviewSkeleton from "@/components/admin/entity/PersonDrawerChildOverviewSkeleton";
-import PersonDrawerSectionCoordinatedReserve from "@/components/admin/entity/PersonDrawerSectionCoordinatedReserve";
 import PersonDrawerChildHeaderExecutive from "@/components/admin/entity/PersonDrawerChildHeaderExecutive";
 import PersonDrawerChildCommunicationsPlaceholder from "@/components/admin/entity/PersonDrawerChildCommunicationsPlaceholder";
 import PersonDrawerChildTitleRow from "@/components/admin/entity/PersonDrawerChildTitleRow";
@@ -4220,6 +4219,12 @@ export default function AdminEntityDrawer() {
             setOpportunityResolvedHeaderLoading(false);
             return;
         }
+        const cachedHeaderActions = peekOpportunityDrawerHeaderActionsCache(drawer.id);
+        if (cachedHeaderActions && opportunityResolvedHeaderActions == null) {
+            setOpportunityResolvedHeaderActions(cachedHeaderActions.actions);
+            opportunityHeaderResolvedSigRef.current = cachedHeaderActions.resolvedSig;
+            setOpportunityResolvedHeaderLoading(false);
+        }
         if (
             drawerShellVariant === "adminV2" &&
             adminV2DrawerBootstrapEnabled() &&
@@ -4288,6 +4293,13 @@ export default function AdminEntityDrawer() {
         appendOpportunityRecordHeaderHints(qs, data as Record<string, unknown> | undefined, drawer.id);
         const actionsUrl = `/api/admin/actions?${qs.toString()}`;
         if (opportunityHeaderResolvedSigRef.current === actionsUrl) {
+            setOpportunityResolvedHeaderLoading(false);
+            return;
+        }
+        const warmCache = peekOpportunityDrawerHeaderActionsCache(drawer.id);
+        if (warmCache?.resolvedSig === actionsUrl) {
+            setOpportunityResolvedHeaderActions(warmCache.actions);
+            opportunityHeaderResolvedSigRef.current = warmCache.resolvedSig;
             setOpportunityResolvedHeaderLoading(false);
             return;
         }
@@ -8899,12 +8911,14 @@ export default function AdminEntityDrawer() {
     const personDrawerChildBodyHydrated =
         personChildLifecycleChrome &&
         personDrawerPaintReady &&
-        (drawerReady || personDrawerTypedBodySnapshot);
+        drawerReady &&
+        dataMatchesDrawer;
 
     const personDrawerParentBodyHydrated =
         personParentGuardianChrome &&
         personDrawerPaintReady &&
-        (drawerReady || personDrawerTypedBodySnapshot);
+        drawerReady &&
+        dataMatchesDrawer;
 
     const personDrawerRuntimeSurface = personChildLifecycleChrome
         ? "child"
@@ -8961,13 +8975,9 @@ export default function AdminEntityDrawer() {
 
     const personDrawerOverviewReady =
         personDrawerPaintReady &&
-        (personChildLifecycleChrome
-            ? personDrawerChildBodyHydrated || useConfigDrivenOverview
-            : personParentGuardianChrome
-                ? personDrawerParentBodyHydrated ||
-                useConfigDrivenOverview ||
-                isPersonDrawerSeedRecord(data as Record<string, unknown>)
-                : useConfigDrivenOverview || isPersonDrawerSeedRecord(data as Record<string, unknown>));
+        (personChildLifecycleChrome || personParentGuardianChrome
+            ? (personDrawerRuntimePlan?.canRevealDrawerFrame ?? false)
+            : useConfigDrivenOverview || isPersonDrawerSeedRecord(data as Record<string, unknown>));
 
     const personDrawerExistingReady = personDrawerOverviewReady;
 
@@ -15341,11 +15351,6 @@ export default function AdminEntityDrawer() {
                                                     }}
                                                     onRecordUpdated={mergePersonDrawerRecord}
                                                 />
-                                            ) : null}
-                                            {personChildLifecycleChrome &&
-                                            personDrawerTypedBodySnapshot &&
-                                            !useConfigDrivenOverview ? (
-                                                <PersonDrawerSectionCoordinatedReserve title="Medical" lines={2} />
                                             ) : null}
                                             <EntityDrawerOverview
                                                 entityType={presentationType}

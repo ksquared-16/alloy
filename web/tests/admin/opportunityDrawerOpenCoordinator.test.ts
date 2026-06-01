@@ -32,7 +32,12 @@ describe("opportunity drawer primary-gated composed open", () => {
     });
 
     it("composed reveal requires bootstrap + primary + header only (not full)", () => {
-        const primary = { id: "o1", _record_surface: "drawer_primary" };
+        const primary = {
+            id: "o1",
+            _record_surface: "drawer_primary",
+            _customer_name: "Test Family",
+            _inquiry_children: [{ person_id: "c1", display_name: "Child", desired_program_label: "Toddler" }],
+        };
         const base = {
             opportunityId: "o1",
             bootstrap: { entity: { id: "o1" } } as never,
@@ -46,7 +51,14 @@ describe("opportunity drawer primary-gated composed open", () => {
         expect(
             opportunityDrawerComposedRevealReady({
                 ...base,
-                fullEntity: { id: "o1", _record_surface: "full" },
+                fullEntity: {
+                    id: "o1",
+                    _record_surface: "full",
+                    _customer_name: "Test Family",
+                    _inquiry_children: [
+                        { person_id: "c1", display_name: "Child", desired_program_label: "Toddler" },
+                    ],
+                },
                 enrichmentHeldUntilInteraction: false,
             })
         ).toBe(true);

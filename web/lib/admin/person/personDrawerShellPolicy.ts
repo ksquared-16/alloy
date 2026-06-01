@@ -1,6 +1,3 @@
-import { isPersonDrawerSeedRecord } from "@/lib/admin/drawer/personDrawerOpenSeed";
-
-/** Child overview body: skeleton only when no typed seed/snapshot body is paintable. */
 export function personDrawerChildBodyShowsSkeleton(args: {
     personChildLifecycleChrome: boolean;
     personDrawerChildBodyHydrated: boolean;
@@ -16,12 +13,11 @@ export function personDrawerParentBodyShowsSkeleton(args: {
     return args.personParentGuardianChrome && !args.personDrawerParentBodyHydrated;
 }
 
-/** Operating summary blocks render from typed seed immediately; full hydrate refines in place. */
+/** Operating summary blocks render only after full hydrate — no partial section shells. */
 export function personDrawerOperatingSummaryVisible(args: {
     bodyHydrated: boolean;
     record: Record<string, unknown> | null | undefined;
 }): boolean {
     if (!args.record || (args.record as { _create?: boolean })._create) return false;
-    if (isPersonDrawerSeedRecord(args.record)) return true;
     return args.bodyHydrated;
 }

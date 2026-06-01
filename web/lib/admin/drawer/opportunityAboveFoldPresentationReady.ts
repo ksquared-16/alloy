@@ -1,10 +1,13 @@
-import { opportunityInquiryFamilyBlockReadyOnPrimary } from "@/lib/admin/drawer/opportunityDrawerFirstPaintContract";
-import { opportunityInquiryTourDisplayFromPrimaryMetadata } from "@/lib/admin/drawer/opportunityDrawerFirstPaintContract";
+import { snapshotInquiryChildrenNeedHydrate } from "@/lib/admin/drawer/opportunityDrawerRecordNeedsRevalidate";
+import {
+    opportunityInquiryFamilyBlockReadyOnPrimary,
+    opportunityInquiryTourDisplayFromPrimaryMetadata,
+} from "@/lib/admin/drawer/opportunityDrawerFirstPaintContract";
+import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
 import {
     opportunityLocationDisplayLabelSafe,
     opportunityStatusDisplayLabelSafe,
 } from "@/lib/admin/drawer/opportunityRawValueGuard";
-import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
 import type { RecordDrawerShellContract } from "@/lib/adminV2/shellContracts/types";
 import type { ActivitySignalResult } from "@/lib/admin/activitySignals";
 
@@ -44,16 +47,8 @@ function activitySummaryReady(record: Record<string, unknown>): boolean {
 
 function childCountPresentationReady(record: Record<string, unknown>, sectionVisible: boolean): boolean {
     if (!sectionVisible) return true;
-    const summary = record._child_lifecycle_summary;
-    if (summary && typeof summary === "object") {
-        const headline = trimNonEmpty((summary as { headline_label?: unknown }).headline_label);
-        if (headline) return true;
-    }
-    const shellCount = Number(record._inquiry_children_shell_count ?? record._inquiry_children_count ?? NaN);
-    if (Number.isFinite(shellCount)) return true;
-    const children = record._inquiry_children;
-    if (Array.isArray(children)) return true;
-    return false;
+    if (!Array.isArray(record._inquiry_children)) return false;
+    return !snapshotInquiryChildrenNeedHydrate(record);
 }
 
 function tourPresentationReady(
@@ -80,7 +75,7 @@ function rightColumnPresentationReady(layout: OpportunityAboveFoldPresentationLa
 
 /**
  * Above-fold presentation contract — display-safe values required before overview body reveal.
- * Does not wait for full hydrate; skeleton sections may remain reserved after reveal.
+ * Does not reveal with header-only section shells.
  */
 export function assessOpportunityAboveFoldPresentationReady(
     record: Record<string, unknown> | null | undefined,

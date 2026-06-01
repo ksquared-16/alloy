@@ -41,7 +41,8 @@ export function validateDrawerSectionContract(
     if (contract.blocksFirstPaint && !contract.belowFoldLazy) {
         const hasReserve = Boolean(contract.reservedLayout?.minHeightClass?.trim());
         const seedOk = contract.canRenderFromSeed && contract.fallbackMode !== "block-drawer-reveal";
-        if (!hasReserve && !seedOk && contract.fallbackMode !== "hidden") {
+        const blockOk = contract.fallbackMode === "block-drawer-reveal";
+        if (!hasReserve && !seedOk && !blockOk && contract.fallbackMode !== "hidden") {
             issues.push({
                 sectionKey: key,
                 code: "above_fold_missing_reserve",

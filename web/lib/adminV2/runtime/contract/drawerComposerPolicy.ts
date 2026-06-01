@@ -84,8 +84,16 @@ export function composeAdminV2DrawerRuntime(
         return c?.blocksFirstPaint && !c.belowFoldLazy;
     });
 
+    const aboveFoldReserved = sectionPlan.sectionsReserved.filter((key) => {
+        const c = registry.find((r) => r.sectionKey === key);
+        return c?.blocksFirstPaint && !c.belowFoldLazy;
+    });
+
     const canRevealDrawerFrame =
-        frameContractOk && aboveFoldBlocking.length === 0 && (sectionPlan.sectionsToRender.length > 0 || sectionPlan.sectionsReserved.length > 0);
+        frameContractOk &&
+        aboveFoldBlocking.length === 0 &&
+        aboveFoldReserved.length === 0 &&
+        sectionPlan.sectionsToRender.length > 0;
 
     const drawerSurfaceReady = canRevealDrawerFrame;
 

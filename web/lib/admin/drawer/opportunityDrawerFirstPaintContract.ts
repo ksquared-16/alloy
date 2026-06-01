@@ -75,9 +75,8 @@ export function opportunityInquirySummaryRightPanelFromPrimaryOnly(
     return false;
 }
 
-/** Overview sections that must not mount on first paint (they fetch or pop layout). */
+/** Overview sections deferred below inquiry children on first paint (below-fold lazy only). */
 export const OPPORTUNITY_ENRICHMENT_DEFERRED_OVERVIEW_SECTION_KEYS = new Set<string>([
-    "inquiry_children",
     "inquiry_tuition",
     "tuition",
     "tuition_pricing",
@@ -93,13 +92,17 @@ export const OPPORTUNITY_ENRICHMENT_DEFERRED_OVERVIEW_SECTION_KEYS = new Set<str
     "family_contacts",
 ]);
 
-/** Collapse enrichment sections without removing shell structure (geometry contract). */
+/** Collapse below-fold enrichment sections; inquiry children stays expanded when visible. */
 function collapseDeferredOverviewSections(sections: EntityDrawerSectionConfig[]): EntityDrawerSectionConfig[] {
-    return sections.map((s) =>
-        OPPORTUNITY_ENRICHMENT_DEFERRED_OVERVIEW_SECTION_KEYS.has(s.key) ?
-            { ...s, defaultExpanded: false, collapsible: true }
-        :   s
-    );
+    return sections.map((s) => {
+        if (s.key === "inquiry_children") {
+            return { ...s, defaultExpanded: true, collapsible: true };
+        }
+        if (OPPORTUNITY_ENRICHMENT_DEFERRED_OVERVIEW_SECTION_KEYS.has(s.key)) {
+            return { ...s, defaultExpanded: false, collapsible: true };
+        }
+        return s;
+    });
 }
 
 /**

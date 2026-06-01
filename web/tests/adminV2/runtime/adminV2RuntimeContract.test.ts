@@ -35,7 +35,20 @@ describe("AdminV2 drawer section registry contract", () => {
         expect(aboveFoldIssues).toEqual([]);
     });
 
-    it("rejects above-fold block without reserve or seed contract", () => {
+    it("accepts above-fold block-drawer-reveal without reserve geometry", () => {
+        const issues = validateDrawerSectionContract({
+            sectionKey: "composed_section",
+            surface: "generic",
+            canRenderFromSeed: false,
+            blocksFirstPaint: true,
+            hasRenderableData: () => false,
+            renderReady: () => false,
+            fallbackMode: "block-drawer-reveal",
+        });
+        expect(issues.some((i) => i.code === "above_fold_missing_reserve")).toBe(false);
+    });
+
+    it("rejects above-fold block without reserve, seed, or block-drawer-reveal contract", () => {
         const issues = validateDrawerSectionContract({
             sectionKey: "bad_section",
             surface: "generic",
@@ -43,7 +56,7 @@ describe("AdminV2 drawer section registry contract", () => {
             blocksFirstPaint: true,
             hasRenderableData: () => false,
             renderReady: () => false,
-            fallbackMode: "block-drawer-reveal",
+            fallbackMode: "reserved",
         });
         expect(issues.some((i) => i.code === "above_fold_missing_reserve")).toBe(true);
     });
@@ -57,7 +70,7 @@ describe("AdminV2 drawer composer policy", () => {
         _customer_name: "Test Family",
     };
 
-    it("typed opportunity snapshot can reveal frame with reserved sections", () => {
+    it("typed opportunity snapshot blocks reveal until above-fold sections render", () => {
         const plan = composeAdminV2DrawerRuntime({
             entityType: "opportunities",
             surface: "opportunity",
@@ -78,12 +91,11 @@ describe("AdminV2 drawer composer policy", () => {
             primaryContractReady: true,
             needsBackgroundHydrate: false,
         });
-        expect(plan.canRevealDrawerFrame).toBe(true);
-        expect(plan.sectionsReserved.length).toBeGreaterThan(0);
-        expect(plan.sectionsBlocking).toEqual([]);
+        expect(plan.canRevealDrawerFrame).toBe(false);
+        expect(plan.sectionsBlocking.length).toBeGreaterThan(0);
     });
 
-    it("child drawer without hydrate reserves sections instead of blocking whole frame", () => {
+    it("child drawer without hydrate blocks frame until sections are composed", () => {
         const plan = composeAdminV2DrawerRuntime({
             entityType: "persons",
             surface: "child",
@@ -104,9 +116,9 @@ describe("AdminV2 drawer composer policy", () => {
             primaryContractReady: true,
             needsBackgroundHydrate: false,
         });
-        expect(plan.canRevealDrawerFrame).toBe(true);
-        expect(plan.sectionsReserved.length).toBeGreaterThan(0);
-        expect(plan.sectionsToRender.length).toBe(0);
+        expect(plan.canRevealDrawerFrame).toBe(false);
+        expect(plan.sectionsBlocking.length).toBeGreaterThan(0);
+        expect(plan.sectionsReserved).toEqual([]);
     });
 });
 
@@ -126,6 +138,8 @@ describe("AdminV2 drawer tabs contract", () => {
                 _record_surface: "drawer_primary",
                 metadata: { tour_date: "2026-06-01" },
                 _customer_name: "Test",
+                next_follow_up_at: "2026-06-15T10:00:00Z",
+                _inquiry_children: [{ person_id: "c1", display_name: "Child", desired_program_label: "Toddler" }],
             },
             error: null,
             typedSnapshot: false,
@@ -225,9 +239,9 @@ describe("AdminV2 runtime wiring (source guards)", () => {
         expect(drawer).toContain("headerTitleRightForDrawer");
     });
 
-    it("person sections use final-size reserve variants", () => {
+    it("person sections render only when hydrated — no reserve variants", () => {
         const operating = readSrc("components/admin/entity/PersonDrawerOperatingSections.tsx");
-        expect(operating).toContain('variant="household"');
-        expect(operating).toContain('variant="address"');
+        expect(operating).not.toContain('variant="household"');
+        expect(operating).not.toContain("PersonDrawerSectionCoordinatedReserve");
     });
 });

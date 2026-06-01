@@ -95,7 +95,7 @@ describe("AdminV2 performance pass 7 — presentation gate", () => {
                 ...record,
                 _status_display: "Tour Scheduled",
                 _location_label: "North Campus",
-                _inquiry_children_shell_count: 1,
+                _inquiry_children: [{ person_id: "c1", display_name: "Child", desired_program_label: "Toddler" }],
             },
             shell,
             {
@@ -126,7 +126,7 @@ describe("AdminV2 performance pass 7 — presentation gate", () => {
             metadata: { tour_date: "2026-06-01", tour_time: "10:00" },
             _identity: { household: { label: "Chen family" } },
             _activity_signal: {},
-            _inquiry_children_shell_count: 1,
+            _inquiry_children: [{ person_id: "c1", display_name: "Child", desired_program_label: "Toddler" }],
         };
         const shell = {
             entity_type: "opportunity" as const,
