@@ -236,10 +236,18 @@ export function FamilyContactsPanel(props: {
             .filter((r) => r.id && r.person_id);
     }, [record, refreshKey]);
 
-    const sorted = useMemo(
+    const allSorted = useMemo(
         () => sortOpportunityFamilyContactRows(rows, primaryPersonId || null),
         [rows, primaryPersonId]
     );
+
+    // In the summary variant (inquiry header card), cap additional contacts to avoid an
+    // oversized card. Full-drawer variant shows all contacts.
+    const MAX_ADDITIONAL_SUMMARY = 2;
+    const sorted =
+        variant === "summary" ? allSorted.slice(0, MAX_ADDITIONAL_SUMMARY) : allSorted;
+    const overflowCount =
+        variant === "summary" ? Math.max(0, allSorted.length - MAX_ADDITIONAL_SUMMARY) : 0;
 
     const eyebrow = oppInqEyebrow;
     const cardPad = variant === "summary" ? "px-1.5 py-0.5" : "px-3 py-2.5";
@@ -378,6 +386,11 @@ export function FamilyContactsPanel(props: {
                             );
                         })}
                         </ul>
+                        {overflowCount > 0 ? (
+                            <p className="mt-1 text-[10px] text-alloy-midnight/45">
+                                {`+${overflowCount} more ${overflowCount === 1 ? "contact" : "contacts"}`}
+                            </p>
+                        ) : null}
                     </>
                 )}
             </div>

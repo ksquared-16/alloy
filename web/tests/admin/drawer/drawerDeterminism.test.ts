@@ -16,6 +16,16 @@ import {
     evaluateComposedOpportunityDrawerPayload,
     evaluateComposedPersonDrawerPayload,
 } from "@/lib/admin/drawer/composedDrawerPayload";
+import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
+import {
+    buildOpportunityFamilyContactRows,
+    sortOpportunityFamilyContactRows,
+} from "@/lib/admin/drawer/opportunityFamilyContactsOrdering";
+import {
+    isComposedPersonPayloadRecentlyReady,
+    putComposedPersonPayloadReady,
+    __clearComposedPersonPayloadCacheForTests,
+} from "@/lib/admin/composedPersonPayloadCache";
 import {
     putQueueRowCache,
     queueRowLogicalCacheKey,
@@ -475,6 +485,125 @@ describe("Parent/child known-empty readiness stability", () => {
         expect(eval1.ready).toBe(eval2.ready);
     });
 
+    // ── Opportunity pre-reveal title ─────────────────────────────────────────────────────────────
+
+    it("AdminEntityDrawer computes opportunityPreRevealTitle from snapshot identity before full reveal", () => {
+        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
+        // Pre-reveal title memo must exist and check identity data
+        expect(drawer).toContain("opportunityPreRevealTitle");
+        // Must only derive title when identity / customer name data is present
+        expect(drawer).toContain("primaryPersonLabel");
+        // Must use formatOpportunityInquiryDrawerTitle with snapshot data
+        expect(drawer).toContain("formatOpportunityInquiryDrawerTitle(d, opportunitySingular)");
+        // First branch of drawerTitleTextResolved must prefer pre-reveal title over seed
+        expect(drawer).toContain("opportunityPreRevealTitle ||");
+        expect(drawer).toContain("opportunityQueuePreviewSeed?.title?.trim()");
+    });
+
+    it("formatOpportunityInquiryDrawerTitle returns correct title when _identity is available", () => {
+        const title = formatOpportunityInquiryDrawerTitle(
+            {
+                _identity: {
+                    primary_person: { id: "p1", label: "Priya Rivera" },
+                },
+                _customer_name: "Rivera Household",
+            },
+            "Lead"
+        );
+        expect(title).toContain("Priya Rivera");
+        expect(title).not.toBe("Lead");
+        expect(title).not.toBe("Enrollment — Lead");
+    });
+
+    it("formatOpportunityInquiryDrawerTitle uses opportunitySingular when no identity data is present", () => {
+        const title = formatOpportunityInquiryDrawerTitle({}, "Lead");
+        // Function always wraps in "Enrollment — {name}" — with no identity, uses singular as name
+        expect(title).toContain("Lead");
+        // The opportunityPreRevealTitle guard returns null in this case (checked separately)
+    });
+
+    it("opportunityPreRevealTitle guard prevents 'Enrollment — ' stub when record has no identity", () => {
+        // This is the guard: !primaryPersonLabel && !customerName → return null
+        // Verify the code pattern exists in AdminEntityDrawer
+        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
+        expect(drawer).toContain("if (!primaryPersonLabel && !customerName) return null");
+    });
+
+    // ── Lead summary contacts limit ───────────────────────────────────────────────────────────────
+
+    it("FamilyContactsPanel limits additional contacts to MAX_ADDITIONAL_SUMMARY in summary variant", () => {
+        const src = readSrc("components/admin/opportunity/FamilyContactsPanel.tsx");
+        expect(src).toContain("MAX_ADDITIONAL_SUMMARY");
+        expect(src).toContain("allSorted.slice(0, MAX_ADDITIONAL_SUMMARY)");
+        expect(src).toContain("overflowCount");
+        // Overflow indicator: "+N more contact(s)" text in JSX
+        expect(src).toContain('"contact" : "contacts"');
+    });
+
+    it("lead summary contact overflow indicator: more than MAX_ADDITIONAL_SUMMARY contacts shows overflow text", () => {
+        // Build a synthetic record with 4 additional persons (beyond primary)
+        const primaryId = "person-primary";
+        const record = {
+            primary_person_id: primaryId,
+            _opportunity_persons: [
+                { id: "op-1", person_id: primaryId, role_type: "primary_contact", name: "Primary", phone: null, email: null },
+                { id: "op-2", person_id: "person-2", role_type: "family_member", name: "Contact 2", phone: null, email: null },
+                { id: "op-3", person_id: "person-3", role_type: "family_member", name: "Contact 3", phone: null, email: null },
+                { id: "op-4", person_id: "person-4", role_type: "family_member", name: "Contact 4", phone: null, email: null },
+            ],
+        };
+        const rows = buildOpportunityFamilyContactRows(record).filter((r) => r.id && r.person_id);
+        const allSorted = sortOpportunityFamilyContactRows(rows, primaryId);
+        // 3 additional contacts after primary is excluded
+        expect(allSorted.length).toBe(3);
+
+        const MAX_ADDITIONAL_SUMMARY = 2;
+        const visible = allSorted.slice(0, MAX_ADDITIONAL_SUMMARY);
+        const overflowCount = Math.max(0, allSorted.length - MAX_ADDITIONAL_SUMMARY);
+
+        expect(visible.length).toBe(2);
+        expect(overflowCount).toBe(1);
+
+        const label = `+${overflowCount} more ${overflowCount === 1 ? "contact" : "contacts"}`;
+        expect(label).toBe("+1 more contact");
+    });
+
+    it("lead summary contact overflow indicator: exactly MAX_ADDITIONAL_SUMMARY contacts shows no overflow", () => {
+        const primaryId = "person-primary";
+        const record = {
+            primary_person_id: primaryId,
+            _opportunity_persons: [
+                { id: "op-1", person_id: primaryId, role_type: "primary_contact", name: "Primary", phone: null, email: null },
+                { id: "op-2", person_id: "person-2", role_type: "family_member", name: "Contact 2", phone: null, email: null },
+                { id: "op-3", person_id: "person-3", role_type: "family_member", name: "Contact 3", phone: null, email: null },
+            ],
+        };
+        const rows = buildOpportunityFamilyContactRows(record).filter((r) => r.id && r.person_id);
+        const allSorted = sortOpportunityFamilyContactRows(rows, primaryId);
+        expect(allSorted.length).toBe(2);
+
+        const MAX_ADDITIONAL_SUMMARY = 2;
+        const overflowCount = Math.max(0, allSorted.length - MAX_ADDITIONAL_SUMMARY);
+        expect(overflowCount).toBe(0);
+    });
+
+    // ── Speed pass: early prefetch + composed payload cache ──────────────────────────────────────
+
+    it("AdminEntityDrawer fires linked person prefetch on opportunityPrimaryHydrateApplied, not drawerReady", () => {
+        const src = readSrc("components/admin/AdminEntityDrawer.tsx");
+        // The prefetch effect condition must be opportunityPrimaryHydrateApplied
+        expect(src).toContain("!opportunityPrimaryHydrateApplied || !data || !dataMatchesDrawer");
+        // The old gate (!drawerReady) must NOT be the condition for the opportunity prefetch effect
+        expect(src).not.toContain("if (!drawerReady || !data || !dataMatchesDrawer) return;\n        if (opportunityLinkedPersonsPrefetchedRef");
+    });
+
+    it("AdminEntityDrawer imports and uses composedPersonPayloadCache", () => {
+        const src = readSrc("components/admin/AdminEntityDrawer.tsx");
+        expect(src).toContain("isComposedPersonPayloadRecentlyReady");
+        expect(src).toContain("putComposedPersonPayloadReady");
+        expect(src).toContain("putComposedPersonPayloadReady(personDrawerComposedContextKey)");
+    });
+
     it("child readiness with no medical data is stable across repeated evaluations", () => {
         const childWithNoMedical: Record<string, unknown> = {
             id: "c-child",
@@ -512,5 +641,61 @@ describe("Parent/child known-empty readiness stability", () => {
 
         expect(eval1.ready).toBe(true);
         expect(eval2.ready).toBe(true);
+    });
+});
+
+// ─── Composed Person Payload Cache ────────────────────────────────────────────
+
+describe("composedPersonPayloadCache", () => {
+    beforeEach(() => {
+        __clearComposedPersonPayloadCacheForTests();
+    });
+
+    it("returns false for unknown key", () => {
+        expect(isComposedPersonPayloadRecentlyReady("person-1|parent|household,household_address")).toBe(false);
+    });
+
+    it("returns true immediately after put", () => {
+        const key = "person-1|parent|household,household_address";
+        putComposedPersonPayloadReady(key);
+        expect(isComposedPersonPayloadRecentlyReady(key)).toBe(true);
+    });
+
+    it("returns false for a different context key than what was stored", () => {
+        putComposedPersonPayloadReady("person-1|parent|household");
+        expect(isComposedPersonPayloadRecentlyReady("person-1|child|child_summary")).toBe(false);
+    });
+
+    it("same person in different surfaces tracked independently", () => {
+        const parentKey = "person-abc|parent|household,household_address";
+        const childKey = "person-abc|child|child_summary";
+
+        putComposedPersonPayloadReady(parentKey);
+        expect(isComposedPersonPayloadRecentlyReady(parentKey)).toBe(true);
+        expect(isComposedPersonPayloadRecentlyReady(childKey)).toBe(false);
+
+        putComposedPersonPayloadReady(childKey);
+        expect(isComposedPersonPayloadRecentlyReady(childKey)).toBe(true);
+    });
+
+    it("null/empty keys are treated as not ready", () => {
+        expect(isComposedPersonPayloadRecentlyReady(null)).toBe(false);
+        expect(isComposedPersonPayloadRecentlyReady(undefined)).toBe(false);
+        expect(isComposedPersonPayloadRecentlyReady("")).toBe(false);
+    });
+
+    it("AdminEntityDrawer populates cache on readiness transition and checks it before fetch", () => {
+        const src = readSrc("components/admin/AdminEntityDrawer.tsx");
+        expect(src).toContain("putComposedPersonPayloadReady(personDrawerComposedContextKey)");
+        expect(src).toContain("isComposedPersonPayloadRecentlyReady(contextKey)");
+        expect(src).toContain("drawer-payload:cache-hit");
+    });
+
+    it("opportunity prefetch fires on primary hydrate not full hydrate", () => {
+        const src = readSrc("components/admin/AdminEntityDrawer.tsx");
+        // Dependency array must contain opportunityPrimaryHydrateApplied
+        expect(src).toContain("opportunityPrimaryHydrateApplied,");
+        // The prefetch effect must NOT gate on drawerReady
+        expect(src).toContain("!opportunityPrimaryHydrateApplied || !data || !dataMatchesDrawer");
     });
 });

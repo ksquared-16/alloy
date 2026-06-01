@@ -326,6 +326,10 @@ import { entityDataMatchesDrawer } from "@/lib/admin/drawer/entityDataMatchesDra
 import { isPersonDrawerSnapshotWarm } from "@/lib/admin/prefetchPersonDrawerSnapshot";
 import { installPersonDrawerDevDirectOpen } from "@/lib/admin/drawer/personDrawerDevDirectOpen";
 import { prefetchLinkedPersonsFromOpportunityRecord } from "@/lib/admin/drawer/prefetchLinkedPersonsFromOpportunityRecord";
+import {
+    isComposedPersonPayloadRecentlyReady,
+    putComposedPersonPayloadReady,
+} from "@/lib/admin/composedPersonPayloadCache";
 import { prefetchLinkedPersonsFromPersonRecord } from "@/lib/admin/drawer/prefetchLinkedPersonsFromPersonRecord";
 import {
     openPersonDrawerFromHousehold,
@@ -8310,7 +8314,10 @@ export default function AdminEntityDrawer() {
             opportunityLinkedPersonsPrefetchedRef.current = null;
             return;
         }
-        if (!drawerReady || !data || !dataMatchesDrawer) return;
+        // Fire as soon as the primary payload is applied — don't wait for full hydrate / BOS reveal.
+        // Starting the person snapshot prefetch here gives it a 1–2s head start so that View Parent
+        // and View Child resolve against a warm cache rather than a cold fetch.
+        if (!opportunityPrimaryHydrateApplied || !data || !dataMatchesDrawer) return;
         if (opportunityLinkedPersonsPrefetchedRef.current === drawer.id) return;
 
         opportunityLinkedPersonsPrefetchedRef.current = drawer.id;
@@ -8323,7 +8330,7 @@ export default function AdminEntityDrawer() {
     }, [
         drawer.type,
         drawer.id,
-        drawerReady,
+        opportunityPrimaryHydrateApplied,
         data,
         dataMatchesDrawer,
     ]);
@@ -9170,12 +9177,36 @@ export default function AdminEntityDrawer() {
         personDrawerComposedFetchedRef.current = null;
     }, [personDrawerComposedContextKey]);
 
+    // Populate the composed-payload confirmation cache whenever the payload transitions to ready.
+    // This lets subsequent opens of the same person/surface/section set skip the composed fetch.
+    useEffect(() => {
+        if (!personDrawerComposedPayloadIsReady || !personDrawerComposedContextKey) return;
+        putComposedPersonPayloadReady(personDrawerComposedContextKey);
+    }, [personDrawerComposedPayloadIsReady, personDrawerComposedContextKey]);
+
     useEffect(() => {
         if (drawer.type !== "persons" || !drawer.id || drawer.id === "new") return;
         if (!personDrawerComposedPreparing) return;
         if (loading) return;
         const contextKey = personDrawerComposedContextKey;
         if (!contextKey) return;
+
+        // If this context was recently confirmed ready (e.g., same person was open moments ago
+        // and composed readiness passed), mark the fetch ref so the network request is skipped.
+        // The entity snapshot already has the complete data from the prior fetch.
+        if (
+            !personDrawerComposedFetchedRef.current &&
+            isComposedPersonPayloadRecentlyReady(contextKey)
+        ) {
+            personDrawerComposedFetchedRef.current = contextKey;
+            if (process.env.NODE_ENV === "development") {
+                console.log("[drawer-payload:cache-hit] composed payload recently confirmed ready", {
+                    contextKey,
+                });
+            }
+            return;
+        }
+
         // After one full fetch for this context key, stop retrying — remaining unresolved
         // sections need a predicate fix, not an infinite fetch loop.
         if (personDrawerComposedFetchedRef.current === contextKey) {
@@ -12036,6 +12067,33 @@ export default function AdminEntityDrawer() {
                 .filter(Boolean)
                 .join(" · ") || undefined
             : undefined;
+    // Best-effort title from enriched snapshot _before_ composed payload / BOS panel are ready.
+    // Prevents "Lead" fallback when snapshot has _identity or _customer_name from a prior full hydrate.
+    const opportunityPreRevealTitle = useMemo(() => {
+        if (
+            drawer.type !== "opportunities" ||
+            !opportunityInquiryWorkflowDrawer ||
+            !overviewData ||
+            drawerGateLoading
+        )
+            return null;
+        const d = overviewData as Record<string, unknown>;
+        const ident = (d._identity as Record<string, unknown> | null | undefined) ?? null;
+        const primaryPersonLabel = ident?.primary_person
+            ? ((ident.primary_person as { label?: string })?.label ?? "").trim()
+            : "";
+        const customerName = ((d._customer_name as string | null | undefined) ?? "").trim();
+        // Only derive from snapshot when identity data is present — avoids "Enrollment — " stub
+        if (!primaryPersonLabel && !customerName) return null;
+        return formatOpportunityInquiryDrawerTitle(d, opportunitySingular) || null;
+    }, [
+        drawer.type,
+        opportunityInquiryWorkflowDrawer,
+        overviewData,
+        drawerGateLoading,
+        opportunitySingular,
+    ]);
+
     const drawerTitleTextResolved =
         isOpportunityRecordModalTarget &&
             drawer.type === "opportunities" &&
@@ -12043,7 +12101,8 @@ export default function AdminEntityDrawer() {
             !error &&
             opportunityInquiryWorkflowDrawer &&
             !opportunityDrawerOverviewRevealReady
-            ? opportunityQueuePreviewSeed?.title?.trim() ||
+            ? opportunityPreRevealTitle ||
+            opportunityQueuePreviewSeed?.title?.trim() ||
             (opportunityDrawerQueueBootstrap
                 ? `Loading ${getEntityLabel(labels, drawer.type, "singular").toLowerCase()}…`
                 : opportunitySingular)
