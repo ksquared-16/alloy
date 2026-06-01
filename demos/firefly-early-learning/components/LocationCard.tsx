@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 type LocationCardProps = {
+  slug: string;
   name: string;
   ages: string;
   address: string;
@@ -8,6 +9,7 @@ type LocationCardProps = {
 };
 
 export default function LocationCard({
+  slug,
   name,
   ages,
   address,
@@ -26,7 +28,7 @@ export default function LocationCard({
         </p>
       </address>
       <Link
-        href="/contact"
+        href={`/contact/${slug}`}
         className="mt-6 inline-flex w-full items-center justify-center rounded-full border border-navy/15 bg-cream px-4 py-2.5 text-sm font-semibold text-navy transition-colors hover:bg-cream-dark"
       >
         Learn More / Contact

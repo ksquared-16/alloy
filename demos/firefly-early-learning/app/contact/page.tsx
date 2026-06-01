@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { campuses } from "@/lib/locations";
 
 export const metadata: Metadata = {
   title: "Schedule a Tour",
 };
-
-const ALLOY_FORM_EMBED_URL =
-  "https://staging.workwithalloy.com/forms/embed/M7s1RqP7cidtef-zqR7iqjIT6VTVIyucRHSnEmbBOFA";
 
 export default function ContactPage() {
   return (
@@ -15,20 +14,26 @@ export default function ContactPage() {
           Schedule a Tour
         </h1>
         <p className="mt-3 max-w-2xl text-lg leading-relaxed text-muted">
-          Interested in learning more about Firefly Early Learning? Complete the
-          form below and a member of our enrollment team will contact you.
+          Choose the campus you&apos;re interested in. Each location has its own
+          inquiry form so our enrollment team can route your request correctly.
         </p>
 
-        <div className="mt-6 overflow-hidden rounded-2xl border border-cream-dark bg-white shadow-sm sm:mt-7">
-          <iframe
-            src={ALLOY_FORM_EMBED_URL}
-            width="100%"
-            height={520}
-            className="block h-[520px] w-full border-0"
-            title="new_enrollment_lead"
-            loading="lazy"
-          />
-        </div>
+        <ul className="mt-8 grid gap-4 sm:grid-cols-3">
+          {campuses.map((campus) => (
+            <li key={campus.slug}>
+              <Link
+                href={`/contact/${campus.slug}`}
+                className="flex h-full flex-col rounded-2xl border border-cream-dark bg-white p-5 shadow-sm transition-colors hover:border-firefly hover:bg-cream-dark/30"
+              >
+                <span className="text-lg font-semibold text-navy">{campus.name}</span>
+                <span className="mt-1 text-sm text-muted">{campus.address}</span>
+                <span className="mt-4 text-sm font-semibold text-forest">
+                  Open tour form →
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   );

@@ -2,6 +2,7 @@ import Link from "next/link";
 import FeatureCard from "@/components/FeatureCard";
 import ProgramCard from "@/components/ProgramCard";
 import LocationCard from "@/components/LocationCard";
+import { campuses } from "@/lib/locations";
 
 const features = [
   {
@@ -41,27 +42,6 @@ const programs = [
     title: "Pre-K",
     description:
       "Kindergarten readiness through problem-solving, early math and reading foundations, and confident social skills.",
-  },
-];
-
-const locations = [
-  {
-    name: "West Campus",
-    ages: "Ages 6 weeks–5 years",
-    address: "123 Learning Lane",
-    phone: "(555) 010-1000",
-  },
-  {
-    name: "North Campus",
-    ages: "Ages 6 weeks–5 years",
-    address: "456 Discovery Drive",
-    phone: "(555) 010-2000",
-  },
-  {
-    name: "Riverbend Campus",
-    ages: "Ages 6 weeks–5 years",
-    address: "789 Meadow Road",
-    phone: "(555) 010-3000",
   },
 ];
 
@@ -142,13 +122,14 @@ export default function HomePage() {
             Three welcoming campuses serving families across the region.
           </p>
           <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {locations.map((location) => (
+            {campuses.map((campus) => (
               <LocationCard
-                key={location.name}
-                name={location.name}
-                ages={location.ages}
-                address={location.address}
-                phone={location.phone}
+                key={campus.slug}
+                slug={campus.slug}
+                name={campus.name}
+                ages={campus.ages}
+                address={campus.address}
+                phone={campus.phone}
               />
             ))}
           </div>

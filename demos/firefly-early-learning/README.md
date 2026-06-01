@@ -34,7 +34,10 @@ No environment variables are required.
 | Route     | Purpose                          |
 | --------- | -------------------------------- |
 | `/`       | Home — hero, features, programs, locations |
-| `/contact`| Schedule a Tour — Alloy form iframe |
+| `/contact`| Choose a campus for tour inquiry |
+| `/contact/west-campus` | West Campus — Alloy form iframe |
+| `/contact/north-campus` | North Campus — Alloy form iframe |
+| `/contact/south-campus` | South Campus — Alloy form iframe |
 
 ## Validation flow
 
