@@ -4,6 +4,7 @@
  */
 
 import { ADMIN_PREVIEW_LINK_LABEL } from "@/lib/forms/adminFormPreview";
+import { humanizeOperatorSlug } from "@/lib/forms/operatorDisplayLabels";
 
 export type DistributionLinkRow = {
     id: string;
@@ -54,7 +55,8 @@ export function distributionLinkLabel(
     if (meta && (meta as { alloy_admin_preview?: unknown }).alloy_admin_preview === true) {
         return ADMIN_PREVIEW_LINK_LABEL;
     }
-    return fallback;
+    const humanized = humanizeOperatorSlug(fallback);
+    return humanized || "Share link";
 }
 
 export function distributionIsPreviewLink(link: DistributionLinkRow): boolean {

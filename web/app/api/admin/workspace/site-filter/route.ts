@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
+import { resolveOrgSiteLocationsForAdmin, type OrgSiteLocationOption } from "@/lib/admin/resolveOrgSiteLocations";
 
-export type WorkspaceSiteFilterSite = { id: string; label: string };
+export type WorkspaceSiteFilterSite = OrgSiteLocationOption;
 
 /** GET — Allowed site locations for header workspace filter (view-only; does not widen permissions). */
 export async function GET() {
@@ -13,27 +14,13 @@ export async function GET() {
     const ctx = gate.access;
 
     const supabase = createAdminClient();
-    const { data: rows, error } = await supabase
-        .from("locations")
-        .select("id, label, location_type")
-        .eq("org_id", ctx.orgId)
-        .eq("location_type", "site")
-        .or("is_active.is.null,is_active.eq.true")
-        .order("label", { ascending: true });
-
-    if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    const sitesRaw = (rows ?? []) as Array<{ id: string; label: string | null }>;
-    let sites: WorkspaceSiteFilterSite[] = sitesRaw.map((r) => ({
-        id: r.id,
-        label: (r.label ?? "").trim() || "Site",
-    }));
-
-    if (ctx.siteScope === "restricted" && ctx.allowedSiteLocationIds?.length) {
-        const allow = new Set(ctx.allowedSiteLocationIds);
-        sites = sites.filter((s) => allow.has(s.id));
+    let sites: WorkspaceSiteFilterSite[];
+    try {
+        sites = await resolveOrgSiteLocationsForAdmin(supabase, ctx.orgId, {
+            allowedSiteLocationIds: ctx.siteScope === "restricted" ? ctx.allowedSiteLocationIds : null,
+        });
+    } catch (e) {
+        return NextResponse.json({ error: e instanceof Error ? e.message : "Site resolve failed" }, { status: 500 });
     }
 
     const showDropdown = sites.length > 1;

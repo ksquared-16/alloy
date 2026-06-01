@@ -211,6 +211,56 @@ Setup status (`linkOutcomeConfigured`, lead routing display) is evaluated **per 
 - Location filter visible on `/adminV2/forms/**` routes
 - Setup page de-emphasizes diagnostics (step rail, after-submit detail, test moved under Advanced disclosures)
 
+## Forms Consumerization pass (May 2026)
+
+**Goal:** Forms should feel like a product for childcare directors, not a system built by engineers. UX and language only — no architecture changes, no new capabilities.
+
+### Operator-first language doctrine
+
+- Primary UI uses enrollment/childcare language (school, inquiry, family, share link).
+- Internal keys, slugs, pipeline ids, version numbers, and metadata field names stay out of the primary surface.
+- When catalog labels exist, always prefer them over raw keys (e.g. `new_inquiry` → **New Lead**).
+
+### Hidden complexity doctrine
+
+- Versioning, publish history, lifecycle step rail, outcome matrices, routing grids, and technical ids live under **Advanced settings** or nested disclosures.
+- Operators edit forms; the system manages versions internally.
+- Advanced options remain available — nothing removed, only de-emphasized.
+
+### Simplified form lifecycle doctrine
+
+Primary form detail surface:
+
+1. **Form fields** — edit, save draft, publish changes (no version numbers in primary actions)
+2. **Form setup** — purpose, lead routing (school + status), share + share by location
+3. **Responses** — count + inbox link
+
+Optional under **Advanced settings:** documents, packet usage, routing configuration, manage all links, publish history, technical details.
+
+### Share by Location — location source fix (May 2026)
+
+**Symptom:** Lead routing showed a campus (e.g. North Campus) while Share by Location said “No active locations found”, rows showed campuses as “Not set up yet”, and the create dropdown was empty — all at once.
+
+**Root causes (three separate bugs):**
+
+| Issue | Cause |
+|-------|--------|
+| Rows vs dropdown vs API | **Three different location sources** merged in UI: routing label catalog (link UUIDs only), `shareByLocationSites` (`is_active = true` only), header bootstrap (`is_active null OR true`) |
+| Empty dropdown | Dropdown used `sitesWithoutLinks`, treating the **general share link** (with `default_location_id`) as a campus link — excluding campuses incorrectly |
+| “Not set up yet” | Row status required **sessionStorage embed URL**, not whether a location-specific link exists; general routing ≠ campus embed link |
+
+**Canonical source:** `resolveOrgSiteLocationsForAdmin` — `locations` where `location_type = site` and `is_active IS NULL OR true`, same query for header filter and Share by Location API.
+
+**Link semantics:** Share by Location tracks **`distribution_context: location_specific`** links only. General share link routing (Lead Routing card) is separate.
+
+**Slug display:** `humanizeOperatorSlug` + `distributionLinkLabel` never show raw form keys like `new_enrollment_lead` in primary UI.
+
+### Tests
+
+- `web/tests/forms/shareByLocationPresentation.test.ts` — API unwrap + site merge
+- `web/tests/forms/formLifecyclePresentation.test.ts` — operator publish summary labels
+- `web/tests/forms/formDetailLifecycleWorkspace.test.tsx` — advanced settings layout
+
 ## Related
 
 - Prior authoring blockers: [forms_authoring_stability.md](./forms_authoring_stability.md)

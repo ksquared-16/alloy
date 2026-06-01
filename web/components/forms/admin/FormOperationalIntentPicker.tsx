@@ -11,6 +11,7 @@ import {
     resolveEffectiveOperationalIntent,
     type OperationalIntentKey,
 } from "@/lib/forms/operationalIntentTemplates";
+import { humanizeOperatorSlug } from "@/lib/forms/operatorDisplayLabels";
 import {
     intakeWorkspaceBtnPrimary,
     intakeWorkspaceBtnSecondary,
@@ -142,7 +143,8 @@ export function FormOperationalIntentPicker({
                         className="rounded-full bg-alloy-blue/10 px-2.5 py-0.5 text-xs font-semibold text-alloy-midnight"
                         data-testid="form-operational-intent-active-label"
                     >
-                        {OPERATIONAL_INTENT_CATALOG.find((t) => t.key === effectiveIntent)?.label ?? effectiveIntent}
+                        {OPERATIONAL_INTENT_CATALOG.find((t) => t.key === effectiveIntent)?.label ??
+                            humanizeOperatorSlug(effectiveIntent ?? "")}
                     </span>
                 :   null}
             </div>

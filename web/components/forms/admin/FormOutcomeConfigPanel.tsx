@@ -681,7 +681,7 @@ export function FormOutcomeConfigPanel({
             :   null}
 
             <div className="mt-3">
-                <TechnicalDetailDisclosure title="Configuration source (debug)" helperText="Form defaults and link metadata">
+                <TechnicalDetailDisclosure title="Routing configuration" helperText="Form defaults and share link settings">
                     <div className="mt-2 space-y-3">
                         <div>
                             <p className={opMutedMeta}>Form default metadata</p>

@@ -480,7 +480,7 @@ export default function FormDetailClient() {
     return (
         <FormsWorkspaceShell
             title={detail?.name ?? "Form workspace"}
-            subtitle={purposeLine ?? "Manage this intake workflow — design through review."}
+            subtitle={purposeLine ?? "Set up this form for families — fields, routing, and sharing."}
             breadcrumbs={
                 detail ?
                     formsWorkspaceBreadcrumbs([{ label: detail.name }])

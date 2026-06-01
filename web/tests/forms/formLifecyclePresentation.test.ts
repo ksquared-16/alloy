@@ -40,9 +40,9 @@ describe("formLifecyclePresentation OW-3", () => {
     });
 
     it("formLifecyclePublishSummaryLabel reflects draft and published", () => {
-        expect(formLifecyclePublishSummaryLabel(true, true)).toBe("Published · draft in progress");
+        expect(formLifecyclePublishSummaryLabel(true, true)).toBe("Published · changes in progress");
         expect(formLifecyclePublishSummaryLabel(false, true)).toBe("Published");
-        expect(formLifecyclePublishSummaryLabel(true, false)).toBe("Draft only");
+        expect(formLifecyclePublishSummaryLabel(true, false)).toBe("Draft");
     });
 
     it("exposes stable lifecycle anchors", () => {

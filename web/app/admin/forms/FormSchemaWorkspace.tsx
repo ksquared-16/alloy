@@ -227,26 +227,23 @@ export default function FormSchemaWorkspace({
 
             {!draftMeta && canMutate ? (
                 <div className="space-y-3 text-sm text-alloy-midnight">
-                    <p className={opMetadata}>
-                        Add questions, then publish. Published versions cannot be edited in place — start a new version from
-                        published when you need to iterate.
-                    </p>
+                    {!latestPublished ?
+                        <p className={opMetadata}>Add questions, then publish so families can open the form.</p>
+                    :   null}
                     <div className="flex flex-wrap gap-2" data-testid="form-new-draft-actions">
-                        <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={busy} onClick={() => void startBlankDraft()}>
-                            New form
-                        </PrimaryButton>
-                        {latestPublished ? (
-                            <PrimaryButton
+                        {!latestPublished ?
+                            <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={busy} onClick={() => void startBlankDraft()}>
+                                Start form
+                            </PrimaryButton>
+                        :   <PrimaryButton
                                 type="button"
                                 className="!px-3 !py-2 text-sm"
                                 disabled={busy}
+                                data-testid="form-action-edit"
                                 onClick={() => void startFromPublished()}
                             >
-                                New version from published (v{latestPublished.version_number})
-                            </PrimaryButton>
-                        ) : (
-                            <span className={clsx("self-center text-xs", opMetadata)}>Publish a first version before you can clone.</span>
-                        )}
+                                Edit form
+                            </PrimaryButton>}
                     </div>
                 </div>
             ) : null}
@@ -261,11 +258,20 @@ export default function FormSchemaWorkspace({
                     />
                     <div className="flex flex-wrap gap-2">
                         <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={!canMutate || busy} onClick={() => void saveDraft()}>
-                            Save
+                            Save draft
                         </PrimaryButton>
                         <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={!canMutate || busy} onClick={() => void publishDraft()}>
-                            Publish form
+                            Publish changes
                         </PrimaryButton>
+                        <button
+                            type="button"
+                            className="self-center text-sm font-semibold text-alloy-midnight/70 underline-offset-2 hover:underline disabled:opacity-50"
+                            disabled={!canMutate || busy}
+                            data-testid="form-action-discard-changes"
+                            onClick={() => void loadDraft(draftVersionId)}
+                        >
+                            Discard changes
+                        </button>
                     </div>
                 </div>
             ) : draftMeta && busy && !schema ? (

@@ -57,7 +57,7 @@ describe("FormLifecycleWorkspaceLayout OW-3", () => {
                 }}
                 viewerTz="UTC"
                 canMutate
-                publishSummary="Published · draft in progress"
+                publishSummary="Published · changes in progress"
                 publishTone="success"
                 purposeLine="Capture family interest"
                 lifecycleSteps={buildFormLifecycleSteps({
@@ -109,8 +109,8 @@ describe("FormLifecycleWorkspaceLayout OW-3", () => {
         expect(html).not.toContain('data-testid="form-action-create-link"');
         expect(html).toContain('data-testid="form-action-submissions"');
         expect(html).not.toContain("Create link");
-        expect(html).toContain("Share form");
-        expect(html).toContain("Draft in progress");
+        expect(html).not.toContain("Share form");
+        expect(html).toContain("Advanced settings");
         expect(html).toContain("Submissions (3)");
         expect(html).toContain('data-testid="form-region-design"');
         expect(html).toContain('data-testid="form-region-operational-outcome"');
@@ -120,10 +120,11 @@ describe("FormLifecycleWorkspaceLayout OW-3", () => {
         expect(html).toContain('data-testid="form-region-intake"');
         expect(html).toContain('data-testid="form-region-review"');
         expect(html).toContain('data-testid="form-schema-workspace-mock"');
-        expect(html).toContain("Published · draft in progress");
+        expect(html).toContain("Published · changes in progress");
         expect(html).toContain("Operator context");
         expect(html).not.toContain("Operator guide");
         expect(html).not.toContain("<table");
+        expect(html).toContain("Responses");
     });
 
     it("keeps technical details in collapsed disclosures", () => {

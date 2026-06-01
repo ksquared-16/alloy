@@ -62,7 +62,7 @@ export function buildFormLifecycleSteps(input: FormLifecycleInput): FormLifecycl
             {
                 key: "design",
                 label: "Build form",
-                statusLabel: hasPublished ? "Draft in progress" : "Draft started",
+                statusLabel: hasPublished ? "Changes in progress" : "Draft started",
                 nextHint: hasPublished ? "Edit fields, then publish" : "Add fields and publish",
                 anchor: FORM_LIFECYCLE_ANCHORS.design,
                 state: "active",
@@ -93,8 +93,8 @@ export function buildFormLifecycleSteps(input: FormLifecycleInput): FormLifecycl
             {
                 key: "publish",
                 label: "Publish",
-                statusLabel: "Live version",
-                nextHint: hasDraft ? "Publish draft when ready" : "Version is live",
+                statusLabel: "Live",
+                nextHint: hasDraft ? "Publish changes when ready" : "Form is live",
                 anchor: FORM_LIFECYCLE_ANCHORS.publish,
                 state: hasDraft ? "active" : "complete",
                 tone: hasDraft ? "info" : "success",
@@ -123,7 +123,7 @@ export function buildFormLifecycleSteps(input: FormLifecycleInput): FormLifecycl
         activeLinkCount > 0 ?
             {
                 key: "distribute",
-                label: "Share form",
+                label: "Share",
                 statusLabel: `${activeLinkCount} live link${activeLinkCount === 1 ? "" : "s"}`,
                 nextHint: "Open or copy the share link",
                 anchor: FORM_LIFECYCLE_ANCHORS.distribute,
@@ -133,7 +133,7 @@ export function buildFormLifecycleSteps(input: FormLifecycleInput): FormLifecycl
         : hasPublished && outcomeConfigured ?
             {
                 key: "distribute",
-                label: "Share form",
+                label: "Share",
                 statusLabel: "Ready to share",
                 nextHint: "Get a share link below",
                 anchor: FORM_LIFECYCLE_ANCHORS.distribute,
@@ -143,16 +143,16 @@ export function buildFormLifecycleSteps(input: FormLifecycleInput): FormLifecycl
         : hasPublished ?
             {
                 key: "distribute",
-                label: "Share form",
-                statusLabel: intentConfigured ? "Configure outcome first" : "Choose purpose first",
-                nextHint: intentConfigured ? "Configure after submit" : "Choose what this form does",
+                label: "Share",
+                statusLabel: intentConfigured ? "Finish setup first" : "Choose purpose first",
+                nextHint: intentConfigured ? "Confirm routing below" : "Choose what this form does",
                 anchor: FORM_LIFECYCLE_ANCHORS.distribute,
                 state: "pending",
                 tone: "neutral",
             }
         :   {
                 key: "distribute",
-                label: "Share form",
+                label: "Share",
                 statusLabel: "Blocked",
                 nextHint: "Publish before sharing",
                 anchor: FORM_LIFECYCLE_ANCHORS.distribute,
@@ -164,9 +164,9 @@ export function buildFormLifecycleSteps(input: FormLifecycleInput): FormLifecycl
         submissionCount > 0 ?
             {
                 key: "intake",
-                label: "Review responses",
+                label: "Responses",
                 statusLabel: `${submissionCount} response${submissionCount === 1 ? "" : "s"}`,
-                nextHint: "Continue workflow in inbox",
+                nextHint: "Open the inbox",
                 anchor: FORM_LIFECYCLE_ANCHORS.intake,
                 state: "complete",
                 tone: "success",
@@ -174,7 +174,7 @@ export function buildFormLifecycleSteps(input: FormLifecycleInput): FormLifecycl
         : activeLinkCount > 0 ?
             {
                 key: "intake",
-                label: "Review responses",
+                label: "Responses",
                 statusLabel: "Awaiting responses",
                 nextHint: "Share link is live",
                 anchor: FORM_LIFECYCLE_ANCHORS.intake,
@@ -183,7 +183,7 @@ export function buildFormLifecycleSteps(input: FormLifecycleInput): FormLifecycl
             }
         :   {
                 key: "intake",
-                label: "Review responses",
+                label: "Responses",
                 statusLabel: "No activity",
                 nextHint: "Share the form first",
                 anchor: FORM_LIFECYCLE_ANCHORS.intake,
@@ -195,7 +195,7 @@ export function buildFormLifecycleSteps(input: FormLifecycleInput): FormLifecycl
         submittedCount > 0 ?
             {
                 key: "review",
-                label: "Continue workflow",
+                label: "Follow up",
                 statusLabel: `${submittedCount} to review`,
                 nextHint: "Open intake inbox",
                 anchor: FORM_LIFECYCLE_ANCHORS.review,
@@ -205,7 +205,7 @@ export function buildFormLifecycleSteps(input: FormLifecycleInput): FormLifecycl
         : submissionCount > 0 ?
             {
                 key: "review",
-                label: "Continue workflow",
+                label: "Follow up",
                 statusLabel: "Draft responses only",
                 nextHint: "Wait for submitted responses",
                 anchor: FORM_LIFECYCLE_ANCHORS.review,
@@ -214,7 +214,7 @@ export function buildFormLifecycleSteps(input: FormLifecycleInput): FormLifecycl
             }
         :   {
                 key: "review",
-                label: "Continue workflow",
+                label: "Follow up",
                 statusLabel: "Nothing yet",
                 nextHint: "Responses appear after families submit",
                 anchor: FORM_LIFECYCLE_ANCHORS.review,
@@ -257,19 +257,18 @@ export function buildFormLifecycleSteps(input: FormLifecycleInput): FormLifecycl
 }
 
 export function formLifecyclePublishSummaryLabel(hasDraft: boolean, hasPublished: boolean): string {
-    if (hasPublished && hasDraft) return "Published · draft in progress";
+    if (hasPublished && hasDraft) return "Published · changes in progress";
     if (hasPublished) return "Published";
-    if (hasDraft) return "Draft only";
+    if (hasDraft) return "Draft";
     return "Not published";
 }
 
 export function formLifecyclePurposeLine(
     purpose: string | null | undefined,
     description: string | null,
-    kind: string
+    _kind: string
 ): string | null {
     if (purpose?.trim()) return purpose.trim();
     if (description?.trim()) return description.trim();
-    if (kind?.trim()) return `Form kind: ${kind.replace(/_/g, " ")}`;
     return null;
 }

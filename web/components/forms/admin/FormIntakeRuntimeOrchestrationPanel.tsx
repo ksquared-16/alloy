@@ -74,12 +74,6 @@ type Props = {
     locationLinkErr?: string | null;
 };
 
-function stepStatusClass(status: "complete" | "active" | "pending"): string {
-    if (status === "complete") return "bg-emerald-50 text-emerald-800 ring-emerald-200/80";
-    if (status === "active") return "bg-alloy-blue/10 text-alloy-midnight ring-alloy-blue/25";
-    return "bg-alloy-stone/20 text-alloy-midnight/55 ring-alloy-midnight/[0.06]";
-}
-
 /** Business-process-first intake setup rail (IC-8). Architecture unchanged — operator language only. */
 export function FormIntakeRuntimeOrchestrationPanel({
     formId,
@@ -227,26 +221,19 @@ export function FormIntakeRuntimeOrchestrationPanel({
         >
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                    <h2 className={opSectionTitle}>Purpose & sharing</h2>
+                    <h2 className={opSectionTitle}>Form setup</h2>
                     <p className={opMutedMeta}>
-                        Choose what this form does, confirm lead routing, then share it with families.
+                        Choose what this form does, confirm where inquiries go, then share it with families.
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                    <StatusBadge label={vm.intakeTypeLabel} variant="info" />
                     {vm.liveReady ?
                         <StatusBadge label="Live" variant="success" />
                     : vm.linkSetupIncomplete ?
                         <StatusBadge label="Setup incomplete" variant="warning" />
-                    : vm.intakeEnabled && vm.linkOutcomeConfigured ?
-                        <StatusBadge label="Intake active" variant="success" />
-                    :   <StatusBadge label="Intake not set up" variant="warning" />}
-                    {vm.createsLead ?
-                        <StatusBadge label="Creates lead" variant="info" />
-                    :   null}
-                    {vm.requiresReview ?
-                        <StatusBadge label="Review required" variant="warning" />
-                    :   null}
+                    : hasPublished ?
+                        <StatusBadge label="Ready to share" variant="info" />
+                    :   <StatusBadge label="Not published" variant="neutral" />}
                 </div>
             </div>
 
@@ -255,21 +242,6 @@ export function FormIntakeRuntimeOrchestrationPanel({
                     {vm.linkSetupIncompleteMessage}
                 </p>
             :   null}
-
-            <TechnicalDetailDisclosure title="Setup progress" helperText="Optional step checklist">
-                <ol className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4" data-testid="orchestration-step-rail">
-                    {vm.steps.map((step) => (
-                        <li
-                            key={step.key}
-                            className={clsx("rounded-lg px-3 py-2 ring-1", stepStatusClass(step.status))}
-                            data-testid={`orchestration-step-${step.key}`}
-                        >
-                            <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70">{step.label}</p>
-                            <p className="mt-0.5 text-xs font-medium leading-snug">{step.hint}</p>
-                        </li>
-                    ))}
-                </ol>
-            </TechnicalDetailDisclosure>
 
             {onFormMetadataUpdated ?
                 <div className="mt-3" data-testid="orchestration-purpose">
@@ -296,29 +268,22 @@ export function FormIntakeRuntimeOrchestrationPanel({
                     data-testid="orchestration-lead-routing"
                 >
                     <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/65">Lead routing</p>
-                    <ul className={clsx("mt-1.5 space-y-0.5", opMetadata)}>
+                    <dl className={clsx("mt-1.5 space-y-1", opMetadata)}>
                         {vm.leadRoutingLocationLabel ?
-                            <li>· {vm.leadRoutingLocationLabel}</li>
+                            <div className="flex flex-wrap gap-x-2">
+                                <dt className="font-medium text-alloy-midnight/75">School:</dt>
+                                <dd>{vm.leadRoutingLocationLabel}</dd>
+                            </div>
                         :   null}
                         {vm.leadRoutingStatusLabel ?
-                            <li>· Starts as · {vm.leadRoutingStatusLabel}</li>
+                            <div className="flex flex-wrap gap-x-2">
+                                <dt className="font-medium text-alloy-midnight/75">Status:</dt>
+                                <dd>{vm.leadRoutingStatusLabel}</dd>
+                            </div>
                         :   null}
-                    </ul>
-                    {vm.leadRoutingWorkUnitLabel ?
-                        <TechnicalDetailDisclosure title="Pipeline routing" helperText="Advanced routing detail">
-                            <p className={opMetadata}>{vm.leadRoutingWorkUnitLabel}</p>
-                        </TechnicalDetailDisclosure>
-                    :   null}
+                    </dl>
                 </div>
             :   null}
-
-            <TechnicalDetailDisclosure title="After submission details" helperText="What happens when a family submits">
-                <ul className={clsx("mt-1.5 space-y-0.5", opMetadata)} data-testid="orchestration-after-submit-preview">
-                    {afterSubmitPreview.map((line) => (
-                        <li key={line}>· {line}</li>
-                    ))}
-                </ul>
-            </TechnicalDetailDisclosure>
 
             <div className="mt-3 space-y-3">
                 <div
@@ -327,7 +292,7 @@ export function FormIntakeRuntimeOrchestrationPanel({
                 >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/65">
-                            Share form
+                            Share
                         </p>
                         {selectedLink?.is_active ?
                             <StatusBadge label="Live" variant="success" />
@@ -469,7 +434,6 @@ export function FormIntakeRuntimeOrchestrationPanel({
                             </p>
                             <FormLocationShareLinksPanel
                                 formId={formId}
-                                formKey={formKey}
                                 formName={formName}
                                 links={links}
                                 hasPublished={hasPublished}
@@ -485,7 +449,15 @@ export function FormIntakeRuntimeOrchestrationPanel({
                 </div>
 
                 <TechnicalDetailDisclosure title="Optional preview / test" helperText="Try a submission before going live">
-                    <div data-testid="runtime-test-confirmation">
+                    <div className="mt-2" data-testid="orchestration-after-submit-preview">
+                        <p className="text-xs font-semibold text-alloy-midnight/70">What happens after submit</p>
+                        <ul className={clsx("mt-1 space-y-0.5", opMetadata)}>
+                            {afterSubmitPreview.map((line) => (
+                                <li key={line}>· {line}</li>
+                            ))}
+                        </ul>
+                    </div>
+                    <div className="mt-3" data-testid="runtime-test-confirmation">
                         <p className={clsx("mt-1", opMutedMeta)} data-testid="orchestration-test-warning">
                             Testing is optional. Submitting a test creates real intake records in this environment.
                         </p>

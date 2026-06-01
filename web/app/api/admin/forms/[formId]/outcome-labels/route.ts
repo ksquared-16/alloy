@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { loadAdminAccessBundleCached } from "@/lib/admin/getAdminAccessContext";
 import { dbGetFormDefinition, dbListPublicLinksForForm } from "@/lib/admin/forms/formsAdminDb";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 import { resolveOutcomeConfigLabelCatalog } from "@/lib/forms/resolveOutcomeConfigLabelCatalog";
@@ -40,6 +41,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         };
     });
 
+    const accessBundle = await loadAdminAccessBundleCached();
+
     try {
         const catalog = await resolveOutcomeConfigLabelCatalog(supabase, ctx.orgId, {
             formMetadata: formRow.metadata ?? {},
@@ -50,7 +53,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 await resolveOutcomeConfigPickerOptions(supabase, ctx.orgId)
             :   null;
         const shareByLocationSites =
-            includePickers ? await resolveShareByLocationSitePickerOptions(supabase, ctx.orgId) : null;
+            includePickers ?
+                await resolveShareByLocationSitePickerOptions(supabase, ctx.orgId, {
+                    allowedSiteLocationIds:
+                        accessBundle.ok && accessBundle.siteScope === "restricted" ?
+                            accessBundle.allowedSiteLocationIds
+                        :   null,
+                })
+            :   null;
         return jsonData({ ...catalog, pickerOptions, shareByLocationSites });
     } catch (e) {
         return NextResponse.json({ error: e instanceof Error ? e.message : "Label resolve failed" }, { status: 500 });

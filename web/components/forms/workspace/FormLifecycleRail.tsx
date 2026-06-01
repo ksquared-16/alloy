@@ -54,7 +54,7 @@ export function FormLifecycleRail({ steps }: Props) {
                 ))}
             </ol>
             <p className={clsx("mt-2", opMetadata)}>
-                Build form → Publish → Configure intake → Share → Review → Documents
+                Form fields → Publish → Share → Responses → Follow up → Documents
             </p>
         </nav>
     );

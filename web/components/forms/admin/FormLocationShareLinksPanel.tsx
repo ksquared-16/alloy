@@ -2,16 +2,14 @@
 
 import clsx from "clsx";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { StatusBadge } from "@/components/admin/StatusBadge";
-import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import type { FormPublicLinkRow } from "@/components/forms/workspace/FormDistributionPanel";
 import { distributionIsPreviewLink } from "@/lib/forms/distributionPresentation";
 import { buildFormEmbedIframeSnippet } from "@/lib/forms/formSharePresentation";
-import type { OutcomeRoutingLabelCatalog } from "@/lib/forms/outcomeConfigLabelCatalog";
 import { readLinkEmbedUrl } from "@/lib/forms/intakeRuntimeOrchestrationStorage";
 import {
     SHARE_BY_LOCATION_COPY,
-    shareByLocationRowLabel,
+    findLocationSpecificShareLinkForSite,
+    parseOutcomeLabelsApiPayload,
     type ShareByLocationSiteOption,
 } from "@/lib/forms/shareByLocationPresentation";
 import {
@@ -27,7 +25,6 @@ export type CreateLocationLinkInput = {
 
 type Props = {
     formId: string;
-    formKey: string;
     formName: string;
     links: FormPublicLinkRow[];
     hasPublished: boolean;
@@ -39,10 +36,9 @@ type Props = {
     onCreateLocationLink: (input: CreateLocationLinkInput) => void | Promise<void>;
 };
 
-/** Share by Location — one form, per-campus embed links (Firefly multi-site). */
+/** Share by Location — canonical org sites + location-specific public links only. */
 export function FormLocationShareLinksPanel({
     formId,
-    formKey,
     formName,
     links,
     hasPublished,
@@ -53,66 +49,56 @@ export function FormLocationShareLinksPanel({
     onCopy,
     onCreateLocationLink,
 }: Props) {
-    const siteFilter = useWorkspaceSiteFilter();
-    const [labelCatalog, setLabelCatalog] = useState<OutcomeRoutingLabelCatalog | null>(null);
     const [siteOptions, setSiteOptions] = useState<ShareByLocationSiteOption[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadErr, setLoadErr] = useState<string | null>(null);
     const [locationId, setLocationId] = useState("");
     const [localErr, setLocalErr] = useState<string | null>(null);
+    const [creatingSiteId, setCreatingSiteId] = useState<string | null>(null);
 
-    const loadPickers = useCallback(async () => {
+    const loadSites = useCallback(async () => {
         setLoading(true);
+        setLoadErr(null);
         try {
             const res = await fetch(
                 `/api/admin/forms/${encodeURIComponent(formId)}/outcome-labels?include_picker_options=1`,
                 { credentials: "include" }
             );
             const json = await res.json().catch(() => ({}));
-            if (res.ok) {
-                const data = json as OutcomeRoutingLabelCatalog & {
-                    shareByLocationSites?: ShareByLocationSiteOption[] | null;
-                };
-                setLabelCatalog({
-                    locations: data.locations ?? {},
-                    workUnits: data.workUnits ?? {},
-                    departments: data.departments ?? {},
-                    verticals: data.verticals ?? {},
-                    opportunityStatusKeys: data.opportunityStatusKeys ?? {},
-                });
-                setSiteOptions(Array.isArray(data.shareByLocationSites) ? data.shareByLocationSites : []);
+            if (!res.ok) {
+                throw new Error((json as { error?: string }).error ?? "Could not load schools");
             }
+            const data = parseOutcomeLabelsApiPayload(json);
+            setSiteOptions(Array.isArray(data?.shareByLocationSites) ? data!.shareByLocationSites! : []);
+        } catch (e) {
+            setLoadErr((e as Error).message);
+            setSiteOptions([]);
         } finally {
             setLoading(false);
         }
     }, [formId]);
 
     useEffect(() => {
-        void loadPickers();
-    }, [loadPickers]);
-
-    useEffect(() => {
-        if (locationId || loading || siteOptions.length === 0) return;
-        const stickySiteId = siteFilter?.selectedSiteId;
-        if (stickySiteId && siteOptions.some((s) => s.id === stickySiteId)) {
-            setLocationId(stickySiteId);
-        }
-    }, [loading, locationId, siteFilter?.selectedSiteId, siteOptions]);
+        void loadSites();
+    }, [loadSites]);
 
     const operationalLinks = useMemo(
         () => links.filter((l) => !distributionIsPreviewLink(l)),
         [links]
     );
 
-    const campusLinks = useMemo(
-        () =>
-            operationalLinks.filter((l) => {
-                const meta = l.metadata;
-                return meta && typeof meta === "object" && (meta as Record<string, unknown>).distribution_context === "location_specific";
-            }),
-        [operationalLinks]
-    );
+    const handleCreate = (site: ShareByLocationSiteOption) => {
+        setLocalErr(null);
+        setCreatingSiteId(site.id);
+        void Promise.resolve(
+            onCreateLocationLink({
+                locationId: site.id,
+                locationName: site.label,
+            })
+        ).finally(() => setCreatingSiteId(null));
+    };
 
-    const handleCreate = () => {
+    const handleCreateFromDropdown = () => {
         setLocalErr(null);
         if (!locationId.trim()) {
             setLocalErr("Choose a school.");
@@ -123,10 +109,7 @@ export function FormLocationShareLinksPanel({
             setLocalErr("Choose a valid school.");
             return;
         }
-        void onCreateLocationLink({
-            locationId: selected.id,
-            locationName: selected.label,
-        });
+        handleCreate(selected);
     };
 
     if (!hasPublished) {
@@ -141,21 +124,97 @@ export function FormLocationShareLinksPanel({
         <div data-testid="form-location-share-links">
             <p className={opMutedMeta}>{SHARE_BY_LOCATION_COPY.helper}</p>
 
-            {canMutate ?
+            {loading ?
+                <p className={clsx("mt-3", opMetadata)}>Loading schools…</p>
+            : loadErr ?
+                <p className="mt-3 text-sm text-alloy-ember" role="alert">
+                    {loadErr}
+                </p>
+            : siteOptions.length === 0 ?
+                <p className="mt-3 text-sm text-amber-900" data-testid="location-link-empty-state">
+                    {SHARE_BY_LOCATION_COPY.emptyLocations}
+                </p>
+            :   <ul className="mt-3 space-y-2" data-testid="location-share-link-rows">
+                    {siteOptions.map((site) => {
+                        const link = findLocationSpecificShareLinkForSite(operationalLinks, site.id);
+                        const embedUrl = link ? readLinkEmbedUrl(link.id) : null;
+                        const iframeSnippet =
+                            embedUrl ? buildFormEmbedIframeSnippet(embedUrl, `${formName} — ${site.label}`) : null;
+                        const copyLinkKey = `location-link-${site.id}`;
+                        const copyEmbedKey = `location-embed-${site.id}`;
+                        const rowCreating = creating && creatingSiteId === site.id;
+
+                        return (
+                            <li
+                                key={site.id}
+                                className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white/95 px-3 py-2.5 ring-1 ring-alloy-midnight/[0.07]"
+                                data-testid={`location-share-site-row-${site.id}`}
+                            >
+                                <span className="text-sm font-medium text-alloy-midnight">{site.label}</span>
+                                <div className="flex flex-wrap gap-2">
+                                    {link && embedUrl ?
+                                        <>
+                                            <button
+                                                type="button"
+                                                className={intakeWorkspaceBtnSecondary}
+                                                data-testid={`location-link-copy-link-${site.id}`}
+                                                onClick={() => onCopy(copyLinkKey, embedUrl)}
+                                            >
+                                                {copied === copyLinkKey ? "Copied" : SHARE_BY_LOCATION_COPY.copyLink}
+                                            </button>
+                                            {iframeSnippet ?
+                                                <button
+                                                    type="button"
+                                                    className={intakeWorkspaceBtnSecondary}
+                                                    data-testid={`location-link-copy-embed-${site.id}`}
+                                                    onClick={() => onCopy(copyEmbedKey, iframeSnippet)}
+                                                >
+                                                    {copied === copyEmbedKey ? "Copied" : SHARE_BY_LOCATION_COPY.copyEmbed}
+                                                </button>
+                                            :   null}
+                                        </>
+                                    : link ?
+                                        <span className={clsx("self-center text-sm", opMutedMeta)}>
+                                            Link created — copy embed right after creating a new link
+                                        </span>
+                                    : canMutate ?
+                                        <button
+                                            type="button"
+                                            className={intakeWorkspaceBtnSecondary}
+                                            disabled={creating}
+                                            data-testid={`location-link-create-${site.id}`}
+                                            onClick={() => handleCreate(site)}
+                                        >
+                                            {rowCreating ? "Creating…" : SHARE_BY_LOCATION_COPY.createLink}
+                                        </button>
+                                    :   <span className={clsx("self-center text-sm", opMutedMeta)}>
+                                            {SHARE_BY_LOCATION_COPY.notSetUp}
+                                        </span>}
+                                </div>
+                            </li>
+                        );
+                    })}
+                </ul>
+            }
+
+            {canMutate && siteOptions.length > 0 ?
                 <div
-                    className="mt-3 rounded-lg bg-white/95 px-3 py-3 ring-1 ring-alloy-midnight/[0.07]"
+                    className="mt-4 rounded-lg bg-white/95 px-3 py-3 ring-1 ring-alloy-midnight/[0.07]"
                     data-testid="location-share-link-create"
                 >
-                    <label className="block space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/65">
+                        {SHARE_BY_LOCATION_COPY.createSectionTitle}
+                    </p>
+                    <label className="mt-2 block space-y-1">
                         <span className="text-xs font-medium text-alloy-midnight">{SHARE_BY_LOCATION_COPY.createPrompt}</span>
                         <select
                             className="w-full rounded-lg border border-alloy-midnight/10 bg-white px-2.5 py-1.5 text-sm shadow-sm"
                             value={locationId}
-                            disabled={loading}
+                            disabled={loading || creating}
                             data-testid="location-link-location"
                             onChange={(e) => setLocationId(e.target.value)}
                         >
-                            <option value="">{loading ? "Loading schools…" : SHARE_BY_LOCATION_COPY.selectLocation}</option>
+                            <option value="">{SHARE_BY_LOCATION_COPY.selectLocation}</option>
                             {siteOptions.map((opt) => (
                                 <option key={opt.id} value={opt.id}>
                                     {opt.label}
@@ -163,11 +222,6 @@ export function FormLocationShareLinksPanel({
                             ))}
                         </select>
                     </label>
-                    {!loading && siteOptions.length === 0 ?
-                        <p className={clsx("mt-2 text-sm text-amber-900")} data-testid="location-link-empty-state">
-                            {SHARE_BY_LOCATION_COPY.emptyLocations}
-                        </p>
-                    :   null}
                     {localErr || createErr ?
                         <p className="mt-2 text-sm text-alloy-ember" role="alert">
                             {localErr ?? createErr}
@@ -176,91 +230,14 @@ export function FormLocationShareLinksPanel({
                     <button
                         type="button"
                         className={clsx(intakeWorkspaceBtnPrimary, "mt-3")}
-                        disabled={creating || loading || siteOptions.length === 0}
+                        disabled={creating || loading || !locationId}
                         data-testid="location-link-create-submit"
-                        onClick={handleCreate}
+                        onClick={handleCreateFromDropdown}
                     >
                         {creating ? "Creating…" : SHARE_BY_LOCATION_COPY.createButton}
                     </button>
                 </div>
             :   null}
-
-            <div className="mt-4 overflow-x-auto">
-                <table className="min-w-full text-left text-sm" data-testid="location-share-link-table">
-                    <thead>
-                        <tr className="border-b border-alloy-midnight/10 text-xs font-semibold uppercase tracking-wide text-alloy-midnight/55">
-                            <th className="px-2 py-1.5">{SHARE_BY_LOCATION_COPY.tableLocation}</th>
-                            <th className="px-2 py-1.5">{SHARE_BY_LOCATION_COPY.tableStatus}</th>
-                            <th className="px-2 py-1.5">{SHARE_BY_LOCATION_COPY.tableActions}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {campusLinks.length === 0 ?
-                            <tr>
-                                <td colSpan={3} className={clsx("px-2 py-3", opMetadata)}>
-                                    {SHARE_BY_LOCATION_COPY.noLinksYet}
-                                </td>
-                            </tr>
-                        :   campusLinks.map((link) => {
-                                const rowLabel = shareByLocationRowLabel(
-                                    link.metadata,
-                                    labelCatalog?.locations,
-                                    formKey
-                                );
-                                const embedUrl = readLinkEmbedUrl(link.id);
-                                const iframeSnippet =
-                                    embedUrl ? buildFormEmbedIframeSnippet(embedUrl, `${formName} — ${rowLabel}`) : null;
-
-                                return (
-                                    <tr
-                                        key={link.id}
-                                        className="border-b border-alloy-midnight/[0.06]"
-                                        data-testid={`location-share-link-row-${link.id}`}
-                                    >
-                                        <td className="px-2 py-2 font-medium text-alloy-midnight">{rowLabel}</td>
-                                        <td className="px-2 py-2">
-                                            <StatusBadge
-                                                label={link.is_active ? "Live" : "Inactive"}
-                                                variant={link.is_active ? "success" : "neutral"}
-                                            />
-                                        </td>
-                                        <td className="px-2 py-2">
-                                            <div className="flex flex-wrap gap-2">
-                                                {iframeSnippet ?
-                                                    <button
-                                                        type="button"
-                                                        className={intakeWorkspaceBtnSecondary}
-                                                        data-testid={`location-link-copy-iframe-${link.id}`}
-                                                        onClick={() => onCopy(`location-iframe-${link.id}`, iframeSnippet)}
-                                                    >
-                                                        {copied === `location-iframe-${link.id}` ? "Copied" : SHARE_BY_LOCATION_COPY.copyIframe}
-                                                    </button>
-                                                :   null}
-                                                {embedUrl ?
-                                                    <a
-                                                        href={embedUrl}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className={intakeWorkspaceBtnSecondary}
-                                                        data-testid={`location-link-open-${link.id}`}
-                                                    >
-                                                        {SHARE_BY_LOCATION_COPY.openLink}
-                                                    </a>
-                                                :   null}
-                                                {!embedUrl ?
-                                                    <span className={clsx("self-center", opMutedMeta)}>
-                                                        {SHARE_BY_LOCATION_COPY.embedOnceHint}
-                                                    </span>
-                                                :   null}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })
-                        }
-                    </tbody>
-                </table>
-            </div>
         </div>
     );
 }

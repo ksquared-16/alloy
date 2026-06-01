@@ -177,52 +177,19 @@ export function FormLifecycleWorkspaceLayout({
                 {previewErr ?
                     <p className="mt-1.5 text-sm text-alloy-ember">{previewErr}</p>
                 : !hasPublished ?
-                    <p className={clsx("mt-1.5", opMetadata)}>Publish a version before sharing intake.</p>
+                    <p className={clsx("mt-1.5", opMetadata)}>Publish your form before sharing it with families.</p>
                 :   null}
-            </div>
-
-            <div className="mt-3">
-                <FormLifecycleRail steps={lifecycleSteps} />
             </div>
 
             <div className="mt-4 space-y-4" data-testid="form-lifecycle-workspace">
                 <section id={FORM_LIFECYCLE_ANCHORS.design} data-testid="form-region-design">
-                    <h2 className="mb-2 text-sm font-semibold text-alloy-midnight">Build form</h2>
+                    <h2 className="mb-2 text-sm font-semibold text-alloy-midnight">Form fields</h2>
                     <FormSchemaWorkspace
                         formId={formId}
                         formName={detail.name}
                         versions={detail.versions}
                         onVersionsUpdated={onVersionsUpdated}
                     />
-                    <TechnicalDetailDisclosure title="Publish & version history" helperText="Publish and prior versions">
-                        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                            {latestPublished ?
-                                <span className={opMetadata}>
-                                    Live v{latestPublished.version_number}
-                                    {latestPublished.published_at ?
-                                        <> · {formatDateTimeForUserDisplay(latestPublished.published_at, viewerTz)}</>
-                                    :   null}
-                                </span>
-                            :   <span className={opMetadata}>No published version</span>}
-                        </div>
-                        <ul className={clsx(opGroupedSurface, "mt-2")}>
-                            {detail.versions.map((v) => (
-                                <li key={v.id} className={opGroupedRowInner}>
-                                    <div className="flex flex-wrap items-center justify-between gap-2">
-                                        <span className="text-sm font-medium text-alloy-midnight">
-                                            Version {v.version_number}
-                                        </span>
-                                        <StatusBadge label={v.status} variant={getStatusVariant(v.status)} />
-                                    </div>
-                                    <p className={clsx("mt-0.5", opMetadata)}>
-                                        {v.published_at ?
-                                            `Published ${formatDateTimeForUserDisplay(v.published_at, viewerTz)}`
-                                        :   `Updated ${formatDateTimeForUserDisplay(v.updated_at ?? v.created_at, viewerTz)}`}
-                                    </p>
-                                </li>
-                            ))}
-                        </ul>
-                    </TechnicalDetailDisclosure>
                 </section>
 
                 <section className={opRegionSeparator} data-testid="form-region-runtime-orchestration">
@@ -254,7 +221,7 @@ export function FormLifecycleWorkspaceLayout({
                 <section id={FORM_LIFECYCLE_ANCHORS.review} className={opRegionSeparator} data-testid="form-region-review">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
-                            <h2 className="text-sm font-semibold text-alloy-midnight">Recent responses</h2>
+                            <h2 className="text-sm font-semibold text-alloy-midnight">Responses</h2>
                             <p className={clsx("mt-0.5", opMetadata)}>
                                 {submissionCount > 0 ?
                                     `${submissionCount} response${submissionCount === 1 ? "" : "s"}`
@@ -267,10 +234,42 @@ export function FormLifecycleWorkspaceLayout({
 
                 <div className={opRegionSeparator}>
                     <TechnicalDetailDisclosure
-                        title="Advanced setup & debugging"
-                        helperText="Intake matrices, routing grids, share link management, and technical details"
+                        title="Advanced settings"
+                        helperText="Documents, packet usage, routing configuration, and technical details"
                     >
                         <div className="mt-3 space-y-4">
+                            <FormLifecycleRail steps={lifecycleSteps} />
+
+                            <TechnicalDetailDisclosure title="Publish history" helperText="Prior publishes and drafts">
+                                <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                                    {latestPublished ?
+                                        <span className={opMetadata}>
+                                            Last published
+                                            {latestPublished.published_at ?
+                                                <> · {formatDateTimeForUserDisplay(latestPublished.published_at, viewerTz)}</>
+                                            :   null}
+                                        </span>
+                                    :   <span className={opMetadata}>Not published yet</span>}
+                                </div>
+                                <ul className={clsx(opGroupedSurface, "mt-2")}>
+                                    {detail.versions.map((v) => (
+                                        <li key={v.id} className={opGroupedRowInner}>
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                                <span className="text-sm font-medium text-alloy-midnight">
+                                                    {v.status === "published" ? "Published" : "Draft"}
+                                                </span>
+                                                <StatusBadge label={v.status} variant={getStatusVariant(v.status)} />
+                                            </div>
+                                            <p className={clsx("mt-0.5", opMetadata)}>
+                                                {v.published_at ?
+                                                    `Published ${formatDateTimeForUserDisplay(v.published_at, viewerTz)}`
+                                                :   `Updated ${formatDateTimeForUserDisplay(v.updated_at ?? v.created_at, viewerTz)}`}
+                                            </p>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </TechnicalDetailDisclosure>
+
                             {showPacketPanel && hasPublished ?
                                 <section data-testid="form-region-packet-context">
                                     <FormPacketContextPanel formId={formId} formName={detail.name} hasPublished={hasPublished} />
