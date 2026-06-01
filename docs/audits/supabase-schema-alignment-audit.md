@@ -124,4 +124,4 @@ Expect **`proconfig`** to include `{search_path=public,pg_temp}` (or equivalent)
 ## Change log
 
 - **2026-05:** Initial audit from CSV + doc review; revised after **live RLS verification** (communications V1 acceptable; legacy `messages` and `workflow_events` composition documented; `messages_outbox` and deny-by-default tables clarified).
-- **2026-05-05:** Hardening sprint — **`workflow_events`** code audit + proposed RLS migration; legacy messaging retirement notes in product comms doc; **`customer_payment_methods`** billing doc posture; **`SECURITY DEFINER` search_path** migration via **`ALTER FUNCTION`** only.
+- **2026-05-31:** Month-end doc pass — validated **`placement_candidates`**, **`form_packet_*`**, **`action_definitions`**, **`record_drawer_layouts`** in CSV exports align with workspace/forms/action docs; orphan **`docs/system/forms-intake-*`** moved to sprint closeouts (source-pack hygiene). New May migrations documented in **`entity-model.md`**, **`roadmap-and-gaps.md`** (child lifecycle v2, waitlist fact truth, person drawer layout runtime v1, canonical actions).

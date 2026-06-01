@@ -42,6 +42,7 @@ High-level map of **server boundaries** for admin, public booking, and action li
 | Forms (admin) | `/api/admin/forms`, `/api/admin/forms/[formId]/**`, submissions, packet sessions, **`GET …/packet-sessions/[id]/review-rollup`** | Definitions, versions, publish/archive, public links, submissions, **packet review rollup (P2-1)** — **partially implemented** product-wide |
 | Forms (public) | `/api/public/forms/[token]/**` | Token-scoped submit / capture |
 | Workspace / dept KPIs | e.g. **`GET /api/admin/departments/[departmentId]/opportunity-lifecycle-kpis`**, **`/api/admin/workspace-kpi-placements`** | **Partially implemented** — KPI strips and placements exist; full **reporting V1** **not implemented** |
+| Global record search | **`GET /api/admin/global-search?q=&limit=`** | Children, parents/guardians, leads, campuses; org + department + site scope — **`docs/sprints/05_2026/completed/global_search_v1_closeout.md`** |
 
 ## Source of truth / key files
 

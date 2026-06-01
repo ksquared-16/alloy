@@ -47,7 +47,10 @@ Use these meanings in code review and prompts.
 | **Workflow Assist** | BOS capability `workflow_assist` — workflow read/explain and gated propose/apply — default path **deterministic**. |
 | **Config / Layout Assist** | BOS capability `config_layout_assist` — `ConfigurationProposalV1` on **`config_layout_assist_proposals`**. |
 | **Placement priority** | Opt-in waitlist ordering layer (`placement_priority_v1` metadata) producing queue **`_placement_priority`** previews — not global waitlist truth. |
-| **Packet review rollup** | Read-only operator review payload (`PacketReviewRollupV1`) built from packet session + submissions + documents index — **`GET /api/admin/forms/packet-sessions/[id]/review-rollup`**. |
+| **Global record search** | AdminV2 header **`GET /api/admin/global-search`** — children, parents, leads, campuses; permission-scoped; drawer swap-in-place — **`docs/sprints/05_2026/completed/global_search_v1_closeout.md`**. |
+| **Canonical action catalog** | Platform **`action_definitions`** keys aligned to lifecycle matrix; legacy `*_placeholder` mapping — migrations **`20260602160000`**+; **`move_to_waitlist`** seeded inactive until activation. |
+| **Completion guardrails** | Contextual structured validation before lifecycle **`executeAdminAction`** paths — **`ActionPreflightBlockedPanel`**; Settings surfacing deferred. |
+| **Packet review rollup** | Read-only operator review payload (`PacketReviewRollupV1`) — **`GET /api/admin/forms/packet-sessions/[id]/review-rollup`**. |
 | **Work unit queue selection** | Route-owned pipeline lane authority: URL `?queue=` (+ attention bucket aliases) → bootstrap `focus_queue` → drawer navigator scope — **`workUnitQueueSelection.ts`**. |
 | **AI policy** | Org setting in **`org_settings.metadata.ai_policy`** — feature allow list, provider (`stub` / `openai`), logging mode; complements RBAC permission keys. |
 

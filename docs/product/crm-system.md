@@ -28,7 +28,7 @@ Cover **opportunities**, pipeline status, CRM-adjacent admin behavior, and **sch
 - **Documents** tab lists packet-linked artifacts via **`/api/admin/related/opportunity/:id`** merge (opportunity-owned **`documents`** + submission junction graph), with optional inline links to **form submission** and **packet session** admin URLs when enriched.
 - **Operator review** (`approve` / `reject` / `needs_correction`) is a gate on **`form_packet_sessions`**; **approval** triggers **idempotent** generated PDFs for mapped published versions (see **`docs/product/documents-and-forms.md`**). **Public packet values remain untrusted proposals** until explicit intake / linkage / future **data change proposal** flows promote them — Phase 1 does **not** auto-mutate canonical CRM person/customer/member fields from arbitrary public answers beyond existing **intake** rules.
 
-**Phase 2** backlog (DCP, P2-5 BOS insight, UX hardening): **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**. **Review MVP (P2-1–P2-4) shipped ~2026-05-21:** rollup API, packet session review console, drawer review modal with labeled answers + provenance — **`docs/product/documents-and-forms.md`**, **`forms_documents_phase_2_packet_review_mvp.md`**.
+**Phase 2** backlog (DCP, P2-5 BOS insight, UX hardening): **`docs/sprints/05_2026/later-phase/enrollment_packet_phase_2.md`**. **Review MVP (P2-1–P2-4) shipped ~2026-05-21:** rollup API, packet session review console, drawer review modal with labeled answers + provenance — **`docs/product/documents-and-forms.md`**, **`forms_documents_phase_2_packet_review_mvp.md`**.
 
 ## How it works
 
@@ -156,7 +156,7 @@ Canonical documentation: **`docs/product/communications.md`** (threads, enqueue,
 
 - **Partially implemented:** **`schedules`** CRUD, action-link reschedule, workspace “today” hooks — exist for CRM/tour/booking-adjacent flows.
 - **Shipped (May 2026):** **Tour Scheduling V1** + **Phase 2 Band A** — `tour_bookings`, availability rules, public token booking, operator drawer lifecycle, confirmation/reminder/reschedule/cancel comms (`communication_scheduled_sends`), quiet hours, add-to-calendar links — see [`completed/tour_scheduling_phase2_band_a_closeout.md`](../sprints/05_2026/completed/tour_scheduling_phase2_band_a_closeout.md), [`tour_scheduling_v1.md`](../sprints/05_2026/tour_scheduling_v1.md).
-- **Deferred / roadmap (Band B+):** External calendar OAuth/sync, distributed public rate limits/CAPTCHA, branded public booking, settings UI for tour comms templates, tour analytics dashboards — [`tour_scheduling_phase_2.md`](../sprints/05_2026/tour_scheduling_phase_2.md).
+- **Deferred / roadmap (Band B+):** External calendar OAuth/sync, distributed public rate limits/CAPTCHA, branded public booking, settings UI for tour comms templates, tour analytics dashboards — [`later-phase/tour_scheduling_phase_2.md`](../sprints/05_2026/later-phase/tour_scheduling_phase_2.md).
 - **Needs verification:** Complete cross-vertical scheduling UX (field services vs childcare).
 - **Needs verification:** Labor compliance / attendance feature depth.
 

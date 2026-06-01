@@ -62,7 +62,7 @@ This sprint delivers **Tour Scheduling V1** as a first-class Alloy capability fo
 - Changing global meaning of **`schedules`** or creating job rows solely to host tours.
 - Retiring **`metadata.tour_*`** read paths in queues in V1 (mirror keeps compatibility).
 
-**Follow-on planning:** items above that move from “non-scope” to product are captured under **`docs/sprints/05_2026/tour_scheduling_phase_2.md`** (not committed work until scheduled).
+**Follow-on planning:** items above that move from “non-scope” to product are captured under **`docs/sprints/05_2026/later-phase/tour_scheduling_phase_2.md`** (not committed work until scheduled).
 
 ## 6. Data Model Summary
 
@@ -172,7 +172,7 @@ Manual QA sign-off: **Tour Scheduling V1** is working as intended for the enroll
 | **Public booking** | **`tour_public_booking_links`** rows (token, org, opportunity, location, active flag). | Rate limit ceilings + window sizes (**`TOUR_PUBLIC_RATE_LIMIT`**, **`TOUR_PUBLIC_SLOTS_MAX_RANGE_MS`**), generic error text for bad tokens, in-process limiter (**not** distributed). | Redis/global limits, CAPTCHA, branded pages, expiring links — see Phase 2. |
 | **Opportunity update helper** | RLS/org patterns on **`opportunities`**. | **`updateOpportunityStatusWithEvent`** requires **`org_id`** on update and treats **0-row** update as failure (no spurious **`opportunity_status_changed`**). | Transactional “booking insert + opportunity patch” single unit of work if product demands it. |
 
-**Summary:** V1 is **intentionally opinionated** in code for event names, default opportunity status targets, blocking statuses, and public abuse guards — those are **acceptable product defaults**. Items marked for Phase 2 should move toward **org/vertical settings**, richer **admin config**, or **platform hardening** as described in **`tour_scheduling_phase_2.md`**.
+**Summary:** V1 is **intentionally opinionated** in code for event names, default opportunity status targets, blocking statuses, and public abuse guards — those are **acceptable product defaults**. Items marked for Phase 2 should move toward **org/vertical settings**, richer **admin config**, or **platform hardening** as described in **`docs/sprints/05_2026/later-phase/tour_scheduling_phase_2.md`**.
 
 ---
 
@@ -404,4 +404,4 @@ Manual QA sign-off: **Tour Scheduling V1** is working as intended for the enroll
 
 ---
 
-Tour Scheduling V1 sprint **complete** (manual QA **May 2026**). **Phase 2 Band A complete** (comms/reminders, May 2026): [`completed/tour_scheduling_phase2_band_a_closeout.md`](./completed/tour_scheduling_phase2_band_a_closeout.md). **Band B+ roadmap:** [`tour_scheduling_phase_2.md`](./tour_scheduling_phase_2.md).
+Tour Scheduling V1 sprint **complete** (manual QA **May 2026**). **Phase 2 Band A complete** (comms/reminders, May 2026): [`completed/tour_scheduling_phase2_band_a_closeout.md`](./completed/tour_scheduling_phase2_band_a_closeout.md). **Band B+ roadmap:** [`../later-phase/tour_scheduling_phase_2.md`](../later-phase/tour_scheduling_phase_2.md).

@@ -12,15 +12,16 @@ Single place for **phase timeline**, **completion vs in-progress tracking**, **s
 
 Phases are **planning buckets**. Dates are narrative, not contractual.
 
-### Current phase (late May 2026 — alignment snapshot)
+### Current phase (May 31 2026 — month-end closeout)
 
 **Theme:** **Operational completion + product hardening; AI groundwork present, deeper agents paused.**
 
-- **Primary execution focus:** Close enrollment/forms loops (Phase 2 review MVP **in progress**), waitlist mutators, tour depth, settings **follow-ons** (Record Experience Builder, forms field parity), messaging reliability, reporting — **not** new autonomous agent personas or broad AdminV2 speed sprints.
-- **Shipped / stable foundations (carry-forward):** Communications V1; roles + department/site scope; resolver vs queue boundaries; enrollment **Needs Attention** + pipeline UX; **Tour Scheduling V1**; **Enrollment Packet E2E Phase 1**; **Settings + Record UX Parity V1** (May 18); **AdminV2 performance closeout** (May 20–24 — reveal gates, WU bootstrap, drawer pipeline, route-owned queue selection).
+- **Primary execution focus (June):** Lifecycle runtime/configuration alignment, **`move_to_waitlist`** mutator + canonical action cutover, enrollment/forms Phase 2 remainder (DCP, UX hardening), tour Band B+, messaging reliability, reporting — **not** autonomous agents or broad perf sprints.
+- **Shipped / stable foundations (May 25–31 delta):** **Child lifecycle + work-unit convergence** (`enrollment_pipeline` v2, case vs child grain); **waitlist** pilot readiness + ranking validation + priority fact truth; **Tour Phase 2 Band A**; **Forms MVP productization**; **Global Search V1**; **person/location drawer convergence**; **lifecycle action alignment** (~84% — entry/enrollment actions, BOS header attention); **completion guardrails** (contextual validation); **person drawer layout runtime v1** (`20260531140000`).
+- **Shipped / stable foundations (carry-forward):** Communications V1; roles + department/site scope; resolver vs queue boundaries; enrollment **Needs Attention** + pipeline UX; **Tour Scheduling V1**; **Enrollment Packet E2E Phase 1**; **Settings + Record UX Parity V1** (May 18); **AdminV2 performance closeout** (May 20–24); **Enrollment Packet Phase 2 review MVP** (P2-1–P2-4, ~May 21).
 - **BOS groundwork shipped (maintain, do not expand as default sprint work):** needs-attention + enrich draft; Orchestrator + Task Assist V1.1; Workflow Assist V1 (narrow); Config/Layout Assist **foundation** (proposals + partial apply); **BOS UX coherence partial** (`OperationalProposalCardFrame`, execution receipts); **operational assist closeout** (deterministic assist routing, communication draft synthesis, channel-aware SMS/email review, Review Assist + drawer stability) — **`docs/product/bos-foundation.md`**, **`docs/sprints/06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`**. **Forward planning only:** **`docs/sprints/future/bos_operational_assist_phase2.md`**.
 - **Waitlist placement priority V1** — **opt-in** engine shipped; promotion mutator still open.
-- **Partially implemented (near-term product):** Enrollment Packet Phase 2 (**P2-1–P2-4 review MVP shipped ~2026-05-21**; DCP, P2-5 BOS insight, UX hardening cards open); waitlist **`add_to_waitlist_placeholder`**; Reporting V1.
+- **Partially implemented (near-term product):** Enrollment Packet Phase 2 (**P2-1–P2-4 shipped ~2026-05-21**; DCP, P2-5 BOS insight, UX hardening in **`later-phase/`**); waitlist **`move_to_waitlist`** / **`add_to_waitlist_placeholder`** replacement; Reporting V1.
 - **Settings + Record UX Parity (May 2026 — complete):** Four-plane Settings control plane V1 — field policy UI + PATCH enforcement (opportunity/job enforceable subset), opportunity workflow v1 layout sections, org action placement editor, layout integrity panel, UX contract pass — **`docs/sprints/05_2026/settings_record_ux_parity_sprint.md`** §12–§13, **`docs/system/configuration-system.md`**. **Deferred:** Record Experience Builder, full `record_actions` migration, ops drawer mutate, `condition_config` editors, person/location field modal parity (linked-record inline PATCH **shipped** — **`linked_record_field_editing_v1.md`**).
 - **Child lifecycle + work-unit convergence (May 2026 — closed):** Grain-aware `enrollment_pipeline` v2, candidate-grain waitlist + child-grain enrollment runtime, read-only case rollups, WU filter UX, strict-mode readiness tooling — **`docs/sprints/05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`**. **Deferred follow-ons:** Settings Config Management (domain/NA presentation CRUD); strict-mode activation; server-side queue search; waitlist forecasting/capacity — see closeout § future sprints and **`waitlist_orchestration_phase2_architecture.md`**.
 - **Waitlist priority fact truth (May 2026 — closed):** Child site/cohort on OCM, record-sourced V2 household facts, employee person UI, candidate repair, forms intake mapping, strict-mode **checklist documented** — **`docs/sprints/05_2026/waitlist_priority_fact_truth_child_scope.md`**. **`shadow_mode: false` not enabled**; site-scoped program catalog deferred.
@@ -39,9 +40,9 @@ Phases are **planning buckets**. Dates are narrative, not contractual.
 
 ### Next phase (near term — operational)
 
-1. **Enrollment Packet Phase 2** / enrollment-forms completion — **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**.
-2. **Waitlist** — real mutator replacing **`add_to_waitlist_placeholder`**; ops validation with placement priority pilots.
-3. **Tour scheduling Phase 2 Band B+** — calendar sync, public hardening, settings UI — **`docs/sprints/05_2026/tour_scheduling_phase_2.md`** (Band A **complete** — **`completed/tour_scheduling_phase2_band_a_closeout.md`**).
+1. **Enrollment Packet Phase 2** / enrollment-forms completion — **`docs/sprints/05_2026/later-phase/enrollment_packet_phase_2.md`**.
+2. **Waitlist completion** — activate **`move_to_waitlist`** (canonical catalog seeded **`20260602160000`**); retire **`add_to_waitlist_placeholder`**; pilot sign-off with ranking validation scripts.
+3. **Tour scheduling Phase 2 Band B+** — **`docs/sprints/05_2026/later-phase/tour_scheduling_phase_2.md`** (Band A **complete** — **`completed/tour_scheduling_phase2_band_a_closeout.md`**).
 4. **Settings / configuration control plane** — **V1 shipped** (May 18): four-plane Fields / Field grouping / Layouts (opportunity workflow v1) / Actions (org placements); remaining: Record Experience Builder, job/schedule layout editors, structured condition builders, forms field-policy parity.
 5. **Required vs optional field behavior** — **shipped** for opportunity/job enforceable fields (Settings + server + drawer); expand enforceable subset + **forms** parity still open.
 6. **Editable record UX** + **action button cleanup** — drawer policy UX, placement editor, linked-record inline PATCH **shipped**; full `record_actions` retirement and ops mutate **deferred**.
@@ -91,6 +92,15 @@ Capabilities below exist in **`web/` / `supabase/`**; “complete” means **fou
 - **Enrollment Packet Phase 2 — review MVP slice (P2-1–P2-4)** — **~2026-05-21** — `GET …/packet-sessions/[id]/review-rollup` (`buildPacketReviewRollupV1`); packet session review console (`PacketReviewRollupView`, `/adminV2/forms/packets/[packetSessionId]`); opportunity drawer review modal hardening; document provenance + **`submitted_record`** synthetic rows for non-PDF steps. **Not shipped:** DCP, P2-5 deterministic BOS insight, UX hardening cards — **`forms_documents_phase_2_packet_review_mvp.md`**, **`enrollment_packet_phase_2.md`**.
 - **BOS UX coherence (partial)** — **~2026-05-20 → 2026-05-22** — shared **`OperationalProposalCardFrame`** on Task/Workflow/Config Assist cards; execution receipts + routing/governance copy; full sprint cards (active operational context, attention hierarchy) **partially implemented** — **`bos_ux_coherence_sprint.md`**.
 - **BOS operational assist (routing + communication drafting)** — **~2026-05-21 → 2026-05-26** — deterministic handoff routing, synthesized customer-facing drafts (separate from recommendation copy), SMS/email channel bodies in review card, Review Assist placement + drawer reveal doctrine, native Work with BOS CTA — **`docs/sprints/06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`**.
+- **Child lifecycle + work-unit convergence** — **~2026-05-27 → 2026-06-01** (migrations **`20260601100000`–`20260601150000`**, **`20260602100000`**) — `enrollment_pipeline` v2 domains/grains, OCM lifecycle SoT, candidate waitlist + child enrollment runtime, client-side WU filters — **`docs/sprints/05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`**.
+- **Waitlist priority fact truth + demo readiness + ranking controls** — **~2026-05-28 → 2026-05-29** — OCM site/cohort, record-sourced V2 facts, demo reseed, runtime position display + manual adjustment — sprints in **`docs/sprints/05_2026/completed/`**.
+- **Tour Scheduling Phase 2 Band A** — **~2026-05-27** — booking lifecycle comms/reminders via **`communication_scheduled_sends`** (`20260527150000`) — **`docs/sprints/05_2026/completed/tour_scheduling_phase2_band_a_closeout.md`**.
+- **Forms MVP productization** — **~2026-05-28** — operational intent templates, simplified form setup, share/embed UX — **`docs/sprints/05_2026/completed/forms_mvp_productization.md`**.
+- **Global Search V1** — **May 2026** — **`GET /api/admin/global-search`**, AdminV2 header search — **`docs/sprints/05_2026/completed/global_search_v1_closeout.md`**.
+- **Person / location drawer convergence** — **~2026-05-29 → 2026-05-30** — shared record primitives, location metadata fields, household copy — **`docs/sprints/05_2026/completed/record_person_location_convergence_audit.md`** (closeout).
+- **Person drawer layout runtime v1** — **~2026-05-31** — migration **`20260531140000`**, Settings read-only visibility — **`docs/sprints/05_2026/person_drawer_runtime_layout_migration.md`**.
+- **Lifecycle action alignment (partial closeout)** — **~2026-05-31** — canonical action catalog stubs (`20260602160000`), Phase 1A entry actions, tour/enrollment alignment migrations, BOS drawer header attention — **`docs/sprints/05_2026/completed/lifecycle_closeout.md`** (~84%; **`move_to_waitlist`**, `mark_won` cutover, BOS wiring deferred).
+- **Completion guardrails (contextual validation)** — **~2026-05-30** — structured validation on lifecycle execute paths — **`docs/sprints/05_2026/required_fields_completion_guardrails_audit.md`**.
 
 ---
 
@@ -99,7 +109,8 @@ Capabilities below exist in **`web/` / `supabase/`**; “complete” means **fou
 | Area | State | Notes |
 |------|--------|--------|
 | **Enrollment / forms** | **Partially implemented** | **Phase 1 shipped**; **Phase 2 review MVP (P2-1–P2-4) shipped ~2026-05-21**; DCP, P2-5 BOS insight, UX hardening, comms presets still open |
-| **Waitlist** | **Partially implemented** | Lanes + **placement priority V1** shipped (**opt-in**); **`add_to_waitlist_placeholder`** still stub |
+| **Waitlist** | **Partially implemented** | V2 candidate rows + ranking validation **shipped**; **`move_to_waitlist`** stub in catalog — **`add_to_waitlist_placeholder`** still active until cutover |
+| **Lifecycle actions (canonical catalog)** | **Partially implemented** | Phase 1A/1B + tour/enrollment alignment **~2026-05-31**; **`move_to_waitlist`**, `mark_won` deprecation, BOS invoke **open** |
 | **AI (assistive groundwork)** | **Partially implemented** | Narrow surfaces **shipped**; **execution paused** for expansion — see **Paused / deprioritized** |
 | **Config / Layout Assist** | **Partially implemented** | Foundation only; **deprioritized** until operational items 1–8 advance |
 
@@ -125,9 +136,9 @@ Before treating Alloy as **broadly customer-ready**, expect progress on:
 
 **Default execution order** — swap only when a hard dependency demands it. **Items 1–9 are operational product work; item 10 is assistive AI only; item 11 is explicitly later.**
 
-1. **Enrollment Packet Phase 2** / enrollment-forms completion — **`enrollment_packet_phase_2.md`**.
-2. **Waitlist completion** — replace **`add_to_waitlist_placeholder`**; validate placement + promotion with ops.
-3. **Tour Scheduling Phase 2 Band B+** — calendar sync, public hardening, analytics — **`tour_scheduling_phase_2.md`** (Band A closeout: **`completed/tour_scheduling_phase2_band_a_closeout.md`**).
+1. **Enrollment Packet Phase 2** / enrollment-forms completion — **`docs/sprints/05_2026/later-phase/enrollment_packet_phase_2.md`**.
+2. **Waitlist completion** — activate **`move_to_waitlist`**; retire **`add_to_waitlist_placeholder`**; validate placement + promotion with ops.
+3. **Tour Scheduling Phase 2 Band B+** — calendar sync, public hardening, analytics — **`docs/sprints/05_2026/later-phase/tour_scheduling_phase_2.md`** (Band A closeout: **`completed/tour_scheduling_phase2_band_a_closeout.md`**).
 4. **Settings / configuration UI parity** — **V1 shipped** (May 18); remaining: Record Experience Builder, job/schedule layout editors, forms field-policy parity, comms bindings self-serve.
 5. **Required vs optional field behavior** — forms, drawers, layouts; **`requirement_policy`** (**needs verification** per surface).
 6. **Editable record UX** — drawer editability vs layouts and permissions.
@@ -158,7 +169,16 @@ Use this block for **velocity / stakeholder summaries**. Dates are **repo anchor
 | **AdminV2 performance closeout** | ~2026-05-19 | ~2026-05-24 | follow-ons scoped | **Implemented** (engineering) |
 | **BOS UX coherence (partial)** | ~2026-05-20 | ~2026-05-22 | full sprint TBD | **Partially implemented** |
 | **BOS operational assist (routing + comms drafting)** | ~2026-05-21 | ~2026-05-26 | Phase 2 planning only | **Implemented** (foundation) |
-| **Waitlist placement priority V1** | 2026-05-08 | ~2026-05-16 | TBD (mutator + V1.1) | **Partially implemented** |
+| **Child lifecycle + WU convergence** | ~2026-05-27 | ~2026-06-01 (`20260601130000` v2) | strict-mode activation TBD | **Implemented** (foundation) |
+| **Waitlist ranking + position controls** | ~2026-05-28 | ~2026-05-29 | mutator TBD | **Partially implemented** |
+| **Waitlist priority fact truth (child scope)** | ~2026-05-28 | ~2026-05-28 (`20260528120000`) | shadow_mode prod TBD | **Implemented** (pilot) |
+| **Forms MVP productization** | ~2026-05-28 | ~2026-05-28 | intelligence/FD backlog TBD | **Implemented** (MVP) |
+| **Global Search V1** | ~2026-05-29 | May 2026 | Phase 2 TBD | **Implemented** |
+| **Person drawer layout runtime v1** | ~2026-05-30 | ~2026-05-31 (`20260531140000`) | builder TBD | **Partially implemented** |
+| **Lifecycle action alignment** | ~2026-05-31 | ~2026-05-31 (`20260602160000`+) | full matrix TBD | **Partially implemented** (~84%) |
+| **Completion guardrails (contextual)** | ~2026-05-30 | ~2026-05-30 | Settings surfacing TBD | **Partially implemented** |
+| **Person / location drawer convergence** | ~2026-05-29 | ~2026-05-30 | Phase 2 governance TBD | **Implemented** (sprint closeout) |
+| **Waitlist placement priority V1** | 2026-05-08 | ~2026-05-16 | mutator + V1.1 TBD | **Partially implemented** |
 | **Tour Scheduling V1** | 2026-05-11 | 2026-05-12 | — | **Implemented** (V1) |
 | **Tour Scheduling Phase 2 Band A** | 2026-05-27 | May 2026 | Band B+ TBD | **Implemented** (comms/reminders) |
 | **AI — needs attention + enrich draft** | ~2026-05-15 | ~2026-05-16 (`20260520100000`) | — | **Implemented** (narrow) |
@@ -237,6 +257,12 @@ Use this block for **velocity / stakeholder summaries**. Dates are **repo anchor
 | **Enrollment Packet E2E Phase 1** | **2026-05-07 (Thu) → 2026-05-13** — enrollment engineering / polish window (parallel-friendly with other work; align with merge history). |
 | **Waitlist placement priority V1** | **2026-05-08 → ~2026-05-16** — sprint closed; opt-in metadata + settings + queue projection. |
 | **AI agents (attention + Orchestrator + Task Assist + Workflow Assist)** | **~2026-05-15 → 2026-05-23** — dense commit window; align per-route with migrations above. |
+| **Child lifecycle + WU convergence** | **~2026-05-27 → 2026-06-01** — dense migration window (`202606011*`–`20260602100000`). |
+| **Waitlist ranking + position controls** | **~2026-05-28 → 2026-05-29** — runtime position + QA scripts. |
+| **Lifecycle action alignment (partial)** | **~2026-05-31** — canonical catalog + Phase 1A/1B + tour/enrollment migrations same day. |
+| **Forms MVP productization** | **~2026-05-28** — Cards 0–6 closeout. |
+| **Global Search V1** | **May 2026** — header search + scoped API. |
+| **Person drawer layout runtime v1** | **~2026-05-31** — migration **`20260531140000`**. |
 | **Config / Layout Assist foundation** | **~2026-05-23** — proposals table + field policy migration same week. |
 | **Settings + Record UX Parity V1** | **2026-05-18** — single-day closeout sprint (Cards 0–9 + post-closeout). |
 | **AdminV2 performance closeout** | **~2026-05-19 → 2026-05-24** — dense commit window; reveal gates, WU bootstrap, drawer pipeline, queue selection fix on **2026-05-24**. |
@@ -323,7 +349,7 @@ Shipped features list **capabilities that exist in repo** at a high level. **Not
 
 #### Notes
 
-- **Enrollment Packet Phase 2** — **partially implemented**: **P2-1–P2-4 review MVP shipped ~2026-05-21** (rollup API, review console, drawer modal, provenance + non-PDF **`submitted_record`** rows). **Still open:** field-level data change proposals (DCP), P2-5 BOS insight, UX hardening cards, richer templates/reminders — **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**, **`forms_documents_phase_2_packet_review_mvp.md`**
+- **Enrollment Packet Phase 2** — **partially implemented**: **P2-1–P2-4 review MVP shipped ~2026-05-21**. **Still open:** DCP, P2-5 BOS insight, UX hardening cards — **`docs/sprints/05_2026/later-phase/enrollment_packet_phase_2.md`**, **`forms_documents_phase_2_packet_review_mvp.md`**
 - **Required vs optional fields** — **needs verification** per published schema
 
 ### Feature: Waitlist (enrollment CRM) — partially implemented
@@ -435,9 +461,9 @@ When verified in code or DB, fold conclusions into **`docs/system/entity-model.m
 - **Opportunity vs contact vs person:** `docs/audits/person-vs-contact-audit.md`.
 - **Event coverage:** `docs/audits/event-integrity-audit.md`.
 - **CRM scoped access:** Not every route uses **`getAdminAccessContextCached`** — grep when adding surfaces.
-- **Forms product completion:** Engine exists; **Enrollment Packet E2E Phase 1** **shipped** **2026-05-07 → 2026-05-13**; **Phase 2 review MVP (P2-1–P2-4) shipped ~2026-05-21**; DCP + P2-5+ still open (`documents-and-forms.md`, **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**).
-- **Waitlist actions:** Placeholder mutator — **not implemented**; placement priority V1 — **shipped opt-in** (`crm-system.md`, placement sprint).
-- **Tour Scheduling:** **V1 + Band A comms/reminders shipped**; **Band B+** (calendar, public hardening, settings UI) — **deferred** — [`tour_scheduling_phase_2.md`](../sprints/05_2026/tour_scheduling_phase_2.md).
+- **Forms product completion:** Engine + **Forms MVP productization shipped ~2026-05-28**; **Enrollment Packet E2E Phase 1** **2026-05-07 → 2026-05-13**; **Phase 2 review MVP ~2026-05-21**; DCP + P2-5+ in **`later-phase/`** (`documents-and-forms.md`).
+- **Waitlist actions:** **`move_to_waitlist`** in canonical catalog (**inactive** until activated); **`add_to_waitlist_placeholder`** still until cutover; placement priority V1 — **shipped opt-in** (`crm-system.md`).
+- **Tour Scheduling:** **V1 + Band A comms/reminders shipped**; **Band B+ deferred** — [`later-phase/tour_scheduling_phase_2.md`](../sprints/05_2026/later-phase/tour_scheduling_phase_2.md).
 - **Reporting V1:** KPI strips exist; **full reporting** — **not implemented**.
 - **BOS:** Assistive groundwork **partially shipped**; **deeper capability expansion paused** — see **`bos-foundation.md`**; **no** autonomous enrollment/subsidy/monitoring agents in execution.
 - **Config/Layout Assist:** Foundation only; apply catalog expansion **paused**.
@@ -454,6 +480,11 @@ When verified in code or DB, fold conclusions into **`docs/system/entity-model.m
 | Forms enrollment **Phase 1 E2E** shipped **2026-05-07 → 2026-05-13**; **Phase 2 review MVP (P2-1–P2-4) shipped ~2026-05-21**; **required/optional field** behavior still needs verification per surface | DCP + forms field-policy parity |
 | AdminV2 performance closeout production monitoring | Dev perf marks exist; dashboards **needs verification** |
 | WU queue selection from dept lanes | Route-owned `?queue=` + `focus_queue` shipped **2026-05-24**; pilot QA on all enrollment lanes |
+| Waitlist **`shadow_mode: false`** in prod | Pilot checklist documented; **needs verification** before general enable |
+| Lifecycle **`move_to_waitlist`** activation | Catalog seeded inactive **`20260602160000`**; cutover from **`add_to_waitlist_placeholder`** **needs verification** |
+| Person drawer layout runtime v1 | Migration **`20260531140000`**; Settings visibility read-only — full builder **deferred** |
+| WU strict-mode activation | Readiness tooling shipped; **`strict_mode` flip deferred** — child-lifecycle closeout |
+| Child lifecycle backfill | Migration **`20260601150000`** — prod QA **needs verification** per org |
 | Waitlist transitions beyond status + previews | Placeholder action |
 | Attendance / staffing | Later / thin signal |
 | OpenAPI / public SDK | Route handlers only |
