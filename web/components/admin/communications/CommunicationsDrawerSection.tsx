@@ -1,8 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
-import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
+import DrawerMessagingComposer from "@/components/adminV2/messaging/DrawerMessagingComposer";
+import MessagingThreadMessageBubble from "@/components/adminV2/messaging/MessagingThreadMessageBubble";
+import {
+    supportsDrawerCommunicationsComposer,
+    normalizeDrawerCommunicationsEntityType,
+} from "@/lib/adminV2/messaging/drawerCommunicationsEntity";
+import type { InboxThreadMessageRow } from "@/lib/adminV2/messaging/inboxThreadMessagesCache";
+import {
+    formatMessagingThreadContextLine,
+    formatMessagingThreadMetadataLine,
+} from "@/lib/adminV2/messaging/messagingThreadContextLines";
 import {
     takeCommunicationsDrawerPrefetch,
     markCommunicationsDrawerPrefetchConsumed,
@@ -63,12 +72,18 @@ const MAX_MERGE_THREADS = 10;
 const SUCCESS_TOAST_MS = 4500;
 /** Default visible rows in the conversation strip (rest behind “View older messages”). */
 const DEFAULT_VISIBLE_MESSAGE_COUNT = 3;
-/** Cap comms body so thread scrolls internally instead of growing the drawer scroll host. */
-const COMMS_DRAWER_BODY_HEIGHT_CLASS = "max-h-[min(72vh,calc(100dvh-15rem))] min-h-[22rem]";
-/** Thread scroll — narrow stacked layout (controls/composer above thread). */
-const CONVERSATION_SCROLL_HEIGHT_CLASS_STACKED =
-    "min-h-[10.5rem] flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-2 py-1";
-/** Thread scroll — wide split layout (thread-only left column). */
+/** Cap comms body so thread/composer share a fixed drawer region (no page scroll to compose). */
+const COMMS_DRAWER_BODY_HEIGHT_CLASS = "h-[min(72vh,calc(100dvh-15rem))] min-h-[22rem] max-h-[min(72vh,calc(100dvh-15rem))]";
+/** Side-by-side workspace at normal drawer width; stacks below breakpoint. */
+const COMMS_DRAWER_SPLIT_LAYOUT_CLASS =
+    "flex min-h-0 flex-1 flex-col overflow-hidden max-[539px]:max-h-none min-[540px]:flex-row";
+/** Left column — context, filters, scrollable history (~40%). */
+const COMMS_DRAWER_THREAD_COLUMN_CLASS =
+    "flex min-h-0 min-w-0 flex-col overflow-hidden bg-[#F7F9FA] max-[539px]:max-h-[min(38vh,14rem)] min-[540px]:w-[40%] min-[540px]:shrink-0 min-[540px]:border-r min-[540px]:border-alloy-stone/28 min-[540px]:shadow-[inset_-1px_0_0_rgba(0,162,131,0.1)]";
+/** Right column — always-visible composer (~60%). */
+const COMMS_DRAWER_COMPOSER_COLUMN_CLASS =
+    "flex min-h-0 min-w-0 flex-col overflow-hidden bg-white min-[540px]:w-[60%] min-[540px]:flex-1 min-[540px]:shadow-[-8px_0_16px_-12px_rgba(49,57,77,0.14)]";
+/** Thread scroll — split layout (left column; parent constrains height on narrow stack). */
 const CONVERSATION_SCROLL_CLASS_SPLIT =
     "min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-2 py-1";
 
@@ -92,6 +107,8 @@ export interface CommunicationsDrawerSectionProps {
      * @default true
      */
     active?: boolean;
+    /** Warm threads/messages/bindings while drawer Overview is visible (no UI). */
+    backgroundPreload?: boolean;
     /** Embedded in overview — compact summary, expand in place, messages only after expand + thread pick. */
     embedded?: boolean;
     /** When embedded inside a drawer section that already shows a "Communication(s)" heading, omit duplicate title. */
@@ -99,6 +116,14 @@ export interface CommunicationsDrawerSectionProps {
     className?: string;
     /** Opportunity-only: lightweight starter templates when there is no message history yet. */
     opportunityComposeContext?: OpportunityComposeContext | null;
+    /** Optional compact header metadata (status, location, children, related contacts). */
+    threadContextMetadata?: {
+        primaryLabel?: string | null;
+        status?: string | null;
+        location?: string | null;
+        children?: string | null;
+        relatedContacts?: string | null;
+    } | null;
 }
 
 const COMPOSER_LABEL = "mb-1 text-[8px] font-semibold tracking-[0.12em] text-alloy-midnight/45";
@@ -262,11 +287,13 @@ export default function CommunicationsDrawerSection({
     apiEntityType,
     entityId,
     active = true,
+    backgroundPreload = false,
     embedded = true,
     className = "",
     opportunityComposeContext: _opportunityComposeContext = null,
+    threadContextMetadata = null,
 }: CommunicationsDrawerSectionProps) {
-    const viewerTz = useAdminViewerTimezone();
+    const normalizedEntityType = normalizeDrawerCommunicationsEntityType(apiEntityType);
     const [threads, setThreads] = useState<ThreadRow[]>([]);
     const [thrErr, setThrErr] = useState<string | null>(null);
     const [loadingThreads, setLoadingThreads] = useState(false);
@@ -283,10 +310,9 @@ export default function CommunicationsDrawerSection({
     const conversationScrollRef = useRef<HTMLDivElement>(null);
     const markedReadSubmittedRef = useRef<Set<string>>(new Set());
 
-    const composerEntity =
-        apiEntityType === "opportunities" || apiEntityType === "jobs" || apiEntityType === "persons"
-            ? apiEntityType
-            : null;
+    const composerEntity = supportsDrawerCommunicationsComposer(normalizedEntityType)
+        ? normalizedEntityType
+        : null;
     const showDrawerComposerChrome = !!(embedded && composerEntity);
 
     const [channelsAvailable, setChannelsAvailable] = useState<string[]>([]);
@@ -361,18 +387,18 @@ export default function CommunicationsDrawerSection({
         setBindingsRefreshGen(0);
     }, [entityId, apiEntityType]);
 
-    /** When parent hides Communication (`active` false), drop thread detail state (no polling; next open is clean). */
+    /** When parent hides Communication (`active` false), drop thread detail unless background preload keeps warming. */
     useEffect(() => {
-        if (active) return;
+        if (active || backgroundPreload) return;
         setMsgs([]);
         setMsgErr(null);
         setShowOlderMessages(false);
         setExpandedBodies({});
         markedReadSubmittedRef.current.clear();
-    }, [active]);
+    }, [active, backgroundPreload]);
 
-    /** Fetches run only while `active`. */
-    const dataLayerActive = active;
+    /** Fetches run while tab is active or background preload is armed. */
+    const dataLayerActive = active || backgroundPreload;
 
     /** When recipients or effective composer changes — eligible selection only (person-first per channel). */
     useEffect(() => {
@@ -574,7 +600,7 @@ export default function CommunicationsDrawerSection({
 
     /** Mark inbound rows read for the current viewer after the thread is shown (per-user reads table). */
     useEffect(() => {
-        if (!dataLayerActive || loadingMsgs) return;
+        if (!active || !dataLayerActive || loadingMsgs) return;
         const inboundUnreadIds = msgs
             .filter((m) => (m.direction ?? "").toLowerCase() === "inbound" && m.viewer_has_read !== true)
             .map((m) => m.id)
@@ -951,8 +977,8 @@ export default function CommunicationsDrawerSection({
     const filterTabCls = (v: ViewFilter) =>
         `rounded-lg px-2 py-1 text-[11px] font-semibold transition ${
             viewFilter === v
-                ? "bg-alloy-midnight text-white shadow-sm"
-                : "border border-alloy-stone/22 bg-white text-alloy-forge hover:bg-alloy-stone/[0.06]"
+                ? "bg-[#00A283]/12 text-alloy-midnight ring-1 ring-[#00A283]/25"
+                : "border border-alloy-stone/18 bg-white text-alloy-forge hover:bg-[#E8F6F2]/50"
         }`;
 
     const emptyThreadsClass = embedded ? "text-[12px] text-alloy-midnight/60" : "text-sm text-alloy-midnight/60";
@@ -1056,175 +1082,47 @@ export default function CommunicationsDrawerSection({
         return null;
     })();
 
-    const composerRecipientsBlock: ReactNode =
-        anyOutboundReady && showDrawerComposerChrome && composerEntity ? (
-            loadingRecipients ? (
-                <div className="flex flex-wrap gap-1 py-0.5" aria-busy="true">
-                    <div className="skeleton-pulse h-7 w-24 rounded-full bg-alloy-stone/12" aria-hidden />
-                    <div className="skeleton-pulse h-7 w-28 rounded-full bg-alloy-stone/11" aria-hidden />
-                </div>
-            ) : recipientsErr ? (
-                <p className="text-[11px] text-alloy-ember">{recipientsErr}</p>
-            ) : recipientsForComposer.length === 0 ? (
-                <p className="text-[10px] text-alloy-midnight/58">
-                    {isPersonDrawerEntity
-                        ? effectiveComposer === "email"
-                            ? "No email on file for this person."
-                            : "No mobile on file for this person."
-                        : effectiveComposer === "email"
-                          ? "No linked people with email."
-                          : "No linked people with a mobile number for SMS."}
-                </p>
-            ) : (
-                <div className="flex max-h-[3.75rem] flex-wrap gap-0.5 overflow-y-auto pr-0.5">
-                    {recipientsForComposer.map((r) => {
-                        const on = selectedRecipientIds.has(r.person_id);
-                        const addr =
-                            effectiveComposer === "email" ? r.email ?? "" : formatDisplayPhoneUs(r.phone ?? "");
-                        return (
-                            <button
-                                key={r.person_id}
-                                type="button"
-                                aria-pressed={on}
-                                disabled={sendBusy}
-                                onClick={() => toggleRecipient(r.person_id)}
-                                title={r.relationship_hint ?? undefined}
-                                className={`max-w-full rounded-full border px-1.5 py-0.5 text-left text-[10px] leading-tight transition ${
-                                    on
-                                        ? "border-alloy-midnight bg-alloy-midnight/[0.08] font-semibold text-alloy-midnight ring-1 ring-alloy-midnight/18"
-                                        : "border-alloy-stone/20 bg-white font-medium text-alloy-forge hover:border-alloy-stone/35"
-                                }`}
-                            >
-                                <span className="block truncate">{r.display_name}</span>
-                                <span className="block truncate text-[9px] font-normal text-alloy-midnight/55">{addr}</span>
-                            </button>
-                        );
-                    })}
-                </div>
-            )
+    const drawerContextLine = formatMessagingThreadContextLine({
+        location: threadContextMetadata?.location,
+        status: threadContextMetadata?.status,
+        channel: effectiveComposer,
+    });
+    const drawerMetadataLine = formatMessagingThreadMetadataLine({
+        children: threadContextMetadata?.children,
+        relatedContacts: threadContextMetadata?.relatedContacts,
+    });
+
+    const drawerComposerNode =
+        showDrawerComposerChrome && composerEntity && normalizedEntityType ? (
+            <DrawerMessagingComposer
+                apiEntityType={normalizedEntityType}
+                entityId={entityId}
+                columnLayout
+                channel={effectiveComposer}
+                onChannelChange={(ch) => {
+                    if (viewFilter === "all") setAllComposerMode(ch);
+                    else onViewFilter(ch);
+                }}
+                emailReady={emailOutboundReady}
+                smsReady={smsOutboundReady}
+                bindingsErr={bindingsErr}
+                loadingBindings={loadingBindings}
+                recipients={recipients}
+                selectedRecipientIds={selectedRecipientIds}
+                onToggleRecipient={toggleRecipient}
+                subject={composerSubject}
+                onSubjectChange={setComposerSubject}
+                body={composerBody}
+                onBodyChange={setComposerBody}
+                sendBusy={sendBusy}
+                sendDisabled={sendBusy || sendDisabledReason !== null}
+                sendDisabledReason={sendDisabledReason}
+                sendLabel="Send now"
+                onSend={() => void sendFromComposer()}
+                sendErr={sendErr}
+                sendOkNote={sendOkNote}
+            />
         ) : null;
-
-    const composerSendBlock: ReactNode =
-        anyOutboundReady && showDrawerComposerChrome && composerEntity ? (
-            <div className="space-y-2">
-                {effectiveComposer === "email" ? (
-                    <label className="block space-y-0.5">
-                        <input
-                            type="text"
-                            value={composerSubject}
-                            onChange={(e) => setComposerSubject(e.target.value)}
-                            disabled={sendBusy || !emailOutboundReady}
-                            placeholder="Subject"
-                            className="w-full rounded-md border border-alloy-stone/20 bg-white px-3 py-2 text-[12px] text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
-                            autoComplete="off"
-                        />
-                    </label>
-                ) : null}
-                <label className="block space-y-0.5">
-                    <textarea
-                        value={composerBody}
-                        onChange={(e) => setComposerBody(e.target.value)}
-                        disabled={sendBusy || !composerReady}
-                        rows={embedded ? 2 : 2}
-                        placeholder="Write your message…"
-                        className="w-full resize-none rounded-md border border-alloy-stone/20 bg-white px-3 py-2 text-[14px] leading-snug text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60 min-h-[160px] lg:min-h-[220px]"
-                        aria-label="Message body"
-                    />
-                </label>
-                <div className="flex flex-wrap items-center gap-2">
-                    <button
-                        type="button"
-                        onClick={() => void sendFromComposer()}
-                        disabled={sendBusy || sendDisabledReason !== null}
-                        title={sendDisabledReason ?? undefined}
-                        className="rounded-md border border-alloy-midnight/20 bg-alloy-midnight px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-alloy-midnight/90 disabled:cursor-not-allowed disabled:opacity-45"
-                    >
-                        {sendBusy ? "Sending…" : effectiveComposer === "email" ? "Send email" : "Send SMS"}
-                    </button>
-                </div>
-                {!sendBusy && sendDisabledReason ? (
-                    <p className="text-[10px] leading-snug text-alloy-midnight/55">{sendDisabledReason}</p>
-                ) : null}
-                {sendErr ? <p className="text-[11px] text-alloy-ember">{sendErr}</p> : null}
-                {sendOkNote ? <p className="text-[11px] text-green-800/85">{sendOkNote}</p> : null}
-            </div>
-        ) : null;
-
-    const composerBindingsShell: ReactNode =
-        showDrawerComposerChrome && composerEntity ? (
-            loadingBindings ? (
-                <div className="space-y-1 py-1" aria-busy="true">
-                    <div className="skeleton-pulse h-3 w-[min(92%,240px)] rounded bg-alloy-stone/14" aria-hidden />
-                    <div className="skeleton-pulse h-8 w-full rounded-md bg-alloy-stone/12" aria-hidden />
-                </div>
-            ) : bindingsErr ? (
-                <p className="text-[11px] text-alloy-ember">{bindingsErr}</p>
-            ) : (
-                <div className="mt-1 space-y-1.5">
-                    {viewFilter === "all" ? (
-                        <div className="flex flex-wrap items-center gap-1">
-                            <span className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
-                                Send as
-                            </span>
-                            <button
-                                type="button"
-                                onClick={() => setAllComposerMode("email")}
-                                className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
-                                    allComposerMode === "email"
-                                        ? "bg-alloy-midnight text-white"
-                                        : "border border-alloy-stone/22 bg-white text-alloy-forge"
-                                }`}
-                            >
-                                Email
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setAllComposerMode("sms")}
-                                className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
-                                    allComposerMode === "sms"
-                                        ? "bg-alloy-midnight text-white"
-                                        : "border border-alloy-stone/22 bg-white text-alloy-forge"
-                                }`}
-                            >
-                                SMS
-                            </button>
-                        </div>
-                    ) : null}
-
-                    {effectiveComposer === "email" && !emailOutboundReady ? (
-                        <p className="text-[10px] leading-snug text-alloy-midnight/60">
-                            Add an active Resend email binding for this org.
-                        </p>
-                    ) : null}
-
-                    {effectiveComposer === "sms" && !smsOutboundReady ? (
-                        <p
-                            className="text-[10px] leading-snug text-alloy-midnight/60"
-                            title="SMS outbound requires a binding row with Twilio credentials"
-                        >
-                            SMS unavailable: set{" "}
-                            <code className="rounded bg-alloy-stone/10 px-0.5 text-[9px]">communication_provider_bindings</code>{" "}
-                            <code className="rounded bg-alloy-stone/10 px-0.5 text-[9px]">secret_ref</code> (not empty / not{" "}
-                            <code className="rounded bg-alloy-stone/10 px-0.5 text-[9px]">unconfigured</code>) on an active{" "}
-                            <code className="rounded bg-alloy-stone/10 px-0.5 text-[9px]">channel=sms</code> row for this org. Global Twilio env
-                            alone does not enable the composer — the send route uses binding rows only.
-                        </p>
-                    ) : null}
-                </div>
-            )
-        ) : null;
-
-    const composerBlockInner: ReactNode =
-        showDrawerComposerChrome && composerEntity ? (
-            <div className="w-full min-w-0">
-                <div className={COMPOSER_LABEL}>Compose</div>
-                {composerBindingsShell}
-                <div className="mt-1.5 space-y-1">{composerRecipientsBlock}</div>
-                {composerSendBlock}
-            </div>
-        ) : null;
-
-    const useWideComposerSplit = Boolean(showDrawerComposerChrome && composerEntity);
 
     const inboundUnreadCountForFilter = (f: ViewFilter) =>
         msgs.filter((m) => {
@@ -1312,97 +1210,19 @@ export default function CommunicationsDrawerSection({
             ) : null}
             {displayedMsgs.map((m) => {
                 const inbound = (m.direction ?? "").toLowerCase() === "inbound";
-                const pres = deliveryStatePresentation(mapToDeliveryState(m));
-                const fail = pres.highlightFailure;
-                const msgWhen = communicationMessageInstant(m);
-                const { headline, sub } = bubbleStatusLine(m);
-                const cp = counterpartyLabel(m, inbound, addressDisplayNameLookup);
+                const bubbleMessage: InboxThreadMessageRow = {
+                    id: m.id,
+                    direction: m.direction ?? "",
+                    channel: m.channel ?? "",
+                    body: m.body ?? null,
+                    created_at: communicationMessageInstant(m) ?? null,
+                };
                 return (
                     <li
                         key={`${m.id}-${m._thread_id ?? ""}`}
                         className={`flex w-full ${inbound ? "justify-start" : "justify-end"}`}
                     >
-                        <div
-                            className={`max-w-[min(100%,19.5rem)] rounded-2xl px-2 py-1 text-[13px] leading-snug shadow-sm ${
-                                inbound
-                                    ? "rounded-tl-sm border border-alloy-stone/16 bg-white text-alloy-forge"
-                                    : `rounded-tr-sm text-white ${
-                                          fail
-                                              ? "border border-alloy-ember/40 bg-alloy-ember/[0.92]"
-                                              : "bg-alloy-midnight/[0.92]"
-                                      }`
-                            }`}
-                        >
-                            <div
-                                className={`mb-0.5 flex flex-wrap items-baseline gap-x-1 text-[10px] font-semibold uppercase tracking-wide ${
-                                    inbound ? "text-alloy-midnight/38" : "text-white/55"
-                                }`}
-                            >
-                                <span className="opacity-90">{channelFacetLabel(m.channel)}</span>
-                                <span className="opacity-40">·</span>
-                                <span
-                                    className={
-                                        inbound
-                                            ? fail
-                                                ? "text-alloy-ember"
-                                                : "normal-case text-alloy-forge/88"
-                                            : "normal-case"
-                                    }
-                                >
-                                    {headline}
-                                </span>
-                                {inbound && m.viewer_has_read !== true ? (
-                                    <span
-                                        className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[#2563eb] opacity-90"
-                                        title="Unread"
-                                        aria-label="Unread"
-                                    />
-                                ) : null}
-                                {msgWhen ? (
-                                    <span
-                                        className={`ml-auto tabular-nums normal-case font-normal opacity-75 ${
-                                            inbound ? "text-alloy-midnight/45" : "text-white/65"
-                                        }`}
-                                    >
-                                        {formatDateTimeForUserDisplay(msgWhen, viewerTz)}
-                                    </span>
-                                ) : null}
-                            </div>
-                            {sub ? (
-                                <p
-                                    className={`mb-0.5 text-[9px] font-normal normal-case leading-snug ${
-                                        inbound ? "text-alloy-midnight/42" : "text-white/48"
-                                    }`}
-                                >
-                                    {sub}
-                                </p>
-                            ) : null}
-                            <p
-                                className={`mb-1 text-[10px] font-medium leading-snug ${
-                                    inbound ? "text-alloy-forge/72" : "text-white/72"
-                                }`}
-                            >
-                                {cp.title}
-                                {cp.subtitle ? (
-                                    <span
-                                        className={`mt-0.5 block font-normal ${
-                                            inbound ? "text-alloy-midnight/45" : "text-white/50"
-                                        }`}
-                                    >
-                                        {cp.subtitle}
-                                    </span>
-                                ) : null}
-                            </p>
-                            {m.body ? (
-                                <TruncatedMessageBody
-                                    messageId={m.id}
-                                    body={m.body}
-                                    expanded={Boolean(expandedBodies[m.id])}
-                                    onToggle={toggleBodyExpand}
-                                    inbound={inbound}
-                                />
-                            ) : null}
-                        </div>
+                        <MessagingThreadMessageBubble message={bubbleMessage} compact />
                     </li>
                 );
             })}
@@ -1428,82 +1248,68 @@ export default function CommunicationsDrawerSection({
         </p>
     ) : null;
 
-    const composerSplitWorkspaceRight: ReactNode =
-        showDrawerComposerChrome && composerEntity ? (
+    const compactHeader: ReactNode =
+        drawerContextLine || drawerMetadataLine ? (
             <div
-                className="order-1 flex min-h-0 min-w-0 flex-col gap-1.5 overflow-hidden lg:order-2 lg:h-full"
-                data-comms-compose-workspace="true"
+                className="shrink-0 border-b border-alloy-stone/18 bg-[#E8F6F2]/35 px-2 py-1.5"
+                data-adminv2-drawer-comms-header="true"
             >
-                <div className="shrink-0 space-y-1.5" data-comms-compose-controls="true">
-                    {channelFilterTabs}
-                    <div className="w-full min-w-0">
-                        <div className={COMPOSER_LABEL}>Recipients</div>
-                        {composerBindingsShell}
-                        <div className="mt-1.5 space-y-1">{composerRecipientsBlock}</div>
-                    </div>
-                </div>
-                <div className="min-h-0 w-full min-w-0 shrink-0 rounded-xl border border-alloy-stone/12 bg-white/[0.97] px-2 py-1.5 shadow-sm lg:shrink-0">
-                    <div className={COMPOSER_LABEL}>Message</div>
-                    {anyOutboundReady ? (
-                        composerSendBlock
-                    ) : (
-                        <p className="text-[10px] leading-snug text-alloy-midnight/55">
-                            Configure an active outbound binding for this channel to compose here.
-                        </p>
-                    )}
-                </div>
+                {drawerContextLine ? (
+                    <p className="text-[11px] leading-snug text-alloy-midnight/62">{drawerContextLine}</p>
+                ) : null}
+                {drawerMetadataLine ? (
+                    <p className={`text-[10px] leading-snug text-alloy-midnight/50 ${drawerContextLine ? "mt-0.5" : ""}`}>
+                        {drawerMetadataLine}
+                    </p>
+                ) : null}
             </div>
         ) : null;
 
-    const threadPaneOnly: ReactNode = (
-        <div
-            className="order-2 flex min-h-[12rem] min-w-0 max-h-[min(44vh,28rem)] flex-1 flex-col overflow-hidden lg:order-1 lg:max-h-none lg:min-h-0"
-            data-comms-thread-pane="true"
-        >
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-stone/15 bg-[linear-gradient(180deg,rgba(246,247,249,0.88)_0%,#ffffff_100%)] shadow-sm">
-                <div
-                    ref={conversationScrollRef}
-                    className={`comms-drawer-conversation min-h-0 ${CONVERSATION_SCROLL_CLASS_SPLIT}`}
-                >
-                    {conversationPaneBody}
-                </div>
-            </div>
-        </div>
-    );
-
     return (
-        <div className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${className}`}>
-            <section className="flex min-h-0 flex-1 flex-col gap-1 overflow-hidden">
+        <div className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${className}`} data-adminv2-drawer-comms="true">
+            <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 {headerTitle}
                 {description}
 
                 {loadingThreads ? (
                     <CommsQuietSkeletonLines dense={Boolean(embedded)} />
-                ) : useWideComposerSplit ? (
-                    <div
-                        className={`flex min-h-0 flex-1 flex-col gap-1.5 overflow-hidden ${COMMS_DRAWER_BODY_HEIGHT_CLASS} lg:grid lg:grid-cols-[minmax(22rem,0.4fr)_minmax(32rem,0.6fr)] lg:items-stretch lg:gap-2 lg:overflow-hidden`}
-                        data-comms-split-layout="thread-left-composer-right"
-                    >
-                        {threadPaneOnly}
-                        {composerSplitWorkspaceRight}
-                    </div>
                 ) : (
                     <div
-                        className={`flex min-h-0 flex-1 flex-col gap-1.5 overflow-hidden ${COMMS_DRAWER_BODY_HEIGHT_CLASS}`}
+                        className={`${COMMS_DRAWER_BODY_HEIGHT_CLASS} ${COMMS_DRAWER_SPLIT_LAYOUT_CLASS}`}
+                        data-comms-drawer-layout="split-workspace"
                     >
-                        {composerSplitWorkspaceRight}
                         <div
-                            className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden min-h-[12rem]"
-                            data-comms-thread-pane="true"
+                            className={COMMS_DRAWER_THREAD_COLUMN_CLASS}
+                            data-comms-drawer-thread-column="true"
                         >
-                            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-stone/15 bg-[linear-gradient(180deg,rgba(246,247,249,0.88)_0%,#ffffff_100%)] shadow-sm">
-                                <div
-                                    ref={conversationScrollRef}
-                                    className={`comms-drawer-conversation min-h-0 ${CONVERSATION_SCROLL_HEIGHT_CLASS_STACKED}`}
-                                >
-                                    {conversationPaneBody}
+                            {compactHeader}
+                            <div className="shrink-0 border-b border-alloy-stone/10 px-2 py-1.5">
+                                {channelFilterTabs}
+                            </div>
+                            <div
+                                className="flex min-h-0 flex-1 flex-col overflow-hidden"
+                                data-comms-thread-pane="true"
+                            >
+                                <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#00A283]/12 bg-[#FAFBFC] shadow-sm max-[539px]:rounded-b-none max-[539px]:border-b-0">
+                                    <div
+                                        ref={conversationScrollRef}
+                                        className={`comms-drawer-conversation ${CONVERSATION_SCROLL_CLASS_SPLIT}`}
+                                        data-comms-thread-scroll="true"
+                                    >
+                                        {conversationPaneBody}
+                                    </div>
                                 </div>
                             </div>
+                        </div>
+                        <div
+                            className={COMMS_DRAWER_COMPOSER_COLUMN_CLASS}
+                            data-comms-drawer-composer-column="true"
+                        >
+                            {drawerComposerNode ?? (
+                                <div className="flex flex-1 items-center justify-center px-3 py-6 text-center text-[12px] text-alloy-midnight/55">
+                                    Composer unavailable for this record type.
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}

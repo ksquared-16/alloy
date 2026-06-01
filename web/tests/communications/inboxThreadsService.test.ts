@@ -9,6 +9,18 @@ import {
     threadSortTimestamp,
 } from "@/lib/communications/inboxThreadsService";
 import { resolveInboxEntityDrawerTarget } from "@/lib/communications/inboxEntityDrawerTarget";
+import {
+    buildInboxContextLine,
+    resolveInboxPrimaryName,
+    resolveInboxReplyTarget,
+    inboxIdentityWithChannelFallback,
+} from "@/lib/communications/inboxThreadIdentity";
+import { inboxLabelIsGenericBoilerplate, sanitizeInboxEntityLabel } from "@/lib/communications/inboxThreadDisplayLabels";
+import {
+    mergeFolderCacheEntry,
+    resolveSelectedThreadIdAfterFolderLoad,
+    shouldShowFolderInitialLoading,
+} from "@/lib/communications/inboxFolderCache";
 import type { InboxThreadListItem } from "@/lib/communications/inboxThreadTypes";
 
 function thread(partial: Partial<InboxThreadListItem> & Pick<InboxThreadListItem, "id">): InboxThreadListItem {
@@ -27,6 +39,17 @@ function thread(partial: Partial<InboxThreadListItem> & Pick<InboxThreadListItem
         sort_at: partial.sort_at ?? null,
         contact_display: partial.contact_display ?? null,
         family_display: partial.family_display ?? null,
+        location_display: partial.location_display ?? null,
+        status_display: partial.status_display ?? null,
+        related_children_display: partial.related_children_display ?? null,
+        related_contacts_display: partial.related_contacts_display ?? null,
+        context_display: partial.context_display ?? null,
+        channel_contact_display: partial.channel_contact_display ?? null,
+        preview_lead: partial.preview_lead ?? null,
+        reply_person_id: partial.reply_person_id ?? null,
+        reply_email_available: partial.reply_email_available ?? true,
+        reply_sms_available: partial.reply_sms_available ?? false,
+        can_reply: partial.can_reply ?? false,
         entity_chip: partial.entity_chip ?? null,
         last_message_preview: partial.last_message_preview ?? null,
         has_unread: partial.has_unread ?? false,
@@ -155,5 +178,111 @@ describe("resolveInboxEntityDrawerTarget", () => {
         expect(resolveInboxEntityDrawerTarget("opportunities", "not-a-uuid")).toBeNull();
         expect(resolveInboxEntityDrawerTarget("forms", oppId)).toBeNull();
         expect(resolveInboxEntityDrawerTarget(null, oppId)).toBeNull();
+    });
+});
+
+describe("inbox thread identity", () => {
+    const personId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+    const oppId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+
+    it("prefers person name over household for opportunity threads", () => {
+        const personId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+        const oppId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+        const personNames = new Map<string, string>([[personId, "Priya Rivera"]]);
+        const primaryPersonByOpportunity = new Map<string, string>([[oppId, personId]]);
+        const name = resolveInboxPrimaryName(
+            inboxIdentityWithChannelFallback({
+                primaryEntityType: "opportunities",
+                primaryEntityId: oppId,
+                channel: "email",
+                recipientKey: "priya@example.com",
+                entityLabel: "Family inquiry",
+                familyDisplay: "Rivera Household",
+                locationDisplay: "North Campus",
+                statusDisplay: "Tour Scheduled",
+                personNames,
+                primaryPersonByOpportunity,
+                primaryPersonByJob: new Map(),
+                channelContact: "priya@example.com",
+                messageContactPersonId: personId,
+            })
+        );
+        expect(name).toBe("Priya Rivera");
+        expect(name.toLowerCase()).not.toContain("household");
+    });
+
+    it("builds context line with location and status", () => {
+        expect(
+            buildInboxContextLine({
+                locationDisplay: "North Campus",
+                statusDisplay: "Tour Scheduled",
+            })
+        ).toBe("North Campus · Tour Scheduled");
+    });
+
+    it("strips Family inquiry boilerplate from entity labels", () => {
+        expect(inboxLabelIsGenericBoilerplate("Family inquiry")).toBe(true);
+        expect(sanitizeInboxEntityLabel("Family inquiry — Mitchell / South Campus")).toBe("South Campus");
+        expect(sanitizeInboxEntityLabel("Family inquiry")).toBeNull();
+    });
+
+    it("resolves reply target for person thread", () => {
+        const target = resolveInboxReplyTarget(
+            thread({
+                id: "t1",
+                primary_entity_type: "persons",
+                primary_entity_id: personId,
+                channel: "email",
+                recipient_key: "priya@example.com",
+                reply_person_id: personId,
+                channel_contact_display: "priya@example.com",
+                reply_email_available: true,
+                reply_sms_available: true,
+            })
+        );
+        expect(target.canReply).toBe(true);
+        expect(target.entityType).toBe("persons");
+        expect(target.recipientPersonId).toBe(personId);
+        expect(target.channel).toBe("email");
+    });
+
+    it("resolves sms reply separately when toggled", () => {
+        const target = resolveInboxReplyTarget(
+            thread({
+                id: "t1",
+                primary_entity_type: "persons",
+                primary_entity_id: personId,
+                channel: "email",
+                recipient_key: "priya@example.com",
+                reply_person_id: personId,
+                channel_contact_display: "priya@example.com",
+                reply_email_available: true,
+                reply_sms_available: true,
+            }),
+            "sms"
+        );
+        expect(target.channel).toBe("sms");
+    });
+});
+
+describe("inbox folder cache", () => {
+    it("uses cached folder without initial loading state", () => {
+        const cache = mergeFolderCacheEntry({}, "inbox", {
+            threads: [thread({ id: "a" })],
+            scheduledSends: [],
+            fetchedAt: Date.now(),
+            error: null,
+        });
+        expect(shouldShowFolderInitialLoading(cache, "inbox")).toBe(false);
+    });
+
+    it("preserves selected thread on folder switch when still present", () => {
+        const next = resolveSelectedThreadIdAfterFolderLoad({
+            folder: "unread",
+            threads: [thread({ id: "a" }), thread({ id: "b" })],
+            previousSelectedId: "b",
+            autoSelectFirst: false,
+        });
+        expect(next).toBe("b");
     });
 });

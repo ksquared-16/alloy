@@ -62,6 +62,47 @@ describe("Inbox foundation UI contracts", () => {
         const panel = read("app/adminV2/messages/InboxPanel.tsx");
         expect(panel).toContain("compact=1");
         expect(panel).toContain("MODAL_THREAD_LIMIT");
+        expect(panel).toContain("inboxFoldersToPrefetch");
+        expect(panel).toContain("folderCache");
+    });
+
+    it("prefetches folders and keeps side-by-side detail panel with thread history", () => {
+        const panel = read("app/adminV2/messages/InboxPanel.tsx");
+        expect(panel).toContain("mergeFolderCacheEntry");
+        expect(panel).toContain("InboxThreadReplyBox");
+        expect(panel).toContain("InboxThreadMessageHistory");
+        expect(panel).toContain("context_display");
+        expect(panel).toContain("preview_lead");
+        expect(read("lib/communications/inboxFolderCache.ts")).toContain("inboxFoldersToPrefetch");
+    });
+
+    it("reply box uses shared composer frame and send API", () => {
+        const reply = read("components/adminV2/messaging/InboxThreadReplyBox.tsx");
+        expect(reply).toContain("MessagingComposerFrame");
+        expect(reply).toContain("/api/admin/communications/send");
+        expect(reply).toContain("data-adminv2-inbox-reply");
+        expect(read("components/adminV2/messaging/ComposerChannelToggle.tsx")).toContain("(unavailable)");
+        expect(read("components/adminV2/messaging/ComposerReplyActionCluster.tsx")).toContain("Send now");
+        expect(read("components/adminV2/messaging/ComposerReplyActionCluster.tsx")).toContain("Send later");
+        expect(read("components/adminV2/messaging/ComposerReplyActionCluster.tsx")).toContain("BOS Assist");
+    });
+
+    it("inbox panel avoids Family inquiry boilerplate and dark message bubbles", () => {
+        const panel = read("app/adminV2/messages/InboxPanel.tsx");
+        expect(panel).not.toContain("entity_chip.label");
+        expect(panel).not.toContain("Family inquiry");
+        expect(panel).not.toContain("bg-alloy-midnight/[0.9]");
+        expect(read("lib/adminV2/messaging/messagingMessageBubbleClasses.ts")).toContain("#E8F6F2");
+        expect(panel).toContain("Compose New");
+        expect(panel).toContain("w-[min(18rem,52%)]");
+        expect(panel).toContain("related_children_display");
+        expect(panel).toContain("formatMessagingThreadMetadataLine");
+    });
+
+    it("AdminV2 shell schedules inbox warm load", () => {
+        const shell = read("app/adminV2/components/AdminV2Shell.tsx");
+        expect(shell).toContain("scheduleInboxWarmLoad");
+        expect(read("lib/adminV2/inboxWarmLoadCache.ts")).toContain("warmInboxFolderCache");
     });
 
     it("full /adminV2/messages route still loads InboxClient", () => {

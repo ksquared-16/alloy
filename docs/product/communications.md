@@ -4,6 +4,45 @@
 
 Outbound and inbound messaging threads tied to **entities** (person-first anchors in CRM) and **workflows**, with canonical enqueue in Next and delivery in the Python worker — without duplicating send logic in UI.
 
+## Messaging V2 — Admin Inbox (June 2026)
+
+**Surfaces**
+
+- **Header Inbox (primary):** Top nav **Inbox** opens a contextual modal (`InboxModal` → `InboxPanel` with `layout="modal"`). Side-by-side folder list + conversation detail; **Compose New** in modal header. Does **not** navigate away from the current workspace.
+- **Full route (secondary):** `/adminV2/messages` still loads `InboxClient` → `InboxPanel` with `layout="page"` for a dedicated inbox page (same panel behavior, page chrome).
+
+**Folders**
+
+Org-wide thread list via **`GET /api/admin/inbox/threads`** (`web/lib/communications/inboxThreadsService.ts`): **Inbox**, **Unread**, **Sent**, **Scheduled**, **Archived**. Modal uses `compact=1` and folder prefetch/warm-load (`inboxWarmLoadCache.ts`, `AdminV2Shell`).
+
+**Conversation detail**
+
+- Person/contact-first header with compact location, status, children, related contacts, household (when distinct).
+- **Full thread history** in the detail panel via **`GET /api/admin/communications/threads/[threadId]/messages`** (up to 100 messages, chronological). Per-thread cache while the panel is open; skeleton only in the message column.
+- Light **Bend Pine** inbound/outbound bubbles (`messagingMessageBubbleClasses.ts`); reply composer pinned at bottom.
+
+**Reply composer (inline)**
+
+- Shared **`MessagingComposerFrame`**: Email/SMS toggle (SMS disabled when org bindings or contact phone missing), optional email subject, body, formatting toolbar (placeholders), **Send now** / **Send later** / **BOS Enhance**.
+- **Send now:** `POST /api/admin/communications/send` (same canonical path as drawer).
+- **Send later:** Opens schedule modal. When the thread anchors on an **opportunity** with a **recipient person**, creates a row via **`POST /api/admin/communication-scheduled-sends`** (`source: task_assist`, `process-due` enqueue). Person-only or non-opportunity threads show an explicit technical gap (API currently requires `entity_type=opportunities`).
+- **BOS Assist:** Opens review modal with draft + intent choices (clearer, warmer, shorter, more professional). Returns a guarded **coming next** state — not yet wired to LLM rewrite (`generateOperationalDraft` / dedicated enhance API).
+
+**Compose New**
+
+- **`QuickMessageModal`** (title **Compose New**): recipient search or record-scoped contacts, thread preview, same composer frame and action entry points as inline reply.
+- Send later from Compose New requires **record-scoped launch with an opportunity id** and a **single recipient**; otherwise the schedule modal documents the gap.
+
+**Known gaps (Messaging V2)**
+
+- Rich text toolbar (Bold/Italic/Link/Image) — UI placeholders only.
+- BOS Enhance — entry point only; no draft replacement yet.
+- Send later — opportunity + person constraint on existing scheduled-send API; no multi-recipient schedule from Compose New.
+- Attachments, templates, notification center, provider OAuth — not in scope.
+- Legacy **`/admin/messaging`** and **`messages`** tables — not retired (see below).
+
+---
+
 ## Current state (Communications V1)
 
 **Data model**
@@ -61,9 +100,10 @@ Outbound and inbound messaging threads tied to **entities** (person-first anchor
 
 ## Not in V1 (explicit)
 
-- **No global inbox** — threads are **entity-scoped** in drawer/modal; there is no org-wide unified inbox product.
-- **No notification system** — header bell/dot for messages is **not** shipped; unread APIs may exist for a future bell (`web/app/adminV2/components/TopNavBar.tsx`).
+- **Notification system** — header bell for arbitrary notifications is **not** shipped; inbox unread badge uses **`/api/admin/communications/unread-count`** for the Inbox nav link only.
 - **No self-service communications completion** — guided DNS, BYO number purchase, or routing rules for tenants **beyond** admin-managed bindings are **not** implemented.
+
+**Superseded (June 2026):** The bullet “No global inbox” is replaced by **Messaging V2 — Admin Inbox** above. Entity-scoped drawer threads remain authoritative for deep record context.
 
 ## How it works
 
@@ -91,6 +131,7 @@ Outbound and inbound messaging threads tied to **entities** (person-first anchor
 | Dual-write flag | `web/lib/communications/communicationsEnabled.ts`, `web/lib/communications/mirrorQueuedMessage.ts` |
 | Workflow send / legacy queue | `web/lib/workflowRun.ts` (search `send_message`, `messages_outbox`) |
 | Drawer + modal | `web/components/admin/AdminEntityDrawer.tsx`, `web/components/admin/communications/CommunicationsDrawerSection.tsx`, `web/app/adminV2/components/QuickMessageModal.tsx` |
+| **Admin Inbox V2** | `web/app/adminV2/messages/InboxPanel.tsx`, `web/app/adminV2/components/InboxModal.tsx`, `web/lib/communications/inboxThreadsService.ts`, `web/components/adminV2/messaging/MessagingComposerFrame.tsx` |
 | Bindings admin UI | `web/app/adminV2/settings/communications/CommunicationsSetupClient.tsx` |
 
 ## Guardrails
@@ -115,4 +156,4 @@ Outbound and inbound messaging threads tied to **entities** (person-first anchor
 
 ## When this doc must be updated
 
-Channels, enqueue model, provider bindings, dual-write flags, worker contracts, webhook behavior change, **enrollment packet email semantics** (queued/sent/delivered distinctions, Resend expectations), **or Task Assist V1.1 scheduled-send / process-due contracts**.
+Channels, enqueue model, provider bindings, dual-write flags, worker contracts, webhook behavior change, **enrollment packet email semantics** (queued/sent/delivered distinctions, Resend expectations), **Task Assist V1.1 scheduled-send / process-due contracts**, or **Admin Inbox V2** behavior (folders, composer, thread history, Send later / BOS entry points).

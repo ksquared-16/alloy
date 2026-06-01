@@ -38,6 +38,9 @@ import {
     minDatetimeLocalValue,
 } from "@/components/admin/taskAssist/TaskAssistOpportunityWorkspace";
 import OperationalProposalCardFrame from "@/app/adminV2/components/bos/OperationalProposalCardFrame";
+import ComposerBosEnhanceModal from "@/components/adminV2/messaging/ComposerBosEnhanceModal";
+import ComposerChannelToggle from "@/components/adminV2/messaging/ComposerChannelToggle";
+import ComposerReplyActionCluster from "@/components/adminV2/messaging/ComposerReplyActionCluster";
 import { BosExecutionReceiptFrameReceipt } from "@/app/adminV2/components/bos/BosExecutionReceiptNotice";
 import { STALE_OPERATIONAL_PROPOSAL_MESSAGE } from "@/lib/adminV2/bos/activeOperationalContext";
 import type { BosExecutionReceiptPresentation } from "@/lib/adminV2/bos/bosExecutionReceipt";
@@ -112,6 +115,7 @@ export default function TaskAssistCompactDraftCard({
     const [error, setError] = useState<string | null>(null);
     const [executionReceipt, setExecutionReceipt] = useState<BosExecutionReceiptPresentation | null>(null);
     const [scheduleNeedsExplicitTime, setScheduleNeedsExplicitTime] = useState(false);
+    const [bosOpen, setBosOpen] = useState(false);
 
     const isScheduleIntent = bootstrap.intent_type === "schedule_message";
 
@@ -435,71 +439,26 @@ export default function TaskAssistCompactDraftCard({
     const entityScopeLabel = locationLabel?.trim() ? `Site · ${locationLabel.trim()}` : null;
 
     const actionFooter = (
-        <div className="flex flex-wrap gap-1.5">
-            {isScheduleIntent ?
-                <>
-                    <button
-                        type="button"
-                        data-task-assist-compact-schedule-submit="true"
-                        disabled={scheduleDisabled}
-                        onClick={() => void onSubmitSchedule()}
-                        className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-45"
-                    >
-                        {scheduleSubmitLoading ? "Scheduling…" : "Schedule send"}
-                    </button>
-                    <button
-                        type="button"
-                        data-task-assist-compact-send-now="true"
-                        disabled={sendDisabled}
-                        onClick={() => void onApply()}
-                        className="rounded-md border border-alloy-stone/30 px-3 py-1.5 text-[11px] font-semibold text-alloy-midnight/85 disabled:opacity-45"
-                    >
-                        {applyLoading ? "Sending…" : "Send now"}
-                    </button>
-                    {v11 ?
-                        <button
-                            type="button"
-                            data-task-assist-compact-save-draft="true"
-                            disabled={!proposalValid || saveDraftLoading}
-                            onClick={() => void onSaveDraft()}
-                            className="rounded-md border border-alloy-stone/30 px-3 py-1.5 text-[11px] font-semibold disabled:opacity-45"
-                        >
-                            {saveDraftLoading ? "Saving…" : "Save draft"}
-                        </button>
-                    :   null}
-                </>
-            :   <>
-                    <button
-                        type="button"
-                        data-task-assist-compact-send-now="true"
-                        disabled={sendDisabled}
-                        onClick={() => void onApply()}
-                        className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-45"
-                    >
-                        {applyLoading ? "Sending…" : "Send now"}
-                    </button>
-                    <button
-                        type="button"
-                        data-task-assist-compact-schedule="true"
-                        disabled={!proposalValid || !selectedPersonId || !finalBody.trim()}
-                        onClick={openSchedulePrompt}
-                        className="rounded-md border border-alloy-stone/30 px-3 py-1.5 text-[11px] font-semibold disabled:opacity-45"
-                    >
-                        Schedule for later
-                    </button>
-                    {v11 ?
-                        <button
-                            type="button"
-                            data-task-assist-compact-save-draft="true"
-                            disabled={!proposalValid || saveDraftLoading}
-                            onClick={() => void onSaveDraft()}
-                            className="rounded-md border border-alloy-stone/30 px-3 py-1.5 text-[11px] font-semibold disabled:opacity-45"
-                        >
-                            {saveDraftLoading ? "Saving…" : "Save draft"}
-                        </button>
-                    :   null}
-                </>
-            }
+        <div className="space-y-1.5">
+            <ComposerReplyActionCluster
+                compact
+                sendBusy={applyLoading || scheduleSubmitLoading}
+                sendDisabled={isScheduleIntent ? scheduleDisabled : sendDisabled}
+                onSend={() => void (isScheduleIntent ? onSubmitSchedule() : onApply())}
+                onSendLater={openSchedulePrompt}
+                onBosEnhance={() => setBosOpen(true)}
+            />
+            {v11 ? (
+                <button
+                    type="button"
+                    data-task-assist-compact-save-draft="true"
+                    disabled={!proposalValid || saveDraftLoading}
+                    onClick={() => void onSaveDraft()}
+                    className="rounded-md border border-alloy-stone/30 px-3 py-1.5 text-[11px] font-semibold disabled:opacity-45"
+                >
+                    {saveDraftLoading ? "Saving…" : "Save draft"}
+                </button>
+            ) : null}
         </div>
     );
 
@@ -650,24 +609,13 @@ export default function TaskAssistCompactDraftCard({
             ) : null}
 
             <div className="flex gap-3 text-[11px]">
-                <label className="inline-flex items-center gap-1 cursor-pointer">
-                    <input
-                        type="radio"
-                        checked={channel === "sms"}
-                        onChange={() => onSelectChannel("sms")}
-                        data-task-assist-channel="sms"
-                    />
-                    SMS
-                </label>
-                <label className="inline-flex items-center gap-1 cursor-pointer">
-                    <input
-                        type="radio"
-                        checked={channel === "email"}
-                        onChange={() => onSelectChannel("email")}
-                        data-task-assist-channel="email"
-                    />
-                    Email
-                </label>
+                <ComposerChannelToggle
+                    compact
+                    channel={channel}
+                    onChange={onSelectChannel}
+                    emailDisabled={!proposal?.recipient_candidates.some((c) => c.has_email)}
+                    smsDisabled={!proposal?.recipient_candidates.some((c) => c.has_sms)}
+                />
             </div>
 
             {channel === "email" ? (
@@ -751,6 +699,7 @@ export default function TaskAssistCompactDraftCard({
                 </div>
             ) : null}
             </OperationalProposalCardFrame>
+            <ComposerBosEnhanceModal open={bosOpen} onClose={() => setBosOpen(false)} draft={finalBody} />
         </div>
     );
 }

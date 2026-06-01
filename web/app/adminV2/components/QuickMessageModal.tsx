@@ -1,7 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { launchAdminV2OpenOpportunityFromContext } from "@/lib/adminV2/contextualRecordOpen";
+import ComposerBosEnhanceModal from "@/components/adminV2/messaging/ComposerBosEnhanceModal";
+import ComposerScheduleSendModal from "@/components/adminV2/messaging/ComposerScheduleSendModal";
+import MessagingComposerFrame from "@/components/adminV2/messaging/MessagingComposerFrame";
+import MessagingThreadMessageBubble from "@/components/adminV2/messaging/MessagingThreadMessageBubble";
+import { resolveComposeNewScheduleContext } from "@/lib/adminV2/messaging/messagingComposerScheduleContext";
 import {
     drawerRecipientToQuickMessageHit,
     fetchQuickMessageOpportunityRecipients,
@@ -105,6 +110,8 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
     const [sendBusy, setSendBusy] = useState(false);
     const [sendErr, setSendErr] = useState<string | null>(null);
     const [sendOk, setSendOk] = useState<string | null>(null);
+    const [scheduleOpen, setScheduleOpen] = useState(false);
+    const [bosOpen, setBosOpen] = useState(false);
 
     const [threadsPreview, setThreadsPreview] = useState<ThreadPreviewRow[]>([]);
     const [threadsLoading, setThreadsLoading] = useState(false);
@@ -116,6 +123,7 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
 
     const searchSeq = useRef(0);
     const scopedFetchSeq = useRef(0);
+    const recipientSearchRef = useRef<HTMLInputElement | null>(null);
 
     const [scopedRecipients, setScopedRecipients] = useState<PersonHit[]>([]);
     const [scopedRecipientsLoading, setScopedRecipientsLoading] = useState(false);
@@ -164,6 +172,8 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
             setBody("");
             setSendErr(null);
             setSendOk(null);
+            setScheduleOpen(false);
+            setBosOpen(false);
             setThreadsPreview([]);
             setThreadsErr(null);
             setThreadMsgsPreview([]);
@@ -455,6 +465,15 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
         return () => window.removeEventListener("keydown", onKey);
     }, [open, onClose]);
 
+    const scheduleContext = useMemo(
+        () =>
+            resolveComposeNewScheduleContext({
+                opportunityId: recordScoped ? opportunityId : null,
+                recipientPersonIds: selectedRecipients.map((p) => p.person_id),
+            }),
+        [recordScoped, opportunityId, selectedRecipients]
+    );
+
     if (!open) return null;
 
     const canSend =
@@ -485,12 +504,12 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
                 <div className="flex shrink-0 items-start justify-between gap-2 border-b border-alloy-stone/12 px-4 py-3 sm:px-5">
                     <div className="min-w-0">
                         <p id="quick-message-title" className="text-sm font-semibold text-alloy-midnight">
-                            Quick message
+                            Compose New
                         </p>
                         <p className="mt-0.5 text-[11px] leading-snug text-alloy-midnight/55">
                             {recordScoped
-                                ? "Message is scoped to this record. Choose a linked parent or contact below."
-                                : "Person-first · org-scoped · person-anchored threads. Search to add or remove recipients."}
+                                ? "Choose a linked contact for this record."
+                                : "Search for people to start a new conversation."}
                         </p>
                     </div>
                     <button
@@ -543,7 +562,12 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
                                 ) : null}
                                 {scopedRecipients.length > 0 ? (
                                     <div>
-                                        <div className={COMPOSER_LABEL}>Recipients</div>
+                                        <div className="mb-1 flex items-center justify-between gap-2">
+                                            <div className={COMPOSER_LABEL}>Recipients</div>
+                                            <span className="text-[10px] font-semibold text-[#007a62]/80" data-adminv2-composer-add-recipient="true">
+                                                Add recipient
+                                            </span>
+                                        </div>
                                         <ul
                                             className="mt-1 max-h-[min(40vh,14rem)] overflow-y-auto rounded-lg border border-alloy-stone/14 bg-alloy-stone/[0.03] lg:max-h-[min(52vh,22rem)]"
                                             role="listbox"
@@ -599,6 +623,7 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
                         <div>
                             <div className={COMPOSER_LABEL}>Search</div>
                             <input
+                                ref={recipientSearchRef}
                                 type="search"
                                 value={searchQ}
                                 onChange={(e) => setSearchQ(e.target.value)}
@@ -652,7 +677,19 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
                         )}
 
                         <div>
-                            <div className={COMPOSER_LABEL}>Selected</div>
+                            <div className="mb-1 flex items-center justify-between gap-2">
+                                <div className={COMPOSER_LABEL}>Selected</div>
+                                {!recordScoped ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => recipientSearchRef.current?.focus()}
+                                        className="text-[10px] font-semibold text-[#007a62] hover:underline"
+                                        data-adminv2-composer-add-recipient="true"
+                                    >
+                                        Add recipient
+                                    </button>
+                                ) : null}
+                            </div>
                             {selectedRecipients.length > 0 ? (
                                 <div className="flex flex-wrap gap-1">
                                     {selectedRecipients.map((p) => (
@@ -715,42 +752,9 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
                                     className="mt-2 flex max-h-[min(36vh,16rem)] flex-col gap-1.5 overflow-y-auto lg:max-h-[min(40vh,20rem)]"
                                     aria-label={`Last ${THREAD_MESSAGE_PREVIEW_LIMIT} messages in first thread`}
                                 >
-                                    {threadMsgsPreview.map((m) => {
-                                        const inbound = (m.direction ?? "").toLowerCase() === "inbound";
-                                        const when = m.created_at ? new Date(m.created_at).toLocaleString() : "";
-                                        const ch = (m.channel ?? "").toUpperCase();
-                                        return (
-                                            <div
-                                                key={m.id}
-                                                className={`flex w-full ${inbound ? "justify-start" : "justify-end"}`}
-                                            >
-                                                <div
-                                                    className={`max-w-[min(100%,28rem)] rounded-xl px-2 py-1.5 text-[11px] leading-snug shadow-sm ${
-                                                        inbound
-                                                            ? "border border-alloy-stone/14 bg-white text-alloy-forge"
-                                                            : "bg-alloy-midnight/[0.9] text-white"
-                                                    }`}
-                                                >
-                                                    <div
-                                                        className={`mb-0.5 flex flex-wrap items-center gap-x-1 text-[9px] font-semibold uppercase tracking-wide ${
-                                                            inbound ? "text-alloy-midnight/40" : "text-white/55"
-                                                        }`}
-                                                    >
-                                                        <span>{ch}</span>
-                                                        <span className="opacity-50">·</span>
-                                                        <span className="font-normal normal-case">{when}</span>
-                                                    </div>
-                                                    <p
-                                                        className={`line-clamp-6 whitespace-pre-wrap break-words ${
-                                                            inbound ? "text-alloy-forge" : "text-white/95"
-                                                        }`}
-                                                    >
-                                                        {m.body?.trim() ? m.body : "—"}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
+                                    {threadMsgsPreview.map((m) => (
+                                        <MessagingThreadMessageBubble key={m.id} message={m} compact />
+                                    ))}
                                 </div>
                             ) : threadMsgsErr ? (
                                 <div className="mt-2 space-y-1">
@@ -794,104 +798,72 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
                         </div>
 
                         <div className="shrink-0 space-y-3 border-t border-alloy-stone/12 pt-3 lg:border-t-0 lg:pt-0">
-                            <div>
-                                <div className={COMPOSER_LABEL}>Channel</div>
-                                {blockedForChannel.length > 0 ? (
-                                    <p className="mb-1 text-[11px] text-alloy-ember">
-                                        {channel === "email"
-                                            ? `Remove or fix recipients without email: ${blockedForChannel.map((p) => p.display_name).join(", ")}`
-                                            : `Remove or fix recipients without mobile: ${blockedForChannel.map((p) => p.display_name).join(", ")}`}
-                                    </p>
-                                ) : null}
-                                <div className="flex flex-wrap gap-1">
-                                    <button
-                                        type="button"
-                                        disabled={!emailReady}
-                                        onClick={() => setChannel("email")}
-                                        className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
-                                            channel === "email"
-                                                ? "bg-alloy-midnight text-white"
-                                                : "border border-alloy-stone/22 bg-white text-alloy-forge disabled:cursor-not-allowed disabled:opacity-45"
-                                        }`}
-                                    >
-                                        Email
-                                    </button>
-                                    <button
-                                        type="button"
-                                        disabled={!smsReady}
-                                        onClick={() => setChannel("sms")}
-                                        className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
-                                            channel === "sms"
-                                                ? "bg-alloy-midnight text-white"
-                                                : "border border-alloy-stone/22 bg-white text-alloy-forge disabled:cursor-not-allowed disabled:opacity-45"
-                                        }`}
-                                    >
-                                        SMS
-                                    </button>
-                                </div>
-                                {loadingBindings ? (
-                                    <p className="mt-1 text-[10px] text-alloy-midnight/48">Loading outbound configuration…</p>
-                                ) : bindingsErr ? (
-                                    <p className="mt-1 text-[10px] text-alloy-ember">{bindingsErr}</p>
-                                ) : !emailReady && !smsReady ? (
-                                    <p className="mt-1 text-[10px] text-alloy-midnight/55">
-                                        No outbound email or SMS bindings are active for this org.
-                                    </p>
-                                ) : null}
-                            </div>
-
-                            {channel === "email" ? (
-                                <label className="block space-y-0.5">
-                                    <span className="text-[11px] font-medium text-alloy-midnight/75">Subject</span>
-                                    <input
-                                        type="text"
-                                        value={subject}
-                                        onChange={(e) => setSubject(e.target.value)}
-                                        disabled={sendBusy}
-                                        placeholder="Optional"
-                                        className="w-full rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 text-[12px] text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
-                                        autoComplete="off"
-                                    />
-                                </label>
-                            ) : null}
-
-                            <label className="block space-y-0.5">
-                                <span className="text-[11px] font-medium text-alloy-midnight/75">
-                                    {channel === "email" ? "Email body" : "Message"}
-                                </span>
-                                <textarea
-                                    value={body}
-                                    onChange={(e) => setBody(e.target.value)}
-                                    disabled={sendBusy}
-                                    rows={4}
-                                    placeholder={channel === "sms" ? "SMS…" : "Email…"}
-                                    className="w-full resize-none rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 text-[12px] leading-snug text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
-                                    aria-label={channel === "email" ? "Email body" : "SMS message"}
-                                />
-                            </label>
-
-                            <div className="flex flex-wrap items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => void send()}
-                                    disabled={sendBusy || !canSend}
-                                    className="rounded-lg border border-alloy-midnight/20 bg-alloy-midnight px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-alloy-midnight/90 disabled:cursor-not-allowed disabled:opacity-45"
-                                >
-                                    {sendBusy ? "Sending…" : sendLabel}
-                                </button>
-                            </div>
-                            {sendErr ? <p className="text-[11px] text-alloy-ember">{sendErr}</p> : null}
-                            {sendOk ? (
-                                <p
-                                    className={`text-[11px] ${sendOk.startsWith("Partial:") ? "text-amber-900/90" : "text-green-800/85"}`}
-                                >
-                                    {sendOk}
-                                </p>
-                            ) : null}
+                            <MessagingComposerFrame
+                                channel={channel}
+                                onChannelChange={setChannel}
+                                emailDisabled={!emailReady}
+                                smsDisabled={!smsReady}
+                                emailDisabledTitle="Outbound email is not configured for this org"
+                                smsDisabledTitle={
+                                    !channelsAvailable.includes("sms")
+                                        ? "SMS outbound is not configured for this org yet"
+                                        : "SMS is unavailable for the selected recipients"
+                                }
+                                channelHint={
+                                    loadingBindings
+                                        ? "Loading outbound configuration…"
+                                        : bindingsErr
+                                          ? bindingsErr
+                                          : !emailReady && !smsReady
+                                            ? "No outbound email or SMS bindings are active for this org."
+                                            : blockedForChannel.length > 0
+                                              ? channel === "email"
+                                                  ? `Remove or fix recipients without email: ${blockedForChannel.map((p) => p.display_name).join(", ")}`
+                                                  : `Remove or fix recipients without mobile: ${blockedForChannel.map((p) => p.display_name).join(", ")}`
+                                              : null
+                                }
+                                subject={subject}
+                                onSubjectChange={setSubject}
+                                body={body}
+                                onBodyChange={setBody}
+                                bodyDisabled={sendBusy || selectedRecipients.length === 0}
+                                bodyPlaceholder={
+                                    selectedRecipients.length === 0
+                                        ? "Add a recipient to compose"
+                                        : channel === "sms"
+                                          ? "Write an SMS…"
+                                          : "Write an email…"
+                                }
+                                bodyRows={4}
+                                sendDisabled={!canSend}
+                                sendBusy={sendBusy}
+                                sendLabel={sendLabel}
+                                onSend={() => void send()}
+                                onSendLater={() => setScheduleOpen(true)}
+                                onBosEnhance={() => setBosOpen(true)}
+                                error={sendErr}
+                                okNote={sendOk}
+                                okNoteTone={sendOk?.startsWith("Partial:") ? "warning" : "success"}
+                                dataTestId="compose-new"
+                            />
                         </div>
                     </div>
                 </div>
             </div>
+            <ComposerScheduleSendModal
+                open={scheduleOpen}
+                onClose={() => setScheduleOpen(false)}
+                channel={channel}
+                subject={subject}
+                body={body}
+                scheduleContext={scheduleContext}
+                onScheduled={() => {
+                    setBody("");
+                    setSubject("");
+                    setSendOk("Send scheduled.");
+                }}
+            />
+            <ComposerBosEnhanceModal open={bosOpen} onClose={() => setBosOpen(false)} draft={body} />
         </div>
     );
 }

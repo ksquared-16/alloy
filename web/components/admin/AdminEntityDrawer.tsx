@@ -61,6 +61,8 @@ import {
     scheduleDeferredCommunicationsDrawerPrefetch,
     invalidateCommunicationsDrawerPrefetch,
 } from "@/lib/admin/communications/communicationsDrawerPrefetch";
+import CommunicationsDrawerBackgroundLoader from "@/components/admin/communications/CommunicationsDrawerBackgroundLoader";
+import { drawerTypeToCommunicationsEntityType } from "@/lib/adminV2/messaging/drawerCommunicationsEntity";
 import {
     formatMoneyFromCents,
     formatMoneyFromDollars,
@@ -8740,11 +8742,10 @@ export default function AdminEntityDrawer() {
     ]);
 
     useLayoutEffect(() => {
-        if (!drawer.id || drawer.id === "new") return;
-        if (drawer.type === "opportunities") {
-            scheduleDeferredCommunicationsDrawerPrefetch("opportunities", drawer.id);
-        } else if (drawer.type === "jobs") {
-            scheduleDeferredCommunicationsDrawerPrefetch("jobs", drawer.id);
+        if (!drawer.type || !drawer.id || drawer.id === "new") return;
+        const apiType = drawerTypeToCommunicationsEntityType(drawer.type);
+        if (apiType) {
+            scheduleDeferredCommunicationsDrawerPrefetch(apiType, drawer.id);
         }
     }, [drawer.type, drawer.id]);
 
@@ -9344,6 +9345,105 @@ export default function AdminEntityDrawer() {
         const tour_time = md && typeof md.tour_time === "string" ? md.tour_time : null;
         return { status_key: sk, primary_first_name: first, tour_date, tour_time };
     }, [drawer.type, drawer.id, overviewData, formData.status_key]);
+
+    const drawerCommsEntityType = useMemo(
+        () =>
+            drawer.type && drawer.id && drawer.id !== "new"
+                ? drawerTypeToCommunicationsEntityType(drawer.type)
+                : null,
+        [drawer.type, drawer.id],
+    );
+
+    const drawerCommunicationsThreadContextMetadata = useMemo(() => {
+        if (!drawerCommsEntityType || !drawer.id || drawer.id === "new") return null;
+        if (!overviewData || (overviewData as { _create?: boolean })._create) return null;
+        const d = overviewData as Record<string, unknown>;
+
+        if (drawer.type === "opportunities") {
+            const ident = (d._identity as { primary_person?: { label?: string | null } } | null) ?? null;
+            const primaryLabel = String(ident?.primary_person?.label ?? "").trim() || null;
+            const sk = String(formData.status_key ?? d.status_key ?? "").trim();
+            const status =
+                (sk ? getStatusLabel(sk) : null) ||
+                String(d._status_display ?? "").trim() ||
+                null;
+            const location = String(d._work_unit_label ?? "").trim() || null;
+            const rawChildren = (d._inquiry_children as Record<string, unknown>[] | undefined) ?? [];
+            const childNames = rawChildren
+                .map((c) => {
+                    const display = String(c.display_name ?? c.name ?? "").trim();
+                    if (display) return display;
+                    const first = String(c.first_name ?? "").trim();
+                    const last = String(c.last_name ?? "").trim();
+                    return [first, last].filter(Boolean).join(" ");
+                })
+                .filter(Boolean);
+            return {
+                primaryLabel,
+                status,
+                location,
+                children: childNames.length > 0 ? childNames.join(", ") : null,
+                relatedContacts: null,
+            };
+        }
+
+        if (drawer.type === "persons") {
+            const primaryLabel = personDisplayName({
+                first_name: d.first_name as string | null | undefined,
+                last_name: d.last_name as string | null | undefined,
+                full_name: d.full_name as string | null | undefined,
+            });
+            return {
+                primaryLabel: primaryLabel !== "—" ? primaryLabel : null,
+                status: null,
+                location: null,
+                children: null,
+                relatedContacts: null,
+            };
+        }
+
+        if (drawer.type === "jobs") {
+            const title = String(d.title ?? d._job_label ?? "").trim() || null;
+            const sk = String(d.status_key ?? "").trim();
+            const status = (sk ? getStatusLabel(sk) : null) || String(d._job_status_label ?? "").trim() || null;
+            return { primaryLabel: title, status, location: null, children: null, relatedContacts: null };
+        }
+
+        return null;
+    }, [drawer.type, drawer.id, drawerCommsEntityType, overviewData, formData.status_key, getStatusLabel]);
+
+    /** True when a visible CommunicationsDrawerSection is actively rendered (skip hidden background loader). */
+    const drawerCommsSurfaceActive = useMemo(() => {
+        if (!drawerCommsEntityType || !drawer.id || drawer.id === "new") return false;
+        if (drawer.type === "persons" && personParentGuardianChrome && drawerTab === "communications") return true;
+        if (
+            drawer.type === "opportunities" &&
+            opportunityRecordGateWorkflowLayout &&
+            drawerTab === "communications"
+        ) {
+            return true;
+        }
+        if (drawer.type === "jobs" && drawerTab === "overview") return true;
+        if (
+            drawer.type === "opportunities" &&
+            !opportunityInquiryWorkflowDrawer &&
+            drawerTab === "overview" &&
+            overviewData &&
+            !(overviewData as { _create?: boolean })._create
+        ) {
+            return true;
+        }
+        return false;
+    }, [
+        drawer.type,
+        drawer.id,
+        drawerTab,
+        drawerCommsEntityType,
+        personParentGuardianChrome,
+        opportunityRecordGateWorkflowLayout,
+        opportunityInquiryWorkflowDrawer,
+        overviewData,
+    ]);
 
     const overviewCustomContent = useMemo(() => {
         if (!overviewData || !drawer.type) return {};
@@ -10053,6 +10153,7 @@ export default function AdminEntityDrawer() {
                         apiEntityType="jobs"
                         entityId={drawer.id}
                         active
+                        threadContextMetadata={drawerCommunicationsThreadContextMetadata}
                     />
                 ),
             };
@@ -14267,13 +14368,12 @@ export default function AdminEntityDrawer() {
                                 <PersonDrawerChildCommunicationsPlaceholder />
                             </div>
                         ) : null}
-                        {drawerTab === "communications" &&
-                            drawer.type === "persons" &&
+                        {drawer.type === "persons" &&
                             personParentGuardianChrome &&
                             drawer.id &&
                             drawer.id !== "new" ? (
                             <div
-                                className="flex min-h-0 flex-1 flex-col overflow-hidden pt-2 min-h-[22rem] h-[min(72vh,calc(100dvh-15rem))]"
+                                className={`flex min-h-0 flex-1 flex-col overflow-hidden pt-2 min-h-[22rem] h-[min(72vh,calc(100dvh-15rem))] ${drawerTab !== "communications" ? "hidden" : ""}`}
                                 data-person-drawer-parent-comms="true"
                             >
                                 <CommunicationsDrawerSection
@@ -14283,6 +14383,8 @@ export default function AdminEntityDrawer() {
                                     apiEntityType="persons"
                                     entityId={drawer.id}
                                     active={drawerTab === "communications"}
+                                    backgroundPreload={drawerTab !== "communications"}
+                                    threadContextMetadata={drawerCommunicationsThreadContextMetadata}
                                 />
                             </div>
                         ) : null}
@@ -14294,7 +14396,7 @@ export default function AdminEntityDrawer() {
                                     drawer.id !== "new" &&
                                     opportunityRecordGateWorkflowLayout ? (
                                     <div
-                                        className="flex min-h-0 flex-1 flex-col overflow-hidden pt-2 min-h-[22rem] h-[min(72vh,calc(100dvh-15rem))]"
+                                        className={`flex min-h-0 flex-1 flex-col overflow-hidden pt-2 min-h-[22rem] h-[min(72vh,calc(100dvh-15rem))] ${drawerTab !== "communications" ? "hidden" : ""}`}
                                         data-admin-opportunity-comms-panel="true"
                                     >
                                         <CommunicationsDrawerSection
@@ -14303,7 +14405,9 @@ export default function AdminEntityDrawer() {
                                             apiEntityType="opportunities"
                                             entityId={drawer.id}
                                             active={drawerTab === "communications"}
+                                            backgroundPreload={drawerTab !== "communications"}
                                             opportunityComposeContext={opportunityCommunicationsComposeContext}
+                                            threadContextMetadata={drawerCommunicationsThreadContextMetadata}
                                         />
                                     </div>
                                 ) : null,
@@ -15709,6 +15813,7 @@ export default function AdminEntityDrawer() {
                                                             entityId={drawer.id}
                                                             active
                                                             opportunityComposeContext={opportunityCommunicationsComposeContext}
+                                                            threadContextMetadata={drawerCommunicationsThreadContextMetadata}
                                                         />
                                                     </div>
                                                 )}
@@ -18236,6 +18341,12 @@ export default function AdminEntityDrawer() {
                     entityTypeLabel={getEntityLabel(labels, drawer.type, "singular") ?? drawer.type}
                     isLoading={deleteSaving}
                 />
+                {drawerCommsEntityType && !drawerCommsSurfaceActive ? (
+                    <CommunicationsDrawerBackgroundLoader
+                        apiEntityType={drawerCommsEntityType}
+                        entityId={drawer.id!}
+                    />
+                ) : null}
             </div>
         </Drawer>
     );

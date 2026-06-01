@@ -2,6 +2,11 @@ import {
     PERSON_STATUS_PROFILE_CHILD_LIFECYCLE,
     PERSON_STATUS_PROFILE_GENERIC,
 } from "@/lib/admin/person/personStatusApplicability";
+import {
+    ENROLLMENT_OPERATOR_STAGE_METADATA_KEY,
+    ENROLLMENT_OPERATOR_STAGE_UNASSIGNED,
+    isLifecycleOperatorStage,
+} from "@/lib/lifecycle/enrollmentOperatorStage";
 
 /** Coerce status_definitions.metadata for DB writes — never null. */
 export function normalizeStatusDefinitionMetadata(raw: unknown): Record<string, unknown> {
@@ -28,6 +33,20 @@ export function normalizeStatusDefinitionMetadata(raw: unknown): Record<string, 
 
     const roles = normalizeStringList(src.applies_to_roles);
     if (roles) out.applies_to_roles = roles;
+
+    if (ENROLLMENT_OPERATOR_STAGE_METADATA_KEY in src) {
+        const raw = src[ENROLLMENT_OPERATOR_STAGE_METADATA_KEY];
+        if (raw == null || raw === "") {
+            delete out[ENROLLMENT_OPERATOR_STAGE_METADATA_KEY];
+        } else {
+            const t = String(raw).trim();
+            if (t === ENROLLMENT_OPERATOR_STAGE_UNASSIGNED || isLifecycleOperatorStage(t)) {
+                out[ENROLLMENT_OPERATOR_STAGE_METADATA_KEY] = t;
+            } else {
+                delete out[ENROLLMENT_OPERATOR_STAGE_METADATA_KEY];
+            }
+        }
+    }
 
     return out;
 }

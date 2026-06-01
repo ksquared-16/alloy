@@ -38,7 +38,7 @@ export default function InboxModal({ open, onClose }: InboxModalProps) {
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="adminv2-inbox-modal-title"
-                className="relative z-[1] flex max-h-[min(88vh,42rem)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-alloy-stone/18 bg-[#f7f6f3] shadow-2xl sm:max-w-xl"
+                className="relative z-[1] flex max-h-[min(88vh,42rem)] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-alloy-stone/18 bg-[#f7f6f3] shadow-2xl sm:max-w-4xl"
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="flex shrink-0 items-center justify-between gap-2 border-b border-alloy-stone/15 bg-white px-3 py-2.5">
@@ -54,7 +54,7 @@ export default function InboxModal({ open, onClose }: InboxModalProps) {
                             onClick={() => setComposeOpen(true)}
                             className="rounded-md bg-[#00A283] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#009276]"
                         >
-                            Compose
+                            Compose New
                         </button>
                         <button
                             type="button"

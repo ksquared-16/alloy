@@ -406,4 +406,4 @@ When dept (or org) saves **Enrollment Process / Lifecycle** configuration, the p
 
 ---
 
-**Suggested follow-on doc (when implementing):** `enrollment_process_configuration_hub_spec_v1.md` — wireframe-level spec for the unified hub, without building a parallel rules engine.
+**Follow-on spec (published):** [`enrollment_process_configuration_hub_spec_v1.md`](./enrollment_process_configuration_hub_spec_v1.md) — wireframe-level hub design, implementation order, risks, migration path.

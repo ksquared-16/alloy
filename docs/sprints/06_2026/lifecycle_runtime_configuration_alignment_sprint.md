@@ -1,7 +1,9 @@
 # Lifecycle Runtime & Configuration Alignment Sprint
 
 **Path:** `docs/sprints/06_2026/lifecycle_runtime_configuration_alignment_sprint.md`  
-**Status:** In progress (May 2026) — Phase 1–6 implemented; Phase 7 manual walkthrough pending on pilot org  
+**Status:** Runtime phases shipped (May 2026); configuration **hub spec** published — implementation deferred to follow-on program  
+**Hub spec (final UX deliverable):** [`enrollment_process_configuration_hub_spec_v1.md`](./enrollment_process_configuration_hub_spec_v1.md)  
+**UX audit:** [`enrollment_operations_configuration_ux_audit.md`](./enrollment_operations_configuration_ux_audit.md)  
 **Prior sprint:** Lifecycle Configuration & Requirement Engine — **CLOSED**
 
 **Doctrine (canonical):** Lead → Qualification → Tour → Waitlist → Enrollment → Enrolled

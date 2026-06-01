@@ -29,19 +29,22 @@ describe("lifecycle Settings IA", () => {
         expect(page).toContain("LifecycleSettingsHubClient");
     });
 
-    it("hub component uses stage-first navigation and friendly labels", () => {
+    it("hub component uses stage-first navigation and shared requirements editor", () => {
         const hub = read("components/adminV2/settings/LifecycleStagesRequirementsHub.tsx");
+        const editor = read("components/adminV2/settings/LifecycleStageRequirementsEditor.tsx");
         expect(hub).toContain("lifecycle-stages-requirements-hub");
-        expect(hub).toContain("Required Information");
-        expect(hub).toContain("Recommended Information");
-        expect(hub).toContain('type="checkbox"');
-        expect(hub).toContain("lifecycleRequirementFieldDetailForLabel");
+        expect(hub).toContain("LifecycleStageRequirementsEditor");
+        expect(hub).toContain("enrollmentProcessSettingsPaths");
+        expect(editor).toContain("Required Information");
+        expect(editor).toContain("Recommended Information");
+        expect(editor).toContain('type="checkbox"');
+        expect(editor).toContain("lifecycleRequirementFieldDetailForLabel");
         expect(hub).toContain("LifecycleStageWhereAppears");
         expect(hub).toContain("LifecycleRelatedSettingsLinks");
-        expect(hub).toContain("lifecycle-req-field-detail");
-        expect(hub).not.toContain("field_key");
-        expect(hub).not.toContain("requirement_policy");
-        expect(hub).not.toContain("condition_config");
+        expect(editor).toContain("lifecycle-req-field-detail");
+        expect(editor).not.toContain("field_key");
+        expect(editor).not.toContain("requirement_policy");
+        expect(editor).not.toContain("condition_config");
     });
 
     it("all six stage names are defined in catalog", () => {
@@ -73,7 +76,9 @@ describe("lifecycle Settings IA", () => {
         expect(workspace).not.toContain("LifecycleStagesRequirementsHub");
     });
 
-    it("related Settings pages cross-link to lifecycle hub", () => {
+    it("related Settings pages cross-link to enrollment process hub", () => {
+        const banner = read("components/adminV2/settings/LifecycleSettingsCrossLinkBanner.tsx");
+        expect(banner).toContain("enrollmentProcessSettingsPaths");
         expect(read("app/adminV2/settings/actions/page.tsx")).toContain('variant="actions"');
         expect(read("app/adminV2/settings/statuses/page.tsx")).toContain('variant="statuses"');
         expect(read("app/adminV2/settings/attention-sla-rules/page.tsx")).toContain('variant="attention"');

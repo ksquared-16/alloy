@@ -20,6 +20,17 @@ import {
     buildPersonStatusApplicabilityMetadata,
     formatPersonStatusApplicabilityLabel,
 } from "@/lib/admin/person/personStatusApplicability";
+import { ADMIN_V2_SETTINGS_ENROLLMENT_PROCESS_PATH } from "@/lib/adminV2/settings/enrollmentProcessSettingsPaths";
+import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
+import {
+    effectiveEnrollmentOperatorStage,
+    ENROLLMENT_OPERATOR_STAGE_UNASSIGNED,
+    mergeEnrollmentOperatorStageMetadata,
+} from "@/lib/lifecycle/enrollmentOperatorStage";
+import {
+    enrollmentProcessStageDisplayLabel,
+    enrollmentProcessStageSelectOptions,
+} from "@/lib/lifecycle/enrollmentProcessStatusDisplay";
 
 /** Canonical admin-configurable workflow statuses (kept in sync with GET /api/admin/status-definitions unscoped list). */
 const ENTITY_TYPES = ADMIN_STATUS_DEFINITIONS_ENTITY_TYPES;
@@ -72,7 +83,7 @@ const STATUSES_DEFAULT_SUBTITLE =
     "Display names for status keys on schedules, jobs, customers, opportunities, vendors, plan templates, and people. Drawers read options from here. Which status changes are allowed is not configured here — see Status transition rules under Settings diagnostics (read-only) or a future Workflow Status Configuration sprint.";
 
 const STATUSES_ADMINV2_SUBTITLE =
-    "Manage status names and order. When business events should change status (for example, tour date set → Tour Scheduled), that behavior is workflow automation — see Automations and Settings → Workflow automation rules (read-only reference).";
+    "Manage status names and order. For opportunities, Enrollment Stage shows which process stage owns each status — edit mapping in Enrollment Process when needed.";
 
 /** Operator hints — disambiguate childcare labels (Children vs People). */
 const STATUS_ENTITY_HINTS: Partial<Record<string, string>> = {
@@ -117,6 +128,7 @@ export default function StatusesClient({
     const [editActive, setEditActive] = useState(true);
     const [editSaving, setEditSaving] = useState(false);
     const [editError, setEditError] = useState<string | null>(null);
+    const [editEnrollmentStage, setEditEnrollmentStage] = useState<LifecycleOperatorStage | "">("");
 
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
     const [deleteSaving, setDeleteSaving] = useState(false);
@@ -229,6 +241,12 @@ export default function StatusesClient({
         setEditSortOrder(row.sort_order);
         setEditActive(row.is_active);
         setEditError(null);
+        if (row.entity_type === "opportunities") {
+            const { stage } = effectiveEnrollmentOperatorStage(row.status_key, row.metadata);
+            setEditEnrollmentStage(stage ?? "");
+        } else {
+            setEditEnrollmentStage("");
+        }
     };
 
     const cancelEdit = () => {
@@ -238,17 +256,34 @@ export default function StatusesClient({
 
     const saveEdit = async () => {
         if (!canMutate || !editingId) return;
+        const editingRow = statuses.find((s) => s.id === editingId);
         setEditSaving(true);
         setEditError(null);
         try {
+            const patch: Record<string, unknown> = {
+                status_label: editLabel.trim() || null,
+                sort_order: editSortOrder,
+                is_active: editActive,
+            };
+            if (
+                editingRow?.entity_type === "opportunities" &&
+                editingRow.org_id
+            ) {
+                const meta =
+                    editingRow.metadata !== null &&
+                    typeof editingRow.metadata === "object" &&
+                    !Array.isArray(editingRow.metadata)
+                        ? (editingRow.metadata as Record<string, unknown>)
+                        : {};
+                patch.metadata = mergeEnrollmentOperatorStageMetadata(
+                    meta,
+                    editEnrollmentStage || ENROLLMENT_OPERATOR_STAGE_UNASSIGNED
+                );
+            }
             const res = await fetch(`/api/admin/status-definitions/${editingId}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    status_label: editLabel.trim() || null,
-                    sort_order: editSortOrder,
-                    is_active: editActive,
-                }),
+                body: JSON.stringify(patch),
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Update failed");
@@ -319,15 +354,25 @@ export default function StatusesClient({
         }
     }, [entityTypeFilter, sortedEntityTypes]);
 
-    const renderTable = (rows: StatusDef[], emptyMessage: string, entityType?: string) => (
+    const renderTable = (rows: StatusDef[], emptyMessage: string, entityType?: string) => {
+        const showEnrollmentStage = entityType === "opportunities";
+        const colSpan =
+            5 +
+            (entityType === "persons" ? 1 : 0) +
+            (showEnrollmentStage ? 1 : 0) +
+            (canMutate ? 1 : 0);
+        return (
         <div className="overflow-x-auto">
-            <table className="w-full min-w-[520px] text-left text-sm">
+            <table className="w-full min-w-[520px] text-left text-sm" data-testid={showEnrollmentStage ? "statuses-opportunities-table" : undefined}>
                 <thead>
                     <tr className="border-b border-[#e6e8ec] text-[#59678b]">
                         <th className="pb-2 pr-4 font-semibold">Label</th>
                         <th className="pb-2 pr-4 font-semibold">Key</th>
                         {entityType === "persons" ? (
                             <th className="pb-2 pr-4 font-semibold">Applicability</th>
+                        ) : null}
+                        {showEnrollmentStage ? (
+                            <th className="pb-2 pr-4 font-semibold">Enrollment Stage</th>
                         ) : null}
                         <th className="pb-2 pr-4 font-semibold">Sort</th>
                         <th className="pb-2 pr-4 font-semibold">Active</th>
@@ -338,7 +383,7 @@ export default function StatusesClient({
                 <tbody>
                     {rows.length === 0 ? (
                         <tr>
-                            <td colSpan={canMutate ? (entityType === "persons" ? 7 : 6) : entityType === "persons" ? 6 : 5} className="py-4 text-[#59678b]">
+                            <td colSpan={colSpan} className="py-4 text-[#59678b]">
                                 {emptyMessage}
                             </td>
                         </tr>
@@ -359,6 +404,30 @@ export default function StatusesClient({
                                         {entityType === "persons" ? (
                                             <td className="py-2 pr-4 text-[#59678b]">
                                                 {formatPersonStatusApplicabilityLabel(row.metadata, row.status_key)}
+                                            </td>
+                                        ) : null}
+                                        {showEnrollmentStage ? (
+                                            <td className="py-2 pr-4">
+                                                {row.org_id ? (
+                                                    <select
+                                                        className="w-full min-w-[8rem] rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                                        value={editEnrollmentStage}
+                                                        onChange={(e) =>
+                                                            setEditEnrollmentStage(
+                                                                e.target.value as LifecycleOperatorStage | ""
+                                                            )
+                                                        }
+                                                        data-testid="statuses-edit-enrollment-stage"
+                                                    >
+                                                        {enrollmentProcessStageSelectOptions().map((o) => (
+                                                            <option key={o.label} value={o.value}>
+                                                                {o.label}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                ) : (
+                                                    <span className="text-xs text-[#59678b]">Platform default</span>
+                                                )}
                                             </td>
                                         ) : null}
                                         <td className="py-2 pr-4">
@@ -404,6 +473,21 @@ export default function StatusesClient({
                                         {entityType === "persons" ? (
                                             <td className="py-2 pr-4 text-[#59678b]">
                                                 {formatPersonStatusApplicabilityLabel(row.metadata, row.status_key)}
+                                            </td>
+                                        ) : null}
+                                        {showEnrollmentStage ? (
+                                            <td className="py-2 pr-4" data-testid="statuses-enrollment-stage-cell">
+                                                <span className="inline-block rounded-md border border-alloy-forge/15 bg-alloy-stone/10 px-2 py-0.5 text-xs font-medium text-alloy-midnight">
+                                                    {enrollmentProcessStageDisplayLabel(row.status_key, row.metadata)}
+                                                </span>
+                                                {!row.org_id ? (
+                                                    <Link
+                                                        href={ADMIN_V2_SETTINGS_ENROLLMENT_PROCESS_PATH}
+                                                        className="mt-1 block text-[11px] font-medium text-alloy-pine hover:underline"
+                                                    >
+                                                        Manage in Enrollment Process
+                                                    </Link>
+                                                ) : null}
                                             </td>
                                         ) : null}
                                         <td className="py-2 pr-4 text-[#59678b]">{row.sort_order}</td>
@@ -458,7 +542,8 @@ export default function StatusesClient({
                 </tbody>
             </table>
         </div>
-    );
+        );
+    };
 
     const statusTitle = entityTypeFilter ? `Statuses — ${filterLabel}` : "Statuses";
     const statusSubtitle = entityTypeFilter

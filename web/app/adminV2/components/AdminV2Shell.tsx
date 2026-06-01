@@ -6,6 +6,7 @@ import {
     writeAdminV2SidebarCollapsed,
 } from "@/lib/adminV2/navigation/adminV2SidebarCollapsed";
 import { prefetchWorkspaceNavTree } from "@/lib/adminV2/navigation/workspaceNavTreeCache";
+import { scheduleInboxWarmLoad } from "@/lib/adminV2/inboxWarmLoadCache";
 import { usePathname } from "next/navigation";
 import { neutral, derived, palette } from "@/styles/tokens/colors";
 
@@ -113,6 +114,7 @@ export default function AdminV2Shell({
 
   useEffect(() => {
     prefetchWorkspaceNavTree();
+    scheduleInboxWarmLoad();
   }, []);
 
   const [zoomLevel, setZoomLevel] = useState<"company" | "department">("company");

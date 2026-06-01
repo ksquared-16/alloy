@@ -13,6 +13,24 @@ import type {
     InboxThreadListItem,
     InboxThreadsListResponse,
 } from "@/lib/communications/inboxThreadTypes";
+import { resolveOpportunityStatusDisplay } from "@/lib/admin/drawer/opportunityStatusDisplayResolve";
+import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
+import { availableComposerChannels, type BindingSummary } from "@/lib/communications/composerChannels";
+import { sanitizeInboxEntityLabel } from "@/lib/communications/inboxThreadDisplayLabels";
+import {
+    buildInboxContextLine,
+    buildInboxPreviewLead,
+    inboxIdentityWithChannelFallback,
+    resolveInboxPrimaryName,
+    resolveInboxReplyTarget,
+} from "@/lib/communications/inboxThreadIdentity";
+import {
+    joinInboxRelatedNames,
+    normalizeInboxRecipientEmail,
+    normalizeInboxRecipientPhoneDigits,
+    personDisplayNameFromRow,
+    resolveMessageContactPersonId,
+} from "@/lib/communications/inboxThreadPersonContext";
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 const PREVIEW_FETCH_CAP = 200;
@@ -196,7 +214,7 @@ async function attachUnreadFlags(
     return unreadByThread;
 }
 
-async function loadEntityLabels(
+async function loadEntityContext(
     supabase: SupabaseClient,
     orgId: string,
     threads: RawThreadRow[]
@@ -204,15 +222,42 @@ async function loadEntityLabels(
     entityLabels: Map<string, string>;
     familyByOpportunity: Map<string, string>;
     personNames: Map<string, string>;
+    locationByOpportunity: Map<string, string>;
+    locationByJob: Map<string, string>;
+    primaryPersonByOpportunity: Map<string, string>;
+    primaryPersonByJob: Map<string, string>;
+    statusByOpportunity: Map<string, string>;
+    personEmailAvailable: Map<string, boolean>;
+    personSmsAvailable: Map<string, boolean>;
+    personIdByEmail: Map<string, string>;
+    personIdByPhone: Map<string, string>;
+    relatedPersonIdsByOpportunity: Map<string, Set<string>>;
+    relatedPersonIdsByJob: Map<string, Set<string>>;
+    relatedChildrenByOpportunity: Map<string, string[]>;
 }> {
     const entityLabels = new Map<string, string>();
     const familyByOpportunity = new Map<string, string>();
     const personNames = new Map<string, string>();
+    const locationByOpportunity = new Map<string, string>();
+    const locationByJob = new Map<string, string>();
+    const primaryPersonByOpportunity = new Map<string, string>();
+    const primaryPersonByJob = new Map<string, string>();
+    const statusByOpportunity = new Map<string, string>();
+    const personEmailAvailable = new Map<string, boolean>();
+    const personSmsAvailable = new Map<string, boolean>();
+    const personIdByEmail = new Map<string, string>();
+    const personIdByPhone = new Map<string, string>();
+    const opportunityStatusMeta = new Map<
+        string,
+        { statusKey: string | null; legacyStatus: string | null; pipelineStageId: string | null }
+    >();
+    const pipelineStageIds = new Set<string>();
 
     const oppIds = new Set<string>();
     const personIds = new Set<string>();
     const jobIds = new Set<string>();
     const customerIds = new Set<string>();
+    const locationIds = new Set<string>();
     const opportunityCustomerIds = new Map<string, string>();
 
     for (const t of threads) {
@@ -231,7 +276,7 @@ async function loadEntityLabels(
         entityQueries.push(
             supabase
                 .from("opportunities")
-                .select("id, name, customer_id")
+                .select("id, name, customer_id, location_id, primary_person_id, status_key, status, pipeline_stage_id")
                 .eq("org_id", orgId)
                 .in("id", [...oppIds])
                 .then(({ data }) => {
@@ -245,6 +290,31 @@ async function loadEntityLabels(
                             customerIds.add(cidStr);
                             opportunityCustomerIds.set(id, cidStr);
                         }
+                        const lid = (row as { location_id?: string | null }).location_id;
+                        if (lid && UUID_RE.test(String(lid))) {
+                            locationIds.add(String(lid));
+                            locationByOpportunity.set(id, String(lid));
+                        }
+                        const pp = (row as { primary_person_id?: string | null }).primary_person_id;
+                        if (pp && UUID_RE.test(String(pp))) {
+                            const ppStr = String(pp);
+                            primaryPersonByOpportunity.set(id, ppStr);
+                            personIds.add(ppStr);
+                        }
+                        const statusKey = (row as { status_key?: string | null }).status_key;
+                        const legacyStatus = (row as { status?: string | null }).status;
+                        const pipelineStageId = (row as { pipeline_stage_id?: string | null }).pipeline_stage_id;
+                        opportunityStatusMeta.set(id, {
+                            statusKey: statusKey != null ? String(statusKey) : null,
+                            legacyStatus: legacyStatus != null ? String(legacyStatus) : null,
+                            pipelineStageId:
+                                pipelineStageId && UUID_RE.test(String(pipelineStageId))
+                                    ? String(pipelineStageId)
+                                    : null,
+                        });
+                        if (pipelineStageId && UUID_RE.test(String(pipelineStageId))) {
+                            pipelineStageIds.add(String(pipelineStageId));
+                        }
                     }
                 })
         );
@@ -254,7 +324,7 @@ async function loadEntityLabels(
         entityQueries.push(
             supabase
                 .from("jobs")
-                .select("id, title")
+                .select("id, title, location_id, primary_person_id")
                 .eq("org_id", orgId)
                 .in("id", [...jobIds])
                 .then(({ data }) => {
@@ -262,6 +332,17 @@ async function loadEntityLabels(
                         const id = String((row as { id: string }).id);
                         const title = (row as { title?: string | null }).title;
                         entityLabels.set(`jobs:${id}`, (title ?? "").trim() || "Job");
+                        const lid = (row as { location_id?: string | null }).location_id;
+                        if (lid && UUID_RE.test(String(lid))) {
+                            locationIds.add(String(lid));
+                            locationByJob.set(id, String(lid));
+                        }
+                        const pp = (row as { primary_person_id?: string | null }).primary_person_id;
+                        if (pp && UUID_RE.test(String(pp))) {
+                            const ppStr = String(pp);
+                            primaryPersonByJob.set(id, ppStr);
+                            personIds.add(ppStr);
+                        }
                     }
                 })
         );
@@ -290,6 +371,12 @@ async function loadEntityLabels(
                             "Person";
                         personNames.set(id, composed);
                         entityLabels.set(`persons:${id}`, composed);
+                        personEmailAvailable.set(id, !!(email ?? "").trim().includes("@"));
+                        personSmsAvailable.set(id, (phone ?? "").replace(/\D/g, "").length >= 10);
+                        const normalizedEmail = normalizeInboxRecipientEmail(email);
+                        if (normalizedEmail) personIdByEmail.set(normalizedEmail, id);
+                        const normalizedPhone = normalizeInboxRecipientPhoneDigits(phone ?? email);
+                        if (normalizedPhone) personIdByPhone.set(normalizedPhone, id);
                     }
                 })
         );
@@ -317,7 +404,213 @@ async function loadEntityLabels(
         }
     }
 
-    return { entityLabels, familyByOpportunity, personNames };
+    const locationLabels = new Map<string, string>();
+    if (locationIds.size > 0) {
+        const { data } = await supabase
+            .from("locations")
+            .select("id, label, name")
+            .eq("org_id", orgId)
+            .in("id", [...locationIds]);
+        for (const row of data ?? []) {
+            const id = String((row as { id: string }).id);
+            const label = (row as { label?: string | null; name?: string | null }).label;
+            const name = (row as { name?: string | null }).name;
+            locationLabels.set(id, (label ?? name ?? "").trim() || "Location");
+        }
+    }
+
+    for (const [oppId, locId] of locationByOpportunity) {
+        const label = locationLabels.get(locId);
+        if (label) locationByOpportunity.set(oppId, label);
+        else locationByOpportunity.delete(oppId);
+    }
+    for (const [jobId, locId] of locationByJob) {
+        const label = locationLabels.get(locId);
+        if (label) locationByJob.set(jobId, label);
+        else locationByJob.delete(jobId);
+    }
+
+    const pipelineStageNames = new Map<string, string>();
+    if (pipelineStageIds.size > 0) {
+        const { data: stages } = await supabase
+            .from("pipeline_stages")
+            .select("id, name")
+            .eq("org_id", orgId)
+            .in("id", [...pipelineStageIds]);
+        for (const row of stages ?? []) {
+            const id = String((row as { id: string }).id);
+            const name = (row as { name?: string | null }).name;
+            pipelineStageNames.set(id, (name ?? "").trim() || "Stage");
+        }
+    }
+
+    const opportunityStatusDefs =
+        opportunityStatusMeta.size > 0
+            ? await fetchEffectiveStatusDefinitions(supabase, orgId, "opportunities", { activeOnly: true })
+            : [];
+
+    for (const [oppId, meta] of opportunityStatusMeta) {
+        const label = resolveOpportunityStatusDisplay({
+            statusKey: meta.statusKey,
+            legacyStatus: meta.legacyStatus,
+            statusDefs: opportunityStatusDefs,
+            pipelineStageId: meta.pipelineStageId,
+            pipelineStageName: meta.pipelineStageId ? pipelineStageNames.get(meta.pipelineStageId) ?? null : null,
+        });
+        if (label?.trim()) statusByOpportunity.set(oppId, label.trim());
+    }
+
+    const relatedPersonIdsByOpportunity = new Map<string, Set<string>>();
+    const relatedPersonIdsByJob = new Map<string, Set<string>>();
+    const relatedChildrenByOpportunity = new Map<string, string[]>();
+
+    if (oppIds.size > 0) {
+        const { data: oppPersonRows } = await supabase
+            .from("opportunity_persons")
+            .select("opportunity_id, person_id")
+            .eq("org_id", orgId)
+            .in("opportunity_id", [...oppIds]);
+        for (const row of oppPersonRows ?? []) {
+            const oppId = String((row as { opportunity_id?: string }).opportunity_id ?? "");
+            const pid = String((row as { person_id?: string }).person_id ?? "");
+            if (!oppId || !pid) continue;
+            const set = relatedPersonIdsByOpportunity.get(oppId) ?? new Set<string>();
+            set.add(pid);
+            relatedPersonIdsByOpportunity.set(oppId, set);
+            personIds.add(pid);
+        }
+
+        const { data: ocmRows } = await supabase
+            .from("opportunity_customer_members")
+            .select(
+                "opportunity_id, customer_members(display_name, first_name, last_name, relationship, persons(first_name, last_name, full_name))"
+            )
+            .eq("org_id", orgId)
+            .in("opportunity_id", [...oppIds]);
+        for (const row of ocmRows ?? []) {
+            const oppId = String((row as { opportunity_id?: string }).opportunity_id ?? "");
+            if (!oppId) continue;
+            const member = (row as {
+                customer_members?: {
+                    display_name?: string | null;
+                    first_name?: string | null;
+                    last_name?: string | null;
+                    relationship?: string | null;
+                    persons?: { first_name?: string | null; last_name?: string | null; full_name?: string | null } | null;
+                } | null;
+            }).customer_members;
+            if (!member) continue;
+            const name = personDisplayNameFromRow({
+                full_name: member.display_name ?? member.persons?.full_name,
+                first_name: member.first_name ?? member.persons?.first_name,
+                last_name: member.last_name ?? member.persons?.last_name,
+            });
+            const rel = String(member.relationship ?? "").trim().toLowerCase();
+            if (rel === "child") {
+                const list = relatedChildrenByOpportunity.get(oppId) ?? [];
+                if (!list.includes(name)) list.push(name);
+                relatedChildrenByOpportunity.set(oppId, list);
+            }
+        }
+    }
+
+    const customerIdsForContacts = [...customerIds];
+    for (const cid of opportunityCustomerIds.values()) customerIdsForContacts.push(cid);
+    const uniqueCustomerIds = [...new Set(customerIdsForContacts.filter((id) => UUID_RE.test(id)))];
+
+    if (uniqueCustomerIds.length > 0) {
+        const { data: cpRows } = await supabase
+            .from("customer_persons")
+            .select("customer_id, person_id, role_type")
+            .eq("org_id", orgId)
+            .in("customer_id", uniqueCustomerIds);
+        for (const row of cpRows ?? []) {
+            const customerId = String((row as { customer_id?: string }).customer_id ?? "");
+            const pid = String((row as { person_id?: string }).person_id ?? "");
+            if (!customerId || !pid) continue;
+            personIds.add(pid);
+            for (const [oppId, custId] of opportunityCustomerIds) {
+                if (custId !== customerId) continue;
+                const set = relatedPersonIdsByOpportunity.get(oppId) ?? new Set<string>();
+                set.add(pid);
+                relatedPersonIdsByOpportunity.set(oppId, set);
+            }
+        }
+    }
+
+    if (jobIds.size > 0) {
+        const { data: jobRows } = await supabase
+            .from("jobs")
+            .select("id, customer_id, opportunity_id, primary_person_id")
+            .eq("org_id", orgId)
+            .in("id", [...jobIds]);
+        for (const row of jobRows ?? []) {
+            const jobId = String((row as { id: string }).id);
+            const set = relatedPersonIdsByJob.get(jobId) ?? new Set<string>();
+            const pp = primaryPersonByJob.get(jobId);
+            if (pp) set.add(pp);
+            const oppId = (row as { opportunity_id?: string | null }).opportunity_id;
+            if (oppId && UUID_RE.test(String(oppId))) {
+                const oppRelated = relatedPersonIdsByOpportunity.get(String(oppId));
+                if (oppRelated) oppRelated.forEach((pid) => set.add(pid));
+            }
+            relatedPersonIdsByJob.set(jobId, set);
+        }
+    }
+
+    for (const oppId of oppIds) {
+        const related = relatedPersonIdsByOpportunity.get(oppId) ?? new Set<string>();
+        const primary = primaryPersonByOpportunity.get(oppId);
+        if (primary) related.add(primary);
+        relatedPersonIdsByOpportunity.set(oppId, related);
+    }
+
+    const missingPersonIds = [...personIds].filter((id) => !personNames.has(id));
+    if (missingPersonIds.length > 0) {
+        const { data: extraPersons } = await supabase
+            .from("persons")
+            .select("id, full_name, first_name, last_name, email, phone")
+            .eq("org_id", orgId)
+            .in("id", missingPersonIds);
+        for (const row of extraPersons ?? []) {
+            const id = String((row as { id: string }).id);
+            const email = (row as { email?: string | null }).email;
+            const phone = (row as { phone?: string | null }).phone;
+            const composed = personDisplayNameFromRow(row as {
+                full_name?: string | null;
+                first_name?: string | null;
+                last_name?: string | null;
+                email?: string | null;
+                phone?: string | null;
+            });
+            personNames.set(id, composed);
+            entityLabels.set(`persons:${id}`, composed);
+            personEmailAvailable.set(id, !!(email ?? "").trim().includes("@"));
+            personSmsAvailable.set(id, (phone ?? "").replace(/\D/g, "").length >= 10);
+            const normalizedEmail = normalizeInboxRecipientEmail(email);
+            if (normalizedEmail) personIdByEmail.set(normalizedEmail, id);
+            const normalizedPhone = normalizeInboxRecipientPhoneDigits(phone ?? email);
+            if (normalizedPhone) personIdByPhone.set(normalizedPhone, id);
+        }
+    }
+
+    return {
+        entityLabels,
+        familyByOpportunity,
+        personNames,
+        locationByOpportunity,
+        locationByJob,
+        primaryPersonByOpportunity,
+        primaryPersonByJob,
+        statusByOpportunity,
+        personEmailAvailable,
+        personSmsAvailable,
+        personIdByEmail,
+        personIdByPhone,
+        relatedPersonIdsByOpportunity,
+        relatedPersonIdsByJob,
+        relatedChildrenByOpportunity,
+    };
 }
 
 function buildEntityChip(
@@ -333,21 +626,98 @@ function buildEntityChip(
             label: entityTypeLabel(thread.primary_entity_type),
         };
     }
+    const sanitized = sanitizeInboxEntityLabel(label);
     return {
         entity_type: thread.primary_entity_type,
         entity_id: thread.primary_entity_id,
-        label,
+        label: sanitized ?? entityTypeLabel(thread.primary_entity_type),
     };
 }
 
-function resolveContactDisplay(
+function resolveLocationDisplay(
     thread: RawThreadRow,
+    locationByOpportunity: Map<string, string>,
+    locationByJob: Map<string, string>
+): string | null {
+    const type = thread.primary_entity_type.trim().toLowerCase();
+    const id = thread.primary_entity_id;
+    if (type === "opportunities") return locationByOpportunity.get(id) ?? null;
+    if (type === "jobs") return locationByJob.get(id) ?? null;
+    return null;
+}
+
+function resolveStatusDisplay(
+    thread: RawThreadRow,
+    statusByOpportunity: Map<string, string>
+): string | null {
+    if (thread.primary_entity_type === "opportunities") {
+        return statusByOpportunity.get(thread.primary_entity_id) ?? null;
+    }
+    return null;
+}
+
+function resolveReplyChannelAvailability(
+    thread: RawThreadRow,
+    replyPersonId: string | null,
+    channelContactDisplay: string | null,
+    personEmailAvailable: Map<string, boolean>,
+    personSmsAvailable: Map<string, boolean>
+): { replyEmailAvailable: boolean; replySmsAvailable: boolean } {
+    if (replyPersonId && UUID_RE.test(replyPersonId)) {
+        return {
+            replyEmailAvailable: personEmailAvailable.get(replyPersonId) ?? false,
+            replySmsAvailable: personSmsAvailable.get(replyPersonId) ?? false,
+        };
+    }
+    const contact = channelContactDisplay?.trim() ?? "";
+    return {
+        replyEmailAvailable: contact.includes("@"),
+        replySmsAvailable: contact.length > 0 && !contact.includes("@"),
+    };
+}
+
+function resolveReplyPersonId(
+    thread: RawThreadRow,
+    primaryPersonByOpportunity: Map<string, string>,
+    primaryPersonByJob: Map<string, string>,
+    relatedPersonIdsByOpportunity: Map<string, Set<string>>,
+    relatedPersonIdsByJob: Map<string, Set<string>>,
+    personIdByEmail: Map<string, string>,
+    personIdByPhone: Map<string, string>
+): string | null {
+    return resolveMessageContactPersonId({
+        primaryEntityType: thread.primary_entity_type,
+        primaryEntityId: thread.primary_entity_id,
+        recipientKey: thread.recipient_key,
+        primaryPersonByOpportunity,
+        primaryPersonByJob,
+        relatedPersonIdsByOpportunity,
+        relatedPersonIdsByJob,
+        personIdByEmail,
+        personIdByPhone,
+    });
+}
+
+function resolveRelatedContactsDisplay(
+    thread: RawThreadRow,
+    messageContactPersonId: string | null,
+    relatedPersonIdsByOpportunity: Map<string, Set<string>>,
+    relatedPersonIdsByJob: Map<string, Set<string>>,
     personNames: Map<string, string>
 ): string | null {
-    if (thread.primary_entity_type === "persons") {
-        return personNames.get(thread.primary_entity_id) ?? contactFromRecipientKey(thread.recipient_key, thread.channel);
+    const type = thread.primary_entity_type.trim().toLowerCase();
+    const id = thread.primary_entity_id;
+    let related: Set<string> | undefined;
+    if (type === "opportunities") related = relatedPersonIdsByOpportunity.get(id);
+    if (type === "jobs") related = relatedPersonIdsByJob.get(id);
+    if (!related?.size) return null;
+    const names: string[] = [];
+    for (const pid of related) {
+        if (messageContactPersonId && pid === messageContactPersonId) continue;
+        const name = personNames.get(pid);
+        if (name) names.push(name);
     }
-    return contactFromRecipientKey(thread.recipient_key, thread.channel);
+    return joinInboxRelatedNames(names);
 }
 
 export async function listInboxThreads(params: {
@@ -406,16 +776,41 @@ export async function listInboxThreads(params: {
 
     const rawThreads = (rows ?? []) as RawThreadRow[];
     const threadIds = rawThreads.map((t) => t.id);
-    const [previews, unreadFlags, { entityLabels, familyByOpportunity, personNames }] = await Promise.all([
+    const [previews, unreadFlags, entityContext] = await Promise.all([
         attachLastPreviews(params.supabase, params.orgId, rawThreads),
         attachUnreadFlags(params.supabase, params.orgId, params.userId, threadIds),
-        loadEntityLabels(params.supabase, params.orgId, rawThreads),
+        loadEntityContext(params.supabase, params.orgId, rawThreads),
     ]);
+    const {
+        entityLabels,
+        familyByOpportunity,
+        personNames,
+        locationByOpportunity,
+        locationByJob,
+        primaryPersonByOpportunity,
+        primaryPersonByJob,
+        statusByOpportunity,
+        personEmailAvailable,
+        personSmsAvailable,
+        personIdByEmail,
+        personIdByPhone,
+        relatedPersonIdsByOpportunity,
+        relatedPersonIdsByJob,
+        relatedChildrenByOpportunity,
+    } = entityContext;
+
+    const { data: bindingRows } = await params.supabase
+        .from("communication_provider_bindings")
+        .select("id, channel, scope, location_id, display_label, provider, status, is_primary, secret_ref, inbound_to_e164, config")
+        .eq("org_id", params.orgId)
+        .order("updated_at", { ascending: false });
+    const orgSmsOutboundEnabled = availableComposerChannels((bindingRows ?? []) as BindingSummary[]).includes("sms");
 
     let items: InboxThreadListItem[] = rawThreads.map((t) => {
         const sortAt = threadSortTimestamp(t);
         const entityChip = buildEntityChip(t, entityLabels);
-        const contactDisplay = resolveContactDisplay(t, personNames);
+        const channelContactDisplay = contactFromRecipientKey(t.recipient_key, t.channel);
+        const entityLabel = entityChip?.label ?? null;
         let familyDisplay: string | null = null;
         if (t.primary_entity_type === "opportunities") {
             familyDisplay = familyByOpportunity.get(t.primary_entity_id) ?? null;
@@ -423,7 +818,60 @@ export async function listInboxThreads(params: {
             familyDisplay = entityChip.label;
         }
 
-        return {
+        const locationDisplay = resolveLocationDisplay(t, locationByOpportunity, locationByJob);
+        const statusDisplay = resolveStatusDisplay(t, statusByOpportunity);
+        const messageContactPersonId = resolveReplyPersonId(
+            t,
+            primaryPersonByOpportunity,
+            primaryPersonByJob,
+            relatedPersonIdsByOpportunity,
+            relatedPersonIdsByJob,
+            personIdByEmail,
+            personIdByPhone
+        );
+        const identityInput = inboxIdentityWithChannelFallback({
+            primaryEntityType: t.primary_entity_type,
+            primaryEntityId: t.primary_entity_id,
+            channel: t.channel,
+            recipientKey: t.recipient_key,
+            entityLabel,
+            familyDisplay,
+            locationDisplay,
+            statusDisplay,
+            personNames,
+            primaryPersonByOpportunity,
+            primaryPersonByJob,
+            channelContact: channelContactDisplay,
+            messageContactPersonId,
+        });
+        const contactDisplay = resolveInboxPrimaryName(identityInput);
+        const contextDisplay = buildInboxContextLine({
+            locationDisplay,
+            statusDisplay,
+        });
+        const relatedChildrenDisplay =
+            t.primary_entity_type === "opportunities"
+                ? joinInboxRelatedNames(relatedChildrenByOpportunity.get(t.primary_entity_id) ?? [])
+                : null;
+        const relatedContactsDisplay = resolveRelatedContactsDisplay(
+            t,
+            messageContactPersonId,
+            relatedPersonIdsByOpportunity,
+            relatedPersonIdsByJob,
+            personNames
+        );
+        const preview = previews.get(t.id) ?? null;
+        const replyPersonId = messageContactPersonId;
+        const personHasSms = replyPersonId ? personSmsAvailable.get(replyPersonId) ?? false : false;
+        const { replyEmailAvailable } = resolveReplyChannelAvailability(
+            t,
+            replyPersonId,
+            channelContactDisplay,
+            personEmailAvailable,
+            personSmsAvailable
+        );
+        const replySmsAvailable = orgSmsOutboundEnabled && personHasSms;
+        const draftItem: InboxThreadListItem = {
             id: t.id,
             org_id: t.org_id,
             channel: t.channel,
@@ -438,10 +886,23 @@ export async function listInboxThreads(params: {
             sort_at: sortAt,
             contact_display: contactDisplay,
             family_display: familyDisplay,
+            location_display: locationDisplay,
+            status_display: statusDisplay,
+            related_children_display: relatedChildrenDisplay,
+            related_contacts_display: relatedContactsDisplay,
+            context_display: contextDisplay,
+            channel_contact_display: channelContactDisplay,
+            preview_lead: buildInboxPreviewLead(t.channel, preview),
+            reply_person_id: replyPersonId,
+            reply_email_available: replyEmailAvailable,
+            reply_sms_available: replySmsAvailable,
+            can_reply: false,
             entity_chip: entityChip,
-            last_message_preview: previews.get(t.id) ?? null,
+            last_message_preview: preview,
             has_unread: unreadFlags.get(t.id) ?? false,
         };
+        draftItem.can_reply = resolveInboxReplyTarget(draftItem).canReply;
+        return draftItem;
     });
 
     items.sort((a, b) => {

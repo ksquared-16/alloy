@@ -32,6 +32,17 @@ export type InboxThreadListItem = {
     sort_at: string | null;
     contact_display: string | null;
     family_display: string | null;
+    location_display: string | null;
+    status_display: string | null;
+    related_children_display: string | null;
+    related_contacts_display: string | null;
+    context_display: string | null;
+    channel_contact_display: string | null;
+    preview_lead: string | null;
+    reply_person_id: string | null;
+    reply_email_available: boolean;
+    reply_sms_available: boolean;
+    can_reply: boolean;
     entity_chip: InboxEntityChip | null;
     last_message_preview: InboxMessagePreview | null;
     has_unread: boolean;
