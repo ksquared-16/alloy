@@ -90,8 +90,7 @@ import {
     ADMINV2_OPEN_TOUR_SCHEDULE_MODAL,
 } from "@/lib/tours/actions/tourBookingActionClient";
 import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions/UpdateStatusAddNoteModal";
-import { AddRelatedPersonModal } from "@/components/admin/opportunity/actions/AddRelatedPersonModal";
-import { AddFamilyMemberModal } from "@/components/admin/opportunity/actions/AddFamilyMemberModal";
+import { AddPersonModal } from "@/components/admin/opportunity/actions/AddPersonModal";
 import { AddInquiryChildModal } from "@/components/admin/opportunity/actions/AddInquiryChildModal";
 import {
     WORKFLOW_ENTITY_TYPES,
@@ -254,8 +253,23 @@ import {
     logInquiryChildrenDebug,
     summarizeInquiryChildrenRows,
 } from "@/lib/admin/drawer/inquiryChildrenDebug";
-import { OpportunityInquiryChildrenRegistryActions } from "@/components/admin/opportunity/OpportunityInquiryChildrenRegistryActions";
 import { OpportunityInquiryChildrenShellChrome } from "@/components/admin/opportunity/OpportunityInquiryChildrenShellChrome";
+import {
+    ADMINV2_OPEN_ADD_INQUIRY_CHILD_MODAL,
+    isAddInquiryChildActionKey,
+    isAddInquiryChildFormKey,
+    parseOpenAddInquiryChildModalDetail,
+    resolveAddInquiryChildMode,
+} from "@/lib/admin/actions/addInquiryChildActionClient";
+import { submitAddInquiryChildFromDrawer } from "@/lib/admin/actions/submitAddInquiryChildFromDrawer";
+import {
+    ADMINV2_OPEN_ADD_PERSON_MODAL,
+    isAddPersonActionKey,
+    isAddPersonFormKey,
+    parseOpenAddPersonModalDetail,
+    resolveAddPersonActionKey,
+} from "@/lib/admin/actions/addPersonActionClient";
+import { submitAddPersonFromDrawer } from "@/lib/admin/actions/submitAddPersonFromDrawer";
 import {
     inquiryChildrenRowCountFromEntity,
     mapRawInquiryChildrenToDrawerRows,
@@ -1836,6 +1850,45 @@ export default function AdminEntityDrawer() {
     /** Pre-open coordinator applied bootstrap + drawer_primary before modal mount. */
     const opportunityDrawerFirstPaintPreloadedRef = useRef<string | null>(null);
     const [addInquiryChildState, setAddInquiryChildState] = useState<{ mode: "child" | "sibling" } | null>(null);
+    const openAddInquiryChildModal = useCallback((mode: "child" | "sibling") => {
+        setAddInquiryChildState({ mode });
+    }, []);
+    const [addPersonState, setAddPersonState] = useState<{ actionKey: string } | null>(null);
+    const openAddPersonModal = useCallback((actionKey: string) => {
+        setAddPersonState({ actionKey: actionKey.trim() || "add_family_member" });
+    }, []);
+    const routeOpportunityDrawerOpenForm = useCallback(
+        (opts: {
+            form_key: string;
+            action: ResolvedActionForClient;
+            executeContext: { surface: string; section_key?: string | null };
+        }) => {
+            const formKey = opts.form_key.trim();
+            if (isAddPersonFormKey(formKey) || isAddPersonActionKey(opts.action.key)) {
+                openAddPersonModal(resolveAddPersonActionKey({ actionKey: opts.action.key, formKey }));
+                return;
+            }
+            if (isAddInquiryChildFormKey(formKey) || isAddInquiryChildActionKey(opts.action.key)) {
+                const p =
+                    opts.action.payload && typeof opts.action.payload === "object"
+                        ? (opts.action.payload as Record<string, unknown>)
+                        : {};
+                openAddInquiryChildModal(
+                    resolveAddInquiryChildMode({
+                        actionKey: opts.action.key,
+                        payloadMode: p.mode != null ? String(p.mode) : null,
+                    })
+                );
+                return;
+            }
+            setActionFormState({
+                form_key: opts.form_key,
+                action: opts.action,
+                executeContext: opts.executeContext,
+            });
+        },
+        [openAddInquiryChildModal, openAddPersonModal]
+    );
     const [collectPaymentOpen, setCollectPaymentOpen] = useState(false);
     const [collectPaymentContext, setCollectPaymentContext] = useState<AdminCollectPaymentModalContext | null>(null);
     const [collectPaymentContextRefresh, setCollectPaymentContextRefresh] = useState(0);
@@ -3783,6 +3836,20 @@ export default function AdminEntityDrawer() {
             if (!drawer.id || drawer.id === "new" || drawer.type !== "opportunities") return;
             if (a.action_type === "open_form") {
                 const formKey = a.payload?.form_key != null ? String(a.payload.form_key).trim() : "";
+                if (isAddInquiryChildFormKey(formKey) || isAddInquiryChildActionKey(a.key)) {
+                    const p = a.payload && typeof a.payload === "object" ? (a.payload as Record<string, unknown>) : {};
+                    openAddInquiryChildModal(
+                        resolveAddInquiryChildMode({
+                            actionKey: a.key,
+                            payloadMode: p.mode != null ? String(p.mode) : null,
+                        })
+                    );
+                    return;
+                }
+                if (isAddPersonFormKey(formKey) || isAddPersonActionKey(a.key)) {
+                    openAddPersonModal(resolveAddPersonActionKey({ actionKey: a.key, formKey }));
+                    return;
+                }
                 if (formKey) setActionFormState({ form_key: formKey, action: a, executeContext: { surface: "record_header" } });
                 return;
             }
@@ -3835,12 +3902,20 @@ export default function AdminEntityDrawer() {
                 await applyRegistryResolvedActionClient(a, {
                     router,
                     openDrawer,
-                    openForm: (opts) =>
+                    openAddInquiryChild: openAddInquiryChildModal,
+                    openAddPerson: openAddPersonModal,
+                    openForm: (opts) => {
+                        const fk = opts.form_key.trim();
+                        if (isAddPersonFormKey(fk) || isAddPersonActionKey(opts.action.key)) {
+                            openAddPersonModal(resolveAddPersonActionKey({ actionKey: opts.action.key, formKey: fk }));
+                            return;
+                        }
                         setActionFormState({
                             form_key: opts.form_key,
                             action: opts.action,
                             executeContext: { surface: "record_header" },
-                        }),
+                        });
+                    },
                     entityId: drawer.id,
                     context: {
                         surface: "record_header",
@@ -3925,6 +4000,8 @@ export default function AdminEntityDrawer() {
             drawer.type,
             drawer.opportunityWorkspaceContext?.department_id,
             openDrawer,
+            openAddInquiryChildModal,
+            openAddPersonModal,
             opportunityDrawerActionPreflight.clearBlocked,
             opportunityWorkUnitDepartmentId,
             refetch,
@@ -4037,11 +4114,31 @@ export default function AdminEntityDrawer() {
             setDrawerTab("overview");
             window.setTimeout(() => scrollToInquiryChildrenSection(ce.detail?.field ?? null), 80);
         };
+        const onOpenAddInquiryChild = (ev: Event) => {
+            const detail = parseOpenAddInquiryChildModalDetail(ev);
+            if (!detail || drawer.type !== "opportunities" || drawer.id !== detail.opportunity_id) return;
+            openAddInquiryChildModal(detail.mode);
+        };
+        const onOpenAddPerson = (ev: Event) => {
+            const detail = parseOpenAddPersonModalDetail(ev);
+            if (!detail) return;
+            const oppId = detail.opportunity_id?.trim() ?? "";
+            if (oppId && drawer.type === "opportunities" && drawer.id === oppId) {
+                openAddPersonModal(
+                    resolveAddPersonActionKey({
+                        actionKey: detail.action_key,
+                        formKey: detail.action_key,
+                    })
+                );
+            }
+        };
         window.addEventListener("adminv2:open-send-form", onOpenSendForm as EventListener);
         window.addEventListener("adminv2:open-enrollment-packet", onOpenEnrollmentPacket as EventListener);
         window.addEventListener("adminv2:opportunity-focus-documents", onFocusDocuments as EventListener);
         window.addEventListener(ADMINV2_OPEN_ENROLLMENT_PACKET_REVIEW, onOpenEnrollmentPacketReview as EventListener);
         window.addEventListener(ADMINV2_OPPORTUNITY_FOCUS_INQUIRY_CHILDREN, onFocusInquiryChildren as EventListener);
+        window.addEventListener(ADMINV2_OPEN_ADD_INQUIRY_CHILD_MODAL, onOpenAddInquiryChild as EventListener);
+        window.addEventListener(ADMINV2_OPEN_ADD_PERSON_MODAL, onOpenAddPerson as EventListener);
         const onOpenTourSchedule = (ev: Event) => {
             const ce = ev as CustomEvent<{ opportunity_id?: string; action_key?: string }>;
             const id = typeof ce.detail?.opportunity_id === "string" ? ce.detail.opportunity_id.trim() : "";
@@ -4090,10 +4187,12 @@ export default function AdminEntityDrawer() {
             window.removeEventListener("adminv2:opportunity-focus-documents", onFocusDocuments as EventListener);
             window.removeEventListener(ADMINV2_OPEN_ENROLLMENT_PACKET_REVIEW, onOpenEnrollmentPacketReview as EventListener);
             window.removeEventListener(ADMINV2_OPPORTUNITY_FOCUS_INQUIRY_CHILDREN, onFocusInquiryChildren as EventListener);
+            window.removeEventListener(ADMINV2_OPEN_ADD_INQUIRY_CHILD_MODAL, onOpenAddInquiryChild as EventListener);
+            window.removeEventListener(ADMINV2_OPEN_ADD_PERSON_MODAL, onOpenAddPerson as EventListener);
             window.removeEventListener(ADMINV2_OPEN_TOUR_SCHEDULE_MODAL, onOpenTourSchedule as EventListener);
             window.removeEventListener(ADMINV2_OPEN_TOUR_OUTCOME_MODAL, onOpenTourOutcome as EventListener);
         };
-    }, [drawer.type, drawer.id]);
+    }, [drawer.type, drawer.id, openAddInquiryChildModal, openAddPersonModal]);
 
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
@@ -9715,13 +9814,14 @@ export default function AdminEntityDrawer() {
                         opportunityFullHydratePending={opportunityFullHydratePending}
                         opportunityFullHydrateApplied={opportunityFullRecordHydrateApplied}
                         opportunityFullHydrateFailed={opportunityBackgroundFullHydrateFailed}
-                        openForm={({ form_key, action }) => {
-                            setActionFormState({
+                        openForm={({ form_key, action }) =>
+                            routeOpportunityDrawerOpenForm({
                                 form_key,
                                 action,
                                 executeContext: { surface: "record_section", section_key: "customer_booking" },
-                            });
-                        }}
+                            })
+                        }
+                        openAddPerson={openAddPersonModal}
                         excludeActionKeys={opportunityRegistryHeaderActionKeys}
                         actionsFetchEnabled={opportunityRegistrySectionActionsFetchEnabled}
                         refreshKey={relatedPeopleRefreshKey}
@@ -9849,17 +9949,13 @@ export default function AdminEntityDrawer() {
         if (!allowInquiryChildren || !opportunityDrawerOverviewRevealReady) return {};
 
         const nKids = inquiryChildrenRowCountFromEntity(d);
-        const openAddInquiryChild = (mode: "child" | "sibling") => {
-            setAddInquiryChildState({ mode });
-        };
-
         return {
             inquiry_children: (
                 <OpportunityInquiryChildrenShellChrome
                     childrenCount={nKids}
                     canMutate={!!canMutate}
-                    onAddChild={() => openAddInquiryChild("child")}
-                    onAddSibling={() => openAddInquiryChild("sibling")}
+                    onAddChild={() => openAddInquiryChildModal("child")}
+                    onAddSibling={() => openAddInquiryChildModal("sibling")}
                 />
             ),
         } as Record<string, unknown>;
@@ -9868,6 +9964,7 @@ export default function AdminEntityDrawer() {
         drawer.type,
         drawer.id,
         canMutate,
+        openAddInquiryChildModal,
         recordChromeOpportunity.layout,
         opportunityDrawerShellContract,
         opportunityDrawerOverviewRevealReady,
@@ -14885,16 +14982,17 @@ export default function AdminEntityDrawer() {
                                                                                                 });
                                                                                                 void refetch();
                                                                                             }}
-                                                                                            openForm={({ form_key, action }) => {
-                                                                                                setActionFormState({
+                                                                                            openForm={({ form_key, action }) =>
+                                                                                                routeOpportunityDrawerOpenForm({
                                                                                                     form_key,
                                                                                                     action,
                                                                                                     executeContext: {
                                                                                                         surface: "record_section",
                                                                                                         section_key: "family_contacts",
                                                                                                     },
-                                                                                                });
-                                                                                            }}
+                                                                                                })
+                                                                                            }
+                                                                                            openAddPerson={openAddPersonModal}
                                                                                             excludeActionKeys={opportunityRegistryHeaderActionKeys}
                                                                                             actionsFetchEnabled={opportunityRegistrySectionActionsFetchEnabled}
                                                                                             refreshKey={relatedPeopleRefreshKey}
@@ -17706,97 +17804,56 @@ export default function AdminEntityDrawer() {
                         }
                     }}
                 />
-                <AddRelatedPersonModal
-                    open={actionFormState?.form_key === "add_related_person"}
-                    onClose={() => setActionFormState(null)}
-                    title={actionFormState?.action?.label ?? "Add parent/contact"}
+                <AddPersonModal
+                    open={!!addPersonState}
+                    title="Add person"
+                    defaultRoleType={
+                        addPersonState?.actionKey === "add_related_person" ? "primary_contact" : "parent"
+                    }
+                    onClose={() => setAddPersonState(null)}
                     onSubmit={async (payload) => {
-                        if (!drawer.id || drawer.id === "new") return;
-                        const actionKey = actionFormState?.action?.key ? String(actionFormState.action.key) : "add_related_person";
-                        setOpportunityActionLoading(actionKey);
-                        setSaveError(null);
-                        try {
-                            const deptId = opportunityWorkUnitDepartmentId?.trim() || null;
-                            const wuid =
-                                data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
-                                    ? String((data as { work_unit_id?: unknown }).work_unit_id).trim() || null
-                                    : null;
-                            const res = await fetch("/api/admin/actions/execute", {
-                                method: "POST",
-                                credentials: "include",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                    action_key: actionKey,
-                                    entity_type: "opportunity",
-                                    entity_id: drawer.id,
-                                    context: {
-                                        surface: "record_section",
-                                        section_key: "customer_booking",
-                                        department_id: deptId,
-                                        work_unit_id: wuid,
-                                    },
-                                    payload,
-                                }),
-                            });
-                            const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-                            if (!res.ok || !json.ok) {
-                                throw new Error(json.error ?? "Action failed");
-                            }
-                            setActionFormState(null);
-                            setRelatedPeopleRefreshKey((n) => n + 1);
-                            refetch();
-                        } finally {
-                            setOpportunityActionLoading(null);
+                        if (!drawer.id || drawer.id === "new" || drawer.type !== "opportunities") {
+                            throw new Error("Open an opportunity record before adding a person.");
                         }
-                    }}
-                />
-                <AddFamilyMemberModal
-                    open={actionFormState?.form_key === "add_family_member"}
-                    onClose={() => setActionFormState(null)}
-                    title={actionFormState?.action?.label ?? "Add family member"}
-                    onSubmit={async (payload) => {
-                        if (!drawer.id || drawer.id === "new") return;
-                        const actionKey = actionFormState?.action?.key ? String(actionFormState.action.key) : "add_family_member";
+                        const actionKey = addPersonState?.actionKey ?? "add_family_member";
+                        const deptId =
+                            opportunityWorkUnitDepartmentId?.trim() ||
+                            (data && typeof data === "object"
+                                ? String((data as { _work_unit_department_id?: unknown })._work_unit_department_id ?? "").trim() ||
+                                  null
+                                : null);
+                        const wuid =
+                            data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
+                                ? String((data as { work_unit_id?: unknown }).work_unit_id).trim() || null
+                                : null;
                         setOpportunityActionLoading(actionKey);
                         setSaveError(null);
                         try {
-                            const deptId =
-                                opportunityWorkUnitDepartmentId?.trim() ||
-                                (data && typeof data === "object"
-                                    ? String((data as { _work_unit_department_id?: unknown })._work_unit_department_id ?? "").trim() || null
-                                    : null);
-                            const wuid =
-                                data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
-                                    ? String((data as { work_unit_id?: unknown }).work_unit_id).trim() || null
-                                    : null;
-                            const xc = actionFormState?.executeContext;
-                            const res = await fetch("/api/admin/actions/execute", {
-                                method: "POST",
-                                credentials: "include",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                    action_key: actionKey,
-                                    entity_type: "opportunity",
-                                    entity_id: drawer.id,
-                                    context: {
-                                        surface: xc?.surface ?? "record_section",
-                                        section_key:
-                                            xc?.surface === "record_header"
-                                                ? null
-                                                : (xc?.section_key ?? "family_contacts"),
-                                        department_id: deptId,
-                                        work_unit_id: wuid,
-                                    },
-                                    payload,
-                                }),
+                            await submitAddPersonFromDrawer({
+                                entityType: "opportunity",
+                                entityId: drawer.id,
+                                actionKey,
+                                payload,
+                                context: {
+                                    surface: "record_section",
+                                    section_key: "family_contacts",
+                                    department_id: deptId,
+                                    work_unit_id: wuid,
+                                },
                             });
-                            const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-                            if (!res.ok || !json.ok) {
-                                throw new Error(json.error ?? "Action failed");
-                            }
-                            setActionFormState(null);
+                            setAddPersonState(null);
+                            setRegistryActionFeedback({
+                                type: "success",
+                                message: "Person added to this inquiry.",
+                                workflow_run_id: null,
+                            });
                             setRelatedPeopleRefreshKey((n) => n + 1);
-                            refetch();
+                            await refetch();
+                            window.dispatchEvent(
+                                new CustomEvent("adminv2:opportunity-updated", {
+                                    detail: { id: drawer.id, action_key: actionKey },
+                                })
+                            );
                         } finally {
                             setOpportunityActionLoading(null);
                         }
@@ -17806,15 +17863,45 @@ export default function AdminEntityDrawer() {
                     open={!!addInquiryChildState}
                     mode={addInquiryChildState?.mode ?? "child"}
                     onClose={() => setAddInquiryChildState(null)}
-                    onSubmit={() => {
-                        // Intentionally not persisted in this cleanup pass.
-                        // UI plumbing is in place; next slice should create/attach customer_member + opportunity_customer_member.
-                        setRegistryActionFeedback({
-                            type: "error",
-                            message: "Add child is not connected yet (TODO: persistence + match checks).",
-                            workflow_run_id: null,
+                    onSubmit={async (payload) => {
+                        if (!drawer.id || drawer.id === "new" || drawer.type !== "opportunities") {
+                            throw new Error("Open an opportunity record before adding a child.");
+                        }
+                        const record =
+                            entityDataMatchesDrawer(data, drawer.id) ? (data as Record<string, unknown>) : null;
+                        const customerId = String(record?.customer_id ?? "").trim();
+                        if (!customerId) {
+                            throw new Error("This inquiry is not linked to a household yet. Add a primary contact first.");
+                        }
+                        const existingRaw = (record?._inquiry_children as unknown[]) ?? [];
+                        const existingChildren = mapRawInquiryChildrenToDrawerRows(existingRaw).map((row) => ({
+                            first_name: row.first_name,
+                            last_name: row.last_name,
+                            dob: row.dob,
+                        }));
+                        const mode = addInquiryChildState?.mode ?? "child";
+                        await submitAddInquiryChildFromDrawer({
+                            opportunityId: drawer.id,
+                            customerId,
+                            payload,
+                            existingChildren,
                         });
                         setAddInquiryChildState(null);
+                        setRegistryActionFeedback({
+                            type: "success",
+                            message:
+                                mode === "sibling" ? "Sibling added to this inquiry." : "Child added to this inquiry.",
+                            workflow_run_id: null,
+                        });
+                        await refetch();
+                        window.dispatchEvent(
+                            new CustomEvent("adminv2:opportunity-updated", {
+                                detail: {
+                                    id: drawer.id,
+                                    action_key: mode === "sibling" ? "add_sibling" : "add_child",
+                                },
+                            })
+                        );
                     }}
                 />
                 <AdminDeleteConfirmModal

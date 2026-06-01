@@ -1,6 +1,7 @@
 "use client";
 
-import { RecordDrawerActionRail, recordDrawerHeaderActionsPanelClassName } from "@/components/admin/drawer/record/RecordDrawerActionRail";
+import { RecordDrawerActionRail } from "@/components/admin/drawer/record/RecordDrawerActionRail";
+import { opportunityDrawerHeaderActionsPanelClassName as recordDrawerHeaderActionsPanelClassName } from "@/components/admin/drawer/record/recordDrawerHeaderActionClasses";
 
 export { recordDrawerHeaderActionsPanelClassName as opportunityDrawerHeaderActionsPanelClassName };
 

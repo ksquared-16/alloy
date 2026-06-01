@@ -93,10 +93,10 @@ This pass widens scope: **every AdminV2 operator action** should be classifiable
 | action_key | Group | runtime_kind | Def | Primary placement | Current behavior | Preflight | Opens | Mutates | Emits | Gap / notes | Demo |
 |------------|-------|--------------|-----|-------------------|------------------|-----------|-------|---------|-------|-------------|------|
 | `create_lead` | entry | `create_related_record` | active | `right_rail` | `open_form` → create-lead flow / `executeAdminAction` create_lead | no | Create lead modal / WU page | new opportunity + person | events | Phase 1A; sentinel entity id | **P0** |
-| `add_child` | record | `create_related_record` | active | `record_section` inquiry_children | **Dual path:** shell chrome → `AddInquiryChildModal` (works); registry `open_form` → **no drawer modal handler** for `add_inquiry_child` | no | Add Child modal | OCM + members | refetch | **Converge registry → same modal** | **P0** |
+| `add_child` | record | `create_related_record` | active | `record_section` inquiry_children + shell chrome | **Pass A shipped:** shell + registry + header `open_form` → `AddInquiryChildModal`; submit via `submitAddInquiryChildFromDrawer` | no (submit validation) | Add Child modal | OCM + members | refetch + `adminv2:opportunity-updated` | — | **P0** |
 | `add_sibling` | record | `create_related_record` | active | inquiry_children section | Same as `add_child` | no | Add Child modal (sibling mode) | OCM | refetch | Same convergence | **P0** |
-| `add_related_person` | record | `create_related_record` | active | customer_booking (legacy off) | `open_form` → modal → execute `add_related_person` | no | Add related person modal | person + customer_persons | events | Family contacts section | **P0** |
-| `add_family_member` | record | `create_related_record` | active | `record_section` family_contacts | `open_form` modal → execute | no | Add family modal | household links | events | Moved off header per overexposure fix | **P0** |
+| `add_related_person` | record | `create_related_record` | active | customer_booking (legacy off) | **Pass B:** `AddPersonModal` → `submitAddPersonFromDrawer` (household + opportunity link) | no | Add person modal | person + customer_persons + opportunity_persons | refetch + events | Same modal as `add_family_member` | **P0** |
+| `add_family_member` | record | `create_related_record` | active | `record_section` family_contacts | **Pass B shipped** — canonical Add Person path | no | Add person modal | person + customer_persons + opportunity_persons | refetch + events | — | **P0** |
 | `assign_classroom` | record / enrollment | `open_related_record` (focus) | active | record_section (stage-gated) | `ui_intent` → focus inquiry field | no | scroll/focus | — | — | Not execute; field edit in layout | P1 |
 | `assign_schedule` | record | `open_related_record` (focus) | active | section | focus `desired_schedule_type` | no | scroll/focus | — | — | Same | P1 |
 | `set_start_date` | record | `open_related_record` (focus) | active | section | focus `desired_start_date` | no | scroll/focus | — | — | Same | P1 |
@@ -256,7 +256,7 @@ This pass widens scope: **every AdminV2 operator action** should be classifiable
 | Blocker | Impact |
 |---------|--------|
 | `move_to_waitlist` inactive in DB | Action may not appear in menu |
-| `add_child` registry vs shell divergence | Section registry button may not open modal |
+| ~~`add_child` registry vs shell divergence~~ | **Resolved (Pass A)** — unified `openAddInquiryChildModal` / event |
 | `create_task` opens panel only | Weak “create task” demo |
 | Task complete/reschedule not in action catalog | Inconsistent “action system” story |
 | Dual tour paths (bar vs registry) | Acceptable for demo if keys documented |

@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
     const v = parsed.value;
 
     const supabase = createAdminClient();
-    if (!(await assertRowOrg(supabase, "opportunities", v.entity_id, ctx.orgId)).ok) {
+    if (v.entity_id && !(await assertRowOrg(supabase, "opportunities", v.entity_id, ctx.orgId)).ok) {
         return NextResponse.json({ ok: false, error: "NOT_FOUND", message: "Opportunity not found." }, { status: 404 });
     }
 

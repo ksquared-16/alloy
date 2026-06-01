@@ -1,5 +1,5 @@
-import type { EntityLabelsMap } from "@/contexts/EntityLabelsContext";
-import { getEntityLabel } from "@/contexts/EntityLabelsContext";
+import type { EntityLabelsMap } from "@/lib/admin/entityLabelDisplay";
+import { getEntityLabel } from "@/lib/admin/entityLabelDisplay";
 
 /**
  * field_definitions / field_section_definitions use singular API entity_type

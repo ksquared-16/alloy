@@ -57,7 +57,7 @@ export function CreateLeadModal(props: {
                     <div className="min-w-0">
                         <div className="text-sm font-semibold text-alloy-midnight">{title}</div>
                         <div className="mt-0.5 text-[12px] text-alloy-midnight/60">
-                            Add a parent and create a new lead in the pipeline.
+                            Add a person and create a new lead. A child can be added later.
                         </div>
                     </div>
                     <button
@@ -73,7 +73,7 @@ export function CreateLeadModal(props: {
                 <div className="space-y-3 px-5 py-4">
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <div className={label}>Parent first name</div>
+                            <div className={label}>First name</div>
                             <input
                                 value={firstName}
                                 disabled={busy}
@@ -83,7 +83,7 @@ export function CreateLeadModal(props: {
                             />
                         </div>
                         <div>
-                            <div className={label}>Parent last name</div>
+                            <div className={label}>Last name</div>
                             <input
                                 value={lastName}
                                 disabled={busy}

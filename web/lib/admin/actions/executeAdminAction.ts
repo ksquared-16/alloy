@@ -10,6 +10,7 @@ import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 import { validateStatusTransition } from "@/lib/admin/statusTransitionRules";
 import { emitEvent } from "@/lib/emitEvent";
 import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
+import { upsertAndLinkPersonForAdmin } from "@/lib/admin/person/upsertAndLinkPersonForAdmin";
 import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
 import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
 import { executeWorkflowRun } from "@/lib/workflowRun";
@@ -410,20 +411,17 @@ export async function executeAdminAction(
             let updatedRow: Record<string, unknown> | null = null;
             const submitActionType = merged.submit_action_type != null ? String(merged.submit_action_type).trim() : "";
 
-            if (formKey === "add_related_person") {
+            if (formKey === "add_related_person" || formKey === "add_family_member") {
                 const firstName = merged.first_name != null ? String(merged.first_name).trim() : "";
                 const lastName = merged.last_name != null ? String(merged.last_name).trim() : "";
-                const email = merged.email != null ? String(merged.email).trim() : "";
-                const phone = merged.phone != null ? String(merged.phone).trim() : "";
+                const email = merged.email != null ? String(merged.email).trim() || null : null;
+                const phone = merged.phone != null ? String(merged.phone).trim() || null : null;
                 const roleTypeRaw = merged.role_type != null ? String(merged.role_type).trim() : "";
-                const roleType = roleTypeRaw || "primary_contact";
 
-                if (!firstName || !lastName) {
-                    return { ok: false, correlation_id: correlationId, error: "Missing required field: first_name/last_name", status: 400 };
-                }
-
-                let customerId: string | null = null;
                 const entityNorm = String(entityTypeRaw).trim().toLowerCase();
+                let customerId: string | null = null;
+                let opportunityId: string | null = null;
+
                 if (entityNorm === "opportunity" || entityNorm === "opportunities") {
                     const { data: opp } = await supabase
                         .from("opportunities")
@@ -434,200 +432,59 @@ export async function executeAdminAction(
                     if (!opp) {
                         return { ok: false, correlation_id: correlationId, error: "Not found", status: 404 };
                     }
+                    opportunityId = entityId;
                     customerId = (opp as { customer_id?: string | null }).customer_id ?? null;
                 } else if (entityNorm === "customer" || entityNorm === "customers") {
                     customerId = entityId;
-                } else {
-                    return { ok: false, correlation_id: correlationId, error: "add_related_person supports opportunity or customer entities only", status: 400 };
-                }
-
-                if (!customerId) {
-                    return { ok: false, correlation_id: correlationId, error: "Record is not linked to a household/customer yet", status: 400 };
-                }
-
-                // Create or find a person (dedupe by email/phone when provided; else insert new).
-                const foundOrCreated = await findOrCreatePersonInOrgWithMeta(supabase, {
-                    email: email || null,
-                    phone: phone || null,
-                    first_name: firstName,
-                    last_name: lastName,
-                    org_id: ctx.orgId,
-                });
-                let personId: string | null = foundOrCreated?.id ?? null;
-                if (!personId) {
-                    const { data: created, error } = await supabase
-                        .from("persons")
-                        .insert({
-                            org_id: ctx.orgId,
-                            first_name: firstName,
-                            last_name: lastName,
-                            email: email || null,
-                            phone: phone || null,
-                        })
-                        .select("id")
-                        .single();
-                    if (error || !created) {
-                        return { ok: false, correlation_id: correlationId, error: error?.message ?? "Failed to create person", status: 400 };
-                    }
-                    personId = (created as { id: string }).id;
-                }
-
-                // Link person to customer via existing relationship table.
-                const { data: existingLink } = await supabase
-                    .from("customer_persons")
-                    .select("id")
-                    .eq("org_id", ctx.orgId)
-                    .eq("customer_id", customerId)
-                    .eq("person_id", personId)
-                    .eq("role_type", roleType)
-                    .maybeSingle();
-                if (existingLink?.id) {
-                    return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
-                        kind: "add_related_person",
-                        customer_id: customerId,
-                        person_id: personId,
-                        customer_person_id: (existingLink as { id: string }).id,
-                        existed: true,
-                    });
-                }
-
-                const { data: insertedLink, error: linkErr } = await supabase
-                    .from("customer_persons")
-                    .insert({
-                        org_id: ctx.orgId,
-                        customer_id: customerId,
-                        person_id: personId,
-                        role_type: roleType,
-                        is_primary: false,
-                        metadata: {},
-                    })
-                    .select("id")
-                    .single();
-                if (linkErr || !insertedLink) {
-                    if (linkErr?.code === "23505") {
-                        return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
-                            kind: "add_related_person",
-                            customer_id: customerId,
-                            person_id: personId,
-                            existed: true,
-                        });
-                    }
-                    return { ok: false, correlation_id: correlationId, error: linkErr?.message ?? "Failed to link person to customer", status: 400 };
-                }
-
-                return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
-                    kind: "add_related_person",
-                    customer_id: customerId,
-                    person_id: personId,
-                    customer_person_id: (insertedLink as { id: string }).id,
-                    existed: false,
-                });
-            }
-
-            if (formKey === "add_family_member") {
-                const firstName = merged.first_name != null ? String(merged.first_name).trim() : "";
-                const lastName = merged.last_name != null ? String(merged.last_name).trim() : "";
-                const email = merged.email != null ? String(merged.email).trim() : "";
-                const phone = merged.phone != null ? String(merged.phone).trim() : "";
-                const roleTypeRaw = merged.role_type != null ? String(merged.role_type).trim() : "";
-                const roleType = roleTypeRaw || "family_member";
-
-                if (!firstName || !lastName) {
-                    return { ok: false, correlation_id: correlationId, error: "Missing required field: first_name/last_name", status: 400 };
-                }
-
-                const entityNorm = String(entityTypeRaw).trim().toLowerCase();
-                if (entityNorm !== "opportunity" && entityNorm !== "opportunities") {
-                    return { ok: false, correlation_id: correlationId, error: "add_family_member supports opportunity entities only", status: 400 };
-                }
-
-                const { data: opp } = await supabase
-                    .from("opportunities")
-                    .select("id, org_id")
-                    .eq("id", entityId)
-                    .eq("org_id", ctx.orgId)
-                    .maybeSingle();
-                if (!opp) {
-                    return { ok: false, correlation_id: correlationId, error: "Not found", status: 404 };
-                }
-
-                const foundOrCreated = await findOrCreatePersonInOrgWithMeta(supabase, {
-                    email: email || null,
-                    phone: phone || null,
-                    first_name: firstName,
-                    last_name: lastName,
-                    org_id: ctx.orgId,
-                });
-                let personId: string | null = foundOrCreated?.id ?? null;
-                if (!personId) {
-                    const { data: created, error } = await supabase
-                        .from("persons")
-                        .insert({
-                            org_id: ctx.orgId,
-                            first_name: firstName,
-                            last_name: lastName,
-                            email: email || null,
-                            phone: phone || null,
-                        })
-                        .select("id")
-                        .single();
-                    if (error || !created) {
-                        return { ok: false, correlation_id: correlationId, error: error?.message ?? "Failed to create person", status: 400 };
-                    }
-                    personId = (created as { id: string }).id;
-                }
-
-                const { data: existingRow } = await supabase
-                    .from("opportunity_persons")
-                    .select("id")
-                    .eq("org_id", ctx.orgId)
-                    .eq("opportunity_id", entityId)
-                    .eq("person_id", personId)
-                    .maybeSingle();
-                if (existingRow?.id) {
-                    return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
-                        kind: "add_family_member",
-                        opportunity_id: entityId,
-                        person_id: personId,
-                        opportunity_person_id: (existingRow as { id: string }).id,
-                        existed: true,
-                    });
-                }
-
-                const { data: insertedOppPerson, error: oppPersonErr } = await supabase
-                    .from("opportunity_persons")
-                    .insert({
-                        org_id: ctx.orgId,
-                        opportunity_id: entityId,
-                        person_id: personId,
-                        role_type: roleType,
-                        metadata: {},
-                    })
-                    .select("id")
-                    .single();
-                if (oppPersonErr || !insertedOppPerson) {
-                    if (oppPersonErr?.code === "23505") {
-                        return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
-                            kind: "add_family_member",
-                            opportunity_id: entityId,
-                            person_id: personId,
-                            existed: true,
-                        });
-                    }
+                } else if (formKey === "add_family_member") {
                     return {
                         ok: false,
                         correlation_id: correlationId,
-                        error: oppPersonErr?.message ?? "Failed to link person to opportunity",
+                        error: "add_family_member supports opportunity entities only",
+                        status: 400,
+                    };
+                } else {
+                    return {
+                        ok: false,
+                        correlation_id: correlationId,
+                        error: "add_related_person supports opportunity or customer entities only",
                         status: 400,
                     };
                 }
 
+                if (!customerId && !opportunityId) {
+                    return {
+                        ok: false,
+                        correlation_id: correlationId,
+                        error: "Record is not linked to a household/customer yet",
+                        status: 400,
+                    };
+                }
+
+                const linked = await upsertAndLinkPersonForAdmin(supabase, {
+                    orgId: ctx.orgId,
+                    firstName,
+                    lastName,
+                    email,
+                    phone,
+                    roleType: roleTypeRaw,
+                    customerId,
+                    opportunityId,
+                    actionKey,
+                });
+                if (!linked.ok) {
+                    return { ok: false, correlation_id: correlationId, error: linked.error, status: 400 };
+                }
+
+                const kind = formKey === "add_related_person" ? "add_related_person" : "add_family_member";
                 return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
-                    kind: "add_family_member",
-                    opportunity_id: entityId,
-                    person_id: personId,
-                    opportunity_person_id: (insertedOppPerson as { id: string }).id,
-                    existed: false,
+                    kind,
+                    customer_id: customerId,
+                    opportunity_id: opportunityId,
+                    person_id: linked.result.person_id,
+                    customer_person_id: linked.result.customer_person_id,
+                    opportunity_person_id: linked.result.opportunity_person_id,
+                    existed: linked.result.existed,
                 });
             }
 

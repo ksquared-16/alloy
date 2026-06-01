@@ -9,7 +9,7 @@ import {
     type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 
-import { recordDrawerHeaderActionClassName } from "@/components/admin/drawer/record/RecordDrawerActionRail";
+import { recordDrawerHeaderActionClassName } from "@/components/admin/drawer/record/recordDrawerHeaderActionClasses";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 
 type Props = {

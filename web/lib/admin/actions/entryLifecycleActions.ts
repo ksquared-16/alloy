@@ -53,13 +53,13 @@ export async function executeCreateLeadAction(
     const phone = trim(input.merged.phone) || null;
 
     if (!firstName) {
-        return { ok: false, error: "Parent first name is required.", status: 400 };
+        return { ok: false, error: "First name is required.", status: 400 };
     }
     if (!lastName) {
-        return { ok: false, error: "Parent last name is required.", status: 400 };
+        return { ok: false, error: "Last name is required.", status: 400 };
     }
     if (!email && !phone) {
-        return { ok: false, error: "Phone or email is required for a new lead.", status: 400 };
+        return { ok: false, error: "Phone or email is required.", status: 400 };
     }
 
     const verticalId = trim(input.merged.vertical_id) || (await resolveOrgDefaultVerticalId(supabase, ctx.orgId));
@@ -87,7 +87,7 @@ export async function executeCreateLeadAction(
     });
     const personId = person?.id?.trim() || null;
     if (!personId) {
-        return { ok: false, error: "Could not create or resolve parent person.", status: 400 };
+        return { ok: false, error: "Could not create or resolve person.", status: 400 };
     }
 
     const { customer_id: customerId } = await ensureCustomerForPersonNative(supabase, personId, {
@@ -137,7 +137,7 @@ export async function executeCreateLeadAction(
         metadata: { source: "create_lead", role: "primary_guardian" },
     });
     if (opErr && opErr.code !== "23505") {
-        return { ok: false, error: opErr.message ?? "Failed to link parent to lead.", status: 400 };
+        return { ok: false, error: opErr.message ?? "Failed to link person to lead.", status: 400 };
     }
 
     try {

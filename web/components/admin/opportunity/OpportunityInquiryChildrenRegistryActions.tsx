@@ -27,10 +27,12 @@ export function OpportunityInquiryChildrenRegistryActions(props: {
     router: RouterLike;
     openDrawer: OpenDrawerFn;
     openForm: (opts: { form_key: string; action: ResolvedActionForClient }) => void;
+    openAddInquiryChild?: (mode: "child" | "sibling") => void;
     /** Suppress keys already on record_header (e.g. add_child / add_sibling). */
     excludeActionKeys?: Set<string>;
 }) {
-    const { opportunityId, childrenCount, canMutate, router, openDrawer, openForm, excludeActionKeys } = props;
+    const { opportunityId, childrenCount, canMutate, router, openDrawer, openForm, openAddInquiryChild, excludeActionKeys } =
+        props;
     const [bySlot, setBySlot] = useState<ResolvedActionsBySlot | null>(null);
     const [loading, setLoading] = useState(true);
     const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -106,6 +108,7 @@ export function OpportunityInquiryChildrenRegistryActions(props: {
                             router,
                             openDrawer,
                             openForm,
+                            openAddInquiryChild,
                             entityId: opportunityId,
                             context: { surface: "record_section", section_key: "inquiry_children" },
                         });

@@ -27,6 +27,7 @@ export function OpportunityHouseholdPeoplePanel(props: {
     router: { push: (href: string) => void; refresh: () => void };
     openDrawer: (opts: { type: AdminDrawerEntityType; id: string }) => void;
     openForm: (opts: { form_key: string; action: ResolvedActionForClient }) => void;
+    openAddPerson?: (actionKey: string) => void;
     /** Increment to force refresh after an action. */
     refreshKey: number;
     /** @deprecated Prefer opportunityFullHydratePending. */
@@ -49,6 +50,7 @@ export function OpportunityHouseholdPeoplePanel(props: {
         router,
         openDrawer,
         openForm,
+        openAddPerson,
         refreshKey,
         recordHydrationPending,
         opportunityFullHydratePending,
@@ -131,6 +133,7 @@ export function OpportunityHouseholdPeoplePanel(props: {
                 router={router}
                 openDrawer={openDrawer}
                 openForm={openForm}
+                openAddPerson={openAddPerson}
                 onApplied={() => void load()}
                 actionsFetchEnabled={actionsFetchEnabled}
             />

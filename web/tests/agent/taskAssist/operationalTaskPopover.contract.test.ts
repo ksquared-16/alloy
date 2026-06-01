@@ -15,5 +15,8 @@ describe("OperationalTaskDetailPopover", () => {
         expect(src).toContain("Edit task");
         expect(src).toContain("patchOperationalTaskFields");
         expect(src).toContain('data-operational-task-edit="true"');
+        expect(src).toContain("formatOperationalTaskSourceLabel");
+        expect(src).not.toContain("{task.source}");
+        expect(src).toContain('data-operational-task-source-label="true"');
     });
 });

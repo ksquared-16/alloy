@@ -4,13 +4,17 @@ import {
     isTaskAssistV1Uuid,
     validateTaskAssistV1ParsedJsonNoForbiddenWorkflowKeys,
 } from "@/lib/agent/taskAssist/taskAssistSuggestionValidators";
+import {
+    enrichOperationalTasksForWorkspace,
+    type OperationalTaskWorkspaceRow,
+} from "@/lib/admin/operationalTasksWorkspaceEnrichment";
 import { getTaskAssistProposalById } from "@/lib/agent/taskAssist/taskAssistProposalPersistence";
 
 export type OperationalTaskRow = {
     id: string;
     org_id: string;
-    entity_type: string;
-    entity_id: string;
+    entity_type: string | null;
+    entity_id: string | null;
     assigned_to_user_id: string | null;
     created_by: string;
     title: string;
@@ -95,7 +99,7 @@ export async function createOperationalTask(params: {
     supabase: SupabaseClient;
     orgId: string;
     userId: string;
-    entityId: string;
+    entityId: string | null;
     title: string;
     description: string | null;
     dueAtIso: string;
@@ -104,7 +108,17 @@ export async function createOperationalTask(params: {
     assignedToUserId: string | null;
     metadata?: Record<string, unknown> | null;
 }): Promise<{ ok: true; row: OperationalTaskRow } | { ok: false; error: string; message: string; status?: number }> {
+    const linkedEntityId = params.entityId?.trim() || null;
+
     if (params.proposalId) {
+        if (!linkedEntityId) {
+            return {
+                ok: false,
+                error: "PROPOSAL_REQUIRES_ENTITY",
+                message: "proposal_id requires a linked opportunity.",
+                status: 400,
+            };
+        }
         const pr = await getTaskAssistProposalById({
             supabase: params.supabase,
             orgId: params.orgId,
@@ -113,7 +127,7 @@ export async function createOperationalTask(params: {
         if (!pr.ok) {
             return { ok: false, error: pr.error, message: pr.message, status: pr.status };
         }
-        if (pr.row.entity_type !== "opportunities" || pr.row.entity_id !== params.entityId) {
+        if (pr.row.entity_type !== "opportunities" || pr.row.entity_id !== linkedEntityId) {
             return { ok: false, error: "PROPOSAL_ENTITY_MISMATCH", message: "proposal_id does not match entity.", status: 400 };
         }
     }
@@ -122,8 +136,8 @@ export async function createOperationalTask(params: {
         .from("operational_tasks")
         .insert({
             org_id: params.orgId,
-            entity_type: "opportunities",
-            entity_id: params.entityId,
+            entity_type: linkedEntityId ? "opportunities" : null,
+            entity_id: linkedEntityId,
             assigned_to_user_id: params.assignedToUserId,
             created_by: params.userId,
             title: params.title.trim(),
@@ -143,11 +157,14 @@ export async function createOperationalTask(params: {
     }
 
     const row = mapTaskRow(data as Record<string, unknown>);
-    if (params.source === "task_assist" || params.source === "manual") {
+    if (
+        linkedEntityId &&
+        (params.source === "task_assist" || params.source === "manual")
+    ) {
         await syncOpportunityNextFollowUpFromOperationalTasks({
             supabase: params.supabase,
             orgId: params.orgId,
-            opportunityId: params.entityId,
+            opportunityId: linkedEntityId,
         });
     }
     return { ok: true, row };
@@ -191,13 +208,12 @@ export async function listOperationalTasksForWorkspace(params: {
     userId: string;
     filter: OperationalTaskWorkspaceFilter;
     limit?: number;
-}): Promise<{ ok: true; rows: OperationalTaskRow[] } | { ok: false; error: string; message: string }> {
+}): Promise<{ ok: true; rows: OperationalTaskWorkspaceRow[] } | { ok: false; error: string; message: string }> {
     const limit = Math.min(Math.max(params.limit ?? 100, 1), 200);
     let q = params.supabase
         .from("operational_tasks")
         .select("*")
         .eq("org_id", params.orgId)
-        .eq("entity_type", "opportunities")
         .order("due_at", { ascending: true })
         .limit(limit);
 
@@ -230,7 +246,13 @@ export async function listOperationalTasksForWorkspace(params: {
         });
     }
 
-    return { ok: true, rows };
+    const enriched = await enrichOperationalTasksForWorkspace({
+        supabase: params.supabase,
+        orgId: params.orgId,
+        tasks: rows,
+    });
+
+    return { ok: true, rows: enriched };
 }
 
 export async function summarizeOperationalTaskCounts(params: {
@@ -306,7 +328,7 @@ export async function completeOperationalTask(params: {
         return { ok: false, error: "DB_UPDATE_FAILED", message: error?.message ?? "Complete failed.", status: 409 };
     }
     const row = mapTaskRow(data as Record<string, unknown>);
-    if (row.source === "task_assist") {
+    if (row.source === "task_assist" && row.entity_id) {
         await syncOpportunityNextFollowUpFromOperationalTasks({
             supabase: params.supabase,
             orgId: params.orgId,
@@ -340,7 +362,7 @@ export async function cancelOperationalTask(params: {
         return { ok: false, error: "DB_UPDATE_FAILED", message: error?.message ?? "Cancel failed.", status: 409 };
     }
     const row = mapTaskRow(data as Record<string, unknown>);
-    if (row.source === "task_assist") {
+    if (row.source === "task_assist" && row.entity_id) {
         await syncOpportunityNextFollowUpFromOperationalTasks({
             supabase: params.supabase,
             orgId: params.orgId,
@@ -397,7 +419,7 @@ export async function updateOperationalTaskFields(params: {
         return { ok: false, error: "DB_UPDATE_FAILED", message: error?.message ?? "Update failed.", status: 409 };
     }
     const row = mapTaskRow(data as Record<string, unknown>);
-    if (row.source === "task_assist") {
+    if (row.source === "task_assist" && row.entity_id) {
         await syncOpportunityNextFollowUpFromOperationalTasks({
             supabase: params.supabase,
             orgId: params.orgId,
@@ -408,7 +430,8 @@ export async function updateOperationalTaskFields(params: {
 }
 
 export function validateOperationalTaskCreateBody(body: unknown): { ok: false; error: string; message: string } | { ok: true; value: {
-    entity_id: string;
+    entity_type: "opportunities" | null;
+    entity_id: string | null;
     title: string;
     description: string | null;
     due_at: string;
@@ -440,12 +463,25 @@ export function validateOperationalTaskCreateBody(body: unknown): { ok: false; e
             return { ok: false, error: "UNKNOWN_BODY_KEYS", message: `Unexpected key: ${k}` };
         }
     }
-    if (body.entity_type !== "opportunities") {
-        return { ok: false, error: "ENTITY_TYPE_UNSUPPORTED", message: "entity_type must be opportunities." };
+    if (body.entity_type != null && body.entity_type !== "" && body.entity_type !== "opportunities") {
+        return { ok: false, error: "ENTITY_TYPE_UNSUPPORTED", message: "entity_type must be opportunities when provided." };
     }
-    const entityId = typeof body.entity_id === "string" ? body.entity_id.trim() : "";
-    if (!entityId || !isTaskAssistV1Uuid(entityId)) {
-        return { ok: false, error: "ENTITY_ID_INVALID", message: "entity_id must be a UUID." };
+
+    const entityIdRaw = body.entity_id;
+    let entityId: string | null = null;
+    if (entityIdRaw != null && entityIdRaw !== "") {
+        if (typeof entityIdRaw !== "string") {
+            return { ok: false, error: "ENTITY_ID_INVALID", message: "entity_id must be a UUID string or null." };
+        }
+        entityId = entityIdRaw.trim();
+        if (!entityId || !isTaskAssistV1Uuid(entityId)) {
+            return { ok: false, error: "ENTITY_ID_INVALID", message: "entity_id must be a UUID." };
+        }
+        if (body.entity_type !== "opportunities") {
+            return { ok: false, error: "ENTITY_TYPE_REQUIRED", message: "entity_type must be opportunities when entity_id is set." };
+        }
+    } else if (body.entity_type === "opportunities") {
+        return { ok: false, error: "ENTITY_ID_REQUIRED", message: "entity_id is required when entity_type is opportunities." };
     }
     const title = typeof body.title === "string" ? body.title.trim() : "";
     if (!title) {
@@ -484,6 +520,7 @@ export function validateOperationalTaskCreateBody(body: unknown): { ok: false; e
     return {
         ok: true,
         value: {
+            entity_type: entityId ? "opportunities" : null,
             entity_id: entityId,
             title,
             description,
@@ -500,8 +537,8 @@ function mapTaskRow(data: Record<string, unknown>): OperationalTaskRow {
     return {
         id: String(data.id),
         org_id: String(data.org_id),
-        entity_type: String(data.entity_type),
-        entity_id: String(data.entity_id),
+        entity_type: data.entity_type != null ? String(data.entity_type) : null,
+        entity_id: data.entity_id != null ? String(data.entity_id) : null,
         assigned_to_user_id: data.assigned_to_user_id != null ? String(data.assigned_to_user_id) : null,
         created_by: String(data.created_by),
         title: String(data.title),

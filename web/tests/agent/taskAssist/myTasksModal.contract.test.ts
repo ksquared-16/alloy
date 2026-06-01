@@ -11,6 +11,10 @@ const navBadge = join(
 const modal = join(dirname(fileURLToPath(import.meta.url)), "../../../app/adminV2/components/MyTasksModal.tsx");
 const panel = join(dirname(fileURLToPath(import.meta.url)), "../../../app/adminV2/components/MyTasksPanel.tsx");
 const taskCard = join(dirname(fileURLToPath(import.meta.url)), "../../../app/adminV2/components/MyTasksTaskCard.tsx");
+const createTaskCard = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "../../../app/adminV2/components/MyTasksCreateTaskCard.tsx"
+);
 const sourceLabel = join(
     dirname(fileURLToPath(import.meta.url)),
     "../../../lib/agent/taskAssist/formatOperationalTaskSourceLabel.ts"
@@ -47,6 +51,12 @@ describe("My tasks modal UX", () => {
         expect(cardSrc).not.toContain("{task.source}");
         expect(cardSrc).toContain('data-adminv2-task-source-label="true"');
         expect(cardSrc).toContain('data-adminv2-task-reschedule="true"');
+        expect(cardSrc).toContain('data-adminv2-task-context="true"');
+        expect(cardSrc).toContain("buildMyTasksRecordContextLines");
+        expect(cardSrc).toContain("normalizeOperationalTaskTitleDisplay");
+        expect(cardSrc).toContain('data-adminv2-task-children="true"');
+        expect(cardSrc).not.toContain("Related to ·");
+        expect(cardSrc).not.toContain("Contact ·");
         expect(readFileSync(sourceLabel, "utf8")).not.toMatch(/return\s+['"]task_assist['"]/);
     });
 
@@ -62,9 +72,15 @@ describe("My tasks modal UX", () => {
         expect(readFileSync(panel, "utf8")).toContain("data-adminv2-new-task");
         expect(readFileSync(panel, "utf8")).toContain("createOperationalTask");
         expect(readFileSync(panel, "utf8")).toContain("MyTasksTaskCard");
-        expect(readFileSync(panel, "utf8")).toContain("saveReschedule");
-        expect(readFileSync(panel, "utf8")).toContain('data-adminv2-tasks-loading="true"');
-        expect(readFileSync(panel, "utf8")).toContain('data-adminv2-tasks-empty="true"');
+        expect(readFileSync(panel, "utf8")).toContain("MyTasksCreateTaskCard");
+        expect(readFileSync(panel, "utf8")).toContain("myTasksRowMatchesSearch");
+        expect(readFileSync(panel, "utf8")).toContain('data-adminv2-tasks-search="true');
+        expect(readFileSync(createTaskCard, "utf8")).toContain("What is the task?");
+        expect(readFileSync(createTaskCard, "utf8")).toContain('data-adminv2-create-task-mode="general"');
+        expect(readFileSync(createTaskCard, "utf8")).not.toContain("Open a lead first");
+        expect(readFileSync(panel, "utf8")).toContain("useEntityLabelsOptional");
+        expect(readFileSync(panel, "utf8")).not.toMatch(/Related to ·/);
+        expect(readFileSync(panel, "utf8")).not.toContain("inquiries appear here");
     });
 
     it("work-unit QueueBlock still dispatches open_record on row click", () => {

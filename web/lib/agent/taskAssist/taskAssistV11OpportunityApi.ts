@@ -108,8 +108,8 @@ export function buildScheduleSendBody(params: {
 }
 
 export type OperationalTaskCreateBody = {
-    entity_type: "opportunities";
-    entity_id: string;
+    entity_type?: "opportunities";
+    entity_id?: string;
     title: string;
     description: string | null;
     due_at: string;
@@ -118,22 +118,26 @@ export type OperationalTaskCreateBody = {
 };
 
 export function buildOperationalTaskBody(params: {
-    entityId: string;
+    entityId?: string | null;
     title: string;
     dueAtIso: string;
     proposalId?: string | null;
     description?: string | null;
     source?: "task_assist" | "manual";
 }): OperationalTaskCreateBody {
-    return {
-        entity_type: "opportunities",
-        entity_id: params.entityId,
+    const entityId = params.entityId?.trim() || null;
+    const body: OperationalTaskCreateBody = {
         title: params.title.trim(),
         description: params.description?.trim() || null,
         due_at: params.dueAtIso,
         source: params.source ?? "task_assist",
         proposal_id: params.proposalId ?? null,
     };
+    if (entityId) {
+        body.entity_type = "opportunities";
+        body.entity_id = entityId;
+    }
+    return body;
 }
 
 export type ScheduledSendPatchBody =

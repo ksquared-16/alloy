@@ -1,13 +1,13 @@
 "use client";
 
 import type { RecordDrawerHeaderActionButtonProps } from "@/components/admin/drawer/record/RecordDrawerActionRail";
+import { RecordDrawerHeaderActionButton as RecordDrawerHeaderActionButtonImpl } from "@/components/admin/drawer/record/RecordDrawerActionRail";
 import {
-    RecordDrawerHeaderActionButton as RecordDrawerHeaderActionButtonImpl,
-    recordDrawerHeaderActionClassName,
     OPPORTUNITY_DRAWER_HEADER_ACTIONS_ROW_CLASS,
-} from "@/components/admin/drawer/record/RecordDrawerActionRail";
+    opportunityDrawerHeaderActionClassName,
+} from "@/components/admin/drawer/record/recordDrawerHeaderActionClasses";
 
-export { recordDrawerHeaderActionClassName as opportunityDrawerHeaderActionClassName };
+export { opportunityDrawerHeaderActionClassName };
 export { OPPORTUNITY_DRAWER_HEADER_ACTIONS_ROW_CLASS };
 
 export type OpportunityDrawerHeaderActionButtonProps = RecordDrawerHeaderActionButtonProps;

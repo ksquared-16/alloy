@@ -4,11 +4,15 @@ import {
     formatOperationalTaskDueDisplay,
     formatOperationalTaskSourceLabel,
 } from "@/lib/agent/taskAssist/formatOperationalTaskSourceLabel";
+import { buildMyTasksRecordContextLines } from "@/lib/agent/taskAssist/myTasksRecordContextPresentation";
+import type { MyTasksPresentationLabels } from "@/lib/agent/taskAssist/myTasksPresentationLabels";
+import { normalizeOperationalTaskTitleDisplay } from "@/lib/agent/taskAssist/normalizeOperationalTaskTitleDisplay";
 import {
     operationalTaskUrgencyBadge,
     type OperationalTaskDueUrgency,
 } from "@/lib/agent/taskAssist/taskAssistOperationalUrgency";
 import { minDatetimeLocalValue } from "@/components/admin/taskAssist/TaskAssistOpportunityWorkspace";
+import type { EntityLabelsMap } from "@/contexts/EntityLabelsContext";
 
 import type { MyTasksTaskRow } from "@/lib/agent/taskAssist/myTasksTaskTypes";
 
@@ -19,6 +23,8 @@ export type MyTasksTaskCardProps = {
     mode: MyTasksTaskCardMode;
     busy: boolean;
     canOpenRecord: boolean;
+    presentation: MyTasksPresentationLabels;
+    entityLabels: EntityLabelsMap;
     editTitle: string;
     editDue: string;
     editNotes: string;
@@ -51,6 +57,8 @@ export default function MyTasksTaskCard({
     mode,
     busy,
     canOpenRecord,
+    presentation,
+    entityLabels,
     editTitle,
     editDue,
     editNotes,
@@ -70,6 +78,8 @@ export default function MyTasksTaskCard({
     const overdue = isOverdueUrgency(badge.urgency);
     const sourceLabel = formatOperationalTaskSourceLabel(task.source);
     const isOpen = task.status === "open";
+    const context = buildMyTasksRecordContextLines(task, presentation, entityLabels);
+    const displayTitle = normalizeOperationalTaskTitleDisplay(task.title);
 
     if (mode === "edit") {
         return (
@@ -122,7 +132,7 @@ export default function MyTasksTaskCard({
                 data-adminv2-task-row={task.id}
                 data-adminv2-task-mode="reschedule"
             >
-                <p className="mb-0.5 text-[13px] font-semibold text-alloy-midnight/90">{task.title}</p>
+                <p className="mb-0.5 text-[13px] font-semibold text-alloy-midnight/90">{displayTitle}</p>
                 <p className="mb-2 text-[11px] text-alloy-midnight/55">
                     {overdue ? "This task is overdue. Pick a new due date." : "Choose a new due date and time."}
                 </p>
@@ -159,7 +169,12 @@ export default function MyTasksTaskCard({
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-[13px] font-semibold leading-snug text-alloy-midnight/92">{task.title}</h3>
+                        <h3
+                            className="text-[13px] font-semibold leading-snug text-alloy-midnight/92"
+                            data-adminv2-task-title-display="true"
+                        >
+                            {displayTitle}
+                        </h3>
                         <span
                             className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${badge.className}`}
                             data-adminv2-task-urgency={badge.urgency}
@@ -167,6 +182,49 @@ export default function MyTasksTaskCard({
                             {badge.label}
                         </span>
                     </div>
+                    {context.showContextBlock ? (
+                        <div
+                            className="mt-1.5 space-y-0.5 text-[11px] leading-snug text-alloy-midnight/55"
+                            data-adminv2-task-context="true"
+                        >
+                            <p>
+                                <span className="text-alloy-midnight/40">{context.entityTypeLabel} · </span>
+                                {canOpenRecord ? (
+                                    <button
+                                        type="button"
+                                        className="font-medium text-alloy-blue underline-offset-2 hover:underline"
+                                        data-adminv2-task-entity-link="true"
+                                        onClick={onOpenRecord}
+                                    >
+                                        {context.entityLabel}
+                                    </button>
+                                ) : (
+                                    <span className="font-medium text-alloy-midnight/68">{context.entityLabel}</span>
+                                )}
+                                {context.statusLabel ? (
+                                    <span className="text-alloy-midnight/38"> · {context.statusLabel}</span>
+                                ) : null}
+                            </p>
+                            {context.householdLabel ? (
+                                <p data-adminv2-task-household="true">
+                                    <span className="text-alloy-midnight/40">Household · </span>
+                                    {context.householdLabel}
+                                </p>
+                            ) : null}
+                            {context.contactLabel ? (
+                                <p data-adminv2-task-contact="true">
+                                    <span className="text-alloy-midnight/40">{context.guardianFieldLabel} · </span>
+                                    {context.contactLabel}
+                                </p>
+                            ) : null}
+                            {context.childrenDisplay && context.childFieldLabel ? (
+                                <p data-adminv2-task-children="true">
+                                    <span className="text-alloy-midnight/40">{context.childFieldLabel} · </span>
+                                    {context.childrenDisplay}
+                                </p>
+                            ) : null}
+                        </div>
+                    ) : null}
                     <p className="mt-1 text-[12px] font-medium text-alloy-midnight/72">
                         Due {formatOperationalTaskDueDisplay(task.due_at)}
                     </p>

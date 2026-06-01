@@ -144,6 +144,7 @@ export function FamilyContactsPanel(props: {
     router: { push: (href: string) => void; refresh: () => void };
     openDrawer: (opts: { type: AdminDrawerEntityType; id: string }) => void;
     openForm: (opts: { form_key: string; action: ResolvedActionForClient }) => void;
+    openAddPerson?: (actionKey: string) => void;
     onRegistryApplied: () => void;
     /** Bumps when the parent refetches opportunity payload after a successful add. */
     refreshKey: number;
@@ -178,6 +179,7 @@ export function FamilyContactsPanel(props: {
         router,
         openDrawer,
         openForm,
+        openAddPerson,
         onRegistryApplied,
         refreshKey,
         recordHydrationPending = false,
@@ -282,7 +284,7 @@ export function FamilyContactsPanel(props: {
             {variant === "default" ? (
                 <div>
                     <div className={eyebrow}>Opportunity people</div>
-                    <p className="mt-0.5 text-xs text-alloy-midnight/55">Linked on this inquiry only (opportunity_persons).</p>
+                    <p className="mt-0.5 text-xs text-alloy-midnight/55">Additional people linked to this inquiry.</p>
                 </div>
             ) : null}
 
@@ -297,6 +299,7 @@ export function FamilyContactsPanel(props: {
                     router={router}
                     openDrawer={openDrawer}
                     openForm={openForm}
+                    openAddPerson={openAddPerson}
                     onApplied={onRegistryApplied}
                     layoutDensity={registryDensity}
                     actionsFetchEnabled={actionsFetchEnabled}

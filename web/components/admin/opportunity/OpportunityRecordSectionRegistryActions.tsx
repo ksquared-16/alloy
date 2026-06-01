@@ -31,6 +31,8 @@ type Props = {
     router: RouterLike;
     openDrawer: OpenDrawerFn;
     openForm?: (opts: { form_key: string; action: ResolvedActionForClient }) => void;
+    openAddInquiryChild?: (mode: "child" | "sibling") => void;
+    openAddPerson?: (actionKey: string) => void;
     onApplied?: () => void;
     /** Success path only — e.g. workflow_run_id for start_workflow. */
     onExecutionResult?: (executionResult: Record<string, unknown> | undefined) => void;
@@ -63,6 +65,8 @@ export default function OpportunityRecordSectionRegistryActions({
     router,
     openDrawer,
     openForm,
+    openAddInquiryChild,
+    openAddPerson,
     onApplied,
     onExecutionResult,
     layoutDensity = "default",
@@ -166,6 +170,8 @@ export default function OpportunityRecordSectionRegistryActions({
                     router,
                     openDrawer,
                     openForm,
+                    openAddInquiryChild,
+                    openAddPerson,
                     departmentId: departmentId ?? null,
                     workUnitId: workUnitId ?? null,
                     entityId: opportunityId,
@@ -195,6 +201,8 @@ export default function OpportunityRecordSectionRegistryActions({
             onExecutionResult,
             openDrawer,
             openForm,
+            openAddInquiryChild,
+    openAddPerson,
             router,
             sectionKey,
             workUnitId,

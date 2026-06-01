@@ -6,7 +6,15 @@ export type MyTasksTaskRow = {
     due_at: string;
     status: string;
     source: string;
-    entity_id: string;
-    entity_type: string;
+    entity_id: string | null;
+    entity_type: string | null;
     created_at: string;
+    /** Presentation-only — workspace GET enrichment. */
+    entity_label?: string | null;
+    household_label?: string | null;
+    contact_label?: string | null;
+    status_label?: string | null;
+    children_labels?: string[] | null;
+    contact_field_label?: string | null;
+    location_id?: string | null;
 };

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 
 import { ADMIN_V2_OPEN_TASKS_MODAL } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 import { formatTaskAssistClientError } from "@/lib/agent/taskAssist/taskAssistClientErrorMessages";
+import { formatOperationalTaskSourceLabel } from "@/lib/agent/taskAssist/formatOperationalTaskSourceLabel";
 import { operationalTaskUrgencyBadge } from "@/lib/agent/taskAssist/taskAssistOperationalUrgency";
 import { patchOperationalTaskFields, patchOperationalTaskStatus, readJson } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 import { minDatetimeLocalValue } from "@/components/admin/taskAssist/TaskAssistOpportunityWorkspace";
@@ -186,8 +187,8 @@ export default function OperationalTaskDetailPopover({
                             {task.description.trim()}
                         </p>
                     ) : null}
-                    <p className="mt-1 text-[9px] text-alloy-midnight/45">
-                        {task.source}
+                    <p className="mt-1 text-[9px] text-alloy-midnight/45" data-operational-task-source-label="true">
+                        {formatOperationalTaskSourceLabel(task.source)}
                         {task.created_at ? ` · ${formatWhen(task.created_at)}` : ""}
                     </p>
                 </>

@@ -18,6 +18,18 @@ import {
     ADMINV2_OPEN_TOUR_SCHEDULE_MODAL,
 } from "@/lib/tours/actions/tourBookingActionClient";
 import { dispatchActionPreflightBlocked } from "@/lib/admin/actions/actionPreflightDrawerEvents";
+import {
+    dispatchOpenAddInquiryChildModal,
+    isAddInquiryChildActionKey,
+    isAddInquiryChildFormKey,
+    resolveAddInquiryChildMode,
+} from "@/lib/admin/actions/addInquiryChildActionClient";
+import {
+    dispatchOpenAddPersonModal,
+    isAddPersonActionKey,
+    isAddPersonFormKey,
+    resolveAddPersonActionKey,
+} from "@/lib/admin/actions/addPersonActionClient";
 import { formatRequirementValidationSummary } from "@/lib/completion/requirementValidationResult";
 import type { RequirementValidationResult } from "@/lib/completion/requirementValidationTypes";
 
@@ -38,6 +50,10 @@ export type ApplyRegistryResolvedActionHost = {
     router: { push: (href: string) => void; refresh: () => void };
     openDrawer: (opts: DrawerOpenOpts) => void;
     openForm?: (opts: { form_key: string; action: ResolvedActionForClient }) => void;
+    /** Capture-first add child — same modal as shell chrome when set. */
+    openAddInquiryChild?: (mode: "child" | "sibling") => void;
+    /** Capture-first add person — same modal for add_family_member / add_related_person. */
+    openAddPerson?: (actionKey: string) => void;
     openCreateLead?: () => void;
     /**
      * Optional invalidation hook to refresh local data without blowing away UI state.
@@ -65,6 +81,40 @@ export async function applyRegistryResolvedActionClient(
 ): Promise<ApplyRegistryResolvedActionResult> {
     if (a.action_type === "open_form") {
         const formKey = a.payload?.form_key != null ? String(a.payload.form_key).trim() : "";
+        if (isAddInquiryChildFormKey(formKey) || isAddInquiryChildActionKey(a.key)) {
+            const oid = host.entityId?.trim();
+            if (!oid) return { ok: false, error: "entity_id required" };
+            const p = a.payload && typeof a.payload === "object" ? (a.payload as Record<string, unknown>) : {};
+            const mode = resolveAddInquiryChildMode({
+                actionKey: a.key,
+                payloadMode: p.mode != null ? String(p.mode) : null,
+            });
+            if (host.openAddInquiryChild) {
+                host.openAddInquiryChild(mode);
+                return { ok: true };
+            }
+            dispatchOpenAddInquiryChildModal({
+                opportunity_id: oid,
+                mode,
+                action_key: a.key,
+            });
+            return { ok: true };
+        }
+        if (isAddPersonFormKey(formKey) || isAddPersonActionKey(a.key)) {
+            const oid = host.entityId?.trim();
+            if (!oid) return { ok: false, error: "entity_id required" };
+            const actionKey = resolveAddPersonActionKey({ actionKey: a.key, formKey });
+            if (host.openAddPerson) {
+                host.openAddPerson(actionKey);
+                return { ok: true };
+            }
+            dispatchOpenAddPersonModal({
+                opportunity_id: oid,
+                action_key: actionKey,
+                entity_type: "opportunity",
+            });
+            return { ok: true };
+        }
         if (formKey === "create_lead") {
             if (host.openCreateLead) {
                 host.openCreateLead();

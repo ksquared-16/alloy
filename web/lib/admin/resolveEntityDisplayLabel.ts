@@ -1,4 +1,4 @@
-import type { EntityLabelsMap } from "@/contexts/EntityLabelsContext";
+import type { EntityLabelsMap } from "@/lib/admin/entityLabelDisplay";
 import {
     adminFieldEntityPluralLabel,
     adminFieldEntitySingularLabel,
