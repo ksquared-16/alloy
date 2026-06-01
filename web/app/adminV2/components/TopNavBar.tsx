@@ -9,6 +9,7 @@ import { palette, neutral, derived } from "@/styles/tokens/colors";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import MyTasksModal from "@/app/adminV2/components/MyTasksModal";
 import OperationalTasksNavBadge from "@/app/adminV2/components/OperationalTasksNavBadge";
+import InboxNavLink from "@/app/adminV2/components/InboxNavLink";
 import QuickMessageModal, { type QuickMessageModalSeed } from "@/app/adminV2/components/QuickMessageModal";
 import {
     ADMINV2_OPEN_QUICK_MESSAGE_EVENT,
@@ -16,7 +17,6 @@ import {
 } from "@/lib/adminV2/quickMessageLaunch";
 import AdminV2ProfileMenu from "@/app/adminV2/components/AdminV2ProfileMenu";
 import GlobalSearchBox from "@/app/adminV2/components/GlobalSearchBox";
-import { MessageSquare } from "lucide-react";
 
 function normalizeAdminPath(pathname: string): string {
   if (pathname === "/admin/v2" || pathname.startsWith("/admin/v2/")) {
@@ -184,19 +184,11 @@ export default function TopNavBar() {
             buttonClassName={HEADER_UTILITY_BTN}
             onOpenModal={openTasksModal}
           />
-          <button
-            type="button"
-            onClick={() => {
-              setQuickMessageSeed(null);
-              setQuickMessageOpen(true);
-            }}
-            className={HEADER_UTILITY_BTN}
-            style={utilityBtnStyle(isMessaging || quickMessageOpen)}
-            title="Send a quick email or SMS (opens modal)"
-          >
-            <MessageSquare className="h-[18px] w-[18px] shrink-0 opacity-90" aria-hidden strokeWidth={2} />
-            <span className="hidden lg:inline">Messages</span>
-          </button>
+          <InboxNavLink
+            active={isMessaging}
+            tabStyle={utilityBtnStyle}
+            buttonClassName={HEADER_UTILITY_BTN}
+          />
         </div>
       </div>
 
