@@ -22,13 +22,15 @@ export const OPPORTUNITY_DRAWER_SECTION_REGISTRY: readonly AdminV2DrawerSectionC
         surface: "opportunity",
         canRenderFromSeed: false,
         blocksFirstPaint: true,
-        // Known-empty doctrine: BOS tasks and guidance only arrive with the full record
-        // (_record_surface === "full"). Allowing reveal on bodyHydrated (primary) causes
-        // tasks/guidance to visibly appear after the drawer is already open — late paint.
-        // Wait for fullHydrateReady so the BOS panel paints once with its final content.
+        // Known-empty doctrine: BOS tasks and guidance only arrive with the full record.
+        // fallbackMode "hidden" means the section does not render (no pop-in) but also does NOT
+        // block canRevealDrawerFrame/canRevealHeaderActions — the header can show actions while
+        // the body holds in "Preparing lead..." via evaluateComposedOpportunityDrawerPayload.
+        // Once fullHydrateReady the section transitions to "render" and the composed payload
+        // becomes ready, allowing the body to reveal with its final BOS content.
         hasRenderableData: (ctx) => ctx.fullHydrateReady,
         renderReady: (ctx) => ctx.fullHydrateReady,
-        fallbackMode: "block-drawer-reveal",
+        fallbackMode: "hidden",
     },
     {
         sectionKey: "opportunity_tour_slot",

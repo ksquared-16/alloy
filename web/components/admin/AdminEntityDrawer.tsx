@@ -11681,6 +11681,34 @@ export default function AdminEntityDrawer() {
         opportunityInquiryWorkflowDrawer,
     ]);
 
+    // Best-effort title from enriched snapshot _before_ composed payload / BOS panel are ready.
+    // Prevents "Lead" fallback when snapshot has _identity or _customer_name from a prior full hydrate.
+    // MUST be above the `return null` guard — hooks cannot be called after conditional returns.
+    const opportunityPreRevealTitle = useMemo(() => {
+        if (
+            drawer.type !== "opportunities" ||
+            !opportunityInquiryWorkflowDrawer ||
+            !overviewData ||
+            drawerGateLoading
+        )
+            return null;
+        const d = overviewData as Record<string, unknown>;
+        const ident = (d._identity as Record<string, unknown> | null | undefined) ?? null;
+        const primaryPersonLabel = ident?.primary_person
+            ? ((ident.primary_person as { label?: string })?.label ?? "").trim()
+            : "";
+        const customerName = ((d._customer_name as string | null | undefined) ?? "").trim();
+        // Only derive from snapshot when identity data is present — avoids "Enrollment — " stub
+        if (!primaryPersonLabel && !customerName) return null;
+        return formatOpportunityInquiryDrawerTitle(d, opportunitySingular) || null;
+    }, [
+        drawer.type,
+        opportunityInquiryWorkflowDrawer,
+        overviewData,
+        drawerGateLoading,
+        opportunitySingular,
+    ]);
+
     if (!drawer.type || !drawer.id) return null;
 
     const drawerHeaderStatusReady =
@@ -12067,33 +12095,6 @@ export default function AdminEntityDrawer() {
                 .filter(Boolean)
                 .join(" · ") || undefined
             : undefined;
-    // Best-effort title from enriched snapshot _before_ composed payload / BOS panel are ready.
-    // Prevents "Lead" fallback when snapshot has _identity or _customer_name from a prior full hydrate.
-    const opportunityPreRevealTitle = useMemo(() => {
-        if (
-            drawer.type !== "opportunities" ||
-            !opportunityInquiryWorkflowDrawer ||
-            !overviewData ||
-            drawerGateLoading
-        )
-            return null;
-        const d = overviewData as Record<string, unknown>;
-        const ident = (d._identity as Record<string, unknown> | null | undefined) ?? null;
-        const primaryPersonLabel = ident?.primary_person
-            ? ((ident.primary_person as { label?: string })?.label ?? "").trim()
-            : "";
-        const customerName = ((d._customer_name as string | null | undefined) ?? "").trim();
-        // Only derive from snapshot when identity data is present — avoids "Enrollment — " stub
-        if (!primaryPersonLabel && !customerName) return null;
-        return formatOpportunityInquiryDrawerTitle(d, opportunitySingular) || null;
-    }, [
-        drawer.type,
-        opportunityInquiryWorkflowDrawer,
-        overviewData,
-        drawerGateLoading,
-        opportunitySingular,
-    ]);
-
     const drawerTitleTextResolved =
         isOpportunityRecordModalTarget &&
             drawer.type === "opportunities" &&

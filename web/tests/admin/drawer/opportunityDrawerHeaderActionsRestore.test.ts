@@ -103,9 +103,10 @@ describe("opportunity header actions restore wiring", () => {
         expect(plan.canRevealHeaderActions).toBe(true);
     });
 
-    it("drawer does not reveal before full record arrives when BOS panel is above fold", () => {
-        // Validates the new known-answer doctrine: opportunity_bos_right_column blocks
-        // with only a drawer_primary record since tasks/guidance are in the full record.
+    it("BOS panel is hidden (not blocking) when full record not yet arrived — header actions can reveal", () => {
+        // opportunity_bos_right_column uses fallbackMode "hidden" so it does NOT block
+        // canRevealDrawerFrame/canRevealHeaderActions. The body is held by the composed
+        // payload evaluation (opportunityComposedPreparing) separately — not the frame gate.
         const plan = composeAdminV2DrawerRuntime({
             entityType: "opportunities",
             surface: "opportunity",
@@ -132,9 +133,10 @@ describe("opportunity header actions restore wiring", () => {
             primaryContractReady: true,
             needsBackgroundHydrate: false,
         });
-        // canRevealHeaderActions must be false — BOS section blocks until full record
-        expect(plan.canRevealHeaderActions).toBe(false);
-        expect(plan.sectionsBlocking).toContain("opportunity_bos_right_column");
+        // BOS uses "hidden" — does not block header actions. The composed payload evaluation
+        // is what holds the body in "Preparing" until fullHydrateReady.
+        expect(plan.canRevealHeaderActions).toBe(true);
+        expect(plan.sectionsBlocking).not.toContain("opportunity_bos_right_column");
     });
 });
 
