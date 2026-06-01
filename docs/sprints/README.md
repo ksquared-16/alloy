@@ -26,6 +26,7 @@
 | Lifecycle runtime & configuration alignment | [`06_2026/lifecycle_runtime_configuration_alignment_sprint.md`](./06_2026/lifecycle_runtime_configuration_alignment_sprint.md) | **Planning** — audit/backlog only |
 | Lifecycle runtime alignment matrix | [`06_2026/lifecycle_runtime_alignment_matrix_v1.md`](./06_2026/lifecycle_runtime_alignment_matrix_v1.md) | **Reference** |
 | Action button configuration UX | [`06_2026/action_button_configuration_ux_sprint.md`](./06_2026/action_button_configuration_ux_sprint.md) | **Active** |
+| AdminV2 backend query & payload optimization | [`06_2026/adminv2_backend_query_payload_optimization_phase.md`](./06_2026/adminv2_backend_query_payload_optimization_phase.md) | **Backlog** — next performance phase |
 
 ---
 
@@ -40,6 +41,7 @@
 | Forms MVP productization | [`05_2026/completed/forms_mvp_productization.md`](./05_2026/completed/forms_mvp_productization.md) |
 | Global search V1 | [`05_2026/completed/global_search_v1_closeout.md`](./05_2026/completed/global_search_v1_closeout.md) |
 | AdminV2 performance | [`05_2026/completed/adminv2_performance_closeout.md`](./05_2026/completed/adminv2_performance_closeout.md) |
+| AdminV2 runtime consistency (June 2026) | [`06_2026/completed/adminv2_runtime_performance_consistency_closeout.md`](./06_2026/completed/adminv2_runtime_performance_consistency_closeout.md) |
 | BOS operational assist | [`06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`](./06_2026/completed/bos_assist_routing_communication_drafting_closeout.md) |
 
 Full roadmap sequencing: **`docs/execution/roadmap-and-gaps.md`**.

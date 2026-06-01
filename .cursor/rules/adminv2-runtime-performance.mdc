@@ -1,0 +1,63 @@
+---
+description: Protect AdminV2 loading, reveal, cache, and known-empty runtime behavior
+alwaysApply: true
+---
+
+# AdminV2 Runtime Performance (Protected Infrastructure)
+
+AdminV2 loading and reveal behavior is **protected infrastructure**. The locked baseline is **`docs/system/adminv2-runtime-performance-doctrine.md`**.
+
+## Before editing AdminV2 UI that touches drawers, queues, routes, tabs, layouts, or actions
+
+1. Read `docs/system/adminv2-runtime-performance-doctrine.md`.
+2. Treat the task as **UI-only** unless it explicitly says runtime/performance.
+3. Do **not** modify runtime reveal gates during ordinary UI work.
+
+## Hard rules
+
+- Do **not** introduce section-owned above-fold skeletons.
+- Do **not** treat `null` as empty (`queueItems === null` is not “no records”).
+- Do **not** weaken composed payload readiness (`evaluateComposedDrawerPayload`, composed person payload).
+- Do **not** remove request signature / stale-response apply guards.
+- Do **not** change cache keys without updating determinism tests.
+- Do **not** clear valid displayed data before replacement is ready on warm navigation.
+- Do **not** show false empty queue states while `rowsLoading` or `rowsHeld`.
+- Prefetch is allowed; **partial above-fold reveal is not**.
+
+## UI-only changes may alter
+
+Spacing, typography, labels, section order (non-contract), visible fields, styling.
+
+## UI-only changes may not alter
+
+Payload readiness, request ownership, cache keys, stale guards, route/drawer reveal gates, queue empty semantics, known-empty predicates.
+
+## Runtime-sensitive files (require test suite)
+
+- `web/components/admin/AdminEntityDrawer.tsx`
+- `web/components/admin/entity/*Drawer*`
+- `web/components/admin/opportunity/*`
+- `web/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx`
+- `web/app/adminV2/components/workspace/blocks/QueueBlock.tsx`
+- `web/lib/admin/drawer/composedDrawerPayload/*`
+- `web/lib/admin/drawer/*Reveal*`
+- `web/lib/adminV2/runtime/contract/*`
+- `web/lib/workspace/*Queue*`
+- `web/lib/admin/opportunityDrawer*`
+- `web/lib/admin/prefetchPersonDrawerSnapshot.ts`
+
+## Required tests when touching runtime-sensitive files
+
+```bash
+cd web && npm run test -- \
+  tests/admin/drawer/drawerDeterminism.test.ts \
+  tests/admin/drawer/composedDrawerPayload.test.ts \
+  tests/admin/drawer/drawerAboveFoldCoordinatedReveal.test.ts \
+  tests/admin/drawer/opportunityDrawerHeaderActionsRestore.test.ts \
+  tests/adminV2/workUnitQueueLaneRevealState.test.ts \
+  tests/adminV2/workUnitPageRevealPolicy.test.ts \
+  tests/adminV2/workUnitCoordinatedRevealRegression.test.ts \
+  tests/lib/workspace/routeSessionCacheAndReveal.test.ts
+```
+
+Also run `cd web && npx tsc --noEmit` before merge on TypeScript changes.
