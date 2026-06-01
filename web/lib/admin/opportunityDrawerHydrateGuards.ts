@@ -60,8 +60,17 @@ export function finishOpportunityDrawerHydrate(
     const inflight = phase === "primary" ? primaryInflight : fullInflight;
     const done = phase === "primary" ? primaryDone : fullDone;
     inflight.delete(id);
-    if (outcome === "success") done.add(id);
-    if (outcome === "fail") done.add(id);
+    if (outcome === "success") {
+        done.add(id);
+    }
+    // "fail" is treated as "abort" for the full-surface phase so that a transient network
+    // error does not permanently prevent the full hydrate from retrying on the next open.
+    // The primary phase still marks done on fail (primary failure shows an error state).
+    if (outcome === "fail" && phase === "primary") {
+        done.add(id);
+    }
+    // For full-phase failures: inflight is already cleared above; done is NOT set, allowing
+    // tryBeginOpportunityDrawerHydrate to succeed on the next attempt.
 }
 
 /** Background full hydrate scheduling — one idle schedule per open. */

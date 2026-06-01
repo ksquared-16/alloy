@@ -1,22 +1,7 @@
 import { snapshotInquiryChildrenNeedHydrate } from "@/lib/admin/drawer/opportunityDrawerRecordNeedsRevalidate";
 import { opportunityInquiryFamilyBlockReadyOnPrimary } from "@/lib/admin/drawer/opportunityDrawerFirstPaintContract";
-import { resolvePersonDrawerHouseholdModel } from "@/lib/admin/person/resolvePersonDrawerHouseholdModel";
-import {
-    personDrawerHouseholdAddressHasContent,
-    resolvePersonDrawerHouseholdAddressModel,
-} from "@/lib/admin/person/resolvePersonDrawerHouseholdAddress";
-import { personDrawerChildChromeActive } from "@/lib/admin/person/personDrawerChildChrome";
+import { personDrawerChildChromeActive, type PersonDrawerChildChromeHint } from "@/lib/admin/person/personDrawerChildChrome";
 import { resolvePersonDrawerChildSummaryModel } from "@/lib/admin/person/personDrawerChildSummaryModel";
-
-function personAddressRenderable(record: Record<string, unknown>): boolean {
-    const model = resolvePersonDrawerHouseholdAddressModel(record);
-    return personDrawerHouseholdAddressHasContent(model);
-}
-
-function personMedicalRenderable(record: Record<string, unknown>): boolean {
-    const med = record.medical ?? record.health;
-    return med != null && typeof med === "object";
-}
 
 function personEmployeeStatusRenderable(record: Record<string, unknown>): boolean {
     return "is_employee" in record;
@@ -51,17 +36,26 @@ export function opportunityDrawerComposedAboveFoldReady(args: {
     return true;
 }
 
+/**
+ * Parent household is ready when the full-payload key is present.
+ * An empty array (single-adult household, no household connections) is a valid known-empty final state.
+ * Before the full API response arrives, the key is absent, so readiness correctly blocks.
+ */
 export function parentDrawerHouseholdCoordinatedReady(
     record: Record<string, unknown> | null | undefined,
-    drawerId: string | null | undefined
+    _drawerId?: string | null
 ): boolean {
     if (!record) return false;
-    return resolvePersonDrawerHouseholdModel(record, { viewing_person_id: drawerId }).groups.length > 0;
+    return "_household_adult_links" in record;
 }
 
+/**
+ * Parent address is ready when the full-payload key is present.
+ * An empty array (no address on file) is a valid known-empty final state.
+ */
 export function parentDrawerAddressCoordinatedReady(record: Record<string, unknown> | null | undefined): boolean {
     if (!record) return false;
-    return personAddressRenderable(record);
+    return "_household_customer_addresses" in record;
 }
 
 export function parentDrawerEmployeeStatusCoordinatedReady(
@@ -71,23 +65,41 @@ export function parentDrawerEmployeeStatusCoordinatedReady(
     return personEmployeeStatusRenderable(record);
 }
 
+/**
+ * Child household is ready when the full-payload key is present.
+ * An empty array (no household connections found) is a valid known-empty final state.
+ */
 export function childDrawerHouseholdCoordinatedReady(
     record: Record<string, unknown> | null | undefined,
-    drawerId: string | null | undefined
+    _drawerId?: string | null
 ): boolean {
     if (!record) return false;
-    return resolvePersonDrawerHouseholdModel(record, { viewing_person_id: drawerId }).groups.length > 0;
+    return "_household_adult_links" in record;
 }
 
-export function childDrawerMedicalCoordinatedReady(record: Record<string, unknown> | null | undefined): boolean {
+/**
+ * Child medical is ready when the full payload has been fetched.
+ * The persons API has no `medical` column — absence of medical data after bodyHydrated is the final known-empty answer.
+ * Pre-hydration, only passes when actual medical data is already present in the record.
+ */
+export function childDrawerMedicalCoordinatedReady(
+    record: Record<string, unknown> | null | undefined,
+    bodyHydrated = false
+): boolean {
     if (!record) return false;
-    return personMedicalRenderable(record);
+    if (bodyHydrated) return true;
+    const med = record.medical ?? record.health;
+    return med != null && typeof med === "object";
 }
 
-export function childDrawerSummaryCoordinatedReady(record: Record<string, unknown> | null | undefined): boolean {
+/** Child summary ready when chrome profile is established (via hint or DB) and a display name is present. */
+export function childDrawerSummaryCoordinatedReady(
+    record: Record<string, unknown> | null | undefined,
+    hint?: PersonDrawerChildChromeHint | null
+): boolean {
     if (!record) return false;
     return (
-        personDrawerChildChromeActive(record) &&
+        personDrawerChildChromeActive(record, hint) &&
         Boolean(resolvePersonDrawerChildSummaryModel(record).display_name?.trim())
     );
 }
@@ -125,13 +137,15 @@ export function childDrawerAboveFoldCoordinatedReady(args: {
     bodyHydrated: boolean;
     requireHousehold: boolean;
     requireMedical: boolean;
+    childChromeHint?: PersonDrawerChildChromeHint | null;
 }): boolean {
     if (!args.bodyHydrated || !args.record) return false;
-    if (!childDrawerSummaryCoordinatedReady(args.record)) return false;
-    if (!personDrawerChildChromeActive(args.record)) return false;
+    if (!childDrawerSummaryCoordinatedReady(args.record, args.childChromeHint)) return false;
+    if (!personDrawerChildChromeActive(args.record, args.childChromeHint)) return false;
     if (args.requireHousehold && !childDrawerHouseholdCoordinatedReady(args.record, args.drawerId)) {
         return false;
     }
-    if (args.requireMedical && !childDrawerMedicalCoordinatedReady(args.record)) return false;
+    // Medical: known-empty after full fetch — bodyHydrated=true is the completion sentinel.
+    if (args.requireMedical && !childDrawerMedicalCoordinatedReady(args.record, args.bodyHydrated)) return false;
     return true;
 }

@@ -23,7 +23,7 @@ type Props = {
     onDismissActionPreflightBlocked?: () => void;
 };
 
-/** Title rail: controls top-right; full-width left-aligned attention context below. */
+/** Title rail: guidance in the header band; actions pinned far right (single row). */
 export function OpportunityDrawerHeaderControls({
     opportunityId,
     overviewData,
@@ -44,28 +44,35 @@ export function OpportunityDrawerHeaderControls({
             data-opportunity-header-controls="true"
         >
             <div
-                className="flex shrink-0 flex-nowrap items-center justify-end gap-2 self-end"
-                data-opportunity-header-controls-row="actions"
+                className="flex w-full min-w-0 items-start gap-3"
+                data-opportunity-header-controls-row="composed"
             >
-                <BosDrawerAssistCta
-                    bare
-                    entityId={opportunityId}
-                    overviewData={overviewData}
-                    opportunitySingular={opportunitySingular}
-                    queuePreviewSeed={queuePreviewSeed}
-                    inquiryWorkflow={inquiryWorkflow}
-                />
-                {showRegistryActions ?
-                    <OpportunityDrawerHeaderActionsMenu
-                        actions={menuActions}
+                <div className="min-w-0 flex-1 self-center">
+                    <DrawerHeaderAttentionBlock overviewData={overviewData} />
+                </div>
+                <div
+                    className="flex shrink-0 flex-nowrap items-center justify-end gap-2 self-start"
+                    data-opportunity-header-controls-row="actions"
+                >
+                    <BosDrawerAssistCta
+                        bare
+                        entityId={opportunityId}
+                        overviewData={overviewData}
+                        opportunitySingular={opportunitySingular}
+                        queuePreviewSeed={queuePreviewSeed}
                         inquiryWorkflow={inquiryWorkflow}
-                        disabled={!canMutate || !!actionLoadingKey}
-                        busyKey={actionLoadingKey}
-                        onSelect={onActionSelect}
                     />
-                :   null}
+                    {showRegistryActions ?
+                        <OpportunityDrawerHeaderActionsMenu
+                            actions={menuActions}
+                            inquiryWorkflow={inquiryWorkflow}
+                            disabled={!canMutate || !!actionLoadingKey}
+                            busyKey={actionLoadingKey}
+                            onSelect={onActionSelect}
+                        />
+                    :   null}
+                </div>
             </div>
-            <DrawerHeaderAttentionBlock overviewData={overviewData} />
             {actionPreflightBlocked ?
                 <ActionPreflightBlockedPanel
                     opportunityId={opportunityId}

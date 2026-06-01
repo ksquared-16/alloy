@@ -87,7 +87,9 @@ describe("drawerCoordinatedFirstPaintRegression", () => {
 
     it("child seed holds reveal until hydrate — no section reserves", () => {
         const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("personDrawerRuntimePlan?.canRevealDrawerFrame");
+        // personDrawerComposedPayloadIsReady replaced personDrawerRuntimePlan?.canRevealDrawerFrame
+        // as the child/parent reveal gate after composed-payload gating was introduced.
+        expect(drawer).toContain("personDrawerComposedPayloadIsReady");
         const operating = readSrc("components/admin/entity/PersonDrawerOperatingSections.tsx");
         expect(operating).not.toContain("showHouseholdReserve");
         expect(operating).not.toContain("PersonDrawerSectionCoordinatedReserve");

@@ -1,4 +1,5 @@
 import type { DrawerTabKey } from "@/lib/entityPresentation";
+import type { PersonDrawerChildChromeHint } from "@/lib/admin/person/personDrawerChildChrome";
 
 /** Drawer body surfaces governed by the runtime composer (not section-local loading). */
 export type AdminV2DrawerSurface = "opportunity" | "parent" | "child" | "generic";
@@ -22,6 +23,8 @@ export type DrawerSectionRenderContext = {
     typedSnapshot: boolean;
     fullHydrateReady: boolean;
     drawerId: string;
+    /** Child chrome hint — lets child sections resolve profile from open-source hint when DB relationships alone are insufficient. */
+    childChromeHint?: PersonDrawerChildChromeHint | null;
 };
 
 export type AdminV2DrawerEntityType = "opportunities" | "persons" | "jobs" | "schedules" | "locations" | "generic";

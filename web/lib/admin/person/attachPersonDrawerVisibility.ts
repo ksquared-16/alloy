@@ -41,6 +41,8 @@ function trimOrNull(v: unknown): string | null {
  */
 export type AttachPersonDrawerVisibilityOptions = {
     siteScope?: AdminAccessScopeDimensions | null;
+    /** Populated in-place with ms durations for household_links, household_address, enrollment_mirror, enrollment_opportunities, and sibling_links sections. */
+    payloadTiming?: Map<string, number>;
 };
 
 export async function attachPersonDrawerVisibility(
@@ -50,6 +52,7 @@ export async function attachPersonDrawerVisibility(
     out: Record<string, unknown>,
     options?: AttachPersonDrawerVisibilityOptions
 ): Promise<void> {
+    const _pt = options?.payloadTiming;
     const memberRows =
         (out._compatibility_members as {
             id: string;
@@ -71,103 +74,161 @@ export async function attachPersonDrawerVisibility(
     const householdCustomerIds = [...new Set([...customerIdsFromMembers, ...customerIdsFromCp])];
 
     const memberNameById = new Map(memberRows.map((m) => [m.id, trimOrNull(m.display_name)]));
-    const enrollmentMirror: PersonEnrollmentMirrorRow[] =
-        memberIds.length > 0
-            ? await buildPersonEnrollmentMirrorRowsForMemberIds(supabase, orgId, memberIds, memberNameById)
-            : [];
 
-    const enrollmentOpportunities: PersonEnrollmentOpportunityRow[] = [];
-    const seenOpp = new Set<string>();
-
+    // ── Phase: enrollment mirror + enrollment opportunities + sibling links (parallel) ──────────
+    // These three sections are all independent. Run them concurrently to cut wall-clock time.
     const primaryOpps =
-        (out._linked_opportunities as {
-            id: string;
-            name?: string | null;
-            status_key?: string | null;
-        }[]) ?? [];
-    for (const opp of primaryOpps) {
-        if (!opp.id || seenOpp.has(opp.id)) continue;
-        seenOpp.add(opp.id);
-        const sk = trimOrNull(opp.status_key);
-        enrollmentOpportunities.push({
-            opportunity_id: opp.id,
-            opportunity_name: trimOrNull(opp.name),
-            status_key: sk,
-            status_label: sk ? await resolveStatusLabel(supabase, orgId, "opportunities", sk) : null,
-            role_label: "Primary contact",
-            link_source: "primary_person",
-        });
-    }
+        (out._linked_opportunities as { id: string; name?: string | null; status_key?: string | null }[]) ?? [];
 
-    const { data: oppPersonRows } = await supabase
-        .from("opportunity_persons")
-        .select("id, opportunity_id, role_type")
-        .eq("org_id", orgId)
-        .eq("person_id", personId)
-        .order("created_at", { ascending: false })
-        .limit(PERSON_VISIBILITY_LIMIT);
+    // _ts is reused after the parallel block for household links / address timing
+    let _ts = 0;
+    const _tsParallelStart = _pt ? Date.now() : 0;
+    const [enrollmentMirror, enrollmentOpportunitiesResult, siblingLinksResult] = await Promise.all([
+        // ── enrollment mirror ─────────────────────────────────────────────────────────────────
+        (async (): Promise<PersonEnrollmentMirrorRow[]> => {
+            if (memberIds.length === 0) return [];
+            const ts = _pt ? Date.now() : 0;
+            const result = await buildPersonEnrollmentMirrorRowsForMemberIds(supabase, orgId, memberIds, memberNameById);
+            _pt?.set("enrollment_mirror", Date.now() - ts);
+            return result;
+        })(),
 
-    const oppPersonList = oppPersonRows ?? [];
-    const oppPersonOppIds = [...new Set(oppPersonList.map((r: { opportunity_id: string }) => r.opportunity_id))];
-    const roleKeys = [...new Set(oppPersonList.map((r: { role_type?: string | null }) => trimOrNull(r.role_type)).filter(Boolean))] as string[];
+        // ── enrollment opportunities ──────────────────────────────────────────────────────────
+        (async (): Promise<{ opps: PersonEnrollmentOpportunityRow[]; personRoles: { role_type: string | null }[] }> => {
+            const ts = _pt ? Date.now() : 0;
+            const opps: PersonEnrollmentOpportunityRow[] = [];
+            const seenOpp = new Set<string>();
 
-    const [oppPersonOppsRes, roleTypesRes] = await Promise.all([
-        oppPersonOppIds.length > 0
-            ? supabase.from("opportunities").select("id, name, status_key").eq("org_id", orgId).in("id", oppPersonOppIds)
-            : { data: [] as { id: string; name?: string | null; status_key?: string | null }[] },
-        roleKeys.length > 0
-            ? supabase.from("customer_person_role_types").select("key, label").eq("org_id", orgId).in("key", roleKeys)
-            : { data: [] as { key: string; label: string | null }[] },
+            // Fetch opportunity_persons rows in parallel with primary opp processing
+            const { data: oppPersonRows } = await supabase
+                .from("opportunity_persons")
+                .select("id, opportunity_id, role_type")
+                .eq("org_id", orgId)
+                .eq("person_id", personId)
+                .order("created_at", { ascending: false })
+                .limit(PERSON_VISIBILITY_LIMIT);
+
+            const oppPersonList = oppPersonRows ?? [];
+            const oppPersonOppIds = [
+                ...new Set(oppPersonList.map((r: { opportunity_id: string }) => r.opportunity_id)),
+            ];
+            const roleKeys = [
+                ...new Set(
+                    oppPersonList
+                        .map((r: { role_type?: string | null }) => trimOrNull(r.role_type))
+                        .filter(Boolean)
+                ),
+            ] as string[];
+
+            const [oppPersonOppsRes, roleTypesRes] = await Promise.all([
+                oppPersonOppIds.length > 0
+                    ? supabase
+                          .from("opportunities")
+                          .select("id, name, status_key")
+                          .eq("org_id", orgId)
+                          .in("id", oppPersonOppIds)
+                    : Promise.resolve({ data: [] as { id: string; name?: string | null; status_key?: string | null }[] }),
+                roleKeys.length > 0
+                    ? supabase
+                          .from("customer_person_role_types")
+                          .select("key, label")
+                          .eq("org_id", orgId)
+                          .in("key", roleKeys)
+                    : Promise.resolve({ data: [] as { key: string; label: string | null }[] }),
+            ]);
+            const oppPersonOppById = new Map((oppPersonOppsRes.data ?? []).map((o) => [o.id, o]));
+            const roleLabelByKey = new Map((roleTypesRes.data ?? []).map((r) => [r.key, r.label ?? r.key]));
+
+            // Collect all unique status keys from primaryOpps + oppPersonList, then resolve in parallel
+            const allOppStatusKeys = [
+                ...new Set([
+                    ...primaryOpps.map((o) => trimOrNull(o.status_key)).filter(Boolean),
+                    ...(oppPersonOppsRes.data ?? []).map((o) => trimOrNull(o.status_key)).filter(Boolean),
+                ] as string[]),
+            ];
+            const resolvedOppStatusLabels = await Promise.all(
+                allOppStatusKeys.map((sk) => resolveStatusLabel(supabase, orgId, "opportunities", sk))
+            );
+            const statusLabelByKey = new Map(allOppStatusKeys.map((k, i) => [k, resolvedOppStatusLabels[i]]));
+
+            for (const opp of primaryOpps) {
+                if (!opp.id || seenOpp.has(opp.id)) continue;
+                seenOpp.add(opp.id);
+                const sk = trimOrNull(opp.status_key);
+                opps.push({
+                    opportunity_id: opp.id,
+                    opportunity_name: trimOrNull(opp.name),
+                    status_key: sk,
+                    status_label: sk ? (statusLabelByKey.get(sk) ?? null) : null,
+                    role_label: "Primary contact",
+                    link_source: "primary_person",
+                });
+            }
+            for (const row of oppPersonList) {
+                const r = row as { opportunity_id: string; role_type?: string | null };
+                if (!r.opportunity_id || seenOpp.has(r.opportunity_id)) continue;
+                seenOpp.add(r.opportunity_id);
+                const opp = oppPersonOppById.get(r.opportunity_id);
+                const sk = trimOrNull(opp?.status_key);
+                const roleKey = trimOrNull(r.role_type);
+                opps.push({
+                    opportunity_id: r.opportunity_id,
+                    opportunity_name: trimOrNull(opp?.name),
+                    status_key: sk,
+                    status_label: sk ? (statusLabelByKey.get(sk) ?? null) : null,
+                    role_label: roleKey ? (roleLabelByKey.get(roleKey) ?? roleKey) : null,
+                    link_source: "opportunity_person",
+                });
+            }
+
+            _pt?.set("enrollment_opportunities", Date.now() - ts);
+            const personRoles = oppPersonList.map((r: { role_type?: string | null }) => ({
+                role_type: trimOrNull(r.role_type),
+            }));
+            return { opps, personRoles };
+        })(),
+
+        // ── sibling links ─────────────────────────────────────────────────────────────────────
+        (async (): Promise<PersonSiblingLinkRow[]> => {
+            if (householdCustomerIds.length === 0) return [];
+            const ts = _pt ? Date.now() : 0;
+            const links: PersonSiblingLinkRow[] = [];
+            const selfMemberIds = new Set(memberIds);
+            const { data: siblingMemberRows } = await supabase
+                .from("customer_members")
+                .select("id, customer_id, display_name, relationship, person_id")
+                .eq("org_id", orgId)
+                .in("customer_id", householdCustomerIds)
+                .eq("relationship", "child")
+                .limit(PERSON_VISIBILITY_LIMIT);
+
+            for (const row of siblingMemberRows ?? []) {
+                const m = row as {
+                    id: string;
+                    customer_id: string;
+                    display_name?: string | null;
+                    person_id?: string | null;
+                };
+                if (selfMemberIds.has(m.id)) continue;
+                if (m.person_id && m.person_id === personId) continue;
+                links.push({
+                    customer_member_id: m.id,
+                    customer_id: m.customer_id,
+                    person_id: trimOrNull(m.person_id),
+                    display_name: trimOrNull(m.display_name),
+                });
+            }
+            _pt?.set("sibling_links", Date.now() - ts);
+            return links;
+        })(),
     ]);
-    const oppPersonOppById = new Map((oppPersonOppsRes.data ?? []).map((o) => [o.id, o]));
-    const roleLabelByKey = new Map((roleTypesRes.data ?? []).map((r) => [r.key, r.label ?? r.key]));
 
-    for (const row of oppPersonList) {
-        const r = row as { opportunity_id: string; role_type?: string | null };
-        if (!r.opportunity_id || seenOpp.has(r.opportunity_id)) continue;
-        seenOpp.add(r.opportunity_id);
-        const opp = oppPersonOppById.get(r.opportunity_id);
-        const sk = trimOrNull(opp?.status_key);
-        const roleKey = trimOrNull(r.role_type);
-        enrollmentOpportunities.push({
-            opportunity_id: r.opportunity_id,
-            opportunity_name: trimOrNull(opp?.name),
-            status_key: sk,
-            status_label: sk ? await resolveStatusLabel(supabase, orgId, "opportunities", sk) : null,
-            role_label: roleKey ? (roleLabelByKey.get(roleKey) ?? roleKey) : null,
-            link_source: "opportunity_person",
-        });
-    }
+    const siblingLinks = siblingLinksResult;
+    const enrollmentOpportunities = enrollmentOpportunitiesResult.opps;
+    const enrollmentPersonRoles = enrollmentOpportunitiesResult.personRoles;
+    if (_pt) _pt.set("visibility_parallel_total", Date.now() - _tsParallelStart);
 
-    const siblingLinks: PersonSiblingLinkRow[] = [];
-    if (householdCustomerIds.length > 0) {
-        const selfMemberIds = new Set(memberIds);
-        const { data: siblingMemberRows } = await supabase
-            .from("customer_members")
-            .select("id, customer_id, display_name, relationship, person_id")
-            .eq("org_id", orgId)
-            .in("customer_id", householdCustomerIds)
-            .eq("relationship", "child")
-            .limit(PERSON_VISIBILITY_LIMIT);
-
-        for (const row of siblingMemberRows ?? []) {
-            const m = row as {
-                id: string;
-                customer_id: string;
-                display_name?: string | null;
-                person_id?: string | null;
-            };
-            if (selfMemberIds.has(m.id)) continue;
-            if (m.person_id && m.person_id === personId) continue;
-            siblingLinks.push({
-                customer_member_id: m.id,
-                customer_id: m.customer_id,
-                person_id: trimOrNull(m.person_id),
-                display_name: trimOrNull(m.display_name),
-            });
-        }
-    }
-
+    _ts = _pt ? Date.now() : 0;
     const householdAdultLinks: PersonHouseholdAdultLinkRow[] = [];
     const householdChildLinks: PersonHouseholdChildLinkRow[] = [];
     if (householdCustomerIds.length > 0) {
@@ -375,6 +436,9 @@ export async function attachPersonDrawerVisibility(
         }
     }
 
+    _pt?.set("household_links", Date.now() - _ts);
+
+    _ts = _pt ? Date.now() : 0;
     if (householdCustomerIds.length > 0) {
         const [customerRes, addressLocRes] = await Promise.all([
             supabase
@@ -432,6 +496,8 @@ export async function attachPersonDrawerVisibility(
         out._household_customer_addresses = [];
     }
 
+    _pt?.set("household_address", Date.now() - _ts);
+
     out._enrollment_opportunities = enrollmentOpportunities;
     if (siblingLinks.length > 0) {
         const siblingMemberIds = siblingLinks
@@ -483,9 +549,7 @@ export async function attachPersonDrawerVisibility(
     out._household_adult_links = householdAdultLinks;
     out._household_child_links = householdChildLinks;
     out._enrollment_mirror = enrollmentMirror;
-    out._opportunity_person_roles = (oppPersonList as { role_type?: string | null }[]).map((r) => ({
-        role_type: r.role_type ?? null,
-    }));
+    out._opportunity_person_roles = enrollmentPersonRoles;
 
     filterPersonDrawerHouseholdVisibilityBySiteScope(out, options?.siteScope ?? null);
 }

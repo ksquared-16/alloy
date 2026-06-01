@@ -63,6 +63,39 @@ function trimOrNull(v: unknown): string | null {
     return s ? s : null;
 }
 
+// ---------------------------------------------------------------------------
+// Person payload build timing
+// ---------------------------------------------------------------------------
+const PERSON_PAYLOAD_TIMING_LOG =
+    process.env.NODE_ENV === "development" || process.env.PERSON_PAYLOAD_TIMING === "1";
+
+function logPersonPayloadBuildTiming(
+    personId: string,
+    timing: Map<string, number>,
+    totalMs: number
+): void {
+    if (!PERSON_PAYLOAD_TIMING_LOG) return;
+    const W = 16;
+    const pad = (s: string) => s + ".".repeat(Math.max(1, W - s.length));
+    const fmt = (v: number) => `${Math.round(v)}ms`;
+    const sum = (...keys: string[]) =>
+        keys.reduce((a, k) => a + (timing.get(k) ?? 0), 0);
+    const rows: Array<[string, string[]]> = [
+        ["summary",       ["summary"]],
+        ["household",     ["customer_persons", "household_links"]],
+        ["address",       ["household_address"]],
+        ["employee",      []],
+        ["medical",       []],
+        ["relationships", ["person_relationships", "contacts_members", "locations", "opportunities"]],
+        ["BOS",           ["enrollment_mirror", "enrollment_opportunities", "sibling_links"]],
+        ["permissions",   ["field_defs", "fk_displays"]],
+    ];
+    console.info(
+        `[person-payload] ${personId.slice(0, 8)}…\n` +
+        rows.map(([label, keys]) => `  ${pad(label)}${fmt(sum(...keys))}`).join("\n") +
+        `\n  ${pad("TOTAL")}${fmt(totalMs)}`
+    );
+}
 
 export async function GET(
     request: NextRequest,
@@ -1215,6 +1248,11 @@ export async function GET(
             if (id === "new") {
                 return NextResponse.json({ _create: true });
             }
+            const _buildStart = Date.now();
+            const _pt = new Map<string, number>();
+
+            // ── summary: base row + status label ─────────────────────────────
+            let _ts = Date.now();
             const { data: personRow, error: personErr } = await supabase
                 .from("persons")
                 .select("*")
@@ -1232,113 +1270,159 @@ export async function GET(
                 null;
             const psk = (personRow as { status_key?: string | null }).status_key ?? null;
             out._status_display = await resolveStatusLabel(supabase, orgId, "persons", psk);
-
-            const { data: cpRows } = await supabase
-                .from("customer_persons")
-                .select("id, customer_id, person_id, role_type, is_primary, created_at")
-                .eq("person_id", id)
-                .eq("org_id", orgId);
-            const customerIds = [...new Set((cpRows ?? []).map((r: { customer_id: string }) => r.customer_id))];
-            const roleKeys = [...new Set((cpRows ?? []).map((r: { role_type?: string | null }) => r.role_type).filter(Boolean))] as string[];
-            const [customerRowsRes, roleTypesRes] = await Promise.all([
-                customerIds.length > 0
-                    ? supabase.from("customers").select("id, name").in("id", customerIds).eq("org_id", orgId)
-                    : { data: [] as { id: string; name: string | null }[] },
-                roleKeys.length > 0
-                    ? supabase.from("customer_person_role_types").select("key, label").eq("org_id", orgId).in("key", roleKeys)
-                    : { data: [] as { key: string; label: string | null }[] },
-            ]);
-            const customerMap = new Map((customerRowsRes.data ?? []).map((c) => [c.id, c.name ?? null]));
-            const roleLabelMap = new Map((roleTypesRes.data ?? []).map((r) => [r.key, r.label ?? r.key]));
-            out._customer_persons = (cpRows ?? []).map((r: { id: string; customer_id: string; person_id: string; role_type?: string | null; is_primary?: boolean | null; created_at?: string }) => ({
-                ...r,
-                is_primary: Boolean(r.is_primary),
-                _customer_name: customerMap.get(r.customer_id) ?? null,
-                _role_label: r.role_type ? (roleLabelMap.get(r.role_type) ?? r.role_type) : null,
-            }));
-
-            const { data: relRows } = await supabase
-                .from("person_relationships")
-                .select("id, from_person_id, to_person_id, relationship_type, created_at")
-                .eq("org_id", orgId)
-                .or(`from_person_id.eq.${id},to_person_id.eq.${id}`);
-            const relTypeKeys = [...new Set((relRows ?? []).map((r: { relationship_type?: string | null }) => r.relationship_type).filter(Boolean))] as string[];
-            const { data: relTypeRows } = relTypeKeys.length > 0
-                ? await supabase.from("person_relationship_type_settings").select("key, label").eq("org_id", orgId).in("key", relTypeKeys)
-                : { data: [] as { key: string; label: string | null }[] };
-            const relTypeLabelMap = new Map((relTypeRows ?? []).map((r) => [r.key, r.label ?? r.key]));
-            const otherPersonIds = [...new Set((relRows ?? []).flatMap((r: { from_person_id: string; to_person_id: string }) => (r.from_person_id === id ? [r.to_person_id] : [r.from_person_id])))];
-            const { data: otherPersons } = otherPersonIds.length > 0
-                ? await supabase.from("persons").select("id, first_name, last_name").in("id", otherPersonIds).eq("org_id", orgId)
-                : { data: [] as { id: string; first_name?: string | null; last_name?: string | null }[] };
-            const personNameMap = new Map((otherPersons ?? []).map((p: { id: string; first_name?: string | null; last_name?: string | null }) => [p.id, [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null]));
-            out._person_relationships = (relRows ?? []).map((r: { id: string; from_person_id: string; to_person_id: string; relationship_type?: string | null; created_at?: string }) => ({
-                ...r,
-                _other_person_id: r.from_person_id === id ? r.to_person_id : r.from_person_id,
-                _other_person_name: personNameMap.get(r.from_person_id === id ? r.to_person_id : r.from_person_id) ?? null,
-                _relationship_type_label: r.relationship_type ? (relTypeLabelMap.get(r.relationship_type) ?? r.relationship_type) : null,
-            }));
+            _pt.set("summary", Date.now() - _ts);
 
             const PERSON_LIMIT = 25;
-            const { data: contactRows } = await supabase
-                .from("contacts")
-                .select("id, first_name, last_name, email, phone, customer_id")
-                .eq("person_id", id)
-                .eq("org_id", orgId)
-                .limit(PERSON_LIMIT);
-            const { data: memberRows } = await supabase
-                .from("customer_members")
-                .select("id, display_name, relationship, customer_id")
-                .eq("person_id", id)
-                .eq("org_id", orgId)
-                .limit(PERSON_LIMIT);
-            out._compatibility_contacts = contactRows ?? [];
-            out._compatibility_members = memberRows ?? [];
 
-            const { data: plLocRows } = await supabase
-                .from("person_locations")
-                .select("location_id, is_primary, relationship_type")
-                .eq("person_id", id)
-                .eq("org_id", orgId)
-                .limit(PERSON_LIMIT);
-            const locLinkList = plLocRows ?? [];
-            const locIdsFromPl = [...new Set(locLinkList.map((r: { location_id: string }) => r.location_id))];
-            const { data: locRowsForPerson } =
-                locIdsFromPl.length > 0
-                    ? await supabase
-                          .from("locations")
-                          .select("id, label, postal_code, city, address1")
-                          .eq("org_id", orgId)
-                          .in("id", locIdsFromPl)
-                    : { data: [] as { id: string; label?: string | null; postal_code?: string | null; city?: string | null; address1?: string | null }[] };
-            const locLabelById = new Map(
-                (locRowsForPerson ?? []).map((l) => {
-                    const lbl =
-                        (l.label && String(l.label).trim()) ||
-                        [l.address1, l.city, l.postal_code].filter(Boolean).join(", ") ||
-                        null;
-                    return [l.id, lbl] as const;
-                })
-            );
-            out._linked_locations = locLinkList.map((row: { location_id: string; is_primary?: boolean | null; relationship_type?: string | null }) => ({
-                location_id: row.location_id,
-                _location_label: locLabelById.get(row.location_id) ?? null,
-                is_primary: !!row.is_primary,
-                relationship_type: row.relationship_type ?? null,
-            }));
+            // ── Phase 2: all person-level lookups in parallel ─────────────────
+            // customer_persons, relationships, contacts/members, locations, and opportunities
+            // are fully independent — run them concurrently to eliminate sequential round-trips.
+            const [cpResult, relResult, cmResult, locResult, oppResult] = await Promise.all([
+                // ── customer_persons ─────────────────────────────────────────
+                (async () => {
+                    const ts = Date.now();
+                    const { data: cpRows } = await supabase
+                        .from("customer_persons")
+                        .select("id, customer_id, person_id, role_type, is_primary, created_at")
+                        .eq("person_id", id)
+                        .eq("org_id", orgId);
+                    const customerIds = [...new Set((cpRows ?? []).map((r: { customer_id: string }) => r.customer_id))];
+                    const roleKeys = [...new Set((cpRows ?? []).map((r: { role_type?: string | null }) => r.role_type).filter(Boolean))] as string[];
+                    const [customerRowsRes, roleTypesRes] = await Promise.all([
+                        customerIds.length > 0
+                            ? supabase.from("customers").select("id, name").in("id", customerIds).eq("org_id", orgId)
+                            : { data: [] as { id: string; name: string | null }[] },
+                        roleKeys.length > 0
+                            ? supabase.from("customer_person_role_types").select("key, label").eq("org_id", orgId).in("key", roleKeys)
+                            : { data: [] as { key: string; label: string | null }[] },
+                    ]);
+                    const customerMap = new Map((customerRowsRes.data ?? []).map((c) => [c.id, c.name ?? null]));
+                    const roleLabelMap = new Map((roleTypesRes.data ?? []).map((r) => [r.key, r.label ?? r.key]));
+                    return {
+                        ms: Date.now() - ts,
+                        rows: (cpRows ?? []).map((r: { id: string; customer_id: string; person_id: string; role_type?: string | null; is_primary?: boolean | null; created_at?: string }) => ({
+                            ...r,
+                            is_primary: Boolean(r.is_primary),
+                            _customer_name: customerMap.get(r.customer_id) ?? null,
+                            _role_label: r.role_type ? (roleLabelMap.get(r.role_type) ?? r.role_type) : null,
+                        })),
+                    };
+                })(),
 
-            const { data: oppRows } = await supabase
-                .from("opportunities")
-                .select("id, name, status_key, job_date, quote_total, created_at")
-                .eq("primary_person_id", id)
-                .eq("org_id", orgId)
-                .order("created_at", { ascending: false })
-                .limit(PERSON_LIMIT);
-            out._linked_opportunities = oppRows ?? [];
+                // ── person_relationships ─────────────────────────────────────
+                (async () => {
+                    const ts = Date.now();
+                    const { data: relRows } = await supabase
+                        .from("person_relationships")
+                        .select("id, from_person_id, to_person_id, relationship_type, created_at")
+                        .eq("org_id", orgId)
+                        .or(`from_person_id.eq.${id},to_person_id.eq.${id}`);
+                    const relTypeKeys = [...new Set((relRows ?? []).map((r: { relationship_type?: string | null }) => r.relationship_type).filter(Boolean))] as string[];
+                    const otherPersonIds = [...new Set((relRows ?? []).flatMap((r: { from_person_id: string; to_person_id: string }) => (r.from_person_id === id ? [r.to_person_id] : [r.from_person_id])))];
+                    // rel-type labels and related person names are independent — fetch in parallel
+                    const [relTypeRes, otherPersonsRes] = await Promise.all([
+                        relTypeKeys.length > 0
+                            ? supabase.from("person_relationship_type_settings").select("key, label").eq("org_id", orgId).in("key", relTypeKeys)
+                            : { data: [] as { key: string; label: string | null }[] },
+                        otherPersonIds.length > 0
+                            ? supabase.from("persons").select("id, first_name, last_name").in("id", otherPersonIds).eq("org_id", orgId)
+                            : { data: [] as { id: string; first_name?: string | null; last_name?: string | null }[] },
+                    ]);
+                    const relTypeLabelMap = new Map((relTypeRes.data ?? []).map((r) => [r.key, r.label ?? r.key]));
+                    const personNameMap = new Map((otherPersonsRes.data ?? []).map((p: { id: string; first_name?: string | null; last_name?: string | null }) => [p.id, [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null]));
+                    return {
+                        ms: Date.now() - ts,
+                        rows: (relRows ?? []).map((r: { id: string; from_person_id: string; to_person_id: string; relationship_type?: string | null; created_at?: string }) => ({
+                            ...r,
+                            _other_person_id: r.from_person_id === id ? r.to_person_id : r.from_person_id,
+                            _other_person_name: personNameMap.get(r.from_person_id === id ? r.to_person_id : r.from_person_id) ?? null,
+                            _relationship_type_label: r.relationship_type ? (relTypeLabelMap.get(r.relationship_type) ?? r.relationship_type) : null,
+                        })),
+                    };
+                })(),
 
-            await attachPersonDrawerVisibility(supabase, orgId, id, out, { siteScope: scopeDim });
-            await attachFieldDefinitionsAndValues(supabase, out, "persons", id);
-            await attachDirectFkRelationshipDisplays(supabase, orgId, "persons", out);
+                // ── contacts + members (parallel within group) ───────────────
+                (async () => {
+                    const ts = Date.now();
+                    const [contactsRes, membersRes] = await Promise.all([
+                        supabase.from("contacts").select("id, first_name, last_name, email, phone, customer_id").eq("person_id", id).eq("org_id", orgId).limit(PERSON_LIMIT),
+                        supabase.from("customer_members").select("id, display_name, relationship, customer_id").eq("person_id", id).eq("org_id", orgId).limit(PERSON_LIMIT),
+                    ]);
+                    return { ms: Date.now() - ts, contacts: contactsRes.data ?? [], members: membersRes.data ?? [] };
+                })(),
+
+                // ── person locations (two sequential queries, second depends on first) ──
+                (async () => {
+                    const ts = Date.now();
+                    const { data: plLocRows } = await supabase
+                        .from("person_locations")
+                        .select("location_id, is_primary, relationship_type")
+                        .eq("person_id", id)
+                        .eq("org_id", orgId)
+                        .limit(PERSON_LIMIT);
+                    const locLinkList = plLocRows ?? [];
+                    const locIdsFromPl = [...new Set(locLinkList.map((r: { location_id: string }) => r.location_id))];
+                    const { data: locRowsForPerson } = locIdsFromPl.length > 0
+                        ? await supabase.from("locations").select("id, label, postal_code, city, address1").eq("org_id", orgId).in("id", locIdsFromPl)
+                        : { data: [] as { id: string; label?: string | null; postal_code?: string | null; city?: string | null; address1?: string | null }[] };
+                    const locLabelById = new Map(
+                        (locRowsForPerson ?? []).map((l) => {
+                            const lbl = (l.label && String(l.label).trim()) || [l.address1, l.city, l.postal_code].filter(Boolean).join(", ") || null;
+                            return [l.id, lbl] as const;
+                        })
+                    );
+                    return {
+                        ms: Date.now() - ts,
+                        rows: locLinkList.map((row: { location_id: string; is_primary?: boolean | null; relationship_type?: string | null }) => ({
+                            location_id: row.location_id,
+                            _location_label: locLabelById.get(row.location_id) ?? null,
+                            is_primary: !!row.is_primary,
+                            relationship_type: row.relationship_type ?? null,
+                        })),
+                    };
+                })(),
+
+                // ── linked opportunities ─────────────────────────────────────
+                (async () => {
+                    const ts = Date.now();
+                    const { data: oppRows } = await supabase
+                        .from("opportunities")
+                        .select("id, name, status_key, job_date, quote_total, created_at")
+                        .eq("primary_person_id", id)
+                        .eq("org_id", orgId)
+                        .order("created_at", { ascending: false })
+                        .limit(PERSON_LIMIT);
+                    return { ms: Date.now() - ts, rows: oppRows ?? [] };
+                })(),
+            ]);
+
+            // Apply phase-2 results to out
+            out._customer_persons = cpResult.rows;          _pt.set("customer_persons", cpResult.ms);
+            out._person_relationships = relResult.rows;     _pt.set("person_relationships", relResult.ms);
+            out._compatibility_contacts = cmResult.contacts; _pt.set("contacts_members", cmResult.ms);
+            out._compatibility_members = cmResult.members;
+            out._linked_locations = locResult.rows;          _pt.set("locations", locResult.ms);
+            out._linked_opportunities = oppResult.rows;      _pt.set("opportunities", oppResult.ms);
+
+            // ── Phase 3: visibility + field defs + FK displays in parallel ────
+            // attachPersonDrawerVisibility reads _customer_persons and _compatibility_members (set above).
+            // field_defs and fk_displays operate on base person columns from phase 1 and are
+            // independent of visibility data — safe to run concurrently.
+            await Promise.all([
+                attachPersonDrawerVisibility(supabase, orgId, id, out, { siteScope: scopeDim, payloadTiming: _pt }),
+                (async () => {
+                    const ts = Date.now();
+                    await attachFieldDefinitionsAndValues(supabase, out, "persons", id);
+                    _pt.set("field_defs", Date.now() - ts);
+                })(),
+                (async () => {
+                    const ts = Date.now();
+                    await attachDirectFkRelationshipDisplays(supabase, orgId, "persons", out);
+                    _pt.set("fk_displays", Date.now() - ts);
+                })(),
+            ]);
+
+            logPersonPayloadBuildTiming(id, _pt, Date.now() - _buildStart);
             return NextResponse.json(out);
         }
 

@@ -1443,6 +1443,17 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     latestRequestSeq: queueItemsRequestSeq.current,
                     stillSelected,
                 });
+                if (process.env.NODE_ENV === "development") {
+                    console.log(`[queue-request:${decision.apply ? "apply" : "ignore"}]`, {
+                        seq,
+                        latestSeq: queueItemsRequestSeq.current,
+                        reason: decision.skippedReason ?? "ok",
+                        itemsCount: Array.isArray((payload as unknown as { rows?: unknown[] }).rows) ? (payload as unknown as { rows: unknown[] }).rows.length : null,
+                        selectedQueueKey: queueKey,
+                        currentSelectedQueueKey: selectedQueueKeyRef.current,
+                        stillSelected,
+                    });
+                }
                 if (decision.apply) {
                     putQueueRowCache(cache, viewScopeFingerprint, workUnitId, apiQueueKey, payload, abSnap);
                     setQueueItems(payload);
@@ -1531,24 +1542,37 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 lease.add(fetchSig);
             }
             if (!options?.force && fetchSig === queueItemsLastFetchSigRef.current) {
-                lease.delete(fetchSig);
                 const ent = touchQueueRowCacheOnHit(cache, logicalKey);
                 if (ent) {
+                    // Cache hit for the same sig: apply immediately without a network round-trip.
+                    lease.delete(fetchSig);
                     setQueueItems(ent.payload);
                     setQueueItemsError(null);
                     setQueueItemsLoading(false);
-                } else {
-                    setQueueItemsLoading(false);
+                    if (pendingQueueTabPerfRef.current && typeof window !== "undefined" && typeof performance !== "undefined") {
+                        pendingQueueTabPerfRef.current = false;
+                        alloyPerfSet("queue_tab_rows_ready", performance.now());
+                    }
+                    return;
                 }
-                if (pendingQueueTabPerfRef.current && typeof window !== "undefined" && typeof performance !== "undefined") {
-                    pendingQueueTabPerfRef.current = false;
-                    alloyPerfSet("queue_tab_rows_ready", performance.now());
-                }
-                return;
+                // No cache entry (expired or evicted) even though sig matches.
+                // Fall through to a fresh network fetch — this recovers from error states
+                // where queueItems was cleared to null and the sig was never re-incremented.
+                lease.delete(fetchSig);
             }
             queueItemsLastFetchSigRef.current = fetchSig;
 
             const seq = ++queueItemsRequestSeq.current;
+            if (process.env.NODE_ENV === "development") {
+                console.log("[queue-request:start]", {
+                    seq,
+                    workUnitId,
+                    selectedQueueKey: queueKey,
+                    apiQueueKey,
+                    viewScopeFingerprint,
+                    userInitiated: options?.userInitiated ?? false,
+                });
+            }
             setQueueItemsLoading(true);
             setQueueItemsError(null);
             setQueueItemsRoute(route);
@@ -3530,7 +3554,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 placementDisplay: placementDiagnostics?.display,
                 rollupSummary: undefined,
                 queueEntityType: entity,
-                rowsLoading: false,
+                // rowsLoading suppresses "No records" empty-state copy while a fetch is in flight.
+                // Belt-and-suspenders with rowsHeld (which QueueBlock also checks for empty state).
+                rowsLoading: queueItemsLoading,
                 rowsHeld: !laneMayPaint,
                 rowsRefreshing,
                 ...(workUnitGroupHeaders ? { workUnitGroupHeaders } : {}),

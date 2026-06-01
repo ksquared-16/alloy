@@ -1190,7 +1190,7 @@ function WorkUnitQueueLane({
               <WorkUnitQueueLaneRowSkeleton key={`queue-row-skel-${i}`} />
             ))
           : null}
-        {!queue.rowsLoading && queue.items.length === 0 ? (
+        {!queue.rowsLoading && !queue.rowsHeld && queue.items.length === 0 ? (
           <li className="adminv2-ws-wu-queue-empty-wrap" role="status">
             <div className="adminv2-ws-wu-queue-empty-panel">
               <p className="adminv2-ws-wu-queue-empty-title">No records</p>

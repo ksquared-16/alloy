@@ -249,22 +249,25 @@ describe("drawerAboveFoldCoordinatedReveal policy", () => {
         expect(plan.sectionsBlocking).toContain("child_household");
     });
 
-    it("8. child drawer blocks reveal when medical fields missing", () => {
+    it("8. child medical known-empty: does not block when body hydrated (no medical data present)", () => {
+        // Core doctrine: the persons API has no medical column.
+        // After a full fetch, absence of medical data is the final known-empty answer — the drawer should reveal.
+        const recordNoMedical = {
+            id: "child-1",
+            _person_name: "Sam Lee",
+            first_name: "Sam",
+            last_name: "Lee",
+            _drawer_presentation_emphasis: "child_lifecycle",
+            _household_context: childRecord._household_context,
+            _household_adult_links: childRecord._household_adult_links,
+            _household_child_links: childRecord._household_child_links,
+        };
         const plan = composeAdminV2DrawerRuntime({
             entityType: "persons",
             surface: "child",
             drawerId: "child-1",
             activeTab: "overview",
-            record: {
-                id: "child-1",
-                _person_name: "Sam Lee",
-                first_name: "Sam",
-                last_name: "Lee",
-                _drawer_presentation_emphasis: "child_lifecycle",
-                _household_context: childRecord._household_context,
-                _household_adult_links: childRecord._household_adult_links,
-                _household_child_links: childRecord._household_child_links,
-            },
+            record: recordNoMedical,
             error: null,
             typedSnapshot: false,
             bodyHydrated: true,
@@ -279,8 +282,17 @@ describe("drawerAboveFoldCoordinatedReveal policy", () => {
             primaryContractReady: true,
             needsBackgroundHydrate: false,
         });
-        expect(plan.canRevealDrawerFrame).toBe(false);
-        expect(plan.sectionsBlocking).toContain("child_medical");
+        expect(plan.canRevealDrawerFrame).toBe(true);
+        expect(plan.sectionsBlocking).not.toContain("child_medical");
+        expect(
+            childDrawerAboveFoldCoordinatedReady({
+                record: recordNoMedical,
+                drawerId: "child-1",
+                bodyHydrated: true,
+                requireHousehold: true,
+                requireMedical: true,
+            })
+        ).toBe(true);
     });
 
     it("9. above-fold sections do not use reserved header-only shells", () => {
@@ -322,6 +334,131 @@ describe("drawerAboveFoldCoordinatedReveal policy", () => {
             childDrawerAboveFoldCoordinatedReady({
                 record: childRecord,
                 drawerId: "child-1",
+                bodyHydrated: true,
+                requireHousehold: true,
+                requireMedical: true,
+            })
+        ).toBe(true);
+    });
+
+    it("10. parent household known-empty: ready when _household_adult_links present but empty", () => {
+        const singleAdultRecord = {
+            id: "parent-1",
+            display_name: "Jordan Lee",
+            is_employee: false,
+            _household_context: [],
+            _household_adult_links: [],
+            _household_child_links: [],
+            _household_customer_addresses: [],
+        };
+        const plan = composeAdminV2DrawerRuntime({
+            entityType: "persons",
+            surface: "parent",
+            drawerId: "parent-1",
+            activeTab: "overview",
+            record: singleAdultRecord,
+            error: null,
+            typedSnapshot: false,
+            bodyHydrated: true,
+            fullHydrateReady: true,
+            frameReady: true,
+            headerActionsResolved: true,
+            headerActionsLoading: false,
+            headerActionsExpectRegistry: false,
+            inquiryWorkflow: false,
+            belowFoldRevealed: true,
+            presentationReady: true,
+            primaryContractReady: true,
+            needsBackgroundHydrate: false,
+        });
+        expect(plan.canRevealDrawerFrame).toBe(true);
+        expect(plan.sectionsBlocking).not.toContain("parent_household");
+        expect(plan.sectionsBlocking).not.toContain("parent_address");
+        expect(
+            parentDrawerAboveFoldCoordinatedReady({
+                record: singleAdultRecord,
+                drawerId: "parent-1",
+                bodyHydrated: true,
+                requireHousehold: true,
+                requireAddress: true,
+                requireEmployeeStatus: true,
+            })
+        ).toBe(true);
+    });
+
+    it("11. parent address known-empty: ready when _household_customer_addresses present but empty", () => {
+        const recordEmptyAddress = {
+            ...parentRecord,
+            _household_customer_addresses: [],
+        };
+        const plan = composeAdminV2DrawerRuntime({
+            entityType: "persons",
+            surface: "parent",
+            drawerId: "parent-1",
+            activeTab: "overview",
+            record: recordEmptyAddress,
+            error: null,
+            typedSnapshot: false,
+            bodyHydrated: true,
+            fullHydrateReady: true,
+            frameReady: true,
+            headerActionsResolved: true,
+            headerActionsLoading: false,
+            headerActionsExpectRegistry: false,
+            inquiryWorkflow: false,
+            belowFoldRevealed: true,
+            presentationReady: true,
+            primaryContractReady: true,
+            needsBackgroundHydrate: false,
+        });
+        expect(plan.canRevealDrawerFrame).toBe(true);
+        expect(plan.sectionsBlocking).not.toContain("parent_address");
+    });
+
+    it("12. child chrome ready via drawer hint when record has no presentation emphasis", () => {
+        // A child opened via open_source hint without _drawer_presentation_emphasis in the record.
+        // The hint alone should make the chrome active and allow the drawer to reveal.
+        const childRecordNoEmphasis = {
+            id: "child-2",
+            _person_name: "Alex Kim",
+            first_name: "Alex",
+            last_name: "Kim",
+            _household_context: [{ customer_id: "cust-2", customer_name: "Kim family" }],
+            _household_adult_links: [
+                { person_id: "parent-2", customer_id: "cust-2", display_name: "Kim Parent", role_type: "parent" },
+            ],
+            _household_child_links: [
+                { customer_member_id: "m-2", customer_id: "cust-2", person_id: "child-2", display_name: "Alex Kim" },
+            ],
+        };
+        const childHint = { presentation_emphasis: "child_lifecycle" as const };
+        expect(
+            childDrawerAboveFoldCoordinatedReady({
+                record: childRecordNoEmphasis,
+                drawerId: "child-2",
+                bodyHydrated: true,
+                requireHousehold: true,
+                requireMedical: true,
+                childChromeHint: childHint,
+            })
+        ).toBe(true);
+    });
+
+    it("13. child household known-empty: ready when _household_adult_links present but empty", () => {
+        const childNoHousehold = {
+            id: "child-3",
+            _person_name: "Orphan Child",
+            first_name: "Orphan",
+            last_name: "Child",
+            _drawer_presentation_emphasis: "child_lifecycle",
+            _household_context: [],
+            _household_adult_links: [],
+            _household_child_links: [],
+        };
+        expect(
+            childDrawerAboveFoldCoordinatedReady({
+                record: childNoHousehold,
+                drawerId: "child-3",
                 bodyHydrated: true,
                 requireHousehold: true,
                 requireMedical: true,

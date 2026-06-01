@@ -70,6 +70,9 @@ describe("opportunity header actions restore wiring", () => {
 
     it("inquiry workflow header actions are tab-independent in composer policy", () => {
         expect(adminV2DrawerHeaderActionsTabIndependent({ inquiryWorkflow: true })).toBe(true);
+        // BOS right column now requires fullHydrateReady (full record surface) before revealing —
+        // use a full-surface record to ensure the section doesn't block the test assertion about
+        // tab-independence (which is orthogonal to BOS readiness).
         const plan = composeAdminV2DrawerRuntime({
             entityType: "opportunities",
             surface: "opportunity",
@@ -77,11 +80,43 @@ describe("opportunity header actions restore wiring", () => {
             activeTab: "communications",
             record: {
                 id: "opp-1",
-                _record_surface: "drawer_primary",
+                _record_surface: "full",
                 metadata: { tour_date: "2026-06-01" },
                 _customer_name: "Test",
                 next_follow_up_at: "2026-06-15T10:00:00Z",
                 _inquiry_children: [{ person_id: "c1", display_name: "Child", desired_program_label: "Toddler" }],
+            },
+            error: null,
+            typedSnapshot: false,
+            bodyHydrated: true,
+            fullHydrateReady: true,
+            frameReady: true,
+            headerActionsResolved: true,
+            headerActionsLoading: false,
+            headerActionsExpectRegistry: true,
+            inquiryWorkflow: true,
+            belowFoldRevealed: false,
+            presentationReady: true,
+            primaryContractReady: true,
+            needsBackgroundHydrate: false,
+        });
+        expect(plan.canRevealHeaderActions).toBe(true);
+    });
+
+    it("drawer does not reveal before full record arrives when BOS panel is above fold", () => {
+        // Validates the new known-answer doctrine: opportunity_bos_right_column blocks
+        // with only a drawer_primary record since tasks/guidance are in the full record.
+        const plan = composeAdminV2DrawerRuntime({
+            entityType: "opportunities",
+            surface: "opportunity",
+            drawerId: "opp-2",
+            activeTab: "overview",
+            record: {
+                id: "opp-2",
+                _record_surface: "drawer_primary",
+                _customer_name: "Test",
+                next_follow_up_at: "2026-07-01T10:00:00Z",
+                _inquiry_children: [],
             },
             error: null,
             typedSnapshot: false,
@@ -97,7 +132,9 @@ describe("opportunity header actions restore wiring", () => {
             primaryContractReady: true,
             needsBackgroundHydrate: false,
         });
-        expect(plan.canRevealHeaderActions).toBe(true);
+        // canRevealHeaderActions must be false — BOS section blocks until full record
+        expect(plan.canRevealHeaderActions).toBe(false);
+        expect(plan.sectionsBlocking).toContain("opportunity_bos_right_column");
     });
 });
 

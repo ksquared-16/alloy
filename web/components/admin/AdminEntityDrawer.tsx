@@ -171,6 +171,7 @@ import {
     filterPersonDrawerOverviewSectionsForLayoutRuntime,
     personDrawerLayoutRuntimeActive,
     resolvePersonDrawerLayoutVariant,
+    resolvePersonOperatingSections,
 } from "@/lib/admin/person/personDrawerLayoutRuntime";
 import { PERSON_DRAWER_CHILD_STATUS_ENTITY_TYPE } from "@/lib/admin/person/personDrawerChildStatusEntityType";
 import {
@@ -358,6 +359,12 @@ import {
     snapshotInquiryChildrenNeedHydrate,
     snapshotNeedsFullRevalidate,
 } from "@/lib/admin/drawer/opportunityDrawerRecordNeedsRevalidate";
+import DrawerComposedPreparingState from "@/components/admin/drawer/DrawerComposedPreparingState";
+import {
+    composedDrawerPreparingCopy,
+    evaluateComposedOpportunityDrawerPayload,
+    evaluateComposedPersonDrawerPayload,
+} from "@/lib/admin/drawer/composedDrawerPayload";
 import { composeAdminV2DrawerRuntime } from "@/lib/adminV2/runtime/contract";
 import { logDrawerBackRestore, logPersonDrawerOpen } from "@/lib/admin/drawer/personDrawerPerfLogs";
 import { dispatchOpportunityQueueUpdated, dispatchOpportunityQueueUpdatedBroadcast } from "@/lib/admin/opportunityQueueRefreshEvent";
@@ -2515,6 +2522,16 @@ export default function AdminEntityDrawer() {
             drawer.type === "persons" &&
             cachedEntity != null &&
             isPersonDrawerSeedRecord(cachedEntity as Record<string, unknown>);
+        if (process.env.NODE_ENV === "development" && drawer.id && drawer.id !== "new") {
+            const cacheHit = !!(cachedEntity && entityDataMatchesDrawer(cachedEntity, drawer.id, drawer.type));
+            console.log(`[drawer-cache:${cacheHit ? "hit" : "miss"}]`, {
+                cacheKey: `${drawer.type}:${drawer.id}`,
+                drawerType: drawer.type,
+                drawerId: drawer.id,
+                surface: cacheHit ? String((cachedEntity as Record<string, unknown>)._record_surface ?? "unknown") : null,
+                isSeed: personSeedSnapshot,
+            });
+        }
         if (cachedEntity && entityDataMatchesDrawer(cachedEntity, drawer.id, drawer.type)) {
             const opportunityCacheNeedsBackgroundHydrate =
                 drawer.type === "opportunities" &&
@@ -7932,8 +7949,58 @@ export default function AdminEntityDrawer() {
         opportunityDrawerPrimaryContractSatisfied,
     ]);
 
+    const opportunityInquiryChildrenSectionVisible = useMemo(() => {
+        if (!opportunityInquiryWorkflowDrawer || !drawer.id || drawer.id === "new") return false;
+        const layoutCfg = (recordChromeOpportunity.layout?.config_json ?? null) as RecordLayoutConfigJson | null;
+        return (
+            opportunityDrawerShellContract?.section_slots.some((s) => s.section_key === "inquiry_children") ===
+                true || recordOpportunityDrawerLayoutIncludesSection(layoutCfg, "inquiry_children")
+        );
+    }, [
+        opportunityInquiryWorkflowDrawer,
+        drawer.id,
+        opportunityDrawerShellContract,
+        recordChromeOpportunity.layout?.config_json,
+    ]);
+
+    const opportunityComposedPayloadEval = useMemo(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new" || !overviewData) {
+            return null;
+        }
+        return evaluateComposedOpportunityDrawerPayload({
+            drawerId: drawer.id,
+            record: overviewData as Record<string, unknown>,
+            bodyHydrated: opportunityPrimaryHydrateApplied || opportunityFullRecordHydrateApplied,
+            // fullHydrateReady is strictly the full-surface sentinel — BOS/right-panel sections
+            // must wait for this before revealing to avoid visible late-paint of tasks/guidance.
+            fullHydrateReady: opportunityFullRecordHydrateApplied,
+            headerActionsReady: opportunityRegistryHeaderReady,
+            inquiryChildrenSectionVisible: opportunityInquiryChildrenSectionVisible,
+        });
+    }, [
+        drawer.type,
+        drawer.id,
+        overviewData,
+        opportunityPrimaryHydrateApplied,
+        opportunityFullRecordHydrateApplied,
+        opportunityRegistryHeaderReady,
+        opportunityInquiryChildrenSectionVisible,
+    ]);
+
+    const opportunityComposedPayloadReady = opportunityComposedPayloadEval?.ready === true;
+
+    const opportunityComposedPreparing =
+        drawer.type === "opportunities" &&
+        opportunityInquiryWorkflowDrawer &&
+        !!drawer.id &&
+        drawer.id !== "new" &&
+        !error &&
+        !opportunityComposedPayloadReady;
+
     const opportunityDrawerOverviewRevealReady = opportunityInquiryWorkflowDrawer
-        ? (opportunityDrawerRuntimePlan?.canRevealDrawerFrame ?? false)
+        ? opportunityComposedPayloadReady &&
+          opportunityDrawerAboveFoldPresentationReady &&
+          (opportunityDrawerRuntimePlan?.canRevealHeaderActions ?? false)
         : opportunityDrawerTypedSnapshotFirstPaint ||
           (opportunityDrawerCoordinatedRevealReady &&
               opportunityDrawerInquiryStructuralReady &&
@@ -8012,7 +8079,15 @@ export default function AdminEntityDrawer() {
 
             if (prev.type === "opportunities" && prev.id && next.type === "persons" && next.id) {
                 if (data && entityDataMatchesDrawer(data, prev.id, "opportunities")) {
-                    putDrawerEntitySnapshot("opportunities", prev.id, data as Record<string, unknown>);
+                    // Include any deferred full-hydrate fields (e.g. _identity) in the snapshot
+                    // so that on back-navigation the title/status restore from the complete record
+                    // rather than falling back to the queue preview seed.
+                    const deferredForSnapshot = opportunityDeferredFullHydrateRef.current;
+                    const snapshotForNav: Record<string, unknown> =
+                        deferredForSnapshot && Object.keys(deferredForSnapshot).length > 0
+                            ? { ...(data as Record<string, unknown>), ...deferredForSnapshot }
+                            : (data as Record<string, unknown>);
+                    putDrawerEntitySnapshot("opportunities", prev.id, snapshotForNav);
                     putDrawerStackRestoreSnapshot("opportunities", prev.id, {
                         drawerTab,
                         opportunityBootstrapAppliedId,
@@ -8895,14 +8970,66 @@ export default function AdminEntityDrawer() {
             (!!presentationConfig?.drawer?.overviewSections?.length &&
                 presentationConfig.drawer.overviewSections.some((s) => s.fields && s.fields.length > 0)));
 
+    const personDrawerOperatingSections = useMemo(
+        () => resolvePersonOperatingSections(resolvedPersonLayoutVariant),
+        [resolvedPersonLayoutVariant]
+    );
+
+    const personDrawerOverviewSectionKeys = useMemo(() => {
+        const order = resolvedPersonLayoutVariant.config.overview_section_order ?? [];
+        const suppressed = new Set(resolvedPersonLayoutVariant.config.overview_suppressed_sections ?? []);
+        if (order.length > 0) {
+            return order.filter((key) => !suppressed.has(key));
+        }
+        return [];
+    }, [resolvedPersonLayoutVariant]);
+
+    const personDrawerComposedPayloadContext = useMemo(() => {
+        if (drawer.type !== "persons" || !drawer.id || drawer.id === "new" || !overviewData) {
+            return null;
+        }
+        if (!personChildLifecycleChrome && !personParentGuardianChrome) return null;
+        return {
+            surface: (personChildLifecycleChrome ? "child" : "parent") as "child" | "parent",
+            drawerId: drawer.id,
+            record: overviewData as Record<string, unknown>,
+            bodyHydrated: drawerReady && dataMatchesDrawer,
+            operatingSections: personDrawerOperatingSections,
+            overviewSectionKeys: personDrawerOverviewSectionKeys,
+            // Thread hint so child section predicates can resolve profile from open-source context
+            childChromeHint: personDrawerChildChromeHint,
+        };
+    }, [
+        drawer.type,
+        drawer.id,
+        overviewData,
+        personChildLifecycleChrome,
+        personParentGuardianChrome,
+        drawerReady,
+        dataMatchesDrawer,
+        personDrawerOperatingSections,
+        personDrawerOverviewSectionKeys,
+        personDrawerChildChromeHint,
+    ]);
+
+    const personDrawerComposedPayloadEval = useMemo(() => {
+        if (!personDrawerComposedPayloadContext) return null;
+        return evaluateComposedPersonDrawerPayload(personDrawerComposedPayloadContext);
+    }, [personDrawerComposedPayloadContext]);
+
+    const personDrawerComposedPayloadIsReady =
+        personDrawerComposedPayloadEval?.ready === true;
+
     const personDrawerPaintReady =
         drawer.type === "persons" &&
         !!drawer.id &&
         drawer.id !== "new" &&
         !error &&
         !!overviewData &&
-        (dataMatchesDrawer || personDrawerFirstPaintRecord != null) &&
-        (drawerReady || isPersonDrawerSeedRecord(overviewData as Record<string, unknown>));
+        (personChildLifecycleChrome || personParentGuardianChrome
+            ? personDrawerComposedPayloadIsReady
+            : (dataMatchesDrawer || personDrawerFirstPaintRecord != null) &&
+              (drawerReady || isPersonDrawerSeedRecord(overviewData as Record<string, unknown>)));
 
     const personDrawerTypedBodySnapshot =
         isPersonDrawerSeedRecord((data ?? overviewData) as Record<string, unknown>) ||
@@ -8974,30 +9101,51 @@ export default function AdminEntityDrawer() {
     ]);
 
     const personDrawerOverviewReady =
-        personDrawerPaintReady &&
+        drawer.type === "persons" &&
+        !!drawer.id &&
+        drawer.id !== "new" &&
+        !error &&
+        !!overviewData &&
         (personChildLifecycleChrome || personParentGuardianChrome
-            ? (personDrawerRuntimePlan?.canRevealDrawerFrame ?? false)
+            ? personDrawerComposedPayloadIsReady
             : useConfigDrivenOverview || isPersonDrawerSeedRecord(data as Record<string, unknown>));
 
     const personDrawerExistingReady = personDrawerOverviewReady;
 
-    const personDrawerChildOverviewPending =
-        drawer.type === "persons" &&
-        !!drawer.id &&
-        drawer.id !== "new" &&
-        !error &&
-        personChildLifecycleChrome &&
-        personDrawerRuntimePlan != null &&
-        !personDrawerRuntimePlan.canRevealDrawerFrame;
+    /**
+     * Stable key encoding the layout context for the current composed payload evaluation.
+     * Encodes drawer id + surface (child|parent) + sorted operating section keys so that the
+     * same person id opened in a different layout context (e.g. child → parent) produces a
+     * different key and correctly resets the fetch sentinel below.
+     */
+    const personDrawerComposedContextKey = useMemo(() => {
+        if (drawer.type !== "persons" || !drawer.id || drawer.id === "new") return null;
+        const surface = personChildLifecycleChrome ? "child" : personParentGuardianChrome ? "parent" : null;
+        if (!surface) return null;
+        const sections = [...personDrawerOperatingSections].sort().join(",");
+        return `${drawer.id}|${surface}|${sections}`;
+    }, [drawer.type, drawer.id, personChildLifecycleChrome, personParentGuardianChrome, personDrawerOperatingSections]);
 
-    const personDrawerParentOverviewPending =
+    /**
+     * Tracks whether the composed-payload fetch has already completed for the current
+     * layout context. Keyed on personDrawerComposedContextKey (id + surface + sections)
+     * rather than bare drawer.id so the same person opened under a different layout
+     * (child vs. parent, different operating sections) gets a fresh fetch.
+     */
+    const personDrawerComposedFetchedRef = useRef<string | null>(null);
+
+    const personDrawerComposedPreparing =
         drawer.type === "persons" &&
         !!drawer.id &&
         drawer.id !== "new" &&
         !error &&
-        personParentGuardianChrome &&
-        personDrawerRuntimePlan != null &&
-        !personDrawerRuntimePlan.canRevealDrawerFrame;
+        (personChildLifecycleChrome || personParentGuardianChrome) &&
+        personDrawerComposedPayloadContext != null &&
+        !personDrawerComposedPayloadIsReady;
+
+    const personDrawerChildOverviewPending = personDrawerComposedPreparing && personChildLifecycleChrome;
+
+    const personDrawerParentOverviewPending = personDrawerComposedPreparing && personParentGuardianChrome;
 
     const personDrawerHasTypedOpenSnapshot =
         isPersonDrawerSnapshotWarm(String(drawer.id)) ||
@@ -9009,10 +9157,98 @@ export default function AdminEntityDrawer() {
         !!drawer.id &&
         drawer.id !== "new" &&
         !error &&
-        !personDrawerPaintReady &&
+        !personDrawerComposedPreparing &&
+        !personDrawerComposedPayloadIsReady &&
         !personDrawerHasTypedOpenSnapshot &&
         !personDrawerTypedBodySnapshot &&
         loading;
+
+    // Reset completion sentinel when the layout context changes (id, surface, or sections).
+    // This ensures the same person opened under a different layout (child vs. parent) gets
+    // a fresh fetch rather than being suppressed by a sentinel from the prior context.
+    useEffect(() => {
+        personDrawerComposedFetchedRef.current = null;
+    }, [personDrawerComposedContextKey]);
+
+    useEffect(() => {
+        if (drawer.type !== "persons" || !drawer.id || drawer.id === "new") return;
+        if (!personDrawerComposedPreparing) return;
+        if (loading) return;
+        const contextKey = personDrawerComposedContextKey;
+        if (!contextKey) return;
+        // After one full fetch for this context key, stop retrying — remaining unresolved
+        // sections need a predicate fix, not an infinite fetch loop.
+        if (personDrawerComposedFetchedRef.current === contextKey) {
+            if (process.env.NODE_ENV === "development") {
+                console.warn(
+                    "[drawer-payload:blocked] full fetch complete but readiness not achieved",
+                    {
+                        contextKey,
+                        missingSections: personDrawerComposedPayloadEval?.missing,
+                        blockingSections: personDrawerComposedPayloadEval?.blockingSections,
+                    }
+                );
+            }
+            return;
+        }
+        const fetchTargetId = drawer.id;
+        const fetchTargetType = drawer.type;
+        if (process.env.NODE_ENV === "development") {
+            console.log("[drawer-payload:start]", {
+                drawerType: fetchTargetType,
+                drawerId: fetchTargetId,
+                contextKey,
+                missingSections: personDrawerComposedPayloadEval?.missing,
+                blockingSections: personDrawerComposedPayloadEval?.blockingSections,
+            });
+        }
+        setLoading(true);
+        setError(null);
+        const url = buildAdminEntityFetchUrl(fetchTargetType, fetchTargetId, drawer.jobRecordSurface);
+        if (!url) {
+            setLoading(false);
+            return;
+        }
+        let cancelled = false;
+        fetch(url)
+            .then((res) => {
+                if (!res.ok) throw new Error(res.status === 404 ? "Not found" : "Failed to load");
+                return res.json();
+            })
+            .then((json) => {
+                if (cancelled) return;
+                if (!entityDataMatchesDrawer(json as Record<string, unknown>, fetchTargetId, fetchTargetType)) {
+                    if (process.env.NODE_ENV === "development") {
+                        console.warn("[drawer-payload:ignore] response id mismatch", {
+                            fetchTargetId,
+                            responseId: (json as { id?: unknown })?.id,
+                        });
+                    }
+                    return;
+                }
+                // Mark context key as fetched before setting data so any re-render that
+                // finds readiness still false will not trigger another fetch.
+                personDrawerComposedFetchedRef.current = contextKey;
+                if (process.env.NODE_ENV === "development") {
+                    console.log("[drawer-payload:apply]", {
+                        drawerType: fetchTargetType,
+                        drawerId: fetchTargetId,
+                        contextKey,
+                    });
+                }
+                setData(json);
+                putDrawerEntitySnapshot(fetchTargetType, fetchTargetId, json as Record<string, unknown>);
+            })
+            .catch((e) => {
+                if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load");
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [drawer.type, drawer.id, drawer.jobRecordSurface, personDrawerComposedPreparing, loading, personDrawerComposedPayloadEval, personDrawerComposedContextKey]);
 
     useEffect(() => {
         if (drawer.type !== "persons" || !drawer.id || drawer.id === "new") return;
@@ -12250,7 +12486,16 @@ export default function AdminEntityDrawer() {
                     </div>
                 ) : null}
                 {error && <p className="text-alloy-ember">Error: {error}</p>}
-                {opportunityDrawerUsesBootstrapBodyShell ? (
+                {opportunityComposedPreparing ? (
+                    <div
+                        className={drawerRecordBodyRootClassName}
+                        data-opportunity-drawer-composed-preparing="true"
+                        role="status"
+                        aria-live="polite"
+                    >
+                        <DrawerComposedPreparingState copy={composedDrawerPreparingCopy("opportunity")} />
+                    </div>
+                ) : opportunityDrawerUsesBootstrapBodyShell ? (
                     <div
                         className={drawerRecordBodyRootClassName}
                         data-adminv2-opportunity-drawer-body={opportunityRecordChromeBodyShell ? "true" : undefined}
@@ -12274,38 +12519,38 @@ export default function AdminEntityDrawer() {
                 ) : personDrawerChildOverviewPending ? (
                     <div
                         className={drawerRecordBodyRootClassName}
-                        data-person-drawer-child-pending="true"
+                        data-person-drawer-child-preparing="true"
                         role="status"
                         aria-live="polite"
                     >
-                        <PersonDrawerChildOverviewSkeleton />
+                        <DrawerComposedPreparingState copy={composedDrawerPreparingCopy("child")} />
                     </div>
                 ) : personDrawerParentOverviewPending ? (
                     <div
                         className={drawerRecordBodyRootClassName}
-                        data-person-drawer-parent-pending="true"
+                        data-person-drawer-parent-preparing="true"
                         role="status"
                         aria-live="polite"
                     >
-                        <PersonDrawerParentOverviewSkeleton />
+                        <DrawerComposedPreparingState copy={composedDrawerPreparingCopy("parent")} />
                     </div>
                 ) : personDrawerShowLoadingShell && personChildLifecycleChrome ? (
                     <div
                         className={drawerRecordBodyRootClassName}
-                        data-person-drawer-child-pending="true"
+                        data-person-drawer-child-preparing="true"
                         role="status"
                         aria-live="polite"
                     >
-                        <PersonDrawerChildOverviewSkeleton />
+                        <DrawerComposedPreparingState copy={composedDrawerPreparingCopy("child")} />
                     </div>
                 ) : personDrawerShowLoadingShell && personParentGuardianChrome ? (
                     <div
                         className={drawerRecordBodyRootClassName}
-                        data-person-drawer-parent-pending="true"
+                        data-person-drawer-parent-preparing="true"
                         role="status"
                         aria-live="polite"
                     >
-                        <PersonDrawerParentOverviewSkeleton />
+                        <DrawerComposedPreparingState copy={composedDrawerPreparingCopy("parent")} />
                     </div>
                 ) : personDrawerShowLoadingShell ? (
                     <div
@@ -12348,7 +12593,9 @@ export default function AdminEntityDrawer() {
                             }
                         />
                     </div>
-                ) : (drawerReady || (drawer.type === "persons" && personDrawerPaintReady)) && data && dataMatchesDrawer ? (
+                ) : (drawerReady || (drawer.type === "persons" && personDrawerComposedPayloadIsReady)) &&
+                    data &&
+                    dataMatchesDrawer ? (
                     <div
                         className={drawerRecordBodyRootClassName}
                         data-adminv2-job-drawer-body={isJobDrawerV2 && drawer.type === "jobs" ? "true" : undefined}

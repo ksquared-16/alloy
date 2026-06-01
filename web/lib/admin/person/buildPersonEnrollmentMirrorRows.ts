@@ -57,16 +57,23 @@ export async function buildPersonEnrollmentMirrorRowsForMemberIds(
 
     const oppIds = [...new Set(ocmList.map((r: { opportunity_id: string }) => r.opportunity_id))];
 
-    const oppRes =
+    // Fetch opportunities and program labels in parallel (program labels are independent of opps)
+    const programPairs = ocmList.map((r: { desired_program_type?: string | null }) => ({
+        setKey: "childcare_program_type",
+        itemKey: r.desired_program_type,
+    }));
+    const [oppResResult, programLabels] = await Promise.all([
         oppIds.length > 0
-            ? await supabase
+            ? supabase
                   .from("opportunities")
                   .select("id, name, status_key, location_id")
                   .eq("org_id", orgId)
                   .in("id", oppIds)
-            : { data: [] as { id: string; name?: string | null; status_key?: string | null; location_id?: string | null }[] };
+            : Promise.resolve({ data: [] as { id: string; name?: string | null; status_key?: string | null; location_id?: string | null }[] }),
+        batchOptionItemLabelsForOrg(supabase, orgId, programPairs),
+    ]);
 
-    const oppById = new Map((oppRes.data ?? []).map((o) => [o.id, o]));
+    const oppById = new Map((oppResResult.data ?? []).map((o) => [o.id, o]));
 
     const locIdSet = new Set<string>();
     for (const row of ocmList) {
@@ -92,11 +99,31 @@ export async function buildPersonEnrollmentMirrorRowsForMemberIds(
 
     const locById = new Map((locRes.data ?? []).map((l) => [l.id, l]));
 
-    const programPairs = ocmList.map((r: { desired_program_type?: string | null }) => ({
-        setKey: "childcare_program_type",
-        itemKey: r.desired_program_type,
-    }));
-    const programLabels = await batchOptionItemLabelsForOrg(supabase, orgId, programPairs);
+    // Collect unique status keys from all OCM rows, then resolve all in parallel
+    // rather than one sequential await per row.
+    const uniqueOppStatusKeys = [
+        ...new Set(
+            ocmList
+                .map((r: { opportunity_id: string }) => {
+                    const opp = oppById.get(r.opportunity_id);
+                    return opp?.status_key ? String(opp.status_key).trim() : null;
+                })
+                .filter(Boolean) as string[]
+        ),
+    ];
+    const uniqueOutcomeKeys = [
+        ...new Set(
+            ocmList
+                .map((r: { outcome_status_key?: string | null }) => trimOrNull(r.outcome_status_key))
+                .filter(Boolean) as string[]
+        ),
+    ];
+    const [resolvedOppLabels, resolvedOutcomeLabels] = await Promise.all([
+        Promise.all(uniqueOppStatusKeys.map((sk) => resolveStatusLabel(supabase, orgId, "opportunities", sk))),
+        Promise.all(uniqueOutcomeKeys.map((sk) => resolveStatusLabel(supabase, orgId, "opportunity_customer_members", sk))),
+    ]);
+    const oppStatusLabelByKey = new Map(uniqueOppStatusKeys.map((k, i) => [k, resolvedOppLabels[i]]));
+    const outcomeStatusLabelByKey = new Map(uniqueOutcomeKeys.map((k, i) => [k, resolvedOutcomeLabels[i]]));
 
     const mirror: PersonEnrollmentMirrorRow[] = [];
     const seenMember = new Set<string>();
@@ -126,26 +153,22 @@ export async function buildPersonEnrollmentMirrorRowsForMemberIds(
             optionLabelLookup: programLabels,
         });
         const outcomeKey = trimOrNull(ocm.outcome_status_key);
+        const oppStatusKey = opp?.status_key ? String(opp.status_key).trim() : null;
 
         mirror.push({
             id: ocm.id,
             opportunity_id: ocm.opportunity_id,
             opportunity_name: trimOrNull(opp?.name),
-            opportunity_status_key: trimOrNull(opp?.status_key),
-            opportunity_status_label: opp?.status_key
-                ? await resolveStatusLabel(supabase, orgId, "opportunities", opp.status_key)
-                : null,
+            opportunity_status_key: oppStatusKey,
+            opportunity_status_label: oppStatusKey ? (oppStatusLabelByKey.get(oppStatusKey) ?? null) : null,
             customer_member_id: ocm.customer_member_id,
-            child_display_name:
-                memberDisplayById.get(ocm.customer_member_id) ?? null,
+            child_display_name: memberDisplayById.get(ocm.customer_member_id) ?? null,
             location_id: siteId,
             location_label: siteRow ? locationDisplayLabel(siteRow) : null,
             program_label: programLabel,
             room_label: roomRow ? locationDisplayLabel(roomRow) : roomKey,
             outcome_status_key: outcomeKey,
-            outcome_status_label: outcomeKey
-                ? await resolveStatusLabel(supabase, orgId, "opportunity_customer_members", outcomeKey)
-                : null,
+            outcome_status_label: outcomeKey ? (outcomeStatusLabelByKey.get(outcomeKey) ?? null) : null,
         });
     }
 

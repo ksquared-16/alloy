@@ -12,8 +12,10 @@ export const CHILD_DRAWER_SECTION_REGISTRY: readonly AdminV2DrawerSectionContrac
         surface: "child",
         canRenderFromSeed: false,
         blocksFirstPaint: true,
-        hasRenderableData: (ctx) => childDrawerSummaryCoordinatedReady(ctx.record),
-        renderReady: (ctx) => ctx.bodyHydrated && childDrawerSummaryCoordinatedReady(ctx.record),
+        // childChromeHint threaded from ComposedPersonDrawerPayloadContext via evaluation ctx
+        hasRenderableData: (ctx) => childDrawerSummaryCoordinatedReady(ctx.record, ctx.childChromeHint),
+        renderReady: (ctx) =>
+            ctx.bodyHydrated && childDrawerSummaryCoordinatedReady(ctx.record, ctx.childChromeHint),
         fallbackMode: "block-drawer-reveal",
     },
     {
@@ -21,8 +23,9 @@ export const CHILD_DRAWER_SECTION_REGISTRY: readonly AdminV2DrawerSectionContrac
         surface: "child",
         canRenderFromSeed: false,
         blocksFirstPaint: true,
-        hasRenderableData: (ctx) => personDrawerChildChromeActive(ctx.record),
-        renderReady: (ctx) => ctx.bodyHydrated && personDrawerChildChromeActive(ctx.record),
+        hasRenderableData: (ctx) => personDrawerChildChromeActive(ctx.record, ctx.childChromeHint),
+        renderReady: (ctx) =>
+            ctx.bodyHydrated && personDrawerChildChromeActive(ctx.record, ctx.childChromeHint),
         fallbackMode: "block-drawer-reveal",
     },
     {
@@ -30,9 +33,9 @@ export const CHILD_DRAWER_SECTION_REGISTRY: readonly AdminV2DrawerSectionContrac
         surface: "child",
         canRenderFromSeed: false,
         blocksFirstPaint: true,
-        hasRenderableData: (ctx) => childDrawerHouseholdCoordinatedReady(ctx.record, ctx.drawerId),
-        renderReady: (ctx) =>
-            ctx.bodyHydrated && childDrawerHouseholdCoordinatedReady(ctx.record, ctx.drawerId),
+        // Known-empty: ready when _household_adult_links key is present (even empty array).
+        hasRenderableData: (ctx) => childDrawerHouseholdCoordinatedReady(ctx.record),
+        renderReady: (ctx) => ctx.bodyHydrated && childDrawerHouseholdCoordinatedReady(ctx.record),
         fallbackMode: "block-drawer-reveal",
     },
     {
@@ -40,8 +43,10 @@ export const CHILD_DRAWER_SECTION_REGISTRY: readonly AdminV2DrawerSectionContrac
         surface: "child",
         canRenderFromSeed: false,
         blocksFirstPaint: true,
-        hasRenderableData: (ctx) => childDrawerMedicalCoordinatedReady(ctx.record),
-        renderReady: (ctx) => ctx.bodyHydrated && childDrawerMedicalCoordinatedReady(ctx.record),
+        // Known-empty: the persons API has no medical column. After full fetch (bodyHydrated),
+        // absence of medical data is the final answer — ready to render the empty/final medical section.
+        hasRenderableData: (ctx) => childDrawerMedicalCoordinatedReady(ctx.record, ctx.bodyHydrated),
+        renderReady: (ctx) => ctx.bodyHydrated && childDrawerMedicalCoordinatedReady(ctx.record, ctx.bodyHydrated),
         fallbackMode: "block-drawer-reveal",
     },
     {
@@ -49,8 +54,9 @@ export const CHILD_DRAWER_SECTION_REGISTRY: readonly AdminV2DrawerSectionContrac
         surface: "child",
         canRenderFromSeed: false,
         blocksFirstPaint: true,
-        hasRenderableData: (ctx) => personDrawerChildChromeActive(ctx.record),
-        renderReady: (ctx) => ctx.bodyHydrated && personDrawerChildChromeActive(ctx.record),
+        hasRenderableData: (ctx) => personDrawerChildChromeActive(ctx.record, ctx.childChromeHint),
+        renderReady: (ctx) =>
+            ctx.bodyHydrated && personDrawerChildChromeActive(ctx.record, ctx.childChromeHint),
         fallbackMode: "block-drawer-reveal",
     },
 ];
