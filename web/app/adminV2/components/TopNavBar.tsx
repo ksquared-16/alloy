@@ -47,7 +47,9 @@ function WorkspaceSiteFilterLocationReserve() {
 
 function WorkspaceSiteFilterStrip({ normalizedPath }: { normalizedPath: string }) {
   const wf = useWorkspaceSiteFilter();
-  if (!normalizedPath.startsWith("/adminV2/workspace")) return null;
+  const showSiteFilter =
+    normalizedPath.startsWith("/adminV2/workspace") || normalizedPath.startsWith("/adminV2/forms");
+  if (!showSiteFilter) return null;
 
   const bootstrap = wf?.displayBootstrap ?? wf?.bootstrap ?? null;
   if (!bootstrap || !wf) {

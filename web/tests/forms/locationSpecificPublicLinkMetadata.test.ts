@@ -9,10 +9,11 @@ const LOC_B = "8de80809-4628-5bc4-a541-352b87fd4395";
 const WU = "5ba90557-876d-4450-9c28-36beac6e83be";
 
 describe("locationSpecificPublicLinkMetadata", () => {
-    it("builds metadata with label and location routing", () => {
+    it("builds metadata with auto-generated label and location routing", () => {
         const meta = buildLocationSpecificLinkMetadata({
-            label: "Website Inquiry — West Campus",
+            formName: "Website Inquiry",
             locationId: LOC_A,
+            locationName: "West Campus",
         });
         expect(meta.label).toBe("Website Inquiry — West Campus");
         expect(meta.default_location_id).toBe(LOC_A);
@@ -20,18 +21,31 @@ describe("locationSpecificPublicLinkMetadata", () => {
         expect(meta.default_work_unit_id).toBeUndefined();
     });
 
-    it("includes optional work unit override", () => {
+    it("includes optional work unit override for advanced flows", () => {
         const meta = buildLocationSpecificLinkMetadata({
-            label: "North Campus",
+            formName: "Website Inquiry",
             locationId: LOC_B,
+            locationName: "North Campus",
             workUnitId: WU,
         });
         expect(meta.default_work_unit_id).toBe(WU);
     });
 
-    it("requires link name and location", () => {
-        expect(() => buildLocationSpecificLinkMetadata({ label: "", locationId: LOC_A })).toThrow(/name/i);
-        expect(() => buildLocationSpecificLinkMetadata({ label: "X", locationId: "bad" })).toThrow(/location/i);
+    it("requires location name and id", () => {
+        expect(() =>
+            buildLocationSpecificLinkMetadata({
+                formName: "Form",
+                locationId: LOC_A,
+                locationName: "",
+            })
+        ).toThrow(/location name/i);
+        expect(() =>
+            buildLocationSpecificLinkMetadata({
+                formName: "Form",
+                locationId: "bad",
+                locationName: "West",
+            })
+        ).toThrow(/location/i);
     });
 
     it("resolves location label from catalog", () => {
@@ -44,8 +58,9 @@ describe("locationSpecificPublicLinkMetadata", () => {
     it("feeds intake routing on public submit", async () => {
         const { parseIntakeLinkDefaults } = await import("@/lib/forms/intake/parseIntakeLinkDefaults");
         const meta = buildLocationSpecificLinkMetadata({
-            label: "North",
+            formName: "Inquiry",
             locationId: LOC_B,
+            locationName: "North Campus",
             workUnitId: WU,
         });
         const parsed = parseIntakeLinkDefaults(meta);
@@ -141,13 +156,14 @@ describe("mergePublicLinkMetadataForCreate with location", () => {
             formKey: "website_inquiry",
             formMetadata: { intake_intent: "enrollment_lead" },
             clientMetadata: buildLocationSpecificLinkMetadata({
-                label: "Riverbend",
+                formName: "Website Inquiry",
                 locationId: CLIENT_LOC,
+                locationName: "Riverbend Campus",
             }),
         });
 
         expect(out.default_location_id).toBe(CLIENT_LOC);
-        expect(out.label).toBe("Riverbend");
+        expect(out.label).toBe("Website Inquiry — Riverbend Campus");
         expect(out.lead_capture).toBe(true);
     });
 });

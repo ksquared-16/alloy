@@ -27,7 +27,6 @@ import {
 import {
     buildEmbedOperatorNote,
     buildFormEmbedIframeSnippet,
-    resolveFormShareHint,
 } from "@/lib/forms/formSharePresentation";
 import { FormOperationalIntentPicker } from "@/components/forms/admin/FormOperationalIntentPicker";
 import {
@@ -43,6 +42,7 @@ import {
     FormLocationShareLinksPanel,
     type CreateLocationLinkInput,
 } from "@/components/forms/admin/FormLocationShareLinksPanel";
+import { SHARE_BY_LOCATION_COPY } from "@/lib/forms/shareByLocationPresentation";
 import {
     opMetadata,
     opMutedMeta,
@@ -209,11 +209,6 @@ export function FormIntakeRuntimeOrchestrationPanel({
         [effectiveIntent, vm.storyBullets]
     );
 
-    const shareHint = useMemo(
-        () => resolveFormShareHint(effectiveIntent),
-        [effectiveIntent]
-    );
-
     const embedOperatorNote = useMemo(
         () => buildEmbedOperatorNote(effectiveIntent),
         [effectiveIntent]
@@ -232,9 +227,9 @@ export function FormIntakeRuntimeOrchestrationPanel({
         >
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                    <h2 className={opSectionTitle}>Setup this form</h2>
+                    <h2 className={opSectionTitle}>Purpose & sharing</h2>
                     <p className={opMutedMeta}>
-                        Choose what this form does, review what happens after submit, then share it with families.
+                        Choose what this form does, confirm lead routing, then share it with families.
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
@@ -261,21 +256,24 @@ export function FormIntakeRuntimeOrchestrationPanel({
                 </p>
             :   null}
 
-            <ol className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4" data-testid="orchestration-step-rail">
-                {vm.steps.map((step) => (
-                    <li
-                        key={step.key}
-                        className={clsx("rounded-lg px-3 py-2 ring-1", stepStatusClass(step.status))}
-                        data-testid={`orchestration-step-${step.key}`}
-                    >
-                        <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70">{step.label}</p>
-                        <p className="mt-0.5 text-xs font-medium leading-snug">{step.hint}</p>
-                    </li>
-                ))}
-            </ol>
+            <TechnicalDetailDisclosure title="Setup progress" helperText="Optional step checklist">
+                <ol className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4" data-testid="orchestration-step-rail">
+                    {vm.steps.map((step) => (
+                        <li
+                            key={step.key}
+                            className={clsx("rounded-lg px-3 py-2 ring-1", stepStatusClass(step.status))}
+                            data-testid={`orchestration-step-${step.key}`}
+                        >
+                            <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70">{step.label}</p>
+                            <p className="mt-0.5 text-xs font-medium leading-snug">{step.hint}</p>
+                        </li>
+                    ))}
+                </ol>
+            </TechnicalDetailDisclosure>
 
             {onFormMetadataUpdated ?
-                <div className="mt-3">
+                <div className="mt-3" data-testid="orchestration-purpose">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/65">Purpose</p>
                     <FormOperationalIntentPicker
                         formId={formId}
                         formKey={formKey}
@@ -292,35 +290,37 @@ export function FormIntakeRuntimeOrchestrationPanel({
                 </div>
             :   null}
 
-            <div
-                className="mt-3 rounded-lg bg-white/90 px-3 py-2 ring-1 ring-alloy-midnight/[0.06]"
-                data-testid="orchestration-after-submit-preview"
-            >
-                <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/65">After submission</p>
-                <ul className={clsx("mt-1.5 space-y-0.5", opMetadata)}>
+            {vm.createsLead && (vm.leadRoutingLocationLabel || vm.leadRoutingStatusLabel) ?
+                <div
+                    className="mt-3 rounded-lg bg-white/90 px-3 py-2 ring-1 ring-alloy-midnight/[0.06]"
+                    data-testid="orchestration-lead-routing"
+                >
+                    <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/65">Lead routing</p>
+                    <ul className={clsx("mt-1.5 space-y-0.5", opMetadata)}>
+                        {vm.leadRoutingLocationLabel ?
+                            <li>· {vm.leadRoutingLocationLabel}</li>
+                        :   null}
+                        {vm.leadRoutingStatusLabel ?
+                            <li>· Starts as · {vm.leadRoutingStatusLabel}</li>
+                        :   null}
+                    </ul>
+                    {vm.leadRoutingWorkUnitLabel ?
+                        <TechnicalDetailDisclosure title="Pipeline routing" helperText="Advanced routing detail">
+                            <p className={opMetadata}>{vm.leadRoutingWorkUnitLabel}</p>
+                        </TechnicalDetailDisclosure>
+                    :   null}
+                </div>
+            :   null}
+
+            <TechnicalDetailDisclosure title="After submission details" helperText="What happens when a family submits">
+                <ul className={clsx("mt-1.5 space-y-0.5", opMetadata)} data-testid="orchestration-after-submit-preview">
                     {afterSubmitPreview.map((line) => (
                         <li key={line}>· {line}</li>
                     ))}
                 </ul>
-                {vm.createsLead && (vm.leadRoutingLocationLabel || vm.leadRoutingWorkUnitLabel || vm.leadRoutingStatusLabel) ?
-                    <div className="mt-3 border-t border-alloy-midnight/[0.06] pt-2" data-testid="orchestration-lead-routing">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/65">Lead routing</p>
-                        <ul className={clsx("mt-1.5 space-y-0.5", opMetadata)}>
-                            {vm.leadRoutingLocationLabel ?
-                                <li>· School/site · {vm.leadRoutingLocationLabel}</li>
-                            :   null}
-                            {vm.leadRoutingWorkUnitLabel ?
-                                <li>· Pipeline · {vm.leadRoutingWorkUnitLabel}</li>
-                            :   null}
-                            {vm.leadRoutingStatusLabel ?
-                                <li>· Starting status · {vm.leadRoutingStatusLabel}</li>
-                            :   null}
-                        </ul>
-                    </div>
-                :   null}
-            </div>
+            </TechnicalDetailDisclosure>
 
-            <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+            <div className="mt-3 space-y-3">
                 <div
                     className="rounded-lg bg-white/95 px-3 py-2.5 ring-1 ring-alloy-midnight/[0.07]"
                     data-testid="active-runtime-card"
@@ -337,10 +337,6 @@ export function FormIntakeRuntimeOrchestrationPanel({
                     </div>
                     <p className="mt-1 text-sm font-semibold text-alloy-midnight">
                         {vm.activeRuntimeLabel ?? "No share link yet"}
-                    </p>
-                    <p className={clsx("mt-0.5", opMutedMeta)}>{vm.intakeTypeDescription}</p>
-                    <p className={clsx("mt-1.5", opMetadata)} data-testid="orchestration-share-hint">
-                        {shareHint}
                     </p>
 
                     {operationalLinks.length > 1 ?
@@ -437,20 +433,6 @@ export function FormIntakeRuntimeOrchestrationPanel({
                                 Publish your form before opening or sharing the public link.
                             </p>
                         :   null}
-                        {hasPublished ?
-                            <button
-                                type="button"
-                                className={intakeWorkspaceBtnSecondary}
-                                data-testid="orchestration-refresh-test"
-                                disabled={loading}
-                                onClick={() => {
-                                    void loadContext();
-                                    onRefreshSubmissions?.();
-                                }}
-                            >
-                                Refresh test result
-                            </button>
-                        :   null}
                     </div>
 
                     {hasPublished && embedUrl && embedSnippet ?
@@ -483,7 +465,7 @@ export function FormIntakeRuntimeOrchestrationPanel({
                     {onCreateLocationLink ?
                         <div className="mt-4 border-t border-alloy-midnight/[0.06] pt-3" data-testid="orchestration-location-links">
                             <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/65">
-                                Location-specific links
+                                {SHARE_BY_LOCATION_COPY.sectionTitle}
                             </p>
                             <FormLocationShareLinksPanel
                                 formId={formId}
@@ -502,57 +484,67 @@ export function FormIntakeRuntimeOrchestrationPanel({
                     :   null}
                 </div>
 
-                <div
-                    className="rounded-lg bg-white/95 px-3 py-2.5 ring-1 ring-alloy-midnight/[0.07]"
-                    data-testid="runtime-test-confirmation"
-                >
-                    <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/65">
-                        Optional preview / test
-                    </p>
-                    <p className={clsx("mt-1", opMutedMeta)} data-testid="orchestration-test-warning">
-                        Testing is optional. Submitting a test creates real intake records in this environment.
-                    </p>
-                    {loading ?
-                        <p className={clsx("mt-2", opMetadata)}>Loading latest submission…</p>
-                    : vm.lastTestConfirmation ?
-                        <>
-                            <p
-                                className={clsx(
-                                    "mt-1 text-sm font-semibold",
-                                    vm.lastTestConfirmation.tone === "success" ? "text-emerald-800"
-                                    : vm.lastTestConfirmation.tone === "warning" ? "text-amber-900"
-                                    : "text-alloy-midnight"
-                                )}
-                            >
-                                {vm.lastTestConfirmation.headline}
-                            </p>
-                            <ul className={clsx("mt-1.5 space-y-0.5", opMetadata)}>
-                                {vm.lastTestConfirmation.lines.map((line) => (
-                                    <li key={line}>· {line}</li>
-                                ))}
-                            </ul>
-                            <div className="mt-2 flex flex-wrap gap-2">
-                                {vm.lastTestConfirmation.opportunityId ?
-                                    <button
-                                        type="button"
-                                        className={intakeWorkspaceBtnPrimary}
-                                        data-testid="orchestration-open-lead"
-                                        onClick={() => openLead(vm.lastTestConfirmation!.opportunityId!)}
-                                    >
-                                        Open lead
-                                    </button>
-                                :   null}
-                                {vm.workUnitHref ?
-                                    <Link href={vm.workUnitHref} className={intakeWorkspaceBtnSecondary}>
-                                        View in {vm.workUnitLabel ?? "pipeline"}
-                                    </Link>
-                                :   null}
-                            </div>
-                        </>
-                    :   <p className={clsx("mt-2", opMetadata)}>
-                            No test submissions yet. You can go live without testing — use Preview form above if you want to try it.
-                        </p>}
-                </div>
+                <TechnicalDetailDisclosure title="Optional preview / test" helperText="Try a submission before going live">
+                    <div data-testid="runtime-test-confirmation">
+                        <p className={clsx("mt-1", opMutedMeta)} data-testid="orchestration-test-warning">
+                            Testing is optional. Submitting a test creates real intake records in this environment.
+                        </p>
+                        {loading ?
+                            <p className={clsx("mt-2", opMetadata)}>Loading latest submission…</p>
+                        : vm.lastTestConfirmation ?
+                            <>
+                                <p
+                                    className={clsx(
+                                        "mt-1 text-sm font-semibold",
+                                        vm.lastTestConfirmation.tone === "success" ? "text-emerald-800"
+                                        : vm.lastTestConfirmation.tone === "warning" ? "text-amber-900"
+                                        : "text-alloy-midnight"
+                                    )}
+                                >
+                                    {vm.lastTestConfirmation.headline}
+                                </p>
+                                <ul className={clsx("mt-1.5 space-y-0.5", opMetadata)}>
+                                    {vm.lastTestConfirmation.lines.map((line) => (
+                                        <li key={line}>· {line}</li>
+                                    ))}
+                                </ul>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                    {vm.lastTestConfirmation.opportunityId ?
+                                        <button
+                                            type="button"
+                                            className={intakeWorkspaceBtnPrimary}
+                                            data-testid="orchestration-open-lead"
+                                            onClick={() => openLead(vm.lastTestConfirmation!.opportunityId!)}
+                                        >
+                                            Open lead
+                                        </button>
+                                    :   null}
+                                    {vm.workUnitHref ?
+                                        <Link href={vm.workUnitHref} className={intakeWorkspaceBtnSecondary}>
+                                            View in {vm.workUnitLabel ?? "pipeline"}
+                                        </Link>
+                                    :   null}
+                                    {hasPublished ?
+                                        <button
+                                            type="button"
+                                            className={intakeWorkspaceBtnSecondary}
+                                            data-testid="orchestration-refresh-test"
+                                            disabled={loading}
+                                            onClick={() => {
+                                                void loadContext();
+                                                onRefreshSubmissions?.();
+                                            }}
+                                        >
+                                            Refresh test result
+                                        </button>
+                                    :   null}
+                                </div>
+                            </>
+                        :   <p className={clsx("mt-2", opMetadata)}>
+                                No test submissions yet. You can go live without testing — use Preview form above if you want to try it.
+                            </p>}
+                    </div>
+                </TechnicalDetailDisclosure>
             </div>
         </div>
     );

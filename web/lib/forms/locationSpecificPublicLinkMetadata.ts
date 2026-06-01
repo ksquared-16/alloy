@@ -2,24 +2,36 @@
  * Location-specific public link metadata — same form, per-link routing (Firefly multi-site).
  */
 
+import { buildLocationShareLinkLabel } from "@/lib/forms/shareByLocationPresentation";
+
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 
 export type LocationSpecificLinkInput = {
-    label: string;
+    formName: string;
     locationId: string;
+    locationName: string;
     workUnitId?: string | null;
+    /** Advanced override — primary UI generates from form + location. */
+    label?: string;
 };
 
 export function readUuid(val: unknown): string | null {
     return typeof val === "string" && UUID_RE.test(val.trim()) ? val.trim() : null;
 }
 
+export { buildLocationShareLinkLabel };
+
 /** Build client metadata patch for a location-specific share link. */
 export function buildLocationSpecificLinkMetadata(input: LocationSpecificLinkInput): Record<string, unknown> {
-    const label = input.label.trim();
     const locationId = readUuid(input.locationId);
-    if (!label) throw new Error("Link name is required");
     if (!locationId) throw new Error("Location is required");
+
+    const locationName = input.locationName.trim();
+    if (!locationName) throw new Error("Location name is required");
+
+    const label =
+        input.label?.trim() ||
+        buildLocationShareLinkLabel(input.formName, locationName);
 
     const metadata: Record<string, unknown> = {
         label,

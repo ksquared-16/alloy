@@ -34,7 +34,6 @@ import FormSchemaWorkspace from "@/app/admin/forms/FormSchemaWorkspace";
 import { FormOutcomeConfigPanel } from "@/components/forms/admin/FormOutcomeConfigPanel";
 import { FormExistingRecordSendPanel } from "@/components/forms/admin/FormExistingRecordSendPanel";
 import { FormIntakeRuntimeOrchestrationPanel } from "@/components/forms/admin/FormIntakeRuntimeOrchestrationPanel";
-import { FormLocationShareLinksPanel } from "@/components/forms/admin/FormLocationShareLinksPanel";
 import { FormPacketContextPanel } from "@/components/forms/admin/FormPacketContextPanel";
 import {
     opGroupedRowInner,
@@ -95,7 +94,7 @@ type Props = {
     operatorGuide: OperatorGuideContent;
     onPreview: () => void;
     onCreateLink: () => void;
-    onCreateLocationLink?: (input: { label: string; locationId: string; workUnitId?: string | null }) => void;
+    onCreateLocationLink?: (input: { locationId: string; locationName: string }) => void;
     creatingLocationLink?: boolean;
     locationLinkErr?: string | null;
     onCopy: (key: string, text: string) => void;
@@ -325,23 +324,6 @@ export function FormLifecycleWorkspaceLayout({
                                             onCreateLink={onCreateLink}
                                             onCopy={onCopy}
                                         />
-                                        {onCreateLocationLink ?
-                                            <div className="mt-4">
-                                                <FormLocationShareLinksPanel
-                                                    formId={formId}
-                                                    formKey={detail.key}
-                                                    formName={detail.name}
-                                                    links={links}
-                                                    hasPublished={hasPublished}
-                                                    canMutate={canMutate}
-                                                    creating={creatingLocationLink}
-                                                    createErr={locationLinkErr}
-                                                    copied={copied}
-                                                    onCopy={onCopy}
-                                                    onCreateLocationLink={onCreateLocationLink}
-                                                />
-                                            </div>
-                                        :   null}
                                     </div>
                                 </div>
                             </section>

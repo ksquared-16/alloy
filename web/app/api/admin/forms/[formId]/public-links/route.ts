@@ -150,12 +150,30 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     if (locationId) {
         try {
+            const formName =
+                typeof (form as { name?: unknown }).name === "string" ?
+                    ((form as { name: string }).name.trim() || "Form")
+                :   "Form";
+            let locationName =
+                typeof body.location_name === "string" ? body.location_name.trim() : "";
+            if (!locationName) {
+                const { data: locRow } = await supabase
+                    .from("locations")
+                    .select("label")
+                    .eq("org_id", ctx.orgId)
+                    .eq("id", locationId)
+                    .maybeSingle();
+                locationName =
+                    typeof locRow?.label === "string" && locRow.label.trim() ? locRow.label.trim() : "Location";
+            }
             Object.assign(
                 clientMetadata,
                 buildLocationSpecificLinkMetadata({
-                    label: linkLabel || "Location link",
+                    formName,
                     locationId,
+                    locationName,
                     workUnitId,
+                    label: linkLabel || undefined,
                 })
             );
         } catch (e) {

@@ -234,7 +234,7 @@ export default function FormDetailClient() {
     };
 
     const createLocationPublicLink = useCallback(
-        async (input: { label: string; locationId: string; workUnitId?: string | null }) => {
+        async (input: { locationId: string; locationName: string }) => {
             if (!formId || !canMutate) return;
             setCreatingLocationLink(true);
             setLocationLinkErr(null);
@@ -244,9 +244,8 @@ export default function FormDetailClient() {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                        label: input.label,
                         default_location_id: input.locationId,
-                        ...(input.workUnitId ? { default_work_unit_id: input.workUnitId } : {}),
+                        location_name: input.locationName,
                     }),
                 });
                 const json = await res.json().catch(() => ({}));

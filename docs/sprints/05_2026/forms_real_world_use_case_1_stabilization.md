@@ -191,6 +191,26 @@ Setup status (`linkOutcomeConfigured`, lead routing display) is evaluated **per 
 
 **Fix:** `resolveDemoEnrollmentLeadTestContext.ts` resolves the live first active site location, selects the canonical demo link by **token hash** (not `limit(1)`), and both prepare + QA scripts use `ensureDemoEnrollmentLeadPublicLinkMetadata` before submit.
 
+### Share by Location UX (May 2026)
+
+**Doctrine:** One form, many location links — do not duplicate forms per campus.
+
+**Operator flow (Firefly demo):**
+1. Build form → choose **Capture new enrollment lead** → publish
+2. Confirm **Lead routing** shows the expected school/status
+3. Under **Share by Location**, pick West / North / Riverbend → **Create link for location**
+4. Copy iframe immediately after each link is created
+5. Embed each iframe on the matching Firefly website page
+
+**UX simplifications:**
+- Renamed **Share by Location** (was "Location-specific links")
+- Link name auto-generated: `{Form Name} — {Location Name}`; table shows campus name only
+- Primary create flow is location-only — pipeline/work unit hidden (defaults from enrollment intent)
+- Site dropdown uses active `location_type = site` rows for all operators (not admin-only picker)
+- Defaults to header location filter when set
+- Location filter visible on `/adminV2/forms/**` routes
+- Setup page de-emphasizes diagnostics (step rail, after-submit detail, test moved under Advanced disclosures)
+
 ## Related
 
 - Prior authoring blockers: [forms_authoring_stability.md](./forms_authoring_stability.md)

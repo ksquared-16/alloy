@@ -5,6 +5,7 @@ import { dbGetFormDefinition, dbListPublicLinksForForm } from "@/lib/admin/forms
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 import { resolveOutcomeConfigLabelCatalog } from "@/lib/forms/resolveOutcomeConfigLabelCatalog";
 import { resolveOutcomeConfigPickerOptions } from "@/lib/forms/resolveOutcomeConfigPickerOptions";
+import { resolveShareByLocationSitePickerOptions } from "@/lib/forms/shareByLocationPresentation";
 
 /** GET — display labels + optional routing pickers for outcome editor (IC-1b / IC-1c). */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ formId: string }> }) {
@@ -48,7 +49,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             includePickers && ctx.role === "admin" ?
                 await resolveOutcomeConfigPickerOptions(supabase, ctx.orgId)
             :   null;
-        return jsonData({ ...catalog, pickerOptions });
+        const shareByLocationSites =
+            includePickers ? await resolveShareByLocationSitePickerOptions(supabase, ctx.orgId) : null;
+        return jsonData({ ...catalog, pickerOptions, shareByLocationSites });
     } catch (e) {
         return NextResponse.json({ error: e instanceof Error ? e.message : "Label resolve failed" }, { status: 500 });
     }
