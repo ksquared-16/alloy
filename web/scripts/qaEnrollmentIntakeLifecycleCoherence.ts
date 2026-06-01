@@ -8,10 +8,13 @@
  *
  * Usage:
  *   cd web && npx tsx --tsconfig tsconfig.json scripts/qaEnrollmentIntakeLifecycleCoherence.ts
+ *   --keep-artifacts  Leave created rows (default: cleanup after pass)
  */
 import { config as loadEnv } from "dotenv";
 import { resolve } from "path";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { cleanupFormsQaRunArtifacts } from "@/lib/forms/cleanupFormsQaArtifacts";
+import { qaScriptKeepsArtifacts } from "./lib/formsQaScriptFlags";
 import { loadOpportunityActivityEvents } from "@/lib/admin/loadOpportunityRelatedActivityEvents";
 import { formatOpportunityActivityTimelineEvent } from "@/lib/admin/opportunityActivityTimelineFormat";
 import { buildOpportunityIntakeSourceViewModel } from "@/lib/forms/opportunityIntakeSourcePresentation";
@@ -154,8 +157,20 @@ async function main() {
     notes.push(`activityTypes: ${types.join(", ")}`);
 
     const pass = errors.length === 0;
-    console.log(JSON.stringify({ pass, notes, errors }, null, 2));
-    process.exit(pass ? 0 : 1);
+    if (pass && !qaScriptKeepsArtifacts()) {
+        try {
+            const cleanup = await cleanupFormsQaRunArtifacts(supabase, DEMO_CHILDCARE_ORG_ID, submissionId);
+            notes.push(
+                `cleanup: removed ${cleanup.deleted.opportunities ?? 0} opportunities, ${cleanup.deleted.form_submissions ?? 0} submissions`
+            );
+        } catch (e) {
+            errors.push(`post-run cleanup failed: ${(e as Error).message}`);
+        }
+    }
+
+    const finalPass = errors.length === 0;
+    console.log(JSON.stringify({ pass: finalPass, notes, errors }, null, 2));
+    process.exit(finalPass ? 0 : 1);
 }
 
 main().catch((e) => {

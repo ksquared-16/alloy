@@ -11,10 +11,13 @@
  *
  * Optional:
  *   APP_BASE=http://localhost:3000 npx tsx ...
+ *   --keep-artifacts  Leave created submission/opportunity rows (default: cleanup after pass)
  */
 import { config as loadEnv } from "dotenv";
 import { resolve } from "path";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { cleanupFormsQaRunArtifacts } from "@/lib/forms/cleanupFormsQaArtifacts";
+import { qaScriptKeepsArtifacts } from "./lib/formsQaScriptFlags";
 import {
     DEMO_CHILDCARE_ENROLLMENT_WORK_UNIT_ID,
     DEMO_CHILDCARE_ORG_ID,
@@ -203,10 +206,23 @@ async function main() {
     notes.push(`quickReviewOperationalLine: ${quickReview.intakeSummary.operationalLine}`);
 
     const pass = errors.length === 0;
+
+    if (pass && !qaScriptKeepsArtifacts()) {
+        try {
+            const cleanup = await cleanupFormsQaRunArtifacts(supabase, DEMO_CHILDCARE_ORG_ID, submissionId);
+            notes.push(
+                `cleanup: removed ${cleanup.deleted.opportunities ?? 0} opportunities, ${cleanup.deleted.form_submissions ?? 0} submissions`
+            );
+        } catch (e) {
+            errors.push(`post-run cleanup failed: ${(e as Error).message}`);
+        }
+    }
+
+    const finalPass = errors.length === 0;
     console.log(
         JSON.stringify(
             {
-                pass,
+                pass: finalPass,
                 opportunityId: row.opportunity_id,
                 submissionId,
                 notes,
@@ -216,7 +232,7 @@ async function main() {
             2
         )
     );
-    process.exit(pass ? 0 : 1);
+    process.exit(finalPass ? 0 : 1);
 }
 
 main().catch((e) => {

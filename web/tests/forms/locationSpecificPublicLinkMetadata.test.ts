@@ -67,6 +67,18 @@ describe("locationSpecificPublicLinkMetadata", () => {
         expect(parsed.default_location_id).toBe(LOC_B);
         expect(parsed.default_work_unit_id).toBe(WU);
     });
+
+    it("location-specific link metadata is link-only — no submission or CRM rows", () => {
+        const meta = buildLocationSpecificLinkMetadata({
+            formName: "Website Inquiry",
+            locationId: LOC_A,
+            locationName: "West Campus",
+        });
+        const keys = Object.keys(meta).sort();
+        expect(keys).toEqual(["default_location_id", "distribution_context", "label"]);
+        expect(meta).not.toHaveProperty("opportunity_id");
+        expect(meta).not.toHaveProperty("person_id");
+    });
 });
 
 describe("mergePublicLinkMetadataForCreate with location", () => {

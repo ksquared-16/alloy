@@ -261,6 +261,58 @@ Optional under **Advanced settings:** documents, packet usage, routing configura
 - `web/tests/forms/formLifecyclePresentation.test.ts` — operator publish summary labels
 - `web/tests/forms/formDetailLifecycleWorkspace.test.tsx` — advanced settings layout
 
+## QA artifact cleanup (May 2026)
+
+### Root cause — New Leads queue pollution
+
+| Artifact | Source script | Guardian name | Email pattern |
+|----------|---------------|---------------|---------------|
+| Jordan Enrollment Lead | `qaEnrollmentLeadOpportunityProof.ts` | `Jordan Enrollment Lead` | `ic56-lead-proof-*@example.com` |
+| Jordan Lifecycle Coherence | `qaEnrollmentIntakeLifecycleCoherence.ts` | `Jordan Lifecycle Coherence` | `lifecycle-coherence-*@example.com` |
+
+Both scripts **submit a real public form** (create draft → submit). Intake creates:
+
+| Table | Rows |
+|-------|------|
+| `form_submissions` | 1 submitted row per run |
+| `opportunities` | 1 lead (`status_key: new_inquiry`) → **New Leads queue** |
+| `persons` | Guardian person (`@example.com`) |
+| `customers` | Household customer |
+| `customer_persons` | Link person ↔ customer |
+| `opportunity_persons` | Link person ↔ opportunity |
+| `workflow_events` | `form_submitted`, `intake_case_created`, `intake_case_operationalized` |
+
+**Location-specific link creation does NOT create any of the above** — only `form_public_links` (+ metadata). Side effects happen on **family submit**, not link mint.
+
+### QA artifact cleanup doctrine
+
+- QA gate scripts must **not pollute operational queues** by default.
+- After successful assertions, scripts call `cleanupFormsQaRunArtifacts` unless `--keep-artifacts`.
+- Manual cleanup: `web/scripts/cleanupFormsQaArtifacts.ts` (dry-run default, `--confirm` to delete).
+
+```bash
+cd web
+# Dry-run — list matching QA rows
+npx tsx scripts/cleanupFormsQaArtifacts.ts --org-id 93667019-bd28-49b5-a688-acc9bb1e0a19
+
+# Remove QA artifacts
+npx tsx scripts/cleanupFormsQaArtifacts.ts --org-id 93667019-bd28-49b5-a688-acc9bb1e0a19 --confirm
+
+# Archive to lost instead of hard delete
+npx tsx scripts/cleanupFormsQaArtifacts.ts --org-id 93667019-bd28-49b5-a688-acc9bb1e0a19 --confirm --archive-only
+```
+
+Fingerprints: `web/lib/forms/formsQaArtifactFingerprints.ts`  
+Cleanup logic: `web/lib/forms/cleanupFormsQaArtifacts.ts`
+
+Refuses `VERCEL_ENV=production`.
+
+### UI deletion gap
+
+**Existing:** Opportunity drawer supports **Mark lost** (`mark_lost` action) for appropriate lifecycle stages — removes lead from active pipeline lanes.
+
+**Not in scope:** No dedicated “delete test lead” or bulk QA purge in UI. Use cleanup script for QA artifacts; use Mark lost for one-off operator dismissal.
+
 ## Related
 
 - Prior authoring blockers: [forms_authoring_stability.md](./forms_authoring_stability.md)
