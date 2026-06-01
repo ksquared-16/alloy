@@ -377,9 +377,10 @@ describe("Opportunity hydrate determinism", () => {
         expect(src).toContain(
             "if (String((json as { id?: unknown }).id ?? \"\") !== hydrateId) return;"
         );
-        // Person composed fetch: response must pass entityDataMatchesDrawer
+        // Person composed fetch: coalesced path must pass entityDataMatchesDrawer
+        expect(src).toContain("fetchPersonDrawerEntityCoalesced");
         expect(src).toContain(
-            "if (!entityDataMatchesDrawer(json as Record<string, unknown>, fetchTargetId, fetchTargetType)) {"
+            "if (!entityDataMatchesDrawer(json, fetchTargetId, fetchTargetType)) {"
         );
     });
 
@@ -531,60 +532,51 @@ describe("Parent/child known-empty readiness stability", () => {
 
     // ── Lead summary contacts limit ───────────────────────────────────────────────────────────────
 
-    it("FamilyContactsPanel limits additional contacts to MAX_ADDITIONAL_SUMMARY in summary variant", () => {
+    it("FamilyContactsPanel limits lead summary to primary + one additional contact", () => {
         const src = readSrc("components/admin/opportunity/FamilyContactsPanel.tsx");
-        expect(src).toContain("MAX_ADDITIONAL_SUMMARY");
-        expect(src).toContain("allSorted.slice(0, MAX_ADDITIONAL_SUMMARY)");
-        expect(src).toContain("overflowCount");
-        // Overflow indicator: "+N more contact(s)" text in JSX
-        expect(src).toContain('"contact" : "contacts"');
+        expect(src).toContain("SUMMARY_VISIBLE_ADDITIONAL_COUNT = 1");
+        expect(src).toContain("additionalContactsForRender");
+        expect(src).toContain("allSorted.slice(0, SUMMARY_VISIBLE_ADDITIONAL_COUNT)");
+        expect(src).not.toContain("overflowCount");
+        expect(src).not.toMatch(/variant === "summary"[\s\S]{0,120}Additional contacts/);
     });
 
-    it("lead summary contact overflow indicator: more than MAX_ADDITIONAL_SUMMARY contacts shows overflow text", () => {
-        // Build a synthetic record with 4 additional persons (beyond primary)
+    it("lead summary contact cap: primary + at most one additional person in final collection", () => {
         const primaryId = "person-primary";
         const record = {
             primary_person_id: primaryId,
             _opportunity_persons: [
                 { id: "op-1", person_id: primaryId, role_type: "primary_contact", name: "Primary", phone: null, email: null },
-                { id: "op-2", person_id: "person-2", role_type: "family_member", name: "Contact 2", phone: null, email: null },
-                { id: "op-3", person_id: "person-3", role_type: "family_member", name: "Contact 3", phone: null, email: null },
+                { id: "op-2", person_id: "person-2", role_type: "family_member", name: "Grace", phone: null, email: null },
+                { id: "op-3", person_id: "person-3", role_type: "family_member", name: "Jordan", phone: null, email: null },
                 { id: "op-4", person_id: "person-4", role_type: "family_member", name: "Contact 4", phone: null, email: null },
             ],
         };
         const rows = buildOpportunityFamilyContactRows(record).filter((r) => r.id && r.person_id);
         const allSorted = sortOpportunityFamilyContactRows(rows, primaryId);
-        // 3 additional contacts after primary is excluded
         expect(allSorted.length).toBe(3);
 
-        const MAX_ADDITIONAL_SUMMARY = 2;
-        const visible = allSorted.slice(0, MAX_ADDITIONAL_SUMMARY);
-        const overflowCount = Math.max(0, allSorted.length - MAX_ADDITIONAL_SUMMARY);
-
-        expect(visible.length).toBe(2);
-        expect(overflowCount).toBe(1);
-
-        const label = `+${overflowCount} more ${overflowCount === 1 ? "contact" : "contacts"}`;
-        expect(label).toBe("+1 more contact");
+        const SUMMARY_VISIBLE_ADDITIONAL_COUNT = 1;
+        const additionalContactsForRender = allSorted.slice(0, SUMMARY_VISIBLE_ADDITIONAL_COUNT);
+        expect(additionalContactsForRender.length).toBe(1);
+        expect(additionalContactsForRender[0]?.person_id).toBe(allSorted[0]?.person_id);
+        expect(additionalContactsForRender[0]?.person_id).not.toBe(primaryId);
+        // Primary renders separately — total visible people = 1 primary + 1 additional = 2
     });
 
-    it("lead summary contact overflow indicator: exactly MAX_ADDITIONAL_SUMMARY contacts shows no overflow", () => {
+    it("lead summary with exactly one additional contact shows that person only", () => {
         const primaryId = "person-primary";
         const record = {
             primary_person_id: primaryId,
             _opportunity_persons: [
                 { id: "op-1", person_id: primaryId, role_type: "primary_contact", name: "Primary", phone: null, email: null },
-                { id: "op-2", person_id: "person-2", role_type: "family_member", name: "Contact 2", phone: null, email: null },
-                { id: "op-3", person_id: "person-3", role_type: "family_member", name: "Contact 3", phone: null, email: null },
+                { id: "op-2", person_id: "person-2", role_type: "family_member", name: "Grace", phone: null, email: null },
             ],
         };
         const rows = buildOpportunityFamilyContactRows(record).filter((r) => r.id && r.person_id);
         const allSorted = sortOpportunityFamilyContactRows(rows, primaryId);
-        expect(allSorted.length).toBe(2);
-
-        const MAX_ADDITIONAL_SUMMARY = 2;
-        const overflowCount = Math.max(0, allSorted.length - MAX_ADDITIONAL_SUMMARY);
-        expect(overflowCount).toBe(0);
+        expect(allSorted.length).toBe(1);
+        expect(allSorted.slice(0, 1).length).toBe(1);
     });
 
     // ── Speed pass: early prefetch + composed payload cache ──────────────────────────────────────

@@ -47,9 +47,9 @@ export function parseInboxFolder(raw: string | null | undefined): InboxFolder | 
     return null;
 }
 
-export function parseInboxLimit(raw: string | number | null | undefined): number {
+export function parseInboxLimit(raw: string | number | null | undefined, defaultLimit = DEFAULT_LIMIT): number {
     const n = typeof raw === "number" ? raw : Number(raw);
-    if (!Number.isFinite(n) || n <= 0) return DEFAULT_LIMIT;
+    if (!Number.isFinite(n) || n <= 0) return defaultLimit;
     return Math.min(Math.max(Math.floor(n), 1), MAX_LIMIT);
 }
 
@@ -225,44 +225,87 @@ async function loadEntityLabels(
         else if (type === "customers") customerIds.add(id);
     }
 
+    const entityQueries: Array<PromiseLike<void>> = [];
+
     if (oppIds.size > 0) {
-        const { data } = await supabase
-            .from("opportunities")
-            .select("id, name, customer_id")
-            .eq("org_id", orgId)
-            .in("id", [...oppIds]);
-        for (const row of data ?? []) {
-            const id = String((row as { id: string }).id);
-            const name = (row as { name?: string | null }).name;
-            entityLabels.set(`opportunities:${id}`, (name ?? "").trim() || "Opportunity");
-            const cid = (row as { customer_id?: string | null }).customer_id;
-            if (cid && UUID_RE.test(String(cid))) {
-                const cidStr = String(cid);
-                customerIds.add(cidStr);
-                opportunityCustomerIds.set(id, cidStr);
-            }
-        }
+        entityQueries.push(
+            supabase
+                .from("opportunities")
+                .select("id, name, customer_id")
+                .eq("org_id", orgId)
+                .in("id", [...oppIds])
+                .then(({ data }) => {
+                    for (const row of data ?? []) {
+                        const id = String((row as { id: string }).id);
+                        const name = (row as { name?: string | null }).name;
+                        entityLabels.set(`opportunities:${id}`, (name ?? "").trim() || "Opportunity");
+                        const cid = (row as { customer_id?: string | null }).customer_id;
+                        if (cid && UUID_RE.test(String(cid))) {
+                            const cidStr = String(cid);
+                            customerIds.add(cidStr);
+                            opportunityCustomerIds.set(id, cidStr);
+                        }
+                    }
+                })
+        );
     }
 
     if (jobIds.size > 0) {
-        const { data } = await supabase
-            .from("jobs")
-            .select("id, title")
-            .eq("org_id", orgId)
-            .in("id", [...jobIds]);
-        for (const row of data ?? []) {
-            const id = String((row as { id: string }).id);
-            const title = (row as { title?: string | null }).title;
-            entityLabels.set(`jobs:${id}`, (title ?? "").trim() || "Job");
-        }
+        entityQueries.push(
+            supabase
+                .from("jobs")
+                .select("id, title")
+                .eq("org_id", orgId)
+                .in("id", [...jobIds])
+                .then(({ data }) => {
+                    for (const row of data ?? []) {
+                        const id = String((row as { id: string }).id);
+                        const title = (row as { title?: string | null }).title;
+                        entityLabels.set(`jobs:${id}`, (title ?? "").trim() || "Job");
+                    }
+                })
+        );
     }
 
-    if (customerIds.size > 0) {
+    if (personIds.size > 0) {
+        entityQueries.push(
+            supabase
+                .from("persons")
+                .select("id, full_name, first_name, last_name, email, phone")
+                .eq("org_id", orgId)
+                .in("id", [...personIds])
+                .then(({ data }) => {
+                    for (const row of data ?? []) {
+                        const id = String((row as { id: string }).id);
+                        const full = (row as { full_name?: string | null }).full_name;
+                        const first = (row as { first_name?: string | null }).first_name;
+                        const last = (row as { last_name?: string | null }).last_name;
+                        const email = (row as { email?: string | null }).email;
+                        const phone = (row as { phone?: string | null }).phone;
+                        const composed =
+                            (full ?? "").trim() ||
+                            [first, last].filter(Boolean).join(" ").trim() ||
+                            (email ?? "").trim() ||
+                            (phone ?? "").trim() ||
+                            "Person";
+                        personNames.set(id, composed);
+                        entityLabels.set(`persons:${id}`, composed);
+                    }
+                })
+        );
+    }
+
+    if (entityQueries.length > 0) {
+        await Promise.all(entityQueries);
+    }
+
+    const customerIdsToLoad = [...customerIds].filter((id) => !entityLabels.has(`customers:${id}`));
+    if (customerIdsToLoad.length > 0) {
         const { data } = await supabase
             .from("customers")
             .select("id, name")
             .eq("org_id", orgId)
-            .in("id", [...customerIds]);
+            .in("id", customerIdsToLoad);
         for (const row of data ?? []) {
             const id = String((row as { id: string }).id);
             const name = (row as { name?: string | null }).name;
@@ -271,30 +314,6 @@ async function loadEntityLabels(
             for (const [oppId, custId] of opportunityCustomerIds) {
                 if (custId === id) familyByOpportunity.set(oppId, label);
             }
-        }
-    }
-
-    if (personIds.size > 0) {
-        const { data } = await supabase
-            .from("persons")
-            .select("id, full_name, first_name, last_name, email, phone")
-            .eq("org_id", orgId)
-            .in("id", [...personIds]);
-        for (const row of data ?? []) {
-            const id = String((row as { id: string }).id);
-            const full = (row as { full_name?: string | null }).full_name;
-            const first = (row as { first_name?: string | null }).first_name;
-            const last = (row as { last_name?: string | null }).last_name;
-            const email = (row as { email?: string | null }).email;
-            const phone = (row as { phone?: string | null }).phone;
-            const composed =
-                (full ?? "").trim() ||
-                [first, last].filter(Boolean).join(" ").trim() ||
-                (email ?? "").trim() ||
-                (phone ?? "").trim() ||
-                "Person";
-            personNames.set(id, composed);
-            entityLabels.set(`persons:${id}`, composed);
         }
     }
 
@@ -337,8 +356,10 @@ export async function listInboxThreads(params: {
     userId: string;
     folder: InboxFolder;
     limit?: number;
+    compact?: boolean;
 }): Promise<{ ok: true; data: InboxThreadsListResponse } | { ok: false; error: string }> {
     const limit = parseInboxLimit(params.limit);
+    const compact = params.compact === true;
 
     if (params.folder === "scheduled") {
         const scheduled = await listInboxScheduledSends({
@@ -372,7 +393,9 @@ export async function listInboxThreads(params: {
     }
 
     const fetchCap =
-        params.folder === "unread" || params.folder === "sent" ? Math.min(limit * 4, MAX_LIMIT * 2) : limit;
+        params.folder === "unread" || params.folder === "sent"
+            ? Math.min(limit * (compact ? 2 : 4), compact ? MAX_LIMIT : MAX_LIMIT * 2)
+            : limit;
 
     const { data: rows, error } = await query
         .order("last_message_at", { ascending: false, nullsFirst: false })
@@ -382,18 +405,12 @@ export async function listInboxThreads(params: {
     if (error) return { ok: false, error: error.message };
 
     const rawThreads = (rows ?? []) as RawThreadRow[];
-    const previews = await attachLastPreviews(params.supabase, params.orgId, rawThreads);
-    const unreadFlags = await attachUnreadFlags(
-        params.supabase,
-        params.orgId,
-        params.userId,
-        rawThreads.map((t) => t.id)
-    );
-    const { entityLabels, familyByOpportunity, personNames } = await loadEntityLabels(
-        params.supabase,
-        params.orgId,
-        rawThreads
-    );
+    const threadIds = rawThreads.map((t) => t.id);
+    const [previews, unreadFlags, { entityLabels, familyByOpportunity, personNames }] = await Promise.all([
+        attachLastPreviews(params.supabase, params.orgId, rawThreads),
+        attachUnreadFlags(params.supabase, params.orgId, params.userId, threadIds),
+        loadEntityLabels(params.supabase, params.orgId, rawThreads),
+    ]);
 
     let items: InboxThreadListItem[] = rawThreads.map((t) => {
         const sortAt = threadSortTimestamp(t);

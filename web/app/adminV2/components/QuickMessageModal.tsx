@@ -691,7 +691,7 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
 
                     {/* Right ~70% — thread preview + composer */}
                     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 border-t border-alloy-stone/12 pt-4 lg:w-[70%] lg:border-t-0 lg:border-l lg:border-alloy-stone/12 lg:px-5 lg:py-5 lg:pt-5">
-                        <div className="flex min-h-0 flex-1 flex-col rounded-xl border border-alloy-stone/14 bg-alloy-stone/[0.04] p-3 lg:min-h-[11rem]">
+                        <div className="flex min-h-0 flex-1 flex-col rounded-xl border border-alloy-stone/14 bg-alloy-stone/[0.04] p-3 lg:min-h-0">
                             <div className={COMPOSER_LABEL}>Thread preview</div>
                             {!previewPersonId ? (
                                 <p className="mt-1 text-[11px] text-alloy-midnight/50">Select a recipient to load context.</p>

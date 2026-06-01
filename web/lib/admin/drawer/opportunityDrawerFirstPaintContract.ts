@@ -11,7 +11,13 @@ export function opportunityDrawerPrimaryContractReady(
     if (!record || typeof record !== "object") return false;
     if (String(record.id ?? "").trim() !== String(drawerId).trim()) return false;
     const surface = String(record._record_surface ?? "").trim();
-    return surface === "drawer_primary" || surface === "drawer_initial" || surface === "full";
+    // drawer_visible — bootstrap operational payload uses the same visible builder as drawer_primary.
+    return (
+        surface === "drawer_primary" ||
+        surface === "drawer_initial" ||
+        surface === "drawer_visible" ||
+        surface === "full"
+    );
 }
 
 /** AdminV2 bootstrap path: primary is painted but background `full` has not merged yet. */

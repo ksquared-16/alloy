@@ -1,9 +1,13 @@
 /**
- * Seeded lifecycle action requirement rules (MVP childcare enrollment pipeline).
- * Source of truth until Settings authoring ships — not a parallel rules engine.
+ * Lifecycle action preflight — respects department lifecycle requirement overrides when present.
  */
 
 import { APPROVE_ENROLLMENT_ACTION_KEY, ENROLLED_STATUS_KEY } from "@/lib/admin/actions/enrollmentApprovalConstants";
+import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
+import {
+    departmentMetadataFromCompletionContext,
+    effectiveLifecycleProgressionRequirementsForStage,
+} from "@/lib/completion/lifecycleProgressionRequirementsConfig";
 import {
     OPPORTUNITY_TOUR_COMPLETED_DATE_METADATA_KEY,
     OPPORTUNITY_WAITLIST_DATE_METADATA_KEY,
@@ -70,109 +74,218 @@ function actionViolation(
     });
 }
 
-function requireAtLeastOneChild(ctx: CompletionEvaluationContext) {
-    const children = inquiryChildren(ctx);
-    if (children.length === 0) {
-        return [
-            actionViolation(ctx, {
-                field_key: "inquiry_children",
-                label: "Child",
-                missing_reason: "Add at least one child before continuing.",
-                blocking_level: "hard_block",
-            }),
-        ];
-    }
-    return [];
+function deptMetadata(ctx: CompletionEvaluationContext): Record<string, unknown> | null {
+    return departmentMetadataFromCompletionContext(ctx.related);
 }
 
-function requireChildAndProgram(ctx: CompletionEvaluationContext) {
-    const violations = [...requireAtLeastOneChild(ctx)];
-    for (const child of inquiryChildren(ctx)) {
-        const childId = trimOrNull(child.person_id) ?? trimOrNull(child.id) ?? "unknown";
-        if (!childHasProgram(child)) {
-            violations.push(
+function effectiveLabels(
+    stage: LifecycleOperatorStage,
+    ctx: CompletionEvaluationContext,
+    kind: "required" | "recommended"
+): Set<string> {
+    const effective = effectiveLifecycleProgressionRequirementsForStage(stage, deptMetadata(ctx));
+    const rows = kind === "required" ? effective.required : effective.recommended;
+    return new Set(rows.map((r) => r.label));
+}
+
+function labelRequired(ctx: CompletionEvaluationContext, labels: Set<string>, label: string): boolean {
+    return labels.has(label);
+}
+
+function violationsForOperatorLabel(
+    ctx: CompletionEvaluationContext,
+    label: string,
+    blocking_level: "hard_block" | "recommendation"
+): ReturnType<typeof actionViolation>[] {
+    const children = inquiryChildren(ctx);
+    switch (label) {
+        case "Child": {
+            if (children.length > 0) return [];
+            return [
                 actionViolation(ctx, {
-                    field_key: "desired_program_type",
-                    label: "Program",
-                    missing_reason: "Program or classroom interest is required for each child.",
-                    blocking_level: "hard_block",
-                    entity_type: "inquiry_child",
-                    entity_id: childId,
-                    resolution_field_key: "desired_program_type",
-                })
-            );
+                    field_key: "inquiry_children",
+                    label: "Child",
+                    missing_reason: "Add at least one child before continuing.",
+                    blocking_level,
+                }),
+            ];
         }
+        case "Program": {
+            const violations: ReturnType<typeof actionViolation>[] = [];
+            for (const child of children) {
+                const childId = trimOrNull(child.person_id) ?? trimOrNull(child.id) ?? "unknown";
+                if (!childHasProgram(child)) {
+                    violations.push(
+                        actionViolation(ctx, {
+                            field_key: "desired_program_type",
+                            label: "Program",
+                            missing_reason: "Program or classroom interest is required for each child.",
+                            blocking_level,
+                            entity_type: "inquiry_child",
+                            entity_id: childId,
+                            resolution_field_key: "desired_program_type",
+                        })
+                    );
+                }
+            }
+            return violations;
+        }
+        case "Child Identity": {
+            const violations: ReturnType<typeof actionViolation>[] = [];
+            for (const child of children) {
+                const childId = trimOrNull(child.person_id) ?? trimOrNull(child.id) ?? "unknown";
+                if (completionValueEmpty(child.person_id)) {
+                    violations.push(
+                        actionViolation(ctx, {
+                            field_key: "person_id",
+                            label: "Child Identity",
+                            missing_reason:
+                                "Each child must be linked to a person record before enrollment approval.",
+                            blocking_level,
+                            entity_type: "inquiry_child",
+                            entity_id: childId,
+                        })
+                    );
+                }
+            }
+            return violations;
+        }
+        case "Classroom": {
+            const violations: ReturnType<typeof actionViolation>[] = [];
+            for (const child of children) {
+                const childId = trimOrNull(child.person_id) ?? trimOrNull(child.id) ?? "unknown";
+                if (completionValueEmpty(child.program_room_cohort_key)) {
+                    violations.push(
+                        actionViolation(ctx, {
+                            field_key: "program_room_cohort_key",
+                            label: "Classroom",
+                            missing_reason: "Classroom or placement target is required before enrollment approval.",
+                            blocking_level,
+                            entity_type: "inquiry_child",
+                            entity_id: childId,
+                            resolution_field_key: "program_room_cohort_key",
+                        })
+                    );
+                }
+            }
+            return violations;
+        }
+        case "Schedule":
+        case "Desired Schedule": {
+            const violations: ReturnType<typeof actionViolation>[] = [];
+            const scheduleLabel = label;
+            for (const child of children) {
+                const childId = trimOrNull(child.person_id) ?? trimOrNull(child.id) ?? "unknown";
+                if (completionValueEmpty(child.desired_schedule_type)) {
+                    violations.push(
+                        actionViolation(ctx, {
+                            field_key: "desired_schedule_type",
+                            label: scheduleLabel,
+                            missing_reason:
+                                scheduleLabel === "Desired Schedule"
+                                    ? "Desired schedule is required before moving to the waitlist."
+                                    : "Schedule is required before enrollment approval.",
+                            blocking_level,
+                            entity_type: "inquiry_child",
+                            entity_id: childId,
+                            resolution_field_key: "desired_schedule_type",
+                        })
+                    );
+                }
+            }
+            return violations;
+        }
+        case "Enrollment Start Date":
+        case "Desired Start Date":
+        case "Start Date": {
+            const violations: ReturnType<typeof actionViolation>[] = [];
+            const startLabel = label;
+            for (const child of children) {
+                const childId = trimOrNull(child.person_id) ?? trimOrNull(child.id) ?? "unknown";
+                if (completionValueEmpty(child.desired_start_date)) {
+                    violations.push(
+                        actionViolation(ctx, {
+                            field_key: "desired_start_date",
+                            label: startLabel,
+                            missing_reason:
+                                startLabel === "Desired Start Date"
+                                    ? "Desired start date is required before moving to the waitlist."
+                                    : "Start date is required before enrollment approval.",
+                            blocking_level,
+                            entity_type: "inquiry_child",
+                            entity_id: childId,
+                            resolution_field_key: "desired_start_date",
+                        })
+                    );
+                }
+            }
+            return violations;
+        }
+        case "Person": {
+            const values = ctx.values;
+            const primary = values.primary_person_id ?? values.primary_contact_id;
+            if (!completionValueEmpty(primary)) return [];
+            return [
+                actionViolation(ctx, {
+                    field_key: "primary_person_id",
+                    label: "Person",
+                    missing_reason: "A parent or guardian contact is required.",
+                    blocking_level,
+                }),
+            ];
+        }
+        case "Tour Date and Time": {
+            const values = ctx.values;
+            const tourDate = values.tour_date ?? metadataValue(values, "tour_date");
+            const tourTime = values.tour_time ?? metadataValue(values, "tour_time");
+            if (!completionValueEmpty(tourDate) && !completionValueEmpty(tourTime)) return [];
+            return [
+                actionViolation(ctx, {
+                    field_key: "tour_date",
+                    label: "Tour Date and Time",
+                    missing_reason: "Preferred tour date and time are recommended when scheduling.",
+                    blocking_level,
+                }),
+            ];
+        }
+        default:
+            return [];
+    }
+}
+
+function collectViolationsForEffectiveLabels(
+    ctx: CompletionEvaluationContext,
+    stage: LifecycleOperatorStage
+): ReturnType<typeof actionViolation>[] {
+    const required = effectiveLabels(stage, ctx, "required");
+    const recommended = effectiveLabels(stage, ctx, "recommended");
+    const violations: ReturnType<typeof actionViolation>[] = [];
+
+    for (const label of required) {
+        violations.push(...violationsForOperatorLabel(ctx, label, "hard_block"));
+    }
+    for (const label of recommended) {
+        violations.push(...violationsForOperatorLabel(ctx, label, "recommendation"));
     }
     return violations;
 }
 
 function evaluateApproveEnrollmentAction(ctx: CompletionEvaluationContext): RequirementValidationResult {
-    const violations = [...requireAtLeastOneChild(ctx)];
-
-    for (const child of inquiryChildren(ctx)) {
-        const childId = trimOrNull(child.person_id) ?? trimOrNull(child.id) ?? "unknown";
-        if (completionValueEmpty(child.person_id)) {
-            violations.push(
-                actionViolation(ctx, {
-                    field_key: "person_id",
-                    label: "Child identity",
-                    missing_reason: "Each child must be linked to a person record before enrollment approval.",
-                    blocking_level: "hard_block",
-                    entity_type: "inquiry_child",
-                    entity_id: childId,
-                })
-            );
-        }
-        if (completionValueEmpty(child.program_room_cohort_key)) {
-            violations.push(
-                actionViolation(ctx, {
-                    field_key: "program_room_cohort_key",
-                    label: "Classroom",
-                    missing_reason: "Classroom or placement target is required before enrollment approval.",
-                    blocking_level: "hard_block",
-                    entity_type: "inquiry_child",
-                    entity_id: childId,
-                    resolution_field_key: "program_room_cohort_key",
-                })
-            );
-        }
-        if (completionValueEmpty(child.desired_schedule_type)) {
-            violations.push(
-                actionViolation(ctx, {
-                    field_key: "desired_schedule_type",
-                    label: "Schedule",
-                    missing_reason: "Schedule is required before enrollment approval.",
-                    blocking_level: "hard_block",
-                    entity_type: "inquiry_child",
-                    entity_id: childId,
-                    resolution_field_key: "desired_schedule_type",
-                })
-            );
-        }
-        if (completionValueEmpty(child.desired_start_date)) {
-            violations.push(
-                actionViolation(ctx, {
-                    field_key: "desired_start_date",
-                    label: "Start date",
-                    missing_reason: "Start date is required before enrollment approval.",
-                    blocking_level: "hard_block",
-                    entity_type: "inquiry_child",
-                    entity_id: childId,
-                    resolution_field_key: "desired_start_date",
-                })
-            );
-        }
-    }
-
+    const violations = collectViolationsForEffectiveLabels(ctx, "enrollment");
+    violations.push(...violationsForOperatorLabel(ctx, "Child Identity", "hard_block"));
     return buildRequirementValidationResult(violations);
 }
 
 function evaluateMoveToWaitlistAction(ctx: CompletionEvaluationContext): RequirementValidationResult {
-    return buildRequirementValidationResult(requireChildAndProgram(ctx));
+    return buildRequirementValidationResult(collectViolationsForEffectiveLabels(ctx, "waitlist"));
 }
 
 function evaluateScheduleTourAction(ctx: CompletionEvaluationContext): RequirementValidationResult {
-    const violations = requireChildAndProgram(ctx);
+    const violations = collectViolationsForEffectiveLabels(ctx, "qualification");
+    const tourRecommended = effectiveLabels("tour", ctx, "recommended");
+    if (tourRecommended.has("Tour Date and Time")) {
+        violations.push(...violationsForOperatorLabel(ctx, "Tour Date and Time", "recommendation"));
+    }
     const values = ctx.values;
     const email = values.email ?? values.parent_email;
     const phone = values.phone ?? values.parent_phone;
@@ -183,18 +296,6 @@ function evaluateScheduleTourAction(ctx: CompletionEvaluationContext): Requireme
                 field_key: "primary_person_id",
                 label: "Primary contact",
                 missing_reason: "A primary contact with phone or email is recommended before scheduling a tour.",
-                blocking_level: "recommendation",
-            })
-        );
-    }
-    const tourDate = values.tour_date ?? metadataValue(values, "tour_date");
-    const tourTime = values.tour_time ?? metadataValue(values, "tour_time");
-    if (completionValueEmpty(tourDate) || completionValueEmpty(tourTime)) {
-        violations.push(
-            actionViolation(ctx, {
-                field_key: "tour_date",
-                label: "Tour date and time",
-                missing_reason: "Preferred tour date and time are recommended when scheduling.",
                 blocking_level: "recommendation",
             })
         );
@@ -224,7 +325,7 @@ function evaluateRecordTourOutcomeAction(
         return buildRequirementValidationResult([
             actionViolation(ctx, {
                 field_key: "outcome",
-                label: "Tour outcome",
+                label: "Tour Outcome",
                 missing_reason: "Select a tour outcome (completed or no-show).",
                 blocking_level: "hard_block",
                 resolution_field_key: "outcome",

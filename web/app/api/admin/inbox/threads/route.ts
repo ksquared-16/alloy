@@ -14,7 +14,9 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const folder = parseInboxFolder(searchParams.get("folder")) ?? "inbox";
-    const limit = parseInboxLimit(searchParams.get("limit"));
+    const compact = searchParams.get("compact") === "1";
+    const defaultLimit = compact ? 20 : undefined;
+    const limit = parseInboxLimit(searchParams.get("limit"), defaultLimit);
 
     const supabase = createAdminClient();
     const result = await listInboxThreads({
@@ -23,6 +25,7 @@ export async function GET(request: NextRequest) {
         userId: ctx.userId,
         folder,
         limit,
+        compact,
     });
 
     if (!result.ok) {

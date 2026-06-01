@@ -241,13 +241,14 @@ export function FamilyContactsPanel(props: {
         [rows, primaryPersonId]
     );
 
-    // In the summary variant (inquiry header card), cap additional contacts to avoid an
-    // oversized card. Full-drawer variant shows all contacts.
-    const MAX_ADDITIONAL_SUMMARY = 2;
-    const sorted =
-        variant === "summary" ? allSorted.slice(0, MAX_ADDITIONAL_SUMMARY) : allSorted;
-    const overflowCount =
-        variant === "summary" ? Math.max(0, allSorted.length - MAX_ADDITIONAL_SUMMARY) : 0;
+    /** Lead summary: primary card + one additional person — 2 people max, no overflow UI. */
+    const SUMMARY_VISIBLE_ADDITIONAL_COUNT = 1;
+    const additionalContactsForRender =
+        variant === "summary" ? allSorted.slice(0, SUMMARY_VISIBLE_ADDITIONAL_COUNT) : allSorted;
+    const summaryReservedAdditionalCount =
+        variant === "summary"
+            ? Math.min(shellReservedAdditionalCount, SUMMARY_VISIBLE_ADDITIONAL_COUNT)
+            : shellReservedAdditionalCount;
 
     const eyebrow = oppInqEyebrow;
     const cardPad = variant === "summary" ? "px-1.5 py-0.5" : "px-3 py-2.5";
@@ -315,7 +316,7 @@ export function FamilyContactsPanel(props: {
             ) : null}
 
             <div className={`min-w-0 ${variant === "summary" ? "mt-0" : "flex-1"}`}>
-                {sorted.length === 0 ? (
+                {additionalContactsForRender.length === 0 ? (
                     opportunityRelationshipsFullHydrateFailed ? (
                         <div
                             className={
@@ -333,9 +334,9 @@ export function FamilyContactsPanel(props: {
                         ) : (
                             <DrawerRelationshipPanelSkeleton density="comfortable" rows={1} />
                         )
-                    ) : shellReservedAdditionalCount > 0 && sorted.length === 0 ? (
+                    ) : shellReservedAdditionalCount > 0 && additionalContactsForRender.length === 0 ? (
                         <ul className={`${variant === "summary" ? "space-y-0.5" : "space-y-2.5"} ${variant === "summary" ? "mt-0" : "mt-0.5"} list-none`}>
-                            {Array.from({ length: shellReservedAdditionalCount }).map((_, i) => (
+                            {Array.from({ length: summaryReservedAdditionalCount }).map((_, i) => (
                                 <li
                                     key={`additional-contact-shell-${i}`}
                                     className={variant === "summary" ? INQUIRY_FAMILY_CONTACTS_ADDITIONAL_ROW_RESERVE_CLASS : undefined}
@@ -349,17 +350,13 @@ export function FamilyContactsPanel(props: {
                     )
                 ) : (
                     <>
-                        <div
-                            className={
-                                variant === "summary" ?
-                                    "mt-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/45"
-                                :   "mt-2.5 text-[11px] font-semibold tracking-wide text-alloy-forge/55"
-                            }
-                        >
-                            Additional contacts
-                        </div>
+                        {variant !== "summary" ? (
+                            <div className="mt-2.5 text-[11px] font-semibold tracking-wide text-alloy-forge/55">
+                                Additional contacts
+                            </div>
+                        ) : null}
                         <ul className={`${variant === "summary" ? "space-y-0.5" : "space-y-2.5"} ${variant === "summary" ? "mt-0" : "mt-0.5"} list-none`}>
-                        {sorted.map((r) => {
+                        {additionalContactsForRender.map((r) => {
                             const personId = String(r.person_id ?? "").trim();
                             const initialValues = personContactCardValuesFromOpportunityPersonRow(r);
                             const gates = resolveLinkedPersonContactCardFieldGates(personId, canMutate);
@@ -386,11 +383,6 @@ export function FamilyContactsPanel(props: {
                             );
                         })}
                         </ul>
-                        {overflowCount > 0 ? (
-                            <p className="mt-1 text-[10px] text-alloy-midnight/45">
-                                {`+${overflowCount} more ${overflowCount === 1 ? "contact" : "contacts"}`}
-                            </p>
-                        ) : null}
                     </>
                 )}
             </div>

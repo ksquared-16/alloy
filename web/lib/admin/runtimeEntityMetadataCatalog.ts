@@ -23,6 +23,14 @@ export type RuntimeMetadataKeyInfo = {
  * Keys with first-class runtime consumers in `web/` (excluding scripts-only demos unless noted).
  */
 export const RUNTIME_METADATA_KEY_INFO: Record<string, RuntimeMetadataKeyInfo> = {
+    lifecycle_progression_requirements_v1: {
+        label: "Lifecycle progression requirements",
+        category: "crm_attention",
+        entities: ["department"],
+        description:
+            "Per-stage required and recommended information labels for enrollment lifecycle. Merged with platform defaults in completion preflight.",
+        schemaSummary: `{ "version": 1, "stages": { "waitlist": { "required_labels": ["Child", "Program"], "recommended_labels": [] } } }`,
+    },
     opportunity_attention_rules: {
         label: "Opportunity attention rules",
         category: "crm_attention",

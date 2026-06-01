@@ -290,6 +290,12 @@ export async function loadWorkUnitOperationalBootstrap(params: {
     );
     const attentionEligible = Boolean(naExecution && workUnitDefinesNeedsAttentionQueue(queueDefinition));
     const wuKey = (wuRow as { key?: string | null }).key ?? null;
+    const focusIsNeedsAttention = focusQueue.trim().toLowerCase() === "needs_attention";
+    const wuIsNeedsAttention = (wuKey ?? "").trim().toLowerCase() === "needs_attention";
+    const attentionCanStartWithSummaries =
+        attentionEligible &&
+        naExecution != null &&
+        (focusIsNeedsAttention || wuIsNeedsAttention);
 
     const tSummaries0 = Date.now();
     const summariesCacheParams = {
@@ -299,9 +305,27 @@ export async function loadWorkUnitOperationalBootstrap(params: {
         queueScopeKey: ctx.queueScopeKey,
     };
     const summariesCached = readWorkUnitQueueSummariesBootstrapCache(summariesCacheParams);
-    const summariesResult =
-        summariesCached ??
-        (await getWorkUnitQueueSummaries({
+
+    const attentionEarlyP: Promise<AttentionBootstrapOutcome> | null =
+        attentionCanStartWithSummaries
+            ? loadWorkUnitBootstrapAttention({
+                  supabase,
+                  orgId,
+                  departmentId,
+                  departmentMetadata,
+                  workUnitMetadata,
+                  accessDim,
+                  recordScopeImpossible,
+                  recordScopeConstraints,
+                  sharedBootstrap,
+                  naExecution: naExecution!,
+                  attentionResolverPasses,
+                  phases,
+              })
+            : null;
+
+    const summariesResult = await (summariesCached ??
+        getWorkUnitQueueSummaries({
             orgId,
             workUnitId,
             preloadedQueueDefinition,
@@ -340,25 +364,35 @@ export async function loadWorkUnitOperationalBootstrap(params: {
 
     let attentionOutcome: AttentionBootstrapOutcome = {};
     if (attentionNeededForReveal) {
-        attentionOutcome = await loadWorkUnitBootstrapAttention({
-            supabase,
-            orgId,
-            departmentId,
-            departmentMetadata,
-            workUnitMetadata,
-            accessDim,
-            recordScopeImpossible,
-            recordScopeConstraints,
-            sharedBootstrap,
-            naExecution: naExecution!,
-            attentionResolverPasses,
-            phases,
-        });
-        phases.summaries_attention_parallel = true;
+        if (attentionEarlyP) {
+            attentionOutcome = await attentionEarlyP;
+            phases.summaries_attention_parallel = true;
+        } else {
+            attentionOutcome = await loadWorkUnitBootstrapAttention({
+                supabase,
+                orgId,
+                departmentId,
+                departmentMetadata,
+                workUnitMetadata,
+                accessDim,
+                recordScopeImpossible,
+                recordScopeConstraints,
+                sharedBootstrap,
+                naExecution: naExecution!,
+                attentionResolverPasses,
+                phases,
+            });
+            phases.summaries_attention_parallel = false;
+        }
     } else if (attentionEligible) {
+        if (attentionEarlyP) {
+            void attentionEarlyP.catch(() => {
+                /* started early for NA WU but not needed for this reveal — discard */
+            });
+        }
         phases.attention_ms = 0;
         phases.attention_deferred = true;
-        phases.summaries_attention_parallel = false;
+        phases.summaries_attention_parallel = Boolean(attentionEarlyP);
     } else {
         phases.attention_ms = 0;
         phases.summaries_attention_parallel = false;

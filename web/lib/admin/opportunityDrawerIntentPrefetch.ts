@@ -15,11 +15,19 @@ export type OpportunityDrawerIntentContext = {
 };
 
 /**
- * Intent-time prefetch (hover / mousedown / focus before click).
- * Warms bootstrap + drawer_primary (open gate) and surface=full (background enrich).
- * Header actions resolve on open (needs primary row for hints).
+ * Hover/focus intent — bootstrap + drawer_primary only.
+ * Full hydrate is deferred to pointer-down so hover does not compete with active lane DB work.
  */
 export function prefetchOpportunityDrawerOnRowIntent(
+    opportunityId: string,
+    workspaceContext?: OpportunityDrawerIntentContext | null,
+    _queuePreviewSeed?: OpportunityDrawerQueuePreviewSeed | null
+): void {
+    prefetchOpportunityDrawerPrimaryLaneOnRowIntent(opportunityId, workspaceContext, _queuePreviewSeed);
+}
+
+/** Bootstrap + drawer_primary — safe on hover/focus without full-hydrate cost. */
+export function prefetchOpportunityDrawerPrimaryLaneOnRowIntent(
     opportunityId: string,
     workspaceContext?: OpportunityDrawerIntentContext | null,
     _queuePreviewSeed?: OpportunityDrawerQueuePreviewSeed | null
@@ -47,7 +55,16 @@ export function prefetchOpportunityDrawerOnRowIntent(
         /* non-fatal — drawer open will reuse in-flight or retry */
     });
     prefetchOpportunityDrawerPrimary(id, init, workspaceContext ?? null, _queuePreviewSeed ?? null);
-    prefetchOpportunityDrawerFull(id, init);
+}
+
+/** Pointer-down intent — warm surface=full without blocking active queue lane work on hover. */
+export function prefetchOpportunityDrawerFullOnRowIntent(
+    opportunityId: string,
+    init?: RequestInit
+): void {
+    const id = opportunityId.trim();
+    if (!id || typeof window === "undefined") return;
+    prefetchOpportunityDrawerFull(id, init ?? workspaceDataFetchInit());
 }
 
 const VISIBLE_DRAWER_PREFETCH_CAP = 3;

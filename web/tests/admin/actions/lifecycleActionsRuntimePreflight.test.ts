@@ -52,6 +52,8 @@ type ChildRow = {
     person_id?: string | null;
     desired_program_type?: string | null;
     program_room_cohort_key?: string | null;
+    desired_schedule_type?: string | null;
+    desired_start_date?: string | null;
 };
 
 function waitlistDef() {
@@ -164,8 +166,8 @@ function buildSupabaseForLifecycle(input: {
                                     location_id: "loc-1",
                                     desired_program_type: c.desired_program_type ?? null,
                                     program_room_cohort_key: c.program_room_cohort_key ?? null,
-                                    desired_schedule_type: null,
-                                    desired_start_date: null,
+                                    desired_schedule_type: c.desired_schedule_type ?? null,
+                                    desired_start_date: c.desired_start_date ?? null,
                                     outcome_status_key: null,
                                 })),
                                 error: null,
@@ -258,6 +260,8 @@ describe("lifecycle actions runtime preflight", () => {
                     customer_member_id: "cm-1",
                     person_id: "person-1",
                     desired_program_type: "infant",
+                    desired_schedule_type: "full_time",
+                    desired_start_date: "2026-09-01",
                 },
             ],
         });
@@ -302,7 +306,7 @@ describe("lifecycle actions runtime preflight", () => {
         if (result.ok) return;
         expect(result.action_preflight?.action_key).toBe("record_tour_outcome");
         const outcomeBlock = result.completion_requirements?.blocking.find((v) => v.field_key === "outcome");
-        expect(outcomeBlock?.label).toBe("Tour outcome");
+        expect(outcomeBlock?.label).toBe("Tour Outcome");
         expect(executeRecordTourOutcomeAction).not.toHaveBeenCalled();
         expect(emitEvent).not.toHaveBeenCalled();
     });

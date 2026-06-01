@@ -1,7 +1,7 @@
 # Lifecycle Runtime & Configuration Alignment Sprint
 
 **Path:** `docs/sprints/06_2026/lifecycle_runtime_configuration_alignment_sprint.md`  
-**Status:** Planning sprint (May 2026) — **audit and backlog only; no implementation**  
+**Status:** In progress (May 2026) — Phase 1–6 implemented; Phase 7 manual walkthrough pending on pilot org  
 **Prior sprint:** Lifecycle Configuration & Requirement Engine — **CLOSED**
 
 **Doctrine (canonical):** Lead → Qualification → Tour → Waitlist → Enrollment → Enrolled
@@ -248,9 +248,50 @@
 
 ---
 
-## Phase 4 — P0 Runtime Alignment Backlog
+## Phase 1 — Implementation summary (shipped)
 
-**Scope:** Implementation backlog for the alignment sprint. **Do not implement in this planning pass.**
+| Item | Delivered |
+|------|-----------|
+| WL-ACT | `20260603100000_activate_move_to_waitlist_lifecycle.sql` — active definition, placements, placeholder retired |
+| WL-ALN | Preflight extended: **Desired schedule**, **Desired start date** on `move_to_waitlist` |
+| Tests | `lifecycleActionsRuntimePreflight`, `evaluateEffectiveRequirements` updated |
+
+## Phase 2 — Implementation summary (shipped)
+
+| Item | Delivered |
+|------|-----------|
+| ACT-CLN | `20260603110000_lifecycle_action_placement_alignment.sql` — approve gating, deprecated actions inactive |
+| Matrix | [`action_placement_alignment_matrix_v1.md`](./action_placement_alignment_matrix_v1.md) |
+
+## Phase 3 — Implementation summary (shipped)
+
+| Item | Delivered |
+|------|-----------|
+| NA buckets | `enrollmentNeedsAttentionBucketsSeed.ts` — lifecycle lenses; quote bucket removed |
+| Progression evaluator | `lifecycleProgressionRequirementsCatalog.ts` for stage missing labels |
+
+## Phase 4 — Implementation summary (shipped)
+
+| Item | Delivered |
+|------|-----------|
+| BOS | Existing `enrichOperationalRecommendationWithActionPreflight` uses unified evaluator (includes waitlist fields) |
+
+## Phase 5–6 — Implementation summary (shipped)
+
+| Item | Delivered |
+|------|-----------|
+| Settings | `LifecycleProgressionRequirementsSettingsPanel` on opportunity Layouts |
+| UX review | [`configuration_ux_review_v1.md`](./configuration_ux_review_v1.md) |
+
+## Phase 7
+
+See [`lifecycle_walkthrough_validation_v1.md`](./lifecycle_walkthrough_validation_v1.md).
+
+---
+
+## Phase 4 — P0 Runtime Alignment Backlog (historical planning)
+
+**Scope:** Original backlog from planning pass — items below marked done where shipped.
 
 Priority order matches sprint goal:
 
@@ -267,7 +308,7 @@ Priority order matches sprint goal:
 
 | ID | Work item | Acceptance | Depends on |
 |----|-----------|------------|------------|
-| WL-ACT-1 | Migration: `move_to_waitlist` `is_active = true` (global + enrollment org) | Definition resolves in `resolveActionsForContext` | — |
+| WL-ACT-1 | Migration: `move_to_waitlist` `is_active = true` (global + enrollment org) | Definition resolves in `resolveActionsForContext` | **Done** |
 | WL-ACT-2 | Seed org placements: header secondary on Qualification, Tour, Enrollment | Operator sees button in drawer header when status allows | WL-ACT-1 |
 | WL-ACT-3 | Verify handler path: status → `waitlisted`, `waitlist_date` stamp, placement candidate | E2E on pilot org | WL-ACT-1 |
 | WL-ACT-4 | Verify `ActionPreflightBlockedPanel` on failed execute | Same UX as approve_enrollment | Existing preflight |

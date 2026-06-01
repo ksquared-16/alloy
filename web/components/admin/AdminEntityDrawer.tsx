@@ -323,7 +323,7 @@ import {
 import { personDrawerOperatingSummaryVisible } from "@/lib/admin/person/personDrawerShellPolicy";
 import { openViewPersonFromOpportunity } from "@/lib/admin/drawer/openViewPersonFromOpportunity";
 import { entityDataMatchesDrawer } from "@/lib/admin/drawer/entityDataMatchesDrawer";
-import { isPersonDrawerSnapshotWarm } from "@/lib/admin/prefetchPersonDrawerSnapshot";
+import { fetchPersonDrawerEntityCoalesced, isPersonDrawerSnapshotWarm } from "@/lib/admin/prefetchPersonDrawerSnapshot";
 import { installPersonDrawerDevDirectOpen } from "@/lib/admin/drawer/personDrawerDevDirectOpen";
 import { prefetchLinkedPersonsFromOpportunityRecord } from "@/lib/admin/drawer/prefetchLinkedPersonsFromOpportunityRecord";
 import {
@@ -9235,30 +9235,19 @@ export default function AdminEntityDrawer() {
         }
         setLoading(true);
         setError(null);
-        const url = buildAdminEntityFetchUrl(fetchTargetType, fetchTargetId, drawer.jobRecordSurface);
-        if (!url) {
-            setLoading(false);
-            return;
-        }
         let cancelled = false;
-        fetch(url)
-            .then((res) => {
-                if (!res.ok) throw new Error(res.status === 404 ? "Not found" : "Failed to load");
-                return res.json();
-            })
+        void fetchPersonDrawerEntityCoalesced(fetchTargetId, { source: "click" })
             .then((json) => {
-                if (cancelled) return;
-                if (!entityDataMatchesDrawer(json as Record<string, unknown>, fetchTargetId, fetchTargetType)) {
+                if (cancelled || !json) return;
+                if (!entityDataMatchesDrawer(json, fetchTargetId, fetchTargetType)) {
                     if (process.env.NODE_ENV === "development") {
                         console.warn("[drawer-payload:ignore] response id mismatch", {
                             fetchTargetId,
-                            responseId: (json as { id?: unknown })?.id,
+                            responseId: json.id,
                         });
                     }
                     return;
                 }
-                // Mark context key as fetched before setting data so any re-render that
-                // finds readiness still false will not trigger another fetch.
                 personDrawerComposedFetchedRef.current = contextKey;
                 if (process.env.NODE_ENV === "development") {
                     console.log("[drawer-payload:apply]", {
@@ -9268,7 +9257,7 @@ export default function AdminEntityDrawer() {
                     });
                 }
                 setData(json);
-                putDrawerEntitySnapshot(fetchTargetType, fetchTargetId, json as Record<string, unknown>);
+                putDrawerEntitySnapshot(fetchTargetType, fetchTargetId, json);
             })
             .catch((e) => {
                 if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load");

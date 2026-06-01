@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { MessageSquare } from "lucide-react";
 
@@ -23,10 +22,12 @@ export default function InboxNavLink({
     active,
     tabStyle,
     buttonClassName,
+    onOpenModal,
 }: {
     active: boolean;
     tabStyle: (active: boolean) => CSSProperties;
     buttonClassName?: string;
+    onOpenModal: () => void;
 }) {
     const [unread, setUnread] = useState<number | null>(() => readInboxUnreadCountCache());
 
@@ -62,8 +63,9 @@ export default function InboxNavLink({
         badge > 0 ? `Inbox — ${badge} unread message${badge === 1 ? "" : "s"}` : "Inbox — conversations";
 
     return (
-        <Link
-            href="/adminV2/messages"
+        <button
+            type="button"
+            onClick={onOpenModal}
             className={buttonClassName ?? "inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-[15px] font-medium leading-none"}
             style={tabStyle(active)}
             title={title}
@@ -80,6 +82,6 @@ export default function InboxNavLink({
                 </span>
             ) : null}
             <span className="sr-only">{badge > 0 ? `${badge} unread` : "Open inbox"}</span>
-        </Link>
+        </button>
     );
 }

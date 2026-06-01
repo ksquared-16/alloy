@@ -9,6 +9,7 @@ import { palette, neutral, derived } from "@/styles/tokens/colors";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import MyTasksModal from "@/app/adminV2/components/MyTasksModal";
 import OperationalTasksNavBadge from "@/app/adminV2/components/OperationalTasksNavBadge";
+import InboxModal from "@/app/adminV2/components/InboxModal";
 import InboxNavLink from "@/app/adminV2/components/InboxNavLink";
 import QuickMessageModal, { type QuickMessageModalSeed } from "@/app/adminV2/components/QuickMessageModal";
 import {
@@ -103,6 +104,7 @@ export default function TopNavBar() {
   const [quickMessageOpen, setQuickMessageOpen] = useState(false);
   const [quickMessageSeed, setQuickMessageSeed] = useState<QuickMessageModalSeed | null>(null);
   const [tasksModalOpen, setTasksModalOpen] = useState(false);
+  const [inboxModalOpen, setInboxModalOpen] = useState(false);
 
   useEffect(() => {
     const onLaunch = (ev: Event) => {
@@ -150,6 +152,10 @@ export default function TopNavBar() {
     setTasksModalOpen(true);
   }, []);
 
+  const openInboxModal = useCallback(() => {
+    setInboxModalOpen(true);
+  }, []);
+
   const normalizedPath = useMemo(() => normalizeAdminPath(pathname), [pathname]);
   const isMessaging = normalizedPath === "/adminV2/messages";
 
@@ -185,9 +191,10 @@ export default function TopNavBar() {
             onOpenModal={openTasksModal}
           />
           <InboxNavLink
-            active={isMessaging}
+            active={isMessaging || inboxModalOpen}
             tabStyle={utilityBtnStyle}
             buttonClassName={HEADER_UTILITY_BTN}
+            onOpenModal={openInboxModal}
           />
         </div>
       </div>
@@ -206,6 +213,7 @@ export default function TopNavBar() {
         }}
       />
       <MyTasksModal open={tasksModalOpen} onClose={() => setTasksModalOpen(false)} />
+      <InboxModal open={inboxModalOpen} onClose={() => setInboxModalOpen(false)} />
     </header>
   );
 }

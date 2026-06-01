@@ -88,6 +88,28 @@ describe("evaluateEffectiveRequirements — move_to_waitlist", () => {
         );
     });
 
+    it("blocks when schedule or start date missing on child", () => {
+        const result = evaluateEffectiveRequirements({
+            entity_type: "opportunity",
+            entity_id: "opp-1",
+            action_key: "move_to_waitlist",
+            trigger: "action_execute",
+            record: oppRecord({
+                _inquiry_children: [
+                    {
+                        id: "ocm-1",
+                        desired_program_type: "infant",
+                        desired_schedule_type: null,
+                        desired_start_date: null,
+                    },
+                ],
+            }),
+        });
+        expect(result.ok).toBe(false);
+        expect(result.blocking.some((v) => v.label === "Desired Schedule")).toBe(true);
+        expect(result.blocking.some((v) => v.label === "Desired Start Date")).toBe(true);
+    });
+
     it("auto-populates waitlist_date instruction", () => {
         const auto = autoPopulateForLifecycleAction("move_to_waitlist", { opportunityId: "opp-1" });
         expect(auto[0]?.metadata_key).toBe("waitlist_date");

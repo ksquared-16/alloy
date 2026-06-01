@@ -24,6 +24,22 @@ export type CachedWorkspaceRoot = {
 
 export type WritableWorkspaceRootSnapshot = Omit<CachedWorkspaceRoot, "v" | "savedAtMs">;
 
+/**
+ * Minimal attention bucket shape stored in the dept session cache.
+ * Intentionally avoids importing the DeptAttentionBucket component type to keep this module
+ * infrastructure-only and free of page-level type coupling.
+ */
+export type CachedDeptAttentionBucket = {
+    key: string;
+    label: string;
+    description: string | null;
+    count: number;
+    reason_codes: string[];
+    order?: number;
+    priority?: number;
+    icon?: string | null;
+};
+
 export type CachedDepartmentPage = {
     v: typeof SCHEMA_V;
     savedAtMs: number;
@@ -31,6 +47,18 @@ export type CachedDepartmentPage = {
     workUnits: Array<{ id: string; name: string | null; key: string | null }>;
     workUnitSummaries: Record<string, { total: number; needs_attention: number | null }>;
     summariesComplete: boolean;
+    /**
+     * Attention buckets from the last bootstrap. Stored for immediate first-paint on warm
+     * navigation — avoids loading-gate while waiting for the operational bootstrap to re-fetch.
+     */
+    attentionBuckets?: CachedDeptAttentionBucket[] | null;
+    attentionPreviewTotal?: number | null;
+    /**
+     * KPI placement rows from the last bootstrap. Stored so `deptPlacementRows !== undefined`
+     * is satisfied immediately from cache, allowing the KPI strip to render without a network round-trip.
+     */
+    kpiPlacementRows?: unknown[] | null;
+    kpiScopeHasPlacements?: boolean;
 };
 
 export type CachedWorkUnitPage = {

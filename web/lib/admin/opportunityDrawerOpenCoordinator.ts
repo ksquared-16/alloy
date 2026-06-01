@@ -8,6 +8,7 @@ import type { OpportunityWorkspaceContext } from "@/contexts/AdminDrawerContext"
 import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
 import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { opportunityDrawerPrimaryContractReady } from "@/lib/admin/drawer/opportunityDrawerFirstPaintContract";
+import { putDrawerEntitySnapshot } from "@/lib/admin/drawerEntitySnapshotCache";
 import { opportunityDrawerComposedAboveFoldReady } from "@/lib/admin/drawer/drawerAboveFoldCoordinatedReveal";
 import { markOpportunityDrawerHydrateDone } from "@/lib/admin/opportunityDrawerHydrateGuards";
 import { fetchOpportunityDrawerFullEntity, isOpportunityDrawerFullWarm } from "@/lib/admin/opportunityDrawerFullPrefetch";
@@ -156,6 +157,24 @@ export async function loadOpportunityDrawerComposedOpen(
 
     const primaryP = (async () => {
         const t0 = typeof performance !== "undefined" ? performance.now() : 0;
+        const boot = await bootstrapP;
+        const bootEntity = boot.entity as Record<string, unknown> | null | undefined;
+        if (
+            bootEntity &&
+            typeof bootEntity === "object" &&
+            opportunityDrawerPrimaryContractReady(bootEntity, id)
+        ) {
+            const primaryFromBootstrap: Record<string, unknown> = {
+                ...bootEntity,
+                _record_surface:
+                    String(bootEntity._record_surface ?? "").trim() === "drawer_visible"
+                        ? "drawer_primary"
+                        : bootEntity._record_surface,
+            };
+            putDrawerEntitySnapshot("opportunities", id, primaryFromBootstrap);
+            primaryMs = Math.round((typeof performance !== "undefined" ? performance.now() : 0) - t0);
+            return primaryFromBootstrap;
+        }
         const entity = await fetchOpportunityDrawerPrimaryEntity(
             id,
             init,

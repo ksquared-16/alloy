@@ -616,8 +616,9 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
             onClick={openCreate}
             disabled={departments.length === 0}
             className="rounded-lg bg-alloy-pine px-4 py-2 text-sm font-medium text-white hover:bg-alloy-pine/90 disabled:opacity-50"
+            data-testid="work-units-add-button"
         >
-            Add work unit
+            Add Work Unit
         </button>
     ) : null;
 
@@ -625,14 +626,14 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
         <div>
             {adminV2Chrome ? (
                 <SettingsPageHeader
-                    title="Work units"
-                    subtitle="Operational queues or cohorts within a department. Queue definition is raw JSON for now."
+                    title="Work Units & Queues"
+                    subtitle="Pipeline lanes where staff work inquiries by lifecycle stage. Use the queue editor for day-to-day changes."
                     actions={addWuAction}
                 />
             ) : (
                 <AdminPageHeader
                     title="Work units"
-                    subtitle="Operational queues or cohorts within a department. Queue definition is raw JSON for now."
+                    subtitle="Operational queues or cohorts within a department."
                     actions={addWuAction}
                 />
             )}
@@ -664,7 +665,19 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
                 ) : error ? (
                     <p className="text-sm text-red-600">{error}</p>
                 ) : sortedForDisplay.length === 0 ? (
-                    <p className="text-sm text-alloy-forge/70">No work units yet.</p>
+                    <div className="space-y-3">
+                        <p className="text-sm text-alloy-forge/70">No work units yet.</p>
+                        {canMutate && departments.length > 0 ? (
+                            <button
+                                type="button"
+                                onClick={openCreate}
+                                className="rounded-lg bg-alloy-pine px-4 py-2 text-sm font-medium text-white hover:bg-alloy-pine/90"
+                                data-testid="work-units-add-button-empty"
+                            >
+                                Add Work Unit
+                            </button>
+                        ) : null}
+                    </div>
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm text-left border-collapse">
@@ -682,7 +695,14 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
                                 {sortedForDisplay.map((row) => (
                                     <tr key={row.id} className="border-b border-admin-border/60">
                                         <td className="py-2 pr-4 text-alloy-forge">{deptNameById.get(row.department_id) ?? row.department_id.slice(0, 8)}</td>
-                                        <td className="py-2 pr-4 font-medium text-alloy-forge">{row.name}</td>
+                                        <td className="py-2 pr-4 font-medium text-alloy-forge">
+                                            {row.name}
+                                            {adminV2Chrome && row.key === "enrollment_pipeline" ? (
+                                                <span className="mt-0.5 block text-[11px] font-normal text-alloy-pine/90">
+                                                    Enrollment lifecycle queues
+                                                </span>
+                                            ) : null}
+                                        </td>
                                         <td className="py-2 pr-4 font-mono text-xs">{row.key}</td>
                                         <td className="py-2 pr-4">{row.sort_order}</td>
                                         <td className="py-2 pr-4">{row.is_active ? "Yes" : "No"}</td>
@@ -710,9 +730,13 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
 
             {modalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-alloy-midnight/40 overflow-y-auto">
-                    <div className="bg-admin-surface-card border border-admin-border rounded-xl shadow-lg max-w-3xl w-full p-6 my-8 max-h-[min(92vh,900px)] overflow-y-auto">
-                        <h2 className="text-lg font-semibold text-alloy-forge">{modalId ? "Edit work unit" : "New work unit"}</h2>
-                        <div className="mt-4 space-y-3">
+                    <div className="bg-admin-surface-card border border-admin-border rounded-xl shadow-lg max-w-3xl w-full my-8 max-h-[min(92vh,900px)] flex flex-col">
+                        <div className="shrink-0 border-b border-admin-border px-6 py-4">
+                            <h2 className="text-lg font-semibold text-alloy-forge">
+                                {modalId ? "Edit work unit" : "New work unit"}
+                            </h2>
+                        </div>
+                        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4 space-y-3">
                             <label className="block text-sm">
                                 <span className="text-alloy-forge/80">Department</span>
                                 <select
@@ -761,15 +785,35 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
                                     onChange={(e) => setModalSortOrder(Number(e.target.value))}
                                 />
                             </label>
-                            <RuntimeMetadataReadOnlyPanel metadata={modalMetadata} entity="work_unit" isNewRow={!modalId} />
-                            <label className="block text-sm">
-                                <span className="text-alloy-forge/80">Queue definition (JSON)</span>
-                                <textarea
-                                    className="mt-1 w-full border border-admin-border rounded-md px-3 py-2 text-sm font-mono text-xs min-h-[120px]"
-                                    value={modalQueueJson}
-                                    onChange={(e) => setModalQueueJson(e.target.value)}
-                                />
-                            </label>
+                            {adminV2Chrome ? (
+                                <details className="rounded-lg border border-dashed border-admin-border/80 bg-alloy-stone/[0.04]">
+                                    <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-alloy-forge/70">
+                                        Advanced — technical metadata
+                                    </summary>
+                                    <div className="border-t border-admin-border/60 px-3 py-2">
+                                        <RuntimeMetadataReadOnlyPanel
+                                            metadata={modalMetadata}
+                                            entity="work_unit"
+                                            isNewRow={!modalId}
+                                        />
+                                    </div>
+                                </details>
+                            ) : (
+                                <RuntimeMetadataReadOnlyPanel metadata={modalMetadata} entity="work_unit" isNewRow={!modalId} />
+                            )}
+                            <details className="rounded-lg border border-admin-border/60 bg-white/50" data-testid="work-units-queue-json-advanced">
+                                <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-alloy-forge/80">
+                                    Advanced — queue definition (JSON)
+                                </summary>
+                                <label className="block px-3 pb-3 text-sm">
+                                    <span className="sr-only">Queue definition JSON</span>
+                                    <textarea
+                                        className="mt-1 w-full border border-admin-border rounded-md px-3 py-2 text-sm font-mono text-xs min-h-[120px]"
+                                        value={modalQueueJson}
+                                        onChange={(e) => setModalQueueJson(e.target.value)}
+                                    />
+                                </label>
+                            </details>
                             <div className="rounded-lg border border-admin-border/60 bg-white/70 px-3 py-2">
                                 <div className="flex items-center justify-between gap-2">
                                     <div className="text-[11px] font-semibold tracking-wide text-alloy-forge/55">
@@ -1037,7 +1081,6 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
                                 <span>Active</span>
                             </label>
                             {modalError ? <p className="text-sm text-red-600">{modalError}</p> : null}
-                        </div>
 
                         {modalId ? (
                             <div className="mt-6 border-t border-admin-border/70 pt-4">
@@ -1211,9 +1254,14 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
                                 ) : null}
                             </div>
                         ) : null}
+                        </div>
 
-                        <div className="mt-6 flex justify-end gap-2">
-                            <button type="button" className="px-4 py-2 text-sm border border-admin-border rounded-lg" onClick={() => setModalOpen(false)}>
+                        <div className="shrink-0 sticky bottom-0 border-t border-admin-border bg-admin-surface-card px-6 py-4 flex justify-end gap-2">
+                            <button
+                                type="button"
+                                className="px-4 py-2 text-sm border border-admin-border rounded-lg"
+                                onClick={() => setModalOpen(false)}
+                            >
                                 Cancel
                             </button>
                             <button
@@ -1221,6 +1269,7 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
                                 disabled={modalSaving || !canMutate}
                                 className="px-4 py-2 text-sm bg-alloy-pine text-white rounded-lg disabled:opacity-50"
                                 onClick={saveModal}
+                                data-testid="work-units-modal-save"
                             >
                                 {modalSaving ? "Saving…" : "Save"}
                             </button>

@@ -8,6 +8,7 @@ import {
     previewFromMessageRow,
     threadSortTimestamp,
 } from "@/lib/communications/inboxThreadsService";
+import { resolveInboxEntityDrawerTarget } from "@/lib/communications/inboxEntityDrawerTarget";
 import type { InboxThreadListItem } from "@/lib/communications/inboxThreadTypes";
 
 function thread(partial: Partial<InboxThreadListItem> & Pick<InboxThreadListItem, "id">): InboxThreadListItem {
@@ -48,6 +49,7 @@ describe("parseInboxFolder", () => {
 describe("parseInboxLimit", () => {
     it("defaults and caps limit", () => {
         expect(parseInboxLimit(null)).toBe(50);
+        expect(parseInboxLimit(null, 20)).toBe(20);
         expect(parseInboxLimit("10")).toBe(10);
         expect(parseInboxLimit(999)).toBe(100);
         expect(parseInboxLimit(0)).toBe(50);
@@ -132,5 +134,26 @@ describe("previewFromMessageRow", () => {
             body: "Hello",
             created_at: "2026-06-01T10:00:00.000Z",
         });
+    });
+});
+
+describe("resolveInboxEntityDrawerTarget", () => {
+    const oppId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+
+    it("maps supported entity types to drawer targets", () => {
+        expect(resolveInboxEntityDrawerTarget("opportunities", oppId)).toEqual({
+            drawerType: "opportunities",
+            entityId: oppId,
+        });
+        expect(resolveInboxEntityDrawerTarget("persons", oppId)).toEqual({
+            drawerType: "persons",
+            entityId: oppId,
+        });
+    });
+
+    it("returns null for invalid or unsupported entities", () => {
+        expect(resolveInboxEntityDrawerTarget("opportunities", "not-a-uuid")).toBeNull();
+        expect(resolveInboxEntityDrawerTarget("forms", oppId)).toBeNull();
+        expect(resolveInboxEntityDrawerTarget(null, oppId)).toBeNull();
     });
 });

@@ -279,7 +279,7 @@
 
 | Action | Runtime type | Intended placement | Coverage | Notes |
 |--------|--------------|---------------------|----------|-------|
-| `move_to_waitlist` | Execute Now | Header (qual/tour/enrollment) | **Missing** | Handler + preflight exist; **`is_active = false`** |
+| `move_to_waitlist` | Execute Now | Header secondary + overflow | **Exists** | Activated `20260603100000`; schedule/start preflight |
 | `remove_from_waitlist` | Execute Now | Header / queue | **Missing** | Catalog stub |
 | `contact_family` | Communication | Section | **Missing** | Use send_email/sms |
 | `schedule_tour` | Open Modal | Header | **Exists** | Re-engage path |
@@ -482,7 +482,7 @@
 | **Lead** | Exists | Exists | Partial | Partial | Partial | Exists | Partial |
 | **Qualification** | Exists | Partial | Partial | Partial | Partial | Exists | Partial |
 | **Tour** | Exists | Exists | Partial | Partial | Partial | Exists | Partial |
-| **Waitlist** | Exists | Exists | **Missing** | Partial | **Missing** | Exists | Partial |
+| **Waitlist** | Exists | Exists | **Partial** | Partial | Partial | Exists | Partial |
 | **Enrollment** | Exists | Exists | Partial | Partial | Partial | Exists | Partial |
 | **Enrolled** | Exists | Exists | Partial | Partial | Partial | Exists | Partial |
 

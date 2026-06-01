@@ -80,6 +80,33 @@ export function perfDeptLoad(args: {
     });
 }
 
+export function perfWorkUnitLoad(args: {
+    phase: string;
+    ms: number;
+    source: AdminV2PerfSource;
+    org_id?: string | null;
+    department_id?: string | null;
+    work_unit_id?: string | null;
+    queue_key?: string | null;
+    /** True when hydrated from session snapshot or in-memory cache before network completed */
+    client_cache_hit?: boolean;
+}): void {
+    emitAdminV2Perf("[perf.work_unit.load]", {
+        surface: "workspace_work_unit",
+        route: args.work_unit_id
+            ? `/adminV2/workspace/dept/${args.department_id ?? "[departmentId]"}/work-unit/${args.work_unit_id}`
+            : "/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]",
+        phase: args.phase,
+        total_ms: args.ms,
+        source: args.source,
+        org_id: args.org_id ?? undefined,
+        department_id: args.department_id ?? undefined,
+        work_unit_id: args.work_unit_id ?? undefined,
+        queue_key: args.queue_key ?? undefined,
+        client_cache_hit: args.client_cache_hit,
+    });
+}
+
 export function perfQueueRowsServer(args: AdminV2PerfCommon & Record<string, unknown>): void {
     emitAdminV2Perf("[perf.queue.rows]", {
         route: `/api/admin/queues/[workUnitId]/[queueKey]`,

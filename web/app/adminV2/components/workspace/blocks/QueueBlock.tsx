@@ -19,6 +19,7 @@ import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
 import { logAdminV2QueueRowClick } from "@/lib/debug/adminV2QueueRowClickDebug";
 import {
   prefetchOpportunityDrawerOnRowIntent,
+  prefetchOpportunityDrawerFullOnRowIntent,
   type OpportunityDrawerIntentContext,
 } from "@/lib/admin/opportunityDrawerIntentPrefetch";
 import { queueRowGrainActionPayload, queueRowGrainContextFromPreviewItem } from "@/lib/queues/queueRowGrainContext";
@@ -1294,7 +1295,12 @@ function WorkUnitQueueLane({
                 role="button"
                 tabIndex={0}
                 onMouseEnter={() => prefetchOpportunityQueueRowIntent(queue, actionEntityId, opportunityDrawerWorkspaceContext)}
-                onMouseDown={() => prefetchOpportunityQueueRowIntent(queue, actionEntityId, opportunityDrawerWorkspaceContext)}
+                onMouseDown={() => {
+                  prefetchOpportunityQueueRowIntent(queue, actionEntityId, opportunityDrawerWorkspaceContext);
+                  if (queue.queueEntityType === "opportunity") {
+                    prefetchOpportunityDrawerFullOnRowIntent(actionEntityId);
+                  }
+                }}
                 onFocus={() => prefetchOpportunityQueueRowIntent(queue, actionEntityId, opportunityDrawerWorkspaceContext)}
                 onClick={() => fireQueueRowOpenRecord(queue, item, onAction, "card")}
                 onKeyDown={(e) => {

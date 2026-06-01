@@ -1,63 +1,85 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { peekDrawerEntitySnapshot, putDrawerEntitySnapshot, __clearDrawerEntitySnapshotCacheForTests } from "@/lib/admin/drawerEntitySnapshotCache";
+
+const { dedupeAdminFetch } = vi.hoisted(() => ({
+    dedupeAdminFetch: vi.fn(),
+}));
+
+vi.mock("@/lib/workspace/workspaceAdminFetchDedupe", () => ({
+    dedupeAdminFetch,
+}));
+
 import {
     __clearPersonDrawerPrefetchInflightForTests,
+    fetchPersonDrawerEntityCoalesced,
     prefetchPersonDrawerSnapshot,
 } from "@/lib/admin/prefetchPersonDrawerSnapshot";
-import { peekDrawerEntitySnapshot, putDrawerEntitySnapshot, __clearDrawerEntitySnapshotCacheForTests } from "@/lib/admin/drawerEntitySnapshotCache";
 
 describe("prefetchPersonDrawerSnapshot", () => {
     afterEach(() => {
         __clearPersonDrawerPrefetchInflightForTests();
         __clearDrawerEntitySnapshotCacheForTests();
+        dedupeAdminFetch.mockReset();
         vi.unstubAllGlobals();
     });
 
     it("stores valid persons snapshot with matching id", async () => {
-        const fetchMock = vi.fn().mockResolvedValue({
+        dedupeAdminFetch.mockResolvedValue({
             ok: true,
             json: async () => ({ id: "p1", first_name: "Ada", last_name: "Lovelace", email: "ada@example.com" }),
         });
-        vi.stubGlobal("fetch", fetchMock);
 
         prefetchPersonDrawerSnapshot("p1", { source: "opportunity_drawer_idle" });
         await new Promise((r) => setTimeout(r, 0));
 
-        expect(fetchMock).toHaveBeenCalledWith("/api/admin/entity/persons/p1");
+        expect(dedupeAdminFetch).toHaveBeenCalledWith(
+            "/api/admin/entity/persons/p1",
+            expect.anything()
+        );
         const cached = peekDrawerEntitySnapshot("persons", "p1");
         expect(cached?.first_name).toBe("Ada");
     });
 
     it("dedupes repeated prefetches for the same person id", async () => {
-        const fetchMock = vi.fn().mockResolvedValue({
+        dedupeAdminFetch.mockResolvedValue({
             ok: true,
             json: async () => ({ id: "p1", first_name: "Ada" }),
         });
-        vi.stubGlobal("fetch", fetchMock);
 
         prefetchPersonDrawerSnapshot("p1");
         prefetchPersonDrawerSnapshot("p1");
         await new Promise((r) => setTimeout(r, 0));
 
-        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(dedupeAdminFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("fetchPersonDrawerEntityCoalesced joins in-flight prefetch", async () => {
+        dedupeAdminFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ id: "p1", first_name: "Coalesced" }),
+        });
+
+        prefetchPersonDrawerSnapshot("p1");
+        const result = await fetchPersonDrawerEntityCoalesced("p1");
+
+        expect(dedupeAdminFetch).toHaveBeenCalledTimes(1);
+        expect(result?.first_name).toBe("Coalesced");
     });
 
     it("skips network when snapshot is already warm", async () => {
         putDrawerEntitySnapshot("persons", "p1", { id: "p1", first_name: "Warm" });
-        const fetchMock = vi.fn();
-        vi.stubGlobal("fetch", fetchMock);
 
         prefetchPersonDrawerSnapshot("p1", { source: "hover" });
         await new Promise((r) => setTimeout(r, 0));
 
-        expect(fetchMock).not.toHaveBeenCalled();
+        expect(dedupeAdminFetch).not.toHaveBeenCalled();
     });
 
     it("does not cache person snapshot when response id mismatches", async () => {
-        const fetchMock = vi.fn().mockResolvedValue({
+        dedupeAdminFetch.mockResolvedValue({
             ok: true,
             json: async () => ({ id: "other", first_name: "Wrong" }),
         });
-        vi.stubGlobal("fetch", fetchMock);
 
         prefetchPersonDrawerSnapshot("p1");
         await new Promise((r) => setTimeout(r, 0));

@@ -408,6 +408,26 @@ export default function AdminV2WorkspaceDepartmentPage() {
         }
         setDeptWorkUnits(hit.workUnits);
         setDeptLoading(false);
+
+        // Restore summaries — lets deptThroughputBodyReady pass immediately for non-pipeline depts.
+        if (hit.summariesComplete && hit.workUnitSummaries) {
+            setDeptWorkUnitSummaries(hit.workUnitSummaries);
+            setDeptQueueSummariesLoading(false);
+        }
+
+        // Restore attention — prevents the attention panel from blocking the reveal gate.
+        if (Array.isArray(hit.attentionBuckets)) {
+            setDeptAttentionBuckets(hit.attentionBuckets as DeptAttentionBucket[]);
+            setDeptAttentionPreviewTotal(hit.attentionPreviewTotal ?? null);
+            setDeptAttentionBucketsLoading(false);
+        }
+
+        // Restore KPI placements — satisfies deptRevealKpiStripReady (placement_rows_defined).
+        if (hit.kpiPlacementRows !== undefined && hit.kpiPlacementRows !== null) {
+            setDeptPlacementRows(hit.kpiPlacementRows as WorkspaceKpiPlacementRow[]);
+            setDeptScopeHasPlacements(hit.kpiScopeHasPlacements ?? false);
+        }
+
         perfDeptLoad({
             phase: "shell_seed",
             ms: 0,
@@ -782,6 +802,28 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         if (!cancelled) {
                             setDeptPlacementRows(j.items ?? []);
                             setDeptScopeHasPlacements(j.scope_has_placements === true);
+                            // Persist KPI placements into session cache so the next warm navigation
+                            // can restore them immediately without waiting for the bootstrap.
+                            if (orgId) {
+                                const existing = readDepartmentPageCache(
+                                    orgId,
+                                    departmentId,
+                                    principalUserId,
+                                    accessScopeFingerprint
+                                );
+                                if (existing && existing.dept.id === departmentId) {
+                                    writeDepartmentPageCache(orgId, principalUserId, accessScopeFingerprint, {
+                                        dept: existing.dept,
+                                        workUnits: existing.workUnits,
+                                        workUnitSummaries: existing.workUnitSummaries,
+                                        summariesComplete: existing.summariesComplete,
+                                        attentionBuckets: existing.attentionBuckets ?? null,
+                                        attentionPreviewTotal: existing.attentionPreviewTotal ?? null,
+                                        kpiPlacementRows: j.items ?? null,
+                                        kpiScopeHasPlacements: j.scope_has_placements === true,
+                                    });
+                                }
+                            }
                         }
                     }
                 } catch {
@@ -969,6 +1011,16 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                 workUnits: wuCommit,
                                 workUnitSummaries: kpiSummaries,
                                 summariesComplete: true,
+                                // Persist attention for warm-navigation reveal without blocking on bootstrap.
+                                attentionBuckets: Array.isArray(b.attention?.needs_attention_buckets)
+                                    ? b.attention!.needs_attention_buckets
+                                    : null,
+                                attentionPreviewTotal: typeof b.attention?.total === "number"
+                                    ? b.attention!.total
+                                    : null,
+                                // Persist KPI placements so deptRevealKpiStripReady passes from cache.
+                                kpiPlacementRows: b.kpi_placements?.items ?? null,
+                                kpiScopeHasPlacements: b.kpi_placements?.scope_has_placements ?? false,
                             });
                         }
                         perfDeptLoad({

@@ -95,6 +95,7 @@ import {
     logAdminV2DuplicateFetchSuppressed,
     logWorkUnitBootstrapBreakdown,
 } from "@/lib/perf/adminV2BootstrapBreakdown";
+import { perfWorkUnitLoad } from "@/lib/perf/adminV2PerfLog";
 import { peelBootstrapServerPerf } from "@/lib/workspace/bootstrapServerPerfEnvelope";
 import {
     markWorkUnitAboveFoldCoordinated,
@@ -960,6 +961,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
         setWorkUnit(pageCacheHitEarly.workUnit as WorkUnitRow);
         setError(null);
         setLoading(false);
+        perfWorkUnitLoad({
+            phase: "shell_seed",
+            ms: 0,
+            source: "cache",
+            department_id: departmentId,
+            work_unit_id: workUnitId,
+            client_cache_hit: true,
+        });
 
         if (warmLaneRetain && routeSelection) {
             const pillKey = workUnitActivePillKeyFromSelection(routeSelection);
@@ -991,6 +1000,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     pill_key: pillKey,
                     attention_bucket_key: abSnap || undefined,
                     age_ms: null,
+                });
+                perfWorkUnitLoad({
+                    phase: "shell_seed_rows",
+                    ms: 0,
+                    source: "cache",
+                    department_id: departmentId,
+                    work_unit_id: workUnitId,
+                    queue_key: pillKey,
+                    client_cache_hit: true,
                 });
             } else {
                 setQueueItems((prev) => {
@@ -2360,10 +2378,24 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 );
                                 primaryLaneRowsSettledOnceRef.current = true;
                                 primaryLaneHydratedInline = true;
-                                void fetchQueueItemsRef.current(workUnitId, pillKey, qs, {
-                                    force: true,
-                                    ...(primaryAb ? { attentionBucketOverride: primaryAb } : {}),
-                                });
+                                if (inlineIncomplete) {
+                                    void fetchQueueItemsRef.current(workUnitId, pillKey, qs, {
+                                        force: true,
+                                        ...(primaryAb ? { attentionBucketOverride: primaryAb } : {}),
+                                    });
+                                } else {
+                                    // Bootstrap inlined queue_reveal rows are complete — defer queue_list
+                                    // enrichment until idle so the active lane is not competing with a duplicate fetch.
+                                    scheduleAdminV2BackgroundWork(
+                                        () => {
+                                            void fetchQueueItemsRef.current(workUnitId, pillKey, qs, {
+                                                quietStaleRefresh: true,
+                                                ...(primaryAb ? { attentionBucketOverride: primaryAb } : {}),
+                                            });
+                                        },
+                                        { idleTimeoutMs: 1500, fallbackMs: 250 }
+                                    );
+                                }
                                 if (typeof window !== "undefined" && typeof performance !== "undefined") {
                                     const laneAt = performance.now();
                                     alloyPerfSet("work_unit_primary_lane_ready", laneAt);
@@ -2871,11 +2903,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
         if (!workUnitId || !departmentId || loading || !workUnit) return;
         if (!primaryLaneRowsSettledOnceRef.current) return;
         if (wuLanePreviewBundleDoneRef.current) return;
+        if (queueItemsLoading) return;
         return scheduleAdminV2BackgroundWork(
             () => {
                 void warmWorkUnitLanePreviewCache();
             },
-            { idleTimeoutMs: 1200, fallbackMs: 80 }
+            { idleTimeoutMs: 1800, fallbackMs: 120 }
         );
     }, [
         workUnitId,
@@ -2885,6 +2918,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         warmWorkUnitLanePreviewCache,
         wuQueueLaneAuthorityReady,
         queueSummaries,
+        queueItemsLoading,
     ]);
 
     /** Chip count context for atomic above-fold model (was inline queuePicker). */
@@ -4683,7 +4717,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
         if (!workUnitPageContentReady) return;
         markWorkUnitLaneShellChromeReal({ departmentId, workUnitId });
         markRouteBootstrapReturned("work_unit", { departmentId, workUnitId });
-    }, [workUnitPageContentReady, departmentId, workUnitId]);
+        if (typeof performance !== "undefined" && typeof window !== "undefined") {
+            const navStart = alloyPerfGet("work_unit_navigation_start") ?? alloyPerfGet("work_unit_start");
+            perfWorkUnitLoad({
+                phase: "shell_rows_ready",
+                ms: navStart != null ? Math.round(performance.now() - Number(navStart)) : 0,
+                source: "network",
+                department_id: departmentId,
+                work_unit_id: workUnitId,
+                queue_key: selectedQueueKey,
+            });
+        }
+    }, [workUnitPageContentReady, departmentId, workUnitId, selectedQueueKey]);
 
     useEffect(() => {
         markWorkUnitRevealGatePhases(workUnitRevealGate, { departmentId, workUnitId });
@@ -4694,7 +4739,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
         markWorkUnitLaneHeaderChipsReal({ departmentId, workUnitId });
         markWorkUnitAboveFoldCoordinated({ departmentId, workUnitId });
         markRouteFirstAboveFoldStable("work_unit", { departmentId, workUnitId });
-    }, [workUnitAboveFoldPageReady, departmentId, workUnitId]);
+        if (typeof performance !== "undefined" && typeof window !== "undefined") {
+            const navStart = alloyPerfGet("work_unit_navigation_start") ?? alloyPerfGet("work_unit_start");
+            perfWorkUnitLoad({
+                phase: "above_fold_ready",
+                ms: navStart != null ? Math.round(performance.now() - Number(navStart)) : 0,
+                source: "network",
+                department_id: departmentId,
+                work_unit_id: workUnitId,
+                queue_key: selectedQueueKey,
+            });
+        }
+    }, [workUnitAboveFoldPageReady, departmentId, workUnitId, selectedQueueKey]);
 
     useEffect(() => {
         if (!workUnitAboveFoldPageReady || !workUnitId) return;

@@ -1,3 +1,4 @@
+import LifecycleSettingsCrossLinkBanner from "@/components/adminV2/settings/LifecycleSettingsCrossLinkBanner";
 import LayoutsSettingsHubClient from "./LayoutsSettingsHubClient";
 import { SETTINGS_LAYOUTS_SUBTITLE } from "@/lib/adminV2/settingsPageSubtitles";
 
@@ -13,6 +14,7 @@ export default async function AdminV2SettingsLayoutsPage({ searchParams }: PageP
                 <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">Record layouts</h1>
                 <p className="max-w-2xl text-sm text-alloy-midnight/60">{SETTINGS_LAYOUTS_SUBTITLE}</p>
             </header>
+            <LifecycleSettingsCrossLinkBanner variant="layouts" />
             <LayoutsSettingsHubClient initialEntity={sp.entity} />
         </div>
     );

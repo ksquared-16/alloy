@@ -13,3 +13,6 @@ export const SETTINGS_FIELD_SECTIONS_SUBTITLE = "Organize fields into reusable c
 
 export const SETTINGS_ACTIONS_SUBTITLE =
     "Add buttons to queue rows and record drawers — message families, update status, tours, and BOS assist.";
+
+export const SETTINGS_LIFECYCLE_SUBTITLE =
+    "Configure stages, required information, and progression rules for enrollment.";

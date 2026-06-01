@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import LifecycleSettingsCrossLinkBanner from "@/components/adminV2/settings/LifecycleSettingsCrossLinkBanner";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import type { NeedsAttentionBucketConfig } from "@/lib/opportunities/needsAttentionBuckets";
 import {
@@ -351,6 +352,8 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                     Work-unit metadata still overrides at runtime.
                 </p>
             </div>
+
+            <LifecycleSettingsCrossLinkBanner variant="attention" />
 
             {error ? (
                 <div className="rounded-lg border border-alloy-ember/40 bg-alloy-ember/10 px-3 py-2 text-sm text-alloy-ember">{error}</div>

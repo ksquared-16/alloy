@@ -284,7 +284,7 @@ describe("approve_enrollment runtime preflight (real evaluator)", () => {
         expect(result.ok).toBe(false);
         if (result.ok) return;
         const start = result.completion_requirements?.blocking.find((v) => v.field_key === "desired_start_date");
-        expect(start?.label).toBe("Start date");
+        expect(start?.label).toBe("Enrollment Start Date");
         expect(start?.missing_reason).toContain("Start date");
         expect(emitEvent).not.toHaveBeenCalled();
     });

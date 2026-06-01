@@ -9,6 +9,9 @@ import { PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS } from "@/lib/admin/person/pe
 import { PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS } from "@/lib/admin/person/personDrawerParentChrome";
 import { putDrawerEntitySnapshot, peekDrawerEntitySnapshot } from "@/lib/admin/drawerEntitySnapshotCache";
 
+import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+
 export type PersonPrefetchSource =
     | "opportunity_drawer_idle"
     | "person_drawer_idle"
@@ -61,7 +64,10 @@ export function prefetchPersonDrawerSnapshot(
 
     const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
 
-    const p = fetch(`/api/admin/entity/persons/${encodeURIComponent(id)}`)
+    const url = `/api/admin/entity/persons/${encodeURIComponent(id)}`;
+    const init = workspaceDataFetchInit();
+
+    const p = dedupeAdminFetch(url, init)
         .then(async (res) => {
             if (!res.ok) return;
             const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
@@ -82,6 +88,53 @@ export function prefetchPersonDrawerSnapshot(
         });
 
     inflight.set(id, p);
+}
+
+/** Coalesced entity GET — joins prefetch inflight and dedupeAdminFetch for drawer open + composed fetch. */
+export async function fetchPersonDrawerEntityCoalesced(
+    personId: string,
+    opts?: { source?: PersonPrefetchSource; openSeed?: PersonDrawerOpenSeed }
+): Promise<Record<string, unknown> | null> {
+    const id = personId.trim();
+    if (!id) return null;
+
+    const cached = peekDrawerEntitySnapshot("persons", id);
+    if (cached && entityDataMatchesDrawer(cached, id, "persons")) {
+        return stampPrefetchOpenSeed(cached, opts?.openSeed);
+    }
+
+    const existingInflight = inflight.get(id);
+    if (existingInflight) {
+        await existingInflight.catch(() => {});
+        const next = peekDrawerEntitySnapshot("persons", id);
+        if (next && entityDataMatchesDrawer(next, id, "persons")) {
+            return stampPrefetchOpenSeed(next, opts?.openSeed);
+        }
+    }
+
+    const url = `/api/admin/entity/persons/${encodeURIComponent(id)}`;
+    const init = workspaceDataFetchInit();
+    const fetchP = dedupeAdminFetch(url, init)
+        .then(async (res) => {
+            if (!res.ok) return;
+            const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+            if (json && typeof json === "object" && entityDataMatchesDrawer(json, id, "persons")) {
+                putDrawerEntitySnapshot("persons", id, stampPrefetchOpenSeed(json, opts?.openSeed));
+            }
+        })
+        .catch(() => {})
+        .finally(() => {
+            inflight.delete(id);
+        });
+
+    inflight.set(id, fetchP);
+    await fetchP;
+
+    const resolved = peekDrawerEntitySnapshot("persons", id);
+    if (resolved && entityDataMatchesDrawer(resolved, id, "persons")) {
+        return stampPrefetchOpenSeed(resolved, opts?.openSeed);
+    }
+    return null;
 }
 
 /** @internal test helper */

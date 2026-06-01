@@ -65,7 +65,7 @@ describe("opportunity drawer primary-gated composed open", () => {
         expect(
             opportunityDrawerComposedRevealReady({
                 ...base,
-                primaryEntity: { id: "o1", _record_surface: "drawer_visible" },
+                primaryEntity: { id: "o1", _record_surface: "drawer_visible", _customer_name: "Test" },
             })
         ).toBe(false);
         expect(
@@ -92,11 +92,19 @@ describe("opportunity drawer primary-gated composed open", () => {
         expect(perf).toContain("post_reveal_enrich_end");
     });
 
-    it("intent prefetch warms bootstrap, primary, and background full", () => {
+    it("intent prefetch warms bootstrap + primary on hover; full on pointer-down helper", () => {
         const intent = read("lib/admin/opportunityDrawerIntentPrefetch.ts");
-        expect(intent).toContain("prefetchOpportunityDrawerFull");
+        expect(intent).toContain("prefetchOpportunityDrawerFullOnRowIntent");
         expect(intent).toContain("prefetchOpportunityDrawerPrimary");
-        expect(intent).toMatch(/background enrich/);
+        expect(intent).toContain("prefetchOpportunityDrawerFull");
+        expect(intent).toContain("pointer-down");
+    });
+
+    it("open coordinator reuses bootstrap entity as drawer_primary when contract-ready", () => {
+        const lib = read("lib/admin/opportunityDrawerOpenCoordinator.ts");
+        expect(lib).toContain("opportunityDrawerPrimaryContractReady(bootEntity, id)");
+        expect(lib).toContain("drawer_visible");
+        expect(lib).toContain("putDrawerEntitySnapshot");
     });
 
     it("AdminEntityDrawer applies composed preload and schedules background full", () => {

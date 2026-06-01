@@ -222,6 +222,23 @@ export async function evaluateOpportunityActionPreflight(
         input.orgId,
         input.opportunityId
     );
+    if (record) {
+        const departmentId =
+            input.departmentId ??
+            (typeof record.department_id === "string" ? record.department_id : null);
+        if (departmentId) {
+            const { data: dept } = await supabase
+                .from("departments")
+                .select("metadata")
+                .eq("id", departmentId)
+                .eq("org_id", input.orgId)
+                .maybeSingle();
+            const md = (dept as { metadata?: unknown } | null)?.metadata;
+            if (md && typeof md === "object" && !Array.isArray(md)) {
+                record._department_metadata = md as Record<string, unknown>;
+            }
+        }
+    }
     if (!record) {
         return buildEffectiveRequirementsResult({
             blocking: [

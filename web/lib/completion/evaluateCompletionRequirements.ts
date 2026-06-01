@@ -192,9 +192,16 @@ function extractRelatedFromRecord(record: Record<string, unknown>) {
             ? String((adultLinksRaw[0] as { customer_id?: string }).customer_id ?? "").trim() || null
             : null);
 
+    const deptMetaRaw = record._department_metadata;
+    const department_metadata =
+        deptMetaRaw !== null && typeof deptMetaRaw === "object" && !Array.isArray(deptMetaRaw)
+            ? (deptMetaRaw as Record<string, unknown>)
+            : undefined;
+
     return {
         customer_id,
         inquiry_children,
+        department_metadata,
         customer_persons,
         customer_members,
         person_relationships,

@@ -44,7 +44,7 @@ describe("prefetchOpportunityDrawerOnRowIntent", () => {
         prefetchOpportunityDrawerFull.mockClear();
     });
 
-    it("prefetches bootstrap + drawer_primary + full in parallel without comms", async () => {
+    it("prefetches bootstrap + drawer_primary on hover without full hydrate", async () => {
         const { prefetchOpportunityDrawerOnRowIntent } = await import(
             "@/lib/admin/opportunityDrawerIntentPrefetch"
         );
@@ -55,7 +55,20 @@ describe("prefetchOpportunityDrawerOnRowIntent", () => {
             null,
             expect.anything()
         );
-        expect(prefetchOpportunityDrawerPrimary).toHaveBeenCalledWith("opp-abc", expect.anything(), null);
+        expect(prefetchOpportunityDrawerPrimary).toHaveBeenCalledWith(
+            "opp-abc",
+            expect.anything(),
+            null,
+            null
+        );
+        expect(prefetchOpportunityDrawerFull).not.toHaveBeenCalled();
+    });
+
+    it("prefetchOpportunityDrawerFullOnRowIntent warms surface=full on pointer-down", async () => {
+        const { prefetchOpportunityDrawerFullOnRowIntent } = await import(
+            "@/lib/admin/opportunityDrawerIntentPrefetch"
+        );
+        prefetchOpportunityDrawerFullOnRowIntent("opp-abc");
         expect(prefetchOpportunityDrawerFull).toHaveBeenCalledWith("opp-abc", expect.anything());
     });
 
