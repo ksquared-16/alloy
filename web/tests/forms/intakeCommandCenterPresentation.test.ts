@@ -44,6 +44,7 @@ describe("intakeCommandCenterPresentation OI-1", () => {
 
         expect(snapshot.kpis.find((k) => k.id === "needs-action")?.value).toBe(3);
         expect(snapshot.kpis.find((k) => k.id === "waiting-on")?.value).toBe(2);
+        expect(snapshot.kpis.find((k) => k.id === "forms")?.value).toBe(2);
         expect(snapshot.actionQueue.length).toBeGreaterThan(0);
         expect(snapshot.actionQueue[0]?.ctaLabel).toMatch(/Review/);
         expect(snapshot.primaryCta?.label).toBe("Review next packet");

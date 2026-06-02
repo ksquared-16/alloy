@@ -1,10 +1,15 @@
 import React from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+
+vi.mock("@/contexts/AdminDrawerContext", () => ({
+    useAdminDrawer: () => ({ openDrawer: vi.fn() }),
+}));
+
 import { IntakeWorkspaceHubView } from "@/components/forms/workspace/IntakeWorkspaceHubView";
 
 describe("IntakeWorkspaceHubView FD-1 workload filters", () => {
-    it("renders interactive filter strip and inline panel", () => {
+    it("renders KPI card navigation and inline panel", () => {
         const html = renderToStaticMarkup(
             <IntakeWorkspaceHubView
                 viewerTz="UTC"
@@ -32,11 +37,16 @@ describe("IntakeWorkspaceHubView FD-1 workload filters", () => {
         );
 
         expect(html).toContain('data-testid="intake-workspace-command-center"');
-        expect(html).toContain('data-testid="intake-workload-filters"');
-        expect(html).toContain('data-testid="intake-filter-needs_review"');
-        expect(html).toContain("Needs review");
+        expect(html).toContain('data-testid="intake-command-center-kpis"');
+        expect(html).toContain('data-testid="intake-kpi-needs-action"');
+        expect(html).toContain("Needs Action");
+        expect(html).not.toContain('data-testid="intake-workload-filters"');
+        expect(html).not.toContain('data-testid="intake-command-orientation"');
+        expect(html).not.toContain("need your attention");
+        expect(html).not.toContain("Fix next linkage");
         expect(html).not.toContain("Action required");
         expect(html).not.toContain('data-testid="intake-action-queue"');
-        expect(html).toContain('data-testid="intake-filter-panel-needs_review"');
+        expect(html).toContain('data-testid="intake-active-filter-needs_action"');
+        expect(html).toContain('data-testid="intake-filter-panel-needs_action"');
     });
 });

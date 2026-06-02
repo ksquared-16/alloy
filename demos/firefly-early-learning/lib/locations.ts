@@ -17,7 +17,7 @@ export const campuses: Campus[] = [
     phone: "(555) 010-1000",
     embedUrl:
       "https://staging.workwithalloy.com/forms/embed/Q6o4x1TadVU-rUFiJvk8ODKWZog89m5hZLGpiUh0l-k",
-    embedTitle: "New Enrollment Lead — West Campus",
+    embedTitle: "Contact Us — West Campus",
   },
   {
     slug: "north-campus",
@@ -27,7 +27,7 @@ export const campuses: Campus[] = [
     phone: "(555) 010-2000",
     embedUrl:
       "https://staging.workwithalloy.com/forms/embed/V4FSiX0FbNVEriy6NEyzs7UkJ-hRJRDM7vm2lr0f51w",
-    embedTitle: "New Enrollment Lead — North Campus",
+    embedTitle: "Contact Us — North Campus",
   },
   {
     slug: "south-campus",
@@ -37,7 +37,7 @@ export const campuses: Campus[] = [
     phone: "(555) 010-3000",
     embedUrl:
       "https://staging.workwithalloy.com/forms/embed/XzvDxYD1CONv9w8MbKDkQDiXjojjndoUe_DVggVhVwY",
-    embedTitle: "New Enrollment Lead — South Campus",
+    embedTitle: "Contact Us — South Campus",
   },
 ];
 

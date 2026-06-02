@@ -19,12 +19,32 @@ import {
 } from "@/lib/forms/submissionInboxPresentation";
 
 export type IntakeWorkspaceFilterKey =
+    | "needs_action"
     | "needs_review"
     | "needs_linking"
     | "recent"
     | "waiting"
     | "forms"
     | "packets";
+
+/** KPI card id → workspace filter (intake command center navigation). */
+export const INTAKE_KPI_ID_TO_FILTER: Record<string, IntakeWorkspaceFilterKey> = {
+    "needs-action": "needs_action",
+    "needs-review": "needs_review",
+    "needs-linking": "needs_linking",
+    "waiting-on": "waiting",
+    healthy: "recent",
+    forms: "forms",
+};
+
+export const INTAKE_FILTER_TO_KPI_ID: Partial<Record<IntakeWorkspaceFilterKey, string>> = {
+    needs_action: "needs-action",
+    needs_review: "needs-review",
+    needs_linking: "needs-linking",
+    waiting: "waiting-on",
+    recent: "healthy",
+    forms: "forms",
+};
 
 export const INTAKE_WORKSPACE_FILTERS: {
     id: IntakeWorkspaceFilterKey;
@@ -112,6 +132,11 @@ export function intakeCaseMatchesWorkspaceFilter(
 ): boolean {
     const { status_bucket, review_state } = intakeCase;
     switch (filter) {
+        case "needs_action":
+            return (
+                intakeCaseMatchesWorkspaceFilter(intakeCase, "needs_review") ||
+                intakeCaseMatchesWorkspaceFilter(intakeCase, "needs_linking")
+            );
         case "needs_review":
             return (
                 status_bucket === "review_required" ||
@@ -200,7 +225,7 @@ function caseFilterItem(
         cta: intakeCase.opportunity_id ? "Continue enrollment" : intakeCase.recommended_next_action,
         submission: primarySubmission,
         sortKey: intakeCase.sort_key,
-        quickReview: filter === "needs_review" || filter === "needs_linking" || filter === "recent",
+        quickReview: filter === "needs_action" || filter === "needs_review" || filter === "needs_linking" || filter === "recent",
         caseKey: intakeCase.case_key,
         submissionCount: intakeCase.submission_count,
         latestActivityAt: intakeCase.latest_activity_at,
@@ -270,6 +295,15 @@ function coveredPacketSessionIds(cases: IntakeCasePresentationRow[]): Set<string
     return ids;
 }
 
+function finalizeIntakeFilterCounts(
+    counts: Omit<Record<IntakeWorkspaceFilterKey, number>, "needs_action">
+): Record<IntakeWorkspaceFilterKey, number> {
+    return {
+        needs_action: counts.needs_review + counts.needs_linking,
+        ...counts,
+    };
+}
+
 export function countIntakeWorkspaceFilters(params: {
     submissions: SubmissionInboxRow[];
     sessions: IntakeCommandCenterSessionRow[];
@@ -292,14 +326,14 @@ export function countIntakeWorkspaceFilters(params: {
         (session) => session.status === "in_progress" && !coveredSessions.has(session.id)
     );
 
-    return {
+    return finalizeIntakeFilterCounts({
         needs_review: filterIntakeCases(cases, "needs_review").length + reviewSessions.length,
         needs_linking: filterIntakeCases(cases, "needs_linking").length,
         recent: filterIntakeCases(cases, "recent").length,
         waiting: filterIntakeCases(cases, "waiting").length + inProgressSessions.length,
         forms: params.forms.length,
         packets: params.packets.length,
-    };
+    });
 }
 
 /** Submission lane counts — preserved for diagnostics (pre-case aggregation). */
@@ -338,6 +372,17 @@ export function buildIntakeWorkspaceFilterPanel(
     const items: IntakeWorkspaceFilterItem[] = [];
 
     switch (filter) {
+        case "needs_action": {
+            const reviewPanel = buildIntakeWorkspaceFilterPanel("needs_review", params);
+            const linkingPanel = buildIntakeWorkspaceFilterPanel("needs_linking", params);
+            return {
+                filter,
+                title: "Needs action",
+                lead: "Intake cases that need review, linkage, or an operator decision.",
+                items: sortItems([...reviewPanel.items, ...linkingPanel.items]),
+                empty: "Nothing needs action right now.",
+            };
+        }
         case "needs_review": {
             for (const intakeCase of filterIntakeCases(cases, "needs_review")) {
                 items.push(caseFilterItem(intakeCase, byId, params.formsById, filter));
@@ -373,10 +418,10 @@ export function buildIntakeWorkspaceFilterPanel(
             }
             return {
                 filter,
-                title: "Recent intake",
-                lead: "Recently operationalized intake cases — generate documents or continue workflows.",
+                title: "Ready / healthy",
+                lead: "Recently operationalized intake — continue enrollment workflows or monitor published forms.",
                 items: sortItems(items),
-                empty: "No recently operationalized intake cases.",
+                empty: "No ready intake cases yet.",
             };
         }
         case "waiting": {
@@ -438,9 +483,9 @@ export function buildIntakeWorkspaceFilterPanel(
 }
 
 export function defaultIntakeWorkspaceFilter(counts: Record<IntakeWorkspaceFilterKey, number>): IntakeWorkspaceFilterKey {
+    if (counts.needs_action > 0) return "needs_action";
     if (counts.needs_review > 0) return "needs_review";
     if (counts.needs_linking > 0) return "needs_linking";
-    if (counts.recent > 0) return "recent";
     if (counts.waiting > 0) return "waiting";
-    return "forms";
+    return "recent";
 }

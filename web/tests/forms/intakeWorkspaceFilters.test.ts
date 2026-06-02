@@ -40,9 +40,8 @@ describe("intakeWorkspaceFilters IC-3", () => {
 
         expect(counts.needs_review).toBeGreaterThanOrEqual(2);
         expect(counts.needs_linking).toBeGreaterThanOrEqual(1);
+        expect(counts.needs_action).toBe(counts.needs_review + counts.needs_linking);
         expect(counts.waiting).toBe(1);
-        expect(counts.forms).toBe(2);
-        expect(counts.packets).toBe(1);
     });
 
     it("preserves submission lane counts for diagnostics", () => {
@@ -54,9 +53,10 @@ describe("intakeWorkspaceFilters IC-3", () => {
         expect(lanes.needsLinking).toBe(1);
     });
 
-    it("defaults to needs_review when review count is positive", () => {
+    it("defaults to needs_action when review or linking count is positive", () => {
         expect(
             defaultIntakeWorkspaceFilter({
+                needs_action: 2,
                 needs_review: 2,
                 needs_linking: 0,
                 recent: 3,
@@ -64,12 +64,13 @@ describe("intakeWorkspaceFilters IC-3", () => {
                 forms: 1,
                 packets: 0,
             })
-        ).toBe("needs_review");
+        ).toBe("needs_action");
     });
 
-    it("defaults to recent when only recently submitted intake exists", () => {
+    it("defaults to recent when workload is clear", () => {
         expect(
             defaultIntakeWorkspaceFilter({
+                needs_action: 0,
                 needs_review: 0,
                 needs_linking: 0,
                 recent: 2,
@@ -145,9 +146,9 @@ describe("intakeWorkspaceFilters IC-3", () => {
             formsById: { [FORM]: "Medication demo" },
         });
 
-        expect(panel.title).toBe("Recent intake");
+        expect(panel.title).toBe("Ready / healthy");
         expect(panel.items[0]?.isCaseRow).toBe(true);
-        expect(panel.items[0]?.meta).toContain("Attached to existing family");
+        expect(panel.items[0]?.meta).toContain("Existing family");
         expect(panel.items[0]?.operatorAction).toBe("Continue enrollment");
         expect(panel.items[0]?.quickReview).toBe(true);
     });

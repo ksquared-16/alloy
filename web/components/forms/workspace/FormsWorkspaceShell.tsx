@@ -29,11 +29,11 @@ function FormsLocationContextNote() {
     const selectedLabel =
         selectedId && bootstrap?.sites ? bootstrap.sites.find((s) => s.id === selectedId)?.label : null;
 
+    if (!selectedLabel) return null;
+
     return (
         <p className={clsx("mt-1", opMetadata)} data-testid="forms-location-context-note">
-            {selectedLabel ?
-                <>Working in context of · {selectedLabel}</>
-            :   <>Org-wide forms — use the location filter in the header to focus on one campus</>}
+            Working in context of · {selectedLabel}
         </p>
     );
 }

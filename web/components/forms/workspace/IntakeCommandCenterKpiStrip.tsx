@@ -14,36 +14,47 @@ const TONE_CLASS: Record<IntakeCommandCenterKpi["tone"], string> = {
 
 type Props = {
     kpis: IntakeCommandCenterKpi[];
+    selectedKpiId?: string | null;
+    onSelectKpi?: (kpiId: string) => void;
 };
 
-/** Compact KPI strip for intake command center (OI-1). */
-export function IntakeCommandCenterKpiStrip({ kpis }: Props) {
+/** KPI cards — primary navigation for intake command center. */
+export function IntakeCommandCenterKpiStrip({ kpis, selectedKpiId, onSelectKpi }: Props) {
     if (kpis.length === 0) return null;
 
     return (
         <div
-            className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5"
+            className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6"
             data-testid="intake-command-center-kpis"
             role="list"
-            aria-label="Intake workload metrics"
+            aria-label="Intake workload filters"
         >
-            {kpis.map((kpi) => (
-                <div
-                    key={kpi.id}
-                    role="listitem"
-                    className={clsx(
-                        "rounded-xl px-3 py-2.5 ring-1 ring-inset transition-colors",
-                        TONE_CLASS[kpi.tone]
-                    )}
-                    data-testid={`intake-kpi-${kpi.id}`}
-                >
-                    <p className={clsx("text-[11px] font-medium uppercase tracking-wide opacity-70")}>{kpi.label}</p>
-                    <p className="mt-0.5 text-xl font-semibold tabular-nums tracking-tight">{kpi.value}</p>
-                    {kpi.hint ?
-                        <p className={clsx("mt-0.5 line-clamp-2", opMetadata)}>{kpi.hint}</p>
-                    :   null}
-                </div>
-            ))}
+            {kpis.map((kpi) => {
+                const selected = selectedKpiId === kpi.id;
+                return (
+                    <button
+                        key={kpi.id}
+                        type="button"
+                        role="listitem"
+                        aria-pressed={selected}
+                        data-testid={`intake-kpi-${kpi.id}`}
+                        className={clsx(
+                            "rounded-xl px-3 py-2.5 text-left ring-1 ring-inset transition-colors",
+                            TONE_CLASS[kpi.tone],
+                            selected ?
+                                "ring-2 ring-alloy-blue/40 shadow-[0_1px_3px_rgba(49,57,77,0.08)]"
+                            :   "hover:ring-alloy-blue/25"
+                        )}
+                        onClick={() => onSelectKpi?.(kpi.id)}
+                    >
+                        <p className="text-[11px] font-medium uppercase tracking-wide opacity-70">{kpi.label}</p>
+                        <p className="mt-0.5 text-xl font-semibold tabular-nums tracking-tight">{kpi.value}</p>
+                        {kpi.hint ?
+                            <p className={clsx("mt-0.5 line-clamp-2", opMetadata)}>{kpi.hint}</p>
+                        :   null}
+                    </button>
+                );
+            })}
         </div>
     );
 }

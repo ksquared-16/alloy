@@ -95,36 +95,43 @@ export function deriveIntakeCommandCenterSnapshot(params: {
     const kpis: IntakeCommandCenterKpi[] = [
         {
             id: "needs-action",
-            label: "Needs action",
+            label: "Needs Action",
             value: needsActionCount,
             tone: needsActionCount > 0 ? "urgent" : "healthy",
             hint: "Review, linkage, or packet decisions",
         },
         {
             id: "needs-review",
-            label: "Needs review",
+            label: "Needs Review",
             value: lanes.needsReview.length + reviewSessions.length,
             tone: lanes.needsReview.length + reviewSessions.length > 0 ? "urgent" : "neutral",
         },
         {
             id: "needs-linking",
-            label: "Needs linking",
+            label: "Needs Linking",
             value: lanes.needsLinking.length,
             tone: lanes.needsLinking.length > 0 ? "attention" : "neutral",
         },
         {
             id: "waiting-on",
-            label: "Waiting on families",
+            label: "Waiting on Families",
             value: waitingCount,
             tone: waitingCount > 0 ? "waiting" : "neutral",
             hint: "Drafts and in-progress packets",
         },
         {
             id: "healthy",
-            label: "Ready / healthy",
-            value: lanes.recentlySubmitted.length + publishedForms.length,
+            label: "Ready / Healthy",
+            value: lanes.recentlySubmitted.length,
             tone: "healthy",
-            hint: "Recently submitted + published forms",
+            hint: "Recently operationalized intake",
+        },
+        {
+            id: "forms",
+            label: "Forms",
+            value: params.forms.length,
+            tone: "neutral",
+            hint: "Author, publish, and distribute",
         },
     ];
 

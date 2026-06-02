@@ -1,20 +1,20 @@
 "use client";
 
 import clsx from "clsx";
-import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { TechnicalDetailDisclosure } from "@/components/forms/review";
 import { FormsWorkspaceShell } from "@/components/forms/workspace";
 import { IntakeCommandCenterKpiStrip } from "@/components/forms/workspace/IntakeCommandCenterKpiStrip";
 import { IntakeWorkspaceFilterPanelView } from "@/components/forms/workspace/IntakeWorkspaceFilterPanelView";
-import { IntakeWorkloadFilterStrip } from "@/components/forms/workspace/IntakeWorkloadFilterStrip";
 import type { IntakeCommandCenterSessionRow } from "@/lib/forms/intakeCommandCenterPresentation";
 import { deriveIntakeCommandCenterSnapshot } from "@/lib/forms/intakeCommandCenterPresentation";
 import {
     buildIntakeWorkspaceFilterPanel,
     countIntakeWorkspaceFilters,
     defaultIntakeWorkspaceFilter,
+    INTAKE_FILTER_TO_KPI_ID,
+    INTAKE_KPI_ID_TO_FILTER,
     type IntakeWorkspaceFilterKey,
 } from "@/lib/forms/intakeWorkspaceFilters";
 import {
@@ -30,7 +30,6 @@ import {
     opCaseFileCanvas,
     opMetadata,
     opMutedMeta,
-    opOrientationSurface,
 } from "@/lib/operational/ui/operationalVisualTokens";
 
 export type IntakeWorkspaceFormRow = {
@@ -126,6 +125,13 @@ export function IntakeWorkspaceHubView({
         setUserFilter(filter);
     };
 
+    const handleSelectKpi = (kpiId: string) => {
+        const filter = INTAKE_KPI_ID_TO_FILTER[kpiId];
+        if (filter) handleSelectFilter(filter);
+    };
+
+    const selectedKpiId = INTAKE_FILTER_TO_KPI_ID[effectiveFilter] ?? null;
+
     const laneCounts = useMemo(() => intakeWorkloadLaneCounts(submissions), [submissions]);
     const diagnostics = useMemo(() => buildIntakeWorkloadDiagnostics(submissions), [submissions]);
 
@@ -174,26 +180,13 @@ export function IntakeWorkspaceHubView({
             : error ?
                 <p className="text-sm text-alloy-ember">{error}</p>
             :   <div data-testid="intake-workspace-command-center" className="space-y-4">
-                    <div className={opOrientationSurface} data-testid="intake-command-orientation">
-                        <p className="text-sm font-semibold text-alloy-midnight">{commandCenter.urgencyHeadline}</p>
-                        <p className={clsx("mt-1", opMetadata)}>{commandCenter.healthyLine}</p>
-                        {commandCenter.primaryCta ?
-                            <div className="mt-3">
-                                <Link href={commandCenter.primaryCta.href} className={intakeWorkspaceBtnPrimary}>
-                                    {commandCenter.primaryCta.label}
-                                </Link>
-                            </div>
-                        :   null}
-                    </div>
-
-                    <IntakeCommandCenterKpiStrip kpis={commandCenter.kpis} />
+                    <IntakeCommandCenterKpiStrip
+                        kpis={commandCenter.kpis}
+                        selectedKpiId={selectedKpiId}
+                        onSelectKpi={handleSelectKpi}
+                    />
 
                     <div className={clsx(opCaseFileCanvas, "space-y-3")} data-testid="intake-workspace-canvas">
-                        <IntakeWorkloadFilterStrip
-                            counts={filterCounts}
-                            selected={effectiveFilter}
-                            onSelect={handleSelectFilter}
-                        />
                         <div
                             className="rounded-xl bg-white/95 px-4 py-3 shadow-[0_1px_3px_rgba(49,57,77,0.05)] ring-1 ring-alloy-midnight/[0.07]"
                             data-testid={`intake-active-filter-${effectiveFilter}`}

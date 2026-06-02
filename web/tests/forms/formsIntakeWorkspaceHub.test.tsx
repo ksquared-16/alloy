@@ -1,6 +1,11 @@
 import React from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+
+vi.mock("@/contexts/AdminDrawerContext", () => ({
+    useAdminDrawer: () => ({ openDrawer: vi.fn() }),
+}));
+
 import type { SubmissionInboxRow } from "@/lib/forms/submissionInboxPresentation";
 import { IntakeWorkspaceHubView } from "@/components/forms/workspace/IntakeWorkspaceHubView";
 import { IntakeWorkspaceFilterPanelView } from "@/components/forms/workspace/IntakeWorkspaceFilterPanelView";
@@ -49,12 +54,13 @@ describe("IntakeWorkspaceHubView IC-3", () => {
         );
 
         expect(html).toContain('data-testid="intake-workspace-canvas"');
-        expect(html).toContain('data-testid="intake-workload-filters"');
+        expect(html).toContain('data-testid="intake-command-center-kpis"');
+        expect(html).not.toContain('data-testid="intake-workload-filters"');
         expect(html).not.toContain('data-testid="intake-latest-submissions"');
         expect(html).toContain('data-testid="intake-workload-browser-debug"');
         expect(html).toContain("Enrollment");
         expect(html).toContain("Intake workspace");
-        expect(html).toContain('data-testid="intake-active-filter-needs_review"');
+        expect(html).toContain('data-testid="intake-active-filter-needs_action"');
         expect(html).toContain("Jordan Test");
         expect(html).toContain('data-testid="intake-case-row-submission-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"');
         expect(html).toContain("Latest activity ·");
@@ -68,8 +74,8 @@ describe("IntakeWorkspaceHubView IC-3", () => {
             <IntakeWorkspaceHubView viewerTz="UTC" forms={[]} sessions={[]} packets={[]} submissions={[]} />
         );
 
-        expect(html).toContain("Intake is calm");
-        expect(html).toContain("No forms in this organization");
+        expect(html).not.toContain("Intake is calm");
+        expect(html).toContain("No ready intake cases yet");
     });
 });
 
