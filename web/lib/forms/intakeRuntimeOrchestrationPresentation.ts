@@ -24,6 +24,7 @@ import {
     isOutcomeConfiguredForIntent,
 } from "@/lib/forms/operationalIntentTemplates";
 import { inferIntakeTypeFromLink, INTAKE_TYPE_CATALOG, type IntakeTypeKey } from "@/lib/forms/inferIntakeType";
+import type { FormLifecycleRecordCreationGate } from "@/lib/forms/lifecycle/isFormLifecycleReadyForRecordCreation";
 
 export type { IntakeTypeKey } from "@/lib/forms/inferIntakeType";
 export { inferIntakeTypeFromLink } from "@/lib/forms/inferIntakeType";
@@ -65,6 +66,10 @@ export type IntakeRuntimeOrchestrationViewModel = {
     leadRoutingWorkUnitLabel: string | null;
     leadRoutingStatusLabel: string | null;
     liveReady: boolean;
+    lifecycleRecordGate: FormLifecycleRecordCreationGate | null;
+    recordCreatingShareBlocked: boolean;
+    recordCreatingShareBlockMessage: string | null;
+    recordCreatingShareBlockButtonLabel: string | null;
     storyBullets: OutcomeStoryBullet[];
     routingSummary: string | null;
     runtimeMismatch: {
@@ -197,6 +202,7 @@ export function buildIntakeRuntimeOrchestrationViewModel(params: {
     documentGenerationConfigured: boolean;
     hasPublished: boolean;
     latestSubmission: RuntimeSubmissionSnapshot | null;
+    lifecycleRecordGate?: FormLifecycleRecordCreationGate | null;
 }): IntakeRuntimeOrchestrationViewModel {
     const operationalLinks = params.links.filter((l) => !distributionIsPreviewLink(l));
     const selected =
@@ -292,7 +298,12 @@ export function buildIntakeRuntimeOrchestrationViewModel(params: {
         linkOutcomeConfigured &&
         (createsLead || intakeType === "existing_family" || intakeType === "operational_document" || intakeType === "general");
     const shareComplete = !!selected?.is_active && (!storedIntentForOutcome || linkOutcomeConfigured);
-    const liveReady = shareComplete && outcomeComplete && !linkSetupIncomplete;
+    const lifecycleRecordGate = params.lifecycleRecordGate ?? null;
+    const recordCreatingShareBlocked = Boolean(
+        lifecycleRecordGate?.blocksRecordCreatingShare && createsLead
+    );
+    const baseLiveReady = shareComplete && outcomeComplete && !linkSetupIncomplete;
+    const liveReady = baseLiveReady && !recordCreatingShareBlocked;
     const testComplete = lastTestConfirmation?.tone === "success" && (lastTestConfirmation.opportunityId || lastTestConfirmation.autoOperationalized);
 
     const locationId = typeof linkMeta.default_location_id === "string" ? linkMeta.default_location_id : null;
@@ -333,14 +344,20 @@ export function buildIntakeRuntimeOrchestrationViewModel(params: {
             key: "share",
             label: "Share form",
             status:
-                linkSetupIncomplete && selected?.is_active ? "active"
-                : shareComplete ? "complete"
+                recordCreatingShareBlocked ? "active"
+                : linkSetupIncomplete && selected?.is_active ? "active"
+                : shareComplete && liveReady ? "complete"
+                : shareComplete ? "active"
                 : outcomeComplete ? "active"
                 :   "pending",
             hint:
-                linkSetupIncomplete && selected?.is_active ? "Finish setup first"
-                : selected?.is_active && linkOutcomeConfigured ? "Link ready"
+                recordCreatingShareBlocked ?
+                    lifecycleRecordGate?.shareBlockButtonLabel ?? "Add required fields first"
+                : linkSetupIncomplete && selected?.is_active ? "Finish setup first"
+                : selected?.is_active && linkOutcomeConfigured && liveReady ? "Link ready"
+                : selected?.is_active && linkOutcomeConfigured ? "Finish lifecycle coverage"
                 : selected ? "Finish intake setup"
+                : recordCreatingShareBlocked ? "Add required fields first"
                 :   "Get a share link",
         },
         {
@@ -378,6 +395,10 @@ export function buildIntakeRuntimeOrchestrationViewModel(params: {
         leadRoutingWorkUnitLabel,
         leadRoutingStatusLabel,
         liveReady,
+        lifecycleRecordGate,
+        recordCreatingShareBlocked,
+        recordCreatingShareBlockMessage: lifecycleRecordGate?.shareBlockMessage ?? null,
+        recordCreatingShareBlockButtonLabel: lifecycleRecordGate?.shareBlockButtonLabel ?? null,
         storyBullets,
         routingSummary,
         runtimeMismatch,

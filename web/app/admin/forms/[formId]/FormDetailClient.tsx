@@ -45,6 +45,11 @@ import {
     writeActiveRuntimeLinkId,
     writeLinkEmbedUrl,
 } from "@/lib/forms/intakeRuntimeOrchestrationStorage";
+import {
+    buildFormLifecycleRecordCreationGate,
+    type FormLifecycleRecordCreationGate,
+} from "@/lib/forms/lifecycle/isFormLifecycleReadyForRecordCreation";
+import type { FormLifecycleCoveragePayload } from "@/lib/forms/lifecycle/loadFormLifecycleCoveragePayload";
 import { opMetadata } from "@/lib/operational/ui/operationalVisualTokens";
 
 type VersionRow = {
@@ -93,6 +98,8 @@ export default function FormDetailClient() {
     const [deleteErr, setDeleteErr] = useState<string | null>(null);
     const [creatingLocationLink, setCreatingLocationLink] = useState(false);
     const [locationLinkErr, setLocationLinkErr] = useState<string | null>(null);
+    const [lifecycleCoverage, setLifecycleCoverage] = useState<FormLifecycleCoveragePayload | null>(null);
+    const [lifecycleCoverageLoadFailed, setLifecycleCoverageLoadFailed] = useState(false);
     const [duplicateBusy, setDuplicateBusy] = useState(false);
     const [duplicateErr, setDuplicateErr] = useState<string | null>(null);
 
@@ -193,6 +200,56 @@ export default function FormDetailClient() {
         }
     }, [formId]);
 
+    const loadLifecycleCoverage = useCallback(async () => {
+        if (!formId) return;
+        setLifecycleCoverageLoadFailed(false);
+        try {
+            const res = await fetch(`/api/admin/forms/${encodeURIComponent(formId)}/lifecycle-coverage`, {
+                credentials: "include",
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                setLifecycleCoverageLoadFailed(true);
+                setLifecycleCoverage(null);
+                return;
+            }
+            setLifecycleCoverage((json as { data?: FormLifecycleCoveragePayload }).data ?? null);
+        } catch {
+            setLifecycleCoverageLoadFailed(true);
+            setLifecycleCoverage(null);
+        }
+    }, [formId]);
+
+    useEffect(() => {
+        void loadLifecycleCoverage();
+    }, [loadLifecycleCoverage, detail?.metadata, detail?.versions]);
+
+    const selectedRuntimeLink = useMemo(() => {
+        const operational = links.filter((l) => {
+            const meta = l.metadata;
+            return meta && typeof meta === "object" && (meta as Record<string, unknown>).mode !== "preview";
+        });
+        if (selectedRuntimeLinkId) {
+            return operational.find((l) => l.id === selectedRuntimeLinkId) ?? operational[0] ?? null;
+        }
+        return operational[0] ?? null;
+    }, [links, selectedRuntimeLinkId]);
+
+    const recordCreationGate = useMemo((): FormLifecycleRecordCreationGate => {
+        const operationalIntent =
+            readStoredOperationalIntent(detail?.metadata) ??
+            resolveEffectiveOperationalIntent({
+                formMetadata: detail?.metadata,
+                linkMetadata: selectedRuntimeLink?.metadata ?? null,
+                formKey: detail?.key ?? "",
+            });
+        return buildFormLifecycleRecordCreationGate({
+            operationalIntent,
+            coveragePayload: lifecycleCoverage,
+            coverageLoadFailed: lifecycleCoverageLoadFailed,
+        });
+    }, [detail?.metadata, detail?.key, lifecycleCoverage, lifecycleCoverageLoadFailed, selectedRuntimeLink?.metadata]);
+
     useEffect(() => {
         void load();
     }, [load]);
@@ -211,6 +268,13 @@ export default function FormDetailClient() {
 
     const createPublicLink = async () => {
         if (!formId || !canMutate) return;
+        if (recordCreationGate.blocksRecordCreatingShare) {
+            setCreateErr(
+                recordCreationGate.shareBlockMessage ??
+                    "Add required lifecycle fields before creating a record-creating share link."
+            );
+            return;
+        }
         setCreating(true);
         setCreateErr(null);
         setCopyWarn(null);
@@ -236,6 +300,13 @@ export default function FormDetailClient() {
     const createLocationPublicLink = useCallback(
         async (input: { locationId: string; locationName: string }) => {
             if (!formId || !canMutate) return;
+            if (recordCreationGate.blocksRecordCreatingShare) {
+                setLocationLinkErr(
+                    recordCreationGate.shareBlockMessage ??
+                        "Add required lifecycle fields before creating a record-creating share link."
+                );
+                return;
+            }
             setCreatingLocationLink(true);
             setLocationLinkErr(null);
             setCopyWarn(null);
@@ -260,7 +331,7 @@ export default function FormDetailClient() {
                 setCreatingLocationLink(false);
             }
         },
-        [applyCreatedLinkResponse, canMutate, formId]
+        [applyCreatedLinkResponse, canMutate, formId, recordCreationGate]
     );
 
     const handleLinkMetadataSaved = useCallback((linkId: string, metadata: Record<string, unknown>) => {
@@ -389,17 +460,6 @@ export default function FormDetailClient() {
     const hasDraft = drafts.length > 0;
     const hasPublished = Boolean(latestPublished);
     const activeLinkCount = links.filter((l) => l.is_active).length;
-
-    const selectedRuntimeLink = useMemo(() => {
-        const operational = links.filter((l) => {
-            const meta = l.metadata;
-            return meta && typeof meta === "object" && (meta as Record<string, unknown>).mode !== "preview";
-        });
-        if (selectedRuntimeLinkId) {
-            return operational.find((l) => l.id === selectedRuntimeLinkId) ?? operational[0] ?? null;
-        }
-        return operational[0] ?? null;
-    }, [links, selectedRuntimeLinkId]);
 
     const intentConfigured = useMemo(() => {
         if (!detail) return false;
@@ -589,6 +649,8 @@ export default function FormDetailClient() {
                     onSelectedRuntimeLinkChange={handleSelectedRuntimeLinkChange}
                     createdOnceLinkId={createdOnceLinkId}
                     openPublicEmbedUrl={openPublicEmbedUrl}
+                    recordCreationGate={recordCreationGate}
+                    onLifecycleCoverageRefresh={() => void loadLifecycleCoverage()}
                 />
                 </>
             :   null}

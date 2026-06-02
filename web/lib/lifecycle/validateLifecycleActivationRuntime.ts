@@ -28,16 +28,18 @@ import {
     LIFECYCLE_RECORDS_QUERY_ZERO_COPY,
     LIFECYCLE_RECORDS_QUERY_ZERO_EXISTING_COPY,
     LIFECYCLE_NO_RECORDS_IN_LIFECYCLE_YET_COPY,
-    lifecycleRecordsMisassignedCopy,
+    lifecycleRecordsVisibleNotAssignedCopy,
     queueStatusKeysForLifecycleWorkUnitValidation,
     queueFilterIncludesExpectedStatuses,
     summarizeBuilderOwnedQueueFilterValidation,
     validateLifecycleStageWorkUnitQueueFilter,
 } from "@/lib/lifecycle/lifecycleWorkUnitQueueValidation";
+import { countLifecycleOpportunityRecordsForWorkUnit } from "@/lib/lifecycle/lifecycleOpportunityQueueScope";
 import {
-    countLifecycleOpportunityRecordsForWorkUnit,
-    listDepartmentWorkUnitIdsForOpportunityScope,
-} from "@/lib/lifecycle/lifecycleOpportunityQueueScope";
+    formatLifecycleActionPlacementDetail,
+    lifecycleNeedsAttentionWorkUnitConfigured,
+    summarizeLifecycleActionPlacementSurfaces,
+} from "@/lib/lifecycle/lifecycleRuntimeSurfaceValidation";
 import { stageKeyFromLifecycleWorkUnitMetadata } from "@/lib/lifecycle/lifecycleStageWorkUnit";
 import { buildLifecycleCatalog, catalogEntryForProcess } from "@/lib/lifecycle/lifecycleCatalog";
 import {
@@ -127,7 +129,9 @@ export type LifecycleActivationCheckId =
     | "work_unit_records_query"
     | "dept_runtime_lifecycle_work_units"
     | "dept_no_legacy_pipeline_lanes"
-    | "drawer_actions";
+    | "drawer_actions"
+    | "lifecycle_visibility_ui_parity"
+    | "needs_attention_optional";
 
 export type LifecycleActivationCheckResult = {
     id: LifecycleActivationCheckId;
@@ -544,14 +548,9 @@ export async function validateLifecycleActivationRuntime(
                 "No statuses assigned to stages yet — records query will be ready after status selection.";
         } else {
             const queryErrors: string[] = [];
-            let totalByStatus = 0;
-            let totalMisassigned = 0;
+            let totalVisible = 0;
+            let totalAssignedHome = 0;
             let firstWuId: string | null = null;
-            const deptWuIds = await listDepartmentWorkUnitIdsForOpportunityScope(
-                supabase,
-                orgId,
-                departmentId
-            );
 
             for (const row of queryTargets) {
                 try {
@@ -561,11 +560,10 @@ export async function validateLifecycleActivationRuntime(
                         departmentId,
                         lifecycleWorkUnitId: row.work_unit_id,
                         statusKeys: row.expected_status_keys,
-                        departmentWorkUnitIds: deptWuIds,
                     });
                     if (!firstWuId) firstWuId = row.work_unit_id;
-                    totalByStatus += counts.matching_by_status;
-                    totalMisassigned += counts.matching_elsewhere_in_department;
+                    totalVisible += counts.matching_by_status;
+                    totalAssignedHome += counts.assigned_to_lifecycle_work_unit;
                 } catch (e) {
                     queryErrors.push(
                         `${row.work_unit_name}: ${e instanceof Error ? e.message : "query failed"}`
@@ -576,28 +574,33 @@ export async function validateLifecycleActivationRuntime(
             if (queryErrors.length) {
                 recordsQueryPass = false;
                 recordsQueryDetail = `Records query failed: ${queryErrors.join("; ")}`;
-            } else if (totalByStatus === 0) {
+            } else if (totalVisible === 0) {
                 recordsQueryPass = true;
                 recordsQueryDetail = LIFECYCLE_NO_RECORDS_IN_LIFECYCLE_YET_COPY;
                 recordsQueryHref =
                     departmentId && firstWuId
                         ? `/adminV2/workspace/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(firstWuId)}`
                         : null;
-            } else if (totalMisassigned > 0) {
-                recordsQueryPass = true;
-                recordsQueryDetail = `${totalByStatus} matching record(s) visible by status (${lifecycleRecordsMisassignedCopy(totalMisassigned)}).`;
-                recordsQueryHref =
-                    departmentId && firstWuId
-                        ? `/adminV2/workspace/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(firstWuId)}`
-                        : null;
             } else {
                 recordsQueryPass = true;
-                recordsQueryDetail = `Records query ready — ${totalByStatus} matching record(s) across stage work units.`;
+                const notAssigned = Math.max(0, totalVisible - totalAssignedHome);
+                recordsQueryDetail =
+                    notAssigned > 0
+                        ? `${totalVisible} record(s) visible by lifecycle filters. ${totalAssignedHome} assigned to lifecycle work units (${lifecycleRecordsVisibleNotAssignedCopy(notAssigned)}).`
+                        : `${totalVisible} record(s) visible by lifecycle filters. ${totalAssignedHome} assigned to lifecycle work units.`;
                 recordsQueryHref =
                     departmentId && firstWuId
                         ? `/adminV2/workspace/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(firstWuId)}`
                         : null;
             }
+
+            checks.push({
+                id: "lifecycle_visibility_ui_parity",
+                label: "Queue visibility matches Settings counts",
+                pass: recordsQueryPass,
+                href: recordsQueryHref,
+                detail: recordsQueryDetail,
+            });
         }
     } else if (workUnit && activation.status_keys.length) {
         const operatorStage = isOperatorStage(activation.stage_key) ? activation.stage_key : null;
@@ -685,11 +688,9 @@ export async function validateLifecycleActivationRuntime(
 
     const configuredActions = await loadLifecycleBuilderConfiguredActions(supabase, orgId);
     const enabledActions = configuredActions.filter((a) => a.placements.some((p) => p.is_active && p.placement_id));
+    const placementSummary = summarizeLifecycleActionPlacementSurfaces(enabledActions);
     const actionPass = true;
-    const actionDetail =
-        enabledActions.length === 0
-            ? "Optional: no actions configured yet."
-            : `${enabledActions.length} lifecycle action(s) configured for workspace surfaces.`;
+    const actionDetail = formatLifecycleActionPlacementDetail(placementSummary);
 
     checks.push({
         id: "drawer_actions",
@@ -697,6 +698,17 @@ export async function validateLifecycleActivationRuntime(
         pass: actionPass,
         href: "/adminV2/workspace",
         detail: actionDetail,
+    });
+
+    const naConfigured = lifecycleNeedsAttentionWorkUnitConfigured(deptWorkUnits ?? []);
+    checks.push({
+        id: "needs_attention_optional",
+        label: "Needs Attention (optional)",
+        pass: true,
+        href: departmentId ? `/adminV2/workspace/dept/${encodeURIComponent(departmentId)}` : null,
+        detail: naConfigured
+            ? "Needs Attention work unit is present (legacy or hybrid)."
+            : "Not configured yet — throughput lifecycle stages still operate; Needs Attention sprint is optional.",
     });
 
     return { checks, id_audit };

@@ -23,8 +23,12 @@ export type LifecycleQueueEmptyLaneDebug = {
 };
 
 export type LifecycleQueueEmptyDebugPayload = {
-    lifecycle_status_scope_applied: boolean;
-    scope_mode: "work_unit_id" | "lifecycle_status_dept_scope" | "lifecycle_status_strict_wu";
+    lifecycle_visibility_scope_applied: boolean;
+    scope_mode:
+        | "work_unit_id"
+        | "lifecycle_visibility"
+        | "legacy_pipeline"
+        | "assignment_home";
     filter_equivalent: ReturnType<typeof buildLifecycleQueueFilterEquivalent>;
     department_work_unit_ids: string[];
     lanes: LifecycleQueueEmptyLaneDebug[];
@@ -76,7 +80,7 @@ export async function buildLifecycleQueueEmptyDebug(params: {
         params.departmentWorkUnitIds.length
             ? countOpportunitiesByWorkUnitIds(params.supabase, params.orgId, params.departmentWorkUnitIds)
             : Promise.resolve({} as Record<string, number>),
-        params.scope.mode === "lifecycle_status" && params.departmentWorkUnitIds.length && sampleKeys.length
+        params.scope.mode === "lifecycle_visibility" && sampleKeys.length
             ? countOpportunitiesInLifecycleDepartmentScope({
                   supabase: params.supabase,
                   orgId: params.orgId,
@@ -101,18 +105,13 @@ export async function buildLifecycleQueueEmptyDebug(params: {
     if (statusSum === 0 && sampleKeys.length) {
         hint =
             "No opportunities in org use these status keys. Check Settings status assignments vs opportunity.status_key (e.g. new_inquiry vs new_lead).";
-    } else if (
-        filter_equivalent.scope_mode === "lifecycle_status_strict_wu" &&
-        department_scope_status_match_total > 0
-    ) {
-        hint =
-            "Records match status in department scope but not work_unit_id. Browser/API path has no departmentWorkUnitIdsForLifecycleScope preload — use /dept bootstrap or Attach matching records in Settings.";
     } else if (department_scope_status_match_total > 0 && lanes.every((l) => l.queue_api_count === 0)) {
-        hint = "Records exist for status+department scope but queue lane status filters may not include them.";
+        hint =
+            "Records are visible by lifecycle status filter but queue lane filters may not include them. Check queue_definition status ops.";
     }
 
     return {
-        lifecycle_status_scope_applied: filter_equivalent.lifecycle_status_scope_applied,
+        lifecycle_visibility_scope_applied: filter_equivalent.lifecycle_visibility_scope_applied,
         scope_mode: filter_equivalent.scope_mode,
         filter_equivalent,
         department_work_unit_ids: filter_equivalent.department_work_unit_ids,

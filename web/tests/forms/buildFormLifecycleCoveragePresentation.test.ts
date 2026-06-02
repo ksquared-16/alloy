@@ -48,7 +48,7 @@ describe("buildFormLifecycleCoveragePresentation", () => {
         });
 
         expect(presentation.status).toBe("ready");
-        expect(presentation.status_headline).toBe("Ready for this lifecycle stage");
+        expect(presentation.status_headline).toBe("Ready. Recommended fields are missing.");
         expect(JSON.stringify(presentation)).not.toContain("person:first_name");
         expect(JSON.stringify(presentation)).not.toContain("crm_mapping_key");
         expect(JSON.stringify(presentation)).not.toContain("guardian_first_name");
@@ -83,6 +83,6 @@ describe("buildFormLifecycleCoveragePresentation", () => {
         });
 
         expect(presentation.status).toBe("missing_required");
-        expect(presentation.status_message).toContain("not ready to create a Lead");
+        expect(presentation.status_message).toContain("cannot create a Lead yet");
     });
 });

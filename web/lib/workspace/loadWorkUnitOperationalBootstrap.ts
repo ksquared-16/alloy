@@ -271,17 +271,20 @@ export async function loadWorkUnitOperationalBootstrap(params: {
     const departmentMetadata = (deptRow as { metadata?: unknown }).metadata ?? null;
     const workUnitMetadata = (wuRow as { metadata?: unknown }).metadata ?? null;
     const queueDefinition = (wuRow as { queue_definition?: unknown }).queue_definition;
+    const wuKey = (wuRow as { key?: string | null }).key ?? null;
 
     const preloadedQueueDefinition = {
         queue_definition: queueDefinition,
         workUnitMetadata,
         departmentId,
+        departmentMetadata,
+        workUnitKey: wuKey,
     };
 
     const naExecution = resolveWorkUnitNeedsAttentionExecution(
         {
             id: workUnitId,
-            key: (wuRow as { key?: string | null }).key ?? null,
+            key: wuKey,
             metadata: workUnitMetadata,
             department_id: wuDeptId,
             queue_definition: queueDefinition,
@@ -289,7 +292,6 @@ export async function loadWorkUnitOperationalBootstrap(params: {
         departmentId
     );
     const attentionEligible = Boolean(naExecution && workUnitDefinesNeedsAttentionQueue(queueDefinition));
-    const wuKey = (wuRow as { key?: string | null }).key ?? null;
     const focusIsNeedsAttention = focusQueue.trim().toLowerCase() === "needs_attention";
     const wuIsNeedsAttention = (wuKey ?? "").trim().toLowerCase() === "needs_attention";
     const attentionCanStartWithSummaries =

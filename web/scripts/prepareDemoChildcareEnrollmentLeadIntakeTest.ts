@@ -207,7 +207,9 @@ async function main() {
                 expectedFirstSubmit: {
                     workloadPill: "Recent (auto_operationalized)",
                     intakeCaseSubtitle: "New lead created",
-                    quickReviewOperationalLine: "New lead created",
+                    quickReviewLeadCreatedMode: true,
+                    quickReviewStatusLine: "New Lead",
+                    quickReviewLeadCopy: "A new enrollment lead was created from this submission.",
                     intake_auto_operationalized: true,
                     intake_needs_review: false,
                     workflowEvents: ["form_submitted", "intake_case_created", "intake_case_operationalized"],

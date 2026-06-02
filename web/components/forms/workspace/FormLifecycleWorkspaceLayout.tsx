@@ -30,6 +30,7 @@ import { FORM_LIFECYCLE_ANCHORS } from "@/lib/forms/formLifecyclePresentation";
 import { FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
 import { FORMS_TECHNICAL_DISCLOSURE } from "@/lib/forms/review/formsReviewTechnicalDisclosure";
 import { readStoredOperationalIntent } from "@/lib/forms/operationalIntentTemplates";
+import type { FormLifecycleRecordCreationGate } from "@/lib/forms/lifecycle/isFormLifecycleReadyForRecordCreation";
 import FormSchemaWorkspace from "@/app/admin/forms/FormSchemaWorkspace";
 import { FormOutcomeConfigPanel } from "@/components/forms/admin/FormOutcomeConfigPanel";
 import { FormExistingRecordSendPanel } from "@/components/forms/admin/FormExistingRecordSendPanel";
@@ -105,6 +106,8 @@ type Props = {
     createdOnceLinkId: string | null;
     openPublicEmbedUrl: string | null;
     onFormMetadataUpdated?: (metadata: Record<string, unknown>) => void;
+    recordCreationGate?: FormLifecycleRecordCreationGate;
+    onLifecycleCoverageRefresh?: () => void;
 };
 
 /** Loaded-state lifecycle workspace layout (OW-3). */
@@ -143,6 +146,8 @@ export function FormLifecycleWorkspaceLayout({
     createdOnceLinkId,
     openPublicEmbedUrl,
     onFormMetadataUpdated,
+    recordCreationGate,
+    onLifecycleCoverageRefresh,
 }: Props) {
     const submissionsHref = `${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(formId)}/submissions`;
     const storedIntent = readStoredOperationalIntent(detail.metadata);
@@ -217,6 +222,8 @@ export function FormLifecycleWorkspaceLayout({
                         creatingLocationLink={creatingLocationLink}
                         locationLinkErr={locationLinkErr}
                         coverageRefreshKey={coverageRefreshKey}
+                        recordCreationGate={recordCreationGate}
+                        onLifecycleCoverageRefresh={onLifecycleCoverageRefresh}
                     />
                 </section>
 
@@ -324,6 +331,7 @@ export function FormLifecycleWorkspaceLayout({
                                             viewerTz={viewerTz}
                                             onCreateLink={onCreateLink}
                                             onCopy={onCopy}
+                                            recordCreationGate={recordCreationGate}
                                         />
                                     </div>
                                 </div>

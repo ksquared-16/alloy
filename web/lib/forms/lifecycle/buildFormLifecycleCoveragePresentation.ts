@@ -9,6 +9,10 @@ import type {
 } from "@/lib/forms/lifecycle/formsLifecycleCoverageTypes";
 import type { FormsLifecycleUsageV1 } from "@/lib/forms/lifecycle/formLifecycleUsageMetadata";
 import {
+    operationalIntentRequiresLifecycleRecordCoverage,
+    recordCreationLabelForIntent,
+} from "@/lib/forms/lifecycle/isFormLifecycleReadyForRecordCreation";
+import {
     operationalIntentTemplate,
     type OperationalIntentKey,
 } from "@/lib/forms/operationalIntentTemplates";
@@ -194,10 +198,32 @@ export function buildFormLifecycleCoveragePresentation(input: {
     }
 
     if (input.coverage.ready) {
+        const recordIntent = operationalIntentRequiresLifecycleRecordCoverage(
+            input.usage ? String(input.usage.intake_intent) : null
+        );
+        const recordLabel = recordCreationLabelForIntent(
+            input.usage ? String(input.usage.intake_intent) : null
+        );
+        const recommendedGaps = input.coverage.missingRecommended.length > 0;
+        const status_headline =
+            recordIntent && recommendedGaps ?
+                "Ready. Recommended fields are missing."
+            : recordIntent ?
+                recordLabel === "Lead" ?
+                    "Ready to create Lead."
+                :   `Ready to create ${recordLabel}.`
+            :   "Ready for this lifecycle stage";
+        const status_message =
+            recordIntent && recommendedGaps ?
+                `Ready to create ${recordLabel}. Recommended fields are missing but sharing is allowed.`
+            : recordIntent ?
+                `This form captures the required information to create a ${recordLabel} for the selected lifecycle stage.`
+            :   "This form captures the required information for the selected workflow stage.";
+
         return {
             status: "ready",
-            status_headline: "Ready for this lifecycle stage",
-            status_message: "This form captures the required information for the selected workflow stage.",
+            status_headline,
+            status_message,
             schema_source,
             lifecycle_label,
             stage_label,
@@ -206,11 +232,18 @@ export function buildFormLifecycleCoveragePresentation(input: {
         };
     }
 
+    const recordIntent = operationalIntentRequiresLifecycleRecordCoverage(
+        input.usage ? String(input.usage.intake_intent) : null
+    );
+    const recordBlockMessage =
+        recordIntent ?
+            "This form cannot create a Lead yet because it does not capture all required information for the selected lifecycle stage."
+        :   "Missing required fields. This form is not ready to create a Lead for this stage.";
+
     return {
         status: "missing_required",
         status_headline: "Missing required fields",
-        status_message:
-            "Missing required fields. This form is not ready to create a Lead for this stage.",
+        status_message: recordBlockMessage,
         schema_source,
         lifecycle_label,
         stage_label,

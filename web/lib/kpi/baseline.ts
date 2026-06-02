@@ -61,6 +61,8 @@ export function buildDefaultDepartmentKpis(params: {
     deptWorkUnitSummaries: Record<string, { total: number; needs_attention: number | null }>;
     deptQueueSummariesLoading: boolean;
     deptQueueSummariesError: string | null;
+    /** When true, aggregate/facet labels clarify visibility-based counts (builder-owned lifecycle). */
+    lifecycleVisibilityCounts?: boolean;
 }): KPIVm[] {
     const list = params.deptWorkUnits;
     if (!list.length) return [];
@@ -72,7 +74,9 @@ export function buildDefaultDepartmentKpis(params: {
         if (total != null) {
             agg.push({
                 id: "baseline.ctx.dept.total_in_scope",
-                label: "Total in department",
+                label: params.lifecycleVisibilityCounts
+                    ? "Visible in department (lifecycle)"
+                    : "Total in department",
                 value: String(total),
                 lane: "business",
             });
@@ -108,7 +112,10 @@ function formatMetricValue(n: number | null): string {
 }
 
 /** Baseline work-unit strip when no placement rows exist for scope — queue-native only. */
-export function buildDefaultWorkUnitKpis(context: WorkUnitKpiContext): KPIVm[] {
+export function buildDefaultWorkUnitKpis(
+    context: WorkUnitKpiContext,
+    opts?: { lifecycleVisibilityCounts?: boolean }
+): KPIVm[] {
     if (context.queueSummariesLoading || context.queueSummariesError) return [];
 
     const normalizedQueueDefinition = context.normalizedQueueDefinition ?? null;
@@ -120,7 +127,9 @@ export function buildDefaultWorkUnitKpis(context: WorkUnitKpiContext): KPIVm[] {
     if (all != null) {
         items.push({
             id: "baseline.ctx.wu.total_in_queue",
-            label: "All queues total",
+            label: opts?.lifecycleVisibilityCounts
+                ? "Visible in work unit (lifecycle)"
+                : "All queues total",
             value: formatMetricValue(all),
             lane: "business",
         });

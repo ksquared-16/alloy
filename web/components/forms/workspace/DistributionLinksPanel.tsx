@@ -38,6 +38,9 @@ type SharedProps = {
     copyWarn?: string | null;
     onCopy?: (key: string, text: string) => void;
     formKey?: string;
+    shareIntakeBlocked?: boolean;
+    shareIntakeBlockedLabel?: string;
+    shareIntakeBlockedMessage?: string | null;
 };
 
 type FormDistributionProps = SharedProps & {
@@ -202,6 +205,9 @@ export function DistributionLinksPanel(props: DistributionLinksPanelProps) {
         copyWarn,
         onCopy,
         formKey,
+        shareIntakeBlocked = false,
+        shareIntakeBlockedLabel = "Add required fields first",
+        shareIntakeBlockedMessage = null,
     } = props;
 
     const activeLinks = links.filter((l) => l.is_active);
@@ -222,17 +228,27 @@ export function DistributionLinksPanel(props: DistributionLinksPanelProps) {
                 </p>
             :   null}
 
+            {mode === "form" && shareIntakeBlocked && shareIntakeBlockedMessage ?
+                <p className="mt-2 text-sm text-amber-900" data-testid="distribution-share-intake-blocked">
+                    {shareIntakeBlockedMessage}
+                </p>
+            :   null}
+
             <div className="mt-3">
                 {!canMutate ?
                     <p className={opMetadata}>{DISTRIBUTION_COPY.adminRequired}</p>
                 :   <PrimaryButton
                         type="button"
                         className="!px-3.5 !py-2 text-sm"
-                        disabled={busy}
+                        disabled={busy || (mode === "form" && shareIntakeBlocked)}
                         onClick={mode === "form" ? props.onShareIntake : props.onLaunchPacket}
                         data-testid={mode === "form" ? "distribution-share-intake" : "distribution-launch-packet"}
                     >
-                        {busy ? (mode === "form" ? "Creating…" : "Launching…") : primaryLabel}
+                        {busy ?
+                            mode === "form" ? "Creating…" : "Launching…"
+                        : mode === "form" && shareIntakeBlocked ?
+                            shareIntakeBlockedLabel
+                        :   primaryLabel}
                     </PrimaryButton>
                 }
             </div>

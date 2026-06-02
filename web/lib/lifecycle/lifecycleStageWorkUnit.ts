@@ -7,6 +7,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import { slugifyLifecycleKey } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { buildLifecycleStageQueueDefinitionForPresentation } from "@/lib/lifecycle/lifecycleStageQueuePresentation";
 import { ENROLLMENT_PIPELINE_WORK_UNIT_KEY } from "@/lib/lifecycle/enrollmentProcessStageQueueKeys";
 import {
     queueStatusKeysForOperatorStage,
@@ -78,52 +79,13 @@ function filterListWithValues(filters: unknown, type: string, values: string[]):
     return list;
 }
 
-/** Single-lane opportunity queue for one lifecycle stage. */
+/** Single-lane opportunity queue for one lifecycle stage (presentation-aware). */
 export function buildLifecycleStageQueueDefinition(params: {
     stageKey: string;
     label: string;
     statusKeys: readonly string[];
 }): Record<string, unknown> {
-    const queueKey = primaryQueueKeyForLifecycleStage(params.stageKey);
-    const label = params.label.trim() || "Queue";
-    const values = params.statusKeys.map((k) => k.trim()).filter(Boolean);
-    const statusFilters = filterListWithValues([], "status", values);
-    const caseFilters = filterListWithValues([], "case_status", values);
-    const queue = {
-        key: queueKey,
-        label,
-        grain: "case" as const,
-        filters_compat_v1: statusFilters,
-        filters: caseFilters,
-    };
-    const doc: Record<string, unknown> = {
-        version: 2,
-        entity_type: "opportunity",
-        ui: {
-            layout: "single_section",
-            primary_total_label: label,
-            primary_total_queue: queueKey,
-            suppress_active_queue_description: false,
-            sections: [{ key: "primary", label, queue_keys: [queueKey] }],
-            row_preview: {
-                variant: "crm_compact",
-                fields: [
-                    "title",
-                    "status",
-                    "primary_contact",
-                    "phone",
-                    "email",
-                    "child_name",
-                    "program",
-                    "desired_start_date",
-                ],
-                actions: ["open"],
-            },
-        },
-        queues: [queue],
-    };
-    loadQueueDefinitionBundle(doc);
-    return doc;
+    return buildLifecycleStageQueueDefinitionForPresentation(params);
 }
 
 export function applyStatusKeysToLifecycleStageQueueDefinition(
@@ -266,4 +228,4 @@ export function queueStatusKeysForStageWorkUnitSnapshot(
 
 /** User-facing empty queue copy for lifecycle stage work units. */
 export const LIFECYCLE_STAGE_QUEUE_EMPTY_COPY =
-    "No records belong to this lifecycle yet. Create a Lead from this lifecycle to see it here." as const;
+    "No records are visible by lifecycle filters yet. Create a Lead from this lifecycle to see it here." as const;

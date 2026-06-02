@@ -5,6 +5,7 @@ import {
     inferIntakeTypeFromLink,
     resolveWorkUnitWorkspaceHref,
 } from "@/lib/forms/intakeRuntimeOrchestrationPresentation";
+import { buildFormLifecycleRecordCreationGate } from "@/lib/forms/lifecycle/isFormLifecycleReadyForRecordCreation";
 import { DEMO_CHILDCARE_ENROLLMENT_LEAD_INTAKE_LINK_METADATA } from "@/lib/forms/intakeRuntimeTestFixtures";
 import { ENROLLMENT_LEAD_CAPTURE_DEMO_FORM_KEY } from "@/lib/forms/seeds/enrollmentLeadCaptureDemo";
 
@@ -148,5 +149,117 @@ describe("intakeRuntimeOrchestrationPresentation", () => {
         expect(vm.liveReady).toBe(true);
         expect(vm.steps.find((s) => s.key === "test")?.status).toBe("pending");
         expect(vm.steps.find((s) => s.key === "test")?.hint).toMatch(/Optional/i);
+    });
+
+    it("blocks live readiness when lifecycle required coverage is missing", () => {
+        const gate = buildFormLifecycleRecordCreationGate({
+            operationalIntent: "enrollment_lead",
+            coveragePayload: {
+                configured: true,
+                coverage: {
+                    ready: false,
+                    missingRequired: [{ requirementId: "person:first_name", requirementLabel: "First Name", requirementEntityType: "person", requirementFieldKey: "first_name", requiredness: "required", status: "missing" }],
+                    missingRecommended: [],
+                    satisfiedRequired: [],
+                    satisfiedRecommended: [],
+                    byEntity: {},
+                    constraintFailures: [],
+                },
+                presentation: {
+                    status: "missing_required",
+                    status_headline: "Missing required fields",
+                    status_message:
+                        "This form cannot create a Lead yet because it does not capture all required information for the selected lifecycle stage.",
+                    schema_source: "published",
+                    lifecycle_label: "Enrollment",
+                    stage_label: "Lead",
+                    intent_label: "Capture new enrollment lead",
+                    entity_groups: [],
+                },
+            },
+        });
+        const vm = buildIntakeRuntimeOrchestrationViewModel({
+            formKey: "website_inquiry",
+            formMetadata: {
+                intake_intent: "enrollment_lead",
+                lifecycle_usage_v1: {
+                    version: 1,
+                    department_id: "dept-1",
+                    stage_key: "lead",
+                    intake_intent: "enrollment_lead",
+                },
+            },
+            links: [ENROLLMENT_LINK],
+            selectedLinkId: ENROLLMENT_LINK.id,
+            labelCatalog: null,
+            documentGenerationConfigured: false,
+            hasPublished: true,
+            latestSubmission: null,
+            lifecycleRecordGate: gate,
+        });
+        expect(vm.recordCreatingShareBlocked).toBe(true);
+        expect(vm.liveReady).toBe(false);
+        expect(vm.steps.find((s) => s.key === "share")?.hint).toBe("Add required fields first");
+    });
+
+    it("keeps live readiness when lifecycle coverage is ready", () => {
+        const gate = buildFormLifecycleRecordCreationGate({
+            operationalIntent: "enrollment_lead",
+            coveragePayload: {
+                configured: true,
+                coverage: {
+                    ready: true,
+                    missingRequired: [],
+                    missingRecommended: [],
+                    satisfiedRequired: [],
+                    satisfiedRecommended: [],
+                    byEntity: {},
+                    constraintFailures: [],
+                },
+                presentation: {
+                    status: "ready",
+                    status_headline: "Ready to create Lead.",
+                    status_message: "Ready.",
+                    schema_source: "published",
+                    lifecycle_label: "Enrollment",
+                    stage_label: "Lead",
+                    intent_label: "Capture new enrollment lead",
+                    entity_groups: [],
+                },
+            },
+        });
+        const vm = buildIntakeRuntimeOrchestrationViewModel({
+            formKey: "website_inquiry",
+            formMetadata: { intake_intent: "enrollment_lead" },
+            links: [ENROLLMENT_LINK],
+            selectedLinkId: ENROLLMENT_LINK.id,
+            labelCatalog: null,
+            documentGenerationConfigured: false,
+            hasPublished: true,
+            latestSubmission: null,
+            lifecycleRecordGate: gate,
+        });
+        expect(vm.recordCreatingShareBlocked).toBe(false);
+        expect(vm.liveReady).toBe(true);
+    });
+
+    it("does not block non-record intents on lifecycle coverage gaps", () => {
+        const gate = buildFormLifecycleRecordCreationGate({
+            operationalIntent: "existing_family",
+            coveragePayload: null,
+        });
+        const vm = buildIntakeRuntimeOrchestrationViewModel({
+            formKey: "website_inquiry",
+            formMetadata: { intake_intent: "existing_family" },
+            links: [ENROLLMENT_LINK],
+            selectedLinkId: ENROLLMENT_LINK.id,
+            labelCatalog: null,
+            documentGenerationConfigured: false,
+            hasPublished: true,
+            latestSubmission: null,
+            lifecycleRecordGate: gate,
+        });
+        expect(gate.applies).toBe(false);
+        expect(vm.recordCreatingShareBlocked).toBe(false);
     });
 });

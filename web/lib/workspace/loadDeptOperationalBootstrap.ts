@@ -166,6 +166,7 @@ export async function loadDeptOperationalBootstrap(params: {
                 queue_definition: (w as { queue_definition?: unknown }).queue_definition,
                 metadata: (w as { metadata?: unknown }).metadata ?? null,
                 department_id: (w as { department_id?: string | null }).department_id ?? null,
+                departmentMetadata,
                 key: (w as { key?: string | null }).key ?? null,
             },
         ])

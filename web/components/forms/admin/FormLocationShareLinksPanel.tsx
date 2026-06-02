@@ -34,6 +34,9 @@ type Props = {
     copied?: string | null;
     onCopy: (key: string, text: string) => void;
     onCreateLocationLink: (input: CreateLocationLinkInput) => void | Promise<void>;
+    shareCreationBlocked?: boolean;
+    shareBlockButtonLabel?: string;
+    shareBlockMessage?: string | null;
 };
 
 /** Share by Location — canonical org sites + location-specific public links only. */
@@ -48,6 +51,9 @@ export function FormLocationShareLinksPanel({
     copied = null,
     onCopy,
     onCreateLocationLink,
+    shareCreationBlocked = false,
+    shareBlockButtonLabel = "Add required fields first",
+    shareBlockMessage = null,
 }: Props) {
     const [siteOptions, setSiteOptions] = useState<ShareByLocationSiteOption[]>([]);
     const [loading, setLoading] = useState(true);
@@ -123,6 +129,11 @@ export function FormLocationShareLinksPanel({
     return (
         <div data-testid="form-location-share-links">
             <p className={opMutedMeta}>{SHARE_BY_LOCATION_COPY.helper}</p>
+            {shareCreationBlocked && shareBlockMessage ?
+                <p className="mt-2 text-sm text-amber-900" data-testid="location-share-links-blocked">
+                    {shareBlockMessage}
+                </p>
+            :   null}
 
             {loading ?
                 <p className={clsx("mt-3", opMetadata)}>Loading schools…</p>
@@ -181,11 +192,16 @@ export function FormLocationShareLinksPanel({
                                         <button
                                             type="button"
                                             className={intakeWorkspaceBtnSecondary}
-                                            disabled={creating}
+                                            disabled={creating || shareCreationBlocked}
                                             data-testid={`location-link-create-${site.id}`}
+                                            title={shareCreationBlocked ? shareBlockMessage ?? undefined : undefined}
                                             onClick={() => handleCreate(site)}
                                         >
-                                            {rowCreating ? "Creating…" : SHARE_BY_LOCATION_COPY.createLink}
+                                            {rowCreating ?
+                                                "Creating…"
+                                            : shareCreationBlocked ?
+                                                shareBlockButtonLabel
+                                            :   SHARE_BY_LOCATION_COPY.createLink}
                                         </button>
                                     :   <span className={clsx("self-center text-sm", opMutedMeta)}>
                                             {SHARE_BY_LOCATION_COPY.notSetUp}
@@ -230,11 +246,16 @@ export function FormLocationShareLinksPanel({
                     <button
                         type="button"
                         className={clsx(intakeWorkspaceBtnPrimary, "mt-3")}
-                        disabled={creating || loading || !locationId}
+                        disabled={creating || loading || !locationId || shareCreationBlocked}
                         data-testid="location-link-create-submit"
+                        title={shareCreationBlocked ? shareBlockMessage ?? undefined : undefined}
                         onClick={handleCreateFromDropdown}
                     >
-                        {creating ? "Creating…" : SHARE_BY_LOCATION_COPY.createButton}
+                        {creating ?
+                            "Creating…"
+                        : shareCreationBlocked ?
+                            shareBlockButtonLabel
+                        :   SHARE_BY_LOCATION_COPY.createButton}
                     </button>
                 </div>
             :   null}

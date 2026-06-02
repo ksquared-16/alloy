@@ -1894,24 +1894,27 @@ const WU_QUEUE_DEF_TTL_MS = 90_000;
 const WU_QUEUE_DEF_CACHE_ENABLED = process.env.NODE_ENV !== "test";
 
 function resolveOpportunityQueueScopeBundle(params: {
+    orgId: string;
     workUnitId: string;
     departmentId: string | null;
     workUnitMetadata: unknown | null;
     workUnitKey: string | null;
-    /** Reuse dept bootstrap work_units fetch — no extra query on /dept. */
+    queueDefinition?: unknown | null;
+    departmentMetadata?: unknown | null;
+    /** Legacy attach diagnostics only — not used for lifecycle visibility lens queries. */
     departmentWorkUnitIdsForLifecycleScope?: readonly string[];
 }): { scope: LifecycleOpportunityQueueScope; departmentWorkUnitIds: string[] } {
     const scope = resolveLifecycleOpportunityQueueScope({
+        orgId: params.orgId,
         workUnitId: params.workUnitId,
         workUnitKey: params.workUnitKey,
         workUnitMetadata: params.workUnitMetadata,
         departmentId: params.departmentId,
+        departmentMetadata: params.departmentMetadata,
+        queueDefinition: params.queueDefinition,
     });
-    if (scope.mode === "lifecycle_status") {
-        const departmentWorkUnitIds =
-            params.departmentWorkUnitIdsForLifecycleScope?.map((id) => id.trim()).filter(Boolean) ??
-            [];
-        return { scope, departmentWorkUnitIds };
+    if (scope.mode === "lifecycle_visibility") {
+        return { scope, departmentWorkUnitIds: [] };
     }
     return { scope, departmentWorkUnitIds: [params.workUnitId] };
 }
@@ -2174,6 +2177,7 @@ export async function getWorkUnitQueueSummaries(params: {
         queue_definition: unknown;
         workUnitMetadata?: unknown | null;
         departmentId?: string | null;
+        departmentMetadata?: unknown | null;
         workUnitKey?: string | null;
         departmentWorkUnitIdsForLifecycleScope?: readonly string[];
     };
@@ -2251,10 +2255,13 @@ export async function getWorkUnitQueueSummaries(params: {
     const opportunityScopeBundle =
         def.entity_type === "opportunity"
             ? resolveOpportunityQueueScopeBundle({
+                  orgId: params.orgId,
                   workUnitId: params.workUnitId,
                   departmentId: workUnitDepartmentId,
                   workUnitMetadata,
                   workUnitKey,
+                  queueDefinition: preloaded?.queue_definition,
+                  departmentMetadata: preloaded?.departmentMetadata,
                   departmentWorkUnitIdsForLifecycleScope:
                       preloaded?.departmentWorkUnitIdsForLifecycleScope,
               })
@@ -2856,7 +2863,7 @@ export async function getWorkUnitQueueSummaries(params: {
     if (
         process.env.NODE_ENV === "development" &&
         def.entity_type === "opportunity" &&
-        opportunityScopeBundle?.scope.mode === "lifecycle_status" &&
+        opportunityScopeBundle?.scope.mode === "lifecycle_visibility" &&
         summaries.some((s) => s.count === 0)
     ) {
         const emptyLanes = def.queues
@@ -2930,6 +2937,7 @@ export async function getDepartmentWorkUnitQueueSummaries(params: {
             queue_definition?: unknown;
             metadata?: unknown | null;
             department_id?: string | null;
+            departmentMetadata?: unknown | null;
             key?: string | null;
         }
     >;
@@ -3022,6 +3030,7 @@ export async function getDepartmentWorkUnitQueueSummaries(params: {
                                   queue_definition: preload.queue_definition,
                                   workUnitMetadata: preload.metadata ?? null,
                                   departmentId: preload.department_id ?? null,
+                                  departmentMetadata: preload.departmentMetadata ?? null,
                                   workUnitKey: preload.key ?? null,
                                   departmentWorkUnitIdsForLifecycleScope:
                                       params.departmentWorkUnitIdsForLifecycleScope,
@@ -3105,6 +3114,7 @@ export async function getWorkUnitQueueItems(params: {
         queue_definition: unknown;
         workUnitMetadata?: unknown | null;
         departmentId?: string | null;
+        departmentMetadata?: unknown | null;
         workUnitKey?: string | null;
         departmentWorkUnitIdsForLifecycleScope?: readonly string[];
     };
@@ -3183,10 +3193,13 @@ export async function getWorkUnitQueueItems(params: {
     const opportunityScopeBundle =
         def.entity_type === "opportunity"
             ? resolveOpportunityQueueScopeBundle({
+                  orgId: params.orgId,
                   workUnitId: params.workUnitId,
                   departmentId: workUnitDepartmentId,
                   workUnitMetadata,
                   workUnitKey,
+                  queueDefinition: preloaded?.queue_definition,
+                  departmentMetadata: preloaded?.departmentMetadata,
                   departmentWorkUnitIdsForLifecycleScope:
                       preloaded?.departmentWorkUnitIdsForLifecycleScope,
               })

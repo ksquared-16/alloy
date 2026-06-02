@@ -161,7 +161,7 @@ describe("lifecycleCreateLeadEntryBinding", () => {
             "LIFECYCLE_NO_RECORDS_IN_LIFECYCLE_YET_COPY"
         );
         expect(read("lib/lifecycle/lifecycleWorkUnitQueueValidation.ts")).toContain(
-            "No records belong to this lifecycle yet"
+            "visible by lifecycle filters"
         );
     });
 

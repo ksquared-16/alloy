@@ -30,6 +30,8 @@ type Props = {
     onLinkMetadataSaved?: (linkId: string, metadata: Record<string, unknown>) => void;
     onCreateLink?: () => void;
     creatingLink?: boolean;
+    shareCreationBlocked?: boolean;
+    shareBlockButtonLabel?: string;
 };
 
 /** “What is this form used for?” — operational intent templates (Forms MVP Card 1). */
@@ -45,6 +47,8 @@ export function FormOperationalIntentPicker({
     onLinkMetadataSaved,
     onCreateLink,
     creatingLink = false,
+    shareCreationBlocked = false,
+    shareBlockButtonLabel = "Add required fields first",
 }: Props) {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -162,11 +166,15 @@ export function FormOperationalIntentPicker({
                         <button
                             type="button"
                             className={clsx(intakeWorkspaceBtnPrimary, "mt-2")}
-                            disabled={creatingLink || busy}
+                            disabled={creatingLink || busy || shareCreationBlocked}
                             data-testid="form-intent-create-share-link"
                             onClick={onCreateLink}
                         >
-                            {creatingLink ? "Creating…" : "Get share link"}
+                            {creatingLink ?
+                                "Creating…"
+                            : shareCreationBlocked ?
+                                shareBlockButtonLabel
+                            :   "Get share link"}
                         </button>
                     :   null}
                 </div>

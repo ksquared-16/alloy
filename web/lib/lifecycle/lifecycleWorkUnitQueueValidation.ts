@@ -25,12 +25,17 @@ export const LIFECYCLE_RECORDS_QUERY_ZERO_COPY =
 export const LIFECYCLE_RECORDS_QUERY_ZERO_EXISTING_COPY =
     "No existing records match these statuses yet." as const;
 
-/** Builder-owned lifecycle with zero records in this department scope (not a broken queue). */
+/** Builder-owned lifecycle with zero records visible by lifecycle filter (not a broken queue). */
 export const LIFECYCLE_NO_RECORDS_IN_LIFECYCLE_YET_COPY =
-    "No records belong to this lifecycle yet. Create a Lead from this lifecycle to see it here." as const;
+    "No records are visible by lifecycle filters yet. Create a Lead from this lifecycle to see it here." as const;
 
+export function lifecycleRecordsVisibleNotAssignedCopy(count: number): string {
+    return `${count} visible by lifecycle filter with assignment home elsewhere.`;
+}
+
+/** @deprecated Prefer lifecycleRecordsVisibleNotAssignedCopy — informational only. */
 export function lifecycleRecordsMisassignedCopy(count: number): string {
-    return `${count} matching record(s) exist but are assigned to another work unit. Repair available.`;
+    return lifecycleRecordsVisibleNotAssignedCopy(count);
 }
 
 function isOperatorStage(stage: string): stage is LifecycleOperatorStage {

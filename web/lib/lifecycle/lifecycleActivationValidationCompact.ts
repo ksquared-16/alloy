@@ -96,7 +96,9 @@ export function buildLifecycleActivationCompactChecks(
             recordsQueryCheck?.detail?.includes(LIFECYCLE_RECORDS_QUERY_ZERO_EXISTING_COPY) ||
             recordsQueryCheck?.detail?.includes(LIFECYCLE_RECORDS_QUERY_ZERO_COPY) ||
             recordsQueryCheck?.detail?.includes("No records match these statuses") ||
-            recordsQueryCheck?.detail?.includes("assigned to another work unit"));
+            recordsQueryCheck?.detail?.includes("visible by lifecycle filters") ||
+            recordsQueryCheck?.detail?.includes("assigned to another work unit") ||
+            recordsQueryCheck?.detail?.includes("visible by lifecycle filter"));
     const recordsNeedsAttach =
         recordsQueryPass && recordsQueryCheck?.detail?.includes("assigned to another work unit");
     const recordsQuerySummary = recordsQueryPass

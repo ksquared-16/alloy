@@ -1,6 +1,7 @@
 "use client";
 
 import { DistributionLinksPanel } from "@/components/forms/workspace/DistributionLinksPanel";
+import type { FormLifecycleRecordCreationGate } from "@/lib/forms/lifecycle/isFormLifecycleReadyForRecordCreation";
 import type { DistributionCreatedLinkPayload, DistributionLinkRow } from "@/lib/forms/distributionPresentation";
 
 export type FormPublicLinkRow = DistributionLinkRow & {
@@ -26,6 +27,7 @@ type Props = {
     viewerTz: string;
     onCreateLink: () => void;
     onCopy: (key: string, text: string) => void;
+    recordCreationGate?: FormLifecycleRecordCreationGate;
 };
 
 function toCreatedLink(payload: CreatedLinkPayload | null): DistributionCreatedLinkPayload | null {
@@ -50,7 +52,9 @@ export function FormDistributionPanel({
     viewerTz,
     onCreateLink,
     onCopy,
+    recordCreationGate,
 }: Props) {
+    const shareIntakeBlocked = Boolean(recordCreationGate?.blocksRecordCreatingShare);
     return (
         <div data-testid="form-distribution-panel">
             <DistributionLinksPanel
@@ -67,6 +71,9 @@ export function FormDistributionPanel({
                 copyWarn={copyWarn}
                 onCopy={onCopy}
                 onShareIntake={onCreateLink}
+                shareIntakeBlocked={shareIntakeBlocked}
+                shareIntakeBlockedLabel={recordCreationGate?.shareBlockButtonLabel ?? "Add required fields first"}
+                shareIntakeBlockedMessage={recordCreationGate?.shareBlockMessage ?? null}
             />
         </div>
     );

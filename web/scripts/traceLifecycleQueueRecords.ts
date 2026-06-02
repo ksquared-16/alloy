@@ -75,7 +75,7 @@ function resolveScopeBundle(params: {
         workUnitMetadata: params.workUnitMetadata,
         departmentId: params.departmentId,
     });
-    if (scope.mode === "lifecycle_status") {
+    if (scope.mode === "lifecycle_visibility") {
         const departmentWorkUnitIds =
             params.departmentWorkUnitIdsForLifecycleScope?.map((id) => id.trim()).filter(Boolean) ?? [];
         return { scope, departmentWorkUnitIds };
@@ -396,8 +396,8 @@ async function main() {
     section("Likely causes checklist");
     console.log({
         "1_status_key_mismatch": !orgHasAnyLaneStatus,
-        "2_work_unit_scope_strict_on_browser": browserFilter.scope_mode === "lifecycle_status_strict_wu",
-        "3_lifecycle_scope_active": scope.mode === "lifecycle_status",
+        "2_work_unit_scope_strict_on_browser": browserFilter.scope_mode === "work_unit_id",
+        "3_lifecycle_scope_active": scope.mode === "lifecycle_visibility",
         "4_browser_vs_dept_count_delta": browserCount !== deptCount,
         "5_queue_definition_missing_filters": laneStatusKeys.length === 0,
     });

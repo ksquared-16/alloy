@@ -40,6 +40,7 @@ type Props = {
     hasSchema?: boolean;
     coverageRefreshKey?: string;
     onFormMetadataUpdated?: (metadata: Record<string, unknown>) => void;
+    onCoverageSaved?: () => void;
 };
 
 const PRIMARY_INTENTS = OPERATIONAL_INTENT_CATALOG.filter((t) => !t.advanced);
@@ -67,6 +68,7 @@ export function FormLifecycleUsagePanel({
     hasSchema = true,
     coverageRefreshKey = "",
     onFormMetadataUpdated,
+    onCoverageSaved,
 }: Props) {
     const storedUsage = useMemo(() => readFormLifecycleUsage(formMetadata), [formMetadata]);
     const storedIntent = useMemo(() => readStoredOperationalIntent(formMetadata), [formMetadata]);
@@ -170,12 +172,13 @@ export function FormLifecycleUsagePanel({
             } else {
                 await loadCoverage();
             }
+            onCoverageSaved?.();
         } catch (e) {
             setError(e instanceof Error ? e.message : "Could not save lifecycle usage");
         } finally {
             setSaving(false);
         }
-    }, [canMutate, departmentId, stageKey, intent, formId, onFormMetadataUpdated, loadCoverage]);
+    }, [canMutate, departmentId, stageKey, intent, formId, onFormMetadataUpdated, loadCoverage, onCoverageSaved]);
 
     const selectedDepartmentName =
         departments.find((d) => d.id === departmentId)?.name ??

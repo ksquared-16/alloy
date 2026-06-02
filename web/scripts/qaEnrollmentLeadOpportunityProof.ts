@@ -122,6 +122,42 @@ function submissionToInboxRow(row: Awaited<ReturnType<typeof loadSubmission>>): 
     };
 }
 
+function assertQuickReviewShowsOperationalizedLead(
+    quickReview: ReturnType<typeof buildIntakeQuickReviewViewModel>,
+    errors: string[]
+) {
+    if (quickReview.leadCreatedMode) {
+        assert(
+            quickReview.intakeSummary.statusLine === "New Lead",
+            `quick review status is New Lead (got ${quickReview.intakeSummary.statusLine})`,
+            errors
+        );
+        const leadCopy = (
+            quickReview.leadCreatedSummary ??
+            quickReview.intakeSummary.capturedLine ??
+            ""
+        ).toLowerCase();
+        assert(leadCopy.includes("lead"), "quick review lead-created copy mentions lead", errors);
+        assert(
+            quickReview.needsAction.clearMessage === "No manual review required.",
+            "quick review shows no manual review required",
+            errors
+        );
+        assert(
+            !quickReview.needsAction.items.some((item) => item.toLowerCase().includes("needs family match")),
+            "quick review has no stale needs-linking items",
+            errors
+        );
+        return;
+    }
+
+    assert(
+        (quickReview.intakeSummary.operationalLine ?? "").toLowerCase().includes("lead"),
+        "quick review operational line mentions lead",
+        errors
+    );
+}
+
 async function main() {
     const notes: string[] = [];
     const errors: string[] = [];
@@ -197,13 +233,13 @@ async function main() {
         formName: form.name ?? "Enrollment Lead — Demo",
         submittedAtLabel: row.submitted_at ?? row.created_at,
     });
-    assert(
-        (quickReview.intakeSummary.operationalLine ?? "").toLowerCase().includes("lead"),
-        "quick review operational line mentions lead",
-        errors
-    );
+    assertQuickReviewShowsOperationalizedLead(quickReview, errors);
     assert(!!intakeCase.opportunity_id, "intake case carries opportunity_id for open path", errors);
-    notes.push(`quickReviewOperationalLine: ${quickReview.intakeSummary.operationalLine}`);
+    notes.push(`quickReviewLeadCreatedMode: ${quickReview.leadCreatedMode}`);
+    notes.push(`quickReviewStatusLine: ${quickReview.intakeSummary.statusLine}`);
+    notes.push(
+        `quickReviewOperationalLine: ${quickReview.intakeSummary.operationalLine ?? quickReview.leadCreatedSummary ?? quickReview.intakeSummary.capturedLine}`
+    );
 
     const pass = errors.length === 0;
 

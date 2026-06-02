@@ -20,6 +20,7 @@ import {
     buildIntakeRuntimeOrchestrationViewModel,
     type RuntimeSubmissionSnapshot,
 } from "@/lib/forms/intakeRuntimeOrchestrationPresentation";
+import type { FormLifecycleRecordCreationGate } from "@/lib/forms/lifecycle/isFormLifecycleReadyForRecordCreation";
 import {
     buildAfterSubmitPreviewLines,
     resolveEffectiveOperationalIntent,
@@ -74,6 +75,8 @@ type Props = {
     creatingLocationLink?: boolean;
     locationLinkErr?: string | null;
     coverageRefreshKey?: string;
+    recordCreationGate?: FormLifecycleRecordCreationGate;
+    onLifecycleCoverageRefresh?: () => void;
 };
 
 /** Business-process-first intake setup rail (IC-8). Architecture unchanged — operator language only. */
@@ -101,6 +104,8 @@ export function FormIntakeRuntimeOrchestrationPanel({
     creatingLocationLink = false,
     locationLinkErr = null,
     coverageRefreshKey = "",
+    recordCreationGate,
+    onLifecycleCoverageRefresh,
 }: Props) {
     const { openDrawer } = useAdminDrawer();
     const [labelCatalog, setLabelCatalog] = useState<OutcomeRoutingLabelCatalog | null>(null);
@@ -156,6 +161,7 @@ export function FormIntakeRuntimeOrchestrationPanel({
                 documentGenerationConfigured,
                 hasPublished,
                 latestSubmission,
+                lifecycleRecordGate: recordCreationGate ?? null,
             }),
         [
             formKey,
@@ -166,8 +172,12 @@ export function FormIntakeRuntimeOrchestrationPanel({
             documentGenerationConfigured,
             hasPublished,
             latestSubmission,
+            recordCreationGate,
         ]
     );
+
+    const shareCreationBlocked = vm.recordCreatingShareBlocked;
+    const shareBlockButtonLabel = vm.recordCreatingShareBlockButtonLabel ?? "Add required fields first";
 
     const operationalLinks = links.filter((l) => !distributionIsPreviewLink(l));
     const selectedLink = operationalLinks.find((l) => l.id === vm.activeRuntimeLinkId) ?? null;
@@ -232,6 +242,12 @@ export function FormIntakeRuntimeOrchestrationPanel({
                 <div className="flex flex-wrap gap-1.5">
                     {vm.liveReady ?
                         <StatusBadge label="Live" variant="success" />
+                    : shareCreationBlocked ?
+                        <StatusBadge label="Missing required fields" variant="warning" />
+                    : recordCreationGate?.readiness === "ready_with_recommended_gaps" ?
+                        <StatusBadge label="Ready · recommended gaps" variant="info" />
+                    : recordCreationGate?.readiness === "not_configured" && recordCreationGate.applies ?
+                        <StatusBadge label="Coverage not configured" variant="neutral" />
                     : vm.linkSetupIncomplete ?
                         <StatusBadge label="Setup incomplete" variant="warning" />
                     : hasPublished ?
@@ -239,6 +255,23 @@ export function FormIntakeRuntimeOrchestrationPanel({
                     :   <StatusBadge label="Not published" variant="neutral" />}
                 </div>
             </div>
+
+            {shareCreationBlocked && vm.recordCreatingShareBlockMessage ?
+                <p
+                    className="mt-2 rounded-lg border border-amber-100 bg-amber-50/80 px-3 py-2 text-sm text-amber-900"
+                    data-testid="lifecycle-record-share-block-banner"
+                >
+                    {vm.recordCreatingShareBlockMessage}
+                </p>
+            : recordCreationGate?.readiness === "ready_with_recommended_gaps" ?
+                <p className="mt-2 rounded-lg border border-alloy-blue/10 bg-alloy-blue/[0.04] px-3 py-2 text-sm text-alloy-midnight" data-testid="lifecycle-record-share-recommended-banner">
+                    {recordCreationGate.setupHeadline}
+                </p>
+            : recordCreationGate?.readiness === "not_configured" && recordCreationGate.applies ?
+                <p className={clsx("mt-2 rounded-lg border border-alloy-stone/20 bg-alloy-stone/[0.06] px-3 py-2 text-sm", opMetadata)} data-testid="lifecycle-record-share-not-configured">
+                    {recordCreationGate.setupMessage}
+                </p>
+            :   null}
 
             {vm.linkSetupIncompleteMessage ?
                 <p className="mt-2 rounded-lg border border-amber-100 bg-amber-50/80 px-3 py-2 text-sm text-amber-900" data-testid="link-setup-incomplete-banner">
@@ -261,6 +294,8 @@ export function FormIntakeRuntimeOrchestrationPanel({
                         onLinkMetadataSaved={onLinkMetadataSaved}
                         onCreateLink={onCreateLink}
                         creatingLink={creatingLink}
+                        shareCreationBlocked={shareCreationBlocked}
+                        shareBlockButtonLabel={shareBlockButtonLabel}
                     />
                 </div>
             :   null}
@@ -296,6 +331,7 @@ export function FormIntakeRuntimeOrchestrationPanel({
                     hasSchema={hasPublished}
                     coverageRefreshKey={coverageRefreshKey}
                     onFormMetadataUpdated={onFormMetadataUpdated}
+                    onCoverageSaved={onLifecycleCoverageRefresh}
                 />
             :   null}
 
@@ -346,11 +382,16 @@ export function FormIntakeRuntimeOrchestrationPanel({
                                 <button
                                     type="button"
                                     className={intakeWorkspaceBtnPrimary}
-                                    disabled={creatingLink}
+                                    disabled={creatingLink || shareCreationBlocked}
                                     data-testid="orchestration-create-share-link"
+                                    title={shareCreationBlocked ? vm.recordCreatingShareBlockMessage ?? undefined : undefined}
                                     onClick={onCreateLink}
                                 >
-                                    {creatingLink ? "Creating…" : "Get share link"}
+                                    {creatingLink ?
+                                        "Creating…"
+                                    : shareCreationBlocked ?
+                                        shareBlockButtonLabel
+                                    :   "Get share link"}
                                 </button>
                             :   null}
                         </div>
@@ -457,6 +498,9 @@ export function FormIntakeRuntimeOrchestrationPanel({
                                 copied={copied}
                                 onCopy={onCopy}
                                 onCreateLocationLink={onCreateLocationLink}
+                                shareCreationBlocked={shareCreationBlocked}
+                                shareBlockButtonLabel={shareBlockButtonLabel}
+                                shareBlockMessage={vm.recordCreatingShareBlockMessage}
                             />
                         </div>
                     :   null}

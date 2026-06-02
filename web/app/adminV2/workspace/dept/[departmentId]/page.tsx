@@ -99,6 +99,12 @@ import {
     isLifecycleStageWorkUnitRow,
     type LifecycleWorkUnitDeptRuntimeDebug,
 } from "@/lib/lifecycle/builderOwnedLifecycleRuntime";
+import {
+    applyLifecycleVisibilityKpiLabels,
+    deptKpiWorkUnitsForLifecycleVisibility,
+    lifecycleThroughputCardTitle,
+    resolveDeptRightRailWorkUnitId,
+} from "@/lib/lifecycle/lifecycleKpiPresentation";
 import { ADMIN_V2_SETTINGS_LIFECYCLE_PATH } from "@/lib/adminV2/settings/lifecycleSettingsPaths";
 import { resolveDeptPipelineExecSurface } from "@/lib/workspace/resolveDeptPipelineExecSurface";
 import { WorkspaceOperIcon } from "@/components/admin/workspace/WorkspaceOperIcon";
@@ -563,8 +569,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         const cacheNaWuId =
             cacheWuList.find((w) => (w.key ?? "").trim().toLowerCase() === "needs_attention")?.id ?? null;
 
-        const railWuFromCache =
-            cacheWuList.find((w) => (w.key ?? "").trim().toLowerCase() === "enrollment_pipeline")?.id ?? "";
+        const railWuFromCache = resolveDeptRightRailWorkUnitId(cacheWuList, isLifecycleStageWorkUnitRow);
         const bootstrapQs = new URLSearchParams({
             include_previews: "false",
             count_mode: "exact",
@@ -1502,11 +1507,23 @@ export default function AdminV2WorkspaceDepartmentPage() {
         return cancel;
     }, [deptAboveFoldPageReady, departmentId, deptThroughputWuRows, selectedSiteId]);
 
-    /** Enrollment rail — parallel with oper region; gate waits for settled rail, not oper reveal order. */
+    const lifecycleRailWorkUnitId = useMemo(() => {
+        if (!builderOwnedLifecycleRuntime) return null;
+        return resolveDeptRightRailWorkUnitId(deptWorkUnits ?? [], isLifecycleStageWorkUnitRow) || null;
+    }, [builderOwnedLifecycleRuntime, deptWorkUnits]);
+
+    /** Department / lifecycle rail — parallel with oper region. */
     useEffect(() => {
-        if (!isEnrollmentLikeDepartmentKey(deptKey) || !departmentId || !primaryWorkUnit?.id) {
+        const railWuId = builderOwnedLifecycleRuntime
+            ? lifecycleRailWorkUnitId
+            : isEnrollmentLikeDepartmentKey(deptKey)
+              ? primaryWorkUnit?.id ?? null
+              : null;
+        if (!departmentId || !railWuId) {
             setEnrollmentDeptRightRail(null);
-            setEnrollmentDeptActionsSettled(!isEnrollmentLikeDepartmentKey(deptKey));
+            setEnrollmentDeptActionsSettled(
+                !isEnrollmentLikeDepartmentKey(deptKey) && !builderOwnedLifecycleRuntime
+            );
             return;
         }
         if (!deptWorkUnitsResolved) return;
@@ -1524,7 +1541,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         let cancelled = false;
         void fetchWorkspaceRightRailResolvedActions({
             departmentId,
-            workUnitId: primaryWorkUnit.id,
+            workUnitId: railWuId,
             fetchInit: workspaceDataFetchInit() ?? {},
         })
             .then((list) => {
@@ -1543,6 +1560,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
         deptKey,
         departmentId,
         primaryWorkUnit?.id,
+        builderOwnedLifecycleRuntime,
+        lifecycleRailWorkUnitId,
         deptWorkUnitsResolved,
         enrollmentDeptActionsSettled,
         enrollmentDeptRightRail,
@@ -1563,14 +1582,14 @@ export default function AdminV2WorkspaceDepartmentPage() {
     }, [deptKey, departmentId, enrollmentDeptRightRail]);
 
     const enrollmentDepartmentRailModel = useMemo(() => {
-        if (!isEnrollmentLikeDepartmentKey(deptKey)) return null;
+        if (!isEnrollmentLikeDepartmentKey(deptKey) && !builderOwnedLifecycleRuntime) return null;
         return mergeEnrollmentRightRailActions(enrollmentDeptRightRail ?? [], {
             primaries: [],
             systemActions: [],
             quickOperations: [],
             overflow: [],
         });
-    }, [deptKey, enrollmentDeptRightRail]);
+    }, [deptKey, builderOwnedLifecycleRuntime, enrollmentDeptRightRail]);
 
     const enrollmentRightRailByKey = useMemo(() => {
         const m = new Map<string, ResolvedActionForClient>();
@@ -1579,11 +1598,15 @@ export default function AdminV2WorkspaceDepartmentPage() {
     }, [enrollmentDeptRightRail]);
 
     const kpis = useMemo(() => {
-        const wuList = deptWorkUnits ?? [];
+        const wuList = deptKpiWorkUnitsForLifecycleVisibility(
+            deptWorkUnits ?? [],
+            builderOwnedLifecycleRuntime,
+            isLifecycleStageWorkUnitRow
+        );
         if (deptPlacementRows === undefined) {
             return [];
         }
-        return resolveKpisForDepartment({
+        const items = resolveKpisForDepartment({
             placementRows: deptPlacementRows,
             scopeHasPlacementRows: deptScopeHasPlacements,
             departmentSurface: "department",
@@ -1591,7 +1614,9 @@ export default function AdminV2WorkspaceDepartmentPage() {
             deptWorkUnitSummaries,
             deptQueueSummariesLoading,
             deptQueueSummariesError,
+            lifecycleVisibilityCounts: builderOwnedLifecycleRuntime,
         }).items;
+        return builderOwnedLifecycleRuntime ? applyLifecycleVisibilityKpiLabels(items) : items;
     }, [
         deptPlacementRows,
         deptScopeHasPlacements,
@@ -1599,6 +1624,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         deptQueueSummariesLoading,
         deptWorkUnitSummaries,
         deptWorkUnits,
+        builderOwnedLifecycleRuntime,
     ]);
 
     const needsAttentionSummary = useMemo(() => {
@@ -1651,19 +1677,27 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     openDrawer,
                     openCreateLead: () => setCreateLeadOpen(true),
                     departmentId,
-                    workUnitId: primaryWorkUnit?.id ?? null,
+                    workUnitId: lifecycleRailWorkUnitId ?? primaryWorkUnit?.id ?? null,
                     needsAttentionHref,
                     context: {
                         surface: "right_rail",
                         department_id: departmentId,
-                        work_unit_id: primaryWorkUnit?.id ?? null,
+                        work_unit_id: lifecycleRailWorkUnitId ?? primaryWorkUnit?.id ?? null,
                     },
                 });
                 return;
             }
             window.alert("Coming next: This action is not configured yet.");
         },
-        [departmentId, enrollmentRightRailByKey, needsAttentionHref, openDrawer, primaryWorkUnit?.id, router]
+        [
+            departmentId,
+            enrollmentRightRailByKey,
+            needsAttentionHref,
+            openDrawer,
+            lifecycleRailWorkUnitId,
+            primaryWorkUnit?.id,
+            router,
+        ]
     );
 
     const showPipelineLanes = deptThroughputPresentation === "pipeline_lanes";
@@ -1727,7 +1761,10 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                         <DeptOperConsoleQueueRow
                                             href={href}
                                             departmentId={departmentId}
-                                            title={`${wu.name?.trim() || "Work unit"}. Total ${total ?? "—"}.`}
+                                            title={lifecycleThroughputCardTitle(
+                                                wu.name?.trim() || "Work unit",
+                                                total
+                                            )}
                                             label={resolveDeptWorkUnitDisplayLabel(wu)}
                                             iconKey={null}
                                             total={total}
@@ -1755,8 +1792,13 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     !deptAttentionBucketsError &&
                     sortedDeptAttentionBuckets.length === 0 ? (
                         <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
-                            <div className="rounded-lg border border-admin-border bg-white/50 px-3 py-3 text-xs text-alloy-midnight/60">
-                                No Needs Attention types configured.
+                            <div
+                                className="rounded-lg border border-admin-border bg-white/50 px-3 py-3 text-xs text-alloy-midnight/60"
+                                data-testid="dept-needs-attention-placeholder"
+                            >
+                                {builderOwnedLifecycleRuntime
+                                    ? "Needs Attention is not configured for this lifecycle yet. Throughput stages use lifecycle visibility filters."
+                                    : "No Needs Attention types configured."}
                             </div>
                         </li>
                     ) : null}
@@ -1947,8 +1989,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         </div>
                     }
                     railSlot={
-                        isEnrollmentLikeDepartmentKey(deptKey) &&
-                        primaryWorkUnit &&
+                        (isEnrollmentLikeDepartmentKey(deptKey) || builderOwnedLifecycleRuntime) &&
+                        (lifecycleRailWorkUnitId || primaryWorkUnit) &&
                         (enrollmentDepartmentRailModel?.systemActions?.length ?? 0) > 0 ? (
                             <ActionsBlock
                                 model={enrollmentDepartmentRailModel!}

@@ -151,6 +151,8 @@ import { mergeEnrollmentRightRailActions } from "@/lib/workspace/viewModels/enro
 import { fetchWorkspaceRightRailResolvedActions } from "@/lib/workspace/fetchWorkspaceRightRailResolvedActions";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { resolveKpisForWorkUnit } from "@/lib/kpi/resolver";
+import { applyLifecycleVisibilityKpiLabels } from "@/lib/lifecycle/lifecycleKpiPresentation";
+import { isLifecycleStageWorkUnitKey } from "@/lib/lifecycle/lifecycleStageWorkUnit";
 import { buildDefaultWorkUnitKpis } from "@/lib/kpi/baseline";
 import { workUnitContextFromParts } from "@/lib/kpi/surfaceContext";
 import { normalizeQueueDefinitionDocument, tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
@@ -3895,16 +3897,29 @@ export default function AdminV2OpportunityWorkUnitPage() {
         model,
     ]);
 
+    const lifecycleVisibilityKpis = useMemo(
+        () => isLifecycleStageWorkUnitKey(workUnit?.key ?? null),
+        [workUnit?.key]
+    );
+
     const wuResolvedPlacementKpis = useMemo(() => {
         if (suppressWorkUnitKpiStrip) return [];
         if (!workUnitKpiContext) return undefined;
         if (wuPlacementRows === undefined) return undefined;
-        return resolveKpisForWorkUnit({
+        const items = resolveKpisForWorkUnit({
             placementRows: wuPlacementRows,
             scopeHasPlacementRows: wuScopeHasPlacements,
             context: workUnitKpiContext,
+            lifecycleVisibilityCounts: lifecycleVisibilityKpis,
         }).items;
-    }, [suppressWorkUnitKpiStrip, wuPlacementRows, wuScopeHasPlacements, workUnitKpiContext]);
+        return lifecycleVisibilityKpis ? applyLifecycleVisibilityKpiLabels(items) : items;
+    }, [
+        suppressWorkUnitKpiStrip,
+        wuPlacementRows,
+        wuScopeHasPlacements,
+        workUnitKpiContext,
+        lifecycleVisibilityKpis,
+    ]);
 
     const enrollmentRightRailByKey = useMemo(() => {
         const m = new Map<string, ResolvedActionForClient>();

@@ -782,12 +782,78 @@ With lifecycle usage configured and guardian first/last + email (or phone) field
 - **Person / Guardian:** First name, Last name, Phone or Email — Required — Satisfied
 - Recommended child fields may show as Missing without blocking Ready
 
-### Remaining gaps (Cards 4–6)
+**Card 4 readiness:** Logic layer (`coverage.ready`, presentation status) is ready to consume; gating hooks not wired yet.
+
+---
+
+## Card 4 — Readiness / Share Gating (implemented)
+
+### Doctrine
+
+**Publish ≠ operational readiness.** Forms may publish while record-creating share links stay blocked until required lifecycle fields are satisfied.
+
+Lifecycle defines the contract; Forms prove satisfaction via Card 1–3 coverage payload.
+
+### Helper
+
+`web/lib/forms/lifecycle/isFormLifecycleReadyForRecordCreation.ts`
+
+- `operationalIntentRequiresLifecycleRecordCoverage` — `enrollment_lead`, `waitlist`
+- `buildFormLifecycleRecordCreationGate` — readiness state + block messages
+- `isFormLifecycleReadyForRecordCreation` — convenience boolean
+
+Readiness states: `not_applicable`, `not_configured`, `unavailable`, `missing_required`, `ready_with_recommended_gaps`, `ready`.
+
+### Gated surfaces
+
+| Surface | Behavior |
+|---------|----------|
+| Form setup status badge | Missing required / recommended gaps / not configured |
+| Share block banner | Card 4 copy when required fields missing |
+| Get share link (orchestration + intent picker + distribution panel) | Disabled → “Add required fields first” |
+| Location-specific link creation | Disabled with same copy + banner |
+| `liveReady` orchestration flag | False when lifecycle blocks record-creating share |
+| Publish | **Not gated** |
+
+### Not gated
+
+- Non-record intents (`existing_family`, `operational_document`, `packet_step`, `custom` without record flow)
+- Forms without lifecycle usage configured (legacy behavior preserved; gentle “not configured” copy)
+- Copy/preview of **existing** share links
+- Public submit (Card 5)
+
+### Copy
+
+- Block: “This form cannot create a Lead yet because it does not capture all required information for the selected lifecycle stage.”
+- Ready: “Ready to create Lead.”
+- Recommended only: “Ready. Recommended fields are missing.” (sharing allowed)
+
+### Wiring
+
+- `FormDetailClient` loads lifecycle coverage once → `recordCreationGate` passed to workspace layout
+- `buildIntakeRuntimeOrchestrationViewModel` accepts `lifecycleRecordGate` for `liveReady` + share step hints
+- `FormIntakeRuntimeOrchestrationPanel`, `FormLocationShareLinksPanel`, `FormOperationalIntentPicker`, `FormDistributionPanel` consume gate props
+- `createPublicLink` / `createLocationPublicLink` guard server-side in client handler (defense in depth; no API block yet)
+
+### Tests
+
+```bash
+cd web && npm run test -- \
+  tests/forms/resolveFormsLifecycleRequirementContract.test.ts \
+  tests/forms/evaluateFormsLifecycleFieldCoverage.test.ts \
+  tests/forms/buildFormLifecycleCoveragePresentation.test.ts \
+  tests/forms/formLifecycleCoverageRoute.test.ts \
+  tests/forms/formLifecycleUsagePanel.test.tsx \
+  tests/forms/isFormLifecycleReadyForRecordCreation.test.ts \
+  tests/forms/intakeRuntimeOrchestrationPresentation.test.ts
+cd web && npx tsc --noEmit
+```
+
+### Remaining gaps (Cards 5–6)
 
 | Card | Gap |
 |------|-----|
-| **4 — Publish / share readiness gating** | Wire `coverage.ready` + missing-required warnings into publish/share UX; block or warn “ready to create lead” |
-| **5 — Runtime submit validation** | Server-side check before `applyFormIntakeSafe`; reject or flag incomplete intake |
+| **5 — Runtime submit validation** | Server-side check before `applyFormIntakeSafe`; reject incomplete public intake |
 | **6 — QA + docs closeout** | End-to-end operator QA, enrollment hub alignment, sprint closeout |
 
-**Card 4 readiness:** Logic layer (`coverage.ready`, presentation status) is ready to consume; gating hooks not wired yet.
+**Card 5 readiness:** Gate helper + coverage API ready; public submit path not wired yet.

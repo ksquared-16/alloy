@@ -11,8 +11,9 @@ import { resolveLifecycleOpportunityQueueScope } from "@/lib/lifecycle/lifecycle
 const repoRoot = path.resolve(__dirname, "../..");
 
 describe("lifecycle queue trace", () => {
-    it("strict WU scope when lifecycle WU has no dept id preload", () => {
+    it("lifecycle_visibility has no work_unit gate even without dept preload", () => {
         const scope = resolveLifecycleOpportunityQueueScope({
+            orgId: "org-1",
             workUnitId: "wu-1",
             workUnitKey: "lifecycle_wu_lead",
             departmentId: "dept-1",
@@ -21,24 +22,11 @@ describe("lifecycle queue trace", () => {
                 lifecycle_stage_key: "lead",
             },
         });
-        expect(scope.mode).toBe("lifecycle_status");
+        expect(scope.mode).toBe("lifecycle_visibility");
         const desc = describeLifecycleQueueScopeFilter(scope, []);
-        expect(desc.scope_mode).toBe("lifecycle_status_strict_wu");
-        expect(desc.lifecycle_status_scope_applied).toBe(true);
-    });
-
-    it("dept scope when department work unit ids preloaded", () => {
-        const scope = resolveLifecycleOpportunityQueueScope({
-            workUnitId: "wu-1",
-            workUnitKey: "lifecycle_wu_lead",
-            departmentId: "dept-1",
-            workUnitMetadata: {
-                lifecycle_builder_owned_v1: { builder_owned: true },
-                lifecycle_stage_key: "lead",
-            },
-        });
-        const desc = describeLifecycleQueueScopeFilter(scope, ["wu-1", "wu-legacy"]);
-        expect(desc.scope_mode).toBe("lifecycle_status_dept_scope");
+        expect(desc.scope_mode).toBe("lifecycle_visibility");
+        expect(desc.lifecycle_visibility_scope_applied).toBe(true);
+        expect(desc.work_unit_scope_sql).toContain("no work_unit_id gate");
     });
 
     it("QueueService attaches dev lifecycle_queue_debug on empty lifecycle queues", () => {
@@ -62,14 +50,15 @@ describe("lifecycle queue trace", () => {
         const eq = buildLifecycleQueueFilterEquivalent({
             orgId: "org",
             scope: {
-                mode: "lifecycle_status",
+                mode: "lifecycle_visibility",
                 departmentId: "d",
                 lifecycleWorkUnitId: "wu",
                 stageKey: "lead",
             },
-            departmentWorkUnitIds: ["a", "b"],
+            departmentWorkUnitIds: [],
             statusKeys: keys,
         });
         expect(eq.status_keys).toContain("new_inquiry");
+        expect(eq.scope_mode).toBe("lifecycle_visibility");
     });
 });
