@@ -43,6 +43,7 @@
 | AdminV2 performance | [`05_2026/completed/adminv2_performance_closeout.md`](./05_2026/completed/adminv2_performance_closeout.md) |
 | AdminV2 runtime consistency (June 2026) | [`06_2026/completed/adminv2_runtime_performance_consistency_closeout.md`](./06_2026/completed/adminv2_runtime_performance_consistency_closeout.md) |
 | BOS operational assist | [`06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`](./06_2026/completed/bos_assist_routing_communication_drafting_closeout.md) |
+| Forms lifecycle requirement coverage | [`06_2026/completed/forms_lifecycle_requirement_coverage.md`](./06_2026/completed/forms_lifecycle_requirement_coverage.md) |
 
 Full roadmap sequencing: **`docs/execution/roadmap-and-gaps.md`**.
 

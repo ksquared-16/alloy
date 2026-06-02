@@ -18,6 +18,10 @@ import { mergePublicSubmissionMeta } from "@/lib/public/forms/publicPayloadMeta"
 import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
 import { applyFormIntakeSafe } from "@/lib/forms/intake/applyFormIntakeSafe";
 import { buildFormIntakeMetaFromPayload } from "@/lib/forms/intake/buildFormIntakeMetaFromPayload";
+import {
+    buildLifecycleValidationBlockedMeta,
+    validatePublicSubmissionLifecycleRequirements,
+} from "@/lib/forms/lifecycle/validatePublicSubmissionLifecycleRequirements";
 import { persistFormSubmissionSignatures } from "@/lib/forms/signatures/persistFormSubmissionSignatures";
 import {
     emitFormPacketCompletedSafe,
@@ -204,6 +208,41 @@ export async function POST(
                     intake: built.intake,
                 },
             };
+
+            const lifecycleValidation = await validatePublicSubmissionLifecycleRequirements(supabase, {
+                orgId: ctx.orgId,
+                formDefinitionId: ctx.formDefinitionId,
+                schemaJson,
+                linkMetadata: metaRecord,
+                submittedValues: (finalPayload.values ?? {}) as Record<string, unknown>,
+            });
+
+            if (!lifecycleValidation.ok) {
+                const blockedMeta = buildLifecycleValidationBlockedMeta({
+                    usage: lifecycleValidation.usage,
+                    missingRequiredLabels: lifecycleValidation.missingRequiredLabels,
+                    missingRequiredFieldKeys: lifecycleValidation.missingRequiredFieldKeys,
+                });
+                finalPayload = {
+                    ...finalPayload,
+                    meta: {
+                        ...((finalPayload.meta ?? {}) as Record<string, unknown>),
+                        ...blockedMeta,
+                    },
+                };
+                await supabase
+                    .from("form_submissions")
+                    .update({ payload: finalPayload as unknown as Record<string, unknown> })
+                    .eq("id", submissionId)
+                    .eq("org_id", ctx.orgId)
+                    .eq("created_via_public_link_id", ctx.linkId)
+                    .eq("status", "draft");
+                return publicErr(lifecycleValidation.publicMessage, 400, {
+                    code: "LIFECYCLE_VALIDATION_BLOCKED",
+                    missing_fields: lifecycleValidation.missingRequiredLabels,
+                });
+            }
+
             try {
                 const intakeResult = await applyFormIntakeSafe(supabase, {
                     orgId: ctx.orgId,

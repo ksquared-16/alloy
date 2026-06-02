@@ -167,7 +167,36 @@ function blocksCrossEntityLabelMatch(ruleId: string, field: FormFieldCaptureEntr
     return !entitiesCompatibleForLabelMatch(ruleId, field);
 }
 
-function matchFieldToRule(ruleId: string, field: FormFieldCaptureEntry): RuleMatchResult | null {
+function submittedFieldHasValue(
+    submittedValues: Record<string, unknown> | undefined,
+    fieldId: string | undefined
+): boolean {
+    if (!submittedValues || !fieldId) return true;
+    const v = submittedValues[fieldId];
+    if (v === null || v === undefined) return false;
+    if (typeof v === "string") return v.trim().length > 0;
+    if (Array.isArray(v)) return v.some((item) => typeof item === "string" && item.trim().length > 0);
+    if (typeof v === "number") return !Number.isNaN(v);
+    if (typeof v === "boolean") return true;
+    return false;
+}
+
+function satisfiedMatch(
+    field: FormFieldCaptureEntry,
+    matchKind: FormsLifecycleCoverageMatchKind,
+    submittedValues?: Record<string, unknown>
+): RuleMatchResult {
+    if (!submittedFieldHasValue(submittedValues, field.id)) {
+        return { status: "missing" };
+    }
+    return { status: "satisfied", field, matchKind };
+}
+
+function matchFieldToRule(
+    ruleId: string,
+    field: FormFieldCaptureEntry,
+    submittedValues?: Record<string, unknown>
+): RuleMatchResult | null {
     if (field.isUnmappedCustom) return null;
     if (blocksPersonNameRule(ruleId, field)) return null;
 
@@ -187,7 +216,7 @@ function matchFieldToRule(ruleId: string, field: FormFieldCaptureEntry): RuleMat
     const src = field.fieldSource;
 
     if (src?.crm_mapping_key && crmKeys.includes(src.crm_mapping_key)) {
-        return { status: "satisfied", field, matchKind: "crm_mapping_key" };
+        return satisfiedMatch(field, "crm_mapping_key", submittedValues);
     }
 
     if (src && src.entity_type !== "custom") {
@@ -201,22 +230,22 @@ function matchFieldToRule(ruleId: string, field: FormFieldCaptureEntry): RuleMat
             expectedKey &&
             (src.field_key === expectedKey || src.shared_value_key === expectedKey)
         ) {
-            return { status: "satisfied", field, matchKind: "entity_field_key" };
+            return satisfiedMatch(field, "entity_field_key", submittedValues);
         }
     }
 
     const captureKeys = captureKeysForRule(ruleId);
     if (captureKeys.includes(field.id)) {
-        return { status: "satisfied", field, matchKind: "registry" };
+        return satisfiedMatch(field, "registry", submittedValues);
     }
     if (field.registryEntry && captureKeys.includes(field.registryEntry.field_key)) {
-        return { status: "satisfied", field, matchKind: "registry" };
+        return satisfiedMatch(field, "registry", submittedValues);
     }
     if (
         field.registryEntry?.shared_value_key &&
         captureKeys.includes(field.registryEntry.shared_value_key)
     ) {
-        return { status: "satisfied", field, matchKind: "registry" };
+        return satisfiedMatch(field, "registry", submittedValues);
     }
 
     if (custom && field.fieldSource?.field_key === custom.field_key) {
@@ -224,7 +253,7 @@ function matchFieldToRule(ruleId: string, field: FormFieldCaptureEntry): RuleMat
             lifecycleEntityFromFormFieldSource(field.fieldSource.entity_type)
         :   null;
         if (formEntity === custom.entity) {
-            return { status: "satisfied", field, matchKind: "alias" };
+            return satisfiedMatch(field, "alias", submittedValues);
         }
     }
 
@@ -243,18 +272,22 @@ function matchFieldToRule(ruleId: string, field: FormFieldCaptureEntry): RuleMat
         const tokenNorm = normalizeCompare(token);
         if (!tokenNorm || !fieldNorm) continue;
         if (fieldNorm === tokenNorm || fieldNorm.includes(tokenNorm) || tokenNorm.includes(fieldNorm)) {
-            return { status: "satisfied", field, matchKind: "label_weak" };
+            return satisfiedMatch(field, "label_weak", submittedValues);
         }
     }
 
     return { status: "missing" };
 }
 
-function bestMatchForRule(ruleId: string, index: FormFieldCaptureIndex): RuleMatchResult {
+function bestMatchForRule(
+    ruleId: string,
+    index: FormFieldCaptureIndex,
+    submittedValues?: Record<string, unknown>
+): RuleMatchResult {
     let best: RuleMatchResult = { status: "missing" };
 
     for (const field of index.fields) {
-        const attempt = matchFieldToRule(ruleId, field);
+        const attempt = matchFieldToRule(ruleId, field, submittedValues);
         if (!attempt) continue;
         if (attempt.status === "unknown") return attempt;
         if (attempt.status !== "satisfied") continue;
@@ -324,7 +357,8 @@ function constraintFailureItem(
 
 function evaluateCoverageWithIndex(
     index: FormFieldCaptureIndex,
-    contract: FormsLifecycleRequirementContract
+    contract: FormsLifecycleRequirementContract,
+    submittedValues?: Record<string, unknown>
 ): FormsLifecycleCoverageResult {
     const matchByRuleId = new Map<string, RuleMatchResult>();
 
@@ -335,7 +369,7 @@ function evaluateCoverageWithIndex(
     ]);
 
     for (const ruleId of allRuleIds) {
-        matchByRuleId.set(ruleId, bestMatchForRule(ruleId, index));
+        matchByRuleId.set(ruleId, bestMatchForRule(ruleId, index, submittedValues));
     }
 
     const satisfiedRequired: FormsLifecycleCoverageItem[] = [];
@@ -403,12 +437,22 @@ export function evaluateFormsLifecycleFieldCoverage(
     return evaluateCoverageWithIndex(buildFormFieldCaptureIndex(schemaJson), contract);
 }
 
+/** Card 5 — evaluate whether submitted values satisfy lifecycle requirements (not just schema capture). */
+export function evaluateSubmittedFormsLifecycleFieldCoverage(
+    schemaJson: unknown,
+    contract: FormsLifecycleRequirementContract,
+    submittedValues: Record<string, unknown>
+): FormsLifecycleCoverageResult {
+    return evaluateCoverageWithIndex(buildFormFieldCaptureIndex(schemaJson), contract, submittedValues);
+}
+
 /** Evaluate coverage from parsed form fields (tests + authoring previews). */
 export function evaluateFormsLifecycleFieldCoverageFromFields(
     fields: FormField[],
-    contract: FormsLifecycleRequirementContract
+    contract: FormsLifecycleRequirementContract,
+    submittedValues?: Record<string, unknown>
 ): FormsLifecycleCoverageResult {
-    return evaluateCoverageWithIndex(buildFormFieldCaptureIndexFromFields(fields), contract);
+    return evaluateCoverageWithIndex(buildFormFieldCaptureIndexFromFields(fields), contract, submittedValues);
 }
 
 /** Representative Website Inquiry schema for docs/tests. */
