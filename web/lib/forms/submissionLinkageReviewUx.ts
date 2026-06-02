@@ -1,3 +1,4 @@
+import { isCleanOperationalizedEnrollmentLead } from "@/lib/forms/intakeEnrollmentLeadClassification";
 import {
     documentGenerationBlockedByIntake,
     submissionHasDocumentAttachTarget,
@@ -26,6 +27,15 @@ export function submissionListLinkageBadge(params: {
     if (params.status.toLowerCase() !== "submitted") {
         return { kind: "none" };
     }
+    if (
+        isCleanOperationalizedEnrollmentLead({
+            status: params.status,
+            payloadMeta: params.payloadMeta,
+            attachRow: params.attachRow,
+        })
+    ) {
+        return { kind: "none" };
+    }
     const block = documentGenerationBlockedByIntake(params.payloadMeta, params.attachRow);
     if (!block.blocked) {
         return { kind: "none" };
@@ -50,7 +60,20 @@ export function submissionListLinkageBadge(params: {
 }
 
 /** Operator-facing bullet reasons for the top-of-page linkage callout (submitted + doc gen blocked). */
-export function buildLinkageReviewCalloutReasons(payloadMeta: unknown, attachRow: SubmissionAttachRow): string[] {
+export function buildLinkageReviewCalloutReasons(
+    payloadMeta: unknown,
+    attachRow: SubmissionAttachRow,
+    status = "submitted"
+): string[] {
+    if (
+        isCleanOperationalizedEnrollmentLead({
+            status,
+            payloadMeta,
+            attachRow,
+        })
+    ) {
+        return [];
+    }
     const block = documentGenerationBlockedByIntake(payloadMeta, attachRow);
     if (!block.blocked) {
         return [];
@@ -107,5 +130,14 @@ export function submissionDetailLinkageCalloutVisible(params: {
     attachRow: SubmissionAttachRow;
 }): boolean {
     if (params.status.toLowerCase() !== "submitted") return false;
+    if (
+        isCleanOperationalizedEnrollmentLead({
+            status: params.status,
+            payloadMeta: params.payloadMeta,
+            attachRow: params.attachRow,
+        })
+    ) {
+        return false;
+    }
     return documentGenerationBlockedByIntake(params.payloadMeta, params.attachRow).blocked;
 }

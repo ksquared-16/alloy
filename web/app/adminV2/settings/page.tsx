@@ -92,16 +92,8 @@ export default function AdminV2SettingsIndexPage() {
                     </SettingsGroup>
 
                     <SettingsGroup label="Enrollment Operations">
-                        <SettingsLink
-                            href="/adminV2/settings/enrollment-process"
-                            title="Enrollment Process"
-                            mode="editable"
-                            emphasis
-                        >
-                            Configure how families move from lead to enrolled — stages, queues, and requirements.
-                        </SettingsLink>
-                        <SettingsLink href="/adminV2/settings/lifecycle" title="Lifecycle" mode="editable">
-                            Required and recommended information per stage (detailed editor).
+                        <SettingsLink href="/adminV2/settings/lifecycle" title="Lifecycle" mode="editable" emphasis>
+                            Configure processes, stages, requirements, statuses, queues, actions, and forms.
                         </SettingsLink>
                         <SettingsLink href="/adminV2/settings/work-units" title="Work Units & Queues" mode="partial">
                             Pipeline lanes and queue layout in the workspace.

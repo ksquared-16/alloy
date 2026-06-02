@@ -3,6 +3,7 @@
  * Uses existing submission status and linkage signals only.
  */
 
+import { isCleanOperationalizedEnrollmentLead } from "@/lib/forms/intakeEnrollmentLeadClassification";
 import type { SubmissionAttachRow } from "@/lib/forms/submissionOutcomeSummary";
 import { submissionListLinkageBadge } from "@/lib/forms/submissionLinkageReviewUx";
 
@@ -75,6 +76,16 @@ export function resolveSubmissionInboxLane(row: SubmissionInboxRow): SubmissionI
     const status = row.status.toLowerCase();
     if (status === "draft" || status === "void") return "drafts";
     if (status !== "submitted") return "drafts";
+
+    if (
+        isCleanOperationalizedEnrollmentLead({
+            status: row.status,
+            payloadMeta: row.payload?.meta,
+            attachRow: submissionInboxAttachRow(row),
+        })
+    ) {
+        return "recentlySubmitted";
+    }
 
     const linkage = submissionInboxLinkageKind(row);
     if (linkage === "needs_review") return "needsReview";

@@ -7,6 +7,7 @@ import { ensureCustomerPersonsPrimaryLink } from "@/lib/bookingCustomerPersonLin
 import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
 import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
 import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
+import { resolveLifecycleCreateLeadBinding } from "@/lib/lifecycle/lifecycleRuntimeBinding";
 import { QUALIFICATION_STATUS_KEY } from "@/lib/admin/actions/universalActionConstants";
 import type { ExecuteAdminActionCtx } from "@/lib/admin/actions/executeAdminAction";
 
@@ -71,11 +72,19 @@ export async function executeCreateLeadAction(
         };
     }
 
-    const workUnitId =
+    const departmentId = trim(input.context?.department_id) || trim(input.merged.department_id) || null;
+    let workUnitId =
         trim(input.context?.work_unit_id) ||
         trim(input.merged.work_unit_id) ||
         null;
-    const departmentId = trim(input.context?.department_id) || trim(input.merged.department_id) || null;
+    let statusKeyForLead = NEW_LEAD_STATUS_KEY;
+    if (departmentId) {
+        const binding = await resolveLifecycleCreateLeadBinding(supabase, ctx.orgId, departmentId);
+        if (!workUnitId && binding.work_unit_id) {
+            workUnitId = binding.work_unit_id;
+        }
+        statusKeyForLead = binding.status_key;
+    }
     const locationId = trim(input.merged.location_id) || null;
 
     const person = await findOrCreatePersonInOrgWithMeta(supabase, {
@@ -113,7 +122,7 @@ export async function executeCreateLeadAction(
         name: displayName,
         status: "open",
         source: trim(input.merged.source) || "manual",
-        status_key: NEW_LEAD_STATUS_KEY,
+        status_key: statusKeyForLead,
         work_unit_id: workUnitId,
         metadata: {
             created_via: "create_lead",
@@ -147,7 +156,7 @@ export async function executeCreateLeadAction(
             entityType: "opportunities",
             entityId: opportunityId,
             oldStatusKey: null,
-            newStatusKey: NEW_LEAD_STATUS_KEY,
+            newStatusKey: statusKeyForLead,
             metadata: { customer_id: customerId, primary_person_id: personId },
             actorUserId: ctx.userId,
         });

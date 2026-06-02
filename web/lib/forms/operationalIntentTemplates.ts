@@ -7,6 +7,10 @@ import { inferIntakeTypeFromLink, type IntakeTypeKey } from "@/lib/forms/inferIn
 import { ENROLLMENT_LEAD_CAPTURE_DEMO_FORM_KEY } from "@/lib/forms/seeds/enrollmentLeadCaptureDemo";
 import { parseIntakeAutoCreateFlags } from "@/lib/forms/intake/parseIntakeAutoCreateFlags";
 import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
+import {
+    FORM_LIFECYCLE_USAGE_METADATA_KEY,
+    readFormLifecycleUsage,
+} from "@/lib/forms/lifecycle/formLifecycleUsageMetadata";
 
 export type OperationalIntentKey =
     | "enrollment_lead"
@@ -202,6 +206,14 @@ export function buildOperationalIntentFormMetadataPatch(
 
     if (intent !== "custom") {
         next.intake_outcome = intakeOutcome;
+    }
+
+    const usage = readFormLifecycleUsage(next);
+    if (usage) {
+        next[FORM_LIFECYCLE_USAGE_METADATA_KEY] = {
+            ...usage,
+            intake_intent: intent,
+        };
     }
 
     return next;

@@ -138,6 +138,33 @@ describe("intakeCasePresentation IC-2", () => {
         expect(rows[0]!.attention_reasons).toContain("Review required before enrollment continues");
     });
 
+    it("maps clean auto-created lead to auto_operationalized (not needs linking)", () => {
+        const rows = buildIntakeCasePresentationRows({
+            submissions: [
+                submission({
+                    id: SUB1,
+                    opportunity_id: OPP,
+                    person_id: "person-1",
+                    customer_id: "customer-1",
+                    payload: submissionPayload({
+                        meta: {
+                            intake_auto_operationalized: true,
+                            intake_needs_review: false,
+                            intake_resolution_path: "created_records",
+                            intake_opportunity_match: "created",
+                        },
+                        values: { guardian_full_name: "Jordan Test" },
+                    }),
+                }),
+            ],
+        });
+
+        expect(rows[0]!.status_bucket).toBe("auto_operationalized");
+        expect(rows[0]!.review_state).toBe("clear");
+        expect(rows[0]!.attention_reasons).toEqual([]);
+        expect(rows[0]!.recommended_next_action).toBe("Continue enrollment");
+    });
+
     it("maps attached clean submission to auto_operationalized", () => {
         const rows = buildIntakeCasePresentationRows({
             submissions: [

@@ -8,6 +8,18 @@ import {
     platformLifecycleProgressionRequirementsForStage,
     type LifecycleProgressionRequirementRow,
 } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
+import {
+    deriveObjectLabelsFromFieldRules,
+    platformFieldRulesForStage,
+    validateFieldRuleIdsForStage,
+    type LifecycleStageFieldRules,
+    OBJECT_LABEL_TO_FIELD_RULES,
+} from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
+import {
+    validateFieldRuleIdsAgainstPalette,
+    type LifecycleFieldPaletteEntry,
+} from "@/lib/lifecycle/lifecycleFieldPaletteMerge";
+import { sanitizeLifecycleFieldRuleIds } from "@/lib/lifecycle/lifecycleConfiguration";
 
 export const LIFECYCLE_PROGRESSION_REQUIREMENTS_METADATA_KEY = "lifecycle_progression_requirements_v1";
 
@@ -19,6 +31,10 @@ export type LifecycleProgressionRequirementsOverrideV1 = {
             {
                 required_labels?: string[];
                 recommended_labels?: string[];
+                field_rules?: {
+                    required_rule_ids?: string[];
+                    recommended_rule_ids?: string[];
+                };
             }
         >
     >;
@@ -45,6 +61,145 @@ function isStageKey(s: string): s is LifecycleOperatorStage {
         s === "enrollment" ||
         s === "enrolled"
     );
+}
+
+function normalizeRuleIdList(raw: unknown): string[] | null {
+    if (!Array.isArray(raw)) return null;
+    const out: string[] = [];
+    for (const item of raw) {
+        if (typeof item !== "string") continue;
+        const t = item.trim();
+        if (t && !out.includes(t)) out.push(t);
+    }
+    return out;
+}
+
+function parseStageFieldRules(value: unknown): LifecycleStageFieldRules | null {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    const required_rule_ids = normalizeRuleIdList((value as { required_rule_ids?: unknown }).required_rule_ids);
+    const recommended_rule_ids = normalizeRuleIdList(
+        (value as { recommended_rule_ids?: unknown }).recommended_rule_ids
+    );
+    if (required_rule_ids === null && recommended_rule_ids === null) return null;
+    return {
+        required_rule_ids: required_rule_ids ?? [],
+        recommended_rule_ids: recommended_rule_ids ?? [],
+    };
+}
+
+function fieldRulesFromObjectLabels(requiredLabels: string[], recommendedLabels: string[]): LifecycleStageFieldRules {
+    const required_rule_ids: string[] = [];
+    const recommended_rule_ids: string[] = [];
+    const requiredSet = new Set<string>();
+    for (const label of requiredLabels) {
+        for (const id of OBJECT_LABEL_TO_FIELD_RULES[label] ?? []) {
+            if (!requiredSet.has(id)) {
+                requiredSet.add(id);
+                required_rule_ids.push(id);
+            }
+        }
+    }
+    for (const label of recommendedLabels) {
+        for (const id of OBJECT_LABEL_TO_FIELD_RULES[label] ?? []) {
+            if (!requiredSet.has(id) && !recommended_rule_ids.includes(id)) {
+                recommended_rule_ids.push(id);
+            }
+        }
+    }
+    return { required_rule_ids, recommended_rule_ids };
+}
+
+function sanitizeStageFieldRules(rules: LifecycleStageFieldRules): LifecycleStageFieldRules {
+    const required_rule_ids = sanitizeLifecycleFieldRuleIds(rules.required_rule_ids);
+    const requiredSet = new Set(required_rule_ids);
+    return {
+        required_rule_ids,
+        recommended_rule_ids: sanitizeLifecycleFieldRuleIds(rules.recommended_rule_ids).filter(
+            (id) => !requiredSet.has(id)
+        ),
+    };
+}
+
+export function effectiveFieldRulesForStage(
+    stage: LifecycleOperatorStage,
+    departmentMetadata?: Record<string, unknown> | null
+): { rules: LifecycleStageFieldRules; source: LifecycleRequirementsSource } {
+    const platform = platformFieldRulesForStage(stage);
+    const override = parseLifecycleProgressionRequirementsOverride(departmentMetadata ?? null);
+    const stageOverride = override?.stages?.[stage];
+    const fieldOverride = stageOverride?.field_rules
+        ? parseStageFieldRules(stageOverride.field_rules)
+        : null;
+
+    if (!fieldOverride) {
+        if (stageOverride?.required_labels || stageOverride?.recommended_labels) {
+            const effective = effectiveLifecycleProgressionRequirementsForStage(stage, departmentMetadata ?? null);
+            return {
+                rules: sanitizeStageFieldRules(
+                    fieldRulesFromObjectLabels(
+                        effective.required.map((r) => r.label),
+                        effective.recommended.map((r) => r.label)
+                    )
+                ),
+                source: "department",
+            };
+        }
+        return { rules: sanitizeStageFieldRules(platform), source: "platform" };
+    }
+
+    const requiredSet = new Set(fieldOverride.required_rule_ids);
+    return {
+        rules: sanitizeStageFieldRules({
+            required_rule_ids: fieldOverride.required_rule_ids,
+            recommended_rule_ids: fieldOverride.recommended_rule_ids.filter((id) => !requiredSet.has(id)),
+        }),
+        source: "department",
+    };
+}
+
+export function buildLifecycleFieldRulesOverridePatch(input: {
+    stage: LifecycleOperatorStage;
+    required_rule_ids: string[];
+    recommended_rule_ids: string[];
+    existingMetadata: Record<string, unknown> | null;
+    mergedPalette?: readonly LifecycleFieldPaletteEntry[];
+}): Record<string, unknown> {
+    const validate = (ids: string[]) =>
+        input.mergedPalette
+            ? validateFieldRuleIdsAgainstPalette(ids, input.mergedPalette)
+            : validateFieldRuleIdsForStage(input.stage, ids);
+    const required = validate(input.required_rule_ids);
+    const recommended = validate(input.recommended_rule_ids);
+    if (!required || !recommended) {
+        throw new Error("Invalid field rules for this stage.");
+    }
+    const requiredSet = new Set(required);
+    const recommendedDeduped = recommended.filter((id) => !requiredSet.has(id));
+    const derived = deriveObjectLabelsFromFieldRules(required, recommendedDeduped);
+
+    const prev = parseLifecycleProgressionRequirementsOverride(input.existingMetadata) ?? {
+        version: 1 as const,
+        stages: {},
+    };
+
+    const stages = {
+        ...prev.stages,
+        [input.stage]: {
+            field_rules: {
+                required_rule_ids: required,
+                recommended_rule_ids: recommendedDeduped,
+            },
+            required_labels: derived.required_labels,
+            recommended_labels: derived.recommended_labels,
+        },
+    };
+
+    return {
+        [LIFECYCLE_PROGRESSION_REQUIREMENTS_METADATA_KEY]: {
+            version: 1,
+            stages,
+        },
+    };
 }
 
 function normalizeLabelList(raw: unknown): string[] | null {
@@ -74,10 +229,12 @@ export function parseLifecycleProgressionRequirementsOverride(
         if (!isStageKey(key) || !value || typeof value !== "object" || Array.isArray(value)) continue;
         const required_labels = normalizeLabelList((value as { required_labels?: unknown }).required_labels);
         const recommended_labels = normalizeLabelList((value as { recommended_labels?: unknown }).recommended_labels);
-        if (required_labels === null && recommended_labels === null) continue;
+        const field_rules = parseStageFieldRules((value as { field_rules?: unknown }).field_rules);
+        if (required_labels === null && recommended_labels === null && !field_rules) continue;
         stages[key] = {
             ...(required_labels !== null ? { required_labels } : {}),
             ...(recommended_labels !== null ? { recommended_labels } : {}),
+            ...(field_rules ? { field_rules } : {}),
         };
     }
     if (Object.keys(stages).length === 0) return null;

@@ -6,8 +6,13 @@ import { APPROVE_ENROLLMENT_ACTION_KEY, ENROLLED_STATUS_KEY } from "@/lib/admin/
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import {
     departmentMetadataFromCompletionContext,
+    effectiveFieldRulesForStage,
     effectiveLifecycleProgressionRequirementsForStage,
 } from "@/lib/completion/lifecycleProgressionRequirementsConfig";
+import {
+    evaluateLifecycleFieldRulesForPreflight,
+    objectLabelsNeedingLegacyFallback,
+} from "@/lib/lifecycle/lifecycleFieldRuleEvaluator";
 import {
     OPPORTUNITY_TOUR_COMPLETED_DATE_METADATA_KEY,
     OPPORTUNITY_WAITLIST_DATE_METADATA_KEY,
@@ -17,6 +22,7 @@ import type { AutoPopulateInstruction } from "@/lib/completion/effectiveRequirem
 import {
     makeRequirementViolation,
     buildRequirementValidationResult,
+    mergeRequirementValidationResults,
 } from "@/lib/completion/requirementValidationResult";
 import type {
     CompletionEvaluationContext,
@@ -257,14 +263,32 @@ function collectViolationsForEffectiveLabels(
     ctx: CompletionEvaluationContext,
     stage: LifecycleOperatorStage
 ): ReturnType<typeof actionViolation>[] {
-    const required = effectiveLabels(stage, ctx, "required");
-    const recommended = effectiveLabels(stage, ctx, "recommended");
-    const violations: ReturnType<typeof actionViolation>[] = [];
+    const metadata = deptMetadata(ctx);
+    const fieldRules = effectiveFieldRulesForStage(stage, metadata);
+    const effective = effectiveLifecycleProgressionRequirementsForStage(stage, metadata);
+    const requiredLabels = effective.required.map((r) => r.label);
+    const recommendedLabels = effective.recommended.map((r) => r.label);
 
-    for (const label of required) {
+    const requiredFallback = objectLabelsNeedingLegacyFallback(
+        fieldRules.rules,
+        requiredLabels,
+        recommendedLabels,
+        "required"
+    );
+    const recommendedFallback = objectLabelsNeedingLegacyFallback(
+        fieldRules.rules,
+        requiredLabels,
+        recommendedLabels,
+        "recommended"
+    );
+
+    const violations: ReturnType<typeof actionViolation>[] = [];
+    for (const label of requiredLabels) {
+        if (!requiredFallback.has(label)) continue;
         violations.push(...violationsForOperatorLabel(ctx, label, "hard_block"));
     }
-    for (const label of recommended) {
+    for (const label of recommendedLabels) {
+        if (!recommendedFallback.has(label)) continue;
         violations.push(...violationsForOperatorLabel(ctx, label, "recommendation"));
     }
     return violations;
@@ -390,24 +414,42 @@ export function evaluateLifecycleActionRequirements(
     const actionKey = trimOrNull(ctx.action_key);
     if (!actionKey) return { ok: true, blocking: [], warnings: [], recommendations: [] };
 
+    let result: RequirementValidationResult;
     switch (actionKey) {
         case APPROVE_ENROLLMENT_ACTION_KEY:
-            return evaluateApproveEnrollmentAction({
+            result = evaluateApproveEnrollmentAction({
                 ...ctx,
                 status_to: ctx.status_to ?? ENROLLED_STATUS_KEY,
             });
+            break;
         case "move_to_waitlist":
-            return evaluateMoveToWaitlistAction({
+            result = evaluateMoveToWaitlistAction({
                 ...ctx,
                 status_to: ctx.status_to ?? WAITLISTED_STATUS_KEY,
             });
+            break;
         case "schedule_tour":
-            return evaluateScheduleTourAction(ctx);
+            result = evaluateScheduleTourAction(ctx);
+            break;
         case "record_tour_outcome":
-            return evaluateRecordTourOutcomeAction(ctx, payload);
+            result = evaluateRecordTourOutcomeAction(ctx, payload);
+            break;
         default:
             return { ok: true, blocking: [], warnings: [], recommendations: [] };
     }
+
+    const fieldViolations = evaluateLifecycleFieldRulesForPreflight(ctx, actionKey).map((fv) =>
+        actionViolation(ctx, {
+            field_key: fv.field_key ?? "lifecycle_field_rule",
+            label: fv.label,
+            missing_reason: fv.missing_reason,
+            blocking_level: fv.blocking_level === "hard_block" ? "hard_block" : "recommendation",
+            entity_type: fv.entity_type,
+            entity_id: fv.entity_id,
+        })
+    );
+
+    return mergeRequirementValidationResults(result, buildRequirementValidationResult(fieldViolations));
 }
 
 export function isLifecyclePreflightActionKey(actionKey: string): boolean {

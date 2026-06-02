@@ -54,6 +54,21 @@ describe("submissionLinkageReviewUx", () => {
         expect(b.kind).toBe("needs_crm_link");
     });
 
+    it("submissionListLinkageBadge — no badge for clean auto-created enrollment lead", () => {
+        expect(
+            submissionListLinkageBadge({
+                status: "submitted",
+                payloadMeta: {
+                    intake_resolution_path: "created_records",
+                    intake_opportunity_match: "created",
+                    intake_auto_operationalized: true,
+                    intake_needs_review: false,
+                },
+                attachRow: { ...attachEmpty, person_id: "p1", customer_id: "c1", opportunity_id: "o1" },
+            }).kind
+        ).toBe("none");
+    });
+
     it("submissionListLinkageBadge — no badge when submitted and clear", () => {
         expect(
             submissionListLinkageBadge({

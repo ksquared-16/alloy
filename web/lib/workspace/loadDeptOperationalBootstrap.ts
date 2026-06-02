@@ -13,6 +13,13 @@ import { resolveDeptPipelineExecSurfaceServer } from "@/lib/workspace/resolveDep
 import type { DeptPipelineExecSurface } from "@/lib/workspace/resolveDeptPipelineExecSurface";
 import { logDeptOperationalBootstrapPerf, type DeptBootstrapPerfPhases } from "@/lib/workspace/deptOperationalBootstrapPerf";
 import { pickDeptPipelineWorkUnit } from "@/lib/workspace/pickDeptPipelineWorkUnit";
+import {
+    deptUsesBuilderOwnedLifecycleRuntime,
+    filterSummaryWorkUnitIdsForDept,
+    filterWorkUnitsForBuilderOwnedDeptDisplay,
+    inspectBuilderOwnedLifecycleWorkUnitsForDept,
+    type LifecycleWorkUnitDeptRuntimeDebug,
+} from "@/lib/lifecycle/builderOwnedLifecycleRuntime";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
 
@@ -27,6 +34,8 @@ export type DeptOperationalBootstrapPayload = {
     summaries: { work_units: Array<{ id: string; queues: unknown[]; error?: string; work_unit_scope_total?: number | null; work_unit_scope_queue_key?: string | null }> };
     attention: DeptAttentionPreviewPayload;
     pipeline_surface: DeptPipelineExecSurface | null;
+    /** Builder-owned lifecycle debug for dept empty states (read-only; no repair on navigation). */
+    lifecycle_work_unit_runtime?: LifecycleWorkUnitDeptRuntimeDebug | null;
 };
 
 export type DeptOperationalBootstrapExtras = {
@@ -95,31 +104,57 @@ export async function loadDeptOperationalBootstrap(params: {
     }
 
     const wuRows = wuRes.data ?? [];
-    const workUnits = wuRows.map((w) => ({
+    const departmentMetadata = (deptRow as { metadata?: unknown }).metadata ?? null;
+
+    const lifecycleWorkUnitRuntime = inspectBuilderOwnedLifecycleWorkUnitsForDept({
+        departmentMetadata,
+        wuRows: wuRows.map((w) => ({
+            id: String((w as { id: string }).id),
+            name: (w as { name?: string | null }).name ?? null,
+            key: (w as { key?: string | null }).key ?? null,
+            metadata: (w as { metadata?: unknown }).metadata,
+        })),
+    });
+
+    const builderOwnedRuntime = deptUsesBuilderOwnedLifecycleRuntime(departmentMetadata, wuRows);
+    const departmentWorkUnitIdsForLifecycleScope = wuRows.map((w) => String((w as { id: string }).id));
+
+    const allWorkUnits = wuRows.map((w) => ({
         id: String((w as { id: string }).id),
         name: (w as { name?: string | null }).name ?? null,
         key: (w as { key?: string | null }).key ?? null,
+        metadata: (w as { metadata?: unknown }).metadata,
     }));
+    const workUnits = builderOwnedRuntime
+        ? filterWorkUnitsForBuilderOwnedDeptDisplay(allWorkUnits)
+        : allWorkUnits;
     const workUnitIds = workUnits.map((w) => w.id);
 
-    const pipelineWorkUnit = pickDeptPipelineWorkUnit(
-        wuRows.map((w) => ({
-            id: String((w as { id: string }).id),
-            key: (w as { key?: string | null }).key ?? null,
-            queue_definition: (w as { queue_definition?: unknown }).queue_definition,
-            department_id: (w as { department_id?: string | null }).department_id ?? null,
-            metadata: (w as { metadata?: unknown }).metadata,
-        })),
-        departmentId
-    );
+    const pipelineWorkUnit = builderOwnedRuntime
+        ? null
+        : pickDeptPipelineWorkUnit(
+              wuRows.map((w) => ({
+                  id: String((w as { id: string }).id),
+                  key: (w as { key?: string | null }).key ?? null,
+                  queue_definition: (w as { queue_definition?: unknown }).queue_definition,
+                  department_id: (w as { department_id?: string | null }).department_id ?? null,
+                  metadata: (w as { metadata?: unknown }).metadata,
+              })),
+              departmentId
+          );
 
-    const summaryWorkUnitIds = workUnitIds.filter((id) => {
+    let summaryWorkUnitIds = workUnitIds.filter((id) => {
         if (pipelineWorkUnit && id === pipelineWorkUnit.id) return false;
         const wu = workUnits.find((w) => w.id === id);
         const key = (wu?.key ?? "").trim().toLowerCase();
         if (key === "needs_attention") return false;
         return true;
     });
+    summaryWorkUnitIds = filterSummaryWorkUnitIdsForDept(
+        summaryWorkUnitIds,
+        allWorkUnits,
+        departmentMetadata
+    );
     phases.skipped_summary_wu_ids = workUnitIds.length - summaryWorkUnitIds.length;
     phases.summary_wu_count = summaryWorkUnitIds.length;
     phases.pipeline_wu_count = pipelineWorkUnit ? 1 : 0;
@@ -131,11 +166,10 @@ export async function loadDeptOperationalBootstrap(params: {
                 queue_definition: (w as { queue_definition?: unknown }).queue_definition,
                 metadata: (w as { metadata?: unknown }).metadata ?? null,
                 department_id: (w as { department_id?: string | null }).department_id ?? null,
+                key: (w as { key?: string | null }).key ?? null,
             },
         ])
     );
-
-    const departmentMetadata = (deptRow as { metadata?: unknown }).metadata ?? null;
 
     const tShared0 = Date.now();
     const sharedBootstrap =
@@ -161,6 +195,7 @@ export async function loadDeptOperationalBootstrap(params: {
                       orgId,
                       departmentId,
                       workUnitIds: summaryWorkUnitIds,
+                      departmentWorkUnitIdsForLifecycleScope,
                       workUnitPreloadById,
                       limit: params.summaries.limit,
                       workUnitConcurrency: params.summaries.workUnitConcurrency,
@@ -217,7 +252,9 @@ export async function loadDeptOperationalBootstrap(params: {
         return out;
     })();
 
-    const pipelineP = (async () => {
+    const pipelineP = builderOwnedRuntime
+        ? Promise.resolve(null)
+        : (async () => {
         const t0 = Date.now();
         const pipelineCandidates = wuRows
             .filter((w) => String((w as { key?: string | null }).key ?? "").trim().toLowerCase() !== "needs_attention")
@@ -260,6 +297,7 @@ export async function loadDeptOperationalBootstrap(params: {
         summaries,
         attention,
         pipeline_surface,
+        lifecycle_work_unit_runtime: lifecycleWorkUnitRuntime,
     };
 
     return { payload, phases };

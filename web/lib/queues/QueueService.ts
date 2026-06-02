@@ -93,6 +93,13 @@ import { expandOpportunityRowsToPlacementCandidateRows } from "@/lib/orchestrati
 import { sortPlacementCandidateQueueRows } from "@/lib/orchestration/placement/sortPlacementCandidateQueueRows";
 import { resolvePlacementQueueConfig } from "@/lib/orchestration/placement/resolvePlacementQueueConfig";
 import { sortNeedsAttentionFilteredRows } from "@/lib/queues/needsAttentionQueuePrioritySort";
+import {
+    applyOpportunityQueueWorkUnitScope,
+    resolveLifecycleOpportunityQueueScope,
+    type LifecycleOpportunityQueueScope,
+} from "@/lib/lifecycle/lifecycleOpportunityQueueScope";
+import { buildLifecycleQueueEmptyDebug } from "@/lib/lifecycle/lifecycleQueueEmptyDebug";
+import type { LifecycleQueueEmptyDebugPayload } from "@/lib/lifecycle/lifecycleQueueEmptyDebug";
 
 type JobRowPreview = {
     id: string;
@@ -1880,10 +1887,34 @@ type WorkUnitQueueDefinitionCacheEntry = {
     /** `work_units.metadata` — feeds opportunity attention resolver config (same TTL as definition). */
     workUnitMetadata: unknown | null;
     departmentId: string | null;
+    workUnitKey: string | null;
 };
 const WU_QUEUE_DEF_CACHE = new Map<string, WorkUnitQueueDefinitionCacheEntry>();
 const WU_QUEUE_DEF_TTL_MS = 90_000;
 const WU_QUEUE_DEF_CACHE_ENABLED = process.env.NODE_ENV !== "test";
+
+function resolveOpportunityQueueScopeBundle(params: {
+    workUnitId: string;
+    departmentId: string | null;
+    workUnitMetadata: unknown | null;
+    workUnitKey: string | null;
+    /** Reuse dept bootstrap work_units fetch — no extra query on /dept. */
+    departmentWorkUnitIdsForLifecycleScope?: readonly string[];
+}): { scope: LifecycleOpportunityQueueScope; departmentWorkUnitIds: string[] } {
+    const scope = resolveLifecycleOpportunityQueueScope({
+        workUnitId: params.workUnitId,
+        workUnitKey: params.workUnitKey,
+        workUnitMetadata: params.workUnitMetadata,
+        departmentId: params.departmentId,
+    });
+    if (scope.mode === "lifecycle_status") {
+        const departmentWorkUnitIds =
+            params.departmentWorkUnitIdsForLifecycleScope?.map((id) => id.trim()).filter(Boolean) ??
+            [];
+        return { scope, departmentWorkUnitIds };
+    }
+    return { scope, departmentWorkUnitIds: [params.workUnitId] };
+}
 
 async function loadWorkUnitQueueDefinitionWithMeta(params: { orgId: string; workUnitId: string }): Promise<{
     def: QueueDefinitionV1;
@@ -1891,6 +1922,7 @@ async function loadWorkUnitQueueDefinitionWithMeta(params: { orgId: string; work
     cacheHit: boolean;
     workUnitMetadata: unknown | null;
     departmentId: string | null;
+    workUnitKey: string | null;
 }> {
     const cacheKey = `wudef:v2:${params.orgId}:${params.workUnitId}`;
     const now = Date.now();
@@ -1903,6 +1935,7 @@ async function loadWorkUnitQueueDefinitionWithMeta(params: { orgId: string; work
                 cacheHit: true,
                 workUnitMetadata: hit.workUnitMetadata ?? null,
                 departmentId: hit.departmentId ?? null,
+                workUnitKey: hit.workUnitKey ?? null,
             };
         }
     }
@@ -1913,7 +1946,7 @@ async function loadWorkUnitQueueDefinitionWithMeta(params: { orgId: string; work
             async () =>
                 supabase
                     .from("work_units")
-                    .select("id, org_id, department_id, queue_definition, metadata, updated_at")
+                    .select("id, org_id, department_id, key, queue_definition, metadata, updated_at")
                     .eq("id", params.workUnitId)
                     .eq("org_id", params.orgId)
                     .maybeSingle()
@@ -1945,10 +1978,21 @@ async function loadWorkUnitQueueDefinitionWithMeta(params: { orgId: string; work
     const departmentIdRaw = (data as { department_id?: unknown }).department_id;
     const departmentId =
         typeof departmentIdRaw === "string" && departmentIdRaw.trim() ? departmentIdRaw.trim() : null;
+    const workUnitKeyRaw = (data as { key?: unknown }).key;
+    const workUnitKey =
+        typeof workUnitKeyRaw === "string" && workUnitKeyRaw.trim() ? workUnitKeyRaw.trim() : null;
     if (WU_QUEUE_DEF_CACHE_ENABLED) {
-        WU_QUEUE_DEF_CACHE.set(cacheKey, { at: now, def, normalized, revision, workUnitMetadata, departmentId });
+        WU_QUEUE_DEF_CACHE.set(cacheKey, {
+            at: now,
+            def,
+            normalized,
+            revision,
+            workUnitMetadata,
+            departmentId,
+            workUnitKey,
+        });
     }
-    return { def, normalized, cacheHit: false, workUnitMetadata, departmentId };
+    return { def, normalized, cacheHit: false, workUnitMetadata, departmentId, workUnitKey };
 }
 
 async function loadWorkUnitQueueDefinition(params: { orgId: string; workUnitId: string }): Promise<QueueDefinitionV1> {
@@ -2130,6 +2174,8 @@ export async function getWorkUnitQueueSummaries(params: {
         queue_definition: unknown;
         workUnitMetadata?: unknown | null;
         departmentId?: string | null;
+        workUnitKey?: string | null;
+        departmentWorkUnitIdsForLifecycleScope?: readonly string[];
     };
     limit?: number;
     /**
@@ -2175,6 +2221,8 @@ export async function getWorkUnitQueueSummaries(params: {
     let def: QueueDefinitionV1;
     let normalized: NormalizedQueueDefinitionDocument;
     let workUnitMetadata: unknown | null;
+    let workUnitDepartmentId: string | null;
+    let workUnitKey: string | null;
     let operationalDay: OperationalDayPlanContext;
     if (preloaded?.queue_definition != null) {
         operationalDay = await operationalDayPromise;
@@ -2182,6 +2230,8 @@ export async function getWorkUnitQueueSummaries(params: {
         def = bundle.def;
         normalized = bundle.normalized;
         workUnitMetadata = preloaded.workUnitMetadata ?? null;
+        workUnitDepartmentId = preloaded.departmentId ?? null;
+        workUnitKey = preloaded.workUnitKey ?? null;
     } else {
         const [loaded, od] = await Promise.all([
             loadWorkUnitQueueDefinitionWithMeta({ orgId: params.orgId, workUnitId: params.workUnitId }),
@@ -2190,11 +2240,25 @@ export async function getWorkUnitQueueSummaries(params: {
         def = loaded.def;
         normalized = loaded.normalized;
         workUnitMetadata = loaded.workUnitMetadata;
+        workUnitDepartmentId = loaded.departmentId;
+        workUnitKey = loaded.workUnitKey;
         operationalDay = od;
     }
     const augmentSummaries = (queues: QueueSummary[]) => queues.map((s) => augmentQueueSummary(s, normalized));
     const loadDefMs = Date.now() - tParallelBoot0;
     assertSupportedEntityType(def);
+
+    const opportunityScopeBundle =
+        def.entity_type === "opportunity"
+            ? resolveOpportunityQueueScopeBundle({
+                  workUnitId: params.workUnitId,
+                  departmentId: workUnitDepartmentId,
+                  workUnitMetadata,
+                  workUnitKey,
+                  departmentWorkUnitIdsForLifecycleScope:
+                      preloaded?.departmentWorkUnitIdsForLifecycleScope,
+              })
+            : null;
 
     if (params.recordScopeImpossible === true) {
         const et = def.entity_type === "job" ? "job" : "opportunity";
@@ -2631,12 +2695,22 @@ export async function getWorkUnitQueueSummaries(params: {
             );
         }
 
-        const oppCountBase = () =>
-            supabase
+        const oppCountBase = () => {
+            let q = supabase
                 .from("opportunities")
                 .select("id", { count: countSel, head: true })
-                .eq("org_id", params.orgId)
-                .eq("work_unit_id", params.workUnitId);
+                .eq("org_id", params.orgId);
+            if (opportunityScopeBundle) {
+                q = applyOpportunityQueueWorkUnitScope(
+                    q,
+                    opportunityScopeBundle.scope,
+                    opportunityScopeBundle.departmentWorkUnitIds
+                );
+            } else {
+                q = q.eq("work_unit_id", params.workUnitId);
+            }
+            return q;
+        };
         const oppScopedCountBase = () =>
             scopeFilter ? (applyRecordScopeConstraintsToQuery(oppCountBase() as never, scopeFilter) as any) : oppCountBase();
 
@@ -2665,11 +2739,19 @@ export async function getWorkUnitQueueSummaries(params: {
 
         const tParallelOpp0 = Date.now();
         const countQ = applyOpsToJobQuery(oppScopedCountBase() as never, ops);
-        const previewQ0 = supabase
+        let previewQ0 = supabase
             .from("opportunities")
             .select("id, name, title, status_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at")
-            .eq("org_id", params.orgId)
-            .eq("work_unit_id", params.workUnitId);
+            .eq("org_id", params.orgId);
+        if (opportunityScopeBundle) {
+            previewQ0 = applyOpportunityQueueWorkUnitScope(
+                previewQ0,
+                opportunityScopeBundle.scope,
+                opportunityScopeBundle.departmentWorkUnitIds
+            );
+        } else {
+            previewQ0 = previewQ0.eq("work_unit_id", params.workUnitId);
+        }
         const previewQ0Scoped = scopeFilter ? applyRecordScopeConstraintsToQuery(previewQ0 as never, scopeFilter) : (previewQ0 as never);
         const previewQ1 = applySortToJobQuery(applyOpsToJobQuery(previewQ0Scoped as never, ops) as never, sort);
         const [countRes, previewRes, effectiveStatusDefs] = await Promise.all([
@@ -2769,9 +2851,52 @@ export async function getWorkUnitQueueSummaries(params: {
         work_unit_scope_total: scopeMeta.total,
         work_unit_scope_queue_key: scopeMeta.queueKey,
     };
+
+    let lifecycle_queue_debug: LifecycleQueueEmptyDebugPayload | undefined;
+    if (
+        process.env.NODE_ENV === "development" &&
+        def.entity_type === "opportunity" &&
+        opportunityScopeBundle?.scope.mode === "lifecycle_status" &&
+        summaries.some((s) => s.count === 0)
+    ) {
+        const emptyLanes = def.queues
+            .map((q, i) => ({ queue: q, summary: summaries[i] }))
+            .filter((x) => x.summary && x.summary.count === 0)
+            .map((x) => ({ queue: x.queue, count: 0 }));
+        if (emptyLanes.length) {
+            try {
+                lifecycle_queue_debug = await buildLifecycleQueueEmptyDebug({
+                    supabase,
+                    orgId: params.orgId,
+                    scope: opportunityScopeBundle.scope,
+                    departmentWorkUnitIds: opportunityScopeBundle.departmentWorkUnitIds,
+                    emptyLanes,
+                    sampleStatusKeys: [],
+                });
+                console.warn("[lifecycle-queue-debug] empty lifecycle opportunity queues", {
+                    work_unit_id: params.workUnitId,
+                    department_work_unit_ids_count: opportunityScopeBundle.departmentWorkUnitIds.length,
+                    ...lifecycle_queue_debug,
+                });
+            } catch (err) {
+                console.warn("[lifecycle-queue-debug] failed", {
+                    work_unit_id: params.workUnitId,
+                    error: err instanceof Error ? err.message : String(err),
+                });
+            }
+        }
+    }
+
+    const debugPayload = lifecycle_queue_debug ? { lifecycle_queue_debug } : {};
     return deferredQueueKeys?.length
-        ? { queues: summaries, deferred_queue_keys: deferredQueueKeys, ...scopePayload, ...viewerTimeZonePayload }
-        : { queues: summaries, ...scopePayload, ...viewerTimeZonePayload };
+        ? {
+              queues: summaries,
+              deferred_queue_keys: deferredQueueKeys,
+              ...scopePayload,
+              ...viewerTimeZonePayload,
+              ...debugPayload,
+          }
+        : { queues: summaries, ...scopePayload, ...viewerTimeZonePayload, ...debugPayload };
 }
 
 const DEPARTMENT_WU_SUMMARY_CONCURRENCY = 3;
@@ -2796,10 +2921,17 @@ export async function getDepartmentWorkUnitQueueSummaries(params: {
      * When set (e.g. dept operational bootstrap), skip re-querying work_units for this department.
      */
     workUnitIds?: string[];
+    /** Reuse dept bootstrap `work_units` ids for lifecycle status scope (no extra fetch). */
+    departmentWorkUnitIdsForLifecycleScope?: readonly string[];
     /** Preloaded rows from dept bootstrap — avoids per-WU `queue_definition` refetch. */
     workUnitPreloadById?: ReadonlyMap<
         string,
-        { queue_definition?: unknown; metadata?: unknown | null; department_id?: string | null }
+        {
+            queue_definition?: unknown;
+            metadata?: unknown | null;
+            department_id?: string | null;
+            key?: string | null;
+        }
     >;
     /** Preview rows per queue (same semantics as GET .../queues limit). */
     limit?: number;
@@ -2890,6 +3022,9 @@ export async function getDepartmentWorkUnitQueueSummaries(params: {
                                   queue_definition: preload.queue_definition,
                                   workUnitMetadata: preload.metadata ?? null,
                                   departmentId: preload.department_id ?? null,
+                                  workUnitKey: preload.key ?? null,
+                                  departmentWorkUnitIdsForLifecycleScope:
+                                      params.departmentWorkUnitIdsForLifecycleScope,
                               }
                             : undefined,
                 });
@@ -2970,6 +3105,8 @@ export async function getWorkUnitQueueItems(params: {
         queue_definition: unknown;
         workUnitMetadata?: unknown | null;
         departmentId?: string | null;
+        workUnitKey?: string | null;
+        departmentWorkUnitIdsForLifecycleScope?: readonly string[];
     };
     sharedBootstrap?: QueueSummariesSharedBootstrap;
     /** WU bootstrap: single attention pass reused for needs_attention lane rows. */
@@ -2995,6 +3132,7 @@ export async function getWorkUnitQueueItems(params: {
     let normalized: NormalizedQueueDefinitionDocument;
     let workUnitMetadata: unknown | null;
     let workUnitDepartmentId: string | null;
+    let workUnitKey: string | null;
     let load_def_ms: number;
     let operational_day_ms: number;
     let operationalDay: OperationalDayPlanContext;
@@ -3020,6 +3158,7 @@ export async function getWorkUnitQueueItems(params: {
         normalized = bundle.normalized;
         workUnitMetadata = preloaded.workUnitMetadata ?? null;
         workUnitDepartmentId = preloaded.departmentId ?? null;
+        workUnitKey = preloaded.workUnitKey ?? null;
         queueDefCacheHit = true;
         load_def_ms = 0;
     } else {
@@ -3034,11 +3173,24 @@ export async function getWorkUnitQueueItems(params: {
         normalized = defTimed.value.normalized;
         workUnitMetadata = defTimed.value.workUnitMetadata ?? null;
         workUnitDepartmentId = defTimed.value.departmentId;
+        workUnitKey = defTimed.value.workUnitKey;
         operationalDay = opsTimed.value.ctx;
         operationalDayCacheHit = opsTimed.value.cacheHit;
         load_def_ms = defTimed.ms;
         operational_day_ms = opsTimed.ms;
     }
+
+    const opportunityScopeBundle =
+        def.entity_type === "opportunity"
+            ? resolveOpportunityQueueScopeBundle({
+                  workUnitId: params.workUnitId,
+                  departmentId: workUnitDepartmentId,
+                  workUnitMetadata,
+                  workUnitKey,
+                  departmentWorkUnitIdsForLifecycleScope:
+                      preloaded?.departmentWorkUnitIdsForLifecycleScope,
+              })
+            : null;
 
     const queueKeyResolution = resolveQueueKeyFromDefinition(params.queueKey, normalized.queues);
     const executableQueueKey = queueKeyResolution.resolvedKey;
@@ -3514,11 +3666,19 @@ export async function getWorkUnitQueueItems(params: {
         activeOnly: true,
     });
 
-    const itemsBaseRaw = supabase
+    let itemsBaseRaw = supabase
         .from("opportunities")
         .select("id, name, status_key, customer_id, primary_person_id, primary_contact_id, location_id, metadata, created_at, updated_at")
-        .eq("org_id", params.orgId)
-        .eq("work_unit_id", params.workUnitId);
+        .eq("org_id", params.orgId);
+    if (opportunityScopeBundle) {
+        itemsBaseRaw = applyOpportunityQueueWorkUnitScope(
+            itemsBaseRaw,
+            opportunityScopeBundle.scope,
+            opportunityScopeBundle.departmentWorkUnitIds
+        );
+    } else {
+        itemsBaseRaw = itemsBaseRaw.eq("work_unit_id", params.workUnitId);
+    }
 
     const itemsBase = scopeFilter ? applyRecordScopeConstraintsToQuery(itemsBaseRaw, scopeFilter) : itemsBaseRaw;
 
@@ -3634,11 +3794,19 @@ export async function getWorkUnitQueueItems(params: {
         );
     }
 
-    const countBaseRaw = supabase
+    let countBaseRaw = supabase
         .from("opportunities")
         .select("id", { count: countSel!, head: true })
-        .eq("org_id", params.orgId)
-        .eq("work_unit_id", params.workUnitId);
+        .eq("org_id", params.orgId);
+    if (opportunityScopeBundle) {
+        countBaseRaw = applyOpportunityQueueWorkUnitScope(
+            countBaseRaw,
+            opportunityScopeBundle.scope,
+            opportunityScopeBundle.departmentWorkUnitIds
+        );
+    } else {
+        countBaseRaw = countBaseRaw.eq("work_unit_id", params.workUnitId);
+    }
     const countBase = scopeFilter ? applyRecordScopeConstraintsToQuery(countBaseRaw, scopeFilter) : countBaseRaw;
     const countQ = applyOpsToJobQuery(countBase as never, ops);
 

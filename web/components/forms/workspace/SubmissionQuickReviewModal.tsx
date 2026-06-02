@@ -113,6 +113,7 @@ export function SubmissionQuickReviewModal({
     const detailHref = viewModel.intakeFileHref;
     const email = submitterLine(row);
     const who = viewModel.headerTitle;
+    const leadFields = viewModel.leadCreatedFields;
 
     const openLead = () => {
         if (!viewModel.opportunityId) return;
@@ -138,15 +139,19 @@ export function SubmissionQuickReviewModal({
             >
                 <div className="flex items-start justify-between gap-3 border-b border-alloy-stone/15 px-5 py-4">
                     <div className="min-w-0">
-                        <p className={opContextLabel}>Intake case review</p>
+                        <p className={opContextLabel}>
+                            {viewModel.leadCreatedMode ? "Quick review" : "Intake case review"}
+                        </p>
                         {who ?
                             <p className="text-sm font-semibold text-alloy-midnight">{who}</p>
                         :   null}
-                        {email ?
+                        {!viewModel.leadCreatedMode && email ?
                             <p className={opMutedMeta}>{email}</p>
                         :   null}
                         <p className={clsx("mt-0.5", opMutedMeta)}>
-                            {formName} · Submitted {submittedAtLabel}
+                            {viewModel.leadCreatedMode ?
+                                `${formName} · Submitted ${submittedAtLabel}`
+                            :   `${formName} · Submitted ${submittedAtLabel}`}
                         </p>
                     </div>
                     <button
@@ -159,6 +164,42 @@ export function SubmissionQuickReviewModal({
                 </div>
 
                 <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+                    {viewModel.leadCreatedMode && leadFields ?
+                        <section data-testid="quick-review-lead-created-fields">
+                            <p className={opContextLabel}>Lead details</p>
+                            <dl className={clsx(opOrientationSurface, "mt-2 space-y-2")}>
+                                {leadFields.contactName ?
+                                    <div>
+                                        <dt className={opMetadata}>Guardian / contact</dt>
+                                        <dd className={opBody}>{leadFields.contactName}</dd>
+                                    </div>
+                                :   null}
+                                {leadFields.email ?
+                                    <div>
+                                        <dt className={opMetadata}>Email</dt>
+                                        <dd className={opBody}>{leadFields.email}</dd>
+                                    </div>
+                                :   null}
+                                {leadFields.phone ?
+                                    <div>
+                                        <dt className={opMetadata}>Phone</dt>
+                                        <dd className={opBody}>{leadFields.phone}</dd>
+                                    </div>
+                                :   null}
+                                {leadFields.school ?
+                                    <div>
+                                        <dt className={opMetadata}>School</dt>
+                                        <dd className={opBody}>{leadFields.school}</dd>
+                                    </div>
+                                :   null}
+                                <div>
+                                    <dt className={opMetadata}>Status</dt>
+                                    <dd className={opBody}>{leadFields.status}</dd>
+                                </div>
+                            </dl>
+                        </section>
+                    :   null}
+
                     <section data-testid="quick-review-intake-summary">
                         <p className={opContextLabel}>Intake summary</p>
                         <div className={clsx(opOrientationSurface, "mt-2")}>
@@ -183,7 +224,9 @@ export function SubmissionQuickReviewModal({
                     </section>
 
                     <section data-testid="quick-review-needs-action">
-                        <p className={opContextLabel}>Needs action</p>
+                        <p className={opContextLabel}>
+                            {viewModel.leadCreatedMode ? "Review status" : "Needs action"}
+                        </p>
                         {viewModel.needsAction.clearMessage ?
                             <p className={clsx("mt-2", opBody)} data-testid="quick-review-no-action">
                                 {viewModel.needsAction.clearMessage}
@@ -263,15 +306,17 @@ export function SubmissionQuickReviewModal({
                             {viewModel.primaryOpenLabel}
                         </PrimaryButton>
                     :   null}
-                    <Link href={detailHref} className="inline-flex">
-                        <PrimaryButton
-                            type="button"
-                            className="!px-3 !py-2 text-sm"
-                            data-testid="quick-review-open-intake-file"
-                        >
-                            {viewModel.opportunityId ? "Open intake file" : viewModel.primaryOpenLabel}
-                        </PrimaryButton>
-                    </Link>
+                    {!viewModel.leadCreatedMode ?
+                        <Link href={detailHref} className="inline-flex">
+                            <PrimaryButton
+                                type="button"
+                                className="!px-3 !py-2 text-sm"
+                                data-testid="quick-review-open-intake-file"
+                            >
+                                {viewModel.opportunityId ? "Open intake file" : viewModel.primaryOpenLabel}
+                            </PrimaryButton>
+                        </Link>
+                    :   null}
                     <SecondaryButton type="button" className="!px-3 !py-2 text-sm" onClick={onClose}>
                         Done
                     </SecondaryButton>

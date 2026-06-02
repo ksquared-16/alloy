@@ -10,7 +10,11 @@ import {
     type AdminAccessContextSuccess,
 } from "@/lib/admin/getAdminAccessContext";
 import { compatibilityPortalRole } from "@/lib/admin/adminPortalRolePick";
-import { scopeDimensionsFromAccess, type AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
+import {
+    effectiveDepartmentScopeDimensions,
+    scopeDimensionsFromAccess,
+    type AdminAccessScopeDimensions,
+} from "@/lib/admin/accessScope";
 
 export type AdminRouteGateSuccess = {
     ok: true;
@@ -19,7 +23,10 @@ export type AdminRouteGateSuccess = {
     role: string;
     roleKeys: string[];
     access: AdminAccessContextSuccess;
+    /** Department scope after portal admin/ops bypass (used by workspace + departments APIs). */
     dim: AdminAccessScopeDimensions;
+    /** Profile-derived scope before bypass (debug / audit). */
+    dimRaw: AdminAccessScopeDimensions;
 };
 
 export type AdminRouteGateFailure = AdminContextFailure | AdminAccessContextFailure;
@@ -54,7 +61,8 @@ export async function loadAdminRouteGate(): Promise<AdminRouteGateResult> {
         role: compatibilityPortalRole(access.roleKeys),
         roleKeys: access.roleKeys,
         access,
-        dim: scopeDimensionsFromAccess(access),
+        dim: effectiveDepartmentScopeDimensions(scopeDimensionsFromAccess(access), access.roleKeys),
+        dimRaw: scopeDimensionsFromAccess(access),
     };
 }
 

@@ -1,5 +1,8 @@
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
-import { effectiveLifecycleProgressionRequirementsForStage } from "@/lib/completion/lifecycleProgressionRequirementsConfig";
+import {
+    effectiveFieldRulesForStage,
+    effectiveLifecycleProgressionRequirementsForStage,
+} from "@/lib/completion/lifecycleProgressionRequirementsConfig";
 
 export function effectiveRequirementLabelsForDepartment(
     stage: LifecycleOperatorStage,
@@ -10,4 +13,11 @@ export function effectiveRequirementLabelsForDepartment(
         required_labels: effective.required.map((r) => r.label),
         recommended_labels: effective.recommended.map((r) => r.label),
     };
+}
+
+export function effectiveFieldRulesForDepartment(
+    stage: LifecycleOperatorStage,
+    departmentMetadata: Record<string, unknown> | null | undefined
+) {
+    return effectiveFieldRulesForStage(stage, departmentMetadata ?? null);
 }

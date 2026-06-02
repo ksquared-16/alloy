@@ -19,32 +19,33 @@ describe("lifecycle Settings IA", () => {
         expect(page).toContain("Enrollment Operations");
         expect(page).toContain('title="Lifecycle"');
         expect(page).toContain("/adminV2/settings/lifecycle");
-        expect(page).toContain('mode="editable"');
+        expect(page).toContain('emphasis');
     });
 
     it("lifecycle hub page renders with operator title and test id", () => {
         const page = read("app/adminV2/settings/lifecycle/page.tsx");
         expect(page).toContain(">Lifecycle</h1>");
         expect(page).toContain("settings-lifecycle-page");
-        expect(page).toContain("LifecycleSettingsHubClient");
+        expect(page).toContain("LifecycleHubClient");
     });
 
-    it("hub component uses stage-first navigation and shared requirements editor", () => {
-        const hub = read("components/adminV2/settings/LifecycleStagesRequirementsHub.tsx");
-        const editor = read("components/adminV2/settings/LifecycleStageRequirementsEditor.tsx");
-        expect(hub).toContain("lifecycle-stages-requirements-hub");
-        expect(hub).toContain("LifecycleStageRequirementsEditor");
-        expect(hub).toContain("enrollmentProcessSettingsPaths");
+    it("primary hub uses stage-first navigation and field requirements editor", () => {
+        const hub = read("components/adminV2/settings/LifecycleHubClient.tsx");
+        const editor = read("components/adminV2/settings/LifecycleStageFieldRequirementsEditor.tsx");
+        expect(hub).toContain("lifecycle-hub");
+        expect(hub).toContain("LifecycleStageFieldRequirementsEditor");
         expect(editor).toContain("Required Information");
-        expect(editor).toContain("Recommended Information");
-        expect(editor).toContain('type="checkbox"');
-        expect(editor).toContain("lifecycleRequirementFieldDetailForLabel");
-        expect(hub).toContain("LifecycleStageWhereAppears");
-        expect(hub).toContain("LifecycleRelatedSettingsLinks");
-        expect(editor).toContain("lifecycle-req-field-detail");
+        expect(editor).toContain("lifecycle-field-entity-select");
+        expect(editor).toContain("lifecycle-field-requirements-list");
         expect(editor).not.toContain("field_key");
         expect(editor).not.toContain("requirement_policy");
         expect(editor).not.toContain("condition_config");
+    });
+
+    it("legacy requirements-only hub cross-links to lifecycle", () => {
+        const legacy = read("components/adminV2/settings/LifecycleStagesRequirementsHub.tsx");
+        expect(legacy).toContain("lifecycle-stages-requirements-hub");
+        expect(legacy).toContain("ADMIN_V2_SETTINGS_LIFECYCLE_PATH");
     });
 
     it("all six stage names are defined in catalog", () => {
@@ -76,9 +77,9 @@ describe("lifecycle Settings IA", () => {
         expect(workspace).not.toContain("LifecycleStagesRequirementsHub");
     });
 
-    it("related Settings pages cross-link to enrollment process hub", () => {
+    it("related Settings pages cross-link to lifecycle hub", () => {
         const banner = read("components/adminV2/settings/LifecycleSettingsCrossLinkBanner.tsx");
-        expect(banner).toContain("enrollmentProcessSettingsPaths");
+        expect(banner).toContain("ADMIN_V2_SETTINGS_LIFECYCLE_PATH");
         expect(read("app/adminV2/settings/actions/page.tsx")).toContain('variant="actions"');
         expect(read("app/adminV2/settings/statuses/page.tsx")).toContain('variant="statuses"');
         expect(read("app/adminV2/settings/attention-sla-rules/page.tsx")).toContain('variant="attention"');

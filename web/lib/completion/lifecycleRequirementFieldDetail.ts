@@ -13,12 +13,12 @@ export type LifecycleRequirementFieldDetail = {
 /** High-level requirement label → nested capture detail (display-only). */
 export const LIFECYCLE_OBJECT_FIELD_DETAIL: Readonly<Record<string, LifecycleRequirementFieldDetail>> = {
     Person: {
-        fields: ["First Name", "Last Name", "Email or Phone"],
-        inheritsNote: "Inherited from parent/guardian profile rules — edit labels on Fields, not here.",
+        fields: ["First Name", "Last Name", "Email", "Phone"],
+        inheritsNote: "Choose which person fields are required per stage — not a fixed bundle.",
     },
     Child: {
-        fields: ["First Name", "Last Name", "Date of Birth or Age Group"],
-        inheritsNote: "Inherited from child profile rules when you add a child on the inquiry.",
+        fields: ["First Name", "Last Name", "Date of Birth", "Age Group"],
+        inheritsNote: "Choose which child fields are required per stage on the inquiry.",
     },
     Program: {
         fields: ["Program Interest"],

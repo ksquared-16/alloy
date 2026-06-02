@@ -6,6 +6,7 @@ import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressi
 import { LIFECYCLE_STAGE_ORDER } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import {
     effectiveEnrollmentOperatorStage,
+    effectiveStageKeyAssignment,
     parseEnrollmentOperatorStageFromMetadata,
     type EnrollmentOperatorStageAssignmentSource,
 } from "@/lib/lifecycle/enrollmentOperatorStage";
@@ -21,13 +22,14 @@ export type EnrollmentStatusStageRow = {
 export type EnrollmentStatusStagesPayload = {
     entity_type: "opportunities";
     stages: Record<
-        LifecycleOperatorStage,
+        string,
         {
             statuses: EnrollmentStatusStageRow[];
             has_custom_assignments: boolean;
         }
     >;
     unassigned: EnrollmentStatusStageRow[];
+    stage_keys: string[];
 };
 
 type StatusInput = {
@@ -51,9 +53,13 @@ function toRow(
     };
 }
 
-export function buildEnrollmentStatusStagesPayload(rows: StatusInput[]): EnrollmentStatusStagesPayload {
+export function buildEnrollmentStatusStagesPayload(
+    rows: StatusInput[],
+    stageKeys: readonly string[] = LIFECYCLE_STAGE_ORDER
+): EnrollmentStatusStagesPayload {
+    const keys = stageKeys.length ? [...stageKeys] : [...LIFECYCLE_STAGE_ORDER];
     const stages = Object.fromEntries(
-        LIFECYCLE_STAGE_ORDER.map((stage) => [stage, { statuses: [] as EnrollmentStatusStageRow[], has_custom_assignments: false }])
+        keys.map((stage) => [stage, { statuses: [] as EnrollmentStatusStageRow[], has_custom_assignments: false }])
     ) as EnrollmentStatusStagesPayload["stages"];
 
     const unassigned: EnrollmentStatusStageRow[] = [];
@@ -61,11 +67,12 @@ export function buildEnrollmentStatusStagesPayload(rows: StatusInput[]): Enrollm
     const sorted = [...rows].sort((a, b) => a.sort_order - b.sort_order || a.status_key.localeCompare(b.status_key));
 
     for (const row of sorted) {
-        const { stage, source } = effectiveEnrollmentOperatorStage(row.status_key, row.metadata);
+        const { stage, source } = effectiveStageKeyAssignment(row.status_key, row.metadata, keys);
         const item = toRow(row, source);
-        if (stage) {
+        if (stage && stages[stage]) {
             stages[stage].statuses.push(item);
-            if (parseEnrollmentOperatorStageFromMetadata(row.metadata) === stage) {
+            const metaStage = parseEnrollmentOperatorStageFromMetadata(row.metadata);
+            if (typeof metaStage === "string" && metaStage !== "unassigned" && metaStage === stage) {
                 stages[stage].has_custom_assignments = true;
             }
         } else {
@@ -77,5 +84,6 @@ export function buildEnrollmentStatusStagesPayload(rows: StatusInput[]): Enrollm
         entity_type: "opportunities",
         stages,
         unassigned,
+        stage_keys: keys,
     };
 }

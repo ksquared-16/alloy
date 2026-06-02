@@ -32,22 +32,23 @@ describe("editable lifecycle settings", () => {
         expect(page).toContain("Choose what must be complete before a family moves forward");
     });
 
-    it("hub renders editable checkboxes and save/reset", () => {
+    it("hub renders field-level editor and save/reset", () => {
         const hub = read("components/adminV2/settings/LifecycleStagesRequirementsHub.tsx");
-        expect(hub).toContain('type="checkbox"');
-        expect(hub).toContain("lifecycle-settings-save");
-        expect(hub).toContain("lifecycle-settings-reset-stage");
-        expect(hub).toContain("lifecycle-req-checkbox-");
-        expect(hub).toContain("lifecycle-req-field-detail");
-        expect(hub).toContain("/lifecycle-requirements");
-        expect(hub).toContain('method: "PATCH"');
+        const editor = read("components/adminV2/settings/LifecycleStageFieldRequirementsEditor.tsx");
+        expect(hub).toContain("LifecycleStageFieldRequirementsEditor");
+        expect(editor).toContain("lifecycle-settings-save");
+        expect(editor).toContain("lifecycle-settings-reset-stage");
+        expect(editor).toContain("lifecycle-field-level-");
+        expect(editor).toContain("field_rules");
+        expect(editor).toContain("/lifecycle-requirements");
     });
 
-    it("lifecycle requirements API route supports GET and PATCH", () => {
+    it("lifecycle requirements API route supports field_rules GET and PATCH", () => {
         const route = read("app/api/admin/departments/[departmentId]/lifecycle-requirements/route.ts");
         expect(route).toContain("export async function GET");
         expect(route).toContain("export async function PATCH");
         expect(route).toContain("reset_stage");
-        expect(route).toContain("buildLifecycleRequirementsOverridePatch");
+        expect(route).toContain("buildLifecycleFieldRulesOverridePatch");
+        expect(route).toContain("field_palette");
     });
 });

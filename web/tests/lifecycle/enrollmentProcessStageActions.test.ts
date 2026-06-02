@@ -41,6 +41,7 @@ describe("enrollmentProcessStageActions", () => {
                 },
                 placements: [
                     {
+                        id: "placement-1",
                         surface: "record_header",
                         slot: "primary",
                         is_active: true,
@@ -64,6 +65,36 @@ describe("enrollmentProcessStageActions", () => {
         ]);
         expect(rows.map((r) => r.key)).toEqual(["schedule_tour"]);
         expect(rows[0]?.operational_note).toContain("Partially");
-        expect(rows[0]?.placements[0]?.surface_label).toBe("Drawer Actions");
+        expect(rows[0]?.placements[0]?.placement_id).toBe("placement-1");
+        expect(rows[0]?.placements[0]?.surface_label).toBe("Drawer");
+    });
+
+    it("includePlacedActions shows actions with placements outside catalog stage", () => {
+        const rows = buildEnrollmentProcessStageActionRows(
+            "lead",
+            [
+                {
+                    definition: {
+                        key: "custom_action",
+                        label: "Custom",
+                        is_active: true,
+                        entity_type: "opportunity",
+                        payload_schema: { catalog: { lifecycle_stage: "enrollment" } },
+                    },
+                    placements: [
+                        {
+                            id: "p1",
+                            surface: "queue_row",
+                            slot: "row_inline",
+                            is_active: true,
+                            department_id: null,
+                            work_unit_id: null,
+                        },
+                    ],
+                },
+            ],
+            { includePlacedActions: true }
+        );
+        expect(rows.map((r) => r.key)).toEqual(["custom_action"]);
     });
 });

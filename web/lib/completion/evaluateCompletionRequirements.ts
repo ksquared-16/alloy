@@ -198,10 +198,38 @@ function extractRelatedFromRecord(record: Record<string, unknown>) {
             ? (deptMetaRaw as Record<string, unknown>)
             : undefined;
 
+    const primaryPersonRaw = record._primary_person;
+    const primary_person =
+        primaryPersonRaw !== null && typeof primaryPersonRaw === "object" && !Array.isArray(primaryPersonRaw)
+            ? {
+                  person_id:
+                      typeof (primaryPersonRaw as { person_id?: unknown }).person_id === "string"
+                          ? (primaryPersonRaw as { person_id: string }).person_id
+                          : null,
+                  first_name:
+                      typeof (primaryPersonRaw as { first_name?: unknown }).first_name === "string"
+                          ? (primaryPersonRaw as { first_name: string }).first_name
+                          : null,
+                  last_name:
+                      typeof (primaryPersonRaw as { last_name?: unknown }).last_name === "string"
+                          ? (primaryPersonRaw as { last_name: string }).last_name
+                          : null,
+                  email:
+                      typeof (primaryPersonRaw as { email?: unknown }).email === "string"
+                          ? (primaryPersonRaw as { email: string }).email
+                          : null,
+                  phone:
+                      typeof (primaryPersonRaw as { phone?: unknown }).phone === "string"
+                          ? (primaryPersonRaw as { phone: string }).phone
+                          : null,
+              }
+            : undefined;
+
     return {
         customer_id,
         inquiry_children,
         department_metadata,
+        primary_person,
         customer_persons,
         customer_members,
         person_relationships,

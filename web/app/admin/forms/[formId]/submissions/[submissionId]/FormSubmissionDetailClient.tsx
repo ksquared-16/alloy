@@ -27,6 +27,7 @@ import {
     buildLinkageReviewCalloutReasons,
     submissionDetailLinkageCalloutVisible,
 } from "@/lib/forms/submissionLinkageReviewUx";
+import { isCleanCreatedEnrollmentLead, isCleanOperationalizedEnrollmentLead } from "@/lib/forms/intakeEnrollmentLeadClassification";
 import type { BosSubmissionReviewContext } from "@/components/forms/review/BosReviewSummaryPlaceholder";
 import { opMetadata } from "@/lib/operational/ui/operationalVisualTokens";
 
@@ -199,10 +200,47 @@ export default function FormSubmissionDetailClient() {
 
     const intakeSection = useMemo(() => (row ? buildSubmissionIntakeSection(row.payload?.meta) : null), [row]);
 
+    const attachRow = useMemo(
+        () =>
+            row ?
+                {
+                    person_id: row.person_id,
+                    customer_id: row.customer_id,
+                    customer_member_id: row.customer_member_id,
+                    opportunity_id: row.opportunity_id,
+                }
+            :   {
+                    person_id: null,
+                    customer_id: null,
+                    customer_member_id: null,
+                    opportunity_id: null,
+                },
+        [row]
+    );
+
+    const cleanOperationalizedLead = useMemo(() => {
+        if (!row || row.status !== "submitted") return false;
+        return isCleanOperationalizedEnrollmentLead({
+            status: row.status,
+            payloadMeta: row.payload?.meta,
+            attachRow,
+        });
+    }, [row, attachRow]);
+
+    const cleanCreatedLead = useMemo(() => {
+        if (!row || row.status !== "submitted") return false;
+        return isCleanCreatedEnrollmentLead({
+            status: row.status,
+            payloadMeta: row.payload?.meta,
+            attachRow,
+        });
+    }, [row, attachRow]);
+
     const intakeNeedsAttention = useMemo(() => {
+        if (cleanOperationalizedLead) return false;
         if (!intakeSection) return false;
         return intakeSection.statusLabel !== "Linked" || !intakeSection.hasServerIntakeRecord;
-    }, [intakeSection]);
+    }, [intakeSection, cleanOperationalizedLead]);
 
     const payloadMetaObj = row?.payload?.meta;
     const payloadMetaRecord =
@@ -236,50 +274,31 @@ export default function FormSubmissionDetailClient() {
         return submissionDetailLinkageCalloutVisible({
             status: row.status,
             payloadMeta: row.payload?.meta,
-            attachRow: {
-                person_id: row.person_id,
-                customer_id: row.customer_id,
-                customer_member_id: row.customer_member_id,
-                opportunity_id: row.opportunity_id,
-            },
+            attachRow,
         });
-    }, [row]);
+    }, [row, attachRow]);
 
     const linkageCalloutReasons = useMemo(() => {
         if (!row) return [];
-        return buildLinkageReviewCalloutReasons(row.payload?.meta, {
-            person_id: row.person_id,
-            customer_id: row.customer_id,
-            customer_member_id: row.customer_member_id,
-            opportunity_id: row.opportunity_id,
-        });
-    }, [row]);
+        return buildLinkageReviewCalloutReasons(row.payload?.meta, attachRow, row.status);
+    }, [row, attachRow]);
 
     const showLinkageWorkflowSection = useMemo(() => {
         if (!row || row.status !== "submitted") return false;
-        return linkageCalloutVisible || needsConfirmLinkage || canMutate;
-    }, [row, linkageCalloutVisible, needsConfirmLinkage, canMutate]);
+        if (cleanOperationalizedLead && !needsConfirmLinkage) return false;
+        return linkageCalloutVisible || needsConfirmLinkage;
+    }, [row, linkageCalloutVisible, needsConfirmLinkage, cleanOperationalizedLead]);
 
     const docGenBlocked = useMemo(() => {
         if (!row || row.status !== "submitted") return { blocked: false as const };
-        return documentGenerationBlockedByIntake(row.payload?.meta, {
-            person_id: row.person_id,
-            customer_id: row.customer_id,
-            customer_member_id: row.customer_member_id,
-            opportunity_id: row.opportunity_id,
-        });
-    }, [row]);
+        return documentGenerationBlockedByIntake(row.payload?.meta, attachRow, row.status);
+    }, [row, attachRow]);
 
     const documentOutcome = useMemo(() => {
         if (!row) return null;
         const blocked =
             row.status === "submitted" &&
-            documentGenerationBlockedByIntake(row.payload?.meta, {
-                person_id: row.person_id,
-                customer_id: row.customer_id,
-                customer_member_id: row.customer_member_id,
-                opportunity_id: row.opportunity_id,
-            }).blocked;
+            documentGenerationBlockedByIntake(row.payload?.meta, attachRow, row.status).blocked;
         return describeDocumentOutcome({
             linkedDocumentsCount: row.linked_documents.length,
             submissionStatus: row.status,
@@ -298,14 +317,9 @@ export default function FormSubmissionDetailClient() {
             canMutate,
             hasAnyCrmEntityLink: hasCrm,
             payloadMeta: row.payload?.meta,
-            attachRow: {
-                person_id: row.person_id,
-                customer_id: row.customer_id,
-                customer_member_id: row.customer_member_id,
-                opportunity_id: row.opportunity_id,
-            },
+            attachRow,
         });
-    }, [row, canMutate]);
+    }, [row, canMutate, attachRow]);
 
     const bosSubmissionContext = useMemo((): BosSubmissionReviewContext | null => {
         if (!row) return null;
@@ -328,8 +342,12 @@ export default function FormSubmissionDetailClient() {
 
     return (
         <FormsWorkspaceShell
-            title="Intake review"
-            subtitle="Review answers, linkage, and outputs for this submission."
+            title={cleanCreatedLead ? "Lead created" : "Intake review"}
+            subtitle={
+                cleanCreatedLead ?
+                    "This inquiry created a new enrollment lead — continue in the opportunity queue."
+                :   "Review answers, linkage, and outputs for this submission."
+            }
             breadcrumbs={formsWorkspaceBreadcrumbs([
                 {
                     label: schema?.title ?? "Form",
@@ -374,6 +392,12 @@ export default function FormSubmissionDetailClient() {
                     linkageCalloutVisible={linkageCalloutVisible}
                     linkageCalloutReasons={linkageCalloutReasons}
                     showLinkageWorkflowSection={showLinkageWorkflowSection}
+                    cleanCreatedLead={cleanCreatedLead}
+                    onOpenLead={
+                        row.opportunity_id ?
+                            () => handleOpenDrawer({ type: "opportunities", id: row.opportunity_id! })
+                        :   undefined
+                    }
                     needsConfirmLinkage={needsConfirmLinkage}
                     docGenBlocked={docGenBlocked}
                     documentOutcome={documentOutcome}

@@ -17,9 +17,9 @@ export type LifecycleProcessTypeDefinition = {
 export const LIFECYCLE_PROCESS_TYPES: readonly LifecycleProcessTypeDefinition[] = [
     {
         key: ENROLLMENT_PROCESS_KEY,
-        settingsPath: "/adminV2/settings/enrollment-process",
-        title: "Enrollment Process",
-        subtitle: "Configure how families move from lead to enrolled.",
+        settingsPath: "/adminV2/settings/lifecycle",
+        title: "Enrollment",
+        subtitle: "Lead to enrolled — the default lifecycle example.",
     },
 ] as const;
 

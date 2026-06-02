@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EnrollmentStatusStagesPayload, EnrollmentStatusStageRow } from "@/lib/lifecycle/enrollmentProcessStatusStageConfig";
+import { asOperatorStageKey } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
 function setsEqual(a: Set<string>, b: Set<string>): boolean {
@@ -12,12 +13,15 @@ function setsEqual(a: Set<string>, b: Set<string>): boolean {
 }
 
 export default function EnrollmentProcessStageStatusesCard({
-    activeStage,
+    departmentId,
+    activeStageKey,
     onStagesLoaded,
 }: {
-    activeStage: LifecycleOperatorStage;
+    departmentId: string;
+    activeStageKey: string;
     onStagesLoaded?: (payload: EnrollmentStatusStagesPayload | null) => void;
 }) {
+    const operatorStage = asOperatorStageKey(activeStageKey);
     const [payload, setPayload] = useState<EnrollmentStatusStagesPayload | null>(null);
     const [draftKeys, setDraftKeys] = useState<Set<string>>(new Set());
     const [savedKeys, setSavedKeys] = useState<Set<string>>(new Set());
@@ -25,35 +29,43 @@ export default function EnrollmentProcessStageStatusesCard({
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [feedback, setFeedback] = useState<string | null>(null);
+    const onStagesLoadedRef = useRef(onStagesLoaded);
+    useEffect(() => {
+        onStagesLoadedRef.current = onStagesLoaded;
+    }, [onStagesLoaded]);
 
     const load = useCallback(async () => {
+        if (!departmentId) return;
         setLoading(true);
         setError(null);
         try {
-            const res = await fetch("/api/admin/enrollment-process/status-stages", workspaceDataFetchInit());
+            const res = await fetch(
+                `/api/admin/enrollment-process/status-stages?department_id=${encodeURIComponent(departmentId)}`,
+                workspaceDataFetchInit()
+            );
             const j = (await res.json().catch(() => ({}))) as EnrollmentStatusStagesPayload & { error?: string };
             if (!res.ok) throw new Error(j.error ?? "Failed to load statuses");
             setPayload(j);
-            onStagesLoaded?.(j);
+            onStagesLoadedRef.current?.(j);
         } catch (e) {
             setError(e instanceof Error ? e.message : "Failed to load");
             setPayload(null);
-            onStagesLoaded?.(null);
+            onStagesLoadedRef.current?.(null);
         } finally {
             setLoading(false);
         }
-    }, [onStagesLoaded]);
+    }, [departmentId]);
 
     useEffect(() => {
         void load();
     }, [load]);
 
     useEffect(() => {
-        const keys = new Set((payload?.stages[activeStage]?.statuses ?? []).map((s) => s.status_key));
+        const keys = new Set((payload?.stages[activeStageKey]?.statuses ?? []).map((s) => s.status_key));
         setDraftKeys(keys);
         setSavedKeys(new Set(keys));
         setFeedback(null);
-    }, [payload, activeStage]);
+    }, [payload, activeStageKey]);
 
     const dirty = useMemo(() => !setsEqual(draftKeys, savedKeys), [draftKeys, savedKeys]);
 
@@ -95,6 +107,7 @@ export default function EnrollmentProcessStageStatusesCard({
     }, [payload, draftKeys]);
 
     const save = useCallback(async () => {
+        if (!operatorStage) return;
         setSaving(true);
         setError(null);
         setFeedback(null);
@@ -103,24 +116,29 @@ export default function EnrollmentProcessStageStatusesCard({
                 ...workspaceDataFetchInit(),
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ stage: activeStage, status_keys: [...draftKeys] }),
+                body: JSON.stringify({
+                    department_id: departmentId,
+                    stage: activeStageKey,
+                    status_keys: [...draftKeys],
+                }),
             });
             const j = (await res.json().catch(() => ({}))) as EnrollmentStatusStagesPayload & { error?: string };
             if (!res.ok) throw new Error(j.error ?? "Save failed");
             setPayload(j);
-            onStagesLoaded?.(j);
-            const keys = new Set((j.stages[activeStage]?.statuses ?? []).map((s) => s.status_key));
+            onStagesLoadedRef.current?.(j);
+            const keys = new Set((j.stages[activeStageKey]?.statuses ?? []).map((s) => s.status_key));
             setDraftKeys(keys);
             setSavedKeys(keys);
-            setFeedback("Saved status mapping.");
+            setFeedback("Saved.");
         } catch (e) {
             setError(e instanceof Error ? e.message : "Save failed");
         } finally {
             setSaving(false);
         }
-    }, [activeStage, draftKeys, onStagesLoaded]);
+    }, [departmentId, activeStageKey, operatorStage, draftKeys]);
 
     const resetStage = useCallback(async () => {
+        if (!operatorStage) return;
         setSaving(true);
         setError(null);
         setFeedback(null);
@@ -129,22 +147,22 @@ export default function EnrollmentProcessStageStatusesCard({
                 ...workspaceDataFetchInit(),
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ reset_stage: activeStage }),
+                body: JSON.stringify({ department_id: departmentId, reset_stage: activeStageKey }),
             });
             const j = (await res.json().catch(() => ({}))) as EnrollmentStatusStagesPayload & { error?: string };
             if (!res.ok) throw new Error(j.error ?? "Reset failed");
             setPayload(j);
-            onStagesLoaded?.(j);
-            const keys = new Set((j.stages[activeStage]?.statuses ?? []).map((s) => s.status_key));
+            onStagesLoadedRef.current?.(j);
+            const keys = new Set((j.stages[activeStageKey]?.statuses ?? []).map((s) => s.status_key));
             setDraftKeys(keys);
             setSavedKeys(keys);
-            setFeedback("Reset to platform defaults for this stage.");
+            setFeedback("Reset to defaults.");
         } catch (e) {
             setError(e instanceof Error ? e.message : "Reset failed");
         } finally {
             setSaving(false);
         }
-    }, [activeStage, onStagesLoaded]);
+    }, [departmentId, activeStageKey, operatorStage]);
 
     const addStatus = useCallback((statusKey: string) => {
         setDraftKeys((prev) => new Set([...prev, statusKey]));
@@ -165,7 +183,12 @@ export default function EnrollmentProcessStageStatusesCard({
     }
 
     return (
-        <div className="space-y-3" data-testid="enrollment-process-statuses-editor">
+        <div className="space-y-2" data-testid="lifecycle-statuses-editor">
+            <p className="text-[11px] leading-relaxed text-alloy-midnight/60">
+                Add or remove opportunity statuses for this stage. Saved statuses drive the Work Unit Queue filter
+                automatically.
+            </p>
+
             {error ? (
                 <p className="text-xs text-red-700" role="alert">
                     {error}
@@ -177,58 +200,46 @@ export default function EnrollmentProcessStageStatusesCard({
                 </p>
             ) : null}
 
-            <div>
-                <h4 className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/50">
-                    Statuses in this stage
-                </h4>
-                {assigned.length ? (
-                    <ul className="mt-2 space-y-1.5" data-testid="enrollment-process-status-assigned">
-                        {[...assigned]
-                            .sort((a, b) => a.status_label.localeCompare(b.status_label))
-                            .map((row) => (
-                                <li
-                                    key={row.status_key}
-                                    className="flex items-center justify-between gap-2 rounded-md border border-alloy-forge/10 bg-white/80 px-2 py-1 text-xs"
-                                >
-                                    <span>{row.status_label}</span>
-                                    <button
-                                        type="button"
-                                        className="text-[11px] font-medium text-alloy-midnight/60 hover:text-red-800"
-                                        onClick={() => removeStatus(row.status_key)}
-                                        data-testid={`enrollment-process-remove-status-${row.status_key}`}
-                                    >
-                                        Remove from stage
-                                    </button>
-                                </li>
-                            ))}
-                    </ul>
-                ) : (
-                    <p className="mt-1 text-xs text-alloy-midnight/50">No statuses in this stage yet.</p>
-                )}
-            </div>
-
-            <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/50">
-                    Add status
-                </label>
-                <select
-                    className="mt-1 w-full rounded-md border border-alloy-forge/20 bg-white px-2 py-1.5 text-xs text-alloy-midnight"
-                    defaultValue=""
-                    onChange={(e) => {
-                        const v = e.target.value;
-                        if (v) addStatus(v);
-                        e.target.value = "";
-                    }}
-                    data-testid="enrollment-process-add-status-select"
-                >
-                    <option value="">Choose a status…</option>
-                    {availableToAdd.map((row) => (
-                        <option key={row.status_key} value={row.status_key}>
-                            {row.status_label}
-                        </option>
+            {assigned.length ? (
+                <ul className="space-y-1" data-testid="enrollment-process-status-assigned">
+                    {assigned.map((row) => (
+                        <li
+                            key={row.status_key}
+                            className="flex items-center justify-between gap-2 rounded border border-alloy-forge/10 px-2 py-0.5 text-xs"
+                        >
+                            <span>{row.status_label}</span>
+                            <button
+                                type="button"
+                                className="text-[10px] font-medium text-alloy-midnight/50 hover:text-red-800"
+                                onClick={() => removeStatus(row.status_key)}
+                                data-testid={`enrollment-process-remove-status-${row.status_key}`}
+                            >
+                                Remove
+                            </button>
+                        </li>
                     ))}
-                </select>
-            </div>
+                </ul>
+            ) : (
+                <p className="text-xs text-alloy-midnight/50">No statuses selected yet.</p>
+            )}
+
+            <select
+                className="w-full rounded-md border border-alloy-forge/20 bg-white px-2 py-1 text-xs"
+                defaultValue=""
+                onChange={(e) => {
+                    const v = e.target.value;
+                    if (v) addStatus(v);
+                    e.target.value = "";
+                }}
+                data-testid="enrollment-process-add-status-select"
+            >
+                <option value="">Add a status…</option>
+                {availableToAdd.map((row) => (
+                    <option key={row.status_key} value={row.status_key}>
+                        {row.status_label}
+                    </option>
+                ))}
+            </select>
 
             <div className="flex flex-wrap gap-2">
                 <button
@@ -243,23 +254,20 @@ export default function EnrollmentProcessStageStatusesCard({
                 <button
                     type="button"
                     className="rounded-md border border-alloy-forge/20 bg-white px-2 py-1 text-[11px] font-medium text-alloy-midnight/80 hover:bg-alloy-stone/10 disabled:opacity-50"
-                    disabled={saving || !payload?.stages[activeStage]?.has_custom_assignments}
+                    disabled={saving || !payload?.stages[activeStageKey]?.has_custom_assignments}
                     onClick={() => void resetStage()}
                     data-testid="enrollment-process-statuses-reset"
                 >
-                    Reset to Default
+                    Reset
                 </button>
             </div>
 
-            <button
-                type="button"
-                disabled
-                title="Future: BOS will suggest statuses for this stage. You review and apply."
-                className="w-full rounded-md border border-dashed border-alloy-forge/20 bg-alloy-stone/[0.04] px-2 py-1.5 text-[11px] text-alloy-midnight/45"
-                data-testid="enrollment-process-bos-suggest-statuses"
+            <Link
+                href="/adminV2/settings/statuses?entity_type=opportunities"
+                className="inline-block text-[11px] font-medium text-alloy-pine hover:underline"
             >
-                Ask BOS to suggest statuses for this stage
-            </button>
+                Create or edit status definitions
+            </Link>
         </div>
     );
 }

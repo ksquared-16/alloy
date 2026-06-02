@@ -1,7 +1,3 @@
-"use client";
+import LifecycleHubClient from "@/components/adminV2/settings/LifecycleHubClient";
 
-import LifecycleStagesRequirementsHub from "@/components/adminV2/settings/LifecycleStagesRequirementsHub";
-
-export default function LifecycleSettingsHubClient() {
-    return <LifecycleStagesRequirementsHub />;
-}
+export default LifecycleHubClient;

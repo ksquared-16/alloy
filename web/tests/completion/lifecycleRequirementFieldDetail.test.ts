@@ -7,13 +7,12 @@ import {
 describe("lifecycleRequirementFieldDetail", () => {
     it("Person expands to first name, last name, email or phone", () => {
         const d = lifecycleRequirementFieldDetailForLabel("Person");
-        expect(d?.fields).toEqual(["First Name", "Last Name", "Email or Phone"]);
+        expect(d?.fields).toEqual(["First Name", "Last Name", "Email", "Phone"]);
     });
 
-    it("Child expands to name and DOB or age group", () => {
+    it("Child expands to name, DOB, and age group", () => {
         const d = lifecycleRequirementFieldDetailForLabel("Child");
-        expect(d?.fields).toContain("First Name");
-        expect(d?.fields).toContain("Date of Birth or Age Group");
+        expect(d?.fields).toEqual(["First Name", "Last Name", "Date of Birth", "Age Group"]);
     });
 
     it("field-level detail is not editable on Lifecycle", () => {

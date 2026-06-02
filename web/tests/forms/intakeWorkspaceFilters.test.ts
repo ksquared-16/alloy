@@ -168,6 +168,39 @@ describe("intakeWorkspaceFilters IC-3", () => {
         expect(panel.empty).toBe("No intake cases need family matching.");
     });
 
+    it("clean auto-created lead counts as recent/healthy — not needs action", () => {
+        const clean = submission({
+            id: "sub-clean",
+            person_id: "person-1",
+            customer_id: "customer-1",
+            opportunity_id: OPP,
+            payload: {
+                meta: {
+                    intake_resolution_path: "created_records",
+                    intake_opportunity_match: "created",
+                    intake_auto_operationalized: true,
+                    intake_needs_review: false,
+                },
+            },
+        });
+        const counts = countIntakeWorkspaceFilters({
+            submissions: [clean],
+            sessions: [],
+            forms: [{ id: FORM }],
+            packets: [],
+            formsById: { [FORM]: "Contact Us" },
+        });
+
+        expect(counts.needs_linking).toBe(0);
+        expect(counts.needs_review).toBe(0);
+        expect(counts.needs_action).toBe(0);
+        expect(counts.recent).toBe(1);
+
+        const intakeCase = buildIntakeCasePresentationRows({ submissions: [clean] })[0]!;
+        expect(intakeCaseMatchesWorkspaceFilter(intakeCase, "needs_action")).toBe(false);
+        expect(intakeCaseMatchesWorkspaceFilter(intakeCase, "recent")).toBe(true);
+    });
+
     it("uses case-centric empty states", () => {
         expect(
             buildIntakeWorkspaceFilterPanel("needs_review", {

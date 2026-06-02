@@ -11,10 +11,16 @@ import {
 import {
     buildLifecycleRequirementsOverridePatch,
     buildLifecycleRequirementsResetStagePatch,
+    buildLifecycleFieldRulesOverridePatch,
     departmentHasStageOverride,
+    effectiveFieldRulesForStage,
     effectiveLifecycleProgressionRequirementsForStage,
     parseLifecycleProgressionRequirementsOverride,
 } from "@/lib/completion/lifecycleProgressionRequirementsConfig";
+import { mergeLifecycleFieldPaletteForStage } from "@/lib/lifecycle/lifecycleFieldPaletteMerge";
+import { loadOrgFieldDefinitionsForLifecycle } from "@/lib/lifecycle/loadOrgFieldDefinitionsForLifecycle";
+import { platformFieldRulesForStage } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
+import { LIFECYCLE_REQUIREMENT_ENTITIES } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 
 function isStageKey(s: string): s is LifecycleOperatorStage {
     return (LIFECYCLE_STAGE_ORDER as readonly string[]).includes(s);
@@ -76,23 +82,39 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
             : {};
 
     const override = parseLifecycleProgressionRequirementsOverride(metadata);
+    const orgFieldDefs = await loadOrgFieldDefinitionsForLifecycle(createAdminClient(), ctx.orgId);
     const stages = Object.fromEntries(
         LIFECYCLE_STAGE_ORDER.map((stage) => {
             const platform = platformLifecycleProgressionRequirementsForStage(stage);
             const effective = effectiveLifecycleProgressionRequirementsForStage(stage, metadata);
+            const platformFields = platformFieldRulesForStage(stage);
+            const effectiveFields = effectiveFieldRulesForStage(stage, metadata);
+            const palette = mergeLifecycleFieldPaletteForStage(stage, orgFieldDefs);
             return [
                 stage,
                 {
                     platform: {
                         required_labels: platform.required.map((r) => r.label),
                         recommended_labels: platform.recommended.map((r) => r.label),
+                        field_rules: platformFields,
                     },
                     effective: {
                         required_labels: effective.required.map((r) => r.label),
                         recommended_labels: effective.recommended.map((r) => r.label),
                         source: effective.source,
+                        field_rules: effectiveFields.rules,
+                        field_rules_source: effectiveFields.source,
                     },
                     has_department_override: departmentHasStageOverride(override, stage),
+                    field_palette: palette.map((f) => ({
+                        rule_id: f.rule_id,
+                        entity: f.entity,
+                        field_label: f.field_label,
+                        field_source: f.field_source,
+                        runtime_enforced: f.runtime_enforced,
+                        form_coverage_supported: f.form_coverage_supported,
+                        config_only: f.config_only,
+                    })),
                 },
             ];
         })
@@ -101,6 +123,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
     return NextResponse.json({
         department_id: departmentId,
         override,
+        entities: LIFECYCLE_REQUIREMENT_ENTITIES,
         stages,
     });
 }
@@ -166,6 +189,52 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
     const stage = typeof body.stage === "string" ? body.stage.trim() : "";
     if (!isStageKey(stage)) {
         return NextResponse.json({ error: "stage is required" }, { status: 400 });
+    }
+
+    const fieldRulesRaw = body.field_rules;
+    if (fieldRulesRaw && typeof fieldRulesRaw === "object" && !Array.isArray(fieldRulesRaw)) {
+        const required_rule_ids = Array.isArray((fieldRulesRaw as { required_rule_ids?: unknown }).required_rule_ids)
+            ? (fieldRulesRaw as { required_rule_ids: unknown[] }).required_rule_ids.filter(
+                  (x): x is string => typeof x === "string"
+              )
+            : [];
+        const recommended_rule_ids = Array.isArray(
+            (fieldRulesRaw as { recommended_rule_ids?: unknown }).recommended_rule_ids
+        )
+            ? (fieldRulesRaw as { recommended_rule_ids: unknown[] }).recommended_rule_ids.filter(
+                  (x): x is string => typeof x === "string"
+              )
+            : [];
+        let metadataPatch: Record<string, unknown>;
+        try {
+            const mergedPalette = mergeLifecycleFieldPaletteForStage(
+                stage,
+                await loadOrgFieldDefinitionsForLifecycle(createAdminClient(), ctx.orgId)
+            );
+            metadataPatch = buildLifecycleFieldRulesOverridePatch({
+                stage,
+                required_rule_ids,
+                recommended_rule_ids,
+                existingMetadata: prevMeta,
+                mergedPalette,
+            });
+        } catch (e) {
+            return NextResponse.json(
+                { error: e instanceof Error ? e.message : "Invalid field rules" },
+                { status: 400 }
+            );
+        }
+        const metadata = deepMergeJsonObjects(prevMeta, metadataPatch);
+        const supabase = createAdminClient();
+        const { data: updated, error } = await supabase
+            .from("departments")
+            .update({ metadata, updated_at: new Date().toISOString() })
+            .eq("id", departmentId)
+            .eq("org_id", ctx.orgId)
+            .select("metadata")
+            .single();
+        if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+        return NextResponse.json({ ok: true, metadata: updated?.metadata ?? metadata });
     }
 
     const required_labels = Array.isArray(body.required_labels)

@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
+import { isLifecycleBuilderOwnedDepartmentMetadata } from "@/lib/lifecycle/lifecycleBuilderOwned";
+import { ensureLifecycleDepartmentWorkspaceAccess } from "@/lib/lifecycle/ensureLifecycleDepartmentWorkspaceAccess";
+import {
+    applyDepartmentAccessScope,
+    filterActiveWorkspaceDepartments,
+} from "@/lib/workspace/workspaceActiveDepartments";
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +65,9 @@ export async function GET() {
         });
     }
 
-    return NextResponse.json({ items: rows ?? [] });
+    const active = filterActiveWorkspaceDepartments(rows ?? []);
+    const scoped = applyDepartmentAccessScope(active, dim);
+    return NextResponse.json({ items: scoped });
 }
 
 /** POST: create department. Admin only. org_id server-side. */
@@ -75,6 +84,7 @@ export async function POST(request: NextRequest) {
         description?: string | null;
         sort_order?: number;
         is_active?: boolean;
+        metadata?: Record<string, unknown>;
     } = {};
     try {
         body = (await request.json()) as typeof body;
@@ -88,6 +98,10 @@ export async function POST(request: NextRequest) {
         typeof body.description === "string" ? body.description.trim() || null : body.description === null ? null : null;
     const sort_order = typeof body.sort_order === "number" && !Number.isNaN(body.sort_order) ? body.sort_order : 0;
     const is_active = body.is_active !== false;
+    const metadata =
+        body.metadata !== null && typeof body.metadata === "object" && !Array.isArray(body.metadata)
+            ? body.metadata
+            : {};
 
     if (!key) {
         return NextResponse.json({ error: "key is required" }, { status: 400 });
@@ -113,7 +127,7 @@ export async function POST(request: NextRequest) {
             description,
             sort_order,
             is_active,
-            metadata: {},
+            metadata,
             updated_at: now,
         })
         .select()
@@ -131,6 +145,24 @@ export async function POST(request: NextRequest) {
             );
         }
         return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    const createdId = (created as { id?: string }).id;
+    if (createdId && isLifecycleBuilderOwnedDepartmentMetadata(metadata)) {
+        const access = await getAdminAccessContextCached();
+        const ensure = await ensureLifecycleDepartmentWorkspaceAccess({
+            supabase,
+            orgId: ctx.orgId,
+            departmentId: createdId,
+            currentUserId: ctx.userId,
+            roleKeys: access.ok ? access.roleKeys : [],
+        });
+        if (!ensure.ok) {
+            return NextResponse.json(
+                { error: `Department created but workspace access provisioning failed: ${ensure.error}` },
+                { status: 500 }
+            );
+        }
     }
 
     return NextResponse.json(created);

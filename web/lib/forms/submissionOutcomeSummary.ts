@@ -1,6 +1,9 @@
 import type { FormPayload } from "@/lib/forms/validateSubmission";
 import { resolveFormSubmissionDocumentParent } from "@/lib/forms/pdf/createGeneratedPdfForSubmission";
 import { parseIntakeAutoCreateFlags } from "@/lib/forms/intake/parseIntakeAutoCreateFlags";
+import {
+    isCleanOperationalizedEnrollmentLead,
+} from "@/lib/forms/intakeEnrollmentLeadClassification";
 import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
 import { extractFormContextForOperatorDebug } from "@/lib/forms/formContextMode";
 
@@ -293,8 +296,19 @@ export function submissionHasDocumentAttachTarget(row: SubmissionAttachRow): boo
  */
 export function documentGenerationBlockedByIntake(
     payloadMeta: unknown,
-    row: SubmissionAttachRow
+    row: SubmissionAttachRow,
+    status = "submitted"
 ): { blocked: boolean; reason?: string } {
+    if (
+        isCleanOperationalizedEnrollmentLead({
+            status,
+            payloadMeta,
+            attachRow: row,
+        })
+    ) {
+        return { blocked: false };
+    }
+
     if (!payloadMeta || typeof payloadMeta !== "object" || Array.isArray(payloadMeta)) {
         if (!submissionHasDocumentAttachTarget(row)) {
             return {
@@ -428,6 +442,21 @@ export function recommendedNextAction(params: {
         customer_member_id: null,
         opportunity_id: null,
     };
+
+    if (
+        isCleanOperationalizedEnrollmentLead({
+            status: params.status,
+            payloadMeta: params.payloadMeta,
+            attachRow,
+        })
+    ) {
+        lines.push("Open the enrollment lead in the opportunity queue to continue.");
+        if (params.hasAnyCrmEntityLink) {
+            lines.push("Use Open beside Person / Customer / Opportunity when you need to update CRM records.");
+        }
+        return lines;
+    }
+
     const hasAttachParent = submissionHasDocumentAttachTarget(attachRow);
     const intakeBlocksDoc =
         params.payloadMeta !== undefined && params.payloadMeta !== null ?

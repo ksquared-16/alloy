@@ -47,6 +47,38 @@ describe("intakeQuickReviewPresentation IC-6", () => {
         expect(model.recommendedNextStep).toContain("Review intake");
     });
 
+    it("shows lead created quick review for clean auto-operationalized case", () => {
+        const model = buildIntakeQuickReviewViewModel({
+            row: row({
+                payload: {
+                    values: {
+                        guardian_full_name: "Jordan Test",
+                        guardian_email: "jordan@example.com",
+                        guardian_phone: "6025550100",
+                    },
+                    meta: {
+                        intake_auto_operationalized: true,
+                        intake_needs_review: false,
+                        intake_resolution_path: "created_records",
+                        intake_opportunity_match: "created",
+                        intake_routing_work_unit_id: "wu-1",
+                    },
+                } as SubmissionInboxRow["payload"],
+            }),
+            formName: "Contact Us",
+            submittedAtLabel: "May 27, 2026 6:09 PM",
+        });
+
+        expect(model.leadCreatedMode).toBe(true);
+        expect(model.headerTitle).toBe("Lead created");
+        expect(model.intakeSummary.capturedLine).toContain("new enrollment lead");
+        expect(model.intakeSummary.statusLine).toBe("New Lead");
+        expect(model.needsAction.clearMessage).toBe("No manual review required.");
+        expect(model.needsAction.items).toHaveLength(0);
+        expect(model.primaryOpenLabel).toBe("Open Lead");
+        expect(model.leadCreatedFields?.email).toBe("jordan@example.com");
+    });
+
     it("shows no manual review required for auto-operationalized case", () => {
         const model = buildIntakeQuickReviewViewModel({
             row: row({
@@ -64,10 +96,32 @@ describe("intakeQuickReviewPresentation IC-6", () => {
             submittedAtLabel: "May 27, 2026 6:09 PM",
         });
 
-        expect(model.intakeSummary.operationalLine).toContain("Auto-operationalized");
-        expect(model.intakeSummary.statusLine).toBe("Auto-operationalized");
+        expect(model.leadCreatedMode).toBe(true);
+        expect(model.intakeSummary.statusLine).toBe("New Lead");
         expect(model.needsAction.clearMessage).toBe("No manual review required.");
         expect(model.needsAction.items).toHaveLength(0);
+    });
+
+    it("duplicate name mismatch shows possible existing family match", () => {
+        const model = buildIntakeQuickReviewViewModel({
+            row: row({
+                payload: {
+                    values: { guardian_full_name: "New Name" },
+                    meta: {
+                        intake_identity_name_mismatch: true,
+                        intake_needs_review: true,
+                        intake_resolution_path: "matched_email",
+                        intake_opportunity_match: "attached_existing",
+                    },
+                } as SubmissionInboxRow["payload"],
+            }),
+            formName: "Contact Us",
+            submittedAtLabel: "May 27, 2026 6:09 PM",
+        });
+
+        expect(model.leadCreatedMode).toBe(false);
+        expect(model.needsAction.items).toContain("Possible existing family match");
+        expect(model.needsAction.clearMessage).toBeNull();
     });
 
     it("keeps evidence details accessible", () => {
@@ -152,7 +206,7 @@ describe("intakeQuickReviewPresentation IC-6", () => {
         expect(model.needsAction.clearMessage).toBe("No manual review required.");
         expect(model.needsAction.items).toHaveLength(0);
         expect(model.opportunityId).toBe("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
-        expect(model.primaryOpenLabel).toBe("Continue enrollment");
+        expect(model.primaryOpenLabel).toBe("Open Lead");
     });
 
     it("IC-5.6 — review-required medication path still shows needs action", () => {

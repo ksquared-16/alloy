@@ -148,6 +148,7 @@ export function FormLifecycleWorkspaceLayout({
     const storedIntent = readStoredOperationalIntent(detail.metadata);
     const showPacketPanel = storedIntent === "packet_step";
     const showExistingRecordSend = storedIntent === "existing_family";
+    const coverageRefreshKey = detail.versions.map((v) => `${v.id}:${v.updated_at ?? v.created_at}`).join("|");
 
     return (
         <>
@@ -215,6 +216,7 @@ export function FormLifecycleWorkspaceLayout({
                         onCreateLocationLink={onCreateLocationLink}
                         creatingLocationLink={creatingLocationLink}
                         locationLinkErr={locationLinkErr}
+                        coverageRefreshKey={coverageRefreshKey}
                     />
                 </section>
 

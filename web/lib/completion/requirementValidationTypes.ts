@@ -73,11 +73,21 @@ export type CompletionEvaluationContext = {
     related?: CompletionRelatedContext;
 };
 
+export type PrimaryPersonSnapshot = {
+    person_id?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    email?: string | null;
+    phone?: string | null;
+};
+
 export type CompletionRelatedContext = {
     customer_id?: string | null;
     inquiry_children?: InquiryChildCompletionSnapshot[];
     /** Department `metadata` for lifecycle requirement overrides (action preflight). */
     department_metadata?: Record<string, unknown> | null;
+    /** Primary contact on opportunity — used for field-level lifecycle rules. */
+    primary_person?: PrimaryPersonSnapshot;
     household_guardian_count?: number;
     household_has_primary_contact?: boolean;
     customer_persons?: Array<{ role_type?: string | null; is_primary?: boolean | null; customer_id?: string | null }>;

@@ -6,7 +6,7 @@ import { departmentIdAllowed, scopeDimensionsFromAccess } from "@/lib/admin/acce
 import { dbListFormDefinitions } from "@/lib/admin/forms/formsAdminDb";
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import { LIFECYCLE_STAGE_ORDER } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
-import { effectiveRequirementLabelsForDepartment } from "@/lib/lifecycle/enrollmentProcessDepartmentRequirements";
+import { effectiveFieldRulesForDepartment, effectiveRequirementLabelsForDepartment } from "@/lib/lifecycle/enrollmentProcessDepartmentRequirements";
 import { buildEnrollmentProcessFormCoverageRows } from "@/lib/lifecycle/enrollmentProcessFormCoverage";
 
 function isStageKey(s: string): s is LifecycleOperatorStage {
@@ -47,6 +47,7 @@ export async function GET(request: NextRequest) {
             : {};
 
     const { required_labels, recommended_labels } = effectiveRequirementLabelsForDepartment(stage, metadata);
+    const { rules: field_rules } = effectiveFieldRulesForDepartment(stage, metadata);
 
     const { data: formRows, error: formErr } = await dbListFormDefinitions(supabase, ctx.orgId);
     if (formErr) return NextResponse.json({ error: formErr.message }, { status: 500 });
@@ -115,6 +116,7 @@ export async function GET(request: NextRequest) {
         stage,
         required_labels,
         recommended_labels,
+        field_rules,
         forms,
     });
 
@@ -122,6 +124,7 @@ export async function GET(request: NextRequest) {
         stage,
         required_labels,
         recommended_labels,
+        field_rules,
         forms: coverage,
     });
 }

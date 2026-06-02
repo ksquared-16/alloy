@@ -41,7 +41,7 @@ const companyRootStyle: CSSProperties = operationalWorkspaceShellStyle({
 /** Per-department rollups for root tiles (from /api/admin/work-units, etc.). */
 export type WorkspaceRootDeptTileStats = Record<
     string,
-    { workUnitCount: number; opportunityRollupLine?: string | null }
+    { workUnitCount: number; opportunityRollupLine?: string | null; workUnitNames?: string[] }
 >;
 
 type Props = {
@@ -148,7 +148,8 @@ export function WorkspaceRootDepartmentGrid({
                 );
                 const desc =
                     (d.description && String(d.description).trim()) ||
-                    `Departments and work units for ${d.name}.`;
+                    (d.name && String(d.name).trim()) ||
+                    "Lifecycle";
                 const stats = deptTileStats?.[d.id];
                 const wu = stats?.workUnitCount;
                 const rollup = stats?.opportunityRollupLine?.trim();

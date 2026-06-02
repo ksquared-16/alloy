@@ -13,14 +13,29 @@ import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
 import { buildWorkspaceRootDepartmentTileRollupLine } from "@/lib/workspace/viewModels/workspaceRootRollup";
 import { resolveKpisForWorkspace } from "@/lib/kpi/resolver";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
-import { dedupeAdminFetch, dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
-import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
-import { loadWorkspaceGrowthRollup } from "@/lib/adminV2/runtime/loadWorkspaceGrowthRollup";
 import {
-    perfWorkspaceLoad,
+    bustWorkspaceDepartmentsFetchDedupe,
+    dedupeAdminFetch,
+    dedupeAdminFetchWithTtl,
+} from "@/lib/workspace/workspaceAdminFetchDedupe";
+import {
+    invalidateAdminV2WorkspaceSessionCache,
     readWorkspaceRootCache,
     writeWorkspaceRootCache,
 } from "@/lib/workspace/adminV2WorkspaceSessionCache";
+import {
+    traceWorkspaceRootDepartmentTiles,
+    transformWorkspaceApiDepartmentsToTiles,
+    type WorkspaceTilePipelineTrace,
+} from "@/lib/workspace/workspaceRootTilePipeline";
+import { WorkspaceTileDebugPanel } from "@/components/admin/workspace/WorkspaceTileDebugPanel";
+import AdminAccessScopeDebugPanel from "@/components/adminV2/settings/lifecycle/AdminAccessScopeDebugPanel";
+import { isLifecycleDebugUiEnabled } from "@/lib/lifecycle/lifecycleDebugUi";
+import { readLifecycleDebugSelection } from "@/lib/lifecycle/lifecycleDebugSelection";
+import type { LifecycleDepartmentIdAudit } from "@/lib/lifecycle/lifecycleDepartmentIdAudit";
+import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
+import { loadWorkspaceGrowthRollup } from "@/lib/adminV2/runtime/loadWorkspaceGrowthRollup";
+import { perfWorkspaceLoad } from "@/lib/workspace/adminV2WorkspaceSessionCache";
 import {
     markRouteBootstrapReturned,
     markRouteFirstAboveFoldStable,
@@ -103,6 +118,9 @@ export default function AdminV2WorkspaceIndexPage() {
     const [workspaceKpiPlacementPending, setWorkspaceKpiPlacementPending] = useState(false);
     const [workspaceRollupRefined, setWorkspaceRollupRefined] = useState(false);
     const [fetchSettledEmpty, setFetchSettledEmpty] = useState(false);
+    const [deptRefreshNonce, setDeptRefreshNonce] = useState(0);
+    const [tilePipelineTrace, setTilePipelineTrace] = useState<WorkspaceTilePipelineTrace | null>(null);
+    const [workspaceIdAudit, setWorkspaceIdAudit] = useState<LifecycleDepartmentIdAudit | null>(null);
 
     useEffect(() => {
         resetRouteShellTrace("workspace");
@@ -110,6 +128,18 @@ export default function AdminV2WorkspaceIndexPage() {
         markRouteShellVisible("workspace");
         return () => unregisterRouteLoadingOwner("workspace", "page");
     }, []);
+
+    useEffect(() => {
+        const onDepartmentsChanged = () => {
+            hydratedCacheRef.current = false;
+            setWorkspaceCachePrimed(false);
+            invalidateAdminV2WorkspaceSessionCache(orgId, principalUserId, accessScopeFingerprint);
+            bustWorkspaceDepartmentsFetchDedupe();
+            setDeptRefreshNonce((n) => n + 1);
+        };
+        window.addEventListener("alloy:workspace-departments-changed", onDepartmentsChanged);
+        return () => window.removeEventListener("alloy:workspace-departments-changed", onDepartmentsChanged);
+    }, [orgId, principalUserId, accessScopeFingerprint]);
 
     useLayoutEffect(() => {
         resetWorkspaceRevealGatePerf();
@@ -166,6 +196,7 @@ export default function AdminV2WorkspaceIndexPage() {
                 const t0 = perfDebug ? performance.now() : 0;
 
                 const fetchInit = workspaceDataFetchInit() ?? {};
+                const deptFetchInit = { ...fetchInit, cache: "no-store" as RequestCache };
                 const placementUrl = "/api/admin/workspace-kpi-placements?surface=workspace";
                 const placementP = dedupeAdminFetchWithTtl(
                     placementUrl,
@@ -173,7 +204,7 @@ export default function AdminV2WorkspaceIndexPage() {
                     8000
                 ).catch(() => null as Response | null);
                 const [res, wuRes] = await Promise.all([
-                    dedupeAdminFetch("/api/admin/departments", fetchInit),
+                    dedupeAdminFetch("/api/admin/departments", deptFetchInit),
                     dedupeAdminFetch("/api/admin/work-units", fetchInit).catch(() => null as Response | null),
                 ]);
                 const json = (await res.json().catch(() => ({}))) as {
@@ -186,8 +217,47 @@ export default function AdminV2WorkspaceIndexPage() {
                 };
                 if (!res.ok) throw new Error(json.error ?? "Failed to load departments");
                 const items = json.items ?? [];
-                const active = items.filter((d) => d.is_active !== false);
+                const trace = traceWorkspaceRootDepartmentTiles(items);
+                const active = transformWorkspaceApiDepartmentsToTiles(items);
                 if (!applyResults) return;
+
+                setTilePipelineTrace(trace);
+                const debugSel = readLifecycleDebugSelection();
+                if (debugSel) {
+                    const sel = debugSel.department_id;
+                    setWorkspaceIdAudit({
+                        selected_department_id: sel,
+                        selected_lifecycle_name: debugSel.lifecycle_name,
+                        selected_process_id: debugSel.process_id,
+                        expected_workspace_tile_name: debugSel.expected_tile_name,
+                        sources: {
+                            validate_route_department_id: sel,
+                            catalog_row_department_id: null,
+                            activation_metadata_department_id: sel,
+                            view_link_department_id: sel,
+                            backing_department_query_id: trace.apiDepartmentIds.includes(sel) ? sel : null,
+                        },
+                        presence: {
+                            in_builder_catalog: false,
+                            catalog_id_matches_selected: false,
+                            in_backing_department_row: trace.apiDepartmentIds.includes(sel),
+                            in_get_workspace_api: trace.apiDepartmentIds.includes(sel),
+                            in_workspace_rendered_tiles: trace.renderedTileIds.includes(sel),
+                        },
+                        workspace_api_department_ids: [...trace.apiDepartmentIds],
+                        workspace_rendered_tile_ids: [...trace.renderedTileIds],
+                        mismatch_hints: trace.apiDepartmentIds.includes(sel)
+                            ? []
+                            : [
+                                  "not_in_workspace_api: Selected lifecycle department ID is not in this page's GET /api/admin/departments response.",
+                              ],
+                    });
+                } else {
+                    setWorkspaceIdAudit(null);
+                }
+                if (process.env.NODE_ENV === "development") {
+                    console.debug("[ws.root] tile pipeline", trace, debugSel);
+                }
 
                 if (typeof performance !== "undefined" && typeof window !== "undefined") {
                     perfWorkspaceLoad({
@@ -359,7 +429,7 @@ export default function AdminV2WorkspaceIndexPage() {
             applyResults = false;
             cancelGrowthRollupDefer();
         };
-    }, [orgId, principalUserId, accessScopeFingerprint]);
+    }, [orgId, principalUserId, accessScopeFingerprint, deptRefreshNonce]);
 
     const workspaceRevealGate = useMemo(() => {
         const cachePrimed = workspaceCachePrimed;
@@ -448,19 +518,32 @@ export default function AdminV2WorkspaceIndexPage() {
     }
 
     return (
-        <WorkspaceRootShell
-            orgName={orgNameFromContext}
-            departments={departments}
-            deptTileStats={deptTileStats}
-            metrics={metricsResolved}
-            metricsLoading={false}
-            orgOpportunityKpis={orgOpportunityKpis}
-            workspaceKpiStrip={workspaceKpiStrip}
-            kpiStripPlaceholder={workspaceKpiPlacementPending}
-            kpiQuietReserveOnly={workspaceKpiPlacementPending}
-            workspaceRollupRefined={workspaceRollupRefined}
-            departmentsPending={false}
-            deptTileStatsPending={false}
-        />
+        <>
+            <WorkspaceRootShell
+                orgName={orgNameFromContext}
+                departments={departments}
+                deptTileStats={deptTileStats}
+                metrics={metricsResolved}
+                metricsLoading={false}
+                orgOpportunityKpis={orgOpportunityKpis}
+                workspaceKpiStrip={workspaceKpiStrip}
+                kpiStripPlaceholder={workspaceKpiPlacementPending}
+                kpiQuietReserveOnly={workspaceKpiPlacementPending}
+                workspaceRollupRefined={workspaceRollupRefined}
+                departmentsPending={false}
+                deptTileStatsPending={false}
+            />
+            {isLifecycleDebugUiEnabled() ? (
+                <>
+                    <AdminAccessScopeDebugPanel surface="workspace" />
+                    <WorkspaceTileDebugPanel
+                        trace={tilePipelineTrace}
+                        renderedDepartmentsCount={departments.length}
+                        reactStateDepartmentIds={departments.map((d) => d.id)}
+                        idAudit={workspaceIdAudit}
+                    />
+                </>
+            ) : null}
+        </>
     );
 }

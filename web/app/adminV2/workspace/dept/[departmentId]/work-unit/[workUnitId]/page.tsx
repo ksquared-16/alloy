@@ -5034,6 +5034,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     />
                     <CreateLeadModal
                         open={createLeadOpen}
+                        departmentId={departmentId}
                         onClose={() => setCreateLeadOpen(false)}
                         onSubmit={async (payload) => {
                             const opportunityId = await executeCreateLeadFromModal({

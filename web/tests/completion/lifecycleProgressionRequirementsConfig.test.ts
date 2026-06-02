@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+    buildLifecycleFieldRulesOverridePatch,
     buildLifecycleRequirementsOverridePatch,
     buildLifecycleRequirementsResetStagePatch,
+    effectiveFieldRulesForStage,
     effectiveLifecycleProgressionRequirementsForStage,
     parseLifecycleProgressionRequirementsOverride,
 } from "@/lib/completion/lifecycleProgressionRequirementsConfig";
@@ -44,6 +46,33 @@ describe("lifecycleProgressionRequirementsConfig merge", () => {
         );
         expect(parsed?.stages?.qualification).toBeUndefined();
     });
+
+    it("field rules patch derives object labels and merges effective rules", () => {
+        const metadata = buildLifecycleFieldRulesOverridePatch({
+            stage: "qualification",
+            required_rule_ids: ["child:first_name", "child:program_interest"],
+            recommended_rule_ids: ["child:desired_schedule"],
+            existingMetadata: {},
+        });
+        const parsed = parseLifecycleProgressionRequirementsOverride(metadata);
+        expect(parsed?.stages?.qualification?.field_rules?.required_rule_ids).toEqual([
+            "child:first_name",
+            "child:program_interest",
+        ]);
+        expect(parsed?.stages?.qualification?.required_labels).toEqual(
+            expect.arrayContaining(["Child", "Program"])
+        );
+        expect(parsed?.stages?.qualification?.recommended_labels).toContain("Desired Schedule");
+
+        const effective = effectiveFieldRulesForStage("qualification", metadata);
+        expect(effective.source).toBe("department");
+        expect(effective.rules.required_rule_ids).toContain("child:program_interest");
+
+        const objectEffective = effectiveLifecycleProgressionRequirementsForStage("qualification", metadata);
+        expect(objectEffective.required.map((r) => r.label)).toEqual(
+            expect.arrayContaining(["Child", "Program"])
+        );
+    });
 });
 
 describe("evaluateLifecycleActionRequirements with overrides", () => {
@@ -58,6 +87,8 @@ describe("evaluateLifecycleActionRequirements with overrides", () => {
             inquiry_children: [
                 {
                     id: "ocm-1",
+                    first_name: "Kid",
+                    last_name: "One",
                     desired_program_type: "infant",
                     desired_schedule_type: null,
                     desired_start_date: null,

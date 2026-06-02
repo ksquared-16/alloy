@@ -5,6 +5,10 @@
 
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 import { FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
+import {
+    enrollmentIntakeRequiresOperatorAttention,
+    isCleanOperationalizedEnrollmentLead,
+} from "@/lib/forms/intakeEnrollmentLeadClassification";
 import type { IntakeCommandCenterSessionRow } from "@/lib/forms/intakeCommandCenterPresentation";
 import {
     deriveSubmissionOperationalNarrative,
@@ -12,8 +16,10 @@ import {
     submissionFamilyLabel,
     type SubmissionOperationalNarrative,
 } from "@/lib/forms/submissionOperationalNarrative";
+import type { SubmissionAttachRow } from "@/lib/forms/submissionOutcomeSummary";
 import {
     resolveSubmissionInboxLane,
+    submissionInboxAttachRow,
     type SubmissionInboxLaneKey,
     type SubmissionInboxRow,
 } from "@/lib/forms/submissionInboxPresentation";
@@ -138,6 +144,18 @@ function isAmbiguousIntake(meta: Record<string, unknown>): boolean {
     return path === "ambiguous_contact" || path === "ambiguous_opportunity";
 }
 
+function submissionAttachRow(row: IntakeCaseSubmissionInput): SubmissionAttachRow {
+    return submissionInboxAttachRow(row);
+}
+
+function submissionIsCleanOperationalizedLead(row: IntakeCaseSubmissionInput, meta: Record<string, unknown>): boolean {
+    return isCleanOperationalizedEnrollmentLead({
+        status: row.status,
+        payloadMeta: meta,
+        attachRow: submissionAttachRow(row),
+    });
+}
+
 function submissionOperationalizedState(
     row: IntakeCaseSubmissionInput,
     lane: SubmissionInboxLaneKey,
@@ -145,6 +163,7 @@ function submissionOperationalizedState(
 ): IntakeCaseOperationalizedState {
     const match = typeof meta.intake_opportunity_match === "string" ? meta.intake_opportunity_match.trim() : "";
     const needsReview = meta.intake_needs_review === true;
+    if (submissionIsCleanOperationalizedLead(row, meta)) return "auto_operationalized";
     if (meta.intake_auto_operationalized === true && !needsReview) return "auto_operationalized";
     if ((match === "attached_existing" || meta.intake_resolution_path === "matched_email") && !needsReview) {
         return "attached_existing";
@@ -163,6 +182,8 @@ function submissionStatusBucket(
 
     const packetSessionId = resolveSubmissionPacketSessionId(row);
     if (packetSessionId && session?.status === "in_progress") return "packet_in_progress";
+
+    if (submissionIsCleanOperationalizedLead(row, meta)) return "auto_operationalized";
 
     if (lane === "needsLinking") return "needs_linking";
     if (lane === "needsReview") return "review_required";
@@ -184,6 +205,7 @@ function submissionReviewState(
     meta: Record<string, unknown>,
     session: IntakeCommandCenterSessionRow | null
 ): IntakeCaseReviewState {
+    if (submissionIsCleanOperationalizedLead(row, meta)) return "clear";
     if (lane === "needsLinking") return "needs_linking";
     if (lane === "needsReview" || meta.intake_needs_review === true) return "needs_review";
     if (row.status === "draft") return "in_progress";
@@ -220,7 +242,17 @@ function pickOperationalizedState(states: IntakeCaseOperationalizedState[]): Int
     return "none";
 }
 
-function attentionReasonFromNarrative(narrative: SubmissionOperationalNarrative): string | null {
+function attentionReasonFromNarrative(
+    narrative: SubmissionOperationalNarrative,
+    row: IntakeCaseSubmissionInput,
+    meta: Record<string, unknown>
+): string | null {
+    if (submissionIsCleanOperationalizedLead(row, meta)) return null;
+    if (enrollmentIntakeRequiresOperatorAttention({ payloadMeta: meta, attachRow: submissionAttachRow(row) })) {
+        if (meta.intake_identity_name_mismatch === true) {
+            return "Possible existing family match";
+        }
+    }
     if (narrative.lane === "needsLinking") return "Needs family match";
     if (narrative.lane === "needsReview") return "Review required before enrollment continues";
     if (narrative.headline.toLowerCase().includes("duplicate")) return "Needs family match";
@@ -333,7 +365,7 @@ function buildIntakeCaseFromGroup(params: {
     const attention_reasons = [
         ...new Set(
             perSubmission
-                .map((item) => attentionReasonFromNarrative(item.narrative))
+                .map((item) => attentionReasonFromNarrative(item.narrative, item.row, item.meta))
                 .filter((reason): reason is string => !!reason)
         ),
     ];

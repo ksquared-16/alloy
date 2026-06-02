@@ -20,7 +20,7 @@ import {
     buildPersonStatusApplicabilityMetadata,
     formatPersonStatusApplicabilityLabel,
 } from "@/lib/admin/person/personStatusApplicability";
-import { ADMIN_V2_SETTINGS_ENROLLMENT_PROCESS_PATH } from "@/lib/adminV2/settings/enrollmentProcessSettingsPaths";
+import { ADMIN_V2_SETTINGS_LIFECYCLE_PATH } from "@/lib/adminV2/settings/lifecycleSettingsPaths";
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import {
     effectiveEnrollmentOperatorStage,
@@ -83,7 +83,7 @@ const STATUSES_DEFAULT_SUBTITLE =
     "Display names for status keys on schedules, jobs, customers, opportunities, vendors, plan templates, and people. Drawers read options from here. Which status changes are allowed is not configured here — see Status transition rules under Settings diagnostics (read-only) or a future Workflow Status Configuration sprint.";
 
 const STATUSES_ADMINV2_SUBTITLE =
-    "Manage status names and order. For opportunities, Enrollment Stage shows which process stage owns each status — edit mapping in Enrollment Process when needed.";
+    "Manage status names and order. For opportunities, Enrollment Stage shows which lifecycle stage owns each status — edit mapping in Lifecycle when needed.";
 
 /** Operator hints — disambiguate childcare labels (Children vs People). */
 const STATUS_ENTITY_HINTS: Partial<Record<string, string>> = {
@@ -482,10 +482,10 @@ export default function StatusesClient({
                                                 </span>
                                                 {!row.org_id ? (
                                                     <Link
-                                                        href={ADMIN_V2_SETTINGS_ENROLLMENT_PROCESS_PATH}
+                                                        href={ADMIN_V2_SETTINGS_LIFECYCLE_PATH}
                                                         className="mt-1 block text-[11px] font-medium text-alloy-pine hover:underline"
                                                     >
-                                                        Manage in Enrollment Process
+                                                        Manage in Lifecycle
                                                     </Link>
                                                 ) : null}
                                             </td>

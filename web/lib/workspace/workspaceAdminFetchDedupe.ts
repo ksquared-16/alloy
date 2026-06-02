@@ -8,6 +8,14 @@
  */
 const inflight = new Map<string, Promise<Response>>();
 
+const WORKSPACE_DEPARTMENTS_URL = "/api/admin/departments";
+
+/** Bust coalesced / TTL cache for workspace department list after lifecycle create/repair/delete. */
+export function bustWorkspaceDepartmentsFetchDedupe(): void {
+    inflight.delete(WORKSPACE_DEPARTMENTS_URL);
+    shortCache.delete(WORKSPACE_DEPARTMENTS_URL);
+}
+
 /** Test-only — clears in-flight and TTL caches between vitest cases. */
 export function resetWorkspaceAdminFetchDedupeForTests(): void {
     inflight.clear();

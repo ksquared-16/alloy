@@ -81,9 +81,14 @@ export function buildWorkspaceRootDepartmentTileRollupLine(params: {
     departmentKey: string;
     workUnitCount: number;
     pipelineExact: PipelineExactSnapshot;
+    workUnitNames?: string[];
 }): string | null {
     if (isGrowthSliceDepartmentKey(params.departmentKey) && params.pipelineExact?.total != null) {
         return `${params.pipelineExact.total} in pipeline`;
+    }
+    const names = (params.workUnitNames ?? []).map((n) => n.trim()).filter(Boolean);
+    if (names.length) {
+        return `Work units: ${names.join(", ")}`;
     }
     if (params.workUnitCount >= 0) {
         return `${params.workUnitCount} work unit${params.workUnitCount === 1 ? "" : "s"}`;

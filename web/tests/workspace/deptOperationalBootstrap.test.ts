@@ -30,6 +30,10 @@ describe("dept operational bootstrap runtime hardening", () => {
         expect(src).toContain("attention_candidate_count");
         expect(src).toContain("attention_rules_ms");
         expect(src).toContain("attention_membership_filter_ms");
+        expect(src).toContain("inspectBuilderOwnedLifecycleWorkUnitsForDept");
+        expect(src).not.toContain("autoRepairBuilderOwnedLifecycleWorkUnitsForDept");
+        expect(src).toContain("departmentWorkUnitIdsForLifecycleScope");
+        expect(src).toContain("lifecycle_work_unit_runtime");
     });
 
     it("resolves needs_attention execution work unit for enrollment pipeline", () => {

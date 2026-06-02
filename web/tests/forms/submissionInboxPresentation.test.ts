@@ -57,6 +57,26 @@ describe("submissionInboxPresentation OW-6", () => {
         expect(resolveSubmissionInboxLane(base({ status: "void" }))).toBe("drafts");
     });
 
+    it("resolveSubmissionInboxLane — clean auto-created lead is recently submitted", () => {
+        expect(
+            resolveSubmissionInboxLane(
+                base({
+                    person_id: "p1",
+                    customer_id: "c1",
+                    opportunity_id: "o1",
+                    payload: {
+                        meta: {
+                            intake_resolution_path: "created_records",
+                            intake_opportunity_match: "created",
+                            intake_auto_operationalized: true,
+                            intake_needs_review: false,
+                        },
+                    },
+                })
+            )
+        ).toBe("recentlySubmitted");
+    });
+
     it("submissionInboxPrimaryAction returns review for attention lanes", () => {
         expect(submissionInboxPrimaryAction("needsReview").label).toBe("Review intake");
         expect(submissionInboxPrimaryAction("needsLinking").kind).toBe("review");

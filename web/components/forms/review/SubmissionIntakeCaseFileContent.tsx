@@ -84,6 +84,8 @@ export type SubmissionIntakeCaseFileContentProps = {
     linkageCalloutVisible: boolean;
     linkageCalloutReasons: string[];
     showLinkageWorkflowSection: boolean;
+    cleanCreatedLead?: boolean;
+    onOpenLead?: () => void;
     needsConfirmLinkage: boolean;
     docGenBlocked: { blocked: boolean; reason?: string };
     documentOutcome: { headline: string; bullets: string[] };
@@ -188,6 +190,8 @@ export function SubmissionIntakeCaseFileContent({
     linkageCalloutVisible,
     linkageCalloutReasons,
     showLinkageWorkflowSection,
+    cleanCreatedLead = false,
+    onOpenLead,
     needsConfirmLinkage,
     docGenBlocked,
     documentOutcome,
@@ -241,6 +245,29 @@ export function SubmissionIntakeCaseFileContent({
                     title="Intake & records"
                     variant={intakeNeedsAttention ? "attention" : "default"}
                 >
+                    {cleanCreatedLead ?
+                        <div
+                            className="rounded-lg bg-alloy-pine/[0.06] px-3 py-3 ring-1 ring-inset ring-alloy-pine/15 sm:px-4"
+                            data-testid="lead-created-summary"
+                        >
+                            <p className={clsx("font-medium text-alloy-pine", opContextValue)}>Lead created</p>
+                            <p className={clsx("mt-1", opBody)}>
+                                A new enrollment lead was created from this submission. Continue in the opportunity
+                                queue — no linkage review is required.
+                            </p>
+                            {onOpenLead ?
+                                <PrimaryButton
+                                    type="button"
+                                    className="!mt-3 !px-3 !py-2 text-sm"
+                                    onClick={onOpenLead}
+                                    data-testid="open-lead-from-intake-review"
+                                >
+                                    Open Lead
+                                </PrimaryButton>
+                            :   null}
+                        </div>
+                    : null}
+
                     {lifecycle.notes.length ?
                         <ul className={clsx("list-disc space-y-1 pl-5", opBody)}>
                             {lifecycle.notes.map((n, i) => (

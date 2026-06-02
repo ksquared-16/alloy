@@ -88,7 +88,38 @@ export async function loadOpportunityRecordForEffectiveRequirements(
 
     const row = data as Record<string, unknown>;
     const inquiry_children = await loadInquiryChildrenForOpportunity(supabase, orgId, opportunityId);
-    return { ...row, _inquiry_children: inquiry_children };
+
+    const primaryPersonId =
+        typeof row.primary_person_id === "string" && row.primary_person_id.trim()
+            ? row.primary_person_id.trim()
+            : null;
+    let _primary_person: Record<string, unknown> | null = null;
+    if (primaryPersonId) {
+        const { data: personRow } = await supabase
+            .from("persons")
+            .select("id, first_name, last_name, email, phone")
+            .eq("id", primaryPersonId)
+            .eq("org_id", orgId)
+            .maybeSingle();
+        if (personRow) {
+            const p = personRow as {
+                id?: string;
+                first_name?: string | null;
+                last_name?: string | null;
+                email?: string | null;
+                phone?: string | null;
+            };
+            _primary_person = {
+                person_id: p.id ?? primaryPersonId,
+                first_name: p.first_name ?? null,
+                last_name: p.last_name ?? null,
+                email: p.email ?? null,
+                phone: p.phone ?? null,
+            };
+        }
+    }
+
+    return { ...row, _inquiry_children: inquiry_children, ...(_primary_person ? { _primary_person } : {}) };
 }
 
 export async function buildOpportunityCompletionContextFromDb(

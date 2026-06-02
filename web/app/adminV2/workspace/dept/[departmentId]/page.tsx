@@ -94,6 +94,12 @@ import {
 } from "@/lib/adminV2/deptRevealGate";
 import { DeptPageLoadingGate } from "@/app/adminV2/components/workspace/DeptPageLoadingGate";
 import { resolveDeptWorkUnitDisplayLabel } from "@/lib/workspace/workUnitShellDisplayTitle";
+import {
+    deptUsesBuilderOwnedLifecycleRuntime,
+    isLifecycleStageWorkUnitRow,
+    type LifecycleWorkUnitDeptRuntimeDebug,
+} from "@/lib/lifecycle/builderOwnedLifecycleRuntime";
+import { ADMIN_V2_SETTINGS_LIFECYCLE_PATH } from "@/lib/adminV2/settings/lifecycleSettingsPaths";
 import { resolveDeptPipelineExecSurface } from "@/lib/workspace/resolveDeptPipelineExecSurface";
 import { WorkspaceOperIcon } from "@/components/admin/workspace/WorkspaceOperIcon";
 import { compareNeedsAttentionBuckets } from "@/lib/opportunities/needsAttentionBuckets";
@@ -153,7 +159,7 @@ type V1QueueSummary = {
     counts_deferred?: boolean;
 };
 
-type DeptRow = { id: string; name: string | null; key: string | null };
+type DeptRow = { id: string; name: string | null; key: string | null; metadata?: unknown };
 
 type DeptAttentionBucket = {
     key: string;
@@ -324,6 +330,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
 
     const [deptWorkUnits, setDeptWorkUnits] = useState<Array<{ id: string; name: string | null; key: string | null }> | null>(null);
     const [deptWorkUnitsError, setDeptWorkUnitsError] = useState<string | null>(null);
+    const [deptLifecycleWuDebug, setDeptLifecycleWuDebug] =
+        useState<LifecycleWorkUnitDeptRuntimeDebug | null>(null);
     const [deptWorkUnitSummaries, setDeptWorkUnitSummaries] = useState<Record<string, { total: number; needs_attention: number | null }>>(
         {}
     );
@@ -528,6 +536,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         }
         setDeptError(null);
         setDeptWorkUnitsError(null);
+        setDeptLifecycleWuDebug(null);
         setDeptQueueSummariesLoading(true);
         setDeptQueueSummariesError(null);
         setDeptAttentionBuckets(null);
@@ -633,6 +642,13 @@ export default function AdminV2WorkspaceDepartmentPage() {
         async function runDeptPipelineProbe(
             wuCommit: Array<{ id: string; name: string | null; key: string | null }>
         ) {
+            if (deptUsesBuilderOwnedLifecycleRuntime(dept?.metadata, wuCommit)) {
+                if (!cancelled) {
+                    setDeptPipelineExecSurface(null);
+                    setDeptPipelineExecLoading(false);
+                }
+                return;
+            }
             const pipelineCandidates = wuCommit.filter(
                 (w) => (w.key ?? "").trim().toLowerCase() !== "needs_attention"
             );
@@ -902,6 +918,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             summaries?: Parameters<typeof applySummariesJson>[1];
                             attention?: Parameters<typeof applyAttentionPayload>[0];
                             pipeline_surface?: DeptPipelineExecSurface | null;
+                            lifecycle_work_unit_runtime?: LifecycleWorkUnitDeptRuntimeDebug | null;
                             kpi_placements?: {
                                 items?: WorkspaceKpiPlacementRow[];
                                 scope_has_placements?: boolean;
@@ -933,6 +950,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                       id: String(b.department.id),
                                       name: b.department.name ?? null,
                                       key: b.department.key ?? null,
+                                      metadata: (b.department as { metadata?: unknown }).metadata,
                                   }
                                 : null;
                         const wuCommit = (b.work_units ?? []).map((w) => ({
@@ -949,6 +967,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         }
                         setDeptWorkUnits(wuCommit);
                         setDeptWorkUnitsError(null);
+                        setDeptLifecycleWuDebug(b.lifecycle_work_unit_runtime ?? null);
                         const nextSummaries = applySummariesJson(departmentId, b.summaries ?? {}, true);
                         if (b.attention && !b.attention.error) {
                             applyAttentionPayload(b.attention);
@@ -962,10 +981,16 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         const pipelineCandidates = wuCommit.filter(
                             (w) => (w.key ?? "").trim().toLowerCase() !== "needs_attention"
                         );
-                        if (pipelineCandidates.length) {
+                        const bootstrapBuilderOwned = deptUsesBuilderOwnedLifecycleRuntime(
+                            (b.department as { metadata?: unknown } | undefined)?.metadata,
+                            wuCommit
+                        );
+                        if (pipelineCandidates.length && !bootstrapBuilderOwned) {
                             setDeptPipelineExecLoading(true);
                         }
-                        setDeptPipelineExecSurface(b.pipeline_surface ?? null);
+                        setDeptPipelineExecSurface(
+                            bootstrapBuilderOwned ? null : (b.pipeline_surface ?? null)
+                        );
                         setDeptPipelineExecLoading(false);
                         const kpiSummaries = mergeDeptWorkUnitSummariesForKpis(
                             nextSummaries,
@@ -1218,11 +1243,17 @@ export default function AdminV2WorkspaceDepartmentPage() {
         return deptLoading && !dept?.id;
     }, [departmentId, deptLoading, dept?.id]);
 
+    const builderOwnedLifecycleRuntime = useMemo(
+        () => deptUsesBuilderOwnedLifecycleRuntime(dept?.metadata, deptWorkUnits ?? []),
+        [dept?.metadata, deptWorkUnits]
+    );
+
     const deptExpectsPipelineLanes = useMemo(() => {
+        if (builderOwnedLifecycleRuntime) return false;
         const list = deptWorkUnits ?? [];
         if (!list.length) return false;
         return list.some((w) => (w.key ?? "").trim().toLowerCase() === "enrollment_pipeline");
-    }, [deptWorkUnits]);
+    }, [deptWorkUnits, builderOwnedLifecycleRuntime]);
 
     useEffect(() => {
         setDeptThroughputPresentation(null);
@@ -1234,6 +1265,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         if (!departmentId || !dept?.id || departmentPageBlockingLoad) return;
         if (deptThroughputPresentation != null) {
             const canUpgradeToPipeline =
+                !builderOwnedLifecycleRuntime &&
                 deptThroughputPresentation === "wu_summaries" &&
                 deptExpectsPipelineLanes &&
                 !deptPipelineExecLoading &&
@@ -1291,11 +1323,15 @@ export default function AdminV2WorkspaceDepartmentPage() {
     ]);
 
     const deptThroughputWuRows = useMemo(() => {
-        return (deptWorkUnits ?? []).filter((w) => {
+        const list = deptWorkUnits ?? [];
+        if (builderOwnedLifecycleRuntime) {
+            return list.filter((w) => isLifecycleStageWorkUnitRow(w));
+        }
+        return list.filter((w) => {
             const key = (w.key ?? "").trim().toLowerCase();
             return key !== "needs_attention" && key !== "enrollment_pipeline";
         });
-    }, [deptWorkUnits]);
+    }, [deptWorkUnits, builderOwnedLifecycleRuntime]);
 
     /** Throughput panel has real rows or a confirmed final empty — not an unresolved blank list (PERF-B-02 tighten). */
     const deptThroughputBodyReady = useMemo(() => {
@@ -1382,8 +1418,22 @@ export default function AdminV2WorkspaceDepartmentPage() {
         deptThroughputPresentation,
     ]);
 
+    const deptLifecycleWuRows = useMemo(
+        () => (deptWorkUnits ?? []).filter((w) => isLifecycleStageWorkUnitRow(w)),
+        [deptWorkUnits]
+    );
+
+    const deptBuilderOwnedNoLifecycleWu =
+        builderOwnedLifecycleRuntime &&
+        deptWorkUnits !== null &&
+        !deptWorkUnitsError &&
+        deptLifecycleWuRows.length === 0;
+
     const deptConfirmedNoWorkUnits =
-        deptWorkUnits !== null && deptWorkUnits.length === 0 && !deptWorkUnitsError;
+        !builderOwnedLifecycleRuntime &&
+        deptWorkUnits !== null &&
+        deptWorkUnits.length === 0 &&
+        !deptWorkUnitsError;
 
     const reserveDeptActionsRail = isEnrollmentLikeDepartmentKey(deptKey);
 
@@ -1795,6 +1845,69 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     {deptError ??
                         "This department could not be loaded. Use the workspace link above to pick another department."}
                 </div>
+            ) : dept && deptBuilderOwnedNoLifecycleWu ? (
+                <div
+                    className="rounded-xl border px-4 py-10 text-center text-sm text-alloy-midnight/55"
+                    style={{ borderColor: "var(--d-border, rgba(39,63,82,0.14))" }}
+                    data-testid="dept-builder-owned-lifecycle-empty"
+                >
+                    {(deptLifecycleWuDebug?.stage_work_unit_configs_count ?? 0) === 0 ? (
+                        <>
+                            <p>No Work Unit Queues have been configured yet.</p>
+                            <p className="mt-3">
+                                <a
+                                    href={ADMIN_V2_SETTINGS_LIFECYCLE_PATH}
+                                    className="font-medium text-alloy-pine hover:underline"
+                                >
+                                    Configure Lifecycle
+                                </a>
+                            </p>
+                        </>
+                    ) : (
+                        <div className="mx-auto max-w-lg space-y-2 text-left">
+                            <p className="text-center">
+                                Lifecycle work unit queues are configured but could not be loaded for this
+                                department.
+                            </p>
+                            {deptLifecycleWuDebug ? (
+                                <ul
+                                    className="mt-4 list-none space-y-1 rounded-lg bg-alloy-midnight/[0.04] px-4 py-3 font-mono text-xs text-alloy-midnight/70"
+                                    data-testid="dept-lifecycle-wu-debug"
+                                >
+                                    <li>
+                                        builder-owned department:{" "}
+                                        {deptLifecycleWuDebug.builder_owned_department ? "yes" : "no"}
+                                    </li>
+                                    <li>stages found: {deptLifecycleWuDebug.active_stages_count}</li>
+                                    <li>
+                                        stage work unit configs found:{" "}
+                                        {deptLifecycleWuDebug.stage_work_unit_configs_count}
+                                    </li>
+                                    <li>
+                                        lifecycle_wu rows found: {deptLifecycleWuDebug.lifecycle_wu_rows_count}
+                                    </li>
+                                    <li>
+                                        repair attempted:{" "}
+                                        no (Settings repair only)
+                                    </li>
+                                    {deptLifecycleWuDebug.reason_no_work_units_rendered ? (
+                                        <li>
+                                            reason: {deptLifecycleWuDebug.reason_no_work_units_rendered}
+                                        </li>
+                                    ) : null}
+                                </ul>
+                            ) : null}
+                            <p className="text-center">
+                                <a
+                                    href={ADMIN_V2_SETTINGS_LIFECYCLE_PATH}
+                                    className="font-medium text-alloy-pine hover:underline"
+                                >
+                                    Configure Lifecycle
+                                </a>
+                            </p>
+                        </div>
+                    )}
+                </div>
             ) : dept && deptConfirmedNoWorkUnits ? (
                 <div
                     className="rounded-xl border px-4 py-10 text-center text-sm text-alloy-midnight/55"
@@ -1849,6 +1962,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
             )}
             <CreateLeadModal
                 open={createLeadOpen}
+                departmentId={departmentId}
                 onClose={() => setCreateLeadOpen(false)}
                 onSubmit={async (payload) => {
                     const opportunityId = await executeCreateLeadFromModal({

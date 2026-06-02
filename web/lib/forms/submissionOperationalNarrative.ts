@@ -4,7 +4,12 @@
  */
 
 import {
+    isCleanCreatedEnrollmentLead,
+    isCleanOperationalizedEnrollmentLead,
+} from "@/lib/forms/intakeEnrollmentLeadClassification";
+import {
     resolveSubmissionInboxLane,
+    submissionInboxAttachRow,
     submissionInboxPrimaryAction,
     type SubmissionInboxLaneKey,
     type SubmissionInboxRow,
@@ -75,7 +80,12 @@ export function formatIntakeRecordsSummary(row: SubmissionInboxRow): string | nu
     return submissionCreatedOrMatchedSummary(row);
 }
 
-function statusLabelForLane(lane: SubmissionInboxLaneKey, needsReview: boolean): string {
+function statusLabelForLane(
+    lane: SubmissionInboxLaneKey,
+    needsReview: boolean,
+    cleanLead: boolean
+): string {
+    if (cleanLead) return "New lead";
     if (lane === "needsLinking") return "Missing family match";
     if (lane === "needsReview" || needsReview) return "Ready for enrollment review";
     if (lane === "recentlySubmitted") return "Ready to continue enrollment";
@@ -90,6 +100,17 @@ export function deriveSubmissionOperationalNarrative(row: SubmissionInboxRow): S
     const path = typeof m.intake_resolution_path === "string" ? m.intake_resolution_path.trim() : "";
     const match = typeof m.intake_opportunity_match === "string" ? m.intake_opportunity_match.trim() : "";
     const needsReview = m.intake_needs_review === true;
+    const attachRow = submissionInboxAttachRow(row);
+    const cleanLead = isCleanOperationalizedEnrollmentLead({
+        status: row.status,
+        payloadMeta: m,
+        attachRow,
+    });
+    const cleanCreatedLead = isCleanCreatedEnrollmentLead({
+        status: row.status,
+        payloadMeta: m,
+        attachRow,
+    });
 
     const primaryAction = submissionInboxPrimaryAction(lane);
 
@@ -110,7 +131,11 @@ export function deriveSubmissionOperationalNarrative(row: SubmissionInboxRow): S
         };
     }
 
-    if (m.intake_identity_name_mismatch === true) {
+    if (cleanCreatedLead) {
+        headline = "Lead created";
+        detail = "A new enrollment lead was created from this submission.";
+        operatorAction = "Open lead";
+    } else if (m.intake_identity_name_mismatch === true) {
         const submitted = submissionFamilyLabel(row);
         const matched =
             typeof m.intake_matched_person_display_name === "string" ?
@@ -150,7 +175,7 @@ export function deriveSubmissionOperationalNarrative(row: SubmissionInboxRow): S
         headline = "Intake not configured";
         detail = "Submission saved only — enable intake on the distribution link if CRM setup is needed.";
         operatorAction = "Fix distribution link or match manually";
-    } else if (lane === "needsLinking") {
+    } else if (lane === "needsLinking" && !cleanLead) {
         headline = "Missing family match";
         detail = "No enrollment lead or family profile linked yet.";
         operatorAction = "Match to family profile";
@@ -172,7 +197,7 @@ export function deriveSubmissionOperationalNarrative(row: SubmissionInboxRow): S
         detail,
         operatorAction,
         lane,
-        statusLabel: statusLabelForLane(lane, needsReview),
+        statusLabel: statusLabelForLane(lane, needsReview, cleanLead),
     };
 }
 

@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import LifecycleRelatedSettingsLinks from "@/components/adminV2/settings/LifecycleRelatedSettingsLinks";
-import LifecycleStageRequirementsEditor from "@/components/adminV2/settings/LifecycleStageRequirementsEditor";
+import LifecycleStageFieldRequirementsEditor from "@/components/adminV2/settings/LifecycleStageFieldRequirementsEditor";
 import LifecycleStageWhereAppears from "@/components/adminV2/settings/LifecycleStageWhereAppears";
 import SettingsEntityTabBar from "@/components/adminV2/settings/SettingsEntityTabBar";
-import { ADMIN_V2_SETTINGS_ENROLLMENT_PROCESS_PATH } from "@/lib/adminV2/settings/enrollmentProcessSettingsPaths";
+import { ADMIN_V2_SETTINGS_LIFECYCLE_PATH } from "@/lib/adminV2/settings/lifecycleSettingsPaths";
 import {
     LIFECYCLE_STAGE_LABELS,
     LIFECYCLE_STAGE_ORDER,
@@ -61,8 +61,8 @@ export default function LifecycleStagesRequirementsHub() {
         <div className="space-y-4" data-testid="lifecycle-stages-requirements-hub">
             <p className="text-xs text-alloy-midnight/55">
                 Prefer the stage-first hub?{" "}
-                <Link href={ADMIN_V2_SETTINGS_ENROLLMENT_PROCESS_PATH} className="font-medium text-alloy-pine hover:underline">
-                    Enrollment Process
+                <Link href={ADMIN_V2_SETTINGS_LIFECYCLE_PATH} className="font-medium text-alloy-pine hover:underline">
+                    Lifecycle
                 </Link>
             </p>
 
@@ -120,7 +120,7 @@ export default function LifecycleStagesRequirementsHub() {
 
                 {departmentId ? (
                     <div className="mt-4">
-                        <LifecycleStageRequirementsEditor
+                        <LifecycleStageFieldRequirementsEditor
                             departmentId={departmentId}
                             activeStage={activeStage}
                             onDirtyChange={setDirty}

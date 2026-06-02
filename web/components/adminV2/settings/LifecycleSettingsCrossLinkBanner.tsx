@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ADMIN_V2_SETTINGS_ENROLLMENT_PROCESS_PATH } from "@/lib/adminV2/settings/enrollmentProcessSettingsPaths";
+import { ADMIN_V2_SETTINGS_LIFECYCLE_PATH } from "@/lib/adminV2/settings/lifecycleSettingsPaths";
 
 export type LifecycleSettingsCrossLinkVariant = "layouts" | "actions" | "statuses" | "attention";
 
@@ -16,7 +16,7 @@ const COPY: Record<
         testId: "lifecycle-crosslink-actions",
     },
     statuses: {
-        body: "Stages group statuses into the enrollment process. Assign each inquiry status to a stage so queues and actions stay aligned.",
+        body: "Stages group statuses into the lifecycle. Assign each inquiry status to a stage so queues and actions stay aligned.",
         testId: "lifecycle-crosslink-statuses",
     },
     attention: {
@@ -39,10 +39,10 @@ export default function LifecycleSettingsCrossLinkBanner({
             <p className="text-xs leading-relaxed">{body}</p>
             <p className="mt-2">
                 <Link
-                    href={ADMIN_V2_SETTINGS_ENROLLMENT_PROCESS_PATH}
+                    href={ADMIN_V2_SETTINGS_LIFECYCLE_PATH}
                     className="text-xs font-medium text-alloy-pine hover:underline"
                 >
-                    Open Enrollment Process
+                    Open Lifecycle
                 </Link>
             </p>
         </div>

@@ -18,7 +18,12 @@ import {
     submissionFamilyLabel,
 } from "@/lib/forms/submissionOperationalNarrative";
 import {
+    isCleanCreatedEnrollmentLead,
+    isCleanOperationalizedEnrollmentLead,
+} from "@/lib/forms/intakeEnrollmentLeadClassification";
+import {
     resolveSubmissionInboxLane,
+    submissionInboxAttachRow,
     type SubmissionInboxRow,
 } from "@/lib/forms/submissionInboxPresentation";
 
@@ -33,8 +38,20 @@ export type IntakeQuickReviewCaseContext = {
     intakeFileHref?: string;
 };
 
+export type IntakeQuickReviewLeadCreatedFields = {
+    contactName: string | null;
+    email: string | null;
+    phone: string | null;
+    school: string | null;
+    status: string;
+};
+
 export type IntakeQuickReviewViewModel = {
+    modalTitle: string;
     headerTitle: string | null;
+    leadCreatedMode: boolean;
+    leadCreatedSummary: string | null;
+    leadCreatedFields: IntakeQuickReviewLeadCreatedFields | null;
     intakeSummary: {
         capturedLine: string;
         operationalLine: string | null;
@@ -89,11 +106,64 @@ function resolveOpportunityId(row: SubmissionInboxRow, caseContext?: IntakeQuick
     return fromCase || null;
 }
 
+function payloadValues(row: SubmissionInboxRow): Record<string, unknown> {
+    const values = payloadRecord(row).values;
+    if (!values || typeof values !== "object" || Array.isArray(values)) return {};
+    return values as Record<string, unknown>;
+}
+
+function readStringValue(values: Record<string, unknown>, key: string): string | null {
+    const raw = values[key];
+    return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+}
+
+function schoolLabelFromSubmission(row: SubmissionInboxRow, meta: Record<string, unknown>): string | null {
+    const values = payloadValues(row);
+    for (const key of ["school", "campus", "location", "preferred_location", "preferred_campus"]) {
+        const label = readStringValue(values, key);
+        if (label) return label;
+    }
+    if (row.opportunity_id || meta.intake_routing_work_unit_id) return "Routed to enrollment pipeline";
+    return null;
+}
+
+function buildLeadCreatedFields(
+    row: SubmissionInboxRow,
+    meta: Record<string, unknown>
+): IntakeQuickReviewLeadCreatedFields {
+    const values = payloadValues(row);
+    const joinedGuardian = [readStringValue(values, "guardian_first_name"), readStringValue(values, "guardian_last_name")]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+    const guardian =
+        readStringValue(values, "guardian_full_name") ??
+        (joinedGuardian || null) ??
+        submissionFamilyLabel(row);
+    return {
+        contactName: guardian,
+        email: readStringValue(values, "guardian_email"),
+        phone: readStringValue(values, "guardian_phone"),
+        school: schoolLabelFromSubmission(row, meta),
+        status: "New Lead",
+    };
+}
+
 function isAutoOperationalizedLead(
     row: SubmissionInboxRow,
     meta: Record<string, unknown>,
     caseContext?: IntakeQuickReviewCaseContext
 ): boolean {
+    const attachRow = submissionInboxAttachRow(row);
+    if (
+        isCleanOperationalizedEnrollmentLead({
+            status: row.status,
+            payloadMeta: meta,
+            attachRow,
+        })
+    ) {
+        return true;
+    }
     if (meta.intake_auto_operationalized === true && meta.intake_needs_review !== true) return true;
     if (caseContext?.operationalizedState === "auto_operationalized") return true;
     if (
@@ -173,6 +243,16 @@ function caseStatusLine(
         return { line: "Waiting for family to submit", tone: "neutral" };
     }
 
+    const attachRow = submissionInboxAttachRow(row);
+    const cleanCreated = isCleanCreatedEnrollmentLead({
+        status: row.status,
+        payloadMeta: meta,
+        attachRow,
+    });
+    if (cleanCreated) {
+        return { line: "New Lead", tone: "success" };
+    }
+
     const packetSessionId = resolveSubmissionPacketSessionId(row as IntakeCaseSubmissionInput);
     if (packetSessionId && row.status === "draft") {
         return { line: "Waiting for packet completion", tone: "neutral" };
@@ -213,6 +293,10 @@ function buildNeedsActionItems(
     const items: string[] = [];
     const path = typeof meta.intake_resolution_path === "string" ? meta.intake_resolution_path.trim() : "";
     const opportunityId = resolveOpportunityId(row, caseContext);
+
+    if (meta.intake_identity_name_mismatch === true) {
+        items.push("Possible existing family match");
+    }
 
     if (lane === "needsLinking") {
         items.push("Needs family match");
@@ -271,12 +355,22 @@ function resolveRecommendedNextStep(
     if (caseContext?.recommendedNextAction?.trim()) return caseContext.recommendedNextAction.trim();
     if (intakeCaseRecommended?.trim()) return intakeCaseRecommended.trim();
     const opportunityId = resolveOpportunityId(row, caseContext);
-    if (isAutoOperationalizedLead(row, meta, caseContext) && opportunityId) return "Continue enrollment";
+    if (isAutoOperationalizedLead(row, meta, caseContext) && opportunityId) {
+        const cleanCreated = isCleanCreatedEnrollmentLead({
+            status: row.status,
+            payloadMeta: meta,
+            attachRow: submissionInboxAttachRow(row),
+        });
+        return cleanCreated ?
+                "Open the enrollment lead to continue in the opportunity queue."
+            :   "Continue enrollment";
+    }
     return narrativeAction;
 }
 
-function resolvePrimaryOpenLabel(opportunityId: string | null, autoOp: boolean): string {
-    if (opportunityId && autoOp) return "Continue enrollment";
+function resolvePrimaryOpenLabel(opportunityId: string | null, autoOp: boolean, cleanCreated: boolean): string {
+    if (opportunityId && cleanCreated) return "Open Lead";
+    if (opportunityId && autoOp) return "Open Lead";
     if (opportunityId) return "Open lead";
     return "Open intake file";
 }
@@ -296,6 +390,13 @@ export function buildIntakeQuickReviewViewModel(params: {
     const status = caseStatusLine(row, meta, lane, caseContext);
     const opportunityId = resolveOpportunityId(row, caseContext);
     const autoOp = isAutoOperationalizedLead(row, meta, caseContext);
+    const attachRow = submissionInboxAttachRow(row);
+    const leadCreatedMode = isCleanCreatedEnrollmentLead({
+        status: row.status,
+        payloadMeta: meta,
+        attachRow,
+    });
+    const familyLabel = submissionFamilyLabel(row);
 
     const intakeCase = buildIntakeCasePresentationRows({
         submissions: [row as IntakeCaseSubmissionInput],
@@ -315,11 +416,19 @@ export function buildIntakeQuickReviewViewModel(params: {
         autoClear || manualClear ? "No manual review required." : null;
 
     return {
-        headerTitle: submissionFamilyLabel(row),
+        modalTitle: leadCreatedMode ? "Lead created" : familyLabel ?? "Intake case review",
+        headerTitle: leadCreatedMode ? "Lead created" : familyLabel,
+        leadCreatedMode,
+        leadCreatedSummary:
+            leadCreatedMode ? "A new enrollment lead was created from this submission." : null,
+        leadCreatedFields: leadCreatedMode ? buildLeadCreatedFields(row, meta) : null,
         intakeSummary: {
-            capturedLine: `${formName} form received`,
-            operationalLine: operationalRecordLine(row, meta, caseContext),
-            routingLine: routingLine(row, meta, caseContext),
+            capturedLine:
+                leadCreatedMode ?
+                    "A new enrollment lead was created from this submission."
+                :   `${formName} form received`,
+            operationalLine: leadCreatedMode ? null : operationalRecordLine(row, meta, caseContext),
+            routingLine: leadCreatedMode ? null : routingLine(row, meta, caseContext),
             statusLine: status.line,
             statusTone: status.tone,
         },
@@ -327,13 +436,16 @@ export function buildIntakeQuickReviewViewModel(params: {
             items: clearMessage ? [] : needsActionItems,
             clearMessage,
         },
-        recommendedNextStep: resolveRecommendedNextStep(
-            row,
-            meta,
-            caseContext,
-            intakeCase?.recommended_next_action,
-            narrative.operatorAction
-        ),
+        recommendedNextStep:
+            leadCreatedMode && opportunityId ?
+                "Open the enrollment lead to continue in the opportunity queue."
+            :   resolveRecommendedNextStep(
+                    row,
+                    meta,
+                    caseContext,
+                    intakeCase?.recommended_next_action,
+                    narrative.operatorAction
+                ),
         evidence: {
             formName,
             submittedAtLabel,
@@ -344,6 +456,6 @@ export function buildIntakeQuickReviewViewModel(params: {
         showConfirmLinkage: shouldShowConfirmLinkage(row, meta),
         opportunityId,
         intakeFileHref: resolveIntakeFileHref(row, caseContext),
-        primaryOpenLabel: resolvePrimaryOpenLabel(opportunityId, autoOp),
+        primaryOpenLabel: resolvePrimaryOpenLabel(opportunityId, autoOp, leadCreatedMode),
     };
 }

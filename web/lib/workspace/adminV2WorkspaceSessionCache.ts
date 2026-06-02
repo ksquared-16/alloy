@@ -128,6 +128,30 @@ export function readWorkspaceRootCache(
     return row as CachedWorkspaceRoot;
 }
 
+/** First matching workspace root snapshot for this org + principal (any access-scope key). */
+export function findWorkspaceRootCacheForPrincipal(
+    orgId: string | null,
+    principalUserId: string | null
+): CachedWorkspaceRoot | null {
+    if (!orgId || typeof window === "undefined") return null;
+    const u = (principalUserId ?? "").trim() || "__anon__";
+    const prefix = `alloy:v${SCHEMA_V}:admV2:ws:root:${orgId}:${u}:`;
+    try {
+        for (let i = 0; i < sessionStorage.length; i++) {
+            const k = sessionStorage.key(i);
+            if (!k?.startsWith(prefix)) continue;
+            const data = readJson(sessionStorage.getItem(k));
+            if (!data || typeof data !== "object") continue;
+            const row = data as Partial<CachedWorkspaceRoot>;
+            if (row.v !== SCHEMA_V || !Array.isArray(row.departments)) continue;
+            return row as CachedWorkspaceRoot;
+        }
+    } catch {
+        /* ignore */
+    }
+    return null;
+}
+
 export function writeWorkspaceRootCache(
     orgId: string | null,
     principalUserId: string | null,

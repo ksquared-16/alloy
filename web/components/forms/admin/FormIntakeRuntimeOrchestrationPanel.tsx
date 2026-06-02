@@ -29,6 +29,7 @@ import {
     buildFormEmbedIframeSnippet,
 } from "@/lib/forms/formSharePresentation";
 import { FormOperationalIntentPicker } from "@/components/forms/admin/FormOperationalIntentPicker";
+import { FormLifecycleUsagePanel } from "@/components/forms/admin/FormLifecycleUsagePanel";
 import {
     readActiveRuntimeLinkId,
     readLinkEmbedUrl,
@@ -72,6 +73,7 @@ type Props = {
     onCreateLocationLink?: (input: CreateLocationLinkInput) => void | Promise<void>;
     creatingLocationLink?: boolean;
     locationLinkErr?: string | null;
+    coverageRefreshKey?: string;
 };
 
 /** Business-process-first intake setup rail (IC-8). Architecture unchanged — operator language only. */
@@ -98,6 +100,7 @@ export function FormIntakeRuntimeOrchestrationPanel({
     onCreateLocationLink,
     creatingLocationLink = false,
     locationLinkErr = null,
+    coverageRefreshKey = "",
 }: Props) {
     const { openDrawer } = useAdminDrawer();
     const [labelCatalog, setLabelCatalog] = useState<OutcomeRoutingLabelCatalog | null>(null);
@@ -283,6 +286,17 @@ export function FormIntakeRuntimeOrchestrationPanel({
                         :   null}
                     </dl>
                 </div>
+            :   null}
+
+            {onFormMetadataUpdated ?
+                <FormLifecycleUsagePanel
+                    formId={formId}
+                    formMetadata={formMetadata}
+                    canMutate={canMutate}
+                    hasSchema={hasPublished}
+                    coverageRefreshKey={coverageRefreshKey}
+                    onFormMetadataUpdated={onFormMetadataUpdated}
+                />
             :   null}
 
             <div className="mt-3 space-y-3">

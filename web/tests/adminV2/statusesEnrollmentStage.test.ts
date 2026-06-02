@@ -14,7 +14,7 @@ describe("Statuses enrollment stage integration", () => {
         expect(client).toContain("Enrollment Stage");
         expect(client).toContain("statuses-opportunities-table");
         expect(client).toContain("enrollmentProcessStageDisplayLabel");
-        expect(client).toContain("Manage in Enrollment Process");
+        expect(client).toContain("Manage in Lifecycle");
         expect(client).not.toContain("enrollment_operator_stage");
     });
 
@@ -27,11 +27,11 @@ describe("Statuses enrollment stage integration", () => {
         );
     });
 
-    it("hub uses live forms and actions cards", () => {
-        const hub = read("components/adminV2/settings/enrollmentProcess/EnrollmentProcessHubClient.tsx");
+    it("lifecycle hub uses live forms and actions cards", () => {
+        const hub = read("components/adminV2/settings/LifecycleHubClient.tsx");
         expect(hub).toContain("EnrollmentProcessFormsCoverageCard");
         expect(hub).toContain("EnrollmentProcessActionsCard");
-        expect(hub).toContain("enrollment-process-bos-suggest-stage-setup");
+        expect(hub).toContain("LifecycleNeedsAttentionCard");
         expect(hub).not.toContain("LIFECYCLE_STAGE_TYPICAL_ACTIONS");
     });
 });

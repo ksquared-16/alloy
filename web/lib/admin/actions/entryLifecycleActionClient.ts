@@ -36,7 +36,7 @@ export async function postAdminActionExecute(body: ExecuteEntryLifecycleActionBo
 }
 
 export async function executeCreateLeadFromModal(input: {
-    payload: { first_name: string; last_name: string; email: string; phone: string };
+    payload: Record<string, string>;
     departmentId?: string | null;
     workUnitId?: string | null;
     surface?: string;

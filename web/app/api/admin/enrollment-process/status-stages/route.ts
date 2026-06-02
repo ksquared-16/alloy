@@ -1,44 +1,82 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { departmentIdAllowed, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import { normalizeStatusDefinitionMetadata } from "@/lib/admin/normalizeStatusMetadata";
 import { logAdminAudit } from "@/lib/adminAuth";
-import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import { LIFECYCLE_STAGE_ORDER } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import { ensureOrgOpportunityStatusRow } from "@/lib/lifecycle/ensureOrgOpportunityStatus";
 import {
     ENROLLMENT_OPERATOR_STAGE_UNASSIGNED,
-    isLifecycleOperatorStage,
     mergeEnrollmentOperatorStageMetadata,
     parseEnrollmentOperatorStageFromMetadata,
 } from "@/lib/lifecycle/enrollmentOperatorStage";
 import { buildEnrollmentStatusStagesPayload } from "@/lib/lifecycle/enrollmentProcessStatusStageConfig";
-
-function isStageKey(s: string): s is LifecycleOperatorStage {
-    return (LIFECYCLE_STAGE_ORDER as readonly string[]).includes(s);
-}
+import {
+    configuredStageKeysForMetadata,
+    isConfiguredStageKey,
+} from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { syncDepartmentQueueForStage } from "@/lib/lifecycle/syncDepartmentQueueForStage";
+import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 
 const STATUS_KEY_REGEX = /^[a-z0-9_]{2,32}$/;
 
-/** GET — opportunity statuses grouped by enrollment operator stage. */
-export async function GET() {
+async function loadDepartmentMetadata(orgId: string, departmentId: string) {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+        .from("departments")
+        .select("metadata")
+        .eq("id", departmentId)
+        .eq("org_id", orgId)
+        .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data?.metadata ?? null;
+}
+
+function mapStatusRows(rows: Awaited<ReturnType<typeof fetchEffectiveStatusDefinitions>>) {
+    return rows.map((r) => ({
+        status_key: r.status_key,
+        status_label: r.status_label,
+        sort_order: Number(r.sort_order) ?? 100,
+        metadata: (r.metadata ?? null) as Record<string, unknown> | null,
+    }));
+}
+
+async function stageKeysForRequest(orgId: string, departmentId: string | null): Promise<string[]> {
+    if (!departmentId) return [...LIFECYCLE_STAGE_ORDER];
+    const metadata = await loadDepartmentMetadata(orgId, departmentId);
+    const keys = configuredStageKeysForMetadata(metadata);
+    return keys.length ? keys : [...LIFECYCLE_STAGE_ORDER];
+}
+
+async function validateStageKey(orgId: string, departmentId: string | null, stage: string): Promise<boolean> {
+    if (!departmentId) return (LIFECYCLE_STAGE_ORDER as readonly string[]).includes(stage);
+    const metadata = await loadDepartmentMetadata(orgId, departmentId);
+    return isConfiguredStageKey(metadata, stage);
+}
+
+/** GET — opportunity statuses grouped by lifecycle stage. ?department_id= for configured stages. */
+export async function GET(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
+    const departmentId = new URL(request.url).searchParams.get("department_id")?.trim() || null;
+    if (departmentId) {
+        const access = await getAdminAccessContextCached();
+        if (!access.ok) return adminContextFailureResponse(access);
+        const dim = scopeDimensionsFromAccess(access);
+        if (!departmentIdAllowed(dim, departmentId)) {
+            return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
+    }
+
     const supabase = createAdminClient();
     const rows = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "opportunities", { activeOnly: true });
+    const stageKeys = await stageKeysForRequest(ctx.orgId, departmentId);
 
-    const payload = buildEnrollmentStatusStagesPayload(
-        rows.map((r) => ({
-            status_key: r.status_key,
-            status_label: r.status_label,
-            sort_order: Number(r.sort_order) ?? 100,
-            metadata: (r.metadata ?? null) as Record<string, unknown> | null,
-        }))
-    );
-
-    return NextResponse.json(payload);
+    return NextResponse.json(buildEnrollmentStatusStagesPayload(mapStatusRows(rows), stageKeys));
 }
 
 /** PATCH — replace statuses assigned to one stage, or reset stage metadata overrides. */
@@ -49,23 +87,33 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    let body: { stage?: string; status_keys?: string[]; reset_stage?: string } = {};
+    let body: { stage?: string; status_keys?: string[]; reset_stage?: string; department_id?: string } = {};
     try {
         body = (await request.json()) as typeof body;
     } catch {
         return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
 
+    const departmentId = typeof body.department_id === "string" ? body.department_id.trim() : null;
+    if (departmentId) {
+        const access = await getAdminAccessContextCached();
+        if (!access.ok) return adminContextFailureResponse(access);
+        const dim = scopeDimensionsFromAccess(access);
+        if (!departmentIdAllowed(dim, departmentId)) {
+            return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
+    }
+
     const resetStage = typeof body.reset_stage === "string" ? body.reset_stage.trim() : "";
     if (resetStage) {
-        if (!isStageKey(resetStage)) {
+        if (!(await validateStageKey(ctx.orgId, departmentId, resetStage))) {
             return NextResponse.json({ error: "Invalid reset_stage" }, { status: 400 });
         }
-        return resetStageMetadata(ctx, resetStage);
+        return resetStageMetadata(ctx, resetStage, departmentId);
     }
 
     const stage = typeof body.stage === "string" ? body.stage.trim() : "";
-    if (!isStageKey(stage)) {
+    if (!(await validateStageKey(ctx.orgId, departmentId, stage))) {
         return NextResponse.json({ error: "Invalid stage" }, { status: 400 });
     }
 
@@ -93,8 +141,6 @@ export async function PATCH(request: NextRequest) {
         .select("id, status_key, metadata")
         .eq("org_id", ctx.orgId)
         .eq("entity_type", "opportunities");
-
-    const orgByKey = new Map((orgRows ?? []).map((r) => [String(r.status_key), r]));
 
     const desired = new Set(statusKeys);
     const changedIds: string[] = [];
@@ -144,19 +190,28 @@ export async function PATCH(request: NextRequest) {
     });
 
     const rows = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "opportunities", { activeOnly: true });
-    return NextResponse.json(buildEnrollmentStatusStagesPayload(
-        rows.map((r) => ({
-            status_key: r.status_key,
-            status_label: r.status_label,
-            sort_order: Number(r.sort_order) ?? 100,
-            metadata: (r.metadata ?? null) as Record<string, unknown> | null,
-        }))
-    ));
+    const stageKeys = await stageKeysForRequest(ctx.orgId, departmentId);
+
+    if (departmentId && (LIFECYCLE_STAGE_ORDER as readonly string[]).includes(stage)) {
+        try {
+            await syncDepartmentQueueForStage(
+                supabase,
+                ctx.orgId,
+                departmentId,
+                stage as LifecycleOperatorStage
+            );
+        } catch {
+            /* queue sync is best-effort when pipeline missing */
+        }
+    }
+
+    return NextResponse.json(buildEnrollmentStatusStagesPayload(mapStatusRows(rows), stageKeys));
 }
 
 async function resetStageMetadata(
     ctx: { orgId: string; userId: string; role: string },
-    stage: LifecycleOperatorStage
+    stage: string,
+    departmentId: string | null
 ) {
     const supabase = createAdminClient();
     const orgId = ctx.orgId;
@@ -194,12 +249,6 @@ async function resetStageMetadata(
     });
 
     const rows = await fetchEffectiveStatusDefinitions(supabase, orgId, "opportunities", { activeOnly: true });
-    return NextResponse.json(buildEnrollmentStatusStagesPayload(
-        rows.map((r) => ({
-            status_key: r.status_key,
-            status_label: r.status_label,
-            sort_order: Number(r.sort_order) ?? 100,
-            metadata: (r.metadata ?? null) as Record<string, unknown> | null,
-        }))
-    ));
+    const stageKeys = await stageKeysForRequest(orgId, departmentId);
+    return NextResponse.json(buildEnrollmentStatusStagesPayload(mapStatusRows(rows), stageKeys));
 }

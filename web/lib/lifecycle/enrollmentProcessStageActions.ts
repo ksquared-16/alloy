@@ -5,6 +5,11 @@
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import { LIFECYCLE_STAGE_ORDER } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import { settingsSlotLabel, settingsSurfaceLabel } from "@/lib/admin/actions/actionPlacementPresentation";
+import { LIFECYCLE_BASE_ACTIONS } from "@/lib/lifecycle/lifecycleStageBaseActions";
+import {
+    parseLifecycleActionScopeFromConditionConfig,
+    type LifecycleActionScope,
+} from "@/lib/lifecycle/lifecycleStageActionScope";
 
 export type ActionCatalogMeta = {
     lifecycle_stage?: string | null;
@@ -13,6 +18,7 @@ export type ActionCatalogMeta = {
 };
 
 export type EnrollmentProcessActionPlacement = {
+    placement_id: string;
     surface_label: string;
     placement_label: string;
     is_active: boolean;
@@ -21,8 +27,10 @@ export type EnrollmentProcessActionPlacement = {
 export type EnrollmentProcessStageActionRow = {
     key: string;
     label: string;
+    base_action_label: string | null;
     definition_active: boolean;
     operational_note: string | null;
+    action_scope?: LifecycleActionScope;
     placements: EnrollmentProcessActionPlacement[];
 };
 
@@ -104,6 +112,28 @@ export function actionMatchesOperatorStage(
     return stages.includes(stage);
 }
 
+export function lifecycleOperatorPlacementLabel(
+    surface: string,
+    slot: string,
+    departmentId: string | null,
+    workUnitId: string | null
+): string {
+    if (surface === "record_header" && slot === "primary") return "Drawer";
+    if (surface === "record_header" && slot === "secondary") return "Drawer";
+    if (surface === "record_header" && slot === "overflow") return "Overflow Menu";
+    if (surface === "queue_row" || surface === "queue_header") return "Work Unit Queue Row";
+    if (surface === "work_unit" || (surface === "right_rail" && workUnitId)) return "Work Unit Right Rail";
+    if (surface === "department" || (surface === "right_rail" && departmentId)) return "Department Right Rail";
+    if (surface === "workspace") return "Workspace";
+    if (surface === "overflow" || slot === "overflow") return "Overflow Menu";
+    return placementOperatorLabel(surface, departmentId, workUnitId);
+}
+
+function baseActionLabelForDefinitionKey(defKey: string): string | null {
+    const match = LIFECYCLE_BASE_ACTIONS.find((b) => b.definition_key === defKey);
+    return match?.label ?? null;
+}
+
 function placementOperatorLabel(surface: string, departmentId: string | null, workUnitId: string | null): string {
     const base = settingsSurfaceLabel(surface);
     if (surface === "right_rail") {
@@ -129,20 +159,25 @@ export function buildEnrollmentProcessStageActionRows(
             payload_schema: unknown;
         };
         placements: {
+            id: string;
             surface: string;
             slot: string;
             is_active: boolean;
             department_id: string | null;
             work_unit_id: string | null;
+            condition_config?: Record<string, unknown> | null;
         }[];
-    }[]
+    }[],
+    options?: { includePlacedActions?: boolean }
 ): EnrollmentProcessStageActionRow[] {
     const byKey = new Map<string, EnrollmentProcessStageActionRow>();
 
     for (const item of items) {
         if (item.definition.entity_type && item.definition.entity_type !== "opportunity") continue;
         const catalog = parseCatalog(item.definition.payload_schema);
-        if (!actionMatchesOperatorStage(stage, catalog)) continue;
+        const matchesStage = actionMatchesOperatorStage(stage, catalog);
+        const hasPlacements = item.placements.some((p) => p.is_active);
+        if (!matchesStage && !hasPlacements) continue;
 
         const status = catalog?.implementation_status ?? null;
         const operational_note =
@@ -154,11 +189,14 @@ export function buildEnrollmentProcessStageActionRows(
 
         let row = byKey.get(item.definition.key);
         if (!row) {
+            const firstCc = item.placements[0]?.condition_config;
             row = {
                 key: item.definition.key,
                 label: item.definition.label,
+                base_action_label: baseActionLabelForDefinitionKey(item.definition.key),
                 definition_active: item.definition.is_active,
                 operational_note,
+                action_scope: parseLifecycleActionScopeFromConditionConfig(firstCc),
                 placements: [],
             };
             byKey.set(item.definition.key, row);
@@ -166,11 +204,17 @@ export function buildEnrollmentProcessStageActionRows(
 
         for (const p of item.placements) {
             if (!p.is_active) continue;
-            const surface_label = placementOperatorLabel(p.surface, p.department_id, p.work_unit_id);
+            const surface_label = lifecycleOperatorPlacementLabel(
+                p.surface,
+                p.slot,
+                p.department_id,
+                p.work_unit_id
+            );
             const slot = settingsSlotLabel(p.slot);
             row.placements.push({
+                placement_id: p.id,
                 surface_label,
-                placement_label: slot ? `${surface_label} · ${slot}` : surface_label,
+                placement_label: surface_label,
                 is_active: true,
             });
         }
@@ -180,13 +224,14 @@ export function buildEnrollmentProcessStageActionRows(
     for (const row of rows) {
         const seen = new Set<string>();
         row.placements = row.placements.filter((p) => {
-            const k = p.surface_label;
+            const k = p.placement_id || p.placement_label;
             if (seen.has(k)) return false;
             seen.add(k);
             return true;
         });
         if (!row.placements.length) {
             row.placements.push({
+                placement_id: "",
                 surface_label: "Not placed",
                 placement_label: "Not placed",
                 is_active: false,

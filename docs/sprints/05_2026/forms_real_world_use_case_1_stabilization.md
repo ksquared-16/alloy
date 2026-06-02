@@ -433,6 +433,39 @@ Registry label updates:
 - `opportunity_interest_notes` → **Inquiry message** (`public_intake_safe: true`)
 - `child_site` → **Preferred school / site**
 
+## Intake classification doctrine (May 2026)
+
+### Clean lead vs ambiguous lead
+
+| Outcome | Signals | Intake Operations bucket | Operator next step |
+|---------|---------|--------------------------|-------------------|
+| **Clean auto-created lead** | `created_records`, `intake_auto_operationalized`, person/customer/opportunity linked, `intake_needs_review: false`, no duplicate conflict | **Ready / Healthy** (`auto_operationalized`) — not Needs Action, Needs Review, or Needs Linking | Open lead in **New Leads** opportunity queue |
+| **Duplicate / ambiguous** | `intake_identity_name_mismatch`, `ambiguous_contact`, `intake_needs_review: true`, `intake_opportunity_match: ambiguous` | **Needs Review** or **Needs Linking** | Quick Review → confirm match / correct linkage |
+| **Intake error / missing routing** | `skipped_error`, `skipped_missing_config`, `intake_work_unit_department_mismatch`, no CRM links | **Needs Action** | Fix link config or manual linkage |
+| **Existing-record update** | `matched_email` + `attached_existing`, review per link policy | Review when `intake_needs_review: true`; otherwise Healthy | Continue enrollment on attached lead |
+
+### Successful auto-created leads leave the action queue
+
+When a website inquiry successfully creates person + customer + opportunity, routes to the correct school/work unit, and sets opportunity status (e.g. `new_inquiry`):
+
+- The **opportunity** becomes the operational object.
+- Intake Operations may show the submission under **Ready / Healthy** or **Recent**, but must **not** count it as Needs Action / Needs Linking.
+- Quick Review shows **Lead created** with **Open Lead** — not “Needs family match” or linkage correction.
+- Intake Review page shows connected records and **Open Lead**; linkage UUID/paste workflow is hidden unless review is actually required.
+
+### Implementation
+
+Central helper: `web/lib/forms/intakeEnrollmentLeadClassification.ts`
+
+Wired through:
+
+- `submissionLinkageReviewUx.ts` — inbox linkage badges
+- `submissionInboxPresentation.ts` — lane resolution
+- `intakeCasePresentation.ts` — KPI buckets and attention reasons
+- `intakeQuickReviewPresentation.ts` — Quick Review copy
+- `FormSubmissionDetailClient.tsx` — intake review page (hide linkage workflow for clean leads)
+- `submissionOutcomeSummary.ts` — document generation gate + recommended next steps
+
 ## Related
 
 - Prior authoring blockers: [forms_authoring_stability.md](./forms_authoring_stability.md)
