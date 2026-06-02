@@ -90,8 +90,56 @@ describe("buildFormIntakeMetaFromPayload", () => {
         expect(r.intake.child?.first_name).toBe("Riley");
     });
 
+    it("maps guardian first and last name fields from system field ids", () => {
+        const r = buildFormIntakeMetaFromPayload({
+            values: {
+                guardian_first_name: "Jordan",
+                guardian_last_name: "Lee",
+                guardian_email: "jordan@example.com",
+            },
+            linkMetadata: { default_vertical_id: VID },
+        });
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        expect(r.intake.guardian?.first_name).toBe("Jordan");
+        expect(r.intake.guardian?.last_name).toBe("Lee");
+    });
+
+    it("prefers explicit guardian first/last over full name split", () => {
+        const r = buildFormIntakeMetaFromPayload({
+            values: {
+                guardian_first_name: "Jordan",
+                guardian_last_name: "Lee",
+                guardian_full_name: "Wrong Name",
+                guardian_email: "jordan@example.com",
+            },
+            linkMetadata: { default_vertical_id: VID },
+        });
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        expect(r.intake.guardian?.first_name).toBe("Jordan");
+        expect(r.intake.guardian?.last_name).toBe("Lee");
+    });
+
+    it("website inquiry succeeds without child fields", () => {
+        const r = buildFormIntakeMetaFromPayload({
+            values: {
+                guardian_first_name: "Sam",
+                guardian_last_name: "Patel",
+                guardian_email: "sam@example.com",
+            },
+            linkMetadata: { default_vertical_id: VID },
+        });
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        expect(r.intake.child).toBeUndefined();
+        expect(r.intake.children).toBeUndefined();
+    });
+
     it("exports defaults with expected medication keys", () => {
         expect(DEFAULT_FORM_INTAKE_VALUE_PATHS.guardian_email).toBe("guardian_email");
+        expect(DEFAULT_FORM_INTAKE_VALUE_PATHS.guardian_first_name).toBe("guardian_first_name");
+        expect(DEFAULT_FORM_INTAKE_VALUE_PATHS.guardian_last_name).toBe("guardian_last_name");
         expect(DEFAULT_FORM_INTAKE_VALUE_PATHS.child_dob).toBe("child_dob");
     });
 });

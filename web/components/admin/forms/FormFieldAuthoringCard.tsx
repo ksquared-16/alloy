@@ -10,7 +10,7 @@ import {
     answerTypeLabel,
     describePrefillMode,
     describePrefillSource,
-    entityTypeLabel,
+    groupSystemFieldsForPicker,
     type UiScalarKind,
 } from "@/lib/forms/formFieldAuthoringPresentation";
 import { linesToStaticOptions, type SystemFieldRegistryEntry } from "@/lib/forms/systemFieldRegistry";
@@ -78,6 +78,7 @@ export function FormFieldAuthoringCard({
     const prefillMode = describePrefillMode(field, entry);
     const pos = regionPosition ?? index;
     const posTotal = regionTotal ?? total;
+    const systemFieldGroups = groupSystemFieldsForPicker(systemFields);
 
     if (compact) {
         return (
@@ -162,17 +163,26 @@ export function FormFieldAuthoringCard({
                                 onChange={(e) => onPickerChange(index, e.target.value)}
                                 data-testid={`form-field-prefill-${field.id}`}
                             >
-                                <optgroup label="Mapped fields">
-                                    {systemFields.map((e) => {
-                                        const takenElsewhere = takenFieldIds.has(e.field_key) && e.field_key !== field.id;
-                                        return (
-                                            <option key={e.id} value={`sys:${e.id}`} disabled={takenElsewhere}>
-                                                {entityTypeLabel(e.entity_type)} — {e.default_label}
-                                            </option>
-                                        );
-                                    })}
+                                {systemFieldGroups.map((group) => (
+                                    <optgroup key={group.id} label={group.label}>
+                                        {group.fields.map((e) => {
+                                            const takenElsewhere =
+                                                takenFieldIds.has(e.field_key) && e.field_key !== field.id;
+                                            return (
+                                                <option
+                                                    key={e.id}
+                                                    value={`sys:${e.id}`}
+                                                    disabled={takenElsewhere}
+                                                >
+                                                    {e.default_label}
+                                                </option>
+                                            );
+                                        })}
+                                    </optgroup>
+                                ))}
+                                <optgroup label="Advanced / Custom">
+                                    <option value="__custom">{FIELD_AUTHORING_COPY.customField}</option>
                                 </optgroup>
-                                <option value="__custom">{FIELD_AUTHORING_COPY.customField}</option>
                             </select>
                         </label>
                         {field.type === "select" ?

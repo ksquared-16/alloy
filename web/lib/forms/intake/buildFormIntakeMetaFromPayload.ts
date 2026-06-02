@@ -32,11 +32,13 @@ export type FormIntakeValueFieldPaths = {
     children?: FormIntakeChildFieldPaths[];
 };
 
-/** Default paths aligned with medication authorization demo and similar guardian/child field ids. */
+/** Default paths aligned with medication authorization demo and website inquiry field ids. */
 export const DEFAULT_FORM_INTAKE_VALUE_PATHS: FormIntakeValueFieldPaths = {
     guardian_email: "guardian_email",
     guardian_phone: "guardian_phone",
     guardian_full_name: "guardian_full_name",
+    guardian_first_name: "guardian_first_name",
+    guardian_last_name: "guardian_last_name",
     child_first_name: "child_first_name",
     child_last_name: "child_last_name",
     child_dob: "child_dob",

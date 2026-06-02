@@ -313,6 +313,126 @@ Refuses `VERCEL_ENV=production`.
 
 **Not in scope:** No dedicated “delete test lead” or bulk QA purge in UI. Use cleanup script for QA artifacts; use Mark lost for one-off operator dismissal.
 
+## Contact Us vs Schedule a Tour (May 2026)
+
+### Doctrine
+
+A **website inquiry is not a tour**. Families are requesting more information; staff review and outreach may lead to a tour as a **next workflow step**.
+
+Use Case #1 copy should say:
+
+- Contact us
+- Request more information
+- Get more information
+
+Avoid **Schedule a Tour** on:
+
+- Firefly demo website CTAs and contact pages
+- Website inquiry form titles (operator-authored, but guidance applies)
+- Primary Forms setup language for enrollment lead capture
+
+Tour scheduling remains a valid **later** enrollment workflow action — not the initial public embed promise.
+
+### Copy updated (Firefly demo)
+
+| Surface | Before | After |
+|---------|--------|-------|
+| Header / hero CTA | Schedule a Tour | Contact Us |
+| `/contact` title | Schedule a Tour | Contact Us |
+| Campus embed pages | Schedule a Tour — {campus} | Contact Us — {campus} |
+| Bottom CTA | Schedule a tour… | Get more information… |
+
+## Field mapping audit — website inquiry (May 2026)
+
+### A. Fields available to form authors (system field registry)
+
+Grouped by operational target:
+
+#### Person / Guardian (`entity_type: guardian`)
+
+| Picker label | Field key | CRM mapping |
+|--------------|-----------|-------------|
+| Guardian first name | `guardian_first_name` | `guardian.first_name` |
+| Guardian last name | `guardian_last_name` | `guardian.last_name` |
+| Guardian email | `guardian_email` | `guardian.email` |
+| Guardian phone | `guardian_phone` | `guardian.phone` |
+
+#### Child / Customer member (`entity_type: child`)
+
+| Picker label | Field key | CRM mapping |
+|--------------|-----------|-------------|
+| Child first name | `child_first_name` | `child.first_name` |
+| Child last name | `child_last_name` | `child.last_name` |
+| Child date of birth | `child_date_of_birth` | `child.date_of_birth` |
+
+**Progressive enrichment:** Child fields are optional at initial website inquiry. They populate `payload.meta.intake.child` when present and may create `customer_members` + `opportunity_customer_members` when auto-create flags allow.
+
+#### Opportunity / Inquiry (`entity_type: opportunity`, `enrollment`)
+
+| Picker label | Field key | Writes to |
+|--------------|-----------|-----------|
+| Inquiry message | `opportunity_interest_notes` | Submission values (intake note promotion TBD) |
+| Preferred school / site | `child_site` | Intake child hint → OCM placement when child captured |
+| Desired program | `desired_program_type` | Intake child hint / OCM metadata |
+| Desired schedule | `desired_schedule_type` | Intake child hint / OCM metadata |
+| Desired start date | `desired_start_date` | Intake child hint / OCM metadata |
+| Program / room preference | `program_room_preference` | Intake child hint / OCM cohort |
+
+**Location routing** for Use Case #1 is primarily via **share link** `default_location_id` (Share by Location), not a form field.
+
+#### Inquiry children vs opportunity children
+
+| Concept | What it is |
+|---------|------------|
+| `payload.meta.intake.child` / `children[]` | Transient intake hints built at submit from mapped form values |
+| `customer_members` + `opportunity_customer_members` | Operational child rows created when intake auto-create + child hints present |
+| Legacy `inquiry_children` | Not a separate table — intake hints are the bridge; OCM is authoritative for enrollment child context |
+
+### B. Website inquiry field mapping table
+
+| Form field | Field key | Writes to | Current behavior (after fix) | Expected behavior |
+|------------|-----------|-----------|------------------------------|-------------------|
+| Guardian first name | `guardian_first_name` | `person.first_name`, opportunity name | Mapped via default intake paths → `meta.intake.guardian` → person insert / opp name | ✓ |
+| Guardian last name | `guardian_last_name` | `person.last_name`, opportunity name | Same | ✓ |
+| Guardian email | `guardian_email` | `person.email`, match key | Default path | ✓ |
+| Guardian phone | `guardian_phone` | `person.phone`, match key | Default path | ✓ |
+| Inquiry message | `opportunity_interest_notes` | Submission `values` | Stored on submission; visible in intake review | Preserved as evidence |
+| Location | *(share link)* | `opportunity.location_id` | From `form_public_links.metadata.default_location_id` | ✓ per campus embed |
+| Child fields | `child_*` | OCM when auto-create on | Optional; not required for UC1 | Progressive enrichment |
+
+Custom / unmapped fields remain **submission-only** unless mapped via system field registry.
+
+### C. Root cause — guardian name missing on opportunity
+
+**Observed:** Form captured Guardian First Name and Guardian Last Name; opportunity did not show the submitted name.
+
+**Trace:**
+
+1. Public submit calls `buildFormIntakeMetaFromPayload(values, linkMetadata)`.
+2. Default intake paths included `guardian_email`, `guardian_phone`, `guardian_full_name` but **not** `guardian_first_name` / `guardian_last_name`.
+3. Website inquiry forms use separate system fields (`guardian_first_name`, `guardian_last_name`) — not `guardian_full_name`.
+4. Intake meta guardian names were `null` → `applyFormIntakeSafe` created/matched person without submitted names → opportunity `name` fell back to email/phone/`Web intake`.
+5. Email match with empty submitted names treated as identity match (`submittedIdentityMatchesPersonRecord` returns true when both submitted names empty) — could attach to existing person without name mismatch review.
+
+**Fix:** Add `guardian_first_name` and `guardian_last_name` to `DEFAULT_FORM_INTAKE_VALUE_PATHS` in `buildFormIntakeMetaFromPayload.ts`.
+
+### Field picker UX (May 2026)
+
+Mapped-field picker now groups registry entries:
+
+- **Guardian / Contact** — guardian fields
+- **Child** — child fields
+- **Inquiry** — opportunity + enrollment planning fields
+- **Advanced / CRM** — customer, associate
+- **Advanced / Custom** — unmapped custom fields
+
+Primary option labels use `default_label` only (no raw keys).
+
+Registry label updates:
+
+- `opportunity_interest_notes` → **Inquiry message** (`public_intake_safe: true`)
+- `child_site` → **Preferred school / site**
+
 ## Related
 
 - Prior authoring blockers: [forms_authoring_stability.md](./forms_authoring_stability.md)

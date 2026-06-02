@@ -66,7 +66,7 @@ export default function HomePage() {
               href="/contact"
               className="inline-flex items-center justify-center rounded-full bg-firefly px-8 py-3.5 text-base font-semibold text-navy shadow-sm transition-colors hover:bg-firefly-dark"
             >
-              Schedule a Tour
+              Contact Us
             </Link>
           </div>
         </div>
@@ -143,14 +143,14 @@ export default function HomePage() {
             Ready to visit?
           </h2>
           <p className="mt-4 text-cream/80">
-            Schedule a tour and see how Firefly can be the right fit for your
+            Get more information and see how Firefly can be the right fit for your
             family.
           </p>
           <Link
             href="/contact"
             className="mt-8 inline-flex items-center justify-center rounded-full bg-firefly px-8 py-3.5 text-base font-semibold text-navy transition-colors hover:bg-firefly-dark"
           >
-            Schedule a Tour
+            Contact Us
           </Link>
         </div>
       </section>

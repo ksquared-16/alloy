@@ -17,10 +17,10 @@ export async function generateMetadata({
 }: ContactCampusPageProps): Promise<Metadata> {
   const { slug } = await params;
   const campus = getCampusBySlug(slug);
-  if (!campus) return { title: "Schedule a Tour" };
+  if (!campus) return { title: "Contact Us" };
 
   return {
-    title: `Schedule a Tour — ${campus.name}`,
+    title: `Contact Us — ${campus.name}`,
   };
 }
 
@@ -38,11 +38,11 @@ export default async function ContactCampusPage({ params }: ContactCampusPagePro
           </Link>
         </p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-navy sm:text-4xl">
-          Schedule a Tour — {campus.name}
+          Contact Us — {campus.name}
         </h1>
         <p className="mt-3 max-w-2xl text-lg leading-relaxed text-muted">
-          Interested in learning more about Firefly Early Learning at {campus.name}?
-          Complete the form below and a member of our enrollment team will contact you.
+          Request more information about Firefly Early Learning at {campus.name}.
+          Complete the form below and a member of our enrollment team will reach out.
         </p>
 
         <div className="mt-6 sm:mt-7">

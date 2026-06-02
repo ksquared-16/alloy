@@ -27,7 +27,7 @@ export default function Header() {
             href="/contact"
             className="rounded-full bg-firefly px-4 py-2 text-sm font-semibold text-navy transition-colors hover:bg-firefly-dark sm:px-5"
           >
-            Schedule a Tour
+            Contact Us
           </Link>
         </nav>
       </div>

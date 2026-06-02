@@ -48,14 +48,54 @@ export const FIELD_AUTHORING_COPY = {
 export function entityTypeLabel(entityType: string): string {
     const map: Record<string, string> = {
         child: "Child",
-        guardian: "Guardian",
-        opportunity: "Opportunity",
+        guardian: "Guardian / Contact",
+        opportunity: "Inquiry",
         customer: "Customer",
         associate: "Associate",
-        enrollment: "Enrollment",
+        enrollment: "Inquiry",
         custom: "Custom",
     };
     return map[entityType] ?? entityType;
+}
+
+/** Operator-facing groups for the mapped-field picker (OI-4B / UC1). */
+export const SYSTEM_FIELD_PICKER_GROUP_ORDER = [
+    "guardian",
+    "child",
+    "inquiry",
+    "advanced",
+] as const;
+
+export type SystemFieldPickerGroupId = (typeof SYSTEM_FIELD_PICKER_GROUP_ORDER)[number];
+
+export const SYSTEM_FIELD_PICKER_GROUP_LABELS: Record<SystemFieldPickerGroupId, string> = {
+    guardian: "Guardian / Contact",
+    child: "Child",
+    inquiry: "Inquiry",
+    advanced: "Advanced / CRM",
+};
+
+function pickerGroupForEntityType(entityType: string): SystemFieldPickerGroupId {
+    if (entityType === "guardian") return "guardian";
+    if (entityType === "child") return "child";
+    if (entityType === "opportunity" || entityType === "enrollment") return "inquiry";
+    return "advanced";
+}
+
+export function groupSystemFieldsForPicker(
+    fields: readonly SystemFieldRegistryEntry[]
+): { id: SystemFieldPickerGroupId; label: string; fields: SystemFieldRegistryEntry[] }[] {
+    const buckets = new Map<SystemFieldPickerGroupId, SystemFieldRegistryEntry[]>();
+    for (const id of SYSTEM_FIELD_PICKER_GROUP_ORDER) buckets.set(id, []);
+    for (const field of fields) {
+        const group = pickerGroupForEntityType(field.entity_type);
+        buckets.get(group)!.push(field);
+    }
+    return SYSTEM_FIELD_PICKER_GROUP_ORDER.map((id) => ({
+        id,
+        label: SYSTEM_FIELD_PICKER_GROUP_LABELS[id],
+        fields: buckets.get(id) ?? [],
+    })).filter((g) => g.fields.length > 0);
 }
 
 export function isCustomUnmappedField(f: FormField): boolean {
