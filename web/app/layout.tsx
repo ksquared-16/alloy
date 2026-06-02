@@ -14,8 +14,9 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: "Alloy | Powered by BOS",
-  description: "Alloy - future operating system for organizations.",
+  title: "Alloy | A Platform For Operational Workflows",
+  description:
+    "Alloy connects people, processes, communications, documents, and actions into a single operating system for childcare.",
   icons: {
     icon: "/brand/alloy-brandmark-blue.svg",
     apple: "/brand/alloy-brandmark-blue.svg",
@@ -34,7 +35,9 @@ export default function RootLayout({
         <GhlScript />
         <StagingBanner />
         <QuoteModalProvider>
+          <QuoteModalProvider>
           <ConditionalSiteLayout>{children}</ConditionalSiteLayout>
+        </QuoteModalProvider>
         </QuoteModalProvider>
       </body>
     </html>

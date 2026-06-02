@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" fill="none" aria-hidden="true">
+  <!-- TODO: Replace with final deck platform foundation artifact export -->
+  <rect width="800" height="500" fill="#F4F6F9"/>
+  <rect x="200" y="280" width="400" height="60" rx="8" fill="#18273A" fill-opacity="0.08" stroke="#18273A" stroke-opacity="0.25" stroke-width="1.5"/>
+  <rect x="240" y="200" width="120" height="60" rx="6" fill="#00458C" opacity="0.1" stroke="#00458C" stroke-width="1"/>
+  <rect x="380" y="200" width="120" height="60" rx="6" fill="#00458C" opacity="0.1" stroke="#00458C" stroke-width="1"/>
+  <rect x="520" y="200" width="120" height="60" rx="6" fill="#00458C" opacity="0.1" stroke="#00458C" stroke-width="1"/>
+  <rect x="310" y="120" width="180" height="50" rx="6" fill="#00A283" opacity="0.15" stroke="#00A283" stroke-width="1.5"/>
+  <path d="M300 250 L400 310 L500 250" stroke="#00A283" stroke-width="2" opacity="0.4"/>
+  <text x="400" y="420" text-anchor="middle" font-family="system-ui,sans-serif" font-size="14" fill="#18273A" opacity="0.35">Platform Foundation Placeholder</text>
+</svg>

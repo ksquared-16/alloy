@@ -1,12 +1,28 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 import LayoutWrapper from "@/components/LayoutWrapper";
-import QuoteModalWrapper from "@/components/QuoteModalWrapper";
-import HomeAmbient from "@/components/HomeAmbient";
+import MarketingHeader from "@/components/marketing/MarketingHeader";
+import MarketingFooter from "@/components/marketing/MarketingFooter";
 import { isPublicFormEmbedPath } from "@/lib/public/forms/publicFormEmbedPath";
+
+function isAppShellRoute(pathname: string | null): boolean {
+  if (!pathname) return false;
+  return (
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/adminV2") ||
+    pathname.startsWith("/adminv2")
+  );
+}
+
+function isAuthRoute(pathname: string | null): boolean {
+  if (!pathname) return false;
+  return (
+    pathname === "/login" ||
+    pathname === "/forgot-password" ||
+    pathname === "/reset-password"
+  );
+}
 
 export default function ConditionalSiteLayout({
   children,
@@ -14,28 +30,19 @@ export default function ConditionalSiteLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const isAdminRoute = pathname?.startsWith("/admin");
   const isFormEmbedRoute = isPublicFormEmbedPath(pathname);
 
-  if (isAdminRoute || isFormEmbedRoute) {
-    // Admin + public form embed: no marketing chrome (embed layout owns the surface).
+  if (isAppShellRoute(pathname) || isFormEmbedRoute || isAuthRoute(pathname)) {
     return <>{children}</>;
   }
 
-  /* Ambient sits in a document-height absolute layer behind chrome (nav/main/footer) so it
-   * cannot paint past the intended frame or sit above opaque header/footer regions. */
   return (
     <LayoutWrapper>
-      <div className="public-site-chrome">
-        <div className="public-site-atmosphere-layer" aria-hidden>
-          <HomeAmbient />
-        </div>
-        <Navbar />
-        <main className="public-site-main">{children}</main>
-        <Footer />
-        <QuoteModalWrapper />
+      <div className="marketing-site-chrome flex min-h-screen min-h-dvh flex-col bg-white">
+        <MarketingHeader />
+        <main className="flex flex-1 flex-col">{children}</main>
+        <MarketingFooter />
       </div>
     </LayoutWrapper>
   );
 }
-

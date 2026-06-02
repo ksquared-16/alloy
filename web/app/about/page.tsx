@@ -1,99 +1,57 @@
-import Section from "@/components/Section";
-import PublicPageShell from "@/components/PublicPageShell";
+import CTAButton from "@/components/marketing/CTAButton";
+import SectionShell from "@/components/marketing/SectionShell";
 
 export default function AboutPage() {
-  const values = [
-    {
-      title: "Trust First",
-      description:
-        "Every pro is vetted. Quality is guaranteed. Alloy stands behind every match. Trust is non-negotiable.",
-    },
-    {
-      title: "Fair for Everyone",
-      description:
-        "Fair pricing for customers, better earnings for pros. No hidden fees, no surprises. Win-win is the only way.",
-    },
-    {
-      title: "Human + Smart",
-      description:
-        "Real people + smart tech, always together. We use technology to make things easier, but real humans are always there when you need them.",
-    },
-    {
-      title: "Dead-Simple",
-      description:
-        "Booking and getting work should feel instant and effortless. No complicated apps, no confusing processes. It just works.",
-    },
-    {
-      title: "Local Proud",
-      description:
-        "We champion neighborhood businesses and local pros. Based in Bend, supporting Bend. Building stronger communities, one job at a time.",
-    },
-  ];
-
   return (
-    <PublicPageShell>
-      {/* Hero — atmosphere shows through */}
-      <Section className="py-12 md:py-20 home-section-transition public-hero-section">
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-4xl md:text-5xl font-bold text-alloy-midnight mb-4">
-            About Alloy
-          </h1>
-          <p className="text-lg text-alloy-midnight/80 mb-8">
-            Finding reliable home service professionals shouldn't be complicated. We match you with trusted local pros—vetted, insured, and ready to do great work. Starting with home cleaning in Bend, Oregon.
-          </p>
-          <p className="text-lg text-alloy-midnight/80">
-            We make it effortless for customers to find pros they can trust, and for great pros to grow their businesses. Fast, reliable connections powered by smart technology and real human care.
-          </p>
-        </div>
-      </Section>
+    <>
+      <SectionShell className="!pt-12 md:!pt-16" innerClassName="max-w-3xl">
+        <p className="text-sm font-semibold uppercase tracking-widest text-alloy-juniper">About</p>
+        <h1 className="mt-3 text-4xl font-bold tracking-tight text-alloy-forge md:text-5xl">
+          Why Alloy Exists
+        </h1>
+        <p className="mt-6 text-xl font-medium leading-relaxed text-alloy-forge">
+          Childcare operators do not need more software. They need fewer systems.
+        </p>
+        <p className="mt-6 text-lg leading-relaxed text-alloy-forge/70">
+          Alloy was built to connect operational workflows, eliminate fragmented processes, and help
+          teams spend less time managing systems and more time serving families.
+        </p>
+        <p className="mt-4 text-lg leading-relaxed text-alloy-forge/70">
+          Most tools in childcare were designed as standalone products — a CRM here, a forms tool
+          there, email in another tab. Operators end up copying data, chasing context, and
+          reconciling reports that should already agree. Alloy replaces that patchwork with a
+          platform where enrollment, communications, documents, and tasks share one record model.
+        </p>
+      </SectionShell>
 
-      {/* Mission */}
-      <Section className="py-16 home-section-stone">
-        <div className="max-w-3xl mx-auto">
-          <h2 className="text-3xl font-bold text-alloy-midnight mb-6 text-center">
-            Our Mission
-          </h2>
-          <p className="text-lg text-alloy-midnight/80 text-center">
-            A world where every home or business project is matched with the perfect local pro in minutes—no stress, no guesswork, and no bad experiences. Creating stronger communities one perfect job at a time.
+      <SectionShell variant="muted">
+        <div className="mx-auto max-w-3xl">
+          <h2 className="text-2xl font-bold text-alloy-forge md:text-3xl">Built Differently</h2>
+          <p className="mt-4 text-lg leading-relaxed text-alloy-forge/70">
+            Most software starts with features. Alloy started with the foundation — entities,
+            workflows, lifecycle, layouts, forms, permissions, documents, messaging, and tasks,
+            powered by the BOS Intelligence Layer.
+          </p>
+          <p className="mt-4 text-lg leading-relaxed text-alloy-forge/70">
+            That foundation means new operational workflows can be added without creating another
+            disconnected system. Enrollment & Family Operations is the first workflow on Alloy. It
+            will not be the last.
           </p>
         </div>
-      </Section>
+      </SectionShell>
 
-      {/* Values */}
-      <Section className="py-16 home-section-transition home-section-light">
-        <h2 className="text-3xl font-bold text-alloy-midnight mb-12 text-center">
-          Our Values
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
-          {values.map((value) => (
-            <div
-              key={value.title}
-              className="bg-white rounded-lg p-6 border border-gray-200"
-            >
-              <h3 className="text-xl font-semibold text-alloy-blue mb-3">
-                {value.title}
-              </h3>
-              <p className="text-gray-600">{value.description}</p>
-            </div>
-          ))}
-        </div>
-      </Section>
-
-      {/* Local Focus */}
-      <Section className="py-16 home-section-stone">
-        <div className="max-w-3xl mx-auto text-center">
-          <h2 className="text-3xl font-bold text-alloy-midnight mb-6">
-            Local Focus, Bend Roots
-          </h2>
-          <p className="text-lg text-alloy-midnight/80 mb-4">
-            Alloy is based in Bend, Oregon. We're not a faceless corporation—we're your neighbors, building a service that works for our community.
+      <SectionShell>
+        <div className="mx-auto max-w-2xl text-center">
+          <h2 className="text-2xl font-bold text-alloy-forge">See what a unified platform feels like</h2>
+          <p className="mt-4 text-alloy-forge/70">
+            We would love to show you Alloy — starting with enrollment operations and the platform
+            underneath.
           </p>
-          <p className="text-lg text-alloy-midnight/80">
-            When you book through Alloy, you're supporting local businesses and helping build a stronger, more connected Bend.
-          </p>
+          <div className="mt-8">
+            <CTAButton href="/contact">Book a Demo</CTAButton>
+          </div>
         </div>
-      </Section>
-    </PublicPageShell>
+      </SectionShell>
+    </>
   );
 }
-

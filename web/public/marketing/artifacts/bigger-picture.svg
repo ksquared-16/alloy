@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" fill="none" aria-hidden="true">
+  <!-- TODO: Replace with final deck bigger picture artifact export -->
+  <rect width="800" height="500" fill="#F4F6F9"/>
+  <rect x="280" y="220" width="240" height="80" rx="10" fill="#18273A" opacity="0.06" stroke="#18273A" stroke-width="1.5"/>
+  <text x="400" y="268" text-anchor="middle" font-family="system-ui,sans-serif" font-size="13" fill="#18273A" opacity="0.5">Platform Foundation</text>
+  <g font-family="system-ui,sans-serif" font-size="10" fill="#18273A" opacity="0.55">
+    <rect x="100" y="100" width="100" height="36" rx="6" stroke="#00A283" stroke-width="1" fill="#00A283" fill-opacity="0.08"/>
+    <text x="150" y="123" text-anchor="middle">Enrollment</text>
+    <rect x="350" y="80" width="100" height="36" rx="6" stroke="#00458C" stroke-width="1" fill="#00458C" fill-opacity="0.06"/>
+    <text x="400" y="103" text-anchor="middle">Billing</text>
+    <rect x="600" y="100" width="100" height="36" rx="6" stroke="#00458C" stroke-width="1" fill="#00458C" fill-opacity="0.06"/>
+    <text x="650" y="123" text-anchor="middle">Payments</text>
+    <rect x="80" y="340" width="100" height="36" rx="6" stroke="#00458C" stroke-width="1" fill="#00458C" fill-opacity="0.06"/>
+    <text x="130" y="363" text-anchor="middle">Attendance</text>
+    <rect x="220" y="360" width="100" height="36" rx="6" stroke="#00458C" stroke-width="1" fill="#00458C" fill-opacity="0.06"/>
+    <text x="270" y="383" text-anchor="middle">Scheduling</text>
+    <rect x="480" y="360" width="100" height="36" rx="6" stroke="#00458C" stroke-width="1" fill="#00458C" fill-opacity="0.06"/>
+    <text x="530" y="383" text-anchor="middle">Staffing</text>
+    <rect x="620" y="340" width="110" height="36" rx="6" stroke="#00458C" stroke-width="1" fill="#00458C" fill-opacity="0.06"/>
+    <text x="675" y="363" text-anchor="middle">Parent Exp.</text>
+  </g>
+  <path d="M150 136 L350 220 M450 116 L400 220 M650 136 L520 220 M130 340 L340 300 M270 360 L400 300 M530 360 L460 300 M675 340 L520 300" stroke="#18273A" stroke-width="1" opacity="0.15"/>
+  <text x="400" y="450" text-anchor="middle" font-family="system-ui,sans-serif" font-size="14" fill="#18273A" opacity="0.35">Bigger Picture Placeholder</text>
+</svg>
