@@ -1,6 +1,15 @@
 import type { StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
 import type { ActivitySignalResult } from "@/lib/admin/activitySignals";
-import { resolveOpportunityAttentionConfigFromMetadata } from "@/lib/opportunities/opportunityAttentionConfig";
+import type { ReadinessMemoScope } from "@/lib/completion/readinessEvaluationMemo";
+import type { ReadinessResult } from "@/lib/completion/readinessTypes";
+import {
+    mergeAttentionMetadataForConfig,
+    resolveOpportunityAttentionConfigFromMetadata,
+} from "@/lib/opportunities/opportunityAttentionConfig";
+import { tryEvaluateOpportunityReadinessForAttention } from "@/lib/opportunities/opportunityReadinessForAttention";
+import {
+    isReadinessAttentionProjectionActive,
+} from "@/lib/opportunities/readinessAttentionProjectionProfile";
 import {
     resolveOpportunityAttention,
     type OpportunityAttentionEntityInput,
@@ -53,26 +62,65 @@ export function computeOperationalAttentionAttachment(input: {
     defs: StatusDefinitionRow[];
     /** Typically `work_units.metadata` for `opportunity.work_unit_id` (QueueService parity). */
     attentionConfigMetadata: unknown | null;
+    /** Department metadata for lifecycle readiness rules + attention rule merge. */
+    departmentMetadata?: unknown | null;
+    orgId?: string | null;
+    departmentId?: string | null;
+    workUnitId?: string | null;
     /**
      * Activity Signals V1 result — same pipeline as queue enrichment / activity-signal route.
      * When `stale_signal` is set, passed through to the resolver as `optionalSignals.activityStale`.
      */
     activitySignal?: ActivitySignalResult | null;
     nowMs?: number;
+    /** Pre-evaluated readiness (e.g. shared memo with drawer bootstrap). */
+    readiness?: ReadinessResult | null;
+    readinessMemoScope?: ReadinessMemoScope;
 }): {
     _operational_attention: OpportunityAttentionResult | null;
     _operational_attention_error: OperationalAttentionAttachmentError | null;
 } {
     try {
-        const config = resolveOpportunityAttentionConfigFromMetadata(input.attentionConfigMetadata ?? null);
+        const mergedMeta = mergeAttentionMetadataForConfig(
+            input.attentionConfigMetadata,
+            input.departmentMetadata ?? null
+        );
+        const config = resolveOpportunityAttentionConfigFromMetadata(mergedMeta);
         const entity = opportunityRowToAttentionEntity(input.opportunityRow);
         const stale = input.activitySignal?.stale_signal ?? null;
+
+        let readiness = input.readiness ?? null;
+        const orgId = input.orgId != null ? String(input.orgId).trim() : "";
+        if (
+            readiness == null &&
+            orgId &&
+            isReadinessAttentionProjectionActive(config.readiness_projection)
+        ) {
+            const deptMeta =
+                input.departmentMetadata &&
+                typeof input.departmentMetadata === "object" &&
+                !Array.isArray(input.departmentMetadata)
+                    ? (input.departmentMetadata as Record<string, unknown>)
+                    : null;
+            readiness =
+                tryEvaluateOpportunityReadinessForAttention({
+                    orgId,
+                    opportunity: entity,
+                    departmentId: input.departmentId ?? null,
+                    workUnitId: input.workUnitId ?? null,
+                    departmentMetadata: deptMeta,
+                    memoScope: input.readinessMemoScope,
+                }) ?? null;
+        }
+
         const result = resolveOpportunityAttention({
             opportunity: entity,
             defs: input.defs,
             nowMs: input.nowMs ?? Date.now(),
             config,
             optionalSignals: stale ? { activityStale: stale } : null,
+            readiness,
+            readinessProjectionProfile: config.readiness_projection,
         });
         return { _operational_attention: result, _operational_attention_error: null };
     } catch (e) {

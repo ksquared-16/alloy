@@ -29,6 +29,16 @@ export const CANONICAL_CHILDCARE_ENROLLMENT_NEEDS_ATTENTION_BUCKETS_SEED = [
         reason_codes: ["stale_qualified"],
     },
     {
+        key: "required_information_missing",
+        label: "Required information missing",
+        description: "Enforced lifecycle field rules not satisfied",
+        enabled: true,
+        order: 35,
+        priority: 35,
+        icon: "clipboard-list",
+        reason_codes: ["missing_required_info"],
+    },
+    {
         key: "follow_up_overdue",
         label: "Follow-up commitment overdue",
         description: null,

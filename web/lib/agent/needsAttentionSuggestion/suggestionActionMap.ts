@@ -38,6 +38,11 @@ const MAP: Readonly<Record<OpportunityAttentionReasonCode, SuggestionActionRow>>
         label: "Link primary person or account",
         action_family: "update_record",
     },
+    missing_required_info: {
+        key: "complete_required_information",
+        label: "Complete required information",
+        action_family: "update_record",
+    },
     high_value_stale: {
         key: "reengage_priority_record",
         label: "Re-engage priority record",

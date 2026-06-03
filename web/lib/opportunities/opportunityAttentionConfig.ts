@@ -1,9 +1,16 @@
-import type { OpportunityAttentionReason } from "@/lib/workspace/opportunityAttentionRules";
+import type { StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
+import type { ReadinessMemoScope } from "@/lib/completion/readinessEvaluationMemo";
 import {
     DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1,
     parseOpportunityAttentionRuleConfigV1FromMetadata,
+    type OpportunityAttentionReason,
     type OpportunityAttentionRuleConfigV1,
 } from "@/lib/workspace/opportunityAttentionRules";
+import {
+    DEFAULT_READINESS_ATTENTION_PROJECTION_PROFILE_V1,
+    resolveReadinessAttentionProjectionProfileFromMetadata,
+    type ReadinessAttentionProjectionProfileV1,
+} from "@/lib/opportunities/readinessAttentionProjectionProfile";
 import {
     DEFAULT_WAIT_BUCKET_SLA_HOURS,
     PLATFORM_PRIMARY_REASON_PRIORITY_ORDER,
@@ -57,6 +64,8 @@ export type OpportunityAttentionResolvedConfig = {
     priority_score_weights?: Partial<
         Record<"severity" | "sla" | "value" | "multi_reason" | "commitment", number>
     >;
+    /** Readiness → attention projection policy (Phase 1). */
+    readiness_projection: ReadinessAttentionProjectionProfileV1;
 };
 
 const LEGACY_KEYS: OpportunityAttentionReason[] = [
@@ -82,6 +91,7 @@ function defaultPolicies(): Record<OpportunityAttentionReasonCode, OpportunityAt
         blocked_internal: { enabled: true, severity: DEFAULT_SEVERITY_BY_REASON.blocked_internal },
         waiting_on_staff: { enabled: true, severity: DEFAULT_SEVERITY_BY_REASON.waiting_on_staff },
         missing_identity: { enabled: true, severity: DEFAULT_SEVERITY_BY_REASON.missing_identity },
+        missing_required_info: { enabled: true, severity: DEFAULT_SEVERITY_BY_REASON.missing_required_info },
         overdue_commitment: { enabled: true, severity: DEFAULT_SEVERITY_BY_REASON.overdue_commitment },
         tour_date_passed: { enabled: true, severity: DEFAULT_SEVERITY_BY_REASON.tour_date_passed },
         follow_up_date_passed: { enabled: true, severity: DEFAULT_SEVERITY_BY_REASON.follow_up_date_passed },
@@ -107,6 +117,7 @@ function defaultLabels(): Record<OpportunityAttentionReasonCode, string> {
         blocked_internal: "Blocked internally",
         waiting_on_staff: "Waiting on staff",
         missing_identity: "Missing contact/customer",
+        missing_required_info: "Required information missing",
         overdue_commitment: "Commitment overdue",
         tour_date_passed: "Tour date passed — follow up",
         follow_up_date_passed: "Follow-up overdue",
@@ -138,6 +149,7 @@ export function createDefaultOpportunityAttentionResolvedConfig(): OpportunityAt
         wait_bucket_sla_hours: undefined,
         primary_reason_priority_order: null,
         priority_score_weights: undefined,
+        readiness_projection: { ...DEFAULT_READINESS_ATTENTION_PROJECTION_PROFILE_V1 },
     };
 }
 
@@ -245,6 +257,7 @@ function mergeOverrides(
  */
 export function resolveOpportunityAttentionConfigFromMetadata(metadata: unknown): OpportunityAttentionResolvedConfig {
     const out = createDefaultOpportunityAttentionResolvedConfig();
+    out.readiness_projection = resolveReadinessAttentionProjectionProfileFromMetadata(metadata);
     const root =
         metadata != null && typeof metadata === "object" && !Array.isArray(metadata)
             ? ((metadata as Record<string, unknown>).opportunity_attention_rules as Record<string, unknown> | undefined)
@@ -274,6 +287,55 @@ export function resolveOpportunityAttentionConfigFromMetadata(metadata: unknown)
     }
 
     return out;
+}
+
+/** Shared shape for {@link enrichOpportunityRows} readiness bridge inputs. */
+export function buildOpportunityAttentionEnrichResolution(input: {
+    defs: StatusDefinitionRow[];
+    config: OpportunityAttentionResolvedConfig;
+    nowMs: number;
+    departmentMetadata?: unknown | null;
+    departmentId?: string | null;
+    readinessMemoScope?: ReadinessMemoScope;
+}) {
+    return {
+        defs: input.defs,
+        config: input.config,
+        nowMs: input.nowMs,
+        departmentMetadata: input.departmentMetadata ?? null,
+        departmentId: input.departmentId ?? null,
+        readinessMemoScope: input.readinessMemoScope,
+    };
+}
+
+/** Work unit metadata overrides department for `opportunity_attention_rules` (matches bucket precedence). */
+export function mergeAttentionMetadataForConfig(
+    workUnitMetadata: unknown,
+    departmentMetadata: unknown
+): unknown {
+    if (workUnitMetadata == null && departmentMetadata == null) return null;
+    if (workUnitMetadata == null) return departmentMetadata;
+    if (departmentMetadata == null) return workUnitMetadata;
+    if (typeof workUnitMetadata !== "object" || Array.isArray(workUnitMetadata)) return departmentMetadata;
+    if (typeof departmentMetadata !== "object" || Array.isArray(departmentMetadata)) return workUnitMetadata;
+    const wu = workUnitMetadata as Record<string, unknown>;
+    const dept = departmentMetadata as Record<string, unknown>;
+    const wuRules = wu.opportunity_attention_rules;
+    const deptRules = dept.opportunity_attention_rules;
+    const mergedRules =
+        typeof deptRules === "object" && deptRules && !Array.isArray(deptRules)
+            ? {
+                  ...(deptRules as Record<string, unknown>),
+                  ...(typeof wuRules === "object" && wuRules && !Array.isArray(wuRules)
+                      ? (wuRules as Record<string, unknown>)
+                      : {}),
+              }
+            : wuRules;
+    return {
+        ...dept,
+        ...wu,
+        ...(mergedRules != null ? { opportunity_attention_rules: mergedRules } : {}),
+    };
 }
 
 export function effectivePrimaryReasonPriorityOrder(

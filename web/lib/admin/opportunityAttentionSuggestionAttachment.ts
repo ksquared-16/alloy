@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { ActivitySignalResult } from "@/lib/admin/activitySignals";
+import type { ReadinessMemoScope } from "@/lib/completion/readinessEvaluationMemo";
+import type { ReadinessResult } from "@/lib/completion/readinessTypes";
 import {
     loadOpportunityActivitySignal,
     type OpportunityActivitySignalOrgMetadata,
@@ -66,6 +68,10 @@ export async function attachOpportunityAttentionSuggestionBundle(params: {
     workUnitId: string | null;
     statusKey: string | null;
     preloadedActivityOrgMetadata?: OpportunityActivitySignalOrgMetadata | null;
+    departmentMetadata?: unknown | null;
+    departmentId?: string | null;
+    readiness?: ReadinessResult | null;
+    readinessMemoScope?: ReadinessMemoScope;
     nowMs?: number;
 }): Promise<{
     _operational_attention: OpportunityAttentionResult | null;
@@ -99,8 +105,14 @@ export async function attachOpportunityAttentionSuggestionBundle(params: {
         opportunityRow: params.opportunityRow,
         defs: params.defs,
         attentionConfigMetadata: params.attentionConfigMetadata,
+        departmentMetadata: params.departmentMetadata ?? null,
+        orgId: params.orgId,
+        departmentId: params.departmentId ?? null,
+        workUnitId: params.workUnitId,
         activitySignal: activity,
         nowMs,
+        readiness: params.readiness ?? null,
+        readinessMemoScope: params.readinessMemoScope,
     });
 
     const legacySuggestionInput =
