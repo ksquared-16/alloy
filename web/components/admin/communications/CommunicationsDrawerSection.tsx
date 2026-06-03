@@ -173,6 +173,26 @@ function communicationMessageInstant(m: MsgRow): string | null | undefined {
     return s && String(s).trim() ? s : null;
 }
 
+/**
+ * Numeric sort key for ordering messages oldest→newest. Parses each row's timestamp
+ * once (vs. inside the comparator, which re-parses O(n·log n) times); non-finite or
+ * absent values sort as 0 — identical to the prior inline comparator semantics.
+ */
+function messageSortTimestamp(m: { created_at?: string | null; sent_at?: string | null }): number {
+    const t = Date.parse(String(m.created_at ?? m.sent_at ?? 0));
+    return Number.isFinite(t) ? t : 0;
+}
+
+/** Stable oldest→newest order using a precomputed timestamp key (decorate-sort-undecorate). */
+function sortMessagesByInstantAscending<T extends { created_at?: string | null; sent_at?: string | null }>(
+    rows: T[],
+): T[] {
+    return rows
+        .map((row) => ({ row, ts: messageSortTimestamp(row) }))
+        .sort((a, b) => a.ts - b.ts)
+        .map((decorated) => decorated.row);
+}
+
 /** Compact bubble headline; keep delivery truth in a muted subline where needed. */
 function bubbleStatusLine(m: MsgRow): { headline: string; sub?: string } {
     const state = mapToDeliveryState(m);
@@ -580,12 +600,7 @@ export default function CommunicationsDrawerSection({
                     }),
                 );
                 if (!isCurrent()) return;
-                let merged = batches.flat();
-                merged.sort((a, b) => {
-                    const ta = Date.parse(String(a.created_at ?? a.sent_at ?? 0));
-                    const tb = Date.parse(String(b.created_at ?? b.sent_at ?? 0));
-                    return (Number.isFinite(ta) ? ta : 0) - (Number.isFinite(tb) ? tb : 0);
-                });
+                let merged = sortMessagesByInstantAscending(batches.flat());
                 const cap = 200;
                 if (merged.length > cap) merged = merged.slice(-cap);
                 setMsgs(merged);
@@ -973,12 +988,7 @@ export default function CommunicationsDrawerSection({
                             byId.add(row.id);
                         }
                     }
-                    merged.sort((a, b) => {
-                        const ta = Date.parse(String(a.created_at ?? a.sent_at ?? 0));
-                        const tb = Date.parse(String(b.created_at ?? b.sent_at ?? 0));
-                        return (Number.isFinite(ta) ? ta : 0) - (Number.isFinite(tb) ? tb : 0);
-                    });
-                    return merged;
+                    return sortMessagesByInstantAscending(merged);
                 });
                 setShowOlderMessages(false);
             }
