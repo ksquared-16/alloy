@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
+import clsx from "clsx";
 
 import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
@@ -13,7 +14,14 @@ import {
     type OperationalRecommendationHandoffCopy,
 } from "@/lib/adminV2/bos/operationalRecommendationHandoff";
 import { opLabelCaps, opMetadata } from "@/lib/operational/ui/operationalVisualTokens";
-import clsx from "clsx";
+import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import { operationalWorkAssigneeCompactLabel } from "@/lib/admin/operationalWork/operationalWorkAssigneePresentation";
+import {
+    fetchCommunicationScheduledSends,
+    fetchOperationalTasks,
+    patchOperationalTaskStatus,
+    readJson,
+} from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 import OperationalTaskDetailPopover, {
     type OperationalTaskDetail,
 } from "@/components/admin/opportunity/OperationalTaskDetailPopover";
@@ -24,16 +32,14 @@ import { scheduledSendAttentionCounts } from "@/lib/agent/taskAssist/taskAssistS
 import {
     ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS,
     ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH,
+    ADMIN_V2_OPEN_CREATE_WORK_MODAL,
     type OpportunityFocusOperationalTasksDetail,
     type OpportunityOperationalTasksRefreshDetail,
+    type OpportunityOpenCreateWorkModalDetail,
 } from "@/lib/adminV2/opportunityDrawerTaskEvents";
 import { formatTaskAssistClientError } from "@/lib/agent/taskAssist/taskAssistClientErrorMessages";
-import {
-    fetchCommunicationScheduledSends,
-    fetchOperationalTasks,
-    readJson,
-} from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
+import { isOperationalWorkV1Enabled } from "@/lib/admin/operationalWork/operationalWorkV1UiGate";
 import {
     operationalTaskUrgencyBadge,
     scheduledSendStripVisible,
@@ -165,6 +171,8 @@ type OperationalTaskRow = {
     status: string;
     source: string;
     description?: string | null;
+    assigned_to_user_id?: string | null;
+    assignee_label?: string | null;
     created_at?: string;
     created_by?: string;
     entity_id?: string;
@@ -244,7 +252,10 @@ export default function OpportunityOperationalCompactStrip({
     hideTasksSection = false,
     rightColumnModel,
 }: OpportunityOperationalCompactStripProps) {
-    const v11 = isTaskAssistV1UiEnabled();
+    const workEnabled = isOperationalWorkV1Enabled();
+    const taskAssistEnabled = isTaskAssistV1UiEnabled();
+    const { userId } = useAdminAuth();
+    const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
     const onDemandTasks = tasksLoadMode === "on_demand";
     const [tasksExpanded, setTasksExpanded] = useState(false);
     const adminDrawer = useAdminDrawerOptional();
@@ -259,18 +270,23 @@ export default function OpportunityOperationalCompactStrip({
     const sendChipRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
     const load = useCallback(async () => {
-        if (!fetchEnabled || !v11 || !opportunityId) return;
+        if (!fetchEnabled || !opportunityId) return;
         if (onDemandTasks && !tasksExpanded) return;
+        if (!workEnabled && !taskAssistEnabled) return;
         setLoading(true);
         setError(null);
         try {
+            const emptyTasksResponse = () =>
+                new Response(JSON.stringify({ ok: true, tasks: [] }), { status: 200 });
+            const emptySendsResponse = () =>
+                new Response(JSON.stringify({ ok: true, scheduled_sends: [] }), { status: 200 });
             const [taskRes, sendRes] = await Promise.all([
-                hideTasksSection ?
-                    Promise.resolve(
-                        new Response(JSON.stringify({ ok: true, tasks: [] }), { status: 200 })
-                    )
-                :   fetchOperationalTasks(opportunityId),
-                fetchCommunicationScheduledSends(opportunityId),
+                workEnabled && !hideTasksSection ?
+                    fetchOperationalTasks(opportunityId)
+                :   Promise.resolve(emptyTasksResponse()),
+                taskAssistEnabled ?
+                    fetchCommunicationScheduledSends(opportunityId)
+                :   Promise.resolve(emptySendsResponse()),
             ]);
             const taskJson = await readJson<{ ok?: boolean; tasks?: OperationalTaskRow[]; error?: string; message?: string }>(
                 taskRes
@@ -296,7 +312,7 @@ export default function OpportunityOperationalCompactStrip({
         } finally {
             setLoading(false);
         }
-    }, [fetchEnabled, hideTasksSection, onDemandTasks, opportunityId, tasksExpanded, v11]);
+    }, [fetchEnabled, hideTasksSection, onDemandTasks, opportunityId, taskAssistEnabled, tasksExpanded, workEnabled]);
 
     const openTasks = useMemo(() => tasks.filter((t) => t.status === "open"), [tasks]);
     const stripSends = useMemo(
@@ -351,6 +367,8 @@ export default function OpportunityOperationalCompactStrip({
             source: popoverTask.source,
             entity_id: opportunityId,
             entity_type: "opportunities",
+            assigned_to_user_id: popoverTask.assigned_to_user_id ?? null,
+            assignee_label: popoverTask.assignee_label ?? null,
             created_at: popoverTask.created_at,
             created_by: popoverTask.created_by,
             entity_label: entityLabel,
@@ -447,7 +465,44 @@ export default function OpportunityOperationalCompactStrip({
         });
     }, [globalAssistant, opportunityId, entityLabel, overviewData]);
 
-    if (!v11) return null;
+    const openCreateWorkModal = useCallback(() => {
+        if (!workEnabled || !opportunityId || typeof window === "undefined") return;
+        window.dispatchEvent(
+            new CustomEvent<OpportunityOpenCreateWorkModalDetail>(ADMIN_V2_OPEN_CREATE_WORK_MODAL, {
+                detail: { opportunity_id: opportunityId },
+            })
+        );
+    }, [opportunityId, workEnabled]);
+
+    const onCompleteTask = useCallback(
+        async (taskId: string) => {
+            setCompletingTaskId(taskId);
+            setError(null);
+            try {
+                const res = await patchOperationalTaskStatus(taskId, "completed");
+                const json = await readJson<{ ok?: boolean; error?: string; message?: string }>(res);
+                if (!res.ok || !json.ok) {
+                    throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
+                }
+                setPopoverTaskId((prev) => (prev === taskId ? null : prev));
+                void load();
+                if (typeof window !== "undefined" && opportunityId) {
+                    window.dispatchEvent(
+                        new CustomEvent(ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH, {
+                            detail: { opportunity_id: opportunityId },
+                        })
+                    );
+                }
+            } catch (e: unknown) {
+                setError(formatTaskAssistClientError((e as Error).message));
+            } finally {
+                setCompletingTaskId(null);
+            }
+        },
+        [load, opportunityId]
+    );
+
+    if (!workEnabled && !taskAssistEnabled) return null;
 
     const inquirySummary = layout === "inquiry_summary";
     const atomicRightColumn = inquirySummary && hideTasksSection && rightColumnModel != null;
@@ -480,6 +535,8 @@ export default function OpportunityOperationalCompactStrip({
         showNextFollowUp,
         hasError: Boolean(error),
     });
+    const showWorkStrip =
+        workEnabled && (openTasks.length > 0 || (loading && !hideTasksSection && !onDemandTasks));
     if (!inquirySummary && !hasChips && !loading && !error) return null;
 
     const chipRowClass = inquirySummary ? "flex w-full flex-wrap gap-1" : "flex w-full flex-wrap justify-end gap-1";
@@ -492,12 +549,46 @@ export default function OpportunityOperationalCompactStrip({
     /** Orchestrator entry lives on record header actions (refinement pass). */
     const showHandoffCard = false;
 
+    const renderCreateWorkButton = () =>
+        workEnabled ? (
+            <button
+                type="button"
+                data-operational-work-create="true"
+                onClick={(e) => {
+                    e.stopPropagation();
+                    openCreateWorkModal();
+                }}
+                className={`${CHIP} cursor-pointer border-dashed border-alloy-stone/35 bg-white text-alloy-blue hover:border-alloy-blue/35 hover:bg-alloy-blue/[0.04]`}
+            >
+                + Add follow-up
+            </button>
+        ) : null;
+
     const renderTaskChips = () =>
         openTasks.map((t) => {
             const selected = popoverTaskId === t.id;
             const taskBadge = operationalTaskUrgencyBadge(t);
+            const assignee = operationalWorkAssigneeCompactLabel({
+                assignedToUserId: t.assigned_to_user_id,
+                assigneeLabel: t.assignee_label,
+                currentUserId: userId,
+            });
+            const completing = completingTaskId === t.id;
             return (
-                <div key={t.id} className="relative">
+                <div key={t.id} className="relative inline-flex items-center gap-0.5">
+                    <button
+                        type="button"
+                        aria-label={`Complete ${t.title}`}
+                        disabled={completing}
+                        data-operational-work-complete={t.id}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            void onCompleteTask(t.id);
+                        }}
+                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-alloy-stone/25 bg-white text-alloy-midnight/55 hover:border-alloy-blue/35 hover:text-alloy-blue disabled:opacity-45"
+                    >
+                        <Check className="h-3 w-3" strokeWidth={2.5} aria-hidden />
+                    </button>
                     <button
                         type="button"
                         ref={(el) => {
@@ -519,7 +610,7 @@ export default function OpportunityOperationalCompactStrip({
                     >
                         {!inquirySummary ? (
                             <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide opacity-80">
-                                Task
+                                Work
                             </span>
                         ) : null}
                         <span className="truncate font-semibold">{t.title}</span>
@@ -528,6 +619,11 @@ export default function OpportunityOperationalCompactStrip({
                         >
                             {taskBadge.label}
                         </span>
+                        {assignee ? (
+                            <span className="shrink-0 opacity-70" data-operational-task-assignee-chip="true">
+                                · {assignee}
+                            </span>
+                        ) : null}
                         <span className="shrink-0 opacity-75">· {shortWhen(t.due_at)}</span>
                     </button>
                     {selected && popoverDetail ? (
@@ -639,10 +735,13 @@ export default function OpportunityOperationalCompactStrip({
                     {loading && !hasChips && !atomicRightColumn ? (
                         <p className="text-[11px] text-alloy-midnight/50">Loading tasks and reminders…</p>
                     ) : null}
-                    {!hideTasksSection && openTasks.length > 0 ? (
-                        <div data-operational-strip-group="tasks">
-                            <div className={INQUIRY_RIGHT_COLUMN_GROUP_LABEL_CLASS}>Tasks</div>
-                            <div className={`mt-1 ${chipRowClass}`}>{renderTaskChips()}</div>
+                    {!hideTasksSection && (openTasks.length > 0 || (workEnabled && loading)) ? (
+                        <div data-operational-strip-group="work">
+                            <div className={INQUIRY_RIGHT_COLUMN_GROUP_LABEL_CLASS}>Work</div>
+                            <div className={`mt-1 ${chipRowClass}`}>
+                                {renderTaskChips()}
+                                {showWorkStrip ? renderCreateWorkButton() : null}
+                            </div>
                         </div>
                     ) : null}
                     {showRemindersSection ? (
@@ -691,6 +790,7 @@ export default function OpportunityOperationalCompactStrip({
                     ) : null}
                     {renderReminderChips()}
                     {renderTaskChips()}
+                    {showWorkStrip ? renderCreateWorkButton() : null}
                 </div>
             )}
             {atomicRightColumn && rightColumnModel.orchestrator_handoff.visible ? (

@@ -48,14 +48,18 @@ import EntityDocumentsSection from "@/components/admin/EntityDocumentsSection";
 import { normalizeDocumentRows } from "@/lib/admin/normalizeDocumentRow";
 import CommunicationsDrawerSection from "@/components/admin/communications/CommunicationsDrawerSection";
 import OpportunityOperationalCompactStrip from "@/components/admin/opportunity/OpportunityOperationalCompactStrip";
+import OpportunityRecordCreateWorkModal from "@/components/admin/opportunity/OpportunityRecordCreateWorkModal";
 import { OpportunityInquirySummaryRightColumn } from "@/components/admin/opportunity/OpportunityInquirySummaryRightColumn";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { buildOpportunityOperationalContext } from "@/lib/adminV2/bos/activeOperationalContext";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
+import { isOperationalWorkV1Enabled } from "@/lib/admin/operationalWork/operationalWorkV1UiGate";
 import {
     ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS,
     ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH,
+    ADMIN_V2_OPEN_CREATE_WORK_MODAL,
     type OpportunityFocusOperationalTasksDetail,
+    type OpportunityOpenCreateWorkModalDetail,
 } from "@/lib/adminV2/opportunityDrawerTaskEvents";
 import {
     scheduleDeferredCommunicationsDrawerPrefetch,
@@ -1749,6 +1753,10 @@ export default function AdminEntityDrawer() {
     const [oppQuoteIntakeOpen, setOppQuoteIntakeOpen] = useState(false);
     const [oppLaunchPacketOpen, setOppLaunchPacketOpen] = useState(false);
     const [oppSendFormOpen, setOppSendFormOpen] = useState(false);
+    const [oppCreateWorkOpen, setOppCreateWorkOpen] = useState(false);
+    const [oppCreateWorkPrefill, setOppCreateWorkPrefill] = useState<
+        OpportunityOpenCreateWorkModalDetail["prefill"] | undefined
+    >(undefined);
     const [oppDiscountOptions, setOppDiscountOptions] = useState<{ value: string; label: string }[] | null>(null);
     const [oppDiscountLoading, setOppDiscountLoading] = useState(false);
     const [oppDiscountSelection, setOppDiscountSelection] = useState<string>("");
@@ -4231,6 +4239,14 @@ export default function AdminEntityDrawer() {
         };
         window.addEventListener(ADMINV2_OPEN_TOUR_SCHEDULE_MODAL, onOpenTourSchedule as EventListener);
         window.addEventListener(ADMINV2_OPEN_TOUR_OUTCOME_MODAL, onOpenTourOutcome as EventListener);
+        const onOpenCreateWork = (ev: Event) => {
+            const detail = (ev as CustomEvent<OpportunityOpenCreateWorkModalDetail>).detail;
+            const id = detail?.opportunity_id?.trim() ?? "";
+            if (!id || drawer.type !== "opportunities" || drawer.id !== id) return;
+            setOppCreateWorkPrefill(detail.prefill ?? undefined);
+            setOppCreateWorkOpen(true);
+        };
+        window.addEventListener(ADMIN_V2_OPEN_CREATE_WORK_MODAL, onOpenCreateWork as EventListener);
         return () => {
             window.removeEventListener("adminv2:open-send-form", onOpenSendForm as EventListener);
             window.removeEventListener("adminv2:open-enrollment-packet", onOpenEnrollmentPacket as EventListener);
@@ -4241,6 +4257,7 @@ export default function AdminEntityDrawer() {
             window.removeEventListener(ADMINV2_OPEN_ADD_PERSON_MODAL, onOpenAddPerson as EventListener);
             window.removeEventListener(ADMINV2_OPEN_TOUR_SCHEDULE_MODAL, onOpenTourSchedule as EventListener);
             window.removeEventListener(ADMINV2_OPEN_TOUR_OUTCOME_MODAL, onOpenTourOutcome as EventListener);
+            window.removeEventListener(ADMIN_V2_OPEN_CREATE_WORK_MODAL, onOpenCreateWork as EventListener);
         };
     }, [drawer.type, drawer.id, openAddInquiryChildModal, openAddPersonModal]);
 
@@ -7262,7 +7279,7 @@ export default function AdminEntityDrawer() {
                     })()}
                     {drawer.id &&
                         drawer.id !== "new" &&
-                        isTaskAssistV1UiEnabled() &&
+                        isOperationalWorkV1Enabled() &&
                         !opportunityInquiryWorkflowDrawer ? (
                         <OpportunityOperationalCompactStrip
                             opportunityId={drawer.id}
@@ -7991,7 +8008,8 @@ export default function AdminEntityDrawer() {
                     recordOpportunityDrawerLayoutIncludesSection(layoutCfg, "family_contacts"),
                 summary_right_column_reserved:
                     opportunityDrawerShellContract?.geometry.summary_right_column_reserved === true ||
-                    (opportunityInquiryWorkflowDrawer && isTaskAssistV1UiEnabled()),
+                    (opportunityInquiryWorkflowDrawer &&
+                        (isOperationalWorkV1Enabled() || isTaskAssistV1UiEnabled())),
                 what_matters_reserved: opportunityInquiryWorkflowDrawer,
                 inquiry_children_section_visible:
                     opportunityDrawerShellContract?.section_slots.some((s) => s.section_key === "inquiry_children") ===
@@ -15666,6 +15684,7 @@ export default function AdminEntityDrawer() {
                                                                                 >
                                                                                     {drawer.id &&
                                                                                         drawer.id !== "new" &&
+                                                                                        isOperationalWorkV1Enabled() ||
                                                                                         isTaskAssistV1UiEnabled() ? (
                                                                                         <OpportunityInquirySummaryRightColumn
                                                                                             model={
@@ -17733,6 +17752,30 @@ export default function AdminEntityDrawer() {
                             {personDrawerShowLoadingShell ? "Loading person…" : "Person record unavailable."}
                         </p>
                     </div>
+                ) : null}
+                {drawer.type === "opportunities" && drawer.id && drawer.id !== "new" && oppCreateWorkOpen ? (
+                    <OpportunityRecordCreateWorkModal
+                        open={oppCreateWorkOpen}
+                        opportunityId={String(drawer.id)}
+                        entityLabel={String((data as { name?: string } | null)?.name ?? "").trim() || null}
+                        prefill={oppCreateWorkPrefill}
+                        lifecycleStageKey={
+                            typeof (data as { _effective_lifecycle_stage?: unknown } | null)?._effective_lifecycle_stage ===
+                            "string"
+                                ? String((data as { _effective_lifecycle_stage: string })._effective_lifecycle_stage).trim() ||
+                                  null
+                                : null
+                        }
+                        recordOwnerUserId={
+                            typeof (data as { assigned_to?: unknown } | null)?.assigned_to === "string"
+                                ? String((data as { assigned_to: string }).assigned_to).trim() || null
+                                : null
+                        }
+                        onClose={() => {
+                            setOppCreateWorkOpen(false);
+                            setOppCreateWorkPrefill(undefined);
+                        }}
+                    />
                 ) : null}
                 {drawer.type === "opportunities" && drawer.id && drawer.id !== "new" && oppSendFormOpen ? (
                     <SendFormToOpportunityModal

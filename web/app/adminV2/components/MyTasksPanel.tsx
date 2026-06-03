@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ListTodo } from "lucide-react";
 
+import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import { defaultOperationalWorkDueLocal } from "@/lib/admin/operationalWork/operationalWorkDateTimeLocal";
 import MyTasksCreateTaskCard, {
     type MyTasksCreateLinkMode,
     type MyTasksCreateLinkedRecord,
@@ -31,7 +33,7 @@ import {
     getCachedWorkspaceOperationalTasks,
     setCachedWorkspaceOperationalTasks,
 } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
-import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
+import { isOperationalWorkV1Enabled } from "@/lib/admin/operationalWork/operationalWorkV1UiGate";
 import type { MyTasksTaskRow } from "@/lib/agent/taskAssist/myTasksTaskTypes";
 import {
     applyEntityLabelToMyTasksCopy,
@@ -43,6 +45,8 @@ export type { MyTasksTaskRow };
 
 const FILTERS: { key: OperationalTaskWorkspaceFilter; label: string }[] = [
     { key: "open", label: "Open" },
+    { key: "assigned_to_me", label: "Mine" },
+    { key: "unassigned", label: "Unassigned" },
     { key: "due_today", label: "Due today" },
     { key: "overdue", label: "Overdue" },
     { key: "completed", label: "Completed" },
@@ -91,7 +95,8 @@ export type MyTasksPanelProps = {
 };
 
 export default function MyTasksPanel({ compact = false, onClose, onFilterCountChange }: MyTasksPanelProps) {
-    const v11 = isTaskAssistV1UiEnabled();
+    const workEnabled = isOperationalWorkV1Enabled();
+    const { userId } = useAdminAuth();
     const { labels: entityLabels } = useEntityLabelsOptional();
     const siteFilter = useWorkspaceSiteFilter();
     const adminDrawer = useAdminDrawerOptional();
@@ -127,17 +132,20 @@ export default function MyTasksPanel({ compact = false, onClose, onFilterCountCh
     const [createLinkMode, setCreateLinkMode] = useState<MyTasksCreateLinkMode>("general");
     const [createLinkedRecord, setCreateLinkedRecord] = useState<MyTasksCreateLinkedRecord | null>(null);
     const [newTitle, setNewTitle] = useState("");
-    const [newDue, setNewDue] = useState("");
+    const [newDue, setNewDue] = useState(defaultOperationalWorkDueLocal);
     const [newNotes, setNewNotes] = useState("");
+    const [newAssignedToUserId, setNewAssignedToUserId] = useState<string | null>(null);
+    const [editAssignedToUserId, setEditAssignedToUserId] = useState<string | null>(null);
     const [createBusy, setCreateBusy] = useState(false);
 
     const resetCreateForm = useCallback(() => {
         setNewTitle("");
-        setNewDue("");
+        setNewDue(defaultOperationalWorkDueLocal());
         setNewNotes("");
+        setNewAssignedToUserId(userId?.trim() || null);
         setCreateLinkMode(contextPrefill ? "linked" : "general");
         setCreateLinkedRecord(contextPrefill);
-    }, [contextPrefill]);
+    }, [contextPrefill, userId]);
 
     const openCreateForm = useCallback(() => {
         resetCreateForm();
@@ -145,7 +153,7 @@ export default function MyTasksPanel({ compact = false, onClose, onFilterCountCh
     }, [resetCreateForm]);
 
     const load = useCallback(async () => {
-        if (!v11) return;
+        if (!workEnabled) return;
         const cached = getCachedWorkspaceOperationalTasks(filter);
         if (cached) {
             setTasks(cached);
@@ -169,7 +177,7 @@ export default function MyTasksPanel({ compact = false, onClose, onFilterCountCh
         } finally {
             setLoading(false);
         }
-    }, [filter, v11]);
+    }, [filter, workEnabled]);
 
     useEffect(() => {
         void load();
@@ -219,6 +227,10 @@ export default function MyTasksPanel({ compact = false, onClose, onFilterCountCh
     const clearForms = useCallback(() => {
         setEditingId(null);
         setRescheduleId(null);
+        setEditTitle("");
+        setEditDue("");
+        setEditNotes("");
+        setEditAssignedToUserId(null);
     }, []);
 
     const onOpenRecord = useCallback(
@@ -267,6 +279,7 @@ export default function MyTasksPanel({ compact = false, onClose, onFilterCountCh
             setEditTitle(task.title);
             setEditDue(operationalTaskDueToLocalInput(task.due_at));
             setEditNotes(task.description ?? "");
+            setEditAssignedToUserId(task.assigned_to_user_id ?? null);
         },
         []
     );
@@ -286,6 +299,7 @@ export default function MyTasksPanel({ compact = false, onClose, onFilterCountCh
                 title: editTitle,
                 description: editNotes.trim() || null,
                 due_at: new Date(editDue).toISOString(),
+                assigned_to_user_id: editAssignedToUserId,
             });
             const json = await readJson<{ ok?: boolean; error?: string; message?: string }>(res);
             if (!res.ok || !json.ok) throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
@@ -297,7 +311,7 @@ export default function MyTasksPanel({ compact = false, onClose, onFilterCountCh
         } finally {
             setActionId(null);
         }
-    }, [clearForms, dispatchRefresh, editDue, editNotes, editTitle, editingId, load]);
+    }, [clearForms, dispatchRefresh, editAssignedToUserId, editDue, editNotes, editTitle, editingId, load]);
 
     const saveReschedule = useCallback(async () => {
         if (!rescheduleId) return;
@@ -332,6 +346,7 @@ export default function MyTasksPanel({ compact = false, onClose, onFilterCountCh
                 description: newNotes,
                 source: "manual",
                 proposalId: null,
+                assignedToUserId: newAssignedToUserId,
             });
             const res = await createOperationalTask(body);
             const json = await readJson<{ ok?: boolean; error?: string; message?: string }>(res);
@@ -345,7 +360,7 @@ export default function MyTasksPanel({ compact = false, onClose, onFilterCountCh
         } finally {
             setCreateBusy(false);
         }
-    }, [createLinkMode, createLinkedRecord, dispatchRefresh, load, newDue, newNotes, newTitle, resetCreateForm]);
+    }, [createLinkMode, createLinkedRecord, dispatchRefresh, load, newAssignedToUserId, newDue, newNotes, newTitle, resetCreateForm]);
 
     const emptyLabel = useMemo(() => {
         switch (filter) {
@@ -353,6 +368,10 @@ export default function MyTasksPanel({ compact = false, onClose, onFilterCountCh
                 return "No tasks due today";
             case "overdue":
                 return "No overdue tasks";
+            case "assigned_to_me":
+                return "Nothing assigned to you";
+            case "unassigned":
+                return "No unassigned tasks";
             case "completed":
                 return "No completed or dismissed tasks";
             default:
@@ -360,8 +379,8 @@ export default function MyTasksPanel({ compact = false, onClose, onFilterCountCh
         }
     }, [filter]);
 
-    if (!v11) {
-        return <p className="text-sm text-alloy-midnight/70">Task Assist is not enabled.</p>;
+    if (!workEnabled) {
+        return <p className="text-sm text-alloy-midnight/70">Operational work is not enabled.</p>;
     }
 
     const listRegionClass = compact ? "min-h-0 flex-1 overflow-y-auto pr-0.5" : "";
@@ -434,12 +453,14 @@ export default function MyTasksPanel({ compact = false, onClose, onFilterCountCh
                 title={newTitle}
                 due={newDue}
                 notes={newNotes}
+                assignedToUserId={newAssignedToUserId}
                 busy={createBusy}
                 onLinkModeChange={setCreateLinkMode}
                 onLinkedRecordChange={setCreateLinkedRecord}
                 onTitleChange={setNewTitle}
                 onDueChange={setNewDue}
                 onNotesChange={setNewNotes}
+                onAssignedToUserIdChange={setNewAssignedToUserId}
                 onCreate={() => void onCreateTask()}
                 onCancel={() => setCreateOpen(false)}
             />
@@ -494,9 +515,11 @@ export default function MyTasksPanel({ compact = false, onClose, onFilterCountCh
                                     editTitle={editTitle}
                                     editDue={editDue}
                                     editNotes={editNotes}
+                                    editAssignedToUserId={editAssignedToUserId}
                                     onEditTitleChange={setEditTitle}
                                     onEditDueChange={setEditDue}
                                     onEditNotesChange={setEditNotes}
+                                    onEditAssignedToUserIdChange={setEditAssignedToUserId}
                                     onComplete={() => void onPatchStatus(t.id, "completed")}
                                     onDismiss={() => void onPatchStatus(t.id, "canceled")}
                                     onStartEdit={() => startEdit(t)}

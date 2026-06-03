@@ -16,6 +16,8 @@ describe("OperationalTaskDetailPopover", () => {
         expect(src).toContain("patchOperationalTaskFields");
         expect(src).toContain('data-operational-task-edit="true"');
         expect(src).toContain("formatOperationalTaskSourceLabel");
+        expect(src).toContain('data-operational-task-assignee="true"');
+        expect(src).toContain("OperationalWorkAssigneeSelect");
         expect(src).not.toContain("{task.source}");
         expect(src).toContain('data-operational-task-source-label="true"');
     });

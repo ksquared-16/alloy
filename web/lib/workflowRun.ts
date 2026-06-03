@@ -20,6 +20,7 @@ import { enqueueCanonicalCommunicationMirror } from "@/lib/communications/mirror
 import { logCommDualWrite, orgIdTail } from "@/lib/communications/mirrorObservation";
 import { assertWorkflowStatusMutationGrain } from "@/lib/admin/actions/resolveStatusMutationGrain";
 import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
+import { executeInstantiateWorkWorkflowAction } from "@/lib/admin/operationalWork/workflowInstantiateWork/executeInstantiateWorkWorkflowAction";
 
 /** Standard event payload shape; all entity keys optional. Do not crash if missing. */
 export type WorkflowEventPayload = {
@@ -1282,7 +1283,15 @@ async function enrichWorkflowEventPayloadEntities(supabase: SupabaseClient, payl
     const oppIdFromPayload = existingOpp?.id != null ? String(existingOpp.id).trim() : "";
     const oppIdFromJob =
         jobForOpp?.opportunity_id != null ? String(jobForOpp.opportunity_id).trim() : "";
-    const oppId = oppIdFromPayload || oppIdFromJob;
+    let oppId = oppIdFromPayload || oppIdFromJob;
+
+    if (!oppId) {
+        const entityTypeRaw = p.entity_type != null ? String(p.entity_type).trim().toLowerCase() : "";
+        const entityIdRaw = p.entity_id != null ? String(p.entity_id).trim() : "";
+        if (entityIdRaw && (entityTypeRaw === "opportunities" || entityTypeRaw === "opportunity")) {
+            oppId = entityIdRaw;
+        }
+    }
 
     if (oppId) {
         const { data: oFull } = await supabase.from("opportunities").select("*").eq("id", oppId).maybeSingle();
@@ -2455,6 +2464,32 @@ export async function executeWorkflowRun(
                     logs.push(renderTemplate(message, payload));
                     actionOutputs = { message: renderTemplate(message, payload) };
                     actionCompleted = true;
+                    break;
+                }
+                case "instantiate_work": {
+                    const instantiateResult = await executeInstantiateWorkWorkflowAction({
+                        supabase,
+                        orgId: orgId ?? "",
+                        workflowId,
+                        workflowRunId: runId,
+                        eventId: options?.event_id ?? null,
+                        actionOrder: action.action_order ?? 0,
+                        workflowActionId: (action as { id?: string }).id ?? null,
+                        actionPayload: pl,
+                        workflowPayload: payload as Record<string, unknown>,
+                    });
+                    logs.push(instantiateResult.log);
+                    actionOutputs = instantiateResult.outputs;
+                    if (instantiateResult.status === "skipped") {
+                        actionSkipped = true;
+                        skipReason = instantiateResult.skipReason ?? "instantiate_work_skipped";
+                    } else {
+                        actionCompleted = true;
+                        const taskId = instantiateResult.outputs.task_id;
+                        if (taskId) {
+                            (payload as Record<string, unknown>)._last_instantiated_work_id = taskId;
+                        }
+                    }
                     break;
                 }
                 default:

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
-import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
+import { isOperationalWorkV1Enabled } from "@/lib/admin/operationalWork/operationalWorkV1UiGate";
 import { runWhenAdminV2PrimarySurfaceReady } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { usePathname } from "next/navigation";
 import { palette, neutral, derived } from "@/styles/tokens/colors";
@@ -132,7 +132,7 @@ export default function TopNavBar() {
 
   useEffect(() => {
     const onOpenTasks = () => {
-      if (!isTaskAssistV1UiEnabled()) return;
+      if (!isOperationalWorkV1Enabled()) return;
       prefetchWorkspaceOperationalTasks("open");
       setTasksModalOpen(true);
     };
@@ -141,7 +141,7 @@ export default function TopNavBar() {
   }, []);
 
   useEffect(() => {
-    if (!isTaskAssistV1UiEnabled()) return;
+    if (!isOperationalWorkV1Enabled()) return;
     const cancelDefer = runWhenAdminV2PrimarySurfaceReady(
       () => prefetchWorkspaceOperationalTasks("open"),
       "operational_tasks_topnav_prefetch"

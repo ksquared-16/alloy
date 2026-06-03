@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { minDatetimeLocalValue } from "@/components/admin/taskAssist/TaskAssistOpportunityWorkspace";
+import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import OperationalWorkAssigneeSelect from "@/components/admin/opportunity/OperationalWorkAssigneeSelect";
+import { minOperationalWorkDatetimeLocalValue } from "@/lib/admin/operationalWork/operationalWorkDateTimeLocal";
 import type { MyTasksPresentationLabels } from "@/lib/agent/taskAssist/myTasksPresentationLabels";
 import {
     fetchTaskAssistEntitySearch,
@@ -28,12 +30,14 @@ export type MyTasksCreateTaskCardProps = {
     title: string;
     due: string;
     notes: string;
+    assignedToUserId: string | null;
     busy: boolean;
     onLinkModeChange: (mode: MyTasksCreateLinkMode) => void;
     onLinkedRecordChange: (record: MyTasksCreateLinkedRecord | null) => void;
     onTitleChange: (value: string) => void;
     onDueChange: (value: string) => void;
     onNotesChange: (value: string) => void;
+    onAssignedToUserIdChange: (value: string | null) => void;
     onCreate: () => void;
     onCancel: () => void;
 };
@@ -54,15 +58,18 @@ export default function MyTasksCreateTaskCard({
     title,
     due,
     notes,
+    assignedToUserId,
     busy,
     onLinkModeChange,
     onLinkedRecordChange,
     onTitleChange,
     onDueChange,
     onNotesChange,
+    onAssignedToUserIdChange,
     onCreate,
     onCancel,
 }: MyTasksCreateTaskCardProps) {
+    const { userId } = useAdminAuth();
     const [recordQuery, setRecordQuery] = useState("");
     const [searchBusy, setSearchBusy] = useState(false);
     const [searchError, setSearchError] = useState<string | null>(null);
@@ -299,10 +306,26 @@ export default function MyTasksCreateTaskCard({
                     id="adminv2-create-task-due"
                     type="datetime-local"
                     value={due}
-                    min={minDatetimeLocalValue()}
+                    min={minOperationalWorkDatetimeLocalValue()}
                     onChange={(e) => onDueChange(e.target.value)}
                     className="w-full rounded-lg border border-alloy-stone/25 px-2.5 py-2 text-[13px]"
                     data-adminv2-create-task-due="true"
+                />
+            </div>
+
+            <div>
+                <label
+                    htmlFor="adminv2-create-task-assignee"
+                    className="mb-1 block text-[12px] font-medium text-alloy-midnight/80"
+                >
+                    Assigned to
+                </label>
+                <OperationalWorkAssigneeSelect
+                    id="adminv2-create-task-assignee"
+                    value={assignedToUserId}
+                    currentUserId={userId}
+                    disabled={busy}
+                    onChange={onAssignedToUserIdChange}
                 />
             </div>
 

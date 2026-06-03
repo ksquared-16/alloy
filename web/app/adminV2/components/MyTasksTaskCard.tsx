@@ -11,7 +11,10 @@ import {
     operationalTaskUrgencyBadge,
     type OperationalTaskDueUrgency,
 } from "@/lib/agent/taskAssist/taskAssistOperationalUrgency";
-import { minDatetimeLocalValue } from "@/components/admin/taskAssist/TaskAssistOpportunityWorkspace";
+import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import OperationalWorkAssigneeSelect from "@/components/admin/opportunity/OperationalWorkAssigneeSelect";
+import { operationalWorkAssigneeDetailLabel } from "@/lib/admin/operationalWork/operationalWorkAssigneePresentation";
+import { minOperationalWorkDatetimeLocalValue } from "@/lib/admin/operationalWork/operationalWorkDateTimeLocal";
 import type { EntityLabelsMap } from "@/contexts/EntityLabelsContext";
 
 import type { MyTasksTaskRow } from "@/lib/agent/taskAssist/myTasksTaskTypes";
@@ -28,9 +31,11 @@ export type MyTasksTaskCardProps = {
     editTitle: string;
     editDue: string;
     editNotes: string;
+    editAssignedToUserId: string | null;
     onEditTitleChange: (value: string) => void;
     onEditDueChange: (value: string) => void;
     onEditNotesChange: (value: string) => void;
+    onEditAssignedToUserIdChange: (value: string | null) => void;
     onComplete: () => void;
     onDismiss: () => void;
     onStartEdit: () => void;
@@ -62,9 +67,11 @@ export default function MyTasksTaskCard({
     editTitle,
     editDue,
     editNotes,
+    editAssignedToUserId,
     onEditTitleChange,
     onEditDueChange,
     onEditNotesChange,
+    onEditAssignedToUserIdChange,
     onComplete,
     onDismiss,
     onStartEdit,
@@ -74,12 +81,18 @@ export default function MyTasksTaskCard({
     onCancelForm,
     onOpenRecord,
 }: MyTasksTaskCardProps) {
+    const { userId } = useAdminAuth();
     const badge = operationalTaskUrgencyBadge(task);
     const overdue = isOverdueUrgency(badge.urgency);
     const sourceLabel = formatOperationalTaskSourceLabel(task.source);
     const isOpen = task.status === "open";
     const context = buildMyTasksRecordContextLines(task, presentation, entityLabels);
     const displayTitle = normalizeOperationalTaskTitleDisplay(task.title);
+    const assigneeLabel = operationalWorkAssigneeDetailLabel({
+        assignedToUserId: task.assigned_to_user_id,
+        assigneeLabel: task.assignee_label,
+        currentUserId: userId,
+    });
 
     if (mode === "edit") {
         return (
@@ -99,7 +112,7 @@ export default function MyTasksTaskCard({
                     <input
                         type="datetime-local"
                         value={editDue}
-                        min={minDatetimeLocalValue()}
+                        min={minOperationalWorkDatetimeLocalValue()}
                         onChange={(e) => onEditDueChange(e.target.value)}
                         className="w-full rounded-lg border border-alloy-stone/25 px-2.5 py-1.5 text-[13px]"
                     />
@@ -109,6 +122,14 @@ export default function MyTasksTaskCard({
                         onChange={(e) => onEditNotesChange(e.target.value)}
                         className="w-full resize-y rounded-lg border border-alloy-stone/25 px-2.5 py-1.5 text-[12px]"
                         placeholder="Notes"
+                    />
+                    <label className="mb-1 block text-[12px] font-medium text-alloy-midnight/80">Assigned to</label>
+                    <OperationalWorkAssigneeSelect
+                        id={`adminv2-edit-task-assignee-${task.id}`}
+                        value={editAssignedToUserId}
+                        currentUserId={userId}
+                        disabled={busy}
+                        onChange={onEditAssignedToUserIdChange}
                     />
                     <div className="flex flex-wrap gap-1.5 pt-0.5">
                         <button type="button" disabled={busy} className={PRIMARY_BTN} onClick={() => void onSaveEdit()}>
@@ -139,7 +160,7 @@ export default function MyTasksTaskCard({
                 <input
                     type="datetime-local"
                     value={editDue}
-                    min={minDatetimeLocalValue()}
+                    min={minOperationalWorkDatetimeLocalValue()}
                     onChange={(e) => onEditDueChange(e.target.value)}
                     className="w-full rounded-lg border border-alloy-stone/25 px-2.5 py-1.5 text-[13px]"
                     data-adminv2-task-reschedule-input="true"
@@ -227,6 +248,9 @@ export default function MyTasksTaskCard({
                     ) : null}
                     <p className="mt-1 text-[12px] font-medium text-alloy-midnight/72">
                         Due {formatOperationalTaskDueDisplay(task.due_at)}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-alloy-midnight/50" data-adminv2-task-assignee="true">
+                        Assigned to · {assigneeLabel}
                     </p>
                     <p className="mt-0.5 text-[11px] text-alloy-midnight/50" data-adminv2-task-source-label="true">
                         {sourceLabel}
