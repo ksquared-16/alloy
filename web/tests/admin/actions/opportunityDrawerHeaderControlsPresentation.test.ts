@@ -36,7 +36,7 @@ describe("opportunity drawer header controls presentation", () => {
         expect(controls).toContain('data-opportunity-header-controls-row="composed"');
         expect(controls).toContain('data-opportunity-header-controls-row="attention"');
         expect(controls).toMatch(
-            /data-opportunity-header-controls-row="composed"[\s\S]*flex-1[\s\S]*data-opportunity-header-controls-row="actions"[\s\S]*OpportunityDrawerHeaderActionsMenu/
+            /data-opportunity-header-controls-row="composed"[\s\S]*flex-1[\s\S]*OpportunityDrawerHeaderActionsRow/
         );
     });
 
@@ -83,16 +83,35 @@ describe("opportunity drawer header controls presentation", () => {
         expect(BOS_ASSIST_CTA_DRAWER).toBe("Work with BOS");
     });
 
-    it("header attention uses full-width surface on the composed row", () => {
+    it("header attention uses modal center column width tokens", () => {
         const strip = read("components/admin/drawer/DrawerHeaderAttentionBlock.tsx");
         const tokens = read("lib/admin/drawer/drawerHeaderAttentionPresentation.ts");
         const controls = read("components/admin/opportunity/OpportunityDrawerHeaderControls.tsx");
+        const drawer = read("components/admin/AdminEntityDrawer.tsx");
+        const shell = read("components/admin/Drawer.tsx");
         expect(strip).toContain("buildDrawerHeaderMoreGuidance");
         expect(strip).toContain("buildReadinessDrawerHeaderMoreGuidance");
         expect(strip).not.toContain("header-attention-view-required-information");
         expect(strip).not.toContain("Supporting detail available");
         expect(tokens).toContain("DRAWER_HEADER_ATTENTION_MAX_WIDTH");
+        expect(tokens).toContain("DRAWER_HEADER_ATTENTION_CENTER_COLUMN_CLASS");
+        expect(tokens).toContain("min-w-[min(100%,450px)]");
+        expect(tokens).toContain("max-w-[600px]");
+        expect(controls).toContain('layout="modal-attention"');
+        expect(controls).toContain('data-opportunity-header-controls-layout="modal-attention"');
+        expect(drawer).toContain('"modal-actions"');
+        expect(drawer).toContain("headerTitleCenterForDrawer");
+        expect(drawer).toContain("opportunityHeaderUsesModalThreeColumn");
+        expect(drawer).toContain('data-opportunity-drawer-header-subtitle="modal-compact"');
+        expect(shell).toContain("headerTitleCenter");
+        expect(shell).toContain("usesThreeColumnHeader");
+        expect(shell).toContain("three-column");
+    });
+
+    it("composed sidebar layout keeps attention and actions in one block", () => {
+        const controls = read("components/admin/opportunity/OpportunityDrawerHeaderControls.tsx");
         expect(controls).toContain('data-opportunity-header-controls-row="composed"');
+        expect(controls).toContain('data-opportunity-header-controls-layout="composed"');
         expect(controls).toContain("flex-1");
         expect(controls).not.toMatch(/flex-col[\s\S]*data-opportunity-header-controls-row="actions"[\s\S]*data-opportunity-header-controls-row="attention"/);
     });
@@ -201,7 +220,7 @@ describe("DrawerHeaderAttentionBlock", () => {
         expect(html).toContain("header-attention-summary");
         expect(html).toContain("Child · Program Interest");
         expect(html).toContain("header-attention-readiness-next");
-        expect(html).toContain("Add child · program interest.");
+        expect(html).toContain("Add Child · Program Interest to continue this inquiry.");
         expect(html).not.toContain("header-attention-urgency-chip");
         expect(html).not.toContain("header-attention-view-required-information");
     });

@@ -100,7 +100,7 @@ describe("drawerHeaderAttentionPresentation", () => {
         expect(ctx.primaryIsReadiness).toBe(true);
         expect(ctx.primarySummaryLine).toBe("Child · Program Interest");
         expect(ctx.severityChipLabel).toBeNull();
-        expect(ctx.nextStepLine).toContain("Add child · program interest");
+        expect(ctx.nextStepLine).toBe("Add Child · Program Interest to continue this inquiry.");
     });
 
     it("resolveDrawerHeaderReadinessAttention builds supporting line for mixed reasons", () => {
@@ -152,8 +152,9 @@ describe("drawerHeaderAttentionPresentation", () => {
             _operational_attention: readinessPrimaryAttention(),
         });
         const lines = buildReadinessDrawerHeaderMoreGuidance(ctx);
-        expect(lines.map((l) => l.label)).toEqual(["What's missing", "Why it matters", "What to do"]);
+        expect(lines.map((l) => l.label)).toEqual(["What's missing", "What to do", "Why it matters"]);
         expect(lines.find((l) => l.key === "missing")?.body).toBe("Child · Program Interest");
+        expect(lines.find((l) => l.key === "do")?.body).toBe("Add Child · Program Interest.");
         expect(lines.find((l) => l.key === "why")?.body).toBe("Needed to continue this inquiry.");
         expect(lines.every((l) => !/needs review|sla|escalat/i.test(`${l.label} ${l.body}`))).toBe(true);
     });

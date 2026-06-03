@@ -46,10 +46,31 @@ describe("buildQueueOperationalAttentionPresentation", () => {
         const r = buildQueueOperationalAttentionPresentation(row);
         expect(r.summaryLine).toContain("Tour follow-up overdue");
     });
+
+    it("readiness primary row uses gap-specific action preview in queueScan mode", () => {
+        const details = [
+            {
+                code: "missing_required_info",
+                label: "Child · Program Interest",
+                attention_source: "readiness",
+                readiness_gap_ids: ["child:program_interest"],
+            },
+        ];
+        const r = buildQueueOperationalAttentionPresentation(
+            {
+                _attention_reason: "missing_required_info",
+                _attention_reason_label: "Child · Program Interest",
+                _attention_reasons_detail: details,
+            },
+            { queueScan: true }
+        );
+        expect(r.summaryLine).toBe("Needs attention: Child · Program Interest");
+        expect(r.nextHintLine).toBe("Add Child · Program Interest to continue this inquiry.");
+    });
 });
 
 describe("nextStepGuidance", () => {
-    it("returns readiness-specific copy for missing_required_info", () => {
+    it("returns generic fallback for missing_required_info without row context", () => {
         const line = nextStepGuidance({
             primaryCode: "missing_required_info",
             waitingBucket: "none",

@@ -75,10 +75,18 @@ export function readinessHeaderMissingLine(gapLabels: string[]): string | null {
     return `${head}${extra}`;
 }
 
-/** Short action line — no service-window or escalation jargon. */
+/** Collapsed-card action preview — display labels, no raw keys. */
 export function readinessHeaderActionLine(gapLabels: string[]): string {
     if (gapLabels.length === 1) {
-        return `Add ${gapLabels[0]!.toLowerCase()}.`;
+        return `Add ${gapLabels[0]!} to continue this inquiry.`;
+    }
+    return "Complete the missing fields to continue this inquiry.";
+}
+
+/** More-guidance action line — short imperative, display labels preserved. */
+export function readinessHeaderActionDetail(gapLabels: string[]): string {
+    if (gapLabels.length === 1) {
+        return `Add ${gapLabels[0]!}.`;
     }
     return "Complete the missing fields.";
 }
@@ -201,7 +209,7 @@ function humanizeGuidanceCopy(text: string): string {
     return unique.join(" · ");
 }
 
-/** Readiness-only More guidance — shortest human form, no operational jargon. */
+/** Readiness-only More guidance — optional detail; collapsed card carries the core fix. */
 export function buildReadinessDrawerHeaderMoreGuidance(
     ctx: DrawerHeaderReadinessAttentionContext
 ): DrawerHeaderMoreGuidanceLine[] {
@@ -210,11 +218,11 @@ export function buildReadinessDrawerHeaderMoreGuidance(
     if (missing) {
         lines.push({ key: "missing", label: "What's missing", body: missing });
     }
-    lines.push({ key: "why", label: "Why it matters", body: readinessHeaderWhyLine() });
-    const action = readinessHeaderActionLine(ctx.gapLabels);
+    const action = readinessHeaderActionDetail(ctx.gapLabels);
     if (action) {
         lines.push({ key: "do", label: "What to do", body: action });
     }
+    lines.push({ key: "why", label: "Why it matters", body: readinessHeaderWhyLine() });
     return lines;
 }
 
@@ -291,8 +299,15 @@ export function hasDrawerHeaderMoreGuidanceContent(
 export const DRAWER_HEADER_ATTENTION_SURFACE =
     "w-full rounded-xl bg-gradient-to-br from-white via-white to-alloy-stone/25 ring-1 ring-alloy-midnight/[0.06] border-l-[3px] border-l-alloy-blue/40";
 
-/** Full rail width — header attention is context, not a compact control. */
-export const DRAWER_HEADER_ATTENTION_MAX_WIDTH = "w-full max-w-full min-w-0";
+/** Card fills its allocated center column — width comes from the header grid, not a % of a narrow parent. */
+export const DRAWER_HEADER_ATTENTION_MAX_WIDTH = "w-full min-w-0";
+
+/** AdminV2 modal header — center column for Needs Attention (450–600px on desktop). */
+export const DRAWER_HEADER_ATTENTION_CENTER_COLUMN_CLASS =
+    "flex w-full min-w-[min(100%,450px)] max-w-[600px] flex-1 shrink items-start justify-start self-center";
+
+/** Shared inner padding/gap for header attention surfaces — compact for modal title row. */
+export const DRAWER_HEADER_ATTENTION_INNER_LAYOUT = "flex w-full flex-col items-start gap-0.5 px-2 py-1";
 
 const REVIEWABLE_OPERATOR_STATUSES = new Set(["needs_review", "needs_correction"]);
 

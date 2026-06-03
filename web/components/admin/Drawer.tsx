@@ -34,6 +34,8 @@ interface DrawerProps {
     headerSubtitle?: React.ReactNode;
     /** Optional: right-side controls aligned with title/subtitle row. */
     headerTitleRight?: React.ReactNode;
+    /** Optional: center column between record details and headerTitleRight (AdminV2 modal attention). */
+    headerTitleCenter?: React.ReactNode;
     /**
      * Optional dense record context between subtitle and status/actions (e.g. workflow chips).
      * Connects header to body without changing entity-specific layout config.
@@ -81,6 +83,7 @@ export default function Drawer({
     title,
     headerSubtitle,
     headerTitleRight,
+    headerTitleCenter,
     headerRecordContext,
     statusBadge,
     headerActions,
@@ -210,10 +213,17 @@ export default function Drawer({
               ? { backgroundColor: neutral.background, color: neutral.textPrimary }
               : undefined;
 
+    const hasHeaderTitleRight = headerTitleRight != null && headerTitleRight !== false;
+    const hasHeaderTitleCenter = headerTitleCenter != null && headerTitleCenter !== false;
+    const usesThreeColumnHeader = hasHeaderTitleRight && hasHeaderTitleCenter;
+    const usesTitleRailHeader = hasHeaderTitleRight && !usesThreeColumnHeader;
+
     const subtitleTypographyClass =
         cleaningRecordModalTone
             ? "mt-1.5 text-[13px] font-normal leading-snug"
-            : `mt-1 text-sm font-medium ${isV2 ? "" : "text-alloy-midnight/55"}`;
+            : usesThreeColumnHeader
+              ? "mt-0.5 text-sm font-medium leading-snug"
+              : `mt-1 text-sm font-medium ${isV2 ? "" : "text-alloy-midnight/55"}`;
 
     const subtitleStyle =
         isV2 && headerSubtitle != null && headerSubtitle !== false
@@ -244,6 +254,18 @@ export default function Drawer({
 
     const hasHeaderSignals = headerSignals != null && headerSignals !== false;
 
+    const closeButton = (
+        <button
+            type="button"
+            onClick={onClose}
+            className={`shrink-0 text-2xl leading-none transition-colors p-1 ${isV2 ? "" : "text-alloy-midnight/70 hover:text-alloy-forge"}`}
+            style={isV2 ? { color: derived.textSecondary } : undefined}
+            aria-label="Close"
+        >
+            ×
+        </button>
+    );
+
     const headerBlock = (
         <>
             <div
@@ -268,11 +290,33 @@ export default function Drawer({
                 }
             >
                 <div
-                    className={`${cleaningRecordModalTone ? "px-6 pt-3 pb-0.5" : "px-6 pt-4 pb-2"} ${
-                        headerTitleRight != null && headerTitleRight !== false ? "flex items-start justify-between gap-4" : ""
+                    className={`${
+                        usesThreeColumnHeader
+                            ? cleaningRecordModalTone
+                                ? "px-6 pt-3 pb-1"
+                                : "px-6 pt-3 pb-1"
+                            : cleaningRecordModalTone
+                              ? "px-6 pt-3 pb-0.5"
+                              : "px-6 pt-4 pb-2"
+                    } ${
+                        usesThreeColumnHeader
+                            ? "flex flex-wrap items-start gap-x-3 gap-y-1"
+                            : usesTitleRailHeader
+                              ? "flex items-start justify-between gap-4"
+                              : ""
                     }`}
+                    data-drawer-header-title-row={usesThreeColumnHeader ? "three-column" : usesTitleRailHeader ? "two-column" : undefined}
                 >
-                    <div className={headerTitleRight != null && headerTitleRight !== false ? "min-w-0 flex-1" : ""}>
+                    <div
+                        className={
+                            usesThreeColumnHeader
+                                ? "min-w-0 shrink-0 basis-auto max-w-[min(100%,17rem)] sm:max-w-[20rem]"
+                                : usesTitleRailHeader
+                                  ? "min-w-0 flex-1"
+                                  : ""
+                        }
+                        data-drawer-header-title-left="true"
+                    >
                         <h2
                             id={isModal ? "admin-drawer-title" : undefined}
                             className={
@@ -286,20 +330,18 @@ export default function Drawer({
                         </h2>
                         {renderHeaderSubtitle()}
                     </div>
-                    {headerTitleRight != null && headerTitleRight !== false ? (
+                    {usesThreeColumnHeader ? (
+                        <div className="min-w-0 flex-1" data-drawer-header-title-center="true">
+                            {headerTitleCenter}
+                        </div>
+                    ) : null}
+                    {hasHeaderTitleRight ? (
                         <div
                             className={`flex shrink-0 items-start gap-3 ${cleaningRecordModalTone ? "py-0.5" : ""}`}
+                            data-drawer-header-title-right="true"
                         >
                             {headerTitleRight}
-                            <button
-                                type="button"
-                                onClick={onClose}
-                                className={`shrink-0 text-2xl leading-none transition-colors p-1 ${isV2 ? "" : "text-alloy-midnight/70 hover:text-alloy-forge"}`}
-                                style={isV2 ? { color: derived.textSecondary } : undefined}
-                                aria-label="Close"
-                            >
-                                ×
-                            </button>
+                            {closeButton}
                         </div>
                     ) : null}
                 </div>
@@ -328,15 +370,7 @@ export default function Drawer({
                             {statusBadge != null && statusBadge !== false && statusBadge}
                             {headerActions}
                         </div>
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className={`shrink-0 text-2xl leading-none transition-colors p-1 ${isV2 ? "" : "text-alloy-midnight/70 hover:text-alloy-forge"}`}
-                            style={isV2 ? { color: derived.textSecondary } : undefined}
-                            aria-label="Close"
-                        >
-                            ×
-                        </button>
+                        {closeButton}
                     </div>
                 ) : null}
                 {headerSignals != null && headerSignals !== false && (
@@ -367,7 +401,9 @@ export default function Drawer({
                                 ? hasHeaderSignals
                                     ? "pb-0 pt-0 -mt-1"
                                     : "pb-0 pt-1"
-                                : "pb-1 pt-0"
+                                : usesThreeColumnHeader
+                                  ? "pb-0 pt-0"
+                                  : "pb-1 pt-0"
                         } ${cleaningRecordModalTone ? "border-t border-solid" : `border-t ${isV2 ? "" : "border-admin-border border-t-alloy-blue/30"}`}`}
                         style={
                             isV2

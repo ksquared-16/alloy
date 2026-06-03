@@ -12,6 +12,8 @@ import {
 } from "@/lib/opportunities/attentionSla";
 import type { AttentionWaitingFacet, ResolvedOpportunityAttentionReason } from "@/lib/opportunities/opportunityAttentionResolver";
 import type { OpportunityAttentionSeverity } from "@/lib/opportunities/opportunityAttentionConfig";
+import { readinessHeaderActionLine } from "@/lib/admin/drawer/drawerHeaderAttentionPresentation";
+import { READINESS_ATTENTION_REASON_CODE } from "@/lib/opportunities/readinessAttentionProjection";
 
 export function severityHeadlinePrefix(severity: OpportunityAttentionSeverity | string | null | undefined): string {
     switch (severity) {
@@ -198,6 +200,36 @@ export type QueueOperationalAttentionPresentationOpts = {
     queueScan?: boolean;
 };
 
+/** Display labels from readiness-sourced attention reasons on a queue row payload. */
+export function readinessGapLabelsFromQueueAttentionDetails(details: unknown): string[] {
+    if (!Array.isArray(details)) return [];
+    const labels: string[] = [];
+    const seen = new Set<string>();
+    for (const entry of details) {
+        if (!entry || typeof entry !== "object") continue;
+        const rec = entry as Record<string, unknown>;
+        const code = String(rec.code ?? "").trim();
+        const source = String(rec.attention_source ?? "").trim();
+        const isReadiness =
+            code === READINESS_ATTENTION_REASON_CODE ||
+            source === "readiness" ||
+            (Array.isArray(rec.readiness_gap_ids) && rec.readiness_gap_ids.length > 0);
+        if (!isReadiness) continue;
+        const label = String(rec.label ?? "").trim();
+        if (!label || seen.has(label)) continue;
+        seen.add(label);
+        labels.push(label);
+    }
+    return labels;
+}
+
+/** Action preview for readiness attention — uses existing drawer copy, no re-evaluation. */
+export function readinessQueueActionLineFromDetails(details: unknown): string | null {
+    const labels = readinessGapLabelsFromQueueAttentionDetails(details);
+    if (!labels.length) return null;
+    return readinessHeaderActionLine(labels);
+}
+
 /** CRM compact row: one calm headline + optional second line */
 export function buildQueueOperationalAttentionPresentation(
     row: {
@@ -244,10 +276,13 @@ export function buildQueueOperationalAttentionPresentation(
     let worst: AttentionSlaTier = "ok";
     for (const t of tiers) worst = worstSlaTier(worst, t);
 
+    const readinessAction = readinessQueueActionLineFromDetails(details);
     const nextHint =
-        primaryCode || wb !== "none"
-            ? nextStepGuidance({ primaryCode: primaryCode ?? "mid_funnel_stale", waitingBucket: wb, worstSlaTier: worst })
-            : null;
+        primaryCode === READINESS_ATTENTION_REASON_CODE && readinessAction
+            ? readinessAction
+            : primaryCode || wb !== "none"
+              ? nextStepGuidance({ primaryCode: primaryCode ?? "mid_funnel_stale", waitingBucket: wb, worstSlaTier: worst })
+              : readinessAction;
 
     return { summaryLine: summary, nextHintLine: nextHint };
 }

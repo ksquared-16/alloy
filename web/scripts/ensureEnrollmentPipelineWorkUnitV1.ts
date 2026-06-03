@@ -19,7 +19,10 @@ import {
     CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1,
     CANONICAL_ENROLLMENT_PIPELINE_STATUS_KEYS,
 } from "@/lib/config/enrollmentPipelineQueueDefinitionV1";
-import { CANONICAL_CHILDCARE_ENROLLMENT_NEEDS_ATTENTION_BUCKETS_SEED } from "@/lib/opportunities/enrollmentNeedsAttentionBucketsSeed";
+import {
+    CANONICAL_CHILDCARE_ENROLLMENT_NEEDS_ATTENTION_BUCKETS_SEED,
+    CANONICAL_ENROLLMENT_READINESS_ATTENTION_PROJECTION_V1,
+} from "@/lib/opportunities/enrollmentNeedsAttentionBucketsSeed";
 
 loadEnv({ path: resolve(process.cwd(), ".env.local") });
 loadEnv({ path: resolve(process.cwd(), ".env") });
@@ -202,6 +205,7 @@ async function main() {
         prevRulesRaw != null && typeof prevRulesRaw === "object" && !Array.isArray(prevRulesRaw)
             ? ({ ...(prevRulesRaw as Record<string, unknown>) } as Record<string, unknown>)
             : {};
+    let deptMetaDirty = false;
     if (!Object.prototype.hasOwnProperty.call(prevRules, "needs_attention_buckets")) {
         prevRules.needs_attention_buckets = CANONICAL_CHILDCARE_ENROLLMENT_NEEDS_ATTENTION_BUCKETS_SEED.map((b) => ({
             key: b.key,
@@ -213,6 +217,49 @@ async function main() {
             icon: b.icon,
             reason_codes: [...b.reason_codes],
         }));
+        deptMetaDirty = true;
+        console.log("Seeding department needs_attention_buckets (childcare enrollment demo).");
+    } else {
+        console.log("Skipped needs_attention_buckets seed — key already present on department metadata.");
+    }
+
+    const prevProjectionRaw = prevRules.readiness_projection_v1;
+    const prevProjection =
+        prevProjectionRaw != null && typeof prevProjectionRaw === "object" && !Array.isArray(prevProjectionRaw)
+            ? ({ ...(prevProjectionRaw as Record<string, unknown>) } as Record<string, unknown>)
+            : null;
+    if (!prevProjection) {
+        prevRules.readiness_projection_v1 = { ...CANONICAL_ENROLLMENT_READINESS_ATTENTION_PROJECTION_V1 };
+        deptMetaDirty = true;
+        console.log("Seeding readiness_projection_v1 with queue bridge enabled.");
+    } else {
+        let projectionDirty = false;
+        if (prevProjection.version !== 1) {
+            prevProjection.version = 1;
+            projectionDirty = true;
+        }
+        if (prevProjection.enabled !== true) {
+            prevProjection.enabled = true;
+            projectionDirty = true;
+        }
+        if (prevProjection.flag_missing_required !== true) {
+            prevProjection.flag_missing_required = true;
+            projectionDirty = true;
+        }
+        if (prevProjection.readiness_attention_bridge_v1 !== true) {
+            prevProjection.readiness_attention_bridge_v1 = true;
+            projectionDirty = true;
+        }
+        if (projectionDirty) {
+            prevRules.readiness_projection_v1 = prevProjection;
+            deptMetaDirty = true;
+            console.log("Updated readiness_projection_v1 — readiness_attention_bridge_v1 enabled.");
+        } else {
+            console.log("readiness_projection_v1 already has queue bridge enabled.");
+        }
+    }
+
+    if (deptMetaDirty) {
         existingDeptMeta.opportunity_attention_rules = prevRules;
         const { error: deptUpErr } = await supabase
             .from("departments")
@@ -223,12 +270,7 @@ async function main() {
             .eq("id", targetDeptId)
             .eq("org_id", orgId);
         if (deptUpErr) throw new Error(deptUpErr.message);
-        console.log(
-            "Seeded department needs_attention_buckets (childcare enrollment demo) on department:",
-            targetDeptId
-        );
-    } else {
-        console.log("Skipped needs_attention_buckets seed — key already present on department metadata.");
+        console.log("Updated department opportunity_attention_rules on department:", targetDeptId);
     }
 
     const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");

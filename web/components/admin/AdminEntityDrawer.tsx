@@ -325,6 +325,10 @@ import {
 import { personDrawerOperatingSummaryVisible } from "@/lib/admin/person/personDrawerShellPolicy";
 import { openViewPersonFromOpportunity } from "@/lib/admin/drawer/openViewPersonFromOpportunity";
 import { entityDataMatchesDrawer } from "@/lib/admin/drawer/entityDataMatchesDrawer";
+import {
+    DRAWER_HEADER_ATTENTION_CENTER_COLUMN_CLASS,
+    isDrawerHeaderAttentionVisible,
+} from "@/lib/admin/drawer/drawerHeaderAttentionPresentation";
 import { fetchPersonDrawerEntityCoalesced, isPersonDrawerSnapshotWarm } from "@/lib/admin/prefetchPersonDrawerSnapshot";
 import { installPersonDrawerDevDirectOpen } from "@/lib/admin/drawer/personDrawerDevDirectOpen";
 import { prefetchLinkedPersonsFromOpportunityRecord } from "@/lib/admin/drawer/prefetchLinkedPersonsFromOpportunityRecord";
@@ -484,7 +488,7 @@ import {
 } from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
-import { formatActivityRelativeShort, formatActivitySignalSummary, type ActivitySignalResult } from "@/lib/admin/activitySignals";
+import { formatActivityRelativeShort, formatActivitySignalHeaderDetail, type ActivitySignalResult } from "@/lib/admin/activitySignals";
 import { OPPORTUNITY_ACTIVITY_STATUS_KEY_LABELS } from "@/lib/admin/opportunityActivityTimelineFormat";
 import { formatOpportunityActivityTimelineEvent } from "@/lib/admin/opportunityActivityTimelineFormat";
 import OpportunityQuoteIntakeSection from "@/components/admin/quoteIntake/OpportunityQuoteIntakeSection";
@@ -1141,6 +1145,18 @@ function DrawerWorkflowHeaderQuickActionsSkeleton() {
             {OPPORTUNITY_DRAWER_HEADER_ACTIONS_SKELETON_BUTTON_CLASSES.map((cls, i) => (
                 <DrawerQuietSkeletonBar key={i} className={cls} />
             ))}
+        </div>
+    );
+}
+
+function DrawerHeaderAttentionColumnSkeleton() {
+    return (
+        <div
+            className={DRAWER_HEADER_ATTENTION_CENTER_COLUMN_CLASS}
+            aria-busy="true"
+            data-opportunity-header-attention-skeleton="true"
+        >
+            <DrawerQuietSkeletonBar className="h-[4.25rem] w-full rounded-xl" />
         </div>
     );
 }
@@ -6812,6 +6828,9 @@ export default function AdminEntityDrawer() {
 
     const isScheduleExistingView = drawer.type === "schedules" && data && !(data as Record<string, unknown>)._create;
     const isOpportunityExistingView = drawer.type === "opportunities" && data && !(data as Record<string, unknown>)._create;
+    /** AdminV2 centered modal: attention in header center column; BOS/Actions pinned right. */
+    const opportunityHeaderUsesModalThreeColumn =
+        useAdminV2RecordModalPresentation && isOpportunityRecordModalTarget && !!isOpportunityExistingView;
     const schedulePaidInFullKnown =
         hasServerJobPaymentSummary &&
         jobPaymentSummaryFromApi.payment_status_key === "paid" &&
@@ -7221,6 +7240,7 @@ export default function AdminEntityDrawer() {
                         if (!drawer.id) return null;
                         return (
                             <OpportunityDrawerHeaderControls
+                                layout={opportunityHeaderUsesModalThreeColumn ? "modal-actions" : "composed"}
                                 opportunityId={drawer.id}
                                 overviewData={
                                     entityDataMatchesDrawer(data, drawer.id) ?
@@ -7257,6 +7277,51 @@ export default function AdminEntityDrawer() {
                 </div>
             )
             : null;
+
+    const opportunityHeaderAttentionCenterNode = useMemo(() => {
+        if (!opportunityHeaderUsesModalThreeColumn || !isOpportunityExistingView || !drawer.id || !data || !entityRowReady) {
+            return null;
+        }
+        if (opportunityHeaderActionsShowSkeleton) {
+            return <DrawerHeaderAttentionColumnSkeleton />;
+        }
+        const overviewDataForHeader =
+            entityDataMatchesDrawer(data, drawer.id) ? (data as Record<string, unknown>) : {};
+        if (!isDrawerHeaderAttentionVisible(overviewDataForHeader)) {
+            return null;
+        }
+        return (
+            <OpportunityDrawerHeaderControls
+                layout="modal-attention"
+                opportunityId={drawer.id}
+                overviewData={overviewDataForHeader}
+                opportunitySingular={opportunitySingular}
+                queuePreviewSeed={drawer.opportunityQueuePreviewSeed ?? null}
+                inquiryWorkflow={opportunityInquiryWorkflowDrawer}
+                menuActions={opportunityRecordHeaderMenuActions}
+                showRegistryActions={!!useOpportunityActionRegistryHeader}
+                canMutate={!!canMutate}
+                actionLoadingKey={opportunityActionLoading}
+                onActionSelect={(a) => void handleResolvedOpportunityHeaderAction(a)}
+                actionPreflightBlocked={null}
+            />
+        );
+    }, [
+        opportunityHeaderUsesModalThreeColumn,
+        isOpportunityExistingView,
+        drawer.id,
+        drawer.opportunityQueuePreviewSeed,
+        data,
+        entityRowReady,
+        opportunityHeaderActionsShowSkeleton,
+        opportunitySingular,
+        opportunityInquiryWorkflowDrawer,
+        opportunityRecordHeaderMenuActions,
+        useOpportunityActionRegistryHeader,
+        canMutate,
+        opportunityActionLoading,
+        handleResolvedOpportunityHeaderAction,
+    ]);
 
     /** BOS Loop 1 — seed active operational context when an opportunity drawer is open (Card 1). */
     useEffect(() => {
@@ -11760,14 +11825,14 @@ export default function AdminEntityDrawer() {
         const stale = sig?.stale_signal ?? null;
         const hasActivity = Boolean(sig?.last_activity_at && String(sig.last_activity_at).trim());
         const rel = hasActivity && sig?.last_activity_at ? formatActivityRelativeShort(sig.last_activity_at, nowMs) : null;
-        const summaryRaw = formatActivitySignalSummary(sig?.last_activity_summary, opportunityActivityStatusKeyLabels);
+        const summaryRaw = formatActivitySignalHeaderDetail(sig?.last_activity_summary, opportunityActivityStatusKeyLabels);
         const summary = summaryRaw?.trim() ?? "";
         const detail =
             summary && rel ? `${summary} · ${rel}` : summary || rel || (hasActivity ? "Activity" : null);
 
         return (
             <div
-                className="flex min-h-[1rem] flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] leading-snug text-alloy-midnight/55"
+                className="flex min-h-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] leading-snug text-alloy-midnight/55"
                 data-drawer-last-activity-line="true"
             >
                 <span className="min-w-0">
@@ -12284,37 +12349,53 @@ export default function AdminEntityDrawer() {
             : headerSubtitleBase;
     const headerSubtitleResolved =
         drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer ? (
-            <div className="mt-0.5 space-y-1.5">
-                <div className="flex flex-wrap items-center gap-2">
-                    {workflowCompactRecordNum ? <span>{workflowCompactRecordNum}</span> : null}
-                    <span className="shrink-0">{opportunityInquiryWorkflowHeaderStatus}</span>
-                    {opportunityHeaderLocationLabel ? (
-                        <span
-                            className="inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-medium"
-                            style={{ borderColor: "rgba(39, 63, 82, 0.18)", color: "rgba(39, 63, 82, 0.78)" }}
-                            data-opportunity-drawer-location="true"
-                        >
-                            {opportunityHeaderLocationLabel}
-                        </span>
-                    ) : null}
+            opportunityHeaderUsesModalThreeColumn ?
+                <div className="mt-0.5" data-opportunity-drawer-header-subtitle="modal-compact">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        {workflowCompactRecordNum ? <span>{workflowCompactRecordNum}</span> : null}
+                        <span className="shrink-0">{opportunityInquiryWorkflowHeaderStatus}</span>
+                        {opportunityHeaderLocationLabel ? (
+                            <span
+                                className="inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-medium"
+                                style={{ borderColor: "rgba(39, 63, 82, 0.18)", color: "rgba(39, 63, 82, 0.78)" }}
+                                data-opportunity-drawer-location="true"
+                            >
+                                {opportunityHeaderLocationLabel}
+                            </span>
+                        ) : null}
+                    </div>
                 </div>
-                <OpportunityChildLifecycleSummaryStrip
-                    summary={opportunityChildLifecycleSummary}
-                    showCaseNote={false}
-                    className="mt-0.5"
-                />
-                {opportunityActivityHeaderLine}
-            </div>
+            :   <div className="mt-0.5 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                        {workflowCompactRecordNum ? <span>{workflowCompactRecordNum}</span> : null}
+                        <span className="shrink-0">{opportunityInquiryWorkflowHeaderStatus}</span>
+                        {opportunityHeaderLocationLabel ? (
+                            <span
+                                className="inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-medium"
+                                style={{ borderColor: "rgba(39, 63, 82, 0.18)", color: "rgba(39, 63, 82, 0.78)" }}
+                                data-opportunity-drawer-location="true"
+                            >
+                                {opportunityHeaderLocationLabel}
+                            </span>
+                        ) : null}
+                    </div>
+                    <OpportunityChildLifecycleSummaryStrip
+                        summary={opportunityChildLifecycleSummary}
+                        showCaseNote={false}
+                    />
+                    {opportunityActivityHeaderLine}
+                </div>
         ) : drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? (
-            <div className="mt-0.5 space-y-1.5">
+            <div className="mt-0.5 space-y-1">
                 {headerSubtitleBase ? <div>{headerSubtitleBase}</div> : null}
                 {opportunityHeaderLocationLabel ? (
                     <div
-                        className="text-[11px] font-medium"
+                        className="flex flex-col gap-0 text-[11px] leading-snug"
                         style={{ color: "rgba(39, 63, 82, 0.72)" }}
                         data-opportunity-drawer-location="true"
                     >
-                        Location: {opportunityHeaderLocationLabel}
+                        <span className="font-medium text-alloy-midnight/45">Location:</span>
+                        <span>{opportunityHeaderLocationLabel}</span>
                     </div>
                 ) : null}
                 {overviewData &&
@@ -12333,7 +12414,6 @@ export default function AdminEntityDrawer() {
                 <OpportunityChildLifecycleSummaryStrip
                     summary={opportunityChildLifecycleSummary}
                     showCaseNote={false}
-                    className="mt-0.5"
                 />
                 {opportunityActivityHeaderLine}
             </div>
@@ -12567,6 +12647,13 @@ export default function AdminEntityDrawer() {
 
     const personHeaderRecordContext = undefined;
 
+    const headerTitleCenterForDrawer =
+        opportunityHeaderUsesModalThreeColumn && opportunityTitleRailActive && !opportunityDrawerHeaderCalmLoading ?
+            !opportunityHeaderTitleRailStable || opportunityWorkflowHeaderChromePending ?
+                <DrawerHeaderAttentionColumnSkeleton />
+            :   opportunityHeaderAttentionCenterNode
+        :   undefined;
+
     const headerTitleRightForDrawer = opportunityDrawerHeaderCalmLoading ? null : (
         opportunityTitleRailActive && !opportunityHeaderTitleRailStable ? (
             <DrawerWorkflowHeaderQuickActionsSkeleton />
@@ -12638,6 +12725,7 @@ export default function AdminEntityDrawer() {
             onClose={closeDrawer}
             title={drawerTitleResolved}
             headerSubtitle={headerSubtitleForDrawer}
+            headerTitleCenter={headerTitleCenterForDrawer}
             headerTitleRight={headerTitleRightForDrawer}
             headerRecordContext={personHeaderRecordContext}
             statusBadge={

@@ -7,6 +7,7 @@ import type { FormsReviewBadgeTone } from "@/lib/forms/review/formsReviewPresent
 import {
     buildDrawerHeaderMoreGuidance,
     buildReadinessDrawerHeaderMoreGuidance,
+    DRAWER_HEADER_ATTENTION_INNER_LAYOUT,
     DRAWER_HEADER_ATTENTION_MAX_WIDTH,
     DRAWER_HEADER_ATTENTION_SURFACE,
     drawerHeaderAttentionSummaryLine,
@@ -106,10 +107,7 @@ export function DrawerHeaderAttentionBlock({ overviewData }: Props) {
                 data-drawer-slot="header_attention_strip"
             >
                 <div
-                    className={clsx(
-                        DRAWER_HEADER_ATTENTION_SURFACE,
-                        "flex w-full flex-col items-start gap-1.5 px-3 py-2",
-                    )}
+                    className={clsx(DRAWER_HEADER_ATTENTION_SURFACE, DRAWER_HEADER_ATTENTION_INNER_LAYOUT)}
                     data-opportunity-header-attention="true"
                     data-attention-surface="readiness_primary"
                 >
@@ -144,12 +142,12 @@ export function DrawerHeaderAttentionBlock({ overviewData }: Props) {
                 </div>
                 {expanded && hasExpandable ?
                     <div
-                        className="absolute left-0 top-full z-30 mt-1 w-full min-w-[18rem] rounded-xl border border-alloy-stone/20 bg-white px-3 py-2.5 text-[11px] leading-snug shadow-lg ring-1 ring-alloy-midnight/[0.06]"
+                        className="absolute left-0 top-full z-30 mt-0.5 w-full min-w-[18rem] rounded-xl border border-alloy-stone/20 bg-white px-2.5 py-2 text-[11px] leading-snug shadow-lg ring-1 ring-alloy-midnight/[0.06]"
                         data-testid="header-attention-expanded-panel"
                         role="region"
                         aria-label="Attention guidance detail"
                     >
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                             {moreGuidance.map((line) => (
                                 <p key={line.key} data-header-more-guidance-row={line.key}>
                                     <span className="font-medium text-alloy-midnight/60">{line.label} · </span>
@@ -159,7 +157,7 @@ export function DrawerHeaderAttentionBlock({ overviewData }: Props) {
                         </div>
                         <button
                             type="button"
-                            className="mt-2 text-[10px] font-medium text-alloy-midnight/50 hover:text-alloy-midnight/70"
+                            className="mt-1.5 text-[10px] font-medium text-alloy-midnight/50 hover:text-alloy-midnight/70"
                             onClick={() => setExpanded(false)}
                         >
                             Close
@@ -208,10 +206,7 @@ export function DrawerHeaderAttentionBlock({ overviewData }: Props) {
             data-drawer-slot="header_attention_strip"
         >
             <div
-                className={clsx(
-                    DRAWER_HEADER_ATTENTION_SURFACE,
-                    "flex w-full flex-col items-start gap-1.5 px-3 py-2",
-                )}
+                className={clsx(DRAWER_HEADER_ATTENTION_SURFACE, DRAWER_HEADER_ATTENTION_INNER_LAYOUT)}
                 data-opportunity-header-attention="true"
             >
                 {showChip || showEscalationChip ?
@@ -241,6 +236,14 @@ export function DrawerHeaderAttentionBlock({ overviewData }: Props) {
                         {summary}
                     </p>
                 :   null}
+                {useReadinessPrimary && readinessCtx.nextStepLine ?
+                    <p
+                        className="w-full min-w-0 text-left text-[11px] leading-snug text-alloy-midnight/78"
+                        data-testid="header-attention-readiness-next"
+                    >
+                        {readinessCtx.nextStepLine}
+                    </p>
+                :   null}
                 {readinessCtx.hasReadinessAttention &&
                 !readinessCtx.primaryIsReadiness &&
                 readinessCtx.supportingLine ?
@@ -260,12 +263,12 @@ export function DrawerHeaderAttentionBlock({ overviewData }: Props) {
             </div>
             {expanded && hasExpandable ?
                 <div
-                    className="absolute left-0 top-full z-30 mt-1 w-full min-w-[18rem] max-w-full rounded-xl border border-alloy-stone/20 bg-white px-3 py-2.5 text-[11px] leading-snug shadow-lg ring-1 ring-alloy-midnight/[0.06]"
+                    className="absolute left-0 top-full z-30 mt-0.5 w-full min-w-[18rem] max-w-full rounded-xl border border-alloy-stone/20 bg-white px-2.5 py-2 text-[11px] leading-snug shadow-lg ring-1 ring-alloy-midnight/[0.06]"
                     data-testid="header-attention-expanded-panel"
                     role="region"
                     aria-label="Operational guidance detail"
                 >
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                         {moreGuidance.map((line) => (
                             <p key={line.key} data-header-more-guidance-row={line.key}>
                                 <span className="font-medium text-alloy-midnight/60">{line.label} · </span>
@@ -275,7 +278,7 @@ export function DrawerHeaderAttentionBlock({ overviewData }: Props) {
                     </div>
                     <button
                         type="button"
-                        className="mt-2 text-[10px] font-medium text-alloy-midnight/50 hover:text-alloy-midnight/70"
+                        className="mt-1.5 text-[10px] font-medium text-alloy-midnight/50 hover:text-alloy-midnight/70"
                         onClick={() => setExpanded(false)}
                     >
                         Close

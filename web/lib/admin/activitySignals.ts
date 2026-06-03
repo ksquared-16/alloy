@@ -197,6 +197,17 @@ export function formatActivitySignalSummary(
     return s;
 }
 
+/** Drawer header detail — display labels only, no category prefix (e.g. "Status:"). */
+export function formatActivitySignalHeaderDetail(
+    summary: string | null | undefined,
+    statusKeyLabels?: Record<string, string>
+): string | null {
+    const formatted = formatActivitySignalSummary(summary, statusKeyLabels);
+    if (!formatted) return null;
+    const stripped = formatted.replace(/^(Status|Child lifecycle):\s*/i, "").trim();
+    return stripped || null;
+}
+
 export function getActivitySignalForEntity(input: {
     events: WorkflowEventLike[];
     entity: ActivitySignalEntity;

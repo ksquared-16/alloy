@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+    formatActivitySignalHeaderDetail,
     formatActivitySignalSummary,
     getActivitySignalForEntity,
     summarizeWorkflowEventForSignal,
@@ -106,5 +107,16 @@ describe("formatActivitySignalSummary", () => {
                 contact_attempted: "Contact Attempted",
             })
         ).toBe("Status: New Inquiry → Contact Attempted");
+    });
+});
+
+describe("formatActivitySignalHeaderDetail", () => {
+    it("returns display labels without category prefix for header stacking", () => {
+        expect(
+            formatActivitySignalHeaderDetail("Status: new_lead → contact_attempted", {
+                new_lead: "New Lead",
+                contact_attempted: "Contact Attempted",
+            })
+        ).toBe("New Lead → Contact Attempted");
     });
 });
