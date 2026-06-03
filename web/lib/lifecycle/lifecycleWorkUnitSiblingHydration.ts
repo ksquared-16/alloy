@@ -7,7 +7,6 @@ import {
     type WorkUnitListRow,
 } from "@/lib/lifecycle/builderOwnedLifecycleRuntime";
 import type { LifecycleSiblingWorkUnitNavRow } from "@/lib/lifecycle/lifecycleWorkUnitShellPills";
-import { resolveDeptWorkUnitDisplayLabel } from "@/lib/workspace/workUnitShellDisplayTitle";
 
 export type LifecycleSiblingHydrationWorkUnit = {
     id: string;
@@ -32,10 +31,9 @@ export function sortLifecycleSiblingWorkUnits<T extends LifecycleSiblingHydratio
         const aOrder = Number.isFinite(ao) ? ao : 9999;
         const bOrder = Number.isFinite(bo) ? bo : 9999;
         if (aOrder !== bOrder) return aOrder - bOrder;
-        const aName = resolveDeptWorkUnitDisplayLabel({ name: a.name, key: a.key ?? null }).toLowerCase();
-        const bName = resolveDeptWorkUnitDisplayLabel({ name: b.name, key: b.key ?? null }).toLowerCase();
-        if (aName !== bName) return aName.localeCompare(bName);
-        return a.id.localeCompare(b.id);
+        // Unified tie-break with sortLifecycleDeptWorkUnits so the /work-units lifecycle pills and the
+        // /dept work-unit queue order identically (canonical work_units.sort_order, then name/key/id).
+        return (a.name ?? a.key ?? a.id).localeCompare(b.name ?? b.key ?? b.id);
     });
 }
 

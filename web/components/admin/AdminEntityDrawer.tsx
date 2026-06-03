@@ -2040,6 +2040,12 @@ export default function AdminEntityDrawer() {
     type StatusDefOption = { status_key: string; status_label: string | null; sort_order: number; is_active: boolean };
     const [statusDefsForDrawer, setStatusDefsForDrawer] = useState<StatusDefOption[]>([]);
     const [statusDefsLoading, setStatusDefsLoading] = useState(false);
+    /**
+     * Drawer fix pass — records which `${id}::${profile}` the current person statusDefs were
+     * resolved for (set on settle, success/empty/error alike — deadlock-free). Used to gate person
+     * reveal so the header status control is ready on first paint instead of popping in afterward.
+     */
+    const [personStatusDefsKey, setPersonStatusDefsKey] = useState<string | null>(null);
     type ContactRelatedPayload = {
         linkedCustomer: { id: string; name: string | null } | null;
         linkedVendor: { id: string; name: string | null } | null;
@@ -7183,7 +7189,7 @@ export default function AdminEntityDrawer() {
         dedupeAdminFetchWithTtl(
             `/api/admin/status-options?entity_type=${encodeURIComponent(PERSON_DRAWER_CHILD_STATUS_ENTITY_TYPE)}&status_profile=${encodeURIComponent(personDrawerStatusProfile)}`,
             init,
-            0
+            1500
         )
             .then((r) => (r.ok ? r.json() : { options: [] }))
             .then((json: { options?: { value: string; label: string; sort_order?: number }[] }) => {
@@ -7198,7 +7204,10 @@ export default function AdminEntityDrawer() {
                 );
             })
             .catch(() => setStatusDefsForDrawer([]))
-            .finally(() => setStatusDefsLoading(false));
+            .finally(() => {
+                setStatusDefsLoading(false);
+                setPersonStatusDefsKey(`${drawer.id}::${personDrawerStatusProfile}`);
+            });
     }, [personDrawerStatusProfile, drawer.type, drawer.id]);
 
     const globalAssistant = useGlobalAssistantOptional();
@@ -7607,6 +7616,15 @@ export default function AdminEntityDrawer() {
     const personRecordChromePending =
         drawer.type === "persons" && !!drawer.id && drawer.id !== "new" && !recordChromePerson.configResolved;
 
+    /** Drawer fix pass — keep the person loading shell up until the header status control is ready
+     *  (only when this person has a status profile). Resolves immediately on a warm TTL cache hit. */
+    const personStatusPending =
+        drawer.type === "persons" &&
+        !!drawer.id &&
+        drawer.id !== "new" &&
+        !!personDrawerStatusProfile &&
+        personStatusDefsKey !== `${drawer.id}::${personDrawerStatusProfile}`;
+
     /** Workflow-shaped gate for sidebar opportunities while record chrome resolves (modal uses `modalOpportunityWorkflow`). */
     const recordGateOpportunityWorkflowShape =
         drawer.type === "opportunities" &&
@@ -7615,7 +7633,7 @@ export default function AdminEntityDrawer() {
         opportunityRecordChromePending &&
         !isOpportunityRecordModalTarget;
     const recordModalV2ChromePending =
-        jobRecordChromePending || scheduleRecordChromePending || opportunityRecordChromePending || personRecordChromePending;
+        jobRecordChromePending || scheduleRecordChromePending || opportunityRecordChromePending || personRecordChromePending || personStatusPending;
     const drawerBodyGateLoading = drawerGateLoading || recordModalV2ChromePending;
 
     /** Keep Admin V2 record modal shell geometry during first-byte fetch — prevents min-height accent snap. */
@@ -8070,7 +8088,13 @@ export default function AdminEntityDrawer() {
         : opportunityDrawerTypedSnapshotFirstPaint ||
           (opportunityDrawerCoordinatedRevealReady &&
               opportunityDrawerInquiryStructuralReady &&
-              (!opportunityInquiryWorkflowDrawer || opportunityDrawerAboveFoldPresentationReady));
+              (!opportunityInquiryWorkflowDrawer || opportunityDrawerAboveFoldPresentationReady) &&
+              // C2 — classic (non-inquiry) opportunities also wait for header actions to SETTLE before
+              // reveal, so header/record actions don't pop in after the drawer is exposed. Settle-based
+              // via the loading flag (cleared on every terminal path → deadlock-free, no timeout), and
+              // gated by expectRegistry so opportunities without registry header actions are unaffected.
+              // The warm `typedSnapshotFirstPaint` reopen path is intentionally NOT gated (stays instant).
+              (!opportunityHeaderActionsExpectRegistry || !opportunityResolvedHeaderLoading));
 
     /** Release above-fold layout lock when primary surface is coordinated — BOS/right column paints with summary. */
     useEffect(() => {
@@ -9088,6 +9112,13 @@ export default function AdminEntityDrawer() {
     const personDrawerComposedPayloadIsReady =
         personDrawerComposedPayloadEval?.ready === true;
 
+    /**
+     * Drawer fix pass — person header status control is ready (or there is no status profile).
+     * Keeps the above-fold status control from popping in after reveal. Resolves immediately on a
+     * warm (TTL-cached) reopen; deadlock-free because the key is set on every settle.
+     */
+    const personStatusReady = !personStatusPending;
+
     const personDrawerPaintReady =
         drawer.type === "persons" &&
         !!drawer.id &&
@@ -9097,6 +9128,8 @@ export default function AdminEntityDrawer() {
         // Card 3B-3 — do not reveal until record layout + actions chrome has resolved, so status,
         // actions, and section structure are stable on first paint (no reorder/pop-in afterward).
         recordChromePerson.configResolved &&
+        // Drawer fix pass — also wait for the person status control to be ready.
+        personStatusReady &&
         (personChildLifecycleChrome || personParentGuardianChrome
             ? personDrawerComposedPayloadIsReady
             : (dataMatchesDrawer || personDrawerFirstPaintRecord != null) &&
