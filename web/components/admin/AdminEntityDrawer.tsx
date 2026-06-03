@@ -401,6 +401,7 @@ import {
 import {
     applyOpportunityFullHydrateDeferredPatch,
     mergeOpportunityFullHydrate,
+    mergeOpportunityFullHydrateBackground,
     mergeOpportunityFullHydrateStaged,
 } from "@/lib/admin/drawer/opportunityFullHydrateMerge";
 import { reportOpportunityDrawerHydrateLayoutStability } from "@/lib/admin/drawer/opportunityDrawerAboveFoldGeometry";
@@ -2890,6 +2891,9 @@ export default function AdminEntityDrawer() {
                         fresh._record_surface = "drawer_primary";
                         return fresh;
                     }
+                    // Primary (paint) hydrate of surface=drawer_primary — applies authoritative
+                    // primary data. (Above-fold immutability is enforced on post-reveal BACKGROUND
+                    // merges — the deferred patch and the member overlay — not on this paint merge.)
                     const merged = mergeOpportunityFullHydrateLocal(prev as Record<string, unknown>, json as Record<string, unknown>);
                     merged._record_surface = "drawer_primary";
                     const changed = Object.keys(merged).filter(
@@ -3093,7 +3097,11 @@ export default function AdminEntityDrawer() {
                     if (!prev || String((prev as { id?: unknown }).id ?? "") !== String(drawer.id)) {
                         return prev;
                     }
-                    const merged = mergeOpportunityFullHydrateLocal(prev as Record<string, unknown>, json as Record<string, unknown>);
+                    // Card 3B-2 — member-graph overlay is a post-reveal BACKGROUND merge whose payload
+                    // includes above-fold `_opportunity_persons`. Use the above-fold-safe merge so it
+                    // fills below-fold/absent member data and clears the pending flag WITHOUT moving
+                    // already-painted family contacts.
+                    const merged = mergeOpportunityFullHydrateBackground(prev as Record<string, unknown>, json as Record<string, unknown>);
                     const prevSurf = String((prev as { _record_surface?: string })._record_surface ?? "full").trim();
                     merged._record_surface = prevSurf || "full";
                     return merged;

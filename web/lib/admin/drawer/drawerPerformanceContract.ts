@@ -27,6 +27,7 @@ import {
     childDrawerSummaryCoordinatedReady,
 } from "@/lib/admin/drawer/drawerAboveFoldCoordinatedReveal";
 import { snapshotNeedsFullRevalidate } from "@/lib/admin/drawer/opportunityDrawerRecordNeedsRevalidate";
+import { OPPORTUNITY_ABOVE_FOLD_RECORD_KEYS } from "@/lib/admin/drawer/opportunityFullHydrateMerge";
 
 export type DrawerSnapshotRecord = Record<string, unknown>;
 
@@ -48,6 +49,11 @@ export interface DrawerTypeContract {
     aboveFoldComplete: (record: DrawerSnapshotRecord, drawerId: string | null | undefined) => boolean;
     /** True when below-fold/background data is still pending (filled invisibly; never blocks reuse). */
     backgroundHydratePending?: (record: DrawerSnapshotRecord) => boolean;
+    /**
+     * Record keys that render above the fold (first-paint-critical). Background/deferred merges
+     * must never MOVE these once painted — runtime patch-safety enforces this.
+     */
+    firstPaintCriticalRecordKeys?: ReadonlySet<string>;
     /** Section classifications (consumed by future config-layout hydration; documented now). */
     sections?: DrawerSectionContract[];
 }
@@ -118,6 +124,7 @@ registerDrawerTypeContract({
             inquiryChildrenSectionVisible: true,
         }),
     backgroundHydratePending: (record) => snapshotNeedsFullRevalidate(record),
+    firstPaintCriticalRecordKeys: OPPORTUNITY_ABOVE_FOLD_RECORD_KEYS,
     // Representative classifications; the full registry-driven merge is a later layout-config card.
     sections: [
         { key: "header_title", paintClass: "first_paint_critical", aboveFold: true },

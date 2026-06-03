@@ -35,6 +35,51 @@ function mergeField(
     target[key] = value;
 }
 
+/**
+ * Record keys whose content renders ABOVE the fold (first-paint-critical) for the opportunity
+ * drawer. A background/deferred merge must never MOVE these once painted — it may only fill them
+ * when absent. (`metadata` is intentionally excluded: it is a mixed above/below-fold blob that
+ * background enrichment legitimately extends.)
+ */
+export const OPPORTUNITY_ABOVE_FOLD_RECORD_KEYS: ReadonlySet<string> = new Set<string>([
+    "name",
+    "title",
+    "status_key",
+    "_status_display",
+    "_pipeline_stage_name",
+    "_customer_name",
+    "_primary_person_name",
+    "_primary_person_email",
+    "_primary_person_phone",
+    "_primary_contact_name",
+    "_identity",
+    "_opportunity_persons",
+    "_inquiry_children",
+    "next_follow_up_at",
+    "_lifecycle_next_step",
+]);
+
+/**
+ * Background-phase merge. Fills absent fields (gap completion) but NEVER overwrites a present
+ * first-paint-critical (above-fold) value — enforcing the contract rule "if a patch touches
+ * already-painted above-fold data, it is not background." Below-fold and absent fields merge
+ * normally, so background hydration stays invisible.
+ */
+export function mergeOpportunityFullHydrateBackground(
+    prev: Record<string, unknown>,
+    full: Record<string, unknown>
+): Record<string, unknown> {
+    const out: Record<string, unknown> = { ...prev };
+    for (const [key, value] of Object.entries(full)) {
+        if (OPPORTUNITY_ABOVE_FOLD_RECORD_KEYS.has(key)) {
+            const current = out[key];
+            if (current != null && current !== "") continue; // already painted above-fold — do not move it
+        }
+        mergeField(out, key, value);
+    }
+    return out;
+}
+
 /** Standard merge — all full fields apply immediately. */
 export function mergeOpportunityFullHydrate(
     prev: Record<string, unknown>,
@@ -88,7 +133,10 @@ export function applyOpportunityFullHydrateDeferredPatch(
     prev: Record<string, unknown>,
     deferredPatch: Record<string, unknown>
 ): Record<string, unknown> {
-    const merged = mergeOpportunityFullHydrate(prev, deferredPatch);
+    // Card 3B — the deferred patch carries above-fold keys (`_identity`, `_inquiry_children`, …)
+    // and is applied AFTER first paint. Use the background-safe merge so it fills only below-fold /
+    // absent fields and never moves already-painted above-fold content.
+    const merged = mergeOpportunityFullHydrateBackground(prev, deferredPatch);
     delete merged._full_hydrate_deferred_pending;
     return merged;
 }
