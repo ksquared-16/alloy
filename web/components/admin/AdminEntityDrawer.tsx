@@ -7601,6 +7601,12 @@ export default function AdminEntityDrawer() {
     const opportunityRecordChromePending =
         drawer.type === "opportunities" && !!drawer.id && drawer.id !== "new" && !recordChromeOpportunity.configResolved;
 
+    /** Card 3B-3 — person/child reveal waits for record layout + actions chrome (mirrors
+     *  opportunity/job/schedule) so status, actions, and section structure paint together rather
+     *  than reordering/popping in after first paint. Resolves immediately on a warm chrome cache hit. */
+    const personRecordChromePending =
+        drawer.type === "persons" && !!drawer.id && drawer.id !== "new" && !recordChromePerson.configResolved;
+
     /** Workflow-shaped gate for sidebar opportunities while record chrome resolves (modal uses `modalOpportunityWorkflow`). */
     const recordGateOpportunityWorkflowShape =
         drawer.type === "opportunities" &&
@@ -7609,7 +7615,7 @@ export default function AdminEntityDrawer() {
         opportunityRecordChromePending &&
         !isOpportunityRecordModalTarget;
     const recordModalV2ChromePending =
-        jobRecordChromePending || scheduleRecordChromePending || opportunityRecordChromePending;
+        jobRecordChromePending || scheduleRecordChromePending || opportunityRecordChromePending || personRecordChromePending;
     const drawerBodyGateLoading = drawerGateLoading || recordModalV2ChromePending;
 
     /** Keep Admin V2 record modal shell geometry during first-byte fetch — prevents min-height accent snap. */
@@ -9088,6 +9094,9 @@ export default function AdminEntityDrawer() {
         drawer.id !== "new" &&
         !error &&
         !!overviewData &&
+        // Card 3B-3 — do not reveal until record layout + actions chrome has resolved, so status,
+        // actions, and section structure are stable on first paint (no reorder/pop-in afterward).
+        recordChromePerson.configResolved &&
         (personChildLifecycleChrome || personParentGuardianChrome
             ? personDrawerComposedPayloadIsReady
             : (dataMatchesDrawer || personDrawerFirstPaintRecord != null) &&
