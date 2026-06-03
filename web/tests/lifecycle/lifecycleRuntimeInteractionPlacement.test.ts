@@ -42,12 +42,11 @@ describe("lifecycle in-page work unit pill switch", () => {
         );
     });
 
-    it("sibling pill click resolves target primary queue key and blocks nav token API fetch", () => {
+    it("sibling pill click resolves target primary queue key and prefetches queue rows", () => {
         const page = readLocal("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
         expect(page).toContain("resolveLifecycleWorkUnitPrimaryQueueKey");
-        expect(page).toContain("lifecycle-wu-queue-fetch-blocked");
-        expect(page).toContain('setSelectedQueueKeyTraced("lifecycleWuNav"');
-        expect(page).toMatch(/fetchQueueItems\(\s*lifecycleNavWuId,\s*targetQueueKey/);
+        expect(page).toContain('applyActiveLifecycleWorkUnitSelection(targetSelection, "lifecycleWuNav")');
+        expect(page).toMatch(/fetchQueueItems\(\s*targetSelection\.workUnitId,\s*targetSelection\.queueKey/);
         expect(page).toMatch(/lifecycleNavWuId === workUnitId\) return/);
     });
 

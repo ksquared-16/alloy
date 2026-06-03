@@ -678,6 +678,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
     >(null);
     const firstUsefulPaintMarkedRef = useRef(false);
     const seededWorkUnitShellRef = useRef(false);
+    /** Set when session cache restores queue rows — skip loading gate churn. */
+    const warmLaneRevealReadyRef = useRef(false);
     /** Reactive mirror of session shell seed — drives cold vs warm page reveal gate. */
     const [workUnitPageSeededFromCache, setWorkUnitPageSeededFromCache] = useState(false);
     /** User changed lane via tabs/buckets — bootstrap must not overwrite selection when summaries arrive. */
@@ -1214,6 +1216,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             skipNextQueueFetchEffectRef.current = true;
             userLaneTouchedRef.current = false;
             setWuQueueLaneAuthorityReady(true);
+            warmLaneRevealReadyRef.current = true;
             queueRowActionsHydratedRef.current = false;
             setQueueRowActionsReady(false);
             return;
@@ -1339,6 +1342,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 setQueueItemsError(null);
                 setQueueItemsLoading(false);
                 primaryLaneRowsSettledOnceRef.current = true;
+                warmLaneRevealReadyRef.current = true;
                 logQueueRowClientCache({
                     event: "hit",
                     work_unit_id: workUnitId,
@@ -2666,13 +2670,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
         let cancelled = false;
         void (async () => {
-            markWorkUnitNavigationStart();
-            setAdminV2PrimarySurfacePending(true, "work_unit_bootstrap_effect");
-            const routeStart = typeof performance !== "undefined" ? performance.now() : 0;
-            if (typeof performance !== "undefined" && typeof window !== "undefined") {
-                alloyPerfSet("work_unit_start", routeStart);
-                console.info("[wu-route-perf]", { event: "work_unit_route_mount", departmentId, workUnitId });
-            }
             const warmSwitch =
                 orgId && departmentId
                     ? readLifecycleWorkUnitSwitchSnapshot({
@@ -2682,6 +2679,17 @@ export default function AdminV2OpportunityWorkUnitPage() {
                           workUnitId,
                       })
                     : null;
+            const shellPrefilled =
+                seededWorkUnitShellRef.current || warmSwitch?.work_unit?.id === workUnitId;
+            if (!shellPrefilled) {
+                markWorkUnitNavigationStart();
+                setAdminV2PrimarySurfacePending(true, "work_unit_bootstrap_effect");
+            }
+            const routeStart = typeof performance !== "undefined" ? performance.now() : 0;
+            if (typeof performance !== "undefined" && typeof window !== "undefined") {
+                alloyPerfSet("work_unit_start", routeStart);
+                console.info("[wu-route-perf]", { event: "work_unit_route_mount", departmentId, workUnitId });
+            }
             if (warmSwitch?.work_unit?.id === workUnitId) {
                 setWorkUnit(warmSwitch.work_unit as WorkUnitRow);
                 setDept(warmSwitch.department as DeptRow);
@@ -3858,12 +3866,23 @@ export default function AdminV2OpportunityWorkUnitPage() {
     ]);
 
     const [wuInitialLaneRevealDone, setWuInitialLaneRevealDone] = useState(false);
+
     useEffect(() => {
+        setWuInitialLaneRevealDone(false);
+    }, [departmentId, workUnitId]);
+
+    useEffect(() => {
+        if (warmLaneRevealReadyRef.current) {
+            warmLaneRevealReadyRef.current = false;
+            setWuInitialLaneRevealDone(true);
+            primaryLaneRowsSettledOnceRef.current = true;
+            return;
+        }
         if (workUnitLaneReveal.settled && !wuInitialLaneRevealDone) {
             setWuInitialLaneRevealDone(true);
             primaryLaneRowsSettledOnceRef.current = true;
         }
-    }, [workUnitLaneReveal.settled, wuInitialLaneRevealDone]);
+    }, [workUnitLaneReveal.settled, wuInitialLaneRevealDone, departmentId, workUnitId]);
 
     const queueModel = useMemo<WorkUnitWorkspaceModel | null>(() => {
         if (!workUnit || !dept) return null;

@@ -3,11 +3,10 @@
  */
 
 import { LIFECYCLE_STAGE_LABELS } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
-import type {
-    FormsLifecycleCoverageResult,
-    FormsLifecycleRequirementContract,
-} from "@/lib/forms/lifecycle/formsLifecycleCoverageTypes";
+import type { FormsLifecycleCoverageResult, FormsLifecycleRequirementContract } from "@/lib/forms/lifecycle/formsLifecycleCoverageTypes";
 import type { FormsLifecycleUsageV1 } from "@/lib/forms/lifecycle/formLifecycleUsageMetadata";
+import { persistedLevelForFormsRule } from "@/lib/completion/readinessFromFormsCoverage";
+import { requirementLevelOperatorLabel } from "@/lib/completion/readinessDisplayPresentation";
 import {
     operationalIntentRequiresLifecycleRecordCoverage,
     recordCreationLabelForIntent,
@@ -19,7 +18,7 @@ import {
 
 export type FormLifecycleCoverageRowPresentation = {
     field_label: string;
-    tier_label: "Required" | "Recommended";
+    tier_label: "Required" | "Recommended" | "Enforced";
     status_label: "Satisfied" | "Missing" | "Unknown";
     detail: string | null;
 };
@@ -61,10 +60,6 @@ function intentLabel(intent: string): string {
     return intent.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function tierLabel(requiredness: "required" | "recommended"): "Required" | "Recommended" {
-    return requiredness === "required" ? "Required" : "Recommended";
-}
-
 function statusLabel(status: "satisfied" | "missing" | "unknown"): "Satisfied" | "Missing" | "Unknown" {
     if (status === "satisfied") return "Satisfied";
     if (status === "unknown") return "Unknown";
@@ -76,15 +71,38 @@ function satisfiedDetail(matchedFormFieldLabel?: string): string | null {
     return `Satisfied by ${matchedFormFieldLabel.trim()}`;
 }
 
-function itemToRow(item: {
-    requirementLabel: string;
-    requiredness: "required" | "recommended";
-    status: "satisfied" | "missing" | "unknown";
-    matchedFormFieldLabel?: string;
-}): FormLifecycleCoverageRowPresentation {
+function tierLabel(
+    item: {
+        requirementId: string;
+        requiredness: "required" | "recommended";
+    },
+    contract: FormsLifecycleRequirementContract | null,
+    departmentMetadata?: Record<string, unknown> | null
+): "Required" | "Recommended" | "Enforced" {
+    if (item.requiredness === "recommended") {
+        return "Recommended";
+    }
+    if (contract) {
+        const level = persistedLevelForFormsRule(item.requirementId, contract, departmentMetadata);
+        return requirementLevelOperatorLabel(level === "off" ? "required" : level);
+    }
+    return "Required";
+}
+
+function itemToRow(
+    item: {
+        requirementId: string;
+        requirementLabel: string;
+        requiredness: "required" | "recommended";
+        status: "satisfied" | "missing" | "unknown";
+        matchedFormFieldLabel?: string;
+    },
+    contract: FormsLifecycleRequirementContract | null,
+    departmentMetadata?: Record<string, unknown> | null
+): FormLifecycleCoverageRowPresentation {
     return {
         field_label: item.requirementLabel,
-        tier_label: tierLabel(item.requiredness),
+        tier_label: tierLabel(item, contract, departmentMetadata),
         status_label: statusLabel(item.status),
         detail:
             item.status === "satisfied" ?
@@ -95,7 +113,11 @@ function itemToRow(item: {
     };
 }
 
-function constraintRow(coverage: FormsLifecycleCoverageResult): FormLifecycleCoverageRowPresentation | null {
+function constraintRow(
+    coverage: FormsLifecycleCoverageResult,
+    contract: FormsLifecycleRequirementContract | null,
+    departmentMetadata?: Record<string, unknown> | null
+): FormLifecycleCoverageRowPresentation | null {
     if (!coverage.constraintFailures.length) {
         const email = [...coverage.satisfiedRequired, ...coverage.satisfiedRecommended].find(
             (i) => i.requirementId === "person:email"
@@ -107,7 +129,7 @@ function constraintRow(coverage: FormsLifecycleCoverageResult): FormLifecycleCov
         if (!participant) return null;
         return {
             field_label: "Phone or email",
-            tier_label: "Required",
+            tier_label: tierLabel(participant, contract, departmentMetadata),
             status_label: "Satisfied",
             detail: satisfiedDetail(participant.matchedFormFieldLabel),
         };
@@ -117,20 +139,24 @@ function constraintRow(coverage: FormsLifecycleCoverageResult): FormLifecycleCov
     if (!cf) return null;
     return {
         field_label: cf.requirementLabel.replace(/\.$/, ""),
-        tier_label: "Required",
+        tier_label: "Enforced",
         status_label: "Missing",
         detail: null,
     };
 }
 
-function buildEntityGroups(coverage: FormsLifecycleCoverageResult): FormLifecycleCoverageEntityPresentation[] {
+function buildEntityGroups(
+    coverage: FormsLifecycleCoverageResult,
+    contract: FormsLifecycleRequirementContract | null,
+    departmentMetadata?: Record<string, unknown> | null
+): FormLifecycleCoverageEntityPresentation[] {
     const groups: FormLifecycleCoverageEntityPresentation[] = [];
-    const constraint = constraintRow(coverage);
+    const constraint = constraintRow(coverage, contract, departmentMetadata);
 
     for (const [entityLabel, group] of Object.entries(coverage.byEntity)) {
         const rows: FormLifecycleCoverageRowPresentation[] = [
-            ...group.required.map((item) => itemToRow(item)),
-            ...group.recommended.map((item) => itemToRow(item)),
+            ...group.required.map((item) => itemToRow(item, contract, departmentMetadata)),
+            ...group.recommended.map((item) => itemToRow(item, contract, departmentMetadata)),
         ];
 
         if (entityLabel === "Person / Guardian" && constraint) {
@@ -161,6 +187,7 @@ export function buildFormLifecycleCoveragePresentation(input: {
     contract: FormsLifecycleRequirementContract | null;
     coverage: FormsLifecycleCoverageResult | null;
     schema_source: "published" | "draft" | "none";
+    departmentMetadata?: Record<string, unknown> | null;
 }): FormLifecycleCoveragePresentation {
     const schema_source = input.schema_source;
     const lifecycle_label = input.departmentName?.trim() || input.contract?.lifecycleLabel?.trim() || null;
@@ -228,7 +255,7 @@ export function buildFormLifecycleCoveragePresentation(input: {
             lifecycle_label,
             stage_label,
             intent_label,
-            entity_groups: buildEntityGroups(input.coverage),
+            entity_groups: buildEntityGroups(input.coverage, input.contract, input.departmentMetadata),
         };
     }
 
@@ -248,6 +275,6 @@ export function buildFormLifecycleCoveragePresentation(input: {
         lifecycle_label,
         stage_label,
         intent_label,
-        entity_groups: buildEntityGroups(input.coverage),
+        entity_groups: buildEntityGroups(input.coverage, input.contract, input.departmentMetadata),
     };
 }

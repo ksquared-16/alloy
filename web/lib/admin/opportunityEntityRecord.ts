@@ -2224,12 +2224,15 @@ export async function respondOpportunityEntityGet(
     orgId,
     (wuDeptRow.data as { department_id?: string | null } | null)?.department_id,
   );
+  const deptIdFull = trimOrNull((wuDeptRow.data as { department_id?: string | null } | null)?.department_id);
   const attnFull = await attachOpportunityAttentionSuggestionBundle({
     supabase,
     orgId,
     opportunityRow: out as Record<string, unknown>,
     defs: opportunityDefs,
     attentionConfigMetadata: wuMetaFull,
+    departmentMetadata: deptMetaFull,
+    departmentId: deptIdFull,
     workUnitId: wuidForDept,
     statusKey: oppSkRaw,
     preloadedActivityOrgMetadata: {

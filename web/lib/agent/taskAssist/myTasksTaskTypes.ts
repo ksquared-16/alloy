@@ -8,6 +8,7 @@ export type MyTasksTaskRow = {
     source: string;
     entity_id: string | null;
     entity_type: string | null;
+    assigned_to_user_id?: string | null;
     created_at: string;
     /** Presentation-only — workspace GET enrichment. */
     entity_label?: string | null;
@@ -17,4 +18,5 @@ export type MyTasksTaskRow = {
     children_labels?: string[] | null;
     contact_field_label?: string | null;
     location_id?: string | null;
+    assignee_label?: string | null;
 };

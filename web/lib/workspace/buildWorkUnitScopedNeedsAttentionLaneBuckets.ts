@@ -2,7 +2,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import { accessScopeRestrictsData, resolveRecordScopeConstraints, type RecordScopeConstraints } from "@/lib/admin/accessScope";
 import { fetchEffectiveStatusDefinitions, type StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
-import { resolveOpportunityAttentionConfigFromMetadata } from "@/lib/opportunities/opportunityAttentionConfig";
+import {
+    mergeAttentionMetadataForConfig,
+    resolveOpportunityAttentionConfigFromMetadata,
+} from "@/lib/opportunities/opportunityAttentionConfig";
 import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
 import {
     applyAttentionConfigLabelsToBuckets,
@@ -30,6 +33,7 @@ export async function buildWorkUnitScopedNeedsAttentionLaneBuckets(params: {
     workUnitId: string;
     workUnitMetadata: unknown | null;
     departmentMetadata: unknown | null;
+    departmentId?: string | null;
     accessDim?: AdminAccessScopeDimensions | null;
     /** Dept bootstrap: reuse scope resolution from the route. */
     recordScopeImpossible?: boolean;
@@ -118,7 +122,9 @@ export async function buildWorkUnitScopedNeedsAttentionLaneBuckets(params: {
         (await fetchEffectiveStatusDefinitions(supabase, orgId, "opportunities", { activeOnly: true }));
     if (params.perf) params.perf.rules_ms = Date.now() - tRules0;
 
-    const attentionConfig = resolveOpportunityAttentionConfigFromMetadata(workUnitMetadata ?? null);
+    const attentionConfig = resolveOpportunityAttentionConfigFromMetadata(
+        mergeAttentionMetadataForConfig(workUnitMetadata, departmentMetadata)
+    );
     const bucketDefs = resolveNeedsAttentionBucketsWithPrecedence(workUnitMetadata, departmentMetadata);
     const refUtc = new Date();
     const sort = [{ column: "updated_at", ascending: true as const }];
@@ -138,6 +144,8 @@ export async function buildWorkUnitScopedNeedsAttentionLaneBuckets(params: {
             columnSelect: "resolver_minimal",
             skipPostFilterSort: true,
             perf: loadPerf,
+            departmentMetadata,
+            departmentId: params.departmentId ?? null,
         }));
     if (params.perf && !params.preloadedAttention) {
         params.perf.query_ms = loadPerf.query_ms;

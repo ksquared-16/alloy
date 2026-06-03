@@ -34,12 +34,12 @@ describe("OpportunityOperationalCompactStrip", () => {
         const src = readFileSync(stripPath, "utf8");
         const taskAnchorIdx = src.indexOf("const taskPopoverAnchorRef = useRef");
         const sendAnchorIdx = src.indexOf("sendPopoverAnchorEl");
-        const v11ReturnIdx = src.indexOf("if (!v11) return null");
+        const earlyReturnIdx = src.indexOf("if (!workEnabled && !taskAssistEnabled) return null");
         expect(taskAnchorIdx).toBeGreaterThan(-1);
         expect(sendAnchorIdx).toBeGreaterThan(-1);
-        expect(v11ReturnIdx).toBeGreaterThan(-1);
-        expect(taskAnchorIdx).toBeLessThan(v11ReturnIdx);
-        expect(sendAnchorIdx).toBeLessThan(v11ReturnIdx);
+        expect(earlyReturnIdx).toBeGreaterThan(-1);
+        expect(taskAnchorIdx).toBeLessThan(earlyReturnIdx);
+        expect(sendAnchorIdx).toBeLessThan(earlyReturnIdx);
     });
 
     it("scheduled-send chips open ScheduledSendDetailPopover with actionable wiring", () => {

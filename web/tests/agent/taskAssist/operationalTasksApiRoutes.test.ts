@@ -11,6 +11,7 @@ const taskId = "66666666-6666-4666-8666-666666666666";
 
 const {
     mockGetAdminContextCached,
+    mockRequireAdminOrgContextLight,
     mockAssertRowOrg,
     mockCreate,
     mockList,
@@ -21,6 +22,7 @@ const {
     mockUpdateFields,
 } = vi.hoisted(() => ({
     mockGetAdminContextCached: vi.fn(),
+    mockRequireAdminOrgContextLight: vi.fn(),
     mockAssertRowOrg: vi.fn(),
     mockCreate: vi.fn(),
     mockList: vi.fn(),
@@ -29,6 +31,14 @@ const {
     mockComplete: vi.fn(),
     mockCancel: vi.fn(),
     mockUpdateFields: vi.fn(),
+}));
+
+vi.mock("@/lib/admin/getAdminOrgContextLight", () => ({
+    requireAdminOrgContextLight: (...args: unknown[]) => mockRequireAdminOrgContextLight(...args),
+    adminOrgContextLightFailureResponse: (failure: { status: number }) =>
+        new Response(JSON.stringify({ error: failure.status === 401 ? "Unauthorized" : "Forbidden" }), {
+            status: failure.status,
+        }),
 }));
 
 vi.mock("@/lib/admin/getAdminContext", async () => {
@@ -45,17 +55,17 @@ vi.mock("@/lib/admin/assertRowOrg", () => ({
     assertRowOrg: (...args: unknown[]) => mockAssertRowOrg(...args),
 }));
 
-vi.mock("@/lib/admin/operationalTasksService", async () => {
-    const actual = await vi.importActual<typeof import("@/lib/admin/operationalTasksService")>("@/lib/admin/operationalTasksService");
+vi.mock("@/lib/admin/operationalWork", async () => {
+    const actual = await vi.importActual<typeof import("@/lib/admin/operationalWork")>("@/lib/admin/operationalWork");
     return {
         ...actual,
-        createOperationalTask: (...args: unknown[]) => mockCreate(...args),
-        listOperationalTasksForEntity: (...args: unknown[]) => mockList(...args),
-        listOperationalTasksForWorkspace: (...args: unknown[]) => mockListWorkspace(...args),
-        summarizeOperationalTaskCounts: (...args: unknown[]) => mockSummarize(...args),
-        completeOperationalTask: (...args: unknown[]) => mockComplete(...args),
-        cancelOperationalTask: (...args: unknown[]) => mockCancel(...args),
-        updateOperationalTaskFields: (...args: unknown[]) => mockUpdateFields(...args),
+        createWorkInstance: (...args: unknown[]) => mockCreate(...args),
+        listWorkForEntity: (...args: unknown[]) => mockList(...args),
+        listWorkForWorkspace: (...args: unknown[]) => mockListWorkspace(...args),
+        summarizeWorkCounts: (...args: unknown[]) => mockSummarize(...args),
+        completeWorkInstance: (...args: unknown[]) => mockComplete(...args),
+        cancelWorkInstance: (...args: unknown[]) => mockCancel(...args),
+        updateWorkInstanceFields: (...args: unknown[]) => mockUpdateFields(...args),
     };
 });
 
@@ -66,6 +76,7 @@ vi.mock("@/lib/supabaseAdmin", () => ({
 describe("operational-tasks admin routes", () => {
     beforeEach(() => {
         mockGetAdminContextCached.mockResolvedValue({ ok: true, orgId, userId, role: "admin" });
+        mockRequireAdminOrgContextLight.mockResolvedValue({ ok: true, orgId, userId, role: "admin", roleKeys: ["admin"] });
         mockAssertRowOrg.mockResolvedValue({ ok: true });
     });
 
@@ -88,8 +99,11 @@ describe("operational-tasks admin routes", () => {
         const req = new NextRequest("http://localhost/api/admin/operational-tasks?scope=workspace&summary=true");
         const res = await getTasks(req);
         expect(res.status).toBe(200);
-        const j = (await res.json()) as { ok?: boolean; counts?: { open: number } };
+        const j = (await res.json()) as { ok?: boolean; counts?: { open: number; due_soon?: number; overdue?: number; ok?: boolean } };
         expect(j.counts?.open).toBe(3);
+        expect(j.counts?.due_soon).toBe(1);
+        expect(j.counts?.overdue).toBe(2);
+        expect(j.counts?.ok).toBeUndefined();
         expect(mockSummarize).toHaveBeenCalledOnce();
     });
 
@@ -145,6 +159,21 @@ describe("operational-tasks admin routes", () => {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ title: "Updated", due_at: "2026-06-01T09:00:00.000Z" }),
+        });
+        const res = await patchTask(req, { params: Promise.resolve({ id: taskId }) });
+        expect(res.status).toBe(200);
+        expect(mockUpdateFields).toHaveBeenCalledOnce();
+    });
+
+    it("PATCH fields accepts assigned_to_user_id", async () => {
+        mockUpdateFields.mockResolvedValue({
+            ok: true,
+            row: { id: taskId, assigned_to_user_id: userId, status: "open" },
+        });
+        const req = new NextRequest(`http://localhost/api/admin/operational-tasks/${taskId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ assigned_to_user_id: userId }),
         });
         const res = await patchTask(req, { params: Promise.resolve({ id: taskId }) });
         expect(res.status).toBe(200);

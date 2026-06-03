@@ -20,6 +20,7 @@ import type { EnrollmentStatusStagesPayload } from "@/lib/lifecycle/enrollmentPr
 import type { EnrollmentPipelineWorkUnitSnapshot } from "@/lib/lifecycle/parseEnrollmentPipelineQueues";
 import type { LifecycleStageBootstrapPayload } from "@/lib/lifecycle/lifecycleStageBootstrapTypes";
 import type { LifecycleStageFieldRules } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
+import type { LifecycleStageFieldRulesStored } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
 import type { LifecycleRequirementEntityKey } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 import type { LifecycleStageWorkUnitIdentityUiState } from "@/components/adminV2/settings/enrollmentProcess/LifecycleStageWorkUnitCard";
 
@@ -130,7 +131,7 @@ function SaveBar({
 }
 
 export type LifecycleStageWorkspaceHandle = {
-    getFieldDraftRules: () => LifecycleStageFieldRules | null;
+    getFieldDraftRules: () => LifecycleStageFieldRulesStored | null;
     isFieldDirty: () => boolean;
     getQueueDisplayName: () => string | null;
 };

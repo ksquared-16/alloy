@@ -57,10 +57,12 @@ function actionViolation(
         field_key: string;
         label: string;
         missing_reason: string;
-        blocking_level: "hard_block" | "recommendation";
+        blocking_level: "hard_block" | "soft_warning" | "recommendation";
         entity_type?: string;
         entity_id?: string;
         resolution_field_key?: string;
+        requirement_level?: "recommended" | "required" | "enforced";
+        rule_id?: string;
     }
 ) {
     return makeRequirementViolation({
@@ -76,6 +78,8 @@ function actionViolation(
             surface: ctx.surface,
             action_key: trimOrNull(ctx.action_key) ?? undefined,
             status_to: trimOrNull(ctx.status_to) ?? undefined,
+            ...(input.requirement_level ? { requirement_level: input.requirement_level } : {}),
+            ...(input.rule_id ? { rule_id: input.rule_id } : {}),
         },
     });
 }
@@ -443,9 +447,11 @@ export function evaluateLifecycleActionRequirements(
             field_key: fv.field_key ?? "lifecycle_field_rule",
             label: fv.label,
             missing_reason: fv.missing_reason,
-            blocking_level: fv.blocking_level === "hard_block" ? "hard_block" : "recommendation",
+            blocking_level: fv.blocking_level,
             entity_type: fv.entity_type,
             entity_id: fv.entity_id,
+            requirement_level: fv.context?.requirement_level,
+            rule_id: fv.context?.rule_id,
         })
     );
 

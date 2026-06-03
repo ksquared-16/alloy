@@ -5,20 +5,23 @@ import { useEffect, useRef, useState } from "react";
 import { FormsReviewBadge } from "@/components/forms/review/FormsReviewBadge";
 import type { FormsReviewBadgeTone } from "@/lib/forms/review/formsReviewPresentation";
 import {
+    buildDrawerHeaderMoreGuidance,
+    buildReadinessDrawerHeaderMoreGuidance,
+    DRAWER_HEADER_ATTENTION_INNER_LAYOUT,
+    DRAWER_HEADER_ATTENTION_MAX_WIDTH,
     DRAWER_HEADER_ATTENTION_SURFACE,
     drawerHeaderAttentionSummaryLine,
     hasDrawerHeaderAttentionExpandableContent,
-    isDrawerHeaderAttentionVisible,
+    isDrawerHeaderReviewAssistVisible,
+    resolveDrawerHeaderReadinessAttention,
 } from "@/lib/admin/drawer/drawerHeaderAttentionPresentation";
 import { resolveDrawerReviewAssistViewModel } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceViewModels";
 import {
     drawerUrgencyChipLabel,
     shouldShowDrawerUrgencyChip,
-    shouldShowDrawerWhatChanged,
 } from "@/lib/adminV2/bos/recommendations/selectors/reviewAssistPresentation";
-import type { ResolvedDrawerSupportingDetail } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceSelectors";
+import type { OpportunityAttentionSeverity } from "@/lib/opportunities/opportunityAttentionConfig";
 import type { UrgencyBandV1 } from "@/lib/adminV2/bos/recommendations/types";
-import { opMetadata } from "@/lib/operational/ui/operationalVisualTokens";
 import clsx from "clsx";
 
 type Props = {
@@ -38,33 +41,26 @@ function urgencyChipTone(band: UrgencyBandV1 | null | undefined): FormsReviewBad
     }
 }
 
-function SupportingDetailBlock({ detail }: { detail: ResolvedDrawerSupportingDetail }) {
+function readinessSeverityChipTone(severity: OpportunityAttentionSeverity | string | null | undefined): FormsReviewBadgeTone {
+    switch (severity) {
+        case "critical":
+        case "high":
+            return "warning";
+        case "medium":
+            return "info";
+        default:
+            return "neutral";
+    }
+}
+
+function ReadinessSupportingDetail({ line }: { line: string }) {
     return (
-        <div className="mt-1 space-y-0.5 text-[10px] leading-snug text-alloy-midnight/70">
-            {detail.primaryFactorLabel ? (
-                <p>
-                    <span className="font-medium text-alloy-midnight/60">Primary factor · </span>
-                    {detail.primaryFactorLabel}
-                </p>
-            ) : null}
-            {detail.displaySignalLabels.length > 0 ? (
-                <ul className="list-inside list-disc space-y-0.5">
-                    {detail.displaySignalLabels.map((label) => (
-                        <li key={label}>{label}</li>
-                    ))}
-                </ul>
-            ) : null}
-            {detail.secondaryFactorLabels.map((label) => (
-                <p key={label}>{label}</p>
-            ))}
-            {detail.timingHint ? (
-                <p className="text-alloy-midnight/60">
-                    <span className="font-medium">Timing · </span>
-                    {detail.timingHint}
-                </p>
-            ) : null}
-            {detail.provenanceLine ? <p className="text-alloy-midnight/60">{detail.provenanceLine}</p> : null}
-        </div>
+        <p
+            className="w-full min-w-0 text-left text-[10px] leading-snug text-alloy-midnight/72"
+            data-testid="header-attention-readiness-supporting"
+        >
+            {line}
+        </p>
     );
 }
 
@@ -74,7 +70,9 @@ function SupportingDetailBlock({ detail }: { detail: ResolvedDrawerSupportingDet
  * Expanded: in-drawer overlay panel with explanation (no route/modal).
  */
 export function DrawerHeaderAttentionBlock({ overviewData }: Props) {
+    const readinessCtx = resolveDrawerHeaderReadinessAttention(overviewData);
     const reviewAssist = resolveDrawerReviewAssistViewModel(overviewData);
+    const bosVisible = isDrawerHeaderReviewAssistVisible(overviewData);
     const [expanded, setExpanded] = useState(false);
     const rootRef = useRef<HTMLDivElement>(null);
 
@@ -96,26 +94,119 @@ export function DrawerHeaderAttentionBlock({ overviewData }: Props) {
         };
     }, [expanded]);
 
-    if (!reviewAssist || !isDrawerHeaderAttentionVisible(overviewData)) return null;
+    if (!bosVisible && !readinessCtx.hasReadinessAttention) return null;
 
-    const { display, urgencyChipContext, priorityExplanation, supportingDetail, readinessChrome } = reviewAssist;
-    const drawerChipLabel = drawerUrgencyChipLabel(display, urgencyChipContext);
-    const showChip = shouldShowDrawerUrgencyChip(display, urgencyChipContext);
-    const showEscalationChip = Boolean(display.escalationChipLabel?.trim());
-    const summary = drawerHeaderAttentionSummaryLine(display);
-    const showWhatChanged = shouldShowDrawerWhatChanged(display);
-    const trustLines = readinessChrome?.trustLines ?? [];
+    if (!bosVisible && readinessCtx.hasReadinessAttention) {
+        const hasExpandable = hasDrawerHeaderAttentionExpandableContent(overviewData);
+        const moreGuidance = buildReadinessDrawerHeaderMoreGuidance(readinessCtx);
+
+        return (
+            <div
+                ref={rootRef}
+                className={clsx("relative", DRAWER_HEADER_ATTENTION_MAX_WIDTH)}
+                data-drawer-slot="header_attention_strip"
+            >
+                <div
+                    className={clsx(DRAWER_HEADER_ATTENTION_SURFACE, DRAWER_HEADER_ATTENTION_INNER_LAYOUT)}
+                    data-opportunity-header-attention="true"
+                    data-attention-surface="readiness_primary"
+                >
+                    {readinessCtx.primarySummaryLine ?
+                        <p
+                            className="line-clamp-2 w-full min-w-0 text-left text-[11px] font-medium leading-snug text-alloy-midnight"
+                            data-testid="header-attention-summary"
+                            title={readinessCtx.primarySummaryLine}
+                        >
+                            {readinessCtx.primarySummaryLine}
+                        </p>
+                    :   null}
+                    {readinessCtx.nextStepLine ?
+                        <p
+                            className="w-full min-w-0 text-left text-[11px] leading-snug text-alloy-midnight/78"
+                            data-testid="header-attention-readiness-next"
+                        >
+                            {readinessCtx.nextStepLine}
+                        </p>
+                    :   null}
+                    {hasExpandable ?
+                        <button
+                            type="button"
+                            className="text-left text-[10px] font-medium text-alloy-midnight/55 hover:text-alloy-midnight/75"
+                            data-testid="header-attention-more-guidance"
+                            aria-expanded={expanded}
+                            onClick={() => setExpanded((v) => !v)}
+                        >
+                            More guidance
+                        </button>
+                    :   null}
+                </div>
+                {expanded && hasExpandable ?
+                    <div
+                        className="absolute left-0 top-full z-30 mt-0.5 w-full min-w-[18rem] rounded-xl border border-alloy-stone/20 bg-white px-2.5 py-2 text-[11px] leading-snug shadow-lg ring-1 ring-alloy-midnight/[0.06]"
+                        data-testid="header-attention-expanded-panel"
+                        role="region"
+                        aria-label="Attention guidance detail"
+                    >
+                        <div className="space-y-1.5">
+                            {moreGuidance.map((line) => (
+                                <p key={line.key} data-header-more-guidance-row={line.key}>
+                                    <span className="font-medium text-alloy-midnight/60">{line.label} · </span>
+                                    {line.body}
+                                </p>
+                            ))}
+                        </div>
+                        <button
+                            type="button"
+                            className="mt-1.5 text-[10px] font-medium text-alloy-midnight/50 hover:text-alloy-midnight/70"
+                            onClick={() => setExpanded(false)}
+                        >
+                            Close
+                        </button>
+                    </div>
+                :   null}
+            </div>
+        );
+    }
+
+    if (!reviewAssist) return null;
+
+    const { display, urgencyChipContext, priorityExplanation, supportingDetail } = reviewAssist;
+    const useReadinessPrimary = readinessCtx.primaryIsReadiness;
+    const drawerChipLabel = useReadinessPrimary
+        ? readinessCtx.severityChipLabel
+        : drawerUrgencyChipLabel(display, urgencyChipContext);
+    const showChip = useReadinessPrimary
+        ? Boolean(readinessCtx.severityChipLabel)
+        : shouldShowDrawerUrgencyChip(display, urgencyChipContext);
+    const showEscalationChip = useReadinessPrimary ? false : Boolean(display.escalationChipLabel?.trim());
+    const summary =
+        useReadinessPrimary && readinessCtx.primarySummaryLine
+            ? readinessCtx.primarySummaryLine
+            : drawerHeaderAttentionSummaryLine(display);
     const hasExpandable = hasDrawerHeaderAttentionExpandableContent(overviewData);
-    const doNext = display.doNext?.trim() ?? "";
-    const showDoNextInPanel = Boolean(doNext && doNext !== summary);
+    const doNext =
+        useReadinessPrimary && readinessCtx.nextStepLine
+            ? readinessCtx.nextStepLine
+            : (display.doNext?.trim() ?? "");
+    const chipTone = useReadinessPrimary
+        ? readinessSeverityChipTone(readinessCtx.primaryReason?.severity)
+        : urgencyChipTone(display.urgencyBand);
+    const moreGuidance = buildDrawerHeaderMoreGuidance({
+        display,
+        summary,
+        doNext,
+        readinessCtx,
+        supportingDetail,
+    });
 
     return (
-        <div ref={rootRef} className="relative w-full min-w-0" data-drawer-slot="header_attention_strip">
+        <div
+            ref={rootRef}
+            className={clsx("relative", DRAWER_HEADER_ATTENTION_MAX_WIDTH)}
+            data-drawer-slot="header_attention_strip"
+        >
             <div
-                className={clsx(
-                    DRAWER_HEADER_ATTENTION_SURFACE,
-                    "flex w-full min-w-0 flex-col items-start gap-1 px-2.5 py-1.5",
-                )}
+                className={clsx(DRAWER_HEADER_ATTENTION_SURFACE, DRAWER_HEADER_ATTENTION_INNER_LAYOUT)}
                 data-opportunity-header-attention="true"
             >
                 {showChip || showEscalationChip ?
@@ -126,10 +217,7 @@ export function DrawerHeaderAttentionBlock({ overviewData }: Props) {
                                 title={priorityExplanation?.ariaLabel ?? drawerChipLabel ?? undefined}
                                 aria-label={priorityExplanation?.ariaLabel ?? drawerChipLabel ?? undefined}
                             >
-                                <FormsReviewBadge
-                                    label={drawerChipLabel!.trim()}
-                                    tone={urgencyChipTone(display.urgencyBand)}
-                                />
+                                <FormsReviewBadge label={drawerChipLabel!.trim()} tone={chipTone} />
                             </span>
                         :   null}
                         {showEscalationChip ?
@@ -148,6 +236,19 @@ export function DrawerHeaderAttentionBlock({ overviewData }: Props) {
                         {summary}
                     </p>
                 :   null}
+                {useReadinessPrimary && readinessCtx.nextStepLine ?
+                    <p
+                        className="w-full min-w-0 text-left text-[11px] leading-snug text-alloy-midnight/78"
+                        data-testid="header-attention-readiness-next"
+                    >
+                        {readinessCtx.nextStepLine}
+                    </p>
+                :   null}
+                {readinessCtx.hasReadinessAttention &&
+                !readinessCtx.primaryIsReadiness &&
+                readinessCtx.supportingLine ?
+                    <ReadinessSupportingDetail line={readinessCtx.supportingLine} />
+                :   null}
                 {hasExpandable ?
                     <button
                         type="button"
@@ -162,45 +263,22 @@ export function DrawerHeaderAttentionBlock({ overviewData }: Props) {
             </div>
             {expanded && hasExpandable ?
                 <div
-                    className="absolute left-0 top-full z-30 mt-1 w-full min-w-[18rem] rounded-xl border border-alloy-stone/20 bg-white px-3 py-2.5 text-[11px] leading-snug shadow-lg ring-1 ring-alloy-midnight/[0.06]"
+                    className="absolute left-0 top-full z-30 mt-0.5 w-full min-w-[18rem] max-w-full rounded-xl border border-alloy-stone/20 bg-white px-2.5 py-2 text-[11px] leading-snug shadow-lg ring-1 ring-alloy-midnight/[0.06]"
                     data-testid="header-attention-expanded-panel"
                     role="region"
                     aria-label="Operational guidance detail"
                 >
                     <div className="space-y-1.5">
-                        {display.whyNow?.trim() ?
-                            <p data-review-assist-row="why_now" className={opMetadata}>
-                                <span className="font-medium text-alloy-midnight/60">Why now · </span>
-                                {display.whyNow.trim()}
+                        {moreGuidance.map((line) => (
+                            <p key={line.key} data-header-more-guidance-row={line.key}>
+                                <span className="font-medium text-alloy-midnight/60">{line.label} · </span>
+                                {line.body}
                             </p>
-                        :   null}
-                        {showDoNextInPanel ?
-                            <p data-review-assist-row="do_next" className={opMetadata}>
-                                <span className="font-medium text-alloy-midnight/60">Recommended next step · </span>
-                                {doNext}
-                            </p>
-                        :   null}
-                        {showWhatChanged ?
-                            <p data-review-assist-row="what_changed" className={opMetadata}>
-                                <span className="font-medium text-alloy-midnight/60">What changed · </span>
-                                {display.urgencyReason!.trim()}
-                            </p>
-                        :   null}
-                        {trustLines.length > 0 ?
-                            <p className={opMetadata} data-testid="review-assist-trust-notes">
-                                {trustLines.join(" · ")}
-                            </p>
-                        :   null}
-                        {showChip && priorityExplanation?.compactReason ?
-                            <p className={opMetadata} data-testid="review-assist-priority-explanation">
-                                Priority · {priorityExplanation.compactReason}
-                            </p>
-                        :   null}
-                        {supportingDetail ? <SupportingDetailBlock detail={supportingDetail} /> : null}
+                        ))}
                     </div>
                     <button
                         type="button"
-                        className="mt-2 text-[10px] font-medium text-alloy-midnight/50 hover:text-alloy-midnight/70"
+                        className="mt-1.5 text-[10px] font-medium text-alloy-midnight/50 hover:text-alloy-midnight/70"
                         onClick={() => setExpanded(false)}
                     >
                         Close

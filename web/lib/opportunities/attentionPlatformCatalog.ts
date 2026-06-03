@@ -15,6 +15,7 @@ export type AttentionOperationalReasonCode =
     | "high_value_stale"
     | "mid_funnel_stale"
     | "missing_identity"
+    | "missing_required_info"
     | "overdue_commitment"
     | "blocked_internal"
     | "waiting_on_staff"
@@ -34,6 +35,7 @@ export const PLATFORM_PRIMARY_REASON_PRIORITY_ORDER: readonly OpportunityAttenti
     "blocked_internal",
     "waiting_on_staff",
     "missing_identity",
+    "missing_required_info",
     "overdue_commitment",
     "tour_date_passed",
     "follow_up_date_passed",
@@ -55,6 +57,7 @@ export const DEFAULT_SEVERITY_BY_REASON: Readonly<Record<OpportunityAttentionRea
         blocked_internal: "high",
         waiting_on_staff: "high",
         missing_identity: "high",
+        missing_required_info: "high",
         overdue_commitment: "high",
         tour_date_passed: "high",
         follow_up_date_passed: "high",
@@ -112,8 +115,7 @@ export function waitBucketToAttentionReasonCode(bucket: Exclude<EnrollmentWaitBu
 }
 
 export function isOpportunityAttentionReasonCode(raw: string): raw is OpportunityAttentionReasonCode {
-    const set = new Set(PLATFORM_PRIMARY_REASON_PRIORITY_ORDER as readonly string[]);
-    return set.has(raw);
+    return Object.prototype.hasOwnProperty.call(DEFAULT_SEVERITY_BY_REASON, raw);
 }
 
 /** Canonical resolver reason codes for Settings pickers (sorted, platform-owned). */

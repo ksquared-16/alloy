@@ -118,6 +118,21 @@ export const ATTENTION_REASON_CRITERIA_CATALOG: Readonly<Record<OpportunityAtten
             metadataKeys: [],
             platformNote: "Platform structural rule — not threshold-tunable via metadata today.",
         },
+        missing_required_info: {
+            title: "Required information missing",
+            meaning:
+                "Projected from the Readiness Engine when enforced lifecycle field rules are not satisfied (`record_view` trigger). Needs Attention does not evaluate field rules independently.",
+            configSource:
+                "Lifecycle Required Information levels on the department (`rule_levels_v1`) — evaluated by `evaluateOperationalReadiness`, projected by `projectReadinessToAttentionReasons`.",
+            configurableSurfaces: ["reason_policy_enabled"],
+            metadataKeys: [
+                "opportunity_attention_rules.readiness_projection_v1.flag_missing_required",
+                "opportunity_attention_rules.readiness_projection_v1.include_required_gaps",
+                "opportunity_attention_rules.readiness_projection_v1.readiness_attention_bridge_v1",
+            ],
+            platformNote:
+                "Enforced gaps project by default. Required-level gaps project only when `include_required_gaps` is true. Recommended never projects.",
+        },
         waiting_on_staff: {
             title: "Waiting on staff",
             meaning: "Emitted when enrollment operational metadata marks the wait bucket as staff-owned (`enrollment_operational.wait_bucket`).",

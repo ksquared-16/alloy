@@ -24,9 +24,16 @@ import type {
 } from "@/lib/completion/effectiveRequirementsTypes";
 import type { RequirementValidationResult } from "@/lib/completion/requirementValidationTypes";
 import {
+    buildRequirementValidationResult,
+} from "@/lib/completion/requirementValidationResult";
+import {
     buildOpportunityCompletionContextFromDb,
     loadOpportunityRecordForEffectiveRequirements,
 } from "@/lib/completion/loadRecordForEffectiveRequirements";
+import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
+import { effectiveFieldRulesStoredForStage } from "@/lib/completion/lifecycleProgressionRequirementsConfig";
+import { canonicalOperatorStageForStatusKey } from "@/lib/lifecycle/enrollmentOperatorStage";
+import { evaluateFieldRulesForStage } from "@/lib/lifecycle/lifecycleFieldRuleEvaluator";
 
 function tagSource(
     violations: EffectiveRequirementViolation[],
@@ -63,6 +70,72 @@ function buildContextFromEffective(input: EffectiveRequirementsContext) {
     });
 }
 
+function resolveOperatorStageForFieldRules(input: EffectiveRequirementsContext): LifecycleOperatorStage | null {
+    const explicit = trimLifecycleStage(input.lifecycle_stage);
+    if (explicit) return explicit;
+    const statusKey = input.status ?? (typeof input.record.status_key === "string" ? input.record.status_key : null);
+    return statusKey ? canonicalOperatorStageForStatusKey(statusKey) : null;
+}
+
+function trimLifecycleStage(raw: string | undefined): LifecycleOperatorStage | null {
+    const stage = raw?.trim();
+    if (
+        stage === "lead" ||
+        stage === "qualification" ||
+        stage === "tour" ||
+        stage === "waitlist" ||
+        stage === "enrollment" ||
+        stage === "enrolled"
+    ) {
+        return stage;
+    }
+    return null;
+}
+
+function departmentMetadataFromRecord(record: Record<string, unknown>): Record<string, unknown> | null {
+    const md = record._department_metadata;
+    return md && typeof md === "object" && !Array.isArray(md) ? (md as Record<string, unknown>) : null;
+}
+
+/** Level-aware lifecycle stage field rules for record_view / bos_scan paths. */
+function evaluateOpportunityLifecycleStageFieldRules(
+    input: EffectiveRequirementsContext,
+    ctx: ReturnType<typeof buildContextFromEffective>
+): RequirementValidationResult {
+    if (input.entity_type !== "opportunity") {
+        return { ok: true, blocking: [], warnings: [], recommendations: [] };
+    }
+
+    const actionKey = input.action_key?.trim();
+    if (actionKey && isLifecyclePreflightActionKey(actionKey)) {
+        return { ok: true, blocking: [], warnings: [], recommendations: [] };
+    }
+
+    const metadata = departmentMetadataFromRecord(input.record);
+    if (!metadata) {
+        return { ok: true, blocking: [], warnings: [], recommendations: [] };
+    }
+
+    const stage = resolveOperatorStageForFieldRules(input);
+    if (!stage) {
+        return { ok: true, blocking: [], warnings: [], recommendations: [] };
+    }
+
+    const stored = effectiveFieldRulesStoredForStage(stage, metadata);
+    const violations = evaluateFieldRulesForStage(
+        {
+            ...ctx,
+            related: {
+                ...ctx.related,
+                department_metadata: metadata,
+            },
+        },
+        stage,
+        stored
+    );
+    return buildRequirementValidationResult(violations);
+}
+
 /** Evaluate from an in-memory record snapshot (BOS preview, tests). */
 export function evaluateEffectiveRequirements(
     input: EffectiveRequirementsContext
@@ -83,6 +156,12 @@ export function evaluateEffectiveRequirements(
     blocking.push(...tagSource(completionParts.blocking, "completion"));
     recommended.push(...tagSource(completionParts.recommended, "completion"));
     summary.completionRules = completionParts.blocking.length + completionParts.recommended.length;
+
+    const lifecycleFieldRules = evaluateOpportunityLifecycleStageFieldRules(input, ctx);
+    const lifecycleParts = partitionValidationToEffective(lifecycleFieldRules, "completion");
+    blocking.push(...tagSource(lifecycleParts.blocking, "completion"));
+    recommended.push(...tagSource(lifecycleParts.recommended, "completion"));
+    summary.completionRules += lifecycleParts.blocking.length + lifecycleParts.recommended.length;
 
     const actionKey = input.action_key?.trim();
     if (actionKey && isLifecyclePreflightActionKey(actionKey)) {

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { getActivitySignalForEntity, summarizeWorkflowEventForSignal, type ActivitySignalRule } from "@/lib/admin/activitySignals";
+import {
+    formatActivitySignalHeaderDetail,
+    formatActivitySignalSummary,
+    getActivitySignalForEntity,
+    summarizeWorkflowEventForSignal,
+    type ActivitySignalRule,
+} from "@/lib/admin/activitySignals";
 
 describe("getActivitySignalForEntity", () => {
     const rules: ActivitySignalRule[] = [
@@ -77,5 +83,40 @@ describe("summarizeWorkflowEventForSignal", () => {
                 payload: { action_key: "add_family_member" },
             })
         ).toBe("Add Family Member");
+    });
+
+    it("uses configured status labels instead of raw keys", () => {
+        expect(
+            summarizeWorkflowEventForSignal(
+                {
+                    occurred_at: new Date().toISOString(),
+                    event_type: "opportunity_status_changed",
+                    payload: { old_status_key: "new_inquiry", new_status_key: "contact_attempted" },
+                },
+                { new_inquiry: "New Inquiry", contact_attempted: "Contact Attempted" }
+            )
+        ).toBe("Status: New Inquiry → Contact Attempted");
+    });
+});
+
+describe("formatActivitySignalSummary", () => {
+    it("rewrites legacy raw-key summaries for drawer display", () => {
+        expect(
+            formatActivitySignalSummary("Status: new_inquiry → contact_attempted", {
+                new_inquiry: "New Inquiry",
+                contact_attempted: "Contact Attempted",
+            })
+        ).toBe("Status: New Inquiry → Contact Attempted");
+    });
+});
+
+describe("formatActivitySignalHeaderDetail", () => {
+    it("returns display labels without category prefix for header stacking", () => {
+        expect(
+            formatActivitySignalHeaderDetail("Status: new_lead → contact_attempted", {
+                new_lead: "New Lead",
+                contact_attempted: "Contact Attempted",
+            })
+        ).toBe("New Lead → Contact Attempted");
     });
 });

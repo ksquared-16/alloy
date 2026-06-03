@@ -7,6 +7,7 @@ import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { OpportunityDrawerHeaderActionsMenu } from "@/components/admin/opportunity/OpportunityDrawerHeaderActionsMenu";
 import { ActionPreflightBlockedPanel } from "@/components/admin/opportunity/ActionPreflightBlockedPanel";
 import type { ActionPreflightUiPayload } from "@/lib/admin/actions/actionPreflightPresentation";
+import { DRAWER_HEADER_ATTENTION_CENTER_COLUMN_CLASS } from "@/lib/admin/drawer/drawerHeaderAttentionPresentation";
 
 type Props = {
     opportunityId: string;
@@ -21,9 +22,64 @@ type Props = {
     onActionSelect: (action: ResolvedActionForClient) => void;
     actionPreflightBlocked?: ActionPreflightUiPayload | null;
     onDismissActionPreflightBlocked?: () => void;
+    /**
+     * `composed` — legacy sidebar: attention + actions in one shrink-0 right column.
+     * `modal-attention` / `modal-actions` — AdminV2 center modal three-column header.
+     */
+    layout?: "composed" | "modal-attention" | "modal-actions";
 };
 
-/** Title rail: guidance in the header band; actions pinned far right (single row). */
+function OpportunityDrawerHeaderActionsRow({
+    opportunityId,
+    overviewData,
+    opportunitySingular = "Inquiry",
+    queuePreviewSeed = null,
+    inquiryWorkflow = false,
+    menuActions,
+    showRegistryActions,
+    canMutate,
+    actionLoadingKey = null,
+    onActionSelect,
+}: Pick<
+    Props,
+    | "opportunityId"
+    | "overviewData"
+    | "opportunitySingular"
+    | "queuePreviewSeed"
+    | "inquiryWorkflow"
+    | "menuActions"
+    | "showRegistryActions"
+    | "canMutate"
+    | "actionLoadingKey"
+    | "onActionSelect"
+>) {
+    return (
+        <div
+            className="flex shrink-0 flex-nowrap items-center justify-end gap-2 self-start"
+            data-opportunity-header-controls-row="actions"
+        >
+            <BosDrawerAssistCta
+                bare
+                entityId={opportunityId}
+                overviewData={overviewData}
+                opportunitySingular={opportunitySingular}
+                queuePreviewSeed={queuePreviewSeed}
+                inquiryWorkflow={inquiryWorkflow}
+            />
+            {showRegistryActions ?
+                <OpportunityDrawerHeaderActionsMenu
+                    actions={menuActions}
+                    inquiryWorkflow={inquiryWorkflow}
+                    disabled={!canMutate || !!actionLoadingKey}
+                    busyKey={actionLoadingKey}
+                    onSelect={onActionSelect}
+                />
+            :   null}
+        </div>
+    );
+}
+
+/** Title rail: modal uses three columns; sidebar keeps composed attention + actions block. */
 export function OpportunityDrawerHeaderControls({
     opportunityId,
     overviewData,
@@ -37,41 +93,75 @@ export function OpportunityDrawerHeaderControls({
     onActionSelect,
     actionPreflightBlocked = null,
     onDismissActionPreflightBlocked,
+    layout = "composed",
 }: Props) {
+    if (layout === "modal-attention") {
+        return (
+            <div
+                className={DRAWER_HEADER_ATTENTION_CENTER_COLUMN_CLASS}
+                data-opportunity-header-controls="true"
+                data-opportunity-header-controls-layout="modal-attention"
+            >
+                <DrawerHeaderAttentionBlock overviewData={overviewData} />
+            </div>
+        );
+    }
+
+    if (layout === "modal-actions") {
+        return (
+            <div
+                className="flex w-auto min-w-0 shrink-0 flex-col items-stretch gap-0.5"
+                data-opportunity-header-controls="true"
+                data-opportunity-header-controls-layout="modal-actions"
+            >
+                <OpportunityDrawerHeaderActionsRow
+                    opportunityId={opportunityId}
+                    overviewData={overviewData}
+                    opportunitySingular={opportunitySingular}
+                    queuePreviewSeed={queuePreviewSeed}
+                    inquiryWorkflow={inquiryWorkflow}
+                    menuActions={menuActions}
+                    showRegistryActions={showRegistryActions}
+                    canMutate={canMutate}
+                    actionLoadingKey={actionLoadingKey}
+                    onActionSelect={onActionSelect}
+                />
+                {actionPreflightBlocked ?
+                    <ActionPreflightBlockedPanel
+                        opportunityId={opportunityId}
+                        preflight={actionPreflightBlocked}
+                        onDismiss={onDismissActionPreflightBlocked}
+                    />
+                :   null}
+            </div>
+        );
+    }
+
     return (
         <div
-            className="flex w-full min-w-0 max-w-full flex-col items-stretch gap-1"
+            className="flex w-full min-w-0 max-w-full flex-col items-stretch gap-0.5"
             data-opportunity-header-controls="true"
+            data-opportunity-header-controls-layout="composed"
         >
             <div
-                className="flex w-full min-w-0 items-start gap-3"
+                className="flex w-full min-w-0 items-start gap-2.5"
                 data-opportunity-header-controls-row="composed"
             >
-                <div className="min-w-0 flex-1 self-center">
+                <div className="min-w-0 flex-1 self-center" data-opportunity-header-controls-row="attention">
                     <DrawerHeaderAttentionBlock overviewData={overviewData} />
                 </div>
-                <div
-                    className="flex shrink-0 flex-nowrap items-center justify-end gap-2 self-start"
-                    data-opportunity-header-controls-row="actions"
-                >
-                    <BosDrawerAssistCta
-                        bare
-                        entityId={opportunityId}
-                        overviewData={overviewData}
-                        opportunitySingular={opportunitySingular}
-                        queuePreviewSeed={queuePreviewSeed}
-                        inquiryWorkflow={inquiryWorkflow}
-                    />
-                    {showRegistryActions ?
-                        <OpportunityDrawerHeaderActionsMenu
-                            actions={menuActions}
-                            inquiryWorkflow={inquiryWorkflow}
-                            disabled={!canMutate || !!actionLoadingKey}
-                            busyKey={actionLoadingKey}
-                            onSelect={onActionSelect}
-                        />
-                    :   null}
-                </div>
+                <OpportunityDrawerHeaderActionsRow
+                    opportunityId={opportunityId}
+                    overviewData={overviewData}
+                    opportunitySingular={opportunitySingular}
+                    queuePreviewSeed={queuePreviewSeed}
+                    inquiryWorkflow={inquiryWorkflow}
+                    menuActions={menuActions}
+                    showRegistryActions={showRegistryActions}
+                    canMutate={canMutate}
+                    actionLoadingKey={actionLoadingKey}
+                    onActionSelect={onActionSelect}
+                />
             </div>
             {actionPreflightBlocked ?
                 <ActionPreflightBlockedPanel

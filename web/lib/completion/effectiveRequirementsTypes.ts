@@ -33,6 +33,10 @@ export type EffectiveRequirementViolation = {
     resolution?: EffectiveRequirementResolution;
     entity_type?: string;
     entity_id?: string;
+    /** Resolved persisted requirement level when level-aware evaluation ran. */
+    requirement_level?: "recommended" | "required" | "enforced";
+    /** Lifecycle field rule id when evaluated from stage field rules. */
+    rule_id?: string;
 };
 
 export type AutoPopulateInstruction = {

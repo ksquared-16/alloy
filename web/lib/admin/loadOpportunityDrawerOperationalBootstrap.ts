@@ -13,6 +13,9 @@ import { sanitizeDrawerOperTrustPreviewFromHints } from "@/lib/admin/sanitizeDra
 import { validateQueueDefinition, type QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
 import type { AdminRouteGateSuccess } from "@/lib/admin/adminRouteGate";
 import type { RecordLayoutConfigJson } from "@/lib/recordChrome/types";
+import { createReadinessMemoScope } from "@/lib/completion/readinessEvaluationMemo";
+import { tryEvaluateDrawerRecordReadiness } from "@/lib/completion/readinessDrawerBootstrap";
+import type { ReadinessResult } from "@/lib/completion/readinessTypes";
 
 export type LoadOpportunityDrawerBootstrapParams = {
     supabase: SupabaseClient;
@@ -89,7 +92,22 @@ export async function loadOpportunityDrawerOperationalBootstrap(
                 .maybeSingle()
         :   Promise.resolve({ data: null, error: null });
 
-    const [entity, layoutRes, wuRes] = await Promise.all([entityP, layoutP, wuP]);
+    const deptMetaP =
+        ctxDept ?
+            supabase
+                .from("departments")
+                .select("metadata")
+                .eq("id", ctxDept)
+                .eq("org_id", orgId)
+                .maybeSingle()
+        :   Promise.resolve({ data: null, error: null });
+
+    const [entity, layoutRes, wuRes, deptMetaRes] = await Promise.all([
+        entityP,
+        layoutP,
+        wuP,
+        deptMetaP,
+    ]);
     phases.visible_entity_ms = Date.now() - tVis0;
     phases.record_layout_ms = Date.now() - tLayout0;
     phases.work_unit_ms = Date.now() - tWu0;
@@ -124,6 +142,24 @@ export async function loadOpportunityDrawerOperationalBootstrap(
     const deptFromEntity = String((entity as { _work_unit_department_id?: unknown })._work_unit_department_id ?? "").trim();
     const departmentId = ctxDept || work_unit?.department_id || deptFromEntity || null;
 
+    const departmentMetadata =
+        deptMetaRes.data &&
+        typeof (deptMetaRes.data as { metadata?: unknown }).metadata === "object" &&
+        !Array.isArray((deptMetaRes.data as { metadata?: unknown }).metadata)
+            ? ((deptMetaRes.data as { metadata: Record<string, unknown> }).metadata)
+            : null;
+
+    const readinessMemo = createReadinessMemoScope();
+    const readiness = tryEvaluateDrawerRecordReadiness({
+        orgId,
+        opportunityId,
+        entity: entity as Record<string, unknown>,
+        departmentId,
+        workUnitId: workUnitId || null,
+        departmentMetadata,
+        memoScope: readinessMemo,
+    });
+
     /** Header actions load client-side after primary reveal — keeps bootstrap off the critical path. */
     const tAct0 = Date.now();
     phases.record_header_actions_ms = Date.now() - tAct0;
@@ -147,6 +183,7 @@ export async function loadOpportunityDrawerOperationalBootstrap(
             work_unit_id: workUnitId || null,
         },
         oper_trust_preview,
+        readiness: readiness ?? null,
         timing: drawerBootstrapTimingFromPhases(params.routeGateMs, phases, totalMs),
     };
 }

@@ -11,6 +11,7 @@ import {
 import { resolveMyTasksGuardianFieldLabelFromRoleTypes } from "@/lib/agent/taskAssist/myTasksPresentationLabels";
 import { resolvePlacementCandidateChildDisplayName } from "@/lib/orchestration/placement/resolvePlacementCandidateChildDisplayName";
 
+import { enrichOperationalTasksWithAssigneeLabels } from "@/lib/admin/operationalWork/operationalWorkAssigneeEnrichment";
 import type { OperationalTaskRow } from "@/lib/admin/operationalTasksService";
 
 /** Presentation-only fields attached to workspace task rows (not persisted). */
@@ -22,6 +23,7 @@ export type OperationalTaskPresentationFields = {
     children_labels: string[];
     contact_field_label: string | null;
     location_id: string | null;
+    assignee_label: string | null;
 };
 
 export type OperationalTaskWorkspaceRow = OperationalTaskRow & OperationalTaskPresentationFields;
@@ -58,6 +60,7 @@ function emptyPresentation(): OperationalTaskPresentationFields {
         children_labels: [],
         contact_field_label: null,
         location_id: null,
+        assignee_label: null,
     };
 }
 
@@ -239,8 +242,10 @@ export async function enrichOperationalTasksForWorkspace(params: {
             children_labels: childrenByOpportunityId.get(opp.id) ?? [],
             contact_field_label: guardianFieldLabel,
             location_id: trimOrNull(opp.location_id),
+            assignee_label: null,
         });
     }
 
-    return tasks.map((t) => attachOperationalTaskPresentationFields(t, contextByOpportunityId));
+    const withContext = tasks.map((t) => attachOperationalTaskPresentationFields(t, contextByOpportunityId));
+    return enrichOperationalTasksWithAssigneeLabels({ supabase: params.supabase, tasks: withContext });
 }

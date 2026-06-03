@@ -38,9 +38,9 @@ function defFor(sk: string, lifecycle: string): StatusDefinitionRow {
 
 describe("resolveOpportunityAttention", () => {
     it("exposes stable priority ordering that includes every canonical code", () => {
-        expect(OPPORTUNITY_ATTENTION_REASON_PRIORITY_ORDER.length).toBe(16);
+        expect(OPPORTUNITY_ATTENTION_REASON_PRIORITY_ORDER.length).toBe(17);
         const set = new Set(OPPORTUNITY_ATTENTION_REASON_PRIORITY_ORDER);
-        expect(set.size).toBe(16);
+        expect(set.size).toBe(17);
     });
 
     it("reports resolver v2 with waiting facet and priority score fields", () => {
@@ -430,5 +430,121 @@ describe("resolveOpportunityAttention", () => {
         expect(batched.needs_attention).toBe(baseline.needs_attention);
         expect(batched.primary_reason?.code).toBe(baseline.primary_reason?.code);
         expect(batched.reasons.map((r) => r.code)).toEqual(baseline.reasons.map((r) => r.code));
+    });
+
+    it("merges readiness-projected missing_required_info without platform re-evaluation", () => {
+        const nowMs = Date.parse("2026-06-01T12:00:00.000Z");
+        const cfg = createDefaultOpportunityAttentionResolvedConfig();
+        const defs = [defFor("contacted", "qualification")];
+        const baseline = resolveOpportunityAttention({
+            opportunity: {
+                id: "1",
+                status_key: "contacted",
+                created_at: "2026-06-01T12:00:00.000Z",
+                updated_at: "2026-06-01T18:00:00.000Z",
+                metadata: null,
+                customer_id: "c1",
+                primary_person_id: "p1",
+            },
+            nowMs,
+            defs,
+            config: cfg,
+        });
+        expect(baseline.needs_attention).toBe(false);
+
+        const withReadiness = resolveOpportunityAttention({
+            opportunity: {
+                id: "1",
+                status_key: "contacted",
+                created_at: "2026-06-01T12:00:00.000Z",
+                updated_at: "2026-06-01T18:00:00.000Z",
+                metadata: null,
+                customer_id: "c1",
+                primary_person_id: "p1",
+            },
+            nowMs,
+            defs,
+            config: cfg,
+            readiness: {
+                contract_version: "1.0",
+                primary_state: "needs_information",
+                trigger: "record_view",
+                subject: { entity_type: "opportunity", entity_id: "1" },
+                context: { org_id: "org-1" },
+                gaps: [
+                    {
+                        requirement_id: "child:program_interest",
+                        scope_type: "record",
+                        level: "enforced",
+                        label: "Child · Program Interest",
+                        missing_reason: "Missing",
+                        failure_kind: "missing",
+                        blocking: false,
+                    },
+                ],
+                counts: {
+                    gaps_total: 1,
+                    by_level: { recommended: 0, required: 0, enforced: 1 },
+                    blocking: 0,
+                    satisfied: 0,
+                    configured: 1,
+                },
+                ok: false,
+            },
+        });
+        expect(withReadiness.needs_attention).toBe(true);
+        expect(withReadiness.reasons.some((r) => r.code === "missing_required_info")).toBe(true);
+        expect(withReadiness.reasons.find((r) => r.code === "missing_required_info")?.attention_source).toBe(
+            "readiness"
+        );
+        expect(withReadiness.reasons.find((r) => r.code === "missing_required_info")?.readiness_gap_ids).toEqual([
+            "child:program_interest",
+        ]);
+    });
+
+    it("omits readiness projection when primary_state is blocked", () => {
+        const nowMs = Date.parse("2026-06-01T12:00:00.000Z");
+        const cfg = createDefaultOpportunityAttentionResolvedConfig();
+        const r = resolveOpportunityAttention({
+            opportunity: {
+                id: "1",
+                status_key: "contacted",
+                created_at: "2026-06-01T12:00:00.000Z",
+                updated_at: "2026-06-01T18:00:00.000Z",
+                metadata: null,
+                customer_id: "c1",
+                primary_person_id: "p1",
+            },
+            nowMs,
+            defs: [defFor("contacted", "qualification")],
+            config: cfg,
+            readiness: {
+                contract_version: "1.0",
+                primary_state: "blocked",
+                trigger: "record_view",
+                subject: { entity_type: "opportunity", entity_id: "1" },
+                context: { org_id: "org-1" },
+                gaps: [
+                    {
+                        requirement_id: "child:program_interest",
+                        scope_type: "record",
+                        level: "enforced",
+                        label: "Child · Program Interest",
+                        missing_reason: "Missing",
+                        failure_kind: "missing",
+                        blocking: true,
+                    },
+                ],
+                counts: {
+                    gaps_total: 1,
+                    by_level: { recommended: 0, required: 0, enforced: 1 },
+                    blocking: 1,
+                    satisfied: 0,
+                    configured: 1,
+                },
+                ok: false,
+            },
+        });
+        expect(r.reasons.some((c) => c.code === "missing_required_info")).toBe(false);
     });
 });

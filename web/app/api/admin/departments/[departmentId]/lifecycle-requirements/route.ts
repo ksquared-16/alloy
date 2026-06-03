@@ -30,6 +30,7 @@ import { lifecycleRequirementEntityLabelsFromMap } from "@/lib/lifecycle/lifecyc
 import { validateFieldRuleIdsAgainstPalette } from "@/lib/lifecycle/lifecycleFieldPaletteMerge";
 import { logLifecycleBuilderSaveTiming } from "@/lib/lifecycle/lifecycleBuilderSaveTiming";
 import { lifecycleActivationFromMetadata } from "@/lib/lifecycle/lifecycleActivationConfig";
+import { parseRuleLevelsV1 } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
 
 function isOperatorStageKey(s: string): s is LifecycleOperatorStage {
     return (LIFECYCLE_STAGE_ORDER as readonly string[]).includes(s);
@@ -224,6 +225,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                 return NextResponse.json({ error: "Invalid field rules for this stage." }, { status: 400 });
             }
             const operator = asOperatorStageKey(stage);
+            const explicit_rule_levels_v1 = parseRuleLevelsV1(
+                (fieldRulesRaw as { rule_levels_v1?: unknown }).rule_levels_v1
+            );
             if (operator) {
                 metadataPatch = buildLifecycleFieldRulesOverridePatch({
                     stage: operator,
@@ -231,6 +235,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                     recommended_rule_ids: recommended,
                     existingMetadata: prevMeta,
                     mergedPalette,
+                    explicit_rule_levels_v1,
                 });
             } else {
                 metadataPatch = buildBuilderStageFieldRulesPatch({
@@ -238,6 +243,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                     required_rule_ids: required,
                     recommended_rule_ids: recommended,
                     existingMetadata: prevMeta,
+                    mergedPalette,
+                    explicit_rule_levels_v1,
                 });
             }
         } catch (e) {

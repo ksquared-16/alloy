@@ -5,6 +5,7 @@
 
 import { humanizeSnakeCaseToken } from "@/lib/admin/activityTimelineFormat";
 import { resolveCommunicationMessageEventTitle } from "@/lib/admin/activityMessageEventLabels";
+import { buildOpportunityActivityStatusKeyLabels } from "@/lib/admin/opportunityActivityStatusKeyLabels";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type ActivitySignalSeverity = "low" | "medium" | "high";
@@ -103,7 +104,10 @@ export function parseActivitySignalRulesFromMetadata(metadata: unknown): Activit
     return out.length ? out : null;
 }
 
-export function summarizeWorkflowEventForSignal(ev: WorkflowEventLike): string {
+export function summarizeWorkflowEventForSignal(
+    ev: WorkflowEventLike,
+    statusKeyLabels?: Record<string, string>
+): string {
     const t = (ev.event_type ?? "").trim();
     const p = (ev.payload && typeof ev.payload === "object" ? ev.payload : {}) as Record<string, unknown>;
     if (t === "message_received") {
@@ -113,18 +117,20 @@ export function summarizeWorkflowEventForSignal(ev: WorkflowEventLike): string {
         return resolveCommunicationMessageEventTitle(t, p) ?? "Message sent";
     }
     if (t === "opportunity_status_changed" || t === "entity_status_changed" || t === "child_lifecycle_status_changed") {
-        const o =
+        const oRaw =
             p.old_status_key != null
                 ? String(p.old_status_key)
                 : p.previous_status_key != null
                   ? String(p.previous_status_key)
                   : "—";
-        const n =
+        const nRaw =
             p.new_status_key != null
                 ? String(p.new_status_key)
                 : p.next_status_key != null
                   ? String(p.next_status_key)
                   : "—";
+        const o = oRaw === "—" ? oRaw : humanizeSnakeCaseToken(oRaw, statusKeyLabels);
+        const n = nRaw === "—" ? nRaw : humanizeSnakeCaseToken(nRaw, statusKeyLabels);
         return t === "child_lifecycle_status_changed" ? `Child lifecycle: ${o} → ${n}` : `Status: ${o} → ${n}`;
     }
     if (t === "note_added") return "Note added";
@@ -169,18 +175,52 @@ export function formatActivityRelativeShort(iso: string | null, nowMs: number): 
  * Derive last-activity fields and optional stale_signal from pre-fetched events + config rules.
  * Rules: first match in config order wins. No rules or no last_activity_at → no stale_signal.
  */
+/** Operator-facing last-activity summary — resolves configured status labels, never raw keys. */
+export function formatActivitySignalSummary(
+    summary: string | null | undefined,
+    statusKeyLabels?: Record<string, string>
+): string | null {
+    const s = (summary ?? "").trim();
+    if (!s) return null;
+    const statusLine = s.match(/^Status:\s*(.+?)\s*→\s*(.+)$/i);
+    if (statusLine) {
+        const o = humanizeSnakeCaseToken(statusLine[1]!.trim(), statusKeyLabels);
+        const n = humanizeSnakeCaseToken(statusLine[2]!.trim(), statusKeyLabels);
+        return `Status: ${o} → ${n}`;
+    }
+    const childLine = s.match(/^Child lifecycle:\s*(.+?)\s*→\s*(.+)$/i);
+    if (childLine) {
+        const o = humanizeSnakeCaseToken(childLine[1]!.trim(), statusKeyLabels);
+        const n = humanizeSnakeCaseToken(childLine[2]!.trim(), statusKeyLabels);
+        return `Child lifecycle: ${o} → ${n}`;
+    }
+    return s;
+}
+
+/** Drawer header detail — display labels only, no category prefix (e.g. "Status:"). */
+export function formatActivitySignalHeaderDetail(
+    summary: string | null | undefined,
+    statusKeyLabels?: Record<string, string>
+): string | null {
+    const formatted = formatActivitySignalSummary(summary, statusKeyLabels);
+    if (!formatted) return null;
+    const stripped = formatted.replace(/^(Status|Child lifecycle):\s*/i, "").trim();
+    return stripped || null;
+}
+
 export function getActivitySignalForEntity(input: {
     events: WorkflowEventLike[];
     entity: ActivitySignalEntity;
     rules: ActivitySignalRule[] | null;
     nowMs?: number;
+    statusKeyLabels?: Record<string, string>;
 }): ActivitySignalResult {
     const nowMs = input.nowMs ?? Date.now();
     const sorted = [...input.events].sort((a, b) => Date.parse(b.occurred_at) - Date.parse(a.occurred_at));
     const latest = sorted[0] ?? null;
     const last_activity_at = latest?.occurred_at ?? null;
     const last_activity_type = latest?.event_type ?? null;
-    const last_activity_summary = latest ? summarizeWorkflowEventForSignal(latest) : null;
+    const last_activity_summary = latest ? summarizeWorkflowEventForSignal(latest, input.statusKeyLabels) : null;
 
     const rules = input.rules;
     if (!rules?.length || !last_activity_at) {
@@ -287,6 +327,7 @@ export async function enrichOpportunityQueueRowsWithActivitySignals<
     workUnitMetadata: unknown;
     departmentMetadata: unknown | null;
     nowMs?: number;
+    statusKeyLabels?: Record<string, string> | null;
 }): Promise<
     Array<
         T & {
@@ -298,6 +339,14 @@ export async function enrichOpportunityQueueRowsWithActivitySignals<
     >
 > {
     const rules = resolveActivitySignalRules(params.workUnitMetadata, params.departmentMetadata);
+    let statusKeyLabels = params.statusKeyLabels ?? null;
+    if (!statusKeyLabels) {
+        try {
+            statusKeyLabels = await buildOpportunityActivityStatusKeyLabels(params.supabase, params.orgId);
+        } catch {
+            statusKeyLabels = null;
+        }
+    }
     const ids = params.rows.map((r) => r.id);
     let latestById = new Map<string, WorkflowEventLike>();
     try {
@@ -316,6 +365,7 @@ export async function enrichOpportunityQueueRowsWithActivitySignals<
             entity: { id: row.id, status_key: row.status_key },
             rules,
             nowMs,
+            statusKeyLabels: statusKeyLabels ?? undefined,
         });
         return {
             ...row,

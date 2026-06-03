@@ -53,7 +53,11 @@ export async function POST(request: NextRequest) {
         selected_status_keys?: string[];
         status_keys?: string[];
         work_unit_name?: string | null;
-        field_rules?: { required_rule_ids?: string[]; recommended_rule_ids?: string[] } | null;
+        field_rules?: {
+            required_rule_ids?: string[];
+            recommended_rule_ids?: string[];
+            rule_levels_v1?: { version?: number; by_rule_id?: Record<string, string> };
+        } | null;
     } = {};
     try {
         body = (await request.json()) as typeof body;
@@ -101,6 +105,11 @@ export async function POST(request: NextRequest) {
                   recommended_rule_ids: Array.isArray(fieldRulesRaw.recommended_rule_ids)
                       ? fieldRulesRaw.recommended_rule_ids.filter((x): x is string => typeof x === "string")
                       : [],
+                  ...(fieldRulesRaw.rule_levels_v1 &&
+                  typeof fieldRulesRaw.rule_levels_v1 === "object" &&
+                  !Array.isArray(fieldRulesRaw.rule_levels_v1)
+                      ? { rule_levels_v1: fieldRulesRaw.rule_levels_v1 }
+                      : {}),
               }
             : null;
 

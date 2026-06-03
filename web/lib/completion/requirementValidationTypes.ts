@@ -31,6 +31,9 @@ export type RequirementViolationContext = {
     role_key?: string;
     profile_key?: string;
     layout_variant_key?: string;
+    /** Persisted requirement level when evaluated from lifecycle field rules. */
+    requirement_level?: "recommended" | "required" | "enforced";
+    rule_id?: string;
 };
 
 export type RequirementViolation = {

@@ -39,6 +39,13 @@ describe("opportunity drawer operational bootstrap", () => {
         expect(loader).toContain("hintDepartmentId");
     });
 
+    it("loader attaches optional readiness without attention resolver work", () => {
+        const loader = read("lib/admin/loadOpportunityDrawerOperationalBootstrap.ts");
+        expect(loader).toContain("tryEvaluateDrawerRecordReadiness");
+        expect(loader).toContain("readiness:");
+        expect(loader).not.toContain("loadOpportunityNeedsAttentionRows");
+    });
+
     it("timing always reports attention_resolver_passes 0", () => {
         const perf = read("lib/admin/opportunityDrawerOperationalBootstrapPerf.ts");
         expect(perf).toContain("attention_resolver_passes: 0");

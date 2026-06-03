@@ -2,12 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 
-import { ADMIN_V2_OPEN_TASKS_MODAL } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
+import {
+    ADMIN_V2_OPEN_TASKS_MODAL,
+    patchOperationalTaskFields,
+    patchOperationalTaskStatus,
+    readJson,
+} from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 import { formatTaskAssistClientError } from "@/lib/agent/taskAssist/taskAssistClientErrorMessages";
 import { formatOperationalTaskSourceLabel } from "@/lib/agent/taskAssist/formatOperationalTaskSourceLabel";
 import { operationalTaskUrgencyBadge } from "@/lib/agent/taskAssist/taskAssistOperationalUrgency";
-import { patchOperationalTaskFields, patchOperationalTaskStatus, readJson } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
-import { minDatetimeLocalValue } from "@/components/admin/taskAssist/TaskAssistOpportunityWorkspace";
+import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import OperationalWorkAssigneeSelect from "@/components/admin/opportunity/OperationalWorkAssigneeSelect";
+import { operationalWorkAssigneeDetailLabel } from "@/lib/admin/operationalWork/operationalWorkAssigneePresentation";
+import { minOperationalWorkDatetimeLocalValue } from "@/lib/admin/operationalWork/operationalWorkDateTimeLocal";
 
 export type OperationalTaskDetail = {
     id: string;
@@ -18,6 +25,8 @@ export type OperationalTaskDetail = {
     source: string;
     entity_id: string;
     entity_type: string;
+    assigned_to_user_id?: string | null;
+    assignee_label?: string | null;
     created_at?: string;
     created_by?: string;
     entity_label?: string | null;
@@ -56,11 +65,13 @@ export default function OperationalTaskDetailPopover({
     onClose,
     onUpdated,
 }: OperationalTaskDetailPopoverProps) {
+    const { userId } = useAdminAuth();
     const panelRef = useRef<HTMLDivElement>(null);
     const [editing, setEditing] = useState(false);
     const [title, setTitle] = useState(task.title);
     const [dueLocal, setDueLocal] = useState(dueToLocalInput(task.due_at));
     const [notes, setNotes] = useState(task.description ?? "");
+    const [assignedToUserId, setAssignedToUserId] = useState<string | null>(task.assigned_to_user_id ?? null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -68,9 +79,10 @@ export default function OperationalTaskDetailPopover({
         setTitle(task.title);
         setDueLocal(dueToLocalInput(task.due_at));
         setNotes(task.description ?? "");
+        setAssignedToUserId(task.assigned_to_user_id ?? null);
         setEditing(false);
         setError(null);
-    }, [task.id, task.title, task.due_at, task.description]);
+    }, [task.id, task.title, task.due_at, task.description, task.assigned_to_user_id]);
 
     useEffect(() => {
         const onDoc = (e: MouseEvent) => {
@@ -114,6 +126,7 @@ export default function OperationalTaskDetailPopover({
                 title,
                 description: notes.trim() || null,
                 due_at: new Date(dueLocal).toISOString(),
+                assigned_to_user_id: assignedToUserId,
             });
             const json = await readJson<{ ok?: boolean; error?: string; message?: string }>(res);
             if (!res.ok || !json.ok) throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
@@ -124,7 +137,13 @@ export default function OperationalTaskDetailPopover({
         } finally {
             setBusy(false);
         }
-    }, [dueLocal, notes, onUpdated, task.id, title]);
+    }, [assignedToUserId, dueLocal, notes, onUpdated, task.id, title]);
+
+    const assigneeLabel = operationalWorkAssigneeDetailLabel({
+        assignedToUserId: task.assigned_to_user_id,
+        assigneeLabel: task.assignee_label,
+        currentUserId: userId,
+    });
 
     const openAllTasks = useCallback(() => {
         if (typeof window !== "undefined") {
@@ -163,7 +182,7 @@ export default function OperationalTaskDetailPopover({
                     <input
                         type="datetime-local"
                         value={dueLocal}
-                        min={minDatetimeLocalValue()}
+                        min={minOperationalWorkDatetimeLocalValue()}
                         onChange={(e) => setDueLocal(e.target.value)}
                         className="w-full rounded border border-alloy-stone/25 px-2 py-1 text-[11px]"
                     />
@@ -174,10 +193,24 @@ export default function OperationalTaskDetailPopover({
                         onChange={(e) => setNotes(e.target.value)}
                         className="w-full resize-y rounded border border-alloy-stone/25 px-2 py-1 text-[10px]"
                     />
+                    <label className="block text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                        Assigned to
+                    </label>
+                    <OperationalWorkAssigneeSelect
+                        id={`operational-task-edit-assignee-${task.id}`}
+                        value={assignedToUserId}
+                        currentUserId={userId}
+                        disabled={busy}
+                        onChange={setAssignedToUserId}
+                    />
                 </div>
             ) : (
                 <>
                     <p className="mt-1 text-[10px] font-medium text-alloy-midnight/70">Due {formatWhen(task.due_at)}</p>
+                    <p className="mt-1 text-[10px] text-alloy-midnight/65" data-operational-task-assignee="true">
+                        <span className="text-alloy-midnight/45">Assigned to · </span>
+                        {assigneeLabel}
+                    </p>
                     <p className="mt-1 text-[10px] text-alloy-midnight/65">
                         <span className="text-alloy-midnight/45">Linked · </span>
                         {linkedLabel}

@@ -1,6 +1,8 @@
 import { evaluateEffectiveRequirements } from "@/lib/completion/evaluateEffectiveRequirements";
 import { effectiveRequirementsToValidationResult } from "@/lib/completion/evaluateEffectiveRequirements";
+import { readinessResultFromEffectiveRequirements } from "@/lib/completion/evaluateOperationalReadiness";
 import { toBosCompletionRequirementPayload } from "@/lib/completion/bosIntegration";
+import type { ReadinessResult } from "@/lib/completion/readinessTypes";
 import { mapCatalogKeyToCanonicalActionKey } from "@/lib/adminV2/bos/recommendations/preflight/mapCatalogKeyToCanonicalActionKey";
 import type { OperationalRecommendationV1 } from "@/lib/adminV2/bos/recommendations/types";
 import type { BosCompletionRequirementPayload } from "@/lib/completion/enforcePersonCompletionOnPatch";
@@ -10,6 +12,7 @@ export type BosRecommendedActionPreflightV1 = {
     label: string;
     preflight: BosCompletionRequirementPayload;
     executable: boolean;
+    readiness?: ReadinessResult;
 };
 
 /**
@@ -36,7 +39,15 @@ export function enrichOperationalRecommendationWithActionPreflight(
     });
 
     const validation = effectiveRequirementsToValidationResult(effective);
-    const preflight = toBosCompletionRequirementPayload(validation);
+    const readiness = readinessResultFromEffectiveRequirements(effective, {
+        trigger: "action_execute",
+        subject: { entity_type: "opportunity", entity_id: opportunityId },
+        context: {
+            org_id: String(opportunityRow.org_id ?? "").trim() || "unknown",
+            action_key: canonicalKey,
+        },
+    });
+    const preflight = { ...toBosCompletionRequirementPayload(validation), readiness };
 
     return {
         ...recommendation,
@@ -49,6 +60,7 @@ export function enrichOperationalRecommendationWithActionPreflight(
             label: recommendation.recommended_action.label,
             preflight,
             executable: effective.ok,
+            readiness,
         },
     };
 }

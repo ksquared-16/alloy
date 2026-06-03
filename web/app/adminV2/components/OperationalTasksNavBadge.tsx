@@ -12,7 +12,7 @@ import {
     writeOperationalTasksNavCountsCache,
 } from "@/lib/adminV2/operationalTasksNavCountsCache";
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
-import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
+import { isOperationalWorkV1Enabled } from "@/lib/admin/operationalWork/operationalWorkV1UiGate";
 import { neutral } from "@/styles/tokens/colors";
 import { runWhenAdminV2PrimarySurfaceReady } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { isAdminV2SidecarNetworkBlocked } from "@/lib/perf/adminV2PrimarySurfaceGate";
@@ -28,7 +28,7 @@ export default function OperationalTasksNavBadge({
     buttonClassName?: string;
     onOpenModal: () => void;
 }) {
-    const enabled = isTaskAssistV1UiEnabled();
+    const enabled = isOperationalWorkV1Enabled();
     const [counts, setCounts] = useState<TaskCounts | null>(() => readOperationalTasksNavCountsCache("open"));
 
     const load = useCallback(async () => {

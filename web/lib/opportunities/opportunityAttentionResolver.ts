@@ -33,6 +33,12 @@ import {
     computeAttentionPriorityScore,
     type PriorityDimensionContribution,
 } from "@/lib/opportunities/attentionPriorityScore";
+import type { ReadinessResult } from "@/lib/completion/readinessTypes";
+import {
+    projectReadinessToAttentionReasons,
+    type ProjectedReadinessAttentionReason,
+} from "@/lib/opportunities/readinessAttentionProjection";
+import type { ReadinessAttentionProjectionProfileV1 } from "@/lib/opportunities/readinessAttentionProjectionProfile";
 
 export type { OpportunityAttentionReasonCode } from "@/lib/opportunities/attentionPlatformCatalog";
 
@@ -118,6 +124,13 @@ export type OpportunityAttentionResolverInput = {
     rowContext?: {
         lastStatusTransitionAtIso?: string | null;
     } | null;
+    /**
+     * Optional readiness snapshot (`record_view` trigger) — projected to attention reasons.
+     * Evaluator must run outside the resolver; pass result only.
+     */
+    readiness?: ReadinessResult | null;
+    /** Override profile; defaults to `config.readiness_projection`. */
+    readinessProjectionProfile?: ReadinessAttentionProjectionProfileV1 | null;
 };
 
 export type ResolvedOpportunityAttentionReason = {
@@ -126,6 +139,9 @@ export type ResolvedOpportunityAttentionReason = {
     severity: OpportunityAttentionSeverity;
     sla_tier: AttentionSlaTier;
     sla_clock_confidence: AttentionSlaClockConfidence;
+    /** Present when reason was projected from readiness gaps. */
+    readiness_gap_ids?: string[];
+    attention_source?: "platform" | "readiness";
 };
 
 export type AttentionWaitingFacet = {
@@ -355,9 +371,22 @@ function toResolvedList(
         row: OpportunityAttentionEntityInput;
         nowMs: number;
         rowContext?: OpportunityAttentionResolverInput["rowContext"];
-    }
+    },
+    projectedByCode?: Map<OpportunityAttentionReasonCode, ProjectedReadinessAttentionReason>
 ): ResolvedOpportunityAttentionReason[] {
     return orderedCodes.map((code) => {
+        const projected = projectedByCode?.get(code);
+        if (projected) {
+            return {
+                code,
+                label: projected.label,
+                severity: projected.severity,
+                sla_tier: projected.severity === "high" || projected.severity === "critical" ? "breached" : "approaching",
+                sla_clock_confidence: "high" as AttentionSlaClockConfidence,
+                readiness_gap_ids: projected.readiness_gap_ids,
+                attention_source: "readiness",
+            };
+        }
         const sla = slaSliceForReason(code, { ...slaCtx, config });
         return {
             code,
@@ -365,8 +394,26 @@ function toResolvedList(
             severity: severityForReasonCode(code, config),
             sla_tier: sla.tier,
             sla_clock_confidence: sla.clock_confidence,
+            attention_source: "platform",
         };
     });
+}
+
+function mergeReadinessProjectedCodes(
+    platformCodes: OpportunityAttentionReasonCode[],
+    readiness: ReadinessResult | null | undefined,
+    profile: ReadinessAttentionProjectionProfileV1
+): {
+    codes: OpportunityAttentionReasonCode[];
+    projectedByCode: Map<OpportunityAttentionReasonCode, ProjectedReadinessAttentionReason>;
+} {
+    const projected = projectReadinessToAttentionReasons(readiness, profile);
+    const projectedByCode = new Map<OpportunityAttentionReasonCode, ProjectedReadinessAttentionReason>();
+    for (const p of projected) {
+        projectedByCode.set(p.code, p);
+    }
+    const codes = [...new Set([...platformCodes, ...projected.map((p) => p.code)])];
+    return { codes, projectedByCode };
 }
 
 /**
@@ -399,11 +446,18 @@ export function resolveOpportunityAttention(input: OpportunityAttentionResolverI
 
     const waitingCodes = collectWaitingCodesFromEo(eo);
 
-    const merged: OpportunityAttentionReasonCode[] = [...queueCodes];
-    if (life) merged.push(life);
-    merged.push(...waitingCodes);
+    const mergedPlatform: OpportunityAttentionReasonCode[] = [...queueCodes];
+    if (life) mergedPlatform.push(life);
+    mergedPlatform.push(...waitingCodes);
 
-    const enabledCodes = applyPolicies([...new Set(merged)], cfg);
+    const projectionProfile = input.readinessProjectionProfile ?? cfg.readiness_projection;
+    const { codes: mergedWithReadiness, projectedByCode } = mergeReadinessProjectedCodes(
+        mergedPlatform,
+        input.readiness,
+        projectionProfile
+    );
+
+    const enabledCodes = applyPolicies([...new Set(mergedWithReadiness)], cfg);
     const orderedCodes = sortReasonCodes(enabledCodes, cfg);
 
     const slaCtxBase = {
@@ -414,7 +468,7 @@ export function resolveOpportunityAttention(input: OpportunityAttentionResolverI
         rowContext: input.rowContext,
     };
 
-    const reasons = toResolvedList(orderedCodes, cfg, slaCtxBase);
+    const reasons = toResolvedList(orderedCodes, cfg, slaCtxBase, projectedByCode);
 
     const activityStale = input.optionalSignals?.activityStale ?? null;
 

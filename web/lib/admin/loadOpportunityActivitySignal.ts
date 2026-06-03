@@ -6,6 +6,7 @@ import {
     resolveActivitySignalRules,
     type ActivitySignalResult,
 } from "@/lib/admin/activitySignals";
+import { buildOpportunityActivityStatusKeyLabels } from "@/lib/admin/opportunityActivityStatusKeyLabels";
 
 export type OpportunityActivitySignalOrgMetadata = {
     workUnitMetadata: unknown | null;
@@ -67,12 +68,14 @@ export async function loadOpportunityActivitySignal(input: LoadOpportunityActivi
     }
     const ev = latestById.get(input.opportunityId);
     const events = ev ? [ev] : [];
+    const statusKeyLabels = await buildOpportunityActivityStatusKeyLabels(input.supabase, input.orgId);
 
     return getActivitySignalForEntity({
         events,
         entity: { id: input.opportunityId, status_key: input.statusKey },
         rules,
         nowMs: input.nowMs ?? Date.now(),
+        statusKeyLabels,
     });
 }
 

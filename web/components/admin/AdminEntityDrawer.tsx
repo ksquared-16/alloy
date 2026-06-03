@@ -48,14 +48,18 @@ import EntityDocumentsSection from "@/components/admin/EntityDocumentsSection";
 import { normalizeDocumentRows } from "@/lib/admin/normalizeDocumentRow";
 import CommunicationsDrawerSection from "@/components/admin/communications/CommunicationsDrawerSection";
 import OpportunityOperationalCompactStrip from "@/components/admin/opportunity/OpportunityOperationalCompactStrip";
+import OpportunityRecordCreateWorkModal from "@/components/admin/opportunity/OpportunityRecordCreateWorkModal";
 import { OpportunityInquirySummaryRightColumn } from "@/components/admin/opportunity/OpportunityInquirySummaryRightColumn";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { buildOpportunityOperationalContext } from "@/lib/adminV2/bos/activeOperationalContext";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
+import { isOperationalWorkV1Enabled } from "@/lib/admin/operationalWork/operationalWorkV1UiGate";
 import {
     ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS,
     ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH,
+    ADMIN_V2_OPEN_CREATE_WORK_MODAL,
     type OpportunityFocusOperationalTasksDetail,
+    type OpportunityOpenCreateWorkModalDetail,
 } from "@/lib/adminV2/opportunityDrawerTaskEvents";
 import {
     scheduleDeferredCommunicationsDrawerPrefetch,
@@ -326,6 +330,10 @@ import {
 import { personDrawerOperatingSummaryVisible } from "@/lib/admin/person/personDrawerShellPolicy";
 import { openViewPersonFromOpportunity } from "@/lib/admin/drawer/openViewPersonFromOpportunity";
 import { entityDataMatchesDrawer } from "@/lib/admin/drawer/entityDataMatchesDrawer";
+import {
+    DRAWER_HEADER_ATTENTION_CENTER_COLUMN_CLASS,
+    isDrawerHeaderAttentionVisible,
+} from "@/lib/admin/drawer/drawerHeaderAttentionPresentation";
 import { fetchPersonDrawerEntityCoalesced, isPersonDrawerSnapshotWarm } from "@/lib/admin/prefetchPersonDrawerSnapshot";
 import { installPersonDrawerDevDirectOpen } from "@/lib/admin/drawer/personDrawerDevDirectOpen";
 import { prefetchLinkedPersonsFromOpportunityRecord } from "@/lib/admin/drawer/prefetchLinkedPersonsFromOpportunityRecord";
@@ -454,6 +462,7 @@ import {
 } from "@/lib/admin/opportunityDrawerBootstrapClient";
 import type { DrawerOperTrustPreviewV1 } from "@/lib/admin/opportunityDrawerOperationalBootstrapTypes";
 import type { OpportunityDrawerOperationalBootstrapResponse } from "@/lib/admin/opportunityDrawerOperationalBootstrapTypes";
+import type { ReadinessResult } from "@/lib/completion/readinessTypes";
 import { AdminV2DrawerLoadingState } from "@/components/admin/workspace/AdminV2DrawerLoadingState";
 import type { RecordLayoutRow } from "@/lib/recordChrome/types";
 import { getSectionOrderFromScheduleLayoutBlocks } from "@/lib/recordChrome/scheduleLayoutConfig";
@@ -485,7 +494,8 @@ import {
 } from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
-import { formatActivityRelativeShort, type ActivitySignalResult } from "@/lib/admin/activitySignals";
+import { formatActivityRelativeShort, formatActivitySignalHeaderDetail, type ActivitySignalResult } from "@/lib/admin/activitySignals";
+import { OPPORTUNITY_ACTIVITY_STATUS_KEY_LABELS } from "@/lib/admin/opportunityActivityTimelineFormat";
 import { formatOpportunityActivityTimelineEvent } from "@/lib/admin/opportunityActivityTimelineFormat";
 import OpportunityQuoteIntakeSection from "@/components/admin/quoteIntake/OpportunityQuoteIntakeSection";
 import OpportunityEnrollmentPacketModal from "@/components/admin/opportunity/OpportunityEnrollmentPacketModal";
@@ -1145,6 +1155,18 @@ function DrawerWorkflowHeaderQuickActionsSkeleton() {
     );
 }
 
+function DrawerHeaderAttentionColumnSkeleton() {
+    return (
+        <div
+            className={DRAWER_HEADER_ATTENTION_CENTER_COLUMN_CLASS}
+            aria-busy="true"
+            data-opportunity-header-attention-skeleton="true"
+        >
+            <DrawerQuietSkeletonBar className="h-[4.25rem] w-full rounded-xl" />
+        </div>
+    );
+}
+
 /** Queue-preview bootstrap: section-shaped reserves (not one large empty block). */
 function DrawerOpportunityQueueBootstrapBodySkeleton() {
     return (
@@ -1733,6 +1755,10 @@ export default function AdminEntityDrawer() {
     const [oppQuoteIntakeOpen, setOppQuoteIntakeOpen] = useState(false);
     const [oppLaunchPacketOpen, setOppLaunchPacketOpen] = useState(false);
     const [oppSendFormOpen, setOppSendFormOpen] = useState(false);
+    const [oppCreateWorkOpen, setOppCreateWorkOpen] = useState(false);
+    const [oppCreateWorkPrefill, setOppCreateWorkPrefill] = useState<
+        OpportunityOpenCreateWorkModalDetail["prefill"] | undefined
+    >(undefined);
     const [oppDiscountOptions, setOppDiscountOptions] = useState<{ value: string; label: string }[] | null>(null);
     const [oppDiscountLoading, setOppDiscountLoading] = useState(false);
     const [oppDiscountSelection, setOppDiscountSelection] = useState<string>("");
@@ -1851,6 +1877,7 @@ export default function AdminEntityDrawer() {
     const [opportunityOperTrustPreview, setOpportunityOperTrustPreview] = useState<DrawerOperTrustPreviewV1 | null>(
         null
     );
+    const [opportunityDrawerReadiness, setOpportunityDrawerReadiness] = useState<ReadinessResult | null>(null);
     const drawerLoadStartRef = useRef<{ key: string; at: number } | null>(null);
     const drawerReadyLoggedKeyRef = useRef<string | null>(null);
     /** Current drawer.type:id — guards async hydrates from overwriting after stack navigation. */
@@ -2422,6 +2449,7 @@ export default function AdminEntityDrawer() {
         setOpportunityBootstrapAppliedId(drawer.id);
         setOpportunityBootstrapLayoutRow(mapBootstrapLayoutToRecordLayoutRow(boot));
         setOpportunityOperTrustPreview(boot.oper_trust_preview);
+        setOpportunityDrawerReadiness(boot.readiness ?? null);
         let merged = mergeOpportunityFullHydrateLocal(
             boot.entity as Record<string, unknown>,
             preload.primaryEntity
@@ -2529,6 +2557,7 @@ export default function AdminEntityDrawer() {
             setOpportunityBootstrapAppliedId(null);
             setOpportunityBootstrapLayoutRow(null);
             setOpportunityOperTrustPreview(null);
+            setOpportunityDrawerReadiness(null);
             setOpportunityDrawerBootstrapLegacy(false);
             return;
         }
@@ -2719,6 +2748,7 @@ export default function AdminEntityDrawer() {
                 boot.entity as Record<string, unknown>
             );
             setOpportunityOperTrustPreview(boot.oper_trust_preview);
+            setOpportunityDrawerReadiness(boot.readiness ?? null);
             setData(boot.entity);
             putDrawerEntitySnapshot(drawer.type, drawer.id, boot.entity as Record<string, unknown>);
             if (boot.record_header_actions) {
@@ -4241,6 +4271,14 @@ export default function AdminEntityDrawer() {
         };
         window.addEventListener(ADMINV2_OPEN_TOUR_SCHEDULE_MODAL, onOpenTourSchedule as EventListener);
         window.addEventListener(ADMINV2_OPEN_TOUR_OUTCOME_MODAL, onOpenTourOutcome as EventListener);
+        const onOpenCreateWork = (ev: Event) => {
+            const detail = (ev as CustomEvent<OpportunityOpenCreateWorkModalDetail>).detail;
+            const id = detail?.opportunity_id?.trim() ?? "";
+            if (!id || drawer.type !== "opportunities" || drawer.id !== id) return;
+            setOppCreateWorkPrefill(detail.prefill ?? undefined);
+            setOppCreateWorkOpen(true);
+        };
+        window.addEventListener(ADMIN_V2_OPEN_CREATE_WORK_MODAL, onOpenCreateWork as EventListener);
         return () => {
             window.removeEventListener("adminv2:open-send-form", onOpenSendForm as EventListener);
             window.removeEventListener("adminv2:open-enrollment-packet", onOpenEnrollmentPacket as EventListener);
@@ -4251,6 +4289,7 @@ export default function AdminEntityDrawer() {
             window.removeEventListener(ADMINV2_OPEN_ADD_PERSON_MODAL, onOpenAddPerson as EventListener);
             window.removeEventListener(ADMINV2_OPEN_TOUR_SCHEDULE_MODAL, onOpenTourSchedule as EventListener);
             window.removeEventListener(ADMINV2_OPEN_TOUR_OUTCOME_MODAL, onOpenTourOutcome as EventListener);
+            window.removeEventListener(ADMIN_V2_OPEN_CREATE_WORK_MODAL, onOpenCreateWork as EventListener);
         };
     }, [drawer.type, drawer.id, openAddInquiryChildModal, openAddPersonModal]);
 
@@ -4988,6 +5027,16 @@ export default function AdminEntityDrawer() {
         if (!statusKey) return null;
         const opt = statusDefsForDrawer.find((s) => s.status_key === statusKey);
         return opt?.status_label ?? null;
+    }, [statusDefsForDrawer]);
+
+    const opportunityActivityStatusKeyLabels = useMemo(() => {
+        const labels: Record<string, string> = { ...OPPORTUNITY_ACTIVITY_STATUS_KEY_LABELS };
+        for (const def of statusDefsForDrawer) {
+            const key = def.status_key?.trim();
+            const label = def.status_label?.trim();
+            if (key && label) labels[key] = label;
+        }
+        return labels;
     }, [statusDefsForDrawer]);
 
     const defaultStatusKeyForCreate = useMemo(() => {
@@ -6828,6 +6877,9 @@ export default function AdminEntityDrawer() {
 
     const isScheduleExistingView = drawer.type === "schedules" && data && !(data as Record<string, unknown>)._create;
     const isOpportunityExistingView = drawer.type === "opportunities" && data && !(data as Record<string, unknown>)._create;
+    /** AdminV2 centered modal: attention in header center column; BOS/Actions pinned right. */
+    const opportunityHeaderUsesModalThreeColumn =
+        useAdminV2RecordModalPresentation && isOpportunityRecordModalTarget && !!isOpportunityExistingView;
     const schedulePaidInFullKnown =
         hasServerJobPaymentSummary &&
         jobPaymentSummaryFromApi.payment_status_key === "paid" &&
@@ -7240,6 +7292,7 @@ export default function AdminEntityDrawer() {
                         if (!drawer.id) return null;
                         return (
                             <OpportunityDrawerHeaderControls
+                                layout={opportunityHeaderUsesModalThreeColumn ? "modal-actions" : "composed"}
                                 opportunityId={drawer.id}
                                 overviewData={
                                     entityDataMatchesDrawer(data, drawer.id) ?
@@ -7261,7 +7314,7 @@ export default function AdminEntityDrawer() {
                     })()}
                     {drawer.id &&
                         drawer.id !== "new" &&
-                        isTaskAssistV1UiEnabled() &&
+                        isOperationalWorkV1Enabled() &&
                         !opportunityInquiryWorkflowDrawer ? (
                         <OpportunityOperationalCompactStrip
                             opportunityId={drawer.id}
@@ -7276,6 +7329,51 @@ export default function AdminEntityDrawer() {
                 </div>
             )
             : null;
+
+    const opportunityHeaderAttentionCenterNode = useMemo(() => {
+        if (!opportunityHeaderUsesModalThreeColumn || !isOpportunityExistingView || !drawer.id || !data || !entityRowReady) {
+            return null;
+        }
+        if (opportunityHeaderActionsShowSkeleton) {
+            return <DrawerHeaderAttentionColumnSkeleton />;
+        }
+        const overviewDataForHeader =
+            entityDataMatchesDrawer(data, drawer.id) ? (data as Record<string, unknown>) : {};
+        if (!isDrawerHeaderAttentionVisible(overviewDataForHeader)) {
+            return null;
+        }
+        return (
+            <OpportunityDrawerHeaderControls
+                layout="modal-attention"
+                opportunityId={drawer.id}
+                overviewData={overviewDataForHeader}
+                opportunitySingular={opportunitySingular}
+                queuePreviewSeed={drawer.opportunityQueuePreviewSeed ?? null}
+                inquiryWorkflow={opportunityInquiryWorkflowDrawer}
+                menuActions={opportunityRecordHeaderMenuActions}
+                showRegistryActions={!!useOpportunityActionRegistryHeader}
+                canMutate={!!canMutate}
+                actionLoadingKey={opportunityActionLoading}
+                onActionSelect={(a) => void handleResolvedOpportunityHeaderAction(a)}
+                actionPreflightBlocked={null}
+            />
+        );
+    }, [
+        opportunityHeaderUsesModalThreeColumn,
+        isOpportunityExistingView,
+        drawer.id,
+        drawer.opportunityQueuePreviewSeed,
+        data,
+        entityRowReady,
+        opportunityHeaderActionsShowSkeleton,
+        opportunitySingular,
+        opportunityInquiryWorkflowDrawer,
+        opportunityRecordHeaderMenuActions,
+        useOpportunityActionRegistryHeader,
+        canMutate,
+        opportunityActionLoading,
+        handleResolvedOpportunityHeaderAction,
+    ]);
 
     /** BOS Loop 1 — seed active operational context when an opportunity drawer is open (Card 1). */
     useEffect(() => {
@@ -7960,7 +8058,8 @@ export default function AdminEntityDrawer() {
                     recordOpportunityDrawerLayoutIncludesSection(layoutCfg, "family_contacts"),
                 summary_right_column_reserved:
                     opportunityDrawerShellContract?.geometry.summary_right_column_reserved === true ||
-                    (opportunityInquiryWorkflowDrawer && isTaskAssistV1UiEnabled()),
+                    (opportunityInquiryWorkflowDrawer &&
+                        (isOperationalWorkV1Enabled() || isTaskAssistV1UiEnabled())),
                 what_matters_reserved: opportunityInquiryWorkflowDrawer,
                 inquiry_children_section_visible:
                     opportunityDrawerShellContract?.section_slots.some((s) => s.section_key === "inquiry_children") ===
@@ -11812,13 +11911,14 @@ export default function AdminEntityDrawer() {
         const stale = sig?.stale_signal ?? null;
         const hasActivity = Boolean(sig?.last_activity_at && String(sig.last_activity_at).trim());
         const rel = hasActivity && sig?.last_activity_at ? formatActivityRelativeShort(sig.last_activity_at, nowMs) : null;
-        const summary = (sig?.last_activity_summary ?? "").trim();
+        const summaryRaw = formatActivitySignalHeaderDetail(sig?.last_activity_summary, opportunityActivityStatusKeyLabels);
+        const summary = summaryRaw?.trim() ?? "";
         const detail =
             summary && rel ? `${summary} · ${rel}` : summary || rel || (hasActivity ? "Activity" : null);
 
         return (
             <div
-                className="flex min-h-[1rem] flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] leading-snug text-alloy-midnight/55"
+                className="flex min-h-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] leading-snug text-alloy-midnight/55"
                 data-drawer-last-activity-line="true"
             >
                 <span className="min-w-0">
@@ -11840,7 +11940,7 @@ export default function AdminEntityDrawer() {
                 ) : null}
             </div>
         );
-    }, [drawer.type, overviewData, opportunityActivitySignal, opportunityActivitySignalLoading]);
+    }, [drawer.type, overviewData, opportunityActivitySignal, opportunityActivitySignalLoading, opportunityActivityStatusKeyLabels]);
 
     const opportunityQueuePreviewSeed = drawer.opportunityQueuePreviewSeed;
     const opportunityDrawerPreviewSubtitle = useMemo(() => {
@@ -12335,37 +12435,53 @@ export default function AdminEntityDrawer() {
             : headerSubtitleBase;
     const headerSubtitleResolved =
         drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer ? (
-            <div className="mt-0.5 space-y-1.5">
-                <div className="flex flex-wrap items-center gap-2">
-                    {workflowCompactRecordNum ? <span>{workflowCompactRecordNum}</span> : null}
-                    <span className="shrink-0">{opportunityInquiryWorkflowHeaderStatus}</span>
-                    {opportunityHeaderLocationLabel ? (
-                        <span
-                            className="inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-medium"
-                            style={{ borderColor: "rgba(39, 63, 82, 0.18)", color: "rgba(39, 63, 82, 0.78)" }}
-                            data-opportunity-drawer-location="true"
-                        >
-                            {opportunityHeaderLocationLabel}
-                        </span>
-                    ) : null}
+            opportunityHeaderUsesModalThreeColumn ?
+                <div className="mt-0.5" data-opportunity-drawer-header-subtitle="modal-compact">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        {workflowCompactRecordNum ? <span>{workflowCompactRecordNum}</span> : null}
+                        <span className="shrink-0">{opportunityInquiryWorkflowHeaderStatus}</span>
+                        {opportunityHeaderLocationLabel ? (
+                            <span
+                                className="inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-medium"
+                                style={{ borderColor: "rgba(39, 63, 82, 0.18)", color: "rgba(39, 63, 82, 0.78)" }}
+                                data-opportunity-drawer-location="true"
+                            >
+                                {opportunityHeaderLocationLabel}
+                            </span>
+                        ) : null}
+                    </div>
                 </div>
-                <OpportunityChildLifecycleSummaryStrip
-                    summary={opportunityChildLifecycleSummary}
-                    showCaseNote={false}
-                    className="mt-0.5"
-                />
-                {opportunityActivityHeaderLine}
-            </div>
+            :   <div className="mt-0.5 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                        {workflowCompactRecordNum ? <span>{workflowCompactRecordNum}</span> : null}
+                        <span className="shrink-0">{opportunityInquiryWorkflowHeaderStatus}</span>
+                        {opportunityHeaderLocationLabel ? (
+                            <span
+                                className="inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-medium"
+                                style={{ borderColor: "rgba(39, 63, 82, 0.18)", color: "rgba(39, 63, 82, 0.78)" }}
+                                data-opportunity-drawer-location="true"
+                            >
+                                {opportunityHeaderLocationLabel}
+                            </span>
+                        ) : null}
+                    </div>
+                    <OpportunityChildLifecycleSummaryStrip
+                        summary={opportunityChildLifecycleSummary}
+                        showCaseNote={false}
+                    />
+                    {opportunityActivityHeaderLine}
+                </div>
         ) : drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? (
-            <div className="mt-0.5 space-y-1.5">
+            <div className="mt-0.5 space-y-1">
                 {headerSubtitleBase ? <div>{headerSubtitleBase}</div> : null}
                 {opportunityHeaderLocationLabel ? (
                     <div
-                        className="text-[11px] font-medium"
+                        className="flex flex-col gap-0 text-[11px] leading-snug"
                         style={{ color: "rgba(39, 63, 82, 0.72)" }}
                         data-opportunity-drawer-location="true"
                     >
-                        Location: {opportunityHeaderLocationLabel}
+                        <span className="font-medium text-alloy-midnight/45">Location:</span>
+                        <span>{opportunityHeaderLocationLabel}</span>
                     </div>
                 ) : null}
                 {overviewData &&
@@ -12384,7 +12500,6 @@ export default function AdminEntityDrawer() {
                 <OpportunityChildLifecycleSummaryStrip
                     summary={opportunityChildLifecycleSummary}
                     showCaseNote={false}
-                    className="mt-0.5"
                 />
                 {opportunityActivityHeaderLine}
             </div>
@@ -12618,6 +12733,13 @@ export default function AdminEntityDrawer() {
 
     const personHeaderRecordContext = undefined;
 
+    const headerTitleCenterForDrawer =
+        opportunityHeaderUsesModalThreeColumn && opportunityTitleRailActive && !opportunityDrawerHeaderCalmLoading ?
+            !opportunityHeaderTitleRailStable || opportunityWorkflowHeaderChromePending ?
+                <DrawerHeaderAttentionColumnSkeleton />
+            :   opportunityHeaderAttentionCenterNode
+        :   undefined;
+
     const headerTitleRightForDrawer = opportunityDrawerHeaderCalmLoading ? null : (
         opportunityTitleRailActive && !opportunityHeaderTitleRailStable ? (
             <DrawerWorkflowHeaderQuickActionsSkeleton />
@@ -12689,6 +12811,7 @@ export default function AdminEntityDrawer() {
             onClose={closeDrawer}
             title={drawerTitleResolved}
             headerSubtitle={headerSubtitleForDrawer}
+            headerTitleCenter={headerTitleCenterForDrawer}
             headerTitleRight={headerTitleRightForDrawer}
             headerRecordContext={personHeaderRecordContext}
             statusBadge={
@@ -15629,6 +15752,7 @@ export default function AdminEntityDrawer() {
                                                                                 >
                                                                                     {drawer.id &&
                                                                                         drawer.id !== "new" &&
+                                                                                        isOperationalWorkV1Enabled() ||
                                                                                         isTaskAssistV1UiEnabled() ? (
                                                                                         <OpportunityInquirySummaryRightColumn
                                                                                             model={
@@ -17696,6 +17820,30 @@ export default function AdminEntityDrawer() {
                             {personDrawerShowLoadingShell ? "Loading person…" : "Person record unavailable."}
                         </p>
                     </div>
+                ) : null}
+                {drawer.type === "opportunities" && drawer.id && drawer.id !== "new" && oppCreateWorkOpen ? (
+                    <OpportunityRecordCreateWorkModal
+                        open={oppCreateWorkOpen}
+                        opportunityId={String(drawer.id)}
+                        entityLabel={String((data as { name?: string } | null)?.name ?? "").trim() || null}
+                        prefill={oppCreateWorkPrefill}
+                        lifecycleStageKey={
+                            typeof (data as { _effective_lifecycle_stage?: unknown } | null)?._effective_lifecycle_stage ===
+                            "string"
+                                ? String((data as { _effective_lifecycle_stage: string })._effective_lifecycle_stage).trim() ||
+                                  null
+                                : null
+                        }
+                        recordOwnerUserId={
+                            typeof (data as { assigned_to?: unknown } | null)?.assigned_to === "string"
+                                ? String((data as { assigned_to: string }).assigned_to).trim() || null
+                                : null
+                        }
+                        onClose={() => {
+                            setOppCreateWorkOpen(false);
+                            setOppCreateWorkPrefill(undefined);
+                        }}
+                    />
                 ) : null}
                 {drawer.type === "opportunities" && drawer.id && drawer.id !== "new" && oppSendFormOpen ? (
                     <SendFormToOpportunityModal

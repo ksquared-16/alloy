@@ -12,7 +12,11 @@ import {
     dispatchOpenEnrollmentPacketReview,
     type InquiryChildrenFocusField,
 } from "@/lib/admin/actions/enrollmentActionClient";
-import { ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS } from "@/lib/adminV2/opportunityDrawerTaskEvents";
+import {
+    ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS,
+    ADMIN_V2_OPEN_CREATE_WORK_MODAL,
+    type OpportunityOpenCreateWorkModalDetail,
+} from "@/lib/adminV2/opportunityDrawerTaskEvents";
 import {
     ADMINV2_OPEN_TOUR_OUTCOME_MODAL,
     ADMINV2_OPEN_TOUR_SCHEDULE_MODAL,
@@ -324,13 +328,13 @@ export async function applyRegistryResolvedActionClient(
                         detail: { opportunity_id: eid },
                     })
                 );
-            }
-            if (typeof window !== "undefined") {
                 window.dispatchEvent(
-                    new CustomEvent("adminv2:open-tasks-panel", {
-                        detail: { opportunity_id: eid || null },
+                    new CustomEvent<OpportunityOpenCreateWorkModalDetail>(ADMIN_V2_OPEN_CREATE_WORK_MODAL, {
+                        detail: { opportunity_id: eid },
                     })
                 );
+            } else if (typeof window !== "undefined") {
+                window.dispatchEvent(new CustomEvent("adminv2:open-tasks-panel", { detail: { opportunity_id: null } }));
             }
             return { ok: true };
         }

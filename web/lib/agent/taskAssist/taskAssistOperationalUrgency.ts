@@ -53,7 +53,7 @@ export function operationalTaskDueUrgency(params: {
     dueAtIso: string;
     now?: Date;
 }): OperationalTaskDueUrgency {
-    const st = params.status.trim().toLowerCase();
+    const st = (params.status ?? "").trim().toLowerCase();
     if (st === "completed") return "completed";
     if (st === "canceled" || st === "cancelled") return "canceled";
     if (st !== "open") return "open";
@@ -72,7 +72,7 @@ export function scheduledSendDeliveryUrgency(params: {
     now?: Date;
     graceMs?: number;
 }): ScheduledSendDeliveryUrgency {
-    const st = params.status.trim().toLowerCase();
+    const st = (params.status ?? "").trim().toLowerCase();
     if (st === "failed") return "failed";
     if (st === "delivered") return "delivered";
     if (st === "canceled" || st === "cancelled") return "canceled";

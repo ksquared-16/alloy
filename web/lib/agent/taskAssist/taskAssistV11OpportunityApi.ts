@@ -47,7 +47,14 @@ export function operationalTasksListUrl(entityId: string): string {
     return `${OPERATIONAL_TASKS_URL}?entity_type=opportunities&entity_id=${encodeURIComponent(entityId)}`;
 }
 
-export type OperationalTaskWorkspaceFilter = "open" | "due_today" | "overdue" | "completed" | "all";
+export type OperationalTaskWorkspaceFilter =
+    | "open"
+    | "due_today"
+    | "overdue"
+    | "completed"
+    | "all"
+    | "assigned_to_me"
+    | "unassigned";
 
 export function operationalTasksWorkspaceUrl(filter: OperationalTaskWorkspaceFilter = "open"): string {
     return `${OPERATIONAL_TASKS_URL}?scope=workspace&filter=${encodeURIComponent(filter)}`;
@@ -115,6 +122,8 @@ export type OperationalTaskCreateBody = {
     due_at: string;
     source: "task_assist" | "manual";
     proposal_id: string | null;
+    assigned_to_user_id?: string | null;
+    work_definition_key?: string;
 };
 
 export function buildOperationalTaskBody(params: {
@@ -124,6 +133,8 @@ export function buildOperationalTaskBody(params: {
     proposalId?: string | null;
     description?: string | null;
     source?: "task_assist" | "manual";
+    assignedToUserId?: string | null;
+    workDefinitionKey?: string | null;
 }): OperationalTaskCreateBody {
     const entityId = params.entityId?.trim() || null;
     const body: OperationalTaskCreateBody = {
@@ -133,9 +144,18 @@ export function buildOperationalTaskBody(params: {
         source: params.source ?? "task_assist",
         proposal_id: params.proposalId ?? null,
     };
+    if (params.assignedToUserId?.trim()) {
+        body.assigned_to_user_id = params.assignedToUserId.trim();
+    } else if (params.assignedToUserId === null) {
+        body.assigned_to_user_id = null;
+    }
     if (entityId) {
         body.entity_type = "opportunities";
         body.entity_id = entityId;
+    }
+    const workDefinitionKey = params.workDefinitionKey?.trim();
+    if (workDefinitionKey) {
+        body.work_definition_key = workDefinitionKey;
     }
     return body;
 }
@@ -249,7 +269,7 @@ export async function patchOperationalTaskStatus(id: string, status: "completed"
 
 export async function patchOperationalTaskFields(
     id: string,
-    fields: { title?: string; description?: string | null; due_at?: string }
+    fields: { title?: string; description?: string | null; due_at?: string; assigned_to_user_id?: string | null }
 ): Promise<Response> {
     return fetch(`${OPERATIONAL_TASKS_URL}/${encodeURIComponent(id)}`, {
         method: "PATCH",

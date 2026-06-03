@@ -38,6 +38,8 @@ export function mapViolationToEffective(
     source: EffectiveRequirementSource
 ): EffectiveRequirementViolation {
     const severity = blockingLevelToSeverity(v.blocking_level);
+    const requirement_level = v.context?.requirement_level;
+    const rule_id = v.context?.rule_id?.trim() || undefined;
     return {
         field_key: v.field_key ?? v.label,
         label: v.label,
@@ -47,6 +49,8 @@ export function mapViolationToEffective(
         resolution: defaultResolution(v),
         entity_type: v.entity_type,
         entity_id: v.entity_id,
+        ...(requirement_level ? { requirement_level } : {}),
+        ...(rule_id ? { rule_id } : {}),
     };
 }
 

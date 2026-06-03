@@ -16,6 +16,10 @@ import { mergeLifecycleFieldPaletteForBuilderStage } from "@/lib/lifecycle/lifec
 import { validateFieldRuleIdsAgainstPalette } from "@/lib/lifecycle/lifecycleFieldPaletteMerge";
 import { loadOrgFieldDefinitionsForLifecycle } from "@/lib/lifecycle/loadOrgFieldDefinitionsForLifecycle";
 import { deepMergeJsonObjects } from "@/lib/json/deepMergeJsonObjects";
+import {
+    parseRuleLevelsV1,
+    type LifecycleStageFieldRulesStored,
+} from "@/lib/lifecycle/lifecycleStageRequirementLevels";
 
 export async function persistLifecycleStageFieldRules(
     supabase: SupabaseClient,
@@ -23,7 +27,7 @@ export async function persistLifecycleStageFieldRules(
         orgId: string;
         departmentId: string;
         stageKey: string;
-        fieldRules: LifecycleStageFieldRules;
+        fieldRules: LifecycleStageFieldRules | LifecycleStageFieldRulesStored;
         existingMetadata: Record<string, unknown>;
     }
 ): Promise<Record<string, unknown>> {
@@ -39,6 +43,10 @@ export async function persistLifecycleStageFieldRules(
         throw new Error("Invalid field rules for this stage.");
     }
 
+    const explicit_rule_levels_v1 = parseRuleLevelsV1(
+        "rule_levels_v1" in params.fieldRules ? params.fieldRules.rule_levels_v1 : undefined
+    );
+
     const operator = asOperatorStageKey(stage);
     let metadataPatch: Record<string, unknown>;
     if (operator) {
@@ -48,6 +56,7 @@ export async function persistLifecycleStageFieldRules(
             recommended_rule_ids: recommended,
             existingMetadata: params.existingMetadata,
             mergedPalette,
+            explicit_rule_levels_v1,
         });
     } else {
         metadataPatch = buildBuilderStageFieldRulesPatch({
@@ -55,6 +64,8 @@ export async function persistLifecycleStageFieldRules(
             required_rule_ids: required,
             recommended_rule_ids: recommended,
             existingMetadata: params.existingMetadata,
+            mergedPalette,
+            explicit_rule_levels_v1,
         });
     }
 

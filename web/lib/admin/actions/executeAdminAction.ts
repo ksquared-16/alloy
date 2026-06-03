@@ -80,6 +80,7 @@ export type ExecuteAdminActionResult =
           completion_requirements?: RequirementValidationResult;
           effective_requirements?: import("@/lib/completion/effectiveRequirementsTypes").EffectiveRequirementsResult;
           action_preflight?: import("@/lib/admin/actions/actionPreflightPresentation").ActionPreflightUiPayload;
+          readiness?: import("@/lib/completion/readinessTypes").ReadinessResult;
       };
 
 function mergePayload(

@@ -11,6 +11,17 @@ import {
     departmentHasStageOverride,
     parseLifecycleProgressionRequirementsOverride,
 } from "@/lib/completion/lifecycleProgressionRequirementsConfig";
+import { effectiveFieldRulesStoredForStage } from "@/lib/completion/lifecycleProgressionRequirementsConfig";
+import {
+    buildDualWriteStoredFieldRules,
+    enforceableLookupFromPalette,
+    isLifecycleRuleEnforceable,
+    parseStoredFieldRules,
+    storedFieldRulesToMetadataFieldRules,
+    type LifecycleStageFieldRulesStored,
+    type RuleLevelsV1,
+} from "@/lib/lifecycle/lifecycleStageRequirementLevels";
+import type { LifecycleFieldPaletteEntry } from "@/lib/lifecycle/lifecycleFieldPaletteMerge";
 
 export const LIFECYCLE_BUILDER_STAGE_FIELD_RULES_METADATA_KEY =
     "lifecycle_builder_stage_field_rules_v1" as const;
@@ -22,20 +33,10 @@ export type LifecycleBuilderStageFieldRulesV1 = {
         {
             required_rule_ids?: string[];
             recommended_rule_ids?: string[];
+            rule_levels_v1?: RuleLevelsV1;
         }
     >;
 };
-
-function normalizeRuleIdList(raw: unknown): string[] {
-    if (!Array.isArray(raw)) return [];
-    const out: string[] = [];
-    for (const item of raw) {
-        if (typeof item !== "string") continue;
-        const t = item.trim();
-        if (t && !out.includes(t)) out.push(t);
-    }
-    return out;
-}
 
 export function parseLifecycleBuilderStageFieldRules(
     metadata: Record<string, unknown> | null | undefined
@@ -51,14 +52,9 @@ export function parseLifecycleBuilderStageFieldRules(
     for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
         const stageKey = key.trim();
         if (!stageKey || !value || typeof value !== "object" || Array.isArray(value)) continue;
-        const required_rule_ids = normalizeRuleIdList(
-            (value as { required_rule_ids?: unknown }).required_rule_ids
-        );
-        const recommended_rule_ids = normalizeRuleIdList(
-            (value as { recommended_rule_ids?: unknown }).recommended_rule_ids
-        );
-        if (!required_rule_ids.length && !recommended_rule_ids.length) continue;
-        by_stage_key[stageKey] = { required_rule_ids, recommended_rule_ids };
+        const stored = parseStoredFieldRules(value);
+        if (!stored) continue;
+        by_stage_key[stageKey] = storedFieldRulesToMetadataFieldRules(stored) as LifecycleBuilderStageFieldRulesV1["by_stage_key"][string];
     }
     if (!Object.keys(by_stage_key).length) return null;
     return { version: 1, by_stage_key };
@@ -118,14 +114,59 @@ export function effectiveFieldRulesForBuilderStage(
     };
 }
 
+/** Effective stored field rules including rule_levels_v1 when persisted. */
+export function effectiveFieldRulesStoredForBuilderStage(
+    builderStageKey: string,
+    departmentMetadata: Record<string, unknown> | null | undefined,
+    operatorStage: LifecycleOperatorStage | null
+): LifecycleStageFieldRulesStored {
+    const key = builderStageKey.trim();
+    const builderParsed = parseLifecycleBuilderStageFieldRules(departmentMetadata ?? null);
+    const builderRow = builderParsed?.by_stage_key[key];
+    if (builderRow) {
+        const stored = parseStoredFieldRules(builderRow);
+        if (stored) return stored;
+    }
+    if (operatorStage) {
+        return effectiveFieldRulesStoredForStage(operatorStage, departmentMetadata);
+    }
+    const { rules } = effectiveFieldRulesForBuilderStage(key, departmentMetadata, operatorStage);
+    return {
+        required_rule_ids: rules.required_rule_ids,
+        recommended_rule_ids: rules.recommended_rule_ids,
+    };
+}
+
 export function buildBuilderStageFieldRulesPatch(input: {
     builderStageKey: string;
     required_rule_ids: string[];
     recommended_rule_ids: string[];
     existingMetadata: Record<string, unknown> | null;
+    explicit_rule_levels_v1?: RuleLevelsV1 | null;
+    mergedPalette?: readonly LifecycleFieldPaletteEntry[];
 }): Record<string, unknown> {
     const stageKey = input.builderStageKey.trim();
     if (!stageKey) throw new Error("builderStageKey is required");
+
+    const sanitizedRequired = sanitizeRules({
+        required_rule_ids: input.required_rule_ids,
+        recommended_rule_ids: [],
+    }).required_rule_ids;
+    const sanitizedRecommended = sanitizeRules({
+        required_rule_ids: [],
+        recommended_rule_ids: input.recommended_rule_ids,
+    }).recommended_rule_ids;
+
+    const isEnforceable = input.mergedPalette
+        ? enforceableLookupFromPalette(input.mergedPalette)
+        : (ruleId: string) => isLifecycleRuleEnforceable(ruleId);
+
+    const dualWrite = buildDualWriteStoredFieldRules({
+        required_rule_ids: sanitizedRequired,
+        recommended_rule_ids: sanitizedRecommended,
+        explicit_rule_levels_v1: input.explicit_rule_levels_v1,
+        isEnforceable,
+    });
 
     const prev = parseLifecycleBuilderStageFieldRules(input.existingMetadata) ?? {
         version: 1 as const,
@@ -133,16 +174,7 @@ export function buildBuilderStageFieldRulesPatch(input: {
     };
     const by_stage_key = {
         ...prev.by_stage_key,
-        [stageKey]: {
-            required_rule_ids: sanitizeRules({
-                required_rule_ids: input.required_rule_ids,
-                recommended_rule_ids: [],
-            }).required_rule_ids,
-            recommended_rule_ids: sanitizeRules({
-                required_rule_ids: [],
-                recommended_rule_ids: input.recommended_rule_ids,
-            }).recommended_rule_ids,
-        },
+        [stageKey]: storedFieldRulesToMetadataFieldRules(dualWrite),
     };
 
     return {

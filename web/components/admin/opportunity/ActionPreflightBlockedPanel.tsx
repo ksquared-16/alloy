@@ -3,6 +3,12 @@
 import MissingRequirementsSummary from "@/components/admin/completion/MissingRequirementsSummary";
 import type { ActionPreflightUiPayload } from "@/lib/admin/actions/actionPreflightPresentation";
 import { applyActionPreflightFieldGuidance } from "@/lib/admin/actions/actionPreflightFieldGuidance";
+import {
+    actionPreflightBlockedSummary,
+    enforcedReadinessGaps,
+    guidanceReadinessGaps,
+    READINESS_LEVEL_GROUP_COPY,
+} from "@/lib/completion/readinessDisplayPresentation";
 
 type Props = {
     opportunityId: string;
@@ -14,6 +20,11 @@ type Props = {
 export function ActionPreflightBlockedPanel({ opportunityId, preflight, className = "", onDismiss }: Props) {
     const blocking = preflight.blocking;
     const hasBlocking = blocking.length > 0;
+    const enforcedGaps = enforcedReadinessGaps(preflight.readiness);
+    const guidanceGaps = guidanceReadinessGaps(preflight.readiness);
+    const useReadinessBlockers = enforcedGaps.length > 0;
+    const summary =
+        useReadinessBlockers ? actionPreflightBlockedSummary() : preflight.summary;
 
     return (
         <div
@@ -37,12 +48,50 @@ export function ActionPreflightBlockedPanel({ opportunityId, preflight, classNam
                     </button>
                 :   null}
             </div>
-            {preflight.summary ?
+            {summary ?
                 <p className="mt-1 text-[11px] leading-snug text-alloy-midnight/65" data-action-preflight-summary="true">
-                    {preflight.summary}
+                    {summary}
                 </p>
             :   null}
-            {hasBlocking ?
+            {useReadinessBlockers ?
+                <div className="mt-2" data-action-preflight-enforced-blockers="true">
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/55">
+                        Complete these enforced items first:
+                    </p>
+                    <ul className="mt-1 space-y-1.5" data-action-preflight-blocking-list="true">
+                        {enforcedGaps.map((gap) => (
+                            <li
+                                key={`${gap.requirement_id}-${gap.label}`}
+                                className="text-[11px] leading-snug text-alloy-midnight/75"
+                                data-action-preflight-blocking-item="true"
+                                data-action-preflight-gap-level="enforced"
+                                data-action-preflight-field-key={gap.field_key ?? gap.requirement_id}
+                            >
+                                <span className="font-medium text-alloy-midnight">{gap.label}</span>
+                                {gap.missing_reason ?
+                                    <span className="text-alloy-midnight/55"> — {gap.missing_reason}</span>
+                                :   null}
+                                {gap.field_key ?
+                                    <button
+                                        type="button"
+                                        className="ml-1.5 text-[10px] font-medium text-alloy-blue hover:underline"
+                                        data-action-preflight-go-to-field="true"
+                                        onClick={() =>
+                                            applyActionPreflightFieldGuidance(
+                                                opportunityId,
+                                                gap.field_key!,
+                                                preflight.action_key
+                                            )
+                                        }
+                                    >
+                                        Go to field
+                                    </button>
+                                :   null}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            : hasBlocking ?
                 <ul className="mt-2 space-y-1.5" data-action-preflight-blocking-list="true">
                     {blocking.map((item) => (
                         <li
@@ -80,6 +129,32 @@ export function ActionPreflightBlockedPanel({ opportunityId, preflight, classNam
                         </li>
                     ))}
                 </ul>
+            :   null}
+            {guidanceGaps.length > 0 ?
+                <div
+                    className="mt-2 rounded-md border border-alloy-forge/10 bg-white/60 px-2 py-1.5"
+                    data-action-preflight-guidance="true"
+                >
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
+                        Also helpful to complete
+                    </p>
+                    <ul className="mt-1 space-y-1">
+                        {guidanceGaps.map((gap) => {
+                            const copy = READINESS_LEVEL_GROUP_COPY[gap.level];
+                            return (
+                                <li
+                                    key={`guidance-${gap.requirement_id}-${gap.label}`}
+                                    className="text-[11px] leading-snug text-alloy-midnight/60"
+                                    data-action-preflight-guidance-item="true"
+                                    data-action-preflight-gap-level={gap.level}
+                                >
+                                    <span className="font-medium text-alloy-midnight/70">{gap.label}</span>
+                                    <span className="text-alloy-midnight/45"> · {copy.heading}</span>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </div>
             :   null}
             <div className="mt-2 border-t border-alloy-ember/15 pt-2">
                 <MissingRequirementsSummary

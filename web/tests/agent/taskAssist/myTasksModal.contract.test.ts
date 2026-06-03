@@ -23,8 +23,19 @@ const queueBlock = join(
     dirname(fileURLToPath(import.meta.url)),
     "../../../app/adminV2/components/workspace/blocks/QueueBlock.tsx"
 );
+const adminV2Layout = join(dirname(fileURLToPath(import.meta.url)), "../../../app/adminV2/layout.tsx");
+const rootAuthProvider = join(dirname(fileURLToPath(import.meta.url)), "../../../app/adminV2/AdminV2RootAuthProvider.tsx");
 
 describe("My tasks modal UX", () => {
+    it("shell layout provides AdminAuthProvider for top-nav Tasks modal", () => {
+        const layoutSrc = readFileSync(adminV2Layout, "utf8");
+        const providerSrc = readFileSync(rootAuthProvider, "utf8");
+        expect(layoutSrc).toContain("AdminV2RootAuthProvider");
+        expect(layoutSrc).toContain("AdminV2Shell");
+        expect(providerSrc).toContain("AdminAuthProvider");
+        expect(readFileSync(panel, "utf8")).toContain("useAdminAuth");
+    });
+
     it("opens modal from top nav button not page navigation", () => {
         expect(readFileSync(navBadge, "utf8")).toContain("<button");
         expect(readFileSync(navBadge, "utf8")).not.toContain('href="/adminV2/tasks"');

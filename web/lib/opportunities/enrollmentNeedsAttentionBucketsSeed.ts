@@ -1,3 +1,5 @@
+import type { ReadinessAttentionProjectionProfileV1 } from "@/lib/opportunities/readinessAttentionProjectionProfile";
+
 /**
  * Childcare / enrollment **demo operating model** — Needs Attention bucket lenses only.
  *
@@ -7,6 +9,17 @@
  *
  * Lifecycle-aligned lenses (May 2026): quote-era buckets removed from default seed.
  */
+
+/** Enrollment runtime — project enforced readiness gaps into queue / dept NA surfaces. */
+export const CANONICAL_ENROLLMENT_READINESS_ATTENTION_PROJECTION_V1: ReadinessAttentionProjectionProfileV1 = {
+    version: 1,
+    enabled: true,
+    flag_missing_required: true,
+    include_required_gaps: false,
+    include_recommended_gaps: false,
+    readiness_attention_bridge_v1: true,
+};
+
 export const CANONICAL_CHILDCARE_ENROLLMENT_NEEDS_ATTENTION_BUCKETS_SEED = [
     {
         key: "new_inquiry_stale",
@@ -27,6 +40,16 @@ export const CANONICAL_CHILDCARE_ENROLLMENT_NEEDS_ATTENTION_BUCKETS_SEED = [
         priority: 20,
         icon: "phone",
         reason_codes: ["stale_qualified"],
+    },
+    {
+        key: "required_information_missing",
+        label: "Required information missing",
+        description: "Enforced lifecycle field rules not satisfied",
+        enabled: true,
+        order: 35,
+        priority: 35,
+        icon: "clipboard-list",
+        reason_codes: ["missing_required_info"],
     },
     {
         key: "follow_up_overdue",

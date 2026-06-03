@@ -4,6 +4,7 @@ import {
     isTaskAssistV1Uuid,
     validateTaskAssistV1ParsedJsonNoForbiddenWorkflowKeys,
 } from "@/lib/agent/taskAssist/taskAssistSuggestionValidators";
+import type { OperationalWorkDedupePolicy } from "@/lib/admin/operationalWork/operationalWorkTypes";
 import {
     enrichOperationalTasksForWorkspace,
     type OperationalTaskWorkspaceRow,
@@ -170,6 +171,61 @@ export async function createOperationalTask(params: {
     return { ok: true, row };
 }
 
+/** Find an open task matching instantiate dedupe criteria (Phase A). */
+export async function findOpenOperationalTaskForInstantiateDedupe(params: {
+    supabase: SupabaseClient;
+    orgId: string;
+    idempotencyKey?: string | null;
+    workDefinitionKey?: string | null;
+    subjectFingerprint?: string | null;
+    periodKey?: string | null;
+    dedupePolicy: OperationalWorkDedupePolicy;
+}): Promise<OperationalTaskRow | null> {
+    const idempotencyKey = params.idempotencyKey?.trim() || null;
+    if (idempotencyKey) {
+        const { data, error } = await params.supabase
+            .from("operational_tasks")
+            .select("*")
+            .eq("org_id", params.orgId)
+            .eq("status", "open")
+            .filter("metadata->provenance->>idempotency_key", "eq", idempotencyKey)
+            .limit(1)
+            .maybeSingle();
+        if (error) {
+            console.error("[findOpenOperationalTaskForInstantiateDedupe:idempotency]", error);
+        } else if (data) {
+            return mapTaskRow(data as Record<string, unknown>);
+        }
+    }
+
+    if (params.dedupePolicy === "none") return null;
+
+    const workDefinitionKey = params.workDefinitionKey?.trim() || null;
+    const subjectFingerprint = params.subjectFingerprint?.trim() || null;
+    if (!workDefinitionKey || !subjectFingerprint) return null;
+
+    let query = params.supabase
+        .from("operational_tasks")
+        .select("*")
+        .eq("org_id", params.orgId)
+        .eq("status", "open")
+        .filter("metadata->>work_definition_key", "eq", workDefinitionKey)
+        .filter("metadata->>subject_fingerprint", "eq", subjectFingerprint);
+
+    if (params.dedupePolicy === "definition_subject_period") {
+        const periodKey = params.periodKey?.trim() || "";
+        query = query.filter("metadata->>dedupe_period_key", "eq", periodKey);
+    }
+
+    const { data, error } = await query.limit(1).maybeSingle();
+    if (error) {
+        console.error("[findOpenOperationalTaskForInstantiateDedupe:definition]", error);
+        return null;
+    }
+    if (!data) return null;
+    return mapTaskRow(data as Record<string, unknown>);
+}
+
 export async function listOperationalTasksForEntity(params: {
     supabase: SupabaseClient;
     orgId: string;
@@ -191,7 +247,14 @@ export async function listOperationalTasksForEntity(params: {
     return { ok: true, rows: (data ?? []).map((r) => mapTaskRow(r as Record<string, unknown>)) };
 }
 
-export type OperationalTaskWorkspaceFilter = "open" | "due_today" | "overdue" | "completed" | "all";
+export type OperationalTaskWorkspaceFilter =
+    | "open"
+    | "due_today"
+    | "overdue"
+    | "completed"
+    | "all"
+    | "assigned_to_me"
+    | "unassigned";
 
 function startOfLocalDay(d: Date): Date {
     return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
@@ -221,6 +284,12 @@ export async function listOperationalTasksForWorkspace(params: {
         q = q.in("status", ["completed", "canceled"]);
     } else if (params.filter !== "all") {
         q = q.eq("status", "open");
+    }
+
+    if (params.filter === "assigned_to_me") {
+        q = q.eq("assigned_to_user_id", params.userId);
+    } else if (params.filter === "unassigned") {
+        q = q.is("assigned_to_user_id", null);
     }
 
     const { data, error } = await q;
@@ -379,6 +448,7 @@ export async function updateOperationalTaskFields(params: {
     title?: string;
     description?: string | null;
     dueAtIso?: string;
+    assignedToUserId?: string | null;
 }): Promise<{ ok: true; row: OperationalTaskRow } | { ok: false; error: string; message: string; status: number }> {
     const cur = await getOperationalTaskById(params);
     if (!cur.ok) return cur;
@@ -401,6 +471,17 @@ export async function updateOperationalTaskFields(params: {
             return { ok: false, error: "DUE_INVALID", message: "due_at must be a valid ISO datetime.", status: 400 };
         }
         patch.due_at = new Date(dueMs).toISOString();
+    }
+    if (params.assignedToUserId !== undefined) {
+        if (params.assignedToUserId === null || params.assignedToUserId === "") {
+            patch.assigned_to_user_id = null;
+        } else {
+            const id = params.assignedToUserId.trim();
+            if (!isTaskAssistV1Uuid(id)) {
+                return { ok: false, error: "ASSIGNED_INVALID", message: "assigned_to_user_id must be a UUID or null.", status: 400 };
+            }
+            patch.assigned_to_user_id = id;
+        }
     }
     if (!Object.keys(patch).length) {
         return { ok: true, row: cur.row };
@@ -438,6 +519,7 @@ export function validateOperationalTaskCreateBody(body: unknown): { ok: false; e
     source: "task_assist" | "manual";
     proposal_id: string | null;
     assigned_to_user_id: string | null;
+    work_definition_key: string | null;
     metadata: Record<string, unknown>;
 } } {
     if (!isRecord(body)) {
@@ -456,6 +538,7 @@ export function validateOperationalTaskCreateBody(body: unknown): { ok: false; e
         "source",
         "proposal_id",
         "assigned_to_user_id",
+        "work_definition_key",
         "metadata",
     ]);
     for (const k of Object.keys(body)) {
@@ -516,6 +599,15 @@ export function validateOperationalTaskCreateBody(body: unknown): { ok: false; e
     }
     const description = typeof body.description === "string" ? body.description.trim() || null : null;
     const metadata = isRecord(body.metadata) ? (body.metadata as Record<string, unknown>) : {};
+    let workDefinitionKey: string | null = null;
+    if (body.work_definition_key != null && body.work_definition_key !== "") {
+        if (typeof body.work_definition_key !== "string") {
+            return { ok: false, error: "WORK_DEFINITION_KEY_INVALID", message: "work_definition_key must be a string or null." };
+        }
+        workDefinitionKey = body.work_definition_key.trim() || null;
+    } else if (typeof metadata.work_definition_key === "string" && metadata.work_definition_key.trim()) {
+        workDefinitionKey = metadata.work_definition_key.trim();
+    }
 
     return {
         ok: true,
@@ -528,6 +620,7 @@ export function validateOperationalTaskCreateBody(body: unknown): { ok: false; e
             source,
             proposal_id: proposalId,
             assigned_to_user_id: assigned,
+            work_definition_key: workDefinitionKey,
             metadata,
         },
     };

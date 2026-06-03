@@ -99,6 +99,7 @@ import { DeptPageLoadingGate } from "@/app/adminV2/components/workspace/DeptPage
 import { resolveDeptWorkUnitDisplayLabel } from "@/lib/workspace/workUnitShellDisplayTitle";
 import {
     lifecycleDeptThroughputWorkUnits,
+    mapBootstrapWorkUnits,
     sortLifecycleDeptWorkUnits,
     type DeptWorkUnitListRow,
 } from "@/lib/lifecycle/sortLifecycleDeptWorkUnits";
@@ -457,7 +458,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         if (expectsPipeline) {
             setDeptPipelineExecLoading(true);
         }
-        setDeptWorkUnits(hit.workUnits);
+        setDeptWorkUnits(mapBootstrapWorkUnits(hit.workUnits));
         setDeptLoading(false);
 
         // Restore summaries — lets deptThroughputBodyReady pass immediately for non-pipeline depts.

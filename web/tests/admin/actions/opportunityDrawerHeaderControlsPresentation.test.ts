@@ -30,14 +30,13 @@ describe("opportunity drawer header controls presentation", () => {
         expect(controls).toContain('data-opportunity-header-controls-row="actions"');
     });
 
-    it("header buttons stay on top row; attention sits below", () => {
+    it("header attention and actions share the composed row", () => {
         const controls = read("components/admin/opportunity/OpportunityDrawerHeaderControls.tsx");
         expect(controls).toContain("DrawerHeaderAttentionBlock");
+        expect(controls).toContain('data-opportunity-header-controls-row="composed"');
+        expect(controls).toContain('data-opportunity-header-controls-row="attention"');
         expect(controls).toMatch(
-            /data-opportunity-header-controls-row="actions"[\s\S]*BosDrawerAssistCta[\s\S]*OpportunityDrawerHeaderActionsMenu/
-        );
-        expect(controls).toMatch(
-            /OpportunityDrawerHeaderActionsMenu[\s\S]*<\/div>[\s\S]*DrawerHeaderAttentionBlock/
+            /data-opportunity-header-controls-row="composed"[\s\S]*flex-1[\s\S]*OpportunityDrawerHeaderActionsRow/
         );
     });
 
@@ -84,14 +83,37 @@ describe("opportunity drawer header controls presentation", () => {
         expect(BOS_ASSIST_CTA_DRAWER).toBe("Work with BOS");
     });
 
-    it("header attention supports two-line summary with intelligence surface accent and More guidance", () => {
+    it("header attention uses modal center column width tokens", () => {
         const strip = read("components/admin/drawer/DrawerHeaderAttentionBlock.tsx");
         const tokens = read("lib/admin/drawer/drawerHeaderAttentionPresentation.ts");
-        expect(strip).toContain("line-clamp-2");
-        expect(strip).not.toContain("truncate");
-        expect(strip).toContain("DRAWER_HEADER_ATTENTION_SURFACE");
-        expect(strip).toContain("header-attention-more-guidance");
-        expect(tokens).toContain("border-l-alloy-blue/40");
+        const controls = read("components/admin/opportunity/OpportunityDrawerHeaderControls.tsx");
+        const drawer = read("components/admin/AdminEntityDrawer.tsx");
+        const shell = read("components/admin/Drawer.tsx");
+        expect(strip).toContain("buildDrawerHeaderMoreGuidance");
+        expect(strip).toContain("buildReadinessDrawerHeaderMoreGuidance");
+        expect(strip).not.toContain("header-attention-view-required-information");
+        expect(strip).not.toContain("Supporting detail available");
+        expect(tokens).toContain("DRAWER_HEADER_ATTENTION_MAX_WIDTH");
+        expect(tokens).toContain("DRAWER_HEADER_ATTENTION_CENTER_COLUMN_CLASS");
+        expect(tokens).toContain("min-w-[min(100%,450px)]");
+        expect(tokens).toContain("max-w-[600px]");
+        expect(controls).toContain('layout="modal-attention"');
+        expect(controls).toContain('data-opportunity-header-controls-layout="modal-attention"');
+        expect(drawer).toContain('"modal-actions"');
+        expect(drawer).toContain("headerTitleCenterForDrawer");
+        expect(drawer).toContain("opportunityHeaderUsesModalThreeColumn");
+        expect(drawer).toContain('data-opportunity-drawer-header-subtitle="modal-compact"');
+        expect(shell).toContain("headerTitleCenter");
+        expect(shell).toContain("usesThreeColumnHeader");
+        expect(shell).toContain("three-column");
+    });
+
+    it("composed sidebar layout keeps attention and actions in one block", () => {
+        const controls = read("components/admin/opportunity/OpportunityDrawerHeaderControls.tsx");
+        expect(controls).toContain('data-opportunity-header-controls-row="composed"');
+        expect(controls).toContain('data-opportunity-header-controls-layout="composed"');
+        expect(controls).toContain("flex-1");
+        expect(controls).not.toMatch(/flex-col[\s\S]*data-opportunity-header-controls-row="actions"[\s\S]*data-opportunity-header-controls-row="attention"/);
     });
 
     it("inquiry summary dedupes body when header attention is visible", () => {
@@ -108,6 +130,11 @@ describe("opportunity drawer header controls presentation", () => {
         expect(strip).toContain("bodyOnlyAttention");
         const band = read("components/admin/drawer/OperationalReviewAssistBand.tsx");
         expect(band).toContain("bodyOnlyAttention");
+    });
+
+    it("drawer body no longer renders standalone Required Information panel", () => {
+        const drawer = read("components/admin/AdminEntityDrawer.tsx");
+        expect(drawer).not.toContain("OpportunityDrawerRequiredInformationPanel");
     });
 });
 
@@ -148,10 +175,84 @@ describe("DrawerHeaderAttentionBlock", () => {
                 },
             })
         );
-        expect(html).toContain("line-clamp-2");
         expect(html).toContain("header-attention-summary");
         expect(html).toContain("Send a warm first response");
         expect(html).toContain("header-attention-more-guidance");
+        expect(html).not.toContain("header-attention-view-required-information");
+    });
+
+    it("renders readiness-primary attention without BOS recommendation", () => {
+        const html = renderToStaticMarkup(
+            createElement(DrawerHeaderAttentionBlock, {
+                overviewData: {
+                    _operational_attention: {
+                        needs_attention: true,
+                        reasons: [
+                            {
+                                code: "missing_required_info",
+                                label: "Child · Program Interest",
+                                severity: "high",
+                                sla_tier: "ok",
+                                sla_clock_confidence: "high",
+                                attention_source: "readiness",
+                                readiness_gap_ids: ["child:program_interest"],
+                            },
+                        ],
+                        primary_reason: {
+                            code: "missing_required_info",
+                            label: "Child · Program Interest",
+                            severity: "high",
+                            sla_tier: "ok",
+                            sla_clock_confidence: "high",
+                            attention_source: "readiness",
+                            readiness_gap_ids: ["child:program_interest"],
+                        },
+                        waiting: { bucket: "none", since_iso: null, active: false },
+                        priority_score: 1,
+                        priority_breakdown: [],
+                        auxiliary: { activity_stale: null },
+                        resolver_version: 2,
+                        computed_at_iso: "2026-06-03T12:00:00.000Z",
+                    },
+                },
+            })
+        );
+        expect(html).toContain("header-attention-summary");
+        expect(html).toContain("Child · Program Interest");
+        expect(html).toContain("header-attention-readiness-next");
+        expect(html).toContain("Add Child · Program Interest to continue this inquiry.");
+        expect(html).not.toContain("header-attention-urgency-chip");
+        expect(html).not.toContain("header-attention-view-required-information");
+    });
+
+    it("shows readiness supporting detail when platform reason is primary", () => {
+        const rec = buildOperationalRecommendationV1(buildTestOperationalRecommendationInput());
+        const html = renderToStaticMarkup(
+            createElement(DrawerHeaderAttentionBlock, {
+                overviewData: {
+                    _operational_recommendation: rec,
+                    _operational_attention: {
+                        ...minimalAttention,
+                        reasons: [
+                            minimalAttention.primary_reason!,
+                            {
+                                code: "missing_required_info",
+                                label: "Child · Program Interest",
+                                severity: "high",
+                                sla_tier: "ok",
+                                sla_clock_confidence: "high",
+                                attention_source: "readiness",
+                                readiness_gap_ids: ["child:program_interest"],
+                            },
+                        ],
+                    },
+                },
+            })
+        );
+        expect(html).toContain("Send a warm first response");
+        expect(html).toContain("header-attention-readiness-supporting");
+        expect(html).toContain("Also missing: Child · Program Interest");
+        expect(html).not.toContain("header-attention-view-required-information");
     });
 });
 

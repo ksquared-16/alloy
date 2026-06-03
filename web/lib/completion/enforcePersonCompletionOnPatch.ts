@@ -55,6 +55,7 @@ export type BosCompletionRequirementPayload = {
     warnings_labels: string[];
     recommendations_labels: string[];
     result: RequirementValidationResult;
+    readiness?: import("@/lib/completion/readinessTypes").ReadinessResult;
 };
 
 export function toBosCompletionRequirementPayload(

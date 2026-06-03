@@ -24,6 +24,7 @@ const PRIORITY_SHORT_BY_CODE: Partial<Record<OpportunityAttentionReasonCode, str
     blocked_internal: "Blocked",
     blocked_external: "Blocked",
     missing_identity: "Missing contact details",
+    missing_required_info: "Required information missing",
 };
 
 export function buildQueueRowPriorityExplanationLine(row: Record<string, unknown>): string | null {

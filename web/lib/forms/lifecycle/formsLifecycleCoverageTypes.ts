@@ -1,5 +1,6 @@
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import type { LifecycleRequirementsSource } from "@/lib/completion/lifecycleProgressionRequirementsConfig";
+import type { ReadinessResult } from "@/lib/completion/readinessTypes";
 
 /** Forms-friendly entity grouping for coverage UI (Card 3+). */
 export type FormsLifecycleEntityType =
@@ -81,6 +82,8 @@ export type FormsLifecycleCoverageResult = {
     byEntity: Record<string, FormsLifecycleCoverageEntityGroup>;
     /** Constraint failures surfaced as required gaps (e.g. email or phone). */
     constraintFailures: FormsLifecycleCoverageItem[];
+    /** Level-aware readiness (Phase 1 — internal only, no UI). */
+    readiness?: ReadinessResult;
 };
 
 export const FORMS_LIFECYCLE_ENTITY_GROUP_LABELS: Record<FormsLifecycleEntityType, string> = {

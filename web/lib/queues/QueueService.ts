@@ -58,7 +58,12 @@ import {
     locationDisplayLabelFromRow,
     type LocationDisplayLabelRow,
 } from "@/lib/admin/locationDisplayLabel";
-import { resolveOpportunityAttentionConfigFromMetadata, type OpportunityAttentionResolvedConfig } from "@/lib/opportunities/opportunityAttentionConfig";
+import { resolveOpportunityAttentionConfigFromMetadata, buildOpportunityAttentionEnrichResolution, mergeAttentionMetadataForConfig, type OpportunityAttentionResolvedConfig } from "@/lib/opportunities/opportunityAttentionConfig";
+import { tryEvaluateOpportunityReadinessForAttention } from "@/lib/opportunities/opportunityReadinessForAttention";
+import {
+    isReadinessAttentionProjectionActive,
+} from "@/lib/opportunities/readinessAttentionProjectionProfile";
+import { createReadinessMemoScope, type ReadinessMemoScope } from "@/lib/completion/readinessEvaluationMemo";
 import {
     opportunityAttentionResultMatchesBucket,
     resolveNeedsAttentionBucketsWithPrecedence,
@@ -1026,6 +1031,9 @@ async function enrichOpportunityRows(params: {
         defs: StatusDefinitionRow[];
         config: OpportunityAttentionResolvedConfig;
         nowMs: number;
+        departmentMetadata?: unknown | null;
+        departmentId?: string | null;
+        readinessMemoScope?: ReadinessMemoScope;
     } | null;
 }): Promise<{ rows: Array<Record<string, unknown>>; queueListSubtimings?: QueueListEnrichmentSubtimingsMs }> {
     const {
@@ -1396,12 +1404,35 @@ async function enrichOpportunityRows(params: {
         let attentionSeverity: "critical" | "high" | "medium" | "low" | null = null;
         let attentionExtras: Record<string, unknown> = {};
         if (opportunityAttentionResolution) {
+            const attnConfig = opportunityAttentionResolution.config;
+            const readinessBridge =
+                attnConfig.readiness_projection.readiness_attention_bridge_v1 &&
+                isReadinessAttentionProjectionActive(attnConfig.readiness_projection);
+            let readiness = undefined;
+            if (readinessBridge && opportunityAttentionResolution.departmentMetadata) {
+                const deptMeta =
+                    typeof opportunityAttentionResolution.departmentMetadata === "object" &&
+                    opportunityAttentionResolution.departmentMetadata &&
+                    !Array.isArray(opportunityAttentionResolution.departmentMetadata)
+                        ? (opportunityAttentionResolution.departmentMetadata as Record<string, unknown>)
+                        : null;
+                readiness = tryEvaluateOpportunityReadinessForAttention({
+                    orgId,
+                    opportunity: opportunityPreviewToResolverEntity(r),
+                    departmentId: opportunityAttentionResolution.departmentId ?? null,
+                    workUnitId: r.work_unit_id != null ? String(r.work_unit_id) : null,
+                    departmentMetadata: deptMeta,
+                    memoScope: opportunityAttentionResolution.readinessMemoScope,
+                });
+            }
             const attn = resolveOpportunityAttention({
                 opportunity: opportunityPreviewToResolverEntity(r),
                 defs: opportunityAttentionResolution.defs,
-                config: opportunityAttentionResolution.config,
+                config: attnConfig,
                 nowMs: opportunityAttentionResolution.nowMs,
                 optionalSignals: null,
+                readiness,
+                readinessProjectionProfile: attnConfig.readiness_projection,
             });
             attentionReasonCode = attn.primary_reason?.code ?? null;
             attentionReasonLabel = attn.primary_reason?.label ?? null;
@@ -1677,6 +1708,9 @@ export async function loadOpportunityNeedsAttentionRows(params: {
         membership_filter_ms?: number;
         sort_ms?: number;
     };
+    /** Dept metadata for readiness bridge on NA membership (optional). */
+    departmentMetadata?: unknown | null;
+    departmentId?: string | null;
 }): Promise<{
     filtered: OpportunityRowPreview[];
     raw_candidates_fetched: number;
@@ -1686,9 +1720,20 @@ export async function loadOpportunityNeedsAttentionRows(params: {
 }> {
     const cap = params.fetchCap ?? NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP;
     const attentionConfig = params.attentionConfig;
+    const readinessBridge =
+        attentionConfig.readiness_projection.readiness_attention_bridge_v1 &&
+        isReadinessAttentionProjectionActive(attentionConfig.readiness_projection) &&
+        params.departmentMetadata != null;
     const minLifecycleH = minLifecycleStaleHoursFromResolvedConfig(attentionConfig.thresholdsHours);
     const candidateOr = buildOpportunityNeedsAttentionCandidateOrExpr(params.now, minLifecycleH);
     const nowMs = params.now.getTime();
+    const readinessMemo = readinessBridge ? createReadinessMemoScope() : undefined;
+    const deptMetaRecord =
+        params.departmentMetadata &&
+        typeof params.departmentMetadata === "object" &&
+        !Array.isArray(params.departmentMetadata)
+            ? (params.departmentMetadata as Record<string, unknown>)
+            : null;
     const selectCols: string =
         params.columnSelect === "resolver_minimal"
             ? NEEDS_ATTENTION_OPPORTUNITY_SELECT_RESOLVER_MINIMAL
@@ -1697,8 +1742,10 @@ export async function loadOpportunityNeedsAttentionRows(params: {
         .from("opportunities")
         .select(selectCols)
         .eq("org_id", params.orgId)
-        .eq("work_unit_id", params.workUnitId)
-        .or(candidateOr) as any;
+        .eq("work_unit_id", params.workUnitId) as any;
+    if (!readinessBridge) {
+        q = q.or(candidateOr);
+    }
     if (params.recordScopeConstraints) {
         q = applyRecordScopeConstraintsToQuery(q, params.recordScopeConstraints);
     }
@@ -1727,25 +1774,39 @@ export async function loadOpportunityNeedsAttentionRows(params: {
         const rowId = String(r.id);
         const md = opportunityMetadataForResolver(r.metadata);
         const tResolve0 = Date.now();
+        const entityInput: OpportunityAttentionEntityInput = {
+            id: rowId,
+            status_key: r.status_key,
+            created_at: r.created_at ?? null,
+            updated_at: r.updated_at ?? null,
+            metadata: md,
+            customer_id: r.customer_id,
+            primary_person_id: r.primary_person_id ?? null,
+            primary_contact_id: r.primary_contact_id ?? null,
+            quote_total: r.quote_total ?? null,
+            estimated_price_cents: r.estimated_price_cents ?? null,
+            monetary_value_cents: r.monetary_value_cents ?? null,
+        };
+        const readiness =
+            readinessBridge && deptMetaRecord
+                ? tryEvaluateOpportunityReadinessForAttention({
+                      orgId: params.orgId,
+                      opportunity: entityInput,
+                      departmentId: params.departmentId ?? null,
+                      workUnitId: params.workUnitId,
+                      departmentMetadata: deptMetaRecord,
+                      memoScope: readinessMemo,
+                  })
+                : undefined;
         const attention = resolveOpportunityAttention({
-            opportunity: {
-                id: rowId,
-                status_key: r.status_key,
-                created_at: r.created_at ?? null,
-                updated_at: r.updated_at ?? null,
-                metadata: md,
-                customer_id: r.customer_id,
-                primary_person_id: r.primary_person_id ?? null,
-                primary_contact_id: r.primary_contact_id ?? null,
-                quote_total: r.quote_total ?? null,
-                estimated_price_cents: r.estimated_price_cents ?? null,
-                monetary_value_cents: r.monetary_value_cents ?? null,
-            },
+            opportunity: entityInput,
             defs: params.opportunityStatusDefs,
             config: attentionConfig,
             nowMs,
             optionalSignals: null,
             batch,
+            readiness,
+            readinessProjectionProfile: attentionConfig.readiness_projection,
         });
         resolverAccum += Date.now() - tResolve0;
         resolved_by_id[rowId] = attention;
@@ -2680,7 +2741,11 @@ export async function getWorkUnitQueueSummaries(params: {
         }
 
         if (q.key === "needs_attention") {
-            const attentionConfigResolved = resolveOpportunityAttentionConfigFromMetadata(workUnitMetadata ?? null);
+            const mergedAttentionMeta = mergeAttentionMetadataForConfig(
+                workUnitMetadata,
+                preloaded?.departmentMetadata ?? null
+            );
+            const attentionConfigResolved = resolveOpportunityAttentionConfigFromMetadata(mergedAttentionMeta);
             const tN0 = Date.now();
             let preloadStatusDefs: StatusDefinitionRow[] | undefined;
             preloadStatusDefs = await sharedOpportunityStatusDefs();
@@ -2694,6 +2759,8 @@ export async function getWorkUnitQueueSummaries(params: {
                 attentionConfig: attentionConfigResolved,
                 fetchCap: includePreviews ? undefined : NEEDS_ATTENTION_COUNT_ONLY_FETCH_CAP,
                 recordScopeConstraints: scopeFilter,
+                departmentMetadata: preloaded?.departmentMetadata ?? null,
+                departmentId: workUnitDepartmentId,
             });
             const matched = needsAttentionLoadOut.filtered;
             const opportunity_needs_attention_semantics = buildQueueServiceAttentionSemantics({
@@ -2722,6 +2789,9 @@ export async function getWorkUnitQueueSummaries(params: {
 
             const previewRows = matched.slice(0, previewLimit);
             rowsEnriched = previewRows.length;
+            const naReadinessMemo = attentionConfigResolved.readiness_projection.readiness_attention_bridge_v1
+                ? createReadinessMemoScope()
+                : undefined;
             const tE0 = Date.now();
             const { rows: preview } = await enrichOpportunityRows({
                 supabase,
@@ -2730,11 +2800,14 @@ export async function getWorkUnitQueueSummaries(params: {
                 effectiveStatusDefs: preloadStatusDefs,
                 enrichment: "queue_preview",
                 viewerDisplayTimeZoneIana: viewerPreviewIana,
-                opportunityAttentionResolution: {
+                opportunityAttentionResolution: buildOpportunityAttentionEnrichResolution({
                     defs: preloadStatusDefs,
                     config: attentionConfigResolved,
                     nowMs: refUtc.getTime(),
-                },
+                    departmentMetadata: preloaded?.departmentMetadata ?? null,
+                    departmentId: workUnitDepartmentId,
+                    readinessMemoScope: naReadinessMemo,
+                }),
             });
             enrichMs = Date.now() - tE0;
 
@@ -3263,11 +3336,6 @@ export async function getWorkUnitQueueItems(params: {
     const queueKeyResolution = resolveQueueKeyFromDefinition(params.queueKey, normalized.queues);
     const executableQueueKey = queueKeyResolution.resolvedKey;
 
-    const opportunityAttentionConfigResolved =
-        def.entity_type === "opportunity"
-            ? resolveOpportunityAttentionConfigFromMetadata(workUnitMetadata)
-            : null;
-
     assertSupportedEntityType(def);
     const q = findQueueByKey(def, executableQueueKey);
     const rowListUi = resolveWorkUnitRowListUi(def, workUnitKey, workUnitMetadata);
@@ -3347,6 +3415,27 @@ export async function getWorkUnitQueueItems(params: {
             departmentMetadata = (dRow as { metadata?: unknown } | null)?.metadata ?? null;
         }
     }
+    const opportunityAttentionConfigResolved =
+        def.entity_type === "opportunity"
+            ? resolveOpportunityAttentionConfigFromMetadata(
+                  mergeAttentionMetadataForConfig(workUnitMetadata, departmentMetadata)
+              )
+            : null;
+    const queueReadinessMemo =
+        opportunityAttentionConfigResolved?.readiness_projection.readiness_attention_bridge_v1
+            ? createReadinessMemoScope()
+            : undefined;
+    const queueAttentionEnrich = (defs: StatusDefinitionRow[], nowMs: number) =>
+        opportunityAttentionConfigResolved
+            ? buildOpportunityAttentionEnrichResolution({
+                  defs,
+                  config: opportunityAttentionConfigResolved,
+                  nowMs,
+                  departmentMetadata,
+                  departmentId: workUnitDepartmentId,
+                  readinessMemoScope: queueReadinessMemo,
+              })
+            : undefined;
     const rowEnrichment = params.rowEnrichment ?? "queue_list";
     const enrichMode = rowEnrichment === "queue_reveal" ? "queue_reveal" : "queue_list";
     const skipPlacementProjection = rowEnrichment === "queue_reveal";
@@ -3655,6 +3744,8 @@ export async function getWorkUnitQueueItems(params: {
                       opportunityStatusDefs: effectiveStatusDefs,
                       attentionConfig: attentionConfigResolved,
                       recordScopeConstraints: scopeFilter,
+                      departmentMetadata,
+                      departmentId: workUnitDepartmentId,
                   })
               );
         let matched = attentionLoadPack.filtered;
@@ -3686,11 +3777,7 @@ export async function getWorkUnitQueueItems(params: {
             relationFetchPlan: queueListRelationPlan,
             viewerDisplayTimeZoneIana: viewerPreviewIana,
             skipOptionalEnrichmentFetches: rowEnrichment === "queue_reveal",
-            opportunityAttentionResolution: {
-                defs: effectiveStatusDefs,
-                config: attentionConfigResolved,
-                nowMs: refUtc.getTime(),
-            },
+            opportunityAttentionResolution: queueAttentionEnrich(effectiveStatusDefs, refUtc.getTime()),
         });
         const enrichment_ms = Date.now() - tEn0;
         const placementPack = skipPlacementProjection
@@ -3795,13 +3882,7 @@ export async function getWorkUnitQueueItems(params: {
             relationFetchPlan: queueListRelationPlan,
             viewerDisplayTimeZoneIana: viewerPreviewIana,
             skipOptionalEnrichmentFetches: rowEnrichment === "queue_reveal",
-            opportunityAttentionResolution: opportunityAttentionConfigResolved
-                ? {
-                      defs: effectiveStatusDefs,
-                      config: opportunityAttentionConfigResolved,
-                      nowMs: refUtc.getTime(),
-                  }
-                : undefined,
+            opportunityAttentionResolution: queueAttentionEnrich(effectiveStatusDefs, refUtc.getTime()),
         });
         const enrichment_ms = Date.now() - tEn0;
         logQueueLaneParityDebug({
