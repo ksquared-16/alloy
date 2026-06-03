@@ -549,57 +549,72 @@ export default function CommunicationsDrawerSection({
         }
     }, [apiEntityType, entityId]);
 
-    const loadConversationMessages = useCallback(async () => {
-        if (!dataLayerActive) return;
-        const scopeList = filteredThreadsByView.slice(0, MAX_MERGE_THREADS);
-        if (scopeList.length === 0) {
-            setMsgs([]);
+    const loadConversationMessages = useCallback(
+        async (signal: AbortSignal, isCurrent: () => boolean) => {
+            if (!dataLayerActive) return;
+            const scopeList = filteredThreadsByView.slice(0, MAX_MERGE_THREADS);
+            if (scopeList.length === 0) {
+                if (!isCurrent()) return;
+                setMsgs([]);
+                setMsgErr(null);
+                setShowOlderMessages(false);
+                setExpandedBodies({});
+                setLoadingMsgs(false);
+                return;
+            }
+            setLoadingMsgs(true);
             setMsgErr(null);
-            setShowOlderMessages(false);
-            setExpandedBodies({});
-            return;
-        }
-        setLoadingMsgs(true);
-        setMsgErr(null);
-        try {
-            const batches = await Promise.all(
-                scopeList.map(async (th) => {
-                    const r = await fetch(
-                        `/api/admin/communications/threads/${encodeURIComponent(th.id)}/messages?limit=${MESSAGES_PER_THREAD_LIMIT}&include_viewer_read=1`,
-                        { credentials: "include" },
-                    );
-                    const j = await r.json().catch(() => ({}));
-                    if (!r.ok) throw new Error((j as { error?: string }).error ?? `HTTP ${r.status}`);
-                    const raw = Array.isArray((j as { messages?: MsgRow[] }).messages)
-                        ? (j as { messages: MsgRow[] }).messages
-                        : [];
-                    return raw.map((m) => ({ ...m, _thread_id: th.id }) as MsgRowWithThread);
-                }),
-            );
-            let merged = batches.flat();
-            merged.sort((a, b) => {
-                const ta = Date.parse(String(a.created_at ?? a.sent_at ?? 0));
-                const tb = Date.parse(String(b.created_at ?? b.sent_at ?? 0));
-                return (Number.isFinite(ta) ? ta : 0) - (Number.isFinite(tb) ? tb : 0);
-            });
-            const cap = 200;
-            if (merged.length > cap) merged = merged.slice(-cap);
-            setMsgs(merged);
-            setShowOlderMessages(false);
-            setExpandedBodies({});
-        } catch (e) {
-            setMsgErr(e instanceof Error ? e.message : "Failed to load messages");
-            setMsgs([]);
-            setShowOlderMessages(false);
-            setExpandedBodies({});
-        } finally {
-            setLoadingMsgs(false);
-        }
-    }, [dataLayerActive, filteredThreadsByView]);
+            try {
+                const batches = await Promise.all(
+                    scopeList.map(async (th) => {
+                        const r = await fetch(
+                            `/api/admin/communications/threads/${encodeURIComponent(th.id)}/messages?limit=${MESSAGES_PER_THREAD_LIMIT}&include_viewer_read=1`,
+                            { credentials: "include", signal },
+                        );
+                        const j = await r.json().catch(() => ({}));
+                        if (!r.ok) throw new Error((j as { error?: string }).error ?? `HTTP ${r.status}`);
+                        const raw = Array.isArray((j as { messages?: MsgRow[] }).messages)
+                            ? (j as { messages: MsgRow[] }).messages
+                            : [];
+                        return raw.map((m) => ({ ...m, _thread_id: th.id }) as MsgRowWithThread);
+                    }),
+                );
+                if (!isCurrent()) return;
+                let merged = batches.flat();
+                merged.sort((a, b) => {
+                    const ta = Date.parse(String(a.created_at ?? a.sent_at ?? 0));
+                    const tb = Date.parse(String(b.created_at ?? b.sent_at ?? 0));
+                    return (Number.isFinite(ta) ? ta : 0) - (Number.isFinite(tb) ? tb : 0);
+                });
+                const cap = 200;
+                if (merged.length > cap) merged = merged.slice(-cap);
+                setMsgs(merged);
+                setShowOlderMessages(false);
+                setExpandedBodies({});
+            } catch (e) {
+                // A superseded load aborts its in-flight fetches; the current load owns state.
+                if (signal.aborted || (e instanceof Error && e.name === "AbortError")) return;
+                if (!isCurrent()) return;
+                setMsgErr(e instanceof Error ? e.message : "Failed to load messages");
+                setMsgs([]);
+                setShowOlderMessages(false);
+                setExpandedBodies({});
+            } finally {
+                if (isCurrent()) setLoadingMsgs(false);
+            }
+        },
+        [dataLayerActive, filteredThreadsByView],
+    );
 
     useEffect(() => {
         if (!dataLayerActive) return;
-        void loadConversationMessages();
+        const controller = new AbortController();
+        let active = true;
+        void loadConversationMessages(controller.signal, () => active);
+        return () => {
+            active = false;
+            controller.abort();
+        };
     }, [dataLayerActive, loadConversationMessages]);
 
     useLayoutEffect(() => {
