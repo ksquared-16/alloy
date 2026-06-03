@@ -346,8 +346,6 @@ export default function CommunicationsDrawerSection({
     const [loadingRecipients, setLoadingRecipients] = useState(false);
     const [selectedRecipientIds, setSelectedRecipientIds] = useState<Set<string>>(() => new Set());
 
-    const [composerSubject, setComposerSubject] = useState("");
-    const [composerBody, setComposerBody] = useState("");
     const [sendBusy, setSendBusy] = useState(false);
     const [sendErr, setSendErr] = useState<string | null>(null);
     const [sendOkNote, setSendOkNote] = useState<string | null>(null);
@@ -397,8 +395,6 @@ export default function CommunicationsDrawerSection({
         setRecipients([]);
         setRecipientsErr(null);
         setSelectedRecipientIds(new Set());
-        setComposerSubject("");
-        setComposerBody("");
         setSendErr(null);
         setSendOkNote(null);
         setShowOlderMessages(false);
@@ -907,17 +903,17 @@ export default function CommunicationsDrawerSection({
         });
     };
 
-    const sendFromComposer = async () => {
-        if (!composerEntity || selectedRecipientIds.size === 0 || !composerBody.trim()) return;
-        if (effectiveComposer === "email" && !emailOutboundReady) return;
-        if (effectiveComposer === "sms" && !smsOutboundReady) return;
+    const sendFromComposer = async (values: { subject: string; body: string }): Promise<boolean> => {
+        if (!composerEntity || selectedRecipientIds.size === 0 || !values.body.trim()) return false;
+        if (effectiveComposer === "email" && !emailOutboundReady) return false;
+        if (effectiveComposer === "sms" && !smsOutboundReady) return false;
 
         const channelSent = effectiveComposer === "sms" ? "sms" : "email";
         setSendBusy(true);
         setSendErr(null);
         setSendOkNote(null);
-        const bodyTrim = composerBody.trim();
-        const subjectTrim = composerSubject.trim();
+        const bodyTrim = values.body.trim();
+        const subjectTrim = values.subject.trim();
         try {
             let lastNote = "";
             const optimisticRows: MsgRowWithThread[] = [];
@@ -976,8 +972,6 @@ export default function CommunicationsDrawerSection({
                 }
             }
             setSendOkNote(userFriendlySendNote(lastNote, channelSent === "sms" ? "sms" : "email"));
-            setComposerSubject("");
-            setComposerBody("");
             invalidateCommunicationsDrawerPrefetch(apiEntityType, entityId);
             if (optimisticRows.length > 0) {
                 setMsgs((prev) => {
@@ -993,8 +987,10 @@ export default function CommunicationsDrawerSection({
                 });
                 setShowOlderMessages(false);
             }
+            return true;
         } catch (e) {
             setSendErr(e instanceof Error ? e.message : "Send failed");
+            return false;
         } finally {
             setSendBusy(false);
         }
@@ -1104,7 +1100,8 @@ export default function CommunicationsDrawerSection({
     const composerReady =
         (effectiveComposer === "email" && emailOutboundReady) || (effectiveComposer === "sms" && smsOutboundReady);
 
-    const sendDisabledReason: string | null = (() => {
+    // Every disabled reason except the empty-body case; the composer appends that from its own draft.
+    const sendDisabledReasonBase: string | null = (() => {
         if (sendBusy) return null;
         if (!composerReady) {
             return effectiveComposer === "email"
@@ -1121,7 +1118,6 @@ export default function CommunicationsDrawerSection({
                   : "No linked person has a mobile number for SMS.";
         }
         if (selectedRecipientIds.size === 0) return "Select at least one recipient.";
-        if (!composerBody.trim()) return "Enter a message to send.";
         return null;
     })();
 
@@ -1138,6 +1134,7 @@ export default function CommunicationsDrawerSection({
     const drawerComposerNode =
         showDrawerComposerChrome && composerEntity && normalizedEntityType ? (
             <DrawerMessagingComposer
+                key={`${normalizedEntityType}:${entityId}`}
                 apiEntityType={normalizedEntityType}
                 entityId={entityId}
                 columnLayout
@@ -1153,15 +1150,10 @@ export default function CommunicationsDrawerSection({
                 recipients={recipients}
                 selectedRecipientIds={selectedRecipientIds}
                 onToggleRecipient={toggleRecipient}
-                subject={composerSubject}
-                onSubjectChange={setComposerSubject}
-                body={composerBody}
-                onBodyChange={setComposerBody}
                 sendBusy={sendBusy}
-                sendDisabled={sendBusy || sendDisabledReason !== null}
-                sendDisabledReason={sendDisabledReason}
+                sendDisabledReasonBase={sendDisabledReasonBase}
                 sendLabel="Send now"
-                onSend={() => void sendFromComposer()}
+                onSend={sendFromComposer}
                 sendErr={sendErr}
                 sendOkNote={sendOkNote}
             />
