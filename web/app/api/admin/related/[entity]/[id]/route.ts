@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { adminPerfEnabled, adminPerfNow, logAdminPerf } from "@/lib/admin/perfTrace";
 import { normalizeDocumentRows, type NormalizedDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 import { mergeOpportunityPacketDocumentsForRelated } from "@/lib/admin/related/mergeOpportunityPacketDocuments";
 import { computeJobDisplayTotalCents, type JobPriceInput } from "@/lib/admin/jobDisplayPrice";
@@ -34,7 +35,7 @@ function mergeDocumentLists(
     }).slice(0, limit);
 }
 
-export async function GET(
+async function getRelatedImpl(
     request: NextRequest,
     { params }: { params: Promise<{ entity: string; id: string }> }
 ) {
@@ -818,4 +819,17 @@ export async function GET(
         console.error("[ADMIN_RELATED]", e);
         return NextResponse.json({ error: "Failed to fetch related" }, { status: 500 });
     }
+}
+
+/** Phase 0 perf wrapper (Card 0.1): times the handler when ADMIN_PERF_TRACE=1; otherwise a passthrough. */
+export async function GET(
+    request: NextRequest,
+    context: { params: Promise<{ entity: string; id: string }> }
+) {
+    if (!adminPerfEnabled()) return getRelatedImpl(request, context);
+    const t0 = adminPerfNow();
+    const res = await getRelatedImpl(request, context);
+    const { entity, id } = await context.params;
+    logAdminPerf({ route: "related", entity, id, status: res.status, t0 });
+    return res;
 }

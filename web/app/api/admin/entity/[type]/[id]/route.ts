@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { adminPerfEnabled, adminPerfNow, logAdminPerf } from "@/lib/admin/perfTrace";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { formatRecurrenceLabel } from "@/lib/adminFormatters";
 import { attachDirectFkRelationshipDisplays } from "@/lib/admin/relationshipDisplayAttach";
@@ -97,7 +98,7 @@ function logPersonPayloadBuildTiming(
     );
 }
 
-export async function GET(
+async function getEntityImpl(
     request: NextRequest,
     { params }: { params: Promise<{ type: string; id: string }> }
 ) {
@@ -1479,4 +1480,17 @@ export async function GET(
         console.error("[ADMIN_ENTITY]", e);
         return NextResponse.json({ error: "Failed to fetch entity" }, { status: 500 });
     }
+}
+
+/** Phase 0 perf wrapper (Card 0.1): times the handler when ADMIN_PERF_TRACE=1; otherwise a passthrough. */
+export async function GET(
+    request: NextRequest,
+    context: { params: Promise<{ type: string; id: string }> }
+) {
+    if (!adminPerfEnabled()) return getEntityImpl(request, context);
+    const t0 = adminPerfNow();
+    const res = await getEntityImpl(request, context);
+    const { type, id } = await context.params;
+    logAdminPerf({ route: "entity", type, id, status: res.status, t0 });
+    return res;
 }
