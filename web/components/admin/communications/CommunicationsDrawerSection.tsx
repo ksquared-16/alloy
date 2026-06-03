@@ -446,6 +446,22 @@ export default function CommunicationsDrawerSection({
             ? msgs.length - DEFAULT_VISIBLE_MESSAGE_COUNT
             : 0;
 
+    /** Inbound-unread counts per filter, computed once per msgs change (was rescanned 3×/render). */
+    const inboundUnreadCounts = useMemo(() => {
+        let all = 0;
+        let email = 0;
+        let sms = 0;
+        for (const m of msgs) {
+            if ((m.direction ?? "").toLowerCase() !== "inbound") continue;
+            if (m.viewer_has_read === true) continue;
+            all += 1;
+            const ch = (m.channel ?? "").trim().toLowerCase();
+            if (ch === "email") email += 1;
+            else if (ch === "sms") sms += 1;
+        }
+        return { all, email, sms } as Record<ViewFilter, number>;
+    }, [msgs]);
+
     const loadThreads = useCallback(async () => {
         setThrErr(null);
         const peek = takeCommunicationsDrawerPrefetch(apiEntityType, entityId);
@@ -616,9 +632,10 @@ export default function CommunicationsDrawerSection({
                         body: JSON.stringify({ message_ids: inboundUnreadIds }),
                     });
                     if (!res.ok) return;
+                    const markedReadIdSet = new Set(inboundUnreadIds);
                     inboundUnreadIds.forEach((id) => markedReadSubmittedRef.current.add(id));
                     setMsgs((prev) =>
-                        prev.map((m) => (inboundUnreadIds.includes(m.id) ? { ...m, viewer_has_read: true } : m)),
+                        prev.map((m) => (markedReadIdSet.has(m.id) ? { ...m, viewer_has_read: true } : m)),
                     );
                     window.dispatchEvent(new CustomEvent("alloy-comms-unread-refresh"));
                 } catch {
@@ -1124,17 +1141,8 @@ export default function CommunicationsDrawerSection({
             />
         ) : null;
 
-    const inboundUnreadCountForFilter = (f: ViewFilter) =>
-        msgs.filter((m) => {
-            if ((m.direction ?? "").toLowerCase() !== "inbound") return false;
-            if (m.viewer_has_read === true) return false;
-            const ch = (m.channel ?? "").trim().toLowerCase();
-            if (f === "all") return true;
-            return ch === f;
-        }).length;
-
     const unreadTabDot = (f: ViewFilter) =>
-        inboundUnreadCountForFilter(f) > 0 ? (
+        inboundUnreadCounts[f] > 0 ? (
             <span
                 className="ml-0.5 inline-block h-1.5 w-1.5 rounded-full bg-[#2563eb] align-middle opacity-90"
                 aria-hidden
