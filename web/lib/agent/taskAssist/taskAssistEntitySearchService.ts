@@ -13,6 +13,7 @@ import {
     locationDisplayLabelFromRow,
     type LocationDisplayLabelRow,
 } from "@/lib/admin/locationDisplayLabel";
+import { formatOpportunityOperatorDisplayLabel } from "@/lib/admin/opportunityDisplayLabel";
 import { resolveQueueRecordScopeConstraints } from "@/lib/admin/resolveQueueRecordScopeConstraints";
 import {
     CRM_ENTITY_SEARCH_UUID_RE,
@@ -64,10 +65,16 @@ function clampLimit(n: number | undefined): number {
     return Math.min(Math.max(v, 1), MAX_LIMIT);
 }
 
-function oppLabel(o: OppRow): string {
+function oppLabel(o: OppRow, customerName?: string | null, locationName?: string | null): string {
     const t = (o.title ?? "").trim();
     const n = (o.name ?? "").trim();
-    return t || n || `Opportunity ${o.id.slice(0, 8)}…`;
+    const raw = t || n;
+    if (!raw) return `Opportunity ${o.id.slice(0, 8)}…`;
+    return formatOpportunityOperatorDisplayLabel(raw, {
+        entitySingularLabel: "Lead",
+        customerName: customerName ?? null,
+        locationName: locationName ?? null,
+    });
 }
 
 function ilikePattern(token: string): string {

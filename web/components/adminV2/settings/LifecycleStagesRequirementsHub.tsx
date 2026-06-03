@@ -122,7 +122,7 @@ export default function LifecycleStagesRequirementsHub() {
                     <div className="mt-4">
                         <LifecycleStageFieldRequirementsEditor
                             departmentId={departmentId}
-                            activeStage={activeStage}
+                            activeStageKey={activeStage}
                             onDirtyChange={setDirty}
                             onFeedback={onFeedback}
                             onError={onError}

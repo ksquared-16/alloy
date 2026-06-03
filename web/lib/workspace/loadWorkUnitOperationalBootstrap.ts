@@ -15,6 +15,16 @@ import { resolveWorkUnitBootstrapPrimaryQueueKey } from "@/lib/workspace/resolve
 import { resolveWorkUnitNeedsAttentionExecution } from "@/lib/workspace/resolveWorkUnitNeedsAttentionExecution";
 import { workUnitDefinesNeedsAttentionQueue } from "@/lib/workspace/resolveDeptNeedsAttentionWorkUnit";
 import type { WorkUnitBootstrapPerfPhases } from "@/lib/workspace/workUnitOperationalBootstrapPerf";
+import {
+    deptUsesBuilderOwnedLifecycleRuntime,
+    filterWorkUnitsForBuilderOwnedDeptDisplay,
+} from "@/lib/lifecycle/builderOwnedLifecycleRuntime";
+import {
+    filterSortLifecycleSiblingWorkUnits,
+    logLifecycleSiblingHydrationDev,
+    type LifecycleSiblingHydrationBlock,
+} from "@/lib/lifecycle/lifecycleWorkUnitSiblingHydration";
+import { getDepartmentWorkUnitQueueSummaries } from "@/lib/queues/QueueService";
 import type { NeedsAttentionBucketWithCount } from "@/lib/opportunities/needsAttentionBuckets";
 import type { AttentionReasonCountSummary } from "@/lib/workspace/attentionReasonCountsSummary";
 import type { QueueServiceOpportunityNeedsAttentionSemantics } from "@/lib/workspace/opportunityAttentionCountSemantics";
@@ -70,6 +80,8 @@ export type WorkUnitOperationalBootstrapPayload = {
         metadata?: unknown;
     };
     queue: WorkUnitOperationalBootstrapQueue;
+    /** Builder-owned lifecycle: full sibling set + visibility-based pill totals (one paint). */
+    lifecycle_siblings?: LifecycleSiblingHydrationBlock;
 };
 
 export type WorkUnitOperBootstrapContext = {
@@ -234,7 +246,7 @@ export async function loadWorkUnitOperationalBootstrap(params: {
     }
 
     const tFetch0 = Date.now();
-    const [deptRes, wuRes] = await Promise.all([
+    const [deptRes, wuRes, deptWuListRes] = await Promise.all([
         supabase
             .from("departments")
             .select("id, key, name, metadata")
@@ -247,6 +259,12 @@ export async function loadWorkUnitOperationalBootstrap(params: {
             .eq("id", workUnitId)
             .eq("org_id", orgId)
             .maybeSingle(),
+        supabase
+            .from("work_units")
+            .select("id, key, name, metadata, department_id, queue_definition, sort_order, is_active")
+            .eq("org_id", orgId)
+            .eq("department_id", departmentId)
+            .order("sort_order", { ascending: true }),
     ]);
     phases.dept_fetch_ms = Date.now() - tFetch0;
     phases.work_unit_fetch_ms = phases.dept_fetch_ms;
@@ -474,6 +492,91 @@ export async function loadWorkUnitOperationalBootstrap(params: {
 
     phases.pipeline_ms = 0;
 
+    let lifecycle_siblings: LifecycleSiblingHydrationBlock | undefined;
+    const deptWuRows = deptWuListRes.data ?? [];
+    const builderOwnedRuntime = deptUsesBuilderOwnedLifecycleRuntime(departmentMetadata, deptWuRows);
+    if (builderOwnedRuntime && !deptWuListRes.error) {
+        const tSib0 = Date.now();
+        const lifecycleRows = filterSortLifecycleSiblingWorkUnits(
+            deptWuRows.map((w) => ({
+                id: String((w as { id: string }).id),
+                name: (w as { name?: string | null }).name ?? null,
+                key: (w as { key?: string | null }).key ?? null,
+                metadata: (w as { metadata?: unknown }).metadata,
+                is_active: (w as { is_active?: boolean }).is_active,
+                sort_order: (w as { sort_order?: number | null }).sort_order ?? null,
+            }))
+        );
+        if (lifecycleRows.length) {
+            const departmentWorkUnitIdsForLifecycleScope = filterWorkUnitsForBuilderOwnedDeptDisplay(
+                deptWuRows.map((w) => ({
+                    id: String((w as { id: string }).id),
+                    name: (w as { name?: string | null }).name ?? null,
+                    key: (w as { key?: string | null }).key ?? null,
+                    metadata: (w as { metadata?: unknown }).metadata,
+                }))
+            ).map((w) => w.id);
+            const workUnitPreloadById = new Map(
+                deptWuRows.map((w) => [
+                    String((w as { id: string }).id),
+                    {
+                        queue_definition: (w as { queue_definition?: unknown }).queue_definition,
+                        metadata: (w as { metadata?: unknown }).metadata ?? null,
+                        department_id: (w as { department_id?: string | null }).department_id ?? null,
+                        departmentMetadata,
+                        key: (w as { key?: string | null }).key ?? null,
+                    },
+                ])
+            );
+            const summaryIds = lifecycleRows.map((r) => r.id);
+            const totals_by_work_unit_id: Record<string, number> = {};
+            try {
+                const batch = await getDepartmentWorkUnitQueueSummaries({
+                    orgId,
+                    departmentId,
+                    workUnitIds: summaryIds,
+                    departmentWorkUnitIdsForLifecycleScope,
+                    workUnitPreloadById,
+                    includePreviews: false,
+                    countAccuracy: "exact",
+                    summaryMode: "all",
+                    recordScopeImpossible,
+                    recordScopeConstraints,
+                    viewerDisplayTimeZone,
+                    workUnitConcurrency: Math.min(6, summaryIds.length),
+                });
+                for (const row of batch.work_units) {
+                    if (row.error) continue;
+                    if (
+                        typeof row.work_unit_scope_total === "number" &&
+                        Number.isFinite(row.work_unit_scope_total)
+                    ) {
+                        totals_by_work_unit_id[row.id] = Math.max(0, Math.floor(row.work_unit_scope_total));
+                    }
+                }
+            } catch (e) {
+                logLifecycleSiblingHydrationDev("sibling_summary_batch_failed", {
+                    department_id: departmentId,
+                    work_unit_id: workUnitId,
+                    error: e instanceof Error ? e.message : String(e),
+                });
+            }
+            lifecycle_siblings = {
+                work_units: lifecycleRows,
+                totals_by_work_unit_id,
+            };
+            logLifecycleSiblingHydrationDev("bootstrap_siblings", {
+                source: "server",
+                department_id: departmentId,
+                work_unit_id: workUnitId,
+                work_unit_ids: summaryIds,
+                labels: lifecycleRows.map((r) => r.name),
+                ms: Date.now() - tSib0,
+            });
+        }
+        phases.lifecycle_siblings_ms = Date.now() - tSib0;
+    }
+
     const payload: WorkUnitOperationalBootstrapPayload = {
         department: {
             id: String((deptRow as { id: string }).id),
@@ -503,6 +606,7 @@ export async function loadWorkUnitOperationalBootstrap(params: {
             ...(primary_lane ? { primary_lane } : {}),
             ...(attentionBlock ? { attention: attentionBlock } : {}),
         },
+        ...(lifecycle_siblings ? { lifecycle_siblings } : {}),
     };
 
     return { payload, phases };

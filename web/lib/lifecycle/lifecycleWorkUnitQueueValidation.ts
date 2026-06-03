@@ -5,7 +5,10 @@
 
 import type { LifecycleActivationV1 } from "@/lib/lifecycle/lifecycleActivationConfig";
 import { asOperatorStageKey } from "@/lib/lifecycle/lifecycleBuilderConfig";
-import { stageSavedStatusKeys } from "@/lib/lifecycle/lifecycleActivationStep3";
+import {
+    resolveAssignedStatusKeysForStage,
+    stageSavedStatusKeys,
+} from "@/lib/lifecycle/lifecycleActivationStep3";
 import type { EnrollmentStatusStagesPayload } from "@/lib/lifecycle/enrollmentProcessStatusStageConfig";
 import { statusKeysForOperatorStageQueueSync } from "@/lib/lifecycle/lifecycleRuntimeBinding";
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
@@ -62,8 +65,23 @@ export function expectedStatusKeysForLifecycleStageValidation(
     stageKey: string,
     statusPayload: EnrollmentStatusStagesPayload | null,
     activation: LifecycleActivationV1,
-    workUnitMetadata?: unknown
+    workUnitMetadata?: unknown,
+    contractSelectedStatusKeys?: readonly string[]
 ): string[] {
+    const contract = (contractSelectedStatusKeys ?? [])
+        .map((k) => String(k ?? "").trim())
+        .filter(Boolean);
+    if (contract.length > 0) {
+        const operator = asOperatorStageKey(stageKey);
+        return operator ? statusKeysForOperatorStageQueueSync(operator, contract) : contract;
+    }
+    const fromPayload = resolveAssignedStatusKeysForStage(statusPayload, stageKey, {
+        activationOwned: true,
+    });
+    if (fromPayload.length) {
+        const operator = asOperatorStageKey(stageKey);
+        return operator ? statusKeysForOperatorStageQueueSync(operator, fromPayload) : fromPayload;
+    }
     const explicit = stageSavedStatusKeys(statusPayload, stageKey, { explicitAssignmentsOnly: true });
     if (explicit.length) {
         const operator = asOperatorStageKey(stageKey);
@@ -103,8 +121,7 @@ export function queueStatusKeysForLifecycleWorkUnitValidation(
         is_active: workUnit.is_active ?? true,
         queue_definition: workUnit.queue_definition,
     });
-    const operator = asOperatorStageKey(stageKey);
-    return queueStatusKeysForStageWorkUnitSnapshot(snapshot, operator);
+    return queueStatusKeysForStageWorkUnitSnapshot(snapshot, asOperatorStageKey(stageKey));
 }
 
 export type LifecycleStageQueueFilterValidation = {
@@ -123,13 +140,16 @@ export function validateLifecycleStageWorkUnitQueueFilter(params: {
     workUnit: { id: string; key: string; name: string; queue_definition: unknown; metadata?: unknown };
     statusPayload: EnrollmentStatusStagesPayload | null;
     activation: LifecycleActivationV1;
+    /** Keys from saveLifecycleStageRuntimeConfig — highest precedence for validation. */
+    contractSelectedStatusKeys?: readonly string[];
 }): LifecycleStageQueueFilterValidation {
-    const { stageKey, workUnit, statusPayload, activation } = params;
+    const { stageKey, workUnit, statusPayload, activation, contractSelectedStatusKeys } = params;
     const expected = expectedStatusKeysForLifecycleStageValidation(
         stageKey,
         statusPayload,
         activation,
-        workUnit.metadata
+        workUnit.metadata,
+        contractSelectedStatusKeys
     );
     const queueKeys = queueStatusKeysForLifecycleWorkUnitValidation(workUnit, stageKey);
     if (!expected.length) {

@@ -189,7 +189,6 @@ export default function LifecycleActivationValidation({
     }
 
     const compactPass = lifecycleActivationCompactAllPass(compactChecks) && allPass;
-
     return (
         <section className="space-y-3" data-testid="lifecycle-activation-validation">
             <div className="flex items-start justify-between gap-3">

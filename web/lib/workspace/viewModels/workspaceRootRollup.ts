@@ -2,6 +2,8 @@ import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import { formatWorkspaceUsdGrouped } from "@/lib/ui-v2/formatWorkspaceCurrency";
 import type { OpportunityLifecycleKpiCounts } from "@/lib/workspace/computeOpportunityLifecycleKpis";
 import { isGrowthSliceDepartmentKey } from "@/lib/workspace/growthSliceDepartments";
+import { isLifecycleStageWorkUnitKey } from "@/lib/lifecycle/lifecycleStageWorkUnit";
+import type { WorkspaceRootDeptTileStats } from "@/components/admin/workspace/WorkspaceRootDepartmentGrid";
 
 /** JSON shape from GET `/api/admin/departments/:departmentId/opportunity-lifecycle-kpis`. */
 export type DepartmentLifecycleKpisPayload = {
@@ -77,6 +79,65 @@ export function buildWorkspaceRootOrgOpportunityKpis(snapshots: WorkspaceGrowthD
 /**
  * Department tile subline — exact pipeline lane total for Growth-slice; otherwise work unit count.
  */
+export type WorkspaceWorkUnitRowForTileCount = {
+    department_id?: string | null;
+    key?: string | null;
+    name?: string | null;
+    is_active?: boolean | null;
+};
+
+/**
+ * Workspace department tile work-unit counts — active rows only.
+ * Builder-owned lifecycle departments count only `lifecycle_wu_*` (not inactive enrollment_pipeline).
+ */
+export function accumulateWorkspaceDeptWorkUnitTileStats(
+    items: readonly WorkspaceWorkUnitRowForTileCount[]
+): WorkspaceRootDeptTileStats {
+    const deptTileStats: WorkspaceRootDeptTileStats = {};
+    const namesByDept = new Map<string, string[]>();
+    const lifecycleCountByDept = new Map<string, number>();
+    const deptHasLifecycle = new Set<string>();
+
+    for (const row of items) {
+        if (row.is_active === false) continue;
+        const did = typeof row.department_id === "string" ? row.department_id.trim() : "";
+        if (!did) continue;
+        const key = typeof row.key === "string" ? row.key.trim() : "";
+        if (isLifecycleStageWorkUnitKey(key)) deptHasLifecycle.add(did);
+    }
+
+    for (const row of items) {
+        if (row.is_active === false) continue;
+        const did = typeof row.department_id === "string" ? row.department_id.trim() : "";
+        if (!did) continue;
+        const key = typeof row.key === "string" ? row.key.trim() : "";
+        const name = typeof row.name === "string" ? row.name.trim() : "";
+
+        if (isLifecycleStageWorkUnitKey(key)) {
+            lifecycleCountByDept.set(did, (lifecycleCountByDept.get(did) ?? 0) + 1);
+            if (name) {
+                const list = namesByDept.get(did) ?? [];
+                list.push(name);
+                namesByDept.set(did, list);
+            }
+            continue;
+        }
+        if (key.toLowerCase() === "needs_attention") continue;
+        if (deptHasLifecycle.has(did)) continue;
+        const cur = deptTileStats[did]?.workUnitCount ?? 0;
+        deptTileStats[did] = { workUnitCount: cur + 1 };
+    }
+
+    for (const [did, count] of lifecycleCountByDept) {
+        deptTileStats[did] = {
+            workUnitCount: count,
+            workUnitNames: namesByDept.get(did) ?? [],
+        };
+    }
+
+    return deptTileStats;
+}
+
 export function buildWorkspaceRootDepartmentTileRollupLine(params: {
     departmentKey: string;
     workUnitCount: number;

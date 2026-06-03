@@ -26,6 +26,11 @@ import {
 } from "@/lib/queues/childGrainEnrollmentQueue";
 import { getQueueUiConfig, type QueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
 import {
+    assertLifecycleStageOpportunityQueryHasStatusFilters,
+    LifecycleStageQueueFiltersEmptyError,
+} from "@/lib/lifecycle/lifecycleStageQueueFilters";
+import { resolveWorkUnitRowListUi } from "@/lib/lifecycle/lifecycleStageWorkUnit";
+import {
     fetchEffectiveStatusDefinitions,
     fetchEffectiveStatusDefinitionsTagged,
     displayLabelsFromDefinitions,
@@ -220,6 +225,22 @@ function findQueueByKey(def: QueueDefinitionV1, queueKey: string): QueueConfig {
 }
 
 /** Status keys declared on lane filters — passed to placement cohort overlap checks when present. */
+function guardLifecycleStageOpportunityQueryFilters(params: {
+    workUnitKey: string | null;
+    opportunityScopeMode: "work_unit_id" | "lifecycle_visibility" | undefined;
+    ops: JobQueryPlanOp[];
+    workUnitMetadata: unknown | null;
+}): void {
+    try {
+        assertLifecycleStageOpportunityQueryHasStatusFilters(params);
+    } catch (e) {
+        if (e instanceof LifecycleStageQueueFiltersEmptyError) {
+            throw new QueueServiceError(e.message, 400, e.code);
+        }
+        throw e;
+    }
+}
+
 function opportunityQueueStatusKeysAllowed(queue: QueueConfig): string[] | undefined {
     const keys = new Set<string>();
     for (const f of queue.filters) {
@@ -1884,6 +1905,8 @@ type WorkUnitQueueDefinitionCacheEntry = {
     def: QueueDefinitionV1;
     normalized: NormalizedQueueDefinitionDocument;
     revision: string | null;
+    /** Stored `work_units.queue_definition` JSON (lifecycle status filters). */
+    queueDefinition: unknown;
     /** `work_units.metadata` — feeds opportunity attention resolver config (same TTL as definition). */
     workUnitMetadata: unknown | null;
     departmentId: string | null;
@@ -1923,6 +1946,7 @@ async function loadWorkUnitQueueDefinitionWithMeta(params: { orgId: string; work
     def: QueueDefinitionV1;
     normalized: NormalizedQueueDefinitionDocument;
     cacheHit: boolean;
+    queueDefinition: unknown;
     workUnitMetadata: unknown | null;
     departmentId: string | null;
     workUnitKey: string | null;
@@ -1936,6 +1960,7 @@ async function loadWorkUnitQueueDefinitionWithMeta(params: { orgId: string; work
                 def: hit.def,
                 normalized: hit.normalized,
                 cacheHit: true,
+                queueDefinition: hit.queueDefinition ?? hit.def,
                 workUnitMetadata: hit.workUnitMetadata ?? null,
                 departmentId: hit.departmentId ?? null,
                 workUnitKey: hit.workUnitKey ?? null,
@@ -1990,12 +2015,21 @@ async function loadWorkUnitQueueDefinitionWithMeta(params: { orgId: string; work
             def,
             normalized,
             revision,
+            queueDefinition: raw,
             workUnitMetadata,
             departmentId,
             workUnitKey,
         });
     }
-    return { def, normalized, cacheHit: false, workUnitMetadata, departmentId, workUnitKey };
+    return {
+        def,
+        normalized,
+        cacheHit: false,
+        queueDefinition: raw,
+        workUnitMetadata,
+        departmentId,
+        workUnitKey,
+    };
 }
 
 async function loadWorkUnitQueueDefinition(params: { orgId: string; workUnitId: string }): Promise<QueueDefinitionV1> {
@@ -2227,12 +2261,14 @@ export async function getWorkUnitQueueSummaries(params: {
     let workUnitMetadata: unknown | null;
     let workUnitDepartmentId: string | null;
     let workUnitKey: string | null;
+    let queueDefinitionDoc: unknown;
     let operationalDay: OperationalDayPlanContext;
     if (preloaded?.queue_definition != null) {
         operationalDay = await operationalDayPromise;
         const bundle = loadQueueDefinitionBundleOrThrow(preloaded.queue_definition);
         def = bundle.def;
         normalized = bundle.normalized;
+        queueDefinitionDoc = preloaded.queue_definition;
         workUnitMetadata = preloaded.workUnitMetadata ?? null;
         workUnitDepartmentId = preloaded.departmentId ?? null;
         workUnitKey = preloaded.workUnitKey ?? null;
@@ -2243,6 +2279,7 @@ export async function getWorkUnitQueueSummaries(params: {
         ]);
         def = loaded.def;
         normalized = loaded.normalized;
+        queueDefinitionDoc = loaded.queueDefinition;
         workUnitMetadata = loaded.workUnitMetadata;
         workUnitDepartmentId = loaded.departmentId;
         workUnitKey = loaded.workUnitKey;
@@ -2443,6 +2480,11 @@ export async function getWorkUnitQueueSummaries(params: {
                         ctx: waitlistGrainCtx,
                         recordScopeConstraints: scopeFilter,
                         recordScopeImpossible: params.recordScopeImpossible,
+                        workUnitMetadata: workUnitMetadata ?? null,
+                        queueDefinition: queueDefinitionDoc,
+                        departmentId: workUnitDepartmentId,
+                        workUnitKey,
+                        executableQueueKey: q.key,
                     });
                     countMs = Date.now() - tCand0;
                     return finish(
@@ -2475,6 +2517,10 @@ export async function getWorkUnitQueueSummaries(params: {
                     offset: 0,
                     departmentMetadata: null,
                     workUnitMetadata: workUnitMetadata ?? null,
+                    queueDefinition: queueDefinitionDoc,
+                    departmentId: workUnitDepartmentId,
+                    workUnitKey,
+                    executableQueueKey: q.key,
                     nowMs: refUtc.getTime(),
                     enrichOpportunityRows: async (rows) =>
                         enrichOpportunityRows({
@@ -2608,6 +2654,12 @@ export async function getWorkUnitQueueSummaries(params: {
             ops = plan.ops;
             sort = plan.sort;
             calendar_meta = plan.calendar_meta;
+            guardLifecycleStageOpportunityQueryFilters({
+                workUnitKey,
+                opportunityScopeMode: opportunityScopeBundle?.scope.mode,
+                ops,
+                workUnitMetadata,
+            });
         } catch (e) {
             if (e instanceof QueueServiceError && e.status === 501) {
                 return finish(
@@ -3143,6 +3195,7 @@ export async function getWorkUnitQueueItems(params: {
     let workUnitMetadata: unknown | null;
     let workUnitDepartmentId: string | null;
     let workUnitKey: string | null;
+    let queueDefinitionDoc: unknown;
     let load_def_ms: number;
     let operational_day_ms: number;
     let operationalDay: OperationalDayPlanContext;
@@ -3166,6 +3219,7 @@ export async function getWorkUnitQueueItems(params: {
         const bundle = loadQueueDefinitionBundleOrThrow(preloaded.queue_definition);
         def = bundle.def;
         normalized = bundle.normalized;
+        queueDefinitionDoc = preloaded.queue_definition;
         workUnitMetadata = preloaded.workUnitMetadata ?? null;
         workUnitDepartmentId = preloaded.departmentId ?? null;
         workUnitKey = preloaded.workUnitKey ?? null;
@@ -3181,6 +3235,7 @@ export async function getWorkUnitQueueItems(params: {
         queueDefCacheHit = defTimed.value.cacheHit;
         def = defTimed.value.def;
         normalized = defTimed.value.normalized;
+        queueDefinitionDoc = defTimed.value.queueDefinition;
         workUnitMetadata = defTimed.value.workUnitMetadata ?? null;
         workUnitDepartmentId = defTimed.value.departmentId;
         workUnitKey = defTimed.value.workUnitKey;
@@ -3215,7 +3270,7 @@ export async function getWorkUnitQueueItems(params: {
 
     assertSupportedEntityType(def);
     const q = findQueueByKey(def, executableQueueKey);
-    const rowListUi = getQueueUiConfig(def);
+    const rowListUi = resolveWorkUnitRowListUi(def, workUnitKey, workUnitMetadata);
     const queueListRelationPlan = queueListRelationFetchPlan(rowListUi);
 
     const scopeFilter = params.recordScopeConstraints ?? null;
@@ -3420,6 +3475,10 @@ export async function getWorkUnitQueueItems(params: {
                 offset: effectiveOffset,
                 departmentMetadata,
                 workUnitMetadata,
+                queueDefinition: queueDefinitionDoc,
+                departmentId: workUnitDepartmentId,
+                workUnitKey,
+                executableQueueKey,
                 nowMs: refUtc.getTime(),
                 skipPlacementProjection,
                 enrichOpportunityRows: async (rows) => {
@@ -3556,6 +3615,12 @@ export async function getWorkUnitQueueItems(params: {
     }
 
     const { ops, sort, calendar_meta } = buildOpportunityPlan(q, refUtc, operationalDay);
+    guardLifecycleStageOpportunityQueryFilters({
+        workUnitKey,
+        opportunityScopeMode: opportunityScopeBundle?.scope.mode,
+        ops,
+        workUnitMetadata,
+    });
     const laneStatusFilterValues = opportunityQueueStatusKeysAllowed(q);
 
     if (executableQueueKey === "needs_attention" || q.key === "needs_attention") {

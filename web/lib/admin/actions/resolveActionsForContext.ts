@@ -2,6 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ActionSurface, ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { emptyResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { filterOpportunityActionsForRuntimeGates } from "@/lib/admin/actions/filterOpportunityActionsForRuntimeGates";
+import { lifecycleBuilderPlacementVisibleOnStage } from "@/lib/lifecycle/lifecycleBuilderActionVisibility";
+import { parseLifecycleActionDisplayOrder } from "@/lib/lifecycle/lifecycleStageActionScope";
 
 export type ResolveActionsQuery = {
     orgId: string;
@@ -18,6 +20,8 @@ export type ResolveActionsQuery = {
      */
     hintOpportunityStatusKey?: string | null;
     hintOpportunityMetadata?: Record<string, unknown> | null;
+    /** Builder-owned work unit stage key — filters lifecycle-builder-configured stage-scoped placements. */
+    lifecycleViewStageKey?: string | null;
 };
 
 type PlacementRow = {
@@ -209,6 +213,11 @@ export async function resolveActionsForContext(
             if (normEt(d.entity_type) !== et) continue;
         }
         if (!passesPlacementScope(row, query)) continue;
+        if (
+            !lifecycleBuilderPlacementVisibleOnStage(row.condition_config, query.lifecycleViewStageKey ?? null)
+        ) {
+            continue;
+        }
         if (query.surface === "record_section") {
             const psk = row.section_key != null ? String(row.section_key).trim() : "";
             if (!psk || psk !== recordSectionKey) continue;
@@ -226,7 +235,7 @@ export async function resolveActionsForContext(
             display_style: row.display_style ?? "button",
             payload,
             workflow_id: d.workflow_id,
-            _order: row.order_index,
+            _order: parseLifecycleActionDisplayOrder(row.condition_config) ?? row.order_index,
             _slot: row.slot,
             _scope_rank: d.org_id != null ? 2 : row.org_id != null ? 1 : 0,
         } as ResolvedActionForClient & { _order: number; _slot: string });

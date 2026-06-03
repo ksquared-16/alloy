@@ -153,6 +153,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ dep
                           orgId: gate.orgId,
                           departmentId,
                           workUnitId: rightRailWorkUnitId,
+                          placementSurfaces: ["department"],
                       });
                       return { actions, ms: Date.now() - t0 };
                   } catch {

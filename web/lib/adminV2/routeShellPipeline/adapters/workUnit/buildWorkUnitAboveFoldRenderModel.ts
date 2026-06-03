@@ -1,4 +1,3 @@
-import { isEnrollmentLikeDepartmentKey } from "@/lib/workspace/enrollmentDepartmentKey";
 import { mergeEnrollmentRightRailActions } from "@/lib/workspace/viewModels/enrollmentRightRailMerge";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { ActionsVm } from "@/lib/ui-v2/workspace-types";
@@ -21,6 +20,7 @@ import {
     type WorkUnitAboveFoldSlotState,
 } from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/aboveFoldTypes";
 import type { WorkUnitQueueLaneRevealState } from "@/lib/workspace/workUnitQueueLaneRevealState";
+import { buildLifecycleSiblingHeaderSkeletonSections } from "@/lib/lifecycle/lifecycleWorkUnitSiblingHydration";
 
 export type WorkUnitQueueSummaryInput = {
     key: string;
@@ -74,6 +74,10 @@ export type BuildWorkUnitAboveFoldRenderModelInput = {
     suppress_other_pill?: boolean;
     /** When true, omit lane description copy under header pills. */
     suppress_active_queue_description?: boolean;
+    /** Builder-owned lifecycle: enrollment-style Work Units + Needs Attention pill rows. */
+    lifecycle_builder_owned_header_sections?: WorkUnitAboveFoldChipSection[] | null;
+    /** When true, render skeleton Work Units row until sibling hydration completes. */
+    lifecycle_builder_owned_header_pending?: boolean;
 };
 
 const EMPTY_ACTIONS: ActionsVm = {
@@ -179,6 +183,12 @@ function buildChipFromPlaceholder(q: WorkUnitChipPlaceholderQueue, input: BuildW
 }
 
 function buildHeaderSections(input: BuildWorkUnitAboveFoldRenderModelInput): WorkUnitAboveFoldChipSection[] {
+    if (input.lifecycle_builder_owned_header_pending) {
+        return buildLifecycleSiblingHeaderSkeletonSections();
+    }
+    if (input.lifecycle_builder_owned_header_sections?.length) {
+        return input.lifecycle_builder_owned_header_sections;
+    }
     const summaries = input.queue_summaries;
     if (summaries && summaries.length > 0) {
         const sections =
@@ -213,6 +223,7 @@ function buildHeaderSections(input: BuildWorkUnitAboveFoldRenderModelInput): Wor
 
 function resolveHeaderState(input: BuildWorkUnitAboveFoldRenderModelInput): WorkUnitAboveFoldSlotState {
     if (!input.work_unit_shell_ready) return "skeleton";
+    if (input.lifecycle_builder_owned_header_pending) return "skeleton";
     if (input.queue_summaries && input.queue_summaries.length > 0) return "ready";
     if (input.queue_summaries_error) return "ready";
     if (input.queue_tab_placeholders?.length) return "skeleton";
@@ -234,10 +245,9 @@ function resolveQueueLaneState(input: BuildWorkUnitAboveFoldRenderModelInput): W
     return "ready";
 }
 
-function enrollmentActionsRail(input: BuildWorkUnitAboveFoldRenderModelInput): ActionsVm {
-    const base = EMPTY_ACTIONS;
-    if (!isEnrollmentLikeDepartmentKey(input.department_key)) return base;
-    return mergeEnrollmentRightRailActions(input.enrollment_right_rail_resolved ?? [], base);
+function resolvedOperationalActionsRail(input: BuildWorkUnitAboveFoldRenderModelInput): ActionsVm {
+    if (!input.reserve_actions_rail) return EMPTY_ACTIONS;
+    return mergeEnrollmentRightRailActions(input.enrollment_right_rail_resolved ?? [], EMPTY_ACTIONS);
 }
 
 /**
@@ -291,7 +301,7 @@ export function buildWorkUnitAboveFoldRenderModel(
         actions_rail: {
             visible: input.reserve_actions_rail,
             state: resolveActionsRailState(input),
-            actions_rail: enrollmentActionsRail(input),
+            actions_rail: resolvedOperationalActionsRail(input),
         },
         queue_lane: {
             visible: true,

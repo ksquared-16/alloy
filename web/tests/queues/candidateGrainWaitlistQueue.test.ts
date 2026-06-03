@@ -10,6 +10,7 @@ import {
     resolveWaitlistPlacementConfigQueueKey,
 } from "@/lib/queues/candidateGrainWaitlistQueue";
 import { resolveQueueKeyFromDefinition } from "@/lib/config/queueDefinitionV2Runtime";
+import { buildLifecycleWaitlistStageQueueDefinition } from "@/lib/lifecycle/lifecycleStageQueuePresentation";
 
 const v2Bundle = loadQueueDefinitionBundle(RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2);
 
@@ -42,6 +43,22 @@ describe("candidateGrainWaitlistQueue", () => {
                     executableQueueKey: "new_leads",
                 })
             ).toBeNull();
+        });
+
+        it("enables for lifecycle waitlist stage queue key", () => {
+            const raw = buildLifecycleWaitlistStageQueueDefinition({
+                stageKey: "waitlist",
+                label: "Waitlist",
+                statusKeys: ["waitlisted"],
+            });
+            const { normalized } = loadQueueDefinitionBundle(raw);
+            const primary = normalized.queues[0]?.key ?? "";
+            const ctx = resolveWaitlistCandidateGrainContext({
+                normalized,
+                executableQueueKey: primary,
+            });
+            expect(ctx).not.toBeNull();
+            expect(ctx?.queueEntry.grain).toBe("candidate");
         });
 
         it("respects global disable env gate", () => {

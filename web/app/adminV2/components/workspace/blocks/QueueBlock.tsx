@@ -1218,7 +1218,10 @@ function WorkUnitQueueLane({
 
           const tier = item.urgencyTier ?? "standard";
           const attentionAccent = Boolean(item.needsOperationalAttention);
-          const rowQuickActions = orderedQueueQuickActions(item.quickActions);
+          const rowQuickActions = queue.rowActionsPending
+            ? []
+            : orderedQueueQuickActions(item.quickActions);
+          const rowActionsPending = Boolean(queue.rowActionsPending);
           const crm = item.semanticCrmCompact;
           const valueShown = (crm?.commercialValue ?? item.valueLabel)?.trim() ?? "";
           const hasValue = Boolean(valueShown);
@@ -1342,7 +1345,16 @@ function WorkUnitQueueLane({
                         waitlistStatusLabel={crm.statusLabel?.trim() || undefined}
                       />
                     </div>
-                    {(rowQuickActions.length) ? (
+                    {rowActionsPending ? (
+                      <div
+                        className="adminv2-ws-enrollment-crm-row__actions shrink-0 self-center pl-2"
+                        aria-hidden
+                        data-queue-row-actions-pending="true"
+                      >
+                        <span className="inline-block h-7 w-[4.5rem] rounded-md skeleton-pulse bg-alloy-stone/12" />
+                        <span className="ml-1.5 inline-block h-7 w-[4.5rem] rounded-md skeleton-pulse bg-alloy-stone/12" />
+                      </div>
+                    ) : rowQuickActions.length ? (
                       <div className="adminv2-ws-enrollment-crm-row__actions" role="group" aria-label="Actions">
                         <div className="adminv2-ws-enrollment-crm-row__action-stack">
                           {rowQuickActions.map((qa) => {
@@ -1448,7 +1460,16 @@ function WorkUnitQueueLane({
                       </span>
                     ) : null}
                     <div className="adminv2-ws-wu-queue-card-compact-cta-row">
-                      {rowQuickActions.length ? (
+                      {rowActionsPending ? (
+                        <div
+                          className="adminv2-ws-wu-queue-card-quick-actions"
+                          aria-hidden
+                          data-queue-row-actions-pending="true"
+                        >
+                          <span className="inline-block h-7 w-[4.5rem] rounded-md skeleton-pulse bg-alloy-stone/12" />
+                          <span className="ml-1.5 inline-block h-7 w-[4.5rem] rounded-md skeleton-pulse bg-alloy-stone/12" />
+                        </div>
+                      ) : rowQuickActions.length ? (
                         <div className="adminv2-ws-wu-queue-card-quick-actions" role="group" aria-label="Quick actions">
                           {rowQuickActions.map((qa) => {
                             const qaDispatchId = queueQuickActionDispatchId(qa);

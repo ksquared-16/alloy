@@ -40,6 +40,16 @@ import {
     lifecycleNeedsAttentionWorkUnitConfigured,
     summarizeLifecycleActionPlacementSurfaces,
 } from "@/lib/lifecycle/lifecycleRuntimeSurfaceValidation";
+import {
+    activeLifecycleProcess,
+    configuredStageKeysForMetadata,
+    lifecycleBuilderFromDepartmentMetadata,
+} from "@/lib/lifecycle/lifecycleBuilderConfig";
+import {
+    assignedStatusKeysFromPayloadForStage,
+    processIdFromDepartmentMetadata,
+    resolveLifecycleStageWorkUnitIdentityForDepartment,
+} from "@/lib/lifecycle/lifecycleStageWorkUnitIdentity";
 import { stageKeyFromLifecycleWorkUnitMetadata } from "@/lib/lifecycle/lifecycleStageWorkUnit";
 import { buildLifecycleCatalog, catalogEntryForProcess } from "@/lib/lifecycle/lifecycleCatalog";
 import {
@@ -501,6 +511,22 @@ export async function validateLifecycleActivationRuntime(
     const statusRows = await fetchEffectiveStatusDefinitions(supabase, orgId, "opportunities", {
         activeOnly: true,
     });
+    const builder = lifecycleBuilderFromDepartmentMetadata(deptMetaForRuntime);
+    const process = builder ? activeLifecycleProcess(builder) : null;
+    const configuredStageKeys =
+        process?.stages.map((s) => s.key.trim()).filter(Boolean) ??
+        configuredStageKeysForMetadata(deptMetaForRuntime);
+    const workUnitStageKeys = lifecycleStageWorkUnits.flatMap((w) => {
+        const fromMeta = stageKeyFromLifecycleWorkUnitMetadata(w.metadata);
+        if (fromMeta) return [fromMeta];
+        if (isLifecycleStageWorkUnitKey(w.key)) {
+            return [w.key.slice(LIFECYCLE_STAGE_WORK_UNIT_KEY_PREFIX.length)];
+        }
+        return [];
+    });
+    const stageKeysForStatusPayload = [
+        ...new Set([...configuredStageKeys, ...workUnitStageKeys]),
+    ].filter(Boolean);
     const statusPayload = buildEnrollmentStatusStagesPayload(
         statusRows.map((r) => ({
             status_key: r.status_key,
@@ -508,9 +534,7 @@ export async function validateLifecycleActivationRuntime(
             sort_order: Number(r.sort_order) ?? 100,
             metadata: (r.metadata ?? null) as Record<string, unknown> | null,
         })),
-        lifecycleStageWorkUnits
-            .map((w) => stageKeyFromLifecycleWorkUnitMetadata(w.metadata))
-            .filter((k): k is string => Boolean(k))
+        stageKeysForStatusPayload.length ? stageKeysForStatusPayload : undefined
     );
 
     let queueFiltersPass = false;
@@ -521,23 +545,61 @@ export async function validateLifecycleActivationRuntime(
     let recordsQueryHref: string | null = null;
 
     if (builderOwnedRuntime && lifecycleStageWorkUnits.length > 0) {
-        const filterRows = lifecycleStageWorkUnits.flatMap((wu) => {
-            const stageKey =
-                stageKeyFromLifecycleWorkUnitMetadata(wu.metadata) ??
-                (isLifecycleStageWorkUnitKey(wu.key)
-                    ? wu.key.slice(LIFECYCLE_STAGE_WORK_UNIT_KEY_PREFIX.length)
-                    : null);
-            if (!stageKey) return [];
-            return [
-                validateLifecycleStageWorkUnitQueueFilter({
+        const processId = processIdFromDepartmentMetadata(deptMetaForRuntime);
+        const stagesToValidate =
+            stageKeysForStatusPayload.length > 0
+                ? stageKeysForStatusPayload
+                : [
+                      ...new Set(
+                          lifecycleStageWorkUnits.flatMap((wu) => {
+                              const sk =
+                                  stageKeyFromLifecycleWorkUnitMetadata(wu.metadata) ??
+                                  (isLifecycleStageWorkUnitKey(wu.key)
+                                      ? wu.key.slice(LIFECYCLE_STAGE_WORK_UNIT_KEY_PREFIX.length)
+                                      : null);
+                              return sk ? [sk] : [];
+                          })
+                      ),
+                  ];
+        const filterRows: ReturnType<typeof validateLifecycleStageWorkUnitQueueFilter>[] = [];
+        for (const stageKey of stagesToValidate) {
+            const identity = await resolveLifecycleStageWorkUnitIdentityForDepartment(supabase, {
+                orgId,
+                departmentId,
                 stageKey,
-                workUnit: wu,
-                statusPayload,
-                activation,
-                }),
-            ];
-        });
-        const filterSummary = summarizeBuilderOwnedQueueFilterValidation(filterRows);
+                processId,
+            });
+            if (identity.state === "conflict") {
+                filterRows.push({
+                    stage_key: stageKey,
+                    work_unit_id: identity.conflictingActiveRows[0]?.id ?? "",
+                    work_unit_key: identity.workUnitKey,
+                    work_unit_name: identity.conflictingActiveRows[0]?.name ?? stageKey,
+                    expected_status_keys: assignedStatusKeysFromPayloadForStage(statusPayload, stageKey),
+                    queue_status_keys: [],
+                    pass: false,
+                    detail: `Stage “${stageKey}”: multiple active work units share key ${identity.workUnitKey}. Repair to dedupe.`,
+                });
+                continue;
+            }
+            if (!identity.workUnit) continue;
+            filterRows.push(
+                validateLifecycleStageWorkUnitQueueFilter({
+                    stageKey,
+                    workUnit: identity.workUnit,
+                    statusPayload,
+                    activation,
+                })
+            );
+        }
+        const activationStageKey = activation.stage_key.trim();
+        const rowsForCompact =
+            activation.activation_owned && activationStageKey
+                ? filterRows.filter((r) => r.stage_key === activationStageKey)
+                : filterRows;
+        const filterSummary = summarizeBuilderOwnedQueueFilterValidation(
+            rowsForCompact.length ? rowsForCompact : filterRows
+        );
         queueFiltersPass = filterSummary.pass;
         queueFiltersDetail = filterSummary.detail;
 

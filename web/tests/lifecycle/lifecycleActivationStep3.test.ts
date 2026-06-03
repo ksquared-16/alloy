@@ -5,9 +5,12 @@ import {
     canConfirmStatusesStep,
     canContinueToWorkUnitQueue,
     collectAllOpportunityStatusRows,
+    shouldSyncStatusDraftFromServer,
     stageSavedStatusKeys,
     statusKeySetsEqual,
 } from "@/lib/lifecycle/lifecycleActivationStep3";
+import { buildEnrollmentStatusStagesPayload } from "@/lib/lifecycle/enrollmentProcessStatusStageConfig";
+import { configuredStageKeysForMetadata, isConfiguredStageKey } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import type { EnrollmentStatusStagesPayload } from "@/lib/lifecycle/enrollmentProcessStatusStageConfig";
 
 const root = resolve(__dirname, "../..");
@@ -112,6 +115,57 @@ describe("lifecycleActivationStep3 helpers", () => {
         expect(statusKeySetsEqual(new Set(["a"]), new Set(["a"]))).toBe(true);
         expect(statusKeySetsEqual(new Set(["a"]), new Set(["a", "b"]))).toBe(false);
     });
+
+    it("shouldSyncStatusDraftFromServer preserves dirty draft", () => {
+        expect(shouldSyncStatusDraftFromServer({ statusDraftDirty: true })).toBe(false);
+        expect(shouldSyncStatusDraftFromServer({ statusDraftDirty: false })).toBe(true);
+    });
+
+    it("buildEnrollmentStatusStagesPayload includes custom lifecycle stage keys", () => {
+        const payload = buildEnrollmentStatusStagesPayload(
+            [
+                {
+                    status_key: "custom_status",
+                    status_label: "Custom",
+                    sort_order: 1,
+                    metadata: { enrollment_operator_stage: "nurture_lane" },
+                },
+            ],
+            ["lead", "nurture_lane"]
+        );
+        expect(payload.stage_keys).toEqual(["lead", "nurture_lane"]);
+        expect(payload.stages.nurture_lane?.statuses.map((s) => s.status_key)).toEqual(["custom_status"]);
+    });
+
+    it("isConfiguredStageKey accepts custom builder stage keys", () => {
+        const metadata = {
+            lifecycle_builder_v1: {
+                version: 1,
+                active_process_id: "p1",
+                processes: [
+                    {
+                        id: "p1",
+                        key: "enrollment",
+                        name: "Enrollment",
+                        primary_entity: "opportunity",
+                        sort_order: 0,
+                        is_active: true,
+                        stages: [
+                            {
+                                id: "s1",
+                                key: "nurture_lane",
+                                label: "Nurture",
+                                sort_order: 0,
+                                is_active: true,
+                            },
+                        ],
+                    },
+                ],
+            },
+        };
+        expect(configuredStageKeysForMetadata(metadata)).toContain("nurture_lane");
+        expect(isConfiguredStageKey(metadata, "nurture_lane")).toBe(true);
+    });
 });
 
 describe("Lifecycle Activation Step 3 UI", () => {
@@ -162,7 +216,8 @@ describe("Lifecycle Activation Step 3 UI", () => {
         const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
         expect(board).toContain("saveStageStatuses");
         expect(board).toContain("completed_steps: 3");
-        expect(board).toContain("savedStatusKeys.size > 0");
+        expect(board).toContain("commitSaved");
+        expect(board).toContain("savedStatusKeys");
     });
 
     it("statuses card avoids unstable onStagesLoaded in load deps", () => {

@@ -1651,6 +1651,8 @@ export default function AdminEntityDrawer() {
     const memberPersonGraphOverlayInFlightRef = useRef<string | null>(null);
     const memberPersonGraphOverlayDoneRef = useRef<string | null>(null);
     const opportunityDrawerAboveFoldLockedRef = useRef(false);
+    /** Schedule Tour picker dispatches modal before drawer id updates — flush when drawer matches. */
+    const pendingTourScheduleRef = useRef<{ id: string; action_key?: string } | null>(null);
     const opportunityDeferredFullHydrateRef = useRef<Record<string, unknown> | null>(null);
 
     /** Coherent shell: entity row loaded (header actions may still resolve in parallel). */
@@ -4164,12 +4166,16 @@ export default function AdminEntityDrawer() {
         const onOpenTourSchedule = (ev: Event) => {
             const ce = ev as CustomEvent<{ opportunity_id?: string; action_key?: string }>;
             const id = typeof ce.detail?.opportunity_id === "string" ? ce.detail.opportunity_id.trim() : "";
-            if (!id || drawer.type !== "opportunities" || drawer.id !== id) return;
+            if (!id) return;
+            const actionKey = ce.detail?.action_key;
+            pendingTourScheduleRef.current = { id, action_key: actionKey };
+            if (drawer.type !== "opportunities" || drawer.id !== id) return;
+            pendingTourScheduleRef.current = null;
             setActionFormState({
                 form_key: "schedule_tour",
                 action: {
-                    key: ce.detail?.action_key === "reschedule_tour" ? "reschedule_tour" : "schedule_tour",
-                    label: ce.detail?.action_key === "reschedule_tour" ? "Reschedule tour" : "Schedule tour",
+                    key: actionKey === "reschedule_tour" ? "reschedule_tour" : "schedule_tour",
+                    label: actionKey === "reschedule_tour" ? "Reschedule tour" : "Schedule tour",
                     description: null,
                     action_type: "open_form",
                     icon: null,
@@ -4215,6 +4221,28 @@ export default function AdminEntityDrawer() {
             window.removeEventListener(ADMINV2_OPEN_TOUR_OUTCOME_MODAL, onOpenTourOutcome as EventListener);
         };
     }, [drawer.type, drawer.id, openAddInquiryChildModal, openAddPersonModal]);
+
+    useEffect(() => {
+        const pending = pendingTourScheduleRef.current;
+        if (!pending || drawer.type !== "opportunities" || drawer.id !== pending.id) return;
+        pendingTourScheduleRef.current = null;
+        const actionKey = pending.action_key;
+        setActionFormState({
+            form_key: "schedule_tour",
+            action: {
+                key: actionKey === "reschedule_tour" ? "reschedule_tour" : "schedule_tour",
+                label: actionKey === "reschedule_tour" ? "Reschedule tour" : "Schedule tour",
+                description: null,
+                action_type: "open_form",
+                icon: null,
+                style: null,
+                display_style: "button",
+                payload: { form_key: "schedule_tour" },
+                workflow_id: null,
+            },
+            executeContext: { surface: "record_header" },
+        });
+    }, [drawer.type, drawer.id]);
 
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {

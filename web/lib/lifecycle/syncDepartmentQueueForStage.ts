@@ -48,7 +48,8 @@ export async function syncDepartmentQueueForStage(
     if (stageWu) {
         queue_definition = applyStatusKeysToLifecycleStageQueueDefinition(
             stageWu.queue_definition,
-            filterKeys
+            filterKeys,
+            stage
         );
     } else {
         const { data: pipelineWu, error: wuErr } = await supabase

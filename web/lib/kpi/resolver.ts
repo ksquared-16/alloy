@@ -161,8 +161,6 @@ export function resolveKpisForDepartment(params: {
     deptWorkUnitSummaries: Record<string, { total: number; needs_attention: number | null }>;
     deptQueueSummariesLoading: boolean;
     deptQueueSummariesError: string | null;
-    /** Builder-owned lifecycle: queue summary totals are visibility-based. */
-    lifecycleVisibilityCounts?: boolean;
 }): ResolveKpisResult {
     const warnings: string[] = [];
     const deptCtx = {
@@ -170,7 +168,6 @@ export function resolveKpisForDepartment(params: {
         deptWorkUnitSummaries: params.deptWorkUnitSummaries,
         deptQueueSummariesLoading: params.deptQueueSummariesLoading,
         deptQueueSummariesError: params.deptQueueSummariesError,
-        lifecycleVisibilityCounts: params.lifecycleVisibilityCounts === true,
     };
     const baseline = () => buildDefaultDepartmentKpis(deptCtx);
 
@@ -240,13 +237,9 @@ export function resolveKpisForWorkUnit(params: {
     placementRows: WorkspaceKpiPlacementRow[];
     scopeHasPlacementRows: boolean;
     context: WorkUnitKpiContext;
-    lifecycleVisibilityCounts?: boolean;
 }): ResolveKpisResult {
     const warnings: string[] = [];
-    const baseline = () =>
-        buildDefaultWorkUnitKpis(params.context, {
-            lifecycleVisibilityCounts: params.lifecycleVisibilityCounts === true,
-        });
+    const baseline = () => buildDefaultWorkUnitKpis(params.context);
     const visible = params.placementRows.filter((r) => r.is_visible !== false);
 
     if (visible.length === 0) {

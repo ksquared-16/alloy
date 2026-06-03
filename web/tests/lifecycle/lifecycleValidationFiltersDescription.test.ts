@@ -151,11 +151,56 @@ describe("builder-owned queue filter validation", () => {
         expect(row.work_unit_key).toBe("lifecycle_wu_lead");
     });
 
+    it("passes for custom builder stage when queue filters match metadata assignments", () => {
+        const customPayload: EnrollmentStatusStagesPayload = {
+            ...statusPayload,
+            stage_keys: ["enrolling"],
+            stages: {
+                enrolling: {
+                    has_custom_assignments: true,
+                    statuses: [
+                        {
+                            status_key: "deposit_paid",
+                            status_label: "Deposit paid",
+                            sort_order: 1,
+                            assignment_source: "metadata",
+                            has_metadata_override: false,
+                        },
+                    ],
+                },
+            },
+        };
+        const queue_definition = buildLifecycleStageQueueDefinition({
+            stageKey: "enrolling",
+            label: "Enrolling",
+            statusKeys: ["deposit_paid"],
+        });
+        const row = validateLifecycleStageWorkUnitQueueFilter({
+            stageKey: "enrolling",
+            workUnit: {
+                id: "wu-enroll",
+                key: "lifecycle_wu_enrolling",
+                name: "Enrolling",
+                queue_definition,
+                metadata: { lifecycle_builder_owned_v1: { builder_owned: true } },
+            },
+            statusPayload: customPayload,
+            activation: {
+                ...activation,
+                stage_key: "enrolling",
+                status_keys: ["deposit_paid"],
+            },
+        });
+        expect(row.pass).toBe(true);
+        expect(row.expected_status_keys).toContain("deposit_paid");
+    });
+
     it("runtime validation uses lifecycle_wu rows for builder-owned departments", () => {
         const v = read("lib/lifecycle/validateLifecycleActivationRuntime.ts");
         expect(v).toContain("builderOwnedRuntime && lifecycleStageWorkUnits.length");
         expect(v).toContain("work_unit_queue_filters");
         expect(v).toContain("listLifecycleStageWorkUnitsForDepartment");
+        expect(v).toContain("configuredStageKeysForMetadata");
         expect(v).not.toContain("syncDepartmentQueueForStage");
     });
 

@@ -123,6 +123,7 @@ export async function loadDeptOperationalBootstrap(params: {
         id: String((w as { id: string }).id),
         name: (w as { name?: string | null }).name ?? null,
         key: (w as { key?: string | null }).key ?? null,
+        sort_order: (w as { sort_order?: number | null }).sort_order ?? null,
         metadata: (w as { metadata?: unknown }).metadata,
     }));
     const workUnits = builderOwnedRuntime

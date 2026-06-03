@@ -122,12 +122,15 @@ export function WorkUnitAboveFoldHeaderChips({
                                     key={chip.key}
                                     type="button"
                                     onClick={() => {
+                                        if (chip.attention_placeholder) return;
                                         if (chip.synthetic_attention_bucket) {
                                             handlers.onAttentionBucketSelect(chip.attention_bucket_raw_key ?? null);
                                             return;
                                         }
                                         handlers.onQueueTabChange(chip.key);
                                     }}
+                                    disabled={chip.attention_placeholder === true}
+                                    aria-disabled={chip.attention_placeholder === true}
                                     className={`${PILL_BASE} ${tierRing(chip.priority, chip.selected)}`}
                                     aria-pressed={chip.selected}
                                     title={chip.count_aria_label ?? chip.description}

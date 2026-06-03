@@ -33,6 +33,7 @@ export type WorkUnitBootstrapPerfPhases = {
     blocking_loader_ms?: number;
     deferred_rows_source?: string;
     pipeline_ms?: number;
+    lifecycle_siblings_ms?: number;
     kpi_placements_ms?: number;
     kpi_placements_cache_hit?: boolean;
     kpi_placements_deferred?: boolean;

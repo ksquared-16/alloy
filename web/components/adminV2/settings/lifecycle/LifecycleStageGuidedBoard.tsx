@@ -8,7 +8,8 @@ import {
     useState,
     type ReactNode,
 } from "react";
-import LifecycleActivationStatusesStep from "@/components/adminV2/settings/lifecycle/LifecycleActivationStatusesStep";
+import LifecycleStatusesCard from "@/components/adminV2/settings/lifecycle/LifecycleStatusesCard";
+import type { LifecycleStatusesSaveState } from "@/lib/lifecycle/lifecycleStatusesCardState";
 import LifecycleStageFieldRequirementsEditor, {
     type LifecycleStageFieldRequirementsEditorHandle,
 } from "@/components/adminV2/settings/LifecycleStageFieldRequirementsEditor";
@@ -41,6 +42,7 @@ function GuidedCard({
     summary,
     primaryLabel,
     primaryDisabled,
+    primaryDisabledReason,
     primaryBusy,
     onPrimary,
     cardRef,
@@ -53,6 +55,7 @@ function GuidedCard({
     summary: string;
     primaryLabel: string;
     primaryDisabled?: boolean;
+    primaryDisabledReason?: string | null;
     primaryBusy?: boolean;
     onPrimary: () => void | Promise<void>;
     cardRef?: (el: HTMLElement | null) => void;
@@ -100,6 +103,7 @@ function GuidedCard({
                         disabled={primaryDisabled || primaryBusy}
                         onClick={() => void onPrimary()}
                         data-testid={`lifecycle-guided-save-${stepId}`}
+                        data-disabled-reason={primaryDisabledReason ?? undefined}
                     >
                         {primaryBusy ? "Saving…" : primaryLabel}
                     </button>
@@ -116,13 +120,16 @@ export default function LifecycleStageGuidedBoard({
     bootstrapLoading,
     statusesPayload,
     statusesSaving,
-    draftStatusKeys,
+    statusesSaveState,
     savedStatusKeys,
     statusesError,
     onToggleStatus,
     onSaveStatuses,
     canSaveStatuses,
+    statusesSaveDisabledReason,
     pipeline,
+    workUnitIdentityState,
+    workUnitNeedsSync,
     onPipelineUpdated,
     statusDisplayLabels,
     validationSlot,
@@ -134,13 +141,16 @@ export default function LifecycleStageGuidedBoard({
     bootstrapLoading: boolean;
     statusesPayload: EnrollmentStatusStagesPayload | null;
     statusesSaving: boolean;
-    draftStatusKeys: Set<string>;
-    savedStatusKeys: Set<string>;
+    statusesSaveState: LifecycleStatusesSaveState;
+    savedStatusKeys: readonly string[];
     statusesError: string | null;
     onToggleStatus: (statusKey: string, selected: boolean) => void;
     onSaveStatuses: () => void | Promise<void>;
     canSaveStatuses: boolean;
+    statusesSaveDisabledReason: string | null;
     pipeline: EnrollmentPipelineWorkUnitSnapshot | null;
+    workUnitIdentityState: "not_created" | "synced" | "needs_sync" | "conflict";
+    workUnitNeedsSync: boolean;
     onPipelineUpdated: (snapshot: EnrollmentPipelineWorkUnitSnapshot | null) => void | Promise<void>;
     statusDisplayLabels: string[];
     validationSlot: ReactNode;
@@ -175,14 +185,19 @@ export default function LifecycleStageGuidedBoard({
         return Boolean(rules && rules.required_rule_ids.length > 0);
     }, [bootstrap?.field_requirements]);
 
-    const statusesComplete = savedStatusKeys.size > 0;
+    const savedKeySet = useMemo(() => new Set(savedStatusKeys), [savedStatusKeys]);
+    const statusesComplete = savedStatusKeys.length > 0;
     const statusesDirty = useMemo(() => {
-        if (savedStatusKeys.size !== draftStatusKeys.size) return true;
-        for (const k of draftStatusKeys) if (!savedStatusKeys.has(k)) return true;
+        const draft = statusesSaveState.saveDraftKeys;
+        if (savedStatusKeys.length !== draft.length) return true;
+        for (const k of draft) if (!savedKeySet.has(k)) return true;
         return false;
-    }, [draftStatusKeys, savedStatusKeys]);
+    }, [statusesSaveState.saveDraftKeys, savedStatusKeys, savedKeySet]);
 
-    const queueComplete = Boolean(pipeline?.id);
+    const queueComplete =
+        Boolean(pipeline?.id) &&
+        workUnitIdentityState === "synced" &&
+        !workUnitNeedsSync;
 
     if (bootstrapLoading && !bootstrap) {
         return (
@@ -206,7 +221,7 @@ export default function LifecycleStageGuidedBoard({
                     status={requiredComplete ? "complete" : fieldDirty ? "ready" : "pending"}
                     summary="Fields needed before work can move forward."
                     primaryLabel="Save Required Information"
-                    primaryDisabled={!operatorStage || (!fieldDirty && !requiredComplete)}
+                    primaryDisabled={!stageKey.trim() || (!fieldDirty && !requiredComplete)}
                     primaryBusy={fieldSaving}
                     cardRef={(el) => {
                         cardRefs.current.required = el;
@@ -224,18 +239,18 @@ export default function LifecycleStageGuidedBoard({
                         })
                     }
                 >
-                    {operatorStage ? (
+                    {stageKey.trim() ? (
                             <LifecycleStageFieldRequirementsEditor
                                 ref={fieldReqRef}
                                 departmentId={departmentId}
-                                activeStage={operatorStage}
+                                activeStageKey={stageKey}
                                 compact
                                 guidedMode
                                 prefetchedFieldRequirements={bootstrap?.field_requirements ?? null}
                                 onDirtyChange={setFieldDirty}
                             />
                     ) : (
-                        <p className="text-xs text-alloy-midnight/50">Requires a platform stage key.</p>
+                        <p className="text-xs text-alloy-midnight/50">Select a stage to configure required information.</p>
                     )}
                 </GuidedCard>
 
@@ -246,16 +261,18 @@ export default function LifecycleStageGuidedBoard({
                     summary="Statuses included in this stage."
                     primaryLabel="Save Statuses"
                     primaryDisabled={!canSaveStatuses}
+                    primaryDisabledReason={statusesSaveDisabledReason}
                     primaryBusy={statusesSaving}
                     cardRef={(el) => {
                         cardRefs.current.statuses = el;
                     }}
                     onPrimary={() => void confirmStep("statuses", onSaveStatuses)}
                 >
-                        <LifecycleActivationStatusesStep
+                        <LifecycleStatusesCard
                             payload={statusesPayload}
                             loading={false}
-                            draftKeys={draftStatusKeys}
+                            saving={statusesSaving}
+                            saveState={statusesSaveState}
                             savedKeys={savedStatusKeys}
                             error={statusesError}
                             onToggleStatus={onToggleStatus}
@@ -265,10 +282,18 @@ export default function LifecycleStageGuidedBoard({
                 <GuidedCard
                     stepId="queue"
                     title="Work Unit Queue"
-                    status={queueComplete ? "complete" : savedStatusKeys.size ? "ready" : "pending"}
+                    status={
+                        workUnitIdentityState === "conflict"
+                            ? "ready"
+                            : queueComplete
+                              ? "complete"
+                              : savedStatusKeys.length
+                                ? "ready"
+                                : "pending"
+                    }
                     summary="Queue records by selected statuses."
                     primaryLabel="Save Work Unit Queue"
-                    primaryDisabled={!savedStatusKeys.size || !operatorStage}
+                    primaryDisabled={!savedStatusKeys.length || !stageKey.trim()}
                     primaryBusy={queueSaving}
                     cardRef={(el) => {
                         cardRefs.current.queue = el;
@@ -277,22 +302,24 @@ export default function LifecycleStageGuidedBoard({
                         void confirmStep("queue", async () => {
                             setQueueSaving(true);
                             try {
-                                const ok = (await workUnitRef.current?.save()) ?? false;
-                                if (ok) await onPipelineUpdated(pipeline);
+                                await workUnitRef.current?.save();
                             } finally {
                                 setQueueSaving(false);
                             }
                         })
                     }
                 >
-                    {savedStatusKeys.size > 0 && operatorStage ? (
+                    {savedStatusKeys.length > 0 && stageKey.trim() ? (
                         <LifecycleStageWorkUnitCard
                             ref={workUnitRef}
                             departmentId={departmentId}
                             activeStageKey={stageKey}
                             stageLabel={stageKey}
                             stageStatusDisplayLabels={statusDisplayLabels}
+                            stageSavedStatusKeys={savedStatusKeys}
                             pipeline={pipeline}
+                            workUnitIdentityState={workUnitIdentityState}
+                            workUnitNeedsSync={workUnitNeedsSync}
                             loadingPipeline={false}
                             onPipelineUpdated={onPipelineUpdated}
                             guidedMode

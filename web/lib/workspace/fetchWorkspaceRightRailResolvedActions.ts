@@ -11,15 +11,19 @@ export async function fetchWorkspaceRightRailResolvedActions(params: {
     departmentId: string;
     workUnitId: string;
     fetchInit?: RequestInit;
+    /** Exact placement surfaces — prevents work_unit actions appearing on department rail and vice versa. */
+    placementSurfaces?: readonly string[];
 }): Promise<ResolvedActionForClient[]> {
-    const { departmentId, workUnitId, fetchInit } = params;
+    const { departmentId, workUnitId, fetchInit, placementSurfaces } = params;
     const init = fetchInit ?? {};
-    const route =
-        `/api/admin/actions/right-rail-bundle?` +
-        new URLSearchParams({
-            department_id: departmentId,
-            work_unit_id: workUnitId,
-        }).toString();
+    const qs = new URLSearchParams({
+        department_id: departmentId,
+        work_unit_id: workUnitId,
+    });
+    if (placementSurfaces?.length) {
+        qs.set("surfaces", placementSurfaces.join(","));
+    }
+    const route = `/api/admin/actions/right-rail-bundle?${qs.toString()}`;
     const res = await dedupeAdminFetchWithTtl(route, init, 8000);
     if (!res.ok) return [];
     const j = (await res.json().catch(() => ({}))) as {

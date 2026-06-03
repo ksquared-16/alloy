@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import LifecycleCreateForm from "@/components/adminV2/settings/lifecycle/LifecycleCreateForm";
 import LifecycleAddStageForm from "@/components/adminV2/settings/lifecycle/LifecycleAddStageForm";
 import LifecycleActivationValidation from "@/components/adminV2/settings/lifecycle/LifecycleActivationValidation";
@@ -41,11 +42,26 @@ import type {
     LifecycleBuilderStageRecord,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import {
-    canConfirmStatusesStep,
     collectAllOpportunityStatusRows,
     LIFECYCLE_ACTIVATION_STATUS_STAGES_PATH,
+    resolveAssignedStatusKeysForStage,
     stageSavedStatusKeys,
 } from "@/lib/lifecycle/lifecycleActivationStep3";
+import { LIFECYCLE_STAGE_RUNTIME_CONFIG_PATH } from "@/lib/lifecycle/lifecycleStageRuntimeConfigTypes";
+import { resolveLifecycleStatusesSaveState } from "@/lib/lifecycle/lifecycleStatusesCardState";
+import {
+    logLifecycleStatusStepDebug,
+    normalizeLifecycleBuilderStageKey,
+    shouldSyncStatusDraftForStage,
+    shouldApplyServerStatusKeysForStage,
+    statusDraftKeysForStage,
+} from "@/lib/lifecycle/lifecycleStatusStepDraft";
+import {
+    applyLifecycleStatusDraftAction,
+    INITIAL_LIFECYCLE_STATUS_DRAFT_STATE,
+    lifecycleStatusDraftReducer,
+    type LifecycleStatusDraftAction,
+} from "@/lib/lifecycle/lifecycleStatusDraftReducer";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { defaultWorkUnitQueueNameForStageKey } from "@/lib/lifecycle/lifecycleRuntimeBinding";
 
@@ -109,6 +125,10 @@ export default function LifecycleActivationBoard({
     const [statusKeys, setStatusKeys] = useState<string[]>([]);
     const [statusDisplayLabels, setStatusDisplayLabels] = useState<string[]>([]);
     const [pipeline, setPipeline] = useState<EnrollmentPipelineWorkUnitSnapshot | null>(null);
+    const [workUnitNeedsSync, setWorkUnitNeedsSync] = useState(false);
+    const [workUnitIdentityState, setWorkUnitIdentityState] = useState<
+        "not_created" | "synced" | "needs_sync" | "conflict"
+    >("not_created");
     const [loadingPipeline, setLoadingPipeline] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [bootLoading, setBootLoading] = useState(true);
@@ -117,13 +137,49 @@ export default function LifecycleActivationBoard({
     const [statusesLoading, setStatusesLoading] = useState(false);
     const [statusesError, setStatusesError] = useState<string | null>(null);
     const [statusesSaving, setStatusesSaving] = useState(false);
-    const [draftStatusKeys, setDraftStatusKeys] = useState<Set<string>>(new Set());
-    const [savedStatusKeys, setSavedStatusKeys] = useState<Set<string>>(new Set());
+    const [statusDraft, dispatchStatusDraftReducer] = useReducer(
+        lifecycleStatusDraftReducer,
+        INITIAL_LIFECYCLE_STATUS_DRAFT_STATE
+    );
+    const statusDraftRef = useRef(statusDraft);
+    const stageKeyRef = useRef("");
+
+    stageKeyRef.current = stageKey;
+
+    const dispatchStatusDraft = useCallback((action: LifecycleStatusDraftAction) => {
+        statusDraftRef.current = applyLifecycleStatusDraftAction(statusDraftRef.current, action);
+        dispatchStatusDraftReducer(action);
+    }, []);
+
+    const statusesSaveState = useMemo(
+        () =>
+            resolveLifecycleStatusesSaveState({
+                stageKey,
+                stageLabel,
+                statusDraftByStageKey: statusDraft.draftByStage,
+                statusDraftDirtyByStage: statusDraft.dirtyByStage,
+                statusesLoading,
+                statusesSaving,
+            }),
+        [
+            stageKey,
+            stageLabel,
+            statusDraft.draftByStage,
+            statusDraft.dirtyByStage,
+            statusesLoading,
+            statusesSaving,
+        ]
+    );
+    const savedStatusKeys = useMemo(
+        () => statusDraftKeysForStage(statusDraft.savedByStage, stageKey),
+        [statusDraft.savedByStage, stageKey]
+    );
 
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [deleteStageOpen, setDeleteStageOpen] = useState(false);
     const [deletingStage, setDeletingStage] = useState(false);
+    const [stageReorderBusy, setStageReorderBusy] = useState(false);
     const [runtimeSummary, setRuntimeSummary] = useState<"unknown" | "pass" | "fail">("unknown");
     const [repairingLocal, setRepairingLocal] = useState(false);
     const repairingBusy = repairingFromParent || repairingLocal;
@@ -165,11 +221,7 @@ export default function LifecycleActivationBoard({
         }
     }, [identity, runtimeDepartmentId, processId, catalog, onIdentityChange, bumpWorkspaceCache, onCatalogRefresh]);
 
-    const canConfirmStatuses = canConfirmStatusesStep({
-        statusesLoading,
-        statusesSaving,
-        draftCount: draftStatusKeys.size,
-    });
+    const canConfirmStatuses = statusesSaveState.canSaveStatuses;
     const operatorStage = asOperatorStageKey(stageKey);
 
     const loadPipeline = useCallback(
@@ -183,9 +235,27 @@ export default function LifecycleActivationBoard({
                     );
                     const j = (await res.json().catch(() => ({}))) as {
                         snapshot?: EnrollmentPipelineWorkUnitSnapshot | null;
+                        work_unit?: { id: string; key: string; name: string; is_active: boolean } | null;
+                        identity?: {
+                            state?: string;
+                            work_unit_id?: string | null;
+                        };
+                        needs_sync?: boolean;
                     };
                     const snap = j.snapshot ?? null;
                     setPipeline(snap);
+                    const identityState = j.identity?.state;
+                    const needsSync = Boolean(j.needs_sync);
+                    setWorkUnitNeedsSync(needsSync);
+                    if (identityState === "conflict") {
+                        setWorkUnitIdentityState("conflict");
+                    } else if (!snap) {
+                        setWorkUnitIdentityState("not_created");
+                    } else if (needsSync) {
+                        setWorkUnitIdentityState("needs_sync");
+                    } else {
+                        setWorkUnitIdentityState("synced");
+                    }
                     if (snap) {
                         setWorkUnitId(snap.id);
                         setWorkUnitName(snap.name);
@@ -246,31 +316,71 @@ export default function LifecycleActivationBoard({
     }, []);
 
     const syncStatusKeysFromPayload = useCallback(
-        (payload: EnrollmentStatusStagesPayload | null, key: string) => {
-            const keys = stageSavedStatusKeys(payload, key, {
-                explicitAssignmentsOnly: activationOwned,
+        (payload: EnrollmentStatusStagesPayload | null, key: string, source: string) => {
+            const normalized = normalizeLifecycleBuilderStageKey(key);
+            if (!normalized) return;
+            if (!shouldSyncStatusDraftForStage(statusDraftRef.current.dirtyByStage, normalized)) {
+                logLifecycleStatusStepDebug("sync-skipped-dirty-draft", {
+                    source,
+                    stageKey: normalized,
+                    draftStatusKeys: statusDraftKeysForStage(
+                        statusDraftRef.current.draftByStage,
+                        normalized
+                    ),
+                });
+                return;
+            }
+            const keys = resolveAssignedStatusKeysForStage(payload, normalized, {
+                activationOwned,
             });
-            const set = new Set(keys);
-            setDraftStatusKeys(set);
-            setSavedStatusKeys(new Set(keys));
-            setStatusKeys(keys);
-            setStatusDisplayLabels(labelsForKeys(payload, keys));
+            if (
+                !shouldApplyServerStatusKeysForStage(
+                    statusDraftRef.current.draftByStage,
+                    statusDraftRef.current.savedByStage,
+                    normalized,
+                    keys
+                )
+            ) {
+                logLifecycleStatusStepDebug("sync-skipped-empty-server", {
+                    source,
+                    stageKey: normalized,
+                    keys,
+                });
+                return;
+            }
+            logLifecycleStatusStepDebug("sync-from-server", { source, stageKey: normalized, keys });
+            dispatchStatusDraft({ type: "syncFromServer", stageKey: normalized, keys });
+            if (normalized === normalizeLifecycleBuilderStageKey(stageKeyRef.current)) {
+                setStatusKeys(keys);
+                setStatusDisplayLabels(labelsForKeys(payload, keys));
+            }
         },
-        [labelsForKeys, activationOwned]
+        [labelsForKeys, activationOwned, dispatchStatusDraft]
     );
 
     const {
         data: stageBootstrap,
         loading: stageBootstrapLoading,
         refresh: refreshStageBootstrap,
+        patch: patchStageBootstrap,
     } = useLifecycleStageBootstrap(runtimeDepartmentId, stageKey, {
         enabled: Boolean(runtimeDepartmentId && stageKey),
     });
 
     const applyStageBootstrap = useCallback(
         (payload: LifecycleStageBootstrapPayload) => {
-            setStatusesPayload(payload.statuses);
-            if (stageKey) syncStatusKeysFromPayload(payload.statuses, stageKey);
+            const sk = normalizeLifecycleBuilderStageKey(stageKey);
+            const stageDirty = sk
+                ? !shouldSyncStatusDraftForStage(statusDraftRef.current.dirtyByStage, sk)
+                : false;
+            if (!stageDirty) {
+                setStatusesPayload(payload.statuses);
+            } else if (sk) {
+                logLifecycleStatusStepDebug("bootstrap-skipped-sync", {
+                    stageKey: sk,
+                    draftStatusKeys: statusDraftKeysForStage(statusDraftRef.current.draftByStage, sk),
+                });
+            }
             setPipeline(payload.pipeline);
             if (payload.pipeline) {
                 setWorkUnitId(payload.pipeline.id);
@@ -283,6 +393,18 @@ export default function LifecycleActivationBoard({
     useEffect(() => {
         if (stageBootstrap) applyStageBootstrap(stageBootstrap);
     }, [stageBootstrap, applyStageBootstrap]);
+
+    /** Hydrate empty draft from server when stage or payload loads — never overwrite user selection. */
+    useEffect(() => {
+        const sk = normalizeLifecycleBuilderStageKey(stageKey);
+        if (!sk || !statusesPayload) return;
+        if (!shouldSyncStatusDraftForStage(statusDraftRef.current.dirtyByStage, sk)) return;
+        const current = statusDraftKeysForStage(statusDraftRef.current.draftByStage, sk);
+        if (current.length > 0) return;
+        const keys = resolveAssignedStatusKeysForStage(statusesPayload, sk, { activationOwned });
+        if (keys.length === 0) return;
+        dispatchStatusDraft({ type: "syncFromServer", stageKey: sk, keys });
+    }, [stageKey, statusesPayload, activationOwned, dispatchStatusDraft]);
 
     const repairLifecycleWorkUnits = useCallback(async () => {
         if (!runtimeDepartmentId || !processId) return;
@@ -425,54 +547,88 @@ export default function LifecycleActivationBoard({
         ]
     );
 
-    const saveStageStatuses = useCallback(async (): Promise<boolean> => {
-        if (!runtimeDepartmentId || !stageKey || draftStatusKeys.size < 1) {
+    const saveStageStatuses = useCallback(async (keysToSave?: readonly string[]): Promise<boolean> => {
+        const sk = normalizeLifecycleBuilderStageKey(stageKeyRef.current || stageKey);
+        const selectedKeys =
+            keysToSave && keysToSave.length > 0
+                ? [...keysToSave]
+                : statusDraftKeysForStage(statusDraftRef.current.draftByStage, sk);
+        logLifecycleStatusStepDebug("save-click", {
+            runtimeDepartmentId,
+            processId,
+            stageKey: sk,
+            stageLabel,
+            saveState: resolveLifecycleStatusesSaveState({
+                stageKey,
+                stageLabel,
+                statusDraftByStageKey: statusDraftRef.current.draftByStage,
+                statusDraftDirtyByStage: statusDraftRef.current.dirtyByStage,
+                statusesLoading,
+                statusesSaving,
+            }),
+            availableStatusCount: collectAllOpportunityStatusRows(statusesPayload).length,
+        });
+        if (!runtimeDepartmentId || !sk || selectedKeys.length < 1) {
             setStatusesError("Select at least one status for this stage.");
             return false;
         }
         setStatusesSaving(true);
         setStatusesError(null);
+        const contractBody = {
+            department_id: runtimeDepartmentId,
+            process_id: processId,
+            stage_key: sk,
+            selected_status_keys: selectedKeys,
+            ...(workUnitName?.trim() ? { work_unit_name: workUnitName.trim() } : {}),
+        };
+        logLifecycleStatusStepDebug("save-contract-request", { body: contractBody });
         try {
-            const res = await fetch(LIFECYCLE_ACTIVATION_STATUS_STAGES_PATH, {
+            const res = await fetch(LIFECYCLE_STAGE_RUNTIME_CONFIG_PATH, {
                 ...workspaceDataFetchInit(),
-                method: "PATCH",
+                method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    department_id: runtimeDepartmentId,
-                    stage: stageKey,
-                    status_keys: [...draftStatusKeys],
-                }),
+                body: JSON.stringify(contractBody),
             });
-            const j = (await res.json().catch(() => ({}))) as EnrollmentStatusStagesPayload & { error?: string };
+            const j = (await res.json().catch(() => ({}))) as {
+                error?: string;
+                status_stages?: EnrollmentStatusStagesPayload;
+                snapshot?: { selectedStatusKeys?: string[]; synced?: boolean };
+                pipeline?: EnrollmentPipelineWorkUnitSnapshot | null;
+            };
+            const statusPayload = j.status_stages ?? null;
+            logLifecycleStatusStepDebug("save-contract-response", {
+                ok: res.ok,
+                status: res.status,
+                savedKeys: j.snapshot?.selectedStatusKeys,
+                synced: j.snapshot?.synced,
+                error: j.error,
+            });
             if (!res.ok) throw new Error(j.error ?? "Save failed");
-            setStatusesPayload(j);
-            const keys = stageSavedStatusKeys(j, stageKey);
+            const keys =
+                j.snapshot?.selectedStatusKeys?.length
+                    ? j.snapshot.selectedStatusKeys
+                    : selectedKeys;
             if (keys.length < 1) {
                 throw new Error(
-                    `Statuses were not assigned to stage "${stageKey}". Check that this stage exists on the lifecycle department.`
+                    `Statuses were not assigned to stage "${sk}". Check that this stage exists on the lifecycle department.`
                 );
             }
-            const labels = labelsForKeys(j, keys);
-            syncStatusKeysFromPayload(j, stageKey);
+            if (statusPayload) setStatusesPayload(statusPayload);
+            const labels = labelsForKeys(statusPayload ?? statusesPayload, keys);
+            dispatchStatusDraft({ type: "commitSaved", stageKey: sk, keys });
+            if (statusPayload) patchStageBootstrap({ statuses: statusPayload });
             setStatusKeys(keys);
             setStatusDisplayLabels(labels);
             await saveActivation({ status_keys: keys, status_labels: labels, completed_steps: 3 });
 
-            if (operatorStage) {
-                const wuId = workUnitId;
-                if (wuId) {
-                    await fetch("/api/admin/enrollment-process/stage-work-unit", {
-                        ...workspaceDataFetchInit(),
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            work_unit_id: wuId,
-                            stage: operatorStage,
-                            sync_statuses: true,
-                        }),
-                    });
-                    await loadPipeline(runtimeDepartmentId);
-                }
+            if (j.pipeline) {
+                setPipeline(j.pipeline);
+                setWorkUnitId(j.pipeline.id);
+                setWorkUnitName(j.pipeline.name);
+                setWorkUnitIdentityState(j.snapshot?.synced ? "synced" : "needs_sync");
+                setWorkUnitNeedsSync(!j.snapshot?.synced);
+            } else if (runtimeDepartmentId) {
+                await loadPipeline(runtimeDepartmentId);
             }
             return true;
         } catch (e) {
@@ -483,31 +639,53 @@ export default function LifecycleActivationBoard({
         }
     }, [
         runtimeDepartmentId,
+        processId,
         stageKey,
-        draftStatusKeys,
+        stageLabel,
+        statusDraft.draftByStage,
+        statusesPayload,
+        statusesLoading,
+        statusesSaving,
         labelsForKeys,
         syncStatusKeysFromPayload,
         saveActivation,
         workUnitId,
         operatorStage,
         loadPipeline,
+        dispatchStatusDraft,
+        patchStageBootstrap,
     ]);
 
     const confirmStatusesAndContinue = useCallback(async () => {
-        const ok = await saveStageStatuses();
+        const keysToSave = statusesSaveState.saveDraftKeys;
+        logLifecycleStatusStepDebug("save-continue-click", {
+            saveState: statusesSaveState,
+            keysToSave,
+        });
+        const ok = await saveStageStatuses(keysToSave);
         if (!ok) return;
         if (runtimeDepartmentId) await loadPipeline(runtimeDepartmentId);
-        await refreshStageBootstrap();
-    }, [saveStageStatuses, runtimeDepartmentId, loadPipeline, refreshStageBootstrap]);
+    }, [saveStageStatuses, runtimeDepartmentId, loadPipeline, statusesSaveState]);
 
-    const onToggleStatus = useCallback((statusKey: string, selected: boolean) => {
-        setDraftStatusKeys((prev) => {
-            const next = new Set(prev);
-            if (selected) next.add(statusKey);
-            else next.delete(statusKey);
-            return next;
-        });
-    }, []);
+    const onToggleStatus = useCallback(
+        (statusKeyArg: string, selected: boolean) => {
+            const sk = normalizeLifecycleBuilderStageKey(stageKeyRef.current || stageKey);
+            const status = statusKeyArg.trim();
+            if (!sk || !status) return;
+            dispatchStatusDraft({ type: "toggle", stageKey: sk, statusKey: status, selected });
+            setStatusesError(null);
+            logLifecycleStatusStepDebug("checkbox-toggle", {
+                runtimeDepartmentId,
+                processId,
+                stageKey: sk,
+                stageLabel,
+                statusKey: status,
+                selected,
+                draftStatusKeys: statusDraftKeysForStage(statusDraftRef.current.draftByStage, sk),
+            });
+        },
+        [runtimeDepartmentId, processId, stageKey, stageLabel, dispatchStatusDraft]
+    );
 
     const builderStageKeys = useMemo(() => {
         const proc = builderStages.length
@@ -530,10 +708,9 @@ export default function LifecycleActivationBoard({
         setStatusKeys([]);
         setStatusDisplayLabels([]);
         setPipeline(null);
-        setDraftStatusKeys(new Set());
-        setSavedStatusKeys(new Set());
+        dispatchStatusDraft({ type: "reset" });
         setRuntimeSummary("unknown");
-    }, []);
+    }, [dispatchStatusDraft]);
 
     const deleteLifecycle = useCallback(async () => {
         if (!runtimeDepartmentId) return;
@@ -606,20 +783,51 @@ export default function LifecycleActivationBoard({
             setStageLabel(nextLabel);
             void loadPipeline(deptId);
             const payload = await loadStatusStages();
-            if (payload && nextKey) syncStatusKeysFromPayload(payload, nextKey);
+            const hydratedKey = normalizeLifecycleBuilderStageKey(nextKey);
+            if (
+                payload &&
+                hydratedKey &&
+                shouldSyncStatusDraftForStage(statusDraftRef.current.dirtyByStage, hydratedKey)
+            ) {
+                syncStatusKeysFromPayload(payload, hydratedKey, "hydrateFromSelection");
+            }
         },
         [loadPipeline, loadStatusStages, syncStatusKeysFromPayload]
     );
 
     const selectStage = useCallback(
-        async (stage: LifecycleBuilderStageRecord) => {
-            setStageKey(stage.key);
-            setStageLabel(stage.label);
-            setShowAddStage(false);
-            if (statusesPayload) syncStatusKeysFromPayload(statusesPayload, stage.key);
+        async (
+            stage: LifecycleBuilderStageRecord,
+            opts?: { statusesPayload?: EnrollmentStatusStagesPayload | null }
+        ) => {
+            const sk = normalizeLifecycleBuilderStageKey(stage.key);
+            flushSync(() => {
+                setStageKey(stage.key);
+                setStageLabel(stage.label);
+                setShowAddStage(false);
+            });
+            stageKeyRef.current = stage.key;
+            logLifecycleStatusStepDebug("select-stage", {
+                stageKey: sk,
+                draftStatusKeys: statusDraftKeysForStage(statusDraftRef.current.draftByStage, sk),
+                dirty: Boolean(statusDraftRef.current.dirtyByStage[sk]),
+            });
+            const payload = opts?.statusesPayload ?? statusesPayload;
+            const canSyncFromServer = () =>
+                shouldSyncStatusDraftForStage(statusDraftRef.current.dirtyByStage, sk);
+            if (canSyncFromServer()) {
+                if (payload) {
+                    syncStatusKeysFromPayload(payload, sk, "selectStage");
+                } else {
+                    const loaded = await loadStatusStages();
+                    if (loaded && canSyncFromServer()) {
+                        syncStatusKeysFromPayload(loaded, sk, "selectStage-load");
+                    }
+                }
+            }
             await saveActivation({ stage_key: stage.key, stage_label: stage.label });
         },
-        [statusesPayload, syncStatusKeysFromPayload, saveActivation]
+        [statusesPayload, syncStatusKeysFromPayload, saveActivation, loadStatusStages]
     );
 
     const renameLifecycle = useCallback(
@@ -690,6 +898,42 @@ export default function LifecycleActivationBoard({
         ]
     );
 
+    const reorderBuilderStage = useCallback(
+        async (stageId: string, direction: "up" | "down") => {
+            if (!runtimeDepartmentId || !processId) return;
+            setStageReorderBusy(true);
+            setError(null);
+            try {
+                const res = await fetch(
+                    `/api/admin/departments/${encodeURIComponent(runtimeDepartmentId)}/lifecycle-builder`,
+                    {
+                        ...workspaceDataFetchInit(),
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            action: "reorder_stage",
+                            process_id: processId,
+                            stage_id: stageId,
+                            direction,
+                        }),
+                    }
+                );
+                const j = (await res.json().catch(() => ({}))) as {
+                    stages?: LifecycleBuilderStageRecord[];
+                    error?: string;
+                };
+                if (!res.ok) throw new Error(j.error ?? "Reorder failed");
+                if (j.stages?.length) setBuilderStages(j.stages);
+                bumpWorkspaceCache();
+            } catch (e) {
+                setError(e instanceof Error ? e.message : "Reorder failed");
+            } finally {
+                setStageReorderBusy(false);
+            }
+        },
+        [runtimeDepartmentId, processId, bumpWorkspaceCache]
+    );
+
     const deleteStage = useCallback(async () => {
         if (!runtimeDepartmentId || !processId || !stageKey || !activationOwned) return;
         setDeletingStage(true);
@@ -726,8 +970,7 @@ export default function LifecycleActivationBoard({
             setDeleteStageOpen(false);
             setStageKey("");
             setStageLabel("");
-            setDraftStatusKeys(new Set());
-            setSavedStatusKeys(new Set());
+            dispatchStatusDraft({ type: "reset" });
             setStatusKeys([]);
             setStatusDisplayLabels([]);
             setWorkUnitId(null);
@@ -746,7 +989,7 @@ export default function LifecycleActivationBoard({
         } finally {
             setDeletingStage(false);
         }
-    }, [runtimeDepartmentId, processId, stageKey, activationOwned, selectStage]);
+    }, [runtimeDepartmentId, processId, stageKey, activationOwned, selectStage, dispatchStatusDraft]);
 
     const deleteWorkUnitQueue = useCallback(async () => {
         if (!workUnitId || !activationOwned) return;
@@ -771,8 +1014,9 @@ export default function LifecycleActivationBoard({
     }, [workUnitId, activationOwned, saveActivation, bumpWorkspaceCache]);
 
     const clearStageStatuses = useCallback(async () => {
-        setDraftStatusKeys(new Set());
-        if (!runtimeDepartmentId || !stageKey) return;
+        const sk = normalizeLifecycleBuilderStageKey(stageKey);
+        dispatchStatusDraft({ type: "clearStageDraft", stageKey: sk });
+        if (!runtimeDepartmentId || !sk) return;
         setStatusesSaving(true);
         try {
             const res = await fetch(LIFECYCLE_ACTIVATION_STATUS_STAGES_PATH, {
@@ -781,21 +1025,21 @@ export default function LifecycleActivationBoard({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     department_id: runtimeDepartmentId,
-                    stage: stageKey,
+                    stage: sk,
                     status_keys: [],
                 }),
             });
             const j = (await res.json().catch(() => ({}))) as EnrollmentStatusStagesPayload & { error?: string };
             if (!res.ok) throw new Error(j.error ?? "Failed to clear statuses");
             setStatusesPayload(j);
-            syncStatusKeysFromPayload(j, stageKey);
+            syncStatusKeysFromPayload(j, sk, "clearStageStatuses");
             await saveActivation({ status_keys: [], status_labels: [], completed_steps: 2 });
         } catch (e) {
             setStatusesError(e instanceof Error ? e.message : "Failed to clear statuses");
         } finally {
             setStatusesSaving(false);
         }
-    }, [runtimeDepartmentId, stageKey, syncStatusKeysFromPayload, saveActivation]);
+    }, [runtimeDepartmentId, stageKey, syncStatusKeysFromPayload, saveActivation, dispatchStatusDraft]);
 
     useEffect(() => {
         let cancelled = false;
@@ -823,12 +1067,6 @@ export default function LifecycleActivationBoard({
         setLifecycleName(identity.lifecycleName);
         setActivationOwned(identity.isBuilderOwned);
     }, [identity?.lifecycleId, identity?.runtimeDepartmentId, identity?.processId, identity?.lifecycleName, identity?.isBuilderOwned]);
-
-    useEffect(() => {
-        if (stageKey && statusesPayload) {
-            syncStatusKeysFromPayload(statusesPayload, stageKey);
-        }
-    }, [stageKey, statusesPayload, syncStatusKeysFromPayload]);
 
     const handleLifecycleFormCreated = useCallback(
         async (result?: { departmentId: string; processId?: string; lifecycleName?: string }) => {
@@ -921,11 +1159,12 @@ export default function LifecycleActivationBoard({
             };
             const stagesList = j.stages ?? (j.active_process ? activeStagesForProcess(j.active_process) : []);
             setBuilderStages(stagesList);
+            const payload = await loadStatusStages();
             const stage = stagesList.find((s) => s.key === key);
-            if (stage) await selectStage(stage);
+            if (stage) await selectStage(stage, { statusesPayload: payload });
             setShowAddStage(false);
         },
-        [runtimeDepartmentId, selectStage]
+        [runtimeDepartmentId, selectStage, loadStatusStages]
     );
 
     if (bootLoading && runtimeDepartmentId && processId) {
@@ -1014,6 +1253,8 @@ export default function LifecycleActivationBoard({
                             activeStageKey={stageKey}
                             onSelect={(s) => void selectStage(s)}
                             onAddStageClick={() => setShowAddStage((v) => !v)}
+                            onReorderStage={reorderBuilderStage}
+                            reorderBusy={stageReorderBusy}
                         />
                         {processId ? (
                             <details
@@ -1109,13 +1350,16 @@ export default function LifecycleActivationBoard({
                                 bootstrapLoading={stageBootstrapLoading}
                                 statusesPayload={statusesPayload}
                                 statusesSaving={statusesSaving}
-                                draftStatusKeys={draftStatusKeys}
+                                statusesSaveState={statusesSaveState}
                                 savedStatusKeys={savedStatusKeys}
                                 statusesError={statusesError}
                                 onToggleStatus={onToggleStatus}
                                 onSaveStatuses={confirmStatusesAndContinue}
                                 canSaveStatuses={canConfirmStatuses}
+                                statusesSaveDisabledReason={statusesSaveState.disabledReason}
                                 pipeline={pipeline}
+                                workUnitIdentityState={workUnitIdentityState}
+                                workUnitNeedsSync={workUnitNeedsSync}
                                 onPipelineUpdated={async (snapshot) => {
                                     if (snapshot) {
                                         setPipeline(snapshot);
@@ -1126,13 +1370,9 @@ export default function LifecycleActivationBoard({
                                             work_unit_name: snapshot.name,
                                             completed_steps: 4,
                                         });
-                                    } else {
+                                    }
+                                    if (runtimeDepartmentId) {
                                         await loadPipeline(runtimeDepartmentId);
-                                        await saveActivation({
-                                            work_unit_id: workUnitId,
-                                            work_unit_name: workUnitName,
-                                            completed_steps: 4,
-                                        });
                                     }
                                     await refreshStageBootstrap();
                                 }}
@@ -1142,8 +1382,11 @@ export default function LifecycleActivationBoard({
                                         <LifecycleActivationValidation
                                             identity={identity}
                                             repairQueue={
-                                                workUnitId && operatorStage
-                                                    ? { workUnitId, stageKey: operatorStage }
+                                                workUnitId && stageKey.trim()
+                                                    ? {
+                                                          workUnitId,
+                                                          stageKey: normalizeLifecycleBuilderStageKey(stageKey),
+                                                      }
                                                     : null
                                             }
                                             onQueueRepaired={async () => {

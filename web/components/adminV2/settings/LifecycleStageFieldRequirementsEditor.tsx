@@ -1,15 +1,17 @@
 "use client";
 
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { LifecycleStageBootstrapFieldRequirements } from "@/lib/lifecycle/lifecycleStageBootstrapTypes";
-import { type LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import {
     LIFECYCLE_REQUIREMENT_ENTITIES,
-    fieldRulesHaveRuntimeGaps,
-    lifecycleEntityLabel,
     type LifecycleRequirementEntityKey,
     type LifecycleStageFieldRules,
 } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
+import { lifecycleRequirementEntityLabel } from "@/lib/lifecycle/lifecycleRequirementEntityLabels";
+import {
+    isWaitlistBuilderStage,
+    WAITLIST_REQUIRED_INFO_HELPER,
+} from "@/lib/lifecycle/lifecycleBuilderStagePalette";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
 type FieldPaletteEntry = {
@@ -35,7 +37,8 @@ type StageConfigPayload = {
 };
 
 type LifecycleRequirementsApiResponse = {
-    stages: Record<LifecycleOperatorStage, StageConfigPayload>;
+    stages: Record<string, StageConfigPayload>;
+    entity_display_labels?: Partial<Record<LifecycleRequirementEntityKey, string>>;
     error?: string;
 };
 
@@ -86,7 +89,7 @@ export type LifecycleStageFieldRequirementsEditorHandle = {
 
 export type LifecycleStageFieldRequirementsEditorProps = {
     departmentId: string;
-    activeStage: LifecycleOperatorStage;
+    activeStageKey: string;
     compact?: boolean;
     /** Guided board — single save on card footer. */
     guidedMode?: boolean;
@@ -102,7 +105,7 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
 >(function LifecycleStageFieldRequirementsEditor(
     {
         departmentId,
-        activeStage,
+        activeStageKey,
         compact = false,
         guidedMode = false,
         prefetchedFieldRequirements = null,
@@ -113,6 +116,10 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
     ref
 ) {
     const [apiStages, setApiStages] = useState<LifecycleRequirementsApiResponse["stages"] | null>(null);
+    const [entityDisplayLabels, setEntityDisplayLabels] = useState<
+        Partial<Record<LifecycleRequirementEntityKey, string>>
+    >({});
+    const savingRef = useRef(false);
     const [activeEntity, setActiveEntity] = useState<LifecycleRequirementEntityKey>("person");
     const [fieldLevels, setFieldLevels] = useState<Record<string, FieldLevel>>({});
     const [savedRules, setSavedRules] = useState<LifecycleStageFieldRules>({
@@ -124,7 +131,7 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
     const [localError, setLocalError] = useState<string | null>(null);
     const [localFeedback, setLocalFeedback] = useState<string | null>(null);
 
-    const stageData = apiStages?.[activeStage];
+    const stageData = apiStages?.[activeStageKey];
     const palette = stageData?.field_palette ?? [];
 
     const entitiesInPalette = useMemo(() => {
@@ -144,10 +151,7 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
         return !stageData.has_department_override;
     }, [stageData]);
 
-    const showEnforcementGap = useMemo(
-        () => fieldRulesHaveRuntimeGaps(draftRules),
-        [draftRules]
-    );
+    const showWaitlistHelper = isWaitlistBuilderStage(activeStageKey);
 
     useEffect(() => {
         onDirtyChange?.(dirty);
@@ -174,6 +178,7 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
                 };
                 if (!res.ok) throw new Error(j.error ?? "Failed to load lifecycle settings");
                 setApiStages(j.stages);
+                setEntityDisplayLabels(j.entity_display_labels ?? {});
             } catch (e) {
                 const msg = e instanceof Error ? e.message : "Failed to load";
                 setLocalError(msg);
@@ -190,12 +195,12 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
         if (!departmentId) return;
         if (prefetchedFieldRequirements) {
             setApiStages({
-                [activeStage]: prefetchedFieldRequirements,
+                [activeStageKey]: prefetchedFieldRequirements,
             } as LifecycleRequirementsApiResponse["stages"]);
             return;
         }
         void loadConfig(departmentId);
-    }, [departmentId, loadConfig, prefetchedFieldRequirements, activeStage]);
+    }, [departmentId, loadConfig, prefetchedFieldRequirements, activeStageKey]);
 
     useEffect(() => {
         if (!stageData) return;
@@ -210,8 +215,10 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
         onFeedback?.(null);
     }, [onFeedback]);
 
-    const persistRequirements = useCallback(async () => {
-        if (!departmentId || !dirty) return;
+    const persistRequirements = useCallback(async (): Promise<boolean> => {
+        if (!departmentId || !dirty) return true;
+        if (savingRef.current) return false;
+        savingRef.current = true;
         setSaving(true);
         setLocalError(null);
         onError?.(null);
@@ -224,7 +231,7 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                        stage: activeStage,
+                        stage: activeStageKey,
                         field_rules: draftRules,
                     }),
                 }
@@ -235,24 +242,34 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
             const msg = "Saved.";
             setLocalFeedback(msg);
             onFeedback?.(msg);
-            await loadConfig(departmentId);
+            if (!prefetchedFieldRequirements) {
+                await loadConfig(departmentId);
+            }
+            return true;
         } catch (e) {
             const msg = e instanceof Error ? e.message : "Save failed";
             setLocalError(msg);
             onError?.(msg);
+            return false;
         } finally {
+            savingRef.current = false;
             setSaving(false);
         }
-    }, [departmentId, dirty, activeStage, draftRules, loadConfig, onError, onFeedback]);
+    }, [
+        departmentId,
+        dirty,
+        activeStageKey,
+        draftRules,
+        loadConfig,
+        onError,
+        onFeedback,
+        prefetchedFieldRequirements,
+    ]);
 
     useImperativeHandle(
         ref,
         () => ({
-            save: async () => {
-                if (!dirty) return true;
-                await persistRequirements();
-                return true;
-            },
+            save: async () => persistRequirements(),
         }),
         [dirty, persistRequirements]
     );
@@ -268,7 +285,7 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
                     ...workspaceDataFetchInit(),
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ reset_stage: activeStage }),
+                    body: JSON.stringify({ reset_stage: activeStageKey }),
                 }
             );
             const j = (await res.json().catch(() => ({}))) as { error?: string };
@@ -284,7 +301,7 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
         } finally {
             setSaving(false);
         }
-    }, [departmentId, activeStage, loadConfig, onError, onFeedback]);
+    }, [departmentId, activeStageKey, loadConfig, onError, onFeedback]);
 
     const fieldsForEntity = useMemo(
         () => palette.filter((f) => f.entity === activeEntity),
@@ -342,13 +359,12 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
                 </div>
             ) : null}
 
-            {showEnforcementGap ? (
+            {showWaitlistHelper ? (
                 <p
-                    className="mb-3 rounded-md border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-xs text-amber-950"
-                    data-testid="lifecycle-field-enforcement-gap"
+                    className="mb-3 text-xs text-alloy-midnight/55"
+                    data-testid="lifecycle-waitlist-required-info-helper"
                 >
-                    Some selected fields are saved as configuration only. Runtime checks still use broader
-                    object-level rules until field-level enforcement expands.
+                    {WAITLIST_REQUIRED_INFO_HELPER}
                 </p>
             ) : null}
 
@@ -384,7 +400,8 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
                                     value={entity.key}
                                     data-testid={`lifecycle-field-entity-option-${entity.key}`}
                                 >
-                                    {entity.label}
+                                    {entityDisplayLabels[entity.key] ??
+                                        lifecycleRequirementEntityLabel(entity.key)}
                                 </option>
                             ))}
                         </select>
@@ -458,7 +475,10 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
                                 <p className="mt-0.5 line-clamp-2 text-[11px] text-alloy-midnight/75">
                                     <span className="font-medium">Required:</span>{" "}
                                     {savedSummary.required
-                                        .map((f) => `${lifecycleEntityLabel(f.entity)} · ${f.field_label}`)
+                                        .map(
+                                            (f) =>
+                                                `${entityDisplayLabels[f.entity] ?? lifecycleRequirementEntityLabel(f.entity)} · ${f.field_label}`
+                                        )
                                         .join(", ")}
                                 </p>
                             ) : null}
@@ -466,7 +486,10 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
                                 <p className="mt-0.5 line-clamp-2 text-[11px] text-alloy-midnight/65">
                                     <span className="font-medium">Recommended:</span>{" "}
                                     {savedSummary.recommended
-                                        .map((f) => `${lifecycleEntityLabel(f.entity)} · ${f.field_label}`)
+                                        .map(
+                                            (f) =>
+                                                `${entityDisplayLabels[f.entity] ?? lifecycleRequirementEntityLabel(f.entity)} · ${f.field_label}`
+                                        )
                                         .join(", ")}
                                 </p>
                             ) : null}

@@ -5,7 +5,6 @@ import {
 import {
     ENROLLMENT_OPERATOR_STAGE_METADATA_KEY,
     ENROLLMENT_OPERATOR_STAGE_UNASSIGNED,
-    isLifecycleOperatorStage,
 } from "@/lib/lifecycle/enrollmentOperatorStage";
 
 /** Coerce status_definitions.metadata for DB writes — never null. */
@@ -40,7 +39,10 @@ export function normalizeStatusDefinitionMetadata(raw: unknown): Record<string, 
             delete out[ENROLLMENT_OPERATOR_STAGE_METADATA_KEY];
         } else {
             const t = String(raw).trim();
-            if (t === ENROLLMENT_OPERATOR_STAGE_UNASSIGNED || isLifecycleOperatorStage(t)) {
+            if (t === ENROLLMENT_OPERATOR_STAGE_UNASSIGNED) {
+                delete out[ENROLLMENT_OPERATOR_STAGE_METADATA_KEY];
+            } else if (t) {
+                // Builder custom stages (e.g. enrolling) are valid — not limited to operator catalog keys.
                 out[ENROLLMENT_OPERATOR_STAGE_METADATA_KEY] = t;
             } else {
                 delete out[ENROLLMENT_OPERATOR_STAGE_METADATA_KEY];

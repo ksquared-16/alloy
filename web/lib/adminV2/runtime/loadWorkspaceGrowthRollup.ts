@@ -14,8 +14,8 @@ import type {
     WorkspaceRootDepartmentRow,
     WorkspaceRootDeptTileStats,
 } from "@/components/admin/workspace/WorkspaceRootDepartmentGrid";
-import { isLifecycleStageWorkUnitKey } from "@/lib/lifecycle/lifecycleStageWorkUnit";
 import type { WorkspaceRootMetrics } from "@/components/admin/workspace/WorkspaceRootShell";
+import { accumulateWorkspaceDeptWorkUnitTileStats } from "@/lib/workspace/viewModels/workspaceRootRollup";
 
 /**
  * Per–growth-slice department lifecycle + pipeline fetches (2×N).
@@ -33,38 +33,10 @@ export async function loadWorkspaceGrowthRollup(
 }> {
     const fetchInit = workspaceDataFetchInit();
 
-    const deptTileStats: WorkspaceRootDeptTileStats = {};
-    if (workUnitsRes?.ok && Array.isArray(wuJson.items)) {
-        const namesByDept = new Map<string, string[]>();
-        const lifecycleCountByDept = new Map<string, number>();
-        for (const row of wuJson.items) {
-            const did = typeof row.department_id === "string" ? row.department_id : "";
-            if (!did) continue;
-            const key = typeof (row as { key?: string }).key === "string" ? (row as { key: string }).key : "";
-            const name =
-                typeof (row as { name?: string }).name === "string"
-                    ? (row as { name: string }).name.trim()
-                    : "";
-            if (isLifecycleStageWorkUnitKey(key)) {
-                lifecycleCountByDept.set(did, (lifecycleCountByDept.get(did) ?? 0) + 1);
-                if (name) {
-                    const list = namesByDept.get(did) ?? [];
-                    list.push(name);
-                    namesByDept.set(did, list);
-                }
-                continue;
-            }
-            if (key.toLowerCase() === "needs_attention") continue;
-            const cur = deptTileStats[did]?.workUnitCount ?? 0;
-            deptTileStats[did] = { workUnitCount: cur + 1 };
-        }
-        for (const [did, count] of lifecycleCountByDept) {
-            deptTileStats[did] = {
-                workUnitCount: count,
-                workUnitNames: namesByDept.get(did) ?? [],
-            };
-        }
-    }
+    const deptTileStats: WorkspaceRootDeptTileStats =
+        workUnitsRes?.ok && Array.isArray(wuJson.items)
+            ? accumulateWorkspaceDeptWorkUnitTileStats(wuJson.items)
+            : {};
 
     for (const d of departments) {
         const wu = deptTileStats[d.id]?.workUnitCount ?? 0;

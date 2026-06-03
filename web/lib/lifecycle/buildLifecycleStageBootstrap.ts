@@ -1,13 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import { dbListFormDefinitions } from "@/lib/admin/forms/formsAdminDb";
-import {
-    effectiveLifecycleProgressionRequirementsForStage,
-    effectiveFieldRulesForStage,
-    departmentHasStageOverride,
-    parseLifecycleProgressionRequirementsOverride,
-} from "@/lib/completion/lifecycleProgressionRequirementsConfig";
-import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
+import { parseLifecycleProgressionRequirementsOverride } from "@/lib/completion/lifecycleProgressionRequirementsConfig";
 import { LIFECYCLE_STAGE_ORDER } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import { asOperatorStageKey } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { buildEnrollmentStatusStagesPayload } from "@/lib/lifecycle/enrollmentProcessStatusStageConfig";
@@ -17,11 +11,10 @@ import {
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { effectiveFieldRulesForDepartment, effectiveRequirementLabelsForDepartment } from "@/lib/lifecycle/enrollmentProcessDepartmentRequirements";
 import { buildEnrollmentProcessFormCoverageRows } from "@/lib/lifecycle/enrollmentProcessFormCoverage";
-import { mergeLifecycleFieldPaletteForStage } from "@/lib/lifecycle/lifecycleFieldPaletteMerge";
+import { buildLifecycleRequirementsStageEntry } from "@/lib/lifecycle/lifecycleRequirementsStagePayload";
 import { loadOrgFieldDefinitionsForLifecycle } from "@/lib/lifecycle/loadOrgFieldDefinitionsForLifecycle";
 import { loadLifecycleBuilderConfiguredActions } from "@/lib/lifecycle/loadLifecycleBuilderConfiguredActions";
 import { loadStageWorkUnitSnapshotForDepartment } from "@/lib/lifecycle/lifecycleStageWorkUnit";
-import { isLifecycleBuilderOwnedDepartmentMetadata } from "@/lib/lifecycle/lifecycleBuilderOwned";
 import { filterSaveableLifecycleBaseActions } from "@/lib/lifecycle/filterSaveableLifecycleBaseActions";
 import { lifecycleActivationBaseActions } from "@/lib/lifecycle/lifecycleStageBaseActions";
 import type { LifecycleStageBootstrapPayload } from "@/lib/lifecycle/lifecycleStageBootstrapTypes";
@@ -83,35 +76,20 @@ export async function buildLifecycleStageBootstrap(params: {
     );
 
     let field_requirements: LifecycleStageBootstrapPayload["field_requirements"] = null;
-    if (operatorStage) {
+    if (isValidBootstrapBuilderStage(metadata, builderStageKey)) {
         const override = parseLifecycleProgressionRequirementsOverride(metadata);
         const orgFieldDefs = await loadOrgFieldDefinitionsForLifecycle(supabase, orgId);
-        const builderOwned = isLifecycleBuilderOwnedDepartmentMetadata(metadata);
-        const hasOverride = departmentHasStageOverride(override, operatorStage);
-        const effective = effectiveLifecycleProgressionRequirementsForStage(operatorStage, metadata);
-        const effectiveFields = effectiveFieldRulesForStage(operatorStage, metadata);
-        const palette = mergeLifecycleFieldPaletteForStage(operatorStage, orgFieldDefs);
-        const blankRules = { required_rule_ids: [] as string[], recommended_rule_ids: [] as string[] };
+        const entry = buildLifecycleRequirementsStageEntry(builderStageKey, metadata, orgFieldDefs, override);
         field_requirements = {
             effective: {
-                required_labels:
-                    builderOwned && !hasOverride ? [] : effective.required.map((r) => r.label),
-                recommended_labels:
-                    builderOwned && !hasOverride ? [] : effective.recommended.map((r) => r.label),
-                source: builderOwned && !hasOverride ? "none" : effective.source,
-                field_rules: builderOwned && !hasOverride ? blankRules : effectiveFields.rules,
-                field_rules_source: builderOwned && !hasOverride ? "none" : effectiveFields.source,
+                required_labels: entry.effective.required_labels,
+                recommended_labels: entry.effective.recommended_labels,
+                source: entry.effective.source,
+                field_rules: entry.effective.field_rules,
+                field_rules_source: entry.effective.field_rules_source,
             },
-            has_department_override: hasOverride,
-            field_palette: palette.map((f) => ({
-                rule_id: f.rule_id,
-                entity: f.entity,
-                field_label: f.field_label,
-                field_source: f.field_source,
-                runtime_enforced: f.runtime_enforced,
-                form_coverage_supported: f.form_coverage_supported,
-                config_only: f.config_only,
-            })),
+            has_department_override: entry.has_department_override,
+            field_palette: entry.field_palette,
         };
     }
 

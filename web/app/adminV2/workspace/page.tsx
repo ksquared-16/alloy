@@ -10,7 +10,10 @@ import {
 import { WorkspacePageLoadingGate } from "@/app/adminV2/components/workspace/WorkspacePageLoadingGate";
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
-import { buildWorkspaceRootDepartmentTileRollupLine } from "@/lib/workspace/viewModels/workspaceRootRollup";
+import {
+    accumulateWorkspaceDeptWorkUnitTileStats,
+    buildWorkspaceRootDepartmentTileRollupLine,
+} from "@/lib/workspace/viewModels/workspaceRootRollup";
 import { resolveKpisForWorkspace } from "@/lib/kpi/resolver";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import {
@@ -64,15 +67,10 @@ function buildWorkspaceQuickRollup(
     workUnitsRes: Response | null,
     wuJson: { items?: { department_id?: string }[]; error?: string }
 ): { metrics: WorkspaceRootMetrics; deptTileStats: WorkspaceRootDeptTileStats } {
-    const deptTileStats: WorkspaceRootDeptTileStats = {};
-    if (workUnitsRes?.ok && Array.isArray(wuJson.items)) {
-        for (const row of wuJson.items) {
-            const did = typeof row.department_id === "string" ? row.department_id : "";
-            if (!did) continue;
-            const cur = deptTileStats[did]?.workUnitCount ?? 0;
-            deptTileStats[did] = { workUnitCount: cur + 1 };
-        }
-    }
+    const deptTileStats: WorkspaceRootDeptTileStats =
+        workUnitsRes?.ok && Array.isArray(wuJson.items)
+            ? accumulateWorkspaceDeptWorkUnitTileStats(wuJson.items)
+            : {};
 
     for (const d of departments) {
         const wu = deptTileStats[d.id]?.workUnitCount ?? 0;

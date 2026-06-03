@@ -5,6 +5,7 @@ import LifecycleStageGuidedBoard from "@/components/adminV2/settings/lifecycle/L
 import type { EnrollmentStatusStagesPayload } from "@/lib/lifecycle/enrollmentProcessStatusStageConfig";
 import type { EnrollmentPipelineWorkUnitSnapshot } from "@/lib/lifecycle/parseEnrollmentPipelineQueues";
 import type { LifecycleStageBootstrapPayload } from "@/lib/lifecycle/lifecycleStageBootstrapTypes";
+import type { LifecycleStatusesSaveState } from "@/lib/lifecycle/lifecycleStatusesCardState";
 
 export default function LifecycleStageConfiguration({
     departmentId,
@@ -13,13 +14,16 @@ export default function LifecycleStageConfiguration({
     bootstrapLoading,
     statusesPayload,
     statusesSaving,
-    draftStatusKeys,
+    statusesSaveState,
     savedStatusKeys,
     statusesError,
     onToggleStatus,
     onSaveStatuses,
     canSaveStatuses,
+    statusesSaveDisabledReason,
     pipeline,
+    workUnitIdentityState,
+    workUnitNeedsSync,
     onPipelineUpdated,
     statusDisplayLabels,
     validationSlot,
@@ -30,13 +34,16 @@ export default function LifecycleStageConfiguration({
     bootstrapLoading: boolean;
     statusesPayload: EnrollmentStatusStagesPayload | null;
     statusesSaving: boolean;
-    draftStatusKeys: Set<string>;
-    savedStatusKeys: Set<string>;
+    statusesSaveState: LifecycleStatusesSaveState;
+    savedStatusKeys: readonly string[];
     statusesError: string | null;
     onToggleStatus: (statusKey: string, selected: boolean) => void;
     onSaveStatuses: () => void | Promise<void>;
     canSaveStatuses: boolean;
+    statusesSaveDisabledReason: string | null;
     pipeline: EnrollmentPipelineWorkUnitSnapshot | null;
+    workUnitIdentityState: "not_created" | "synced" | "needs_sync" | "conflict";
+    workUnitNeedsSync: boolean;
     onPipelineUpdated: (snapshot: EnrollmentPipelineWorkUnitSnapshot | null) => void | Promise<void>;
     statusDisplayLabels: string[];
     validationSlot: ReactNode;
@@ -50,13 +57,16 @@ export default function LifecycleStageConfiguration({
                 bootstrapLoading={bootstrapLoading}
                 statusesPayload={statusesPayload}
                 statusesSaving={statusesSaving}
-                draftStatusKeys={draftStatusKeys}
+                statusesSaveState={statusesSaveState}
                 savedStatusKeys={savedStatusKeys}
                 statusesError={statusesError}
                 onToggleStatus={onToggleStatus}
                 onSaveStatuses={onSaveStatuses}
                 canSaveStatuses={canSaveStatuses}
+                statusesSaveDisabledReason={statusesSaveDisabledReason}
                 pipeline={pipeline}
+                workUnitIdentityState={workUnitIdentityState}
+                workUnitNeedsSync={workUnitNeedsSync}
                 onPipelineUpdated={onPipelineUpdated}
                 statusDisplayLabels={statusDisplayLabels}
                 validationSlot={validationSlot}

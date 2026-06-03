@@ -7,20 +7,23 @@ import {
     collectAllOpportunityStatusRows,
     statusKeySetsEqual,
 } from "@/lib/lifecycle/lifecycleActivationStep3";
-
 export default function LifecycleActivationStatusesStep({
     payload,
     loading,
+    stageKey,
     draftKeys,
     savedKeys,
     error,
+    canSaveStatuses,
     onToggleStatus,
 }: {
     payload: EnrollmentStatusStagesPayload | null;
     loading: boolean;
+    stageKey: string;
     draftKeys: Set<string>;
     savedKeys: Set<string>;
     error: string | null;
+    canSaveStatuses: boolean;
     onToggleStatus: (statusKey: string, selected: boolean) => void;
 }) {
     const dirty = useMemo(() => !statusKeySetsEqual(draftKeys, savedKeys), [draftKeys, savedKeys]);

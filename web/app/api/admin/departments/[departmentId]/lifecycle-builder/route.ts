@@ -30,6 +30,8 @@ import {
     updateStageDescription,
     type LifecycleBuilderV1,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { syncWorkUnitSortOrderFromBuilderStages } from "@/lib/lifecycle/syncWorkUnitSortOrderFromBuilder";
+import { logLifecycleBuilderSaveTiming } from "@/lib/lifecycle/lifecycleBuilderSaveTiming";
 import {
     departmentMetadataHasLifecycleBuilderV1,
     lifecycleBuilderDepartmentNotFoundError,
@@ -89,7 +91,7 @@ async function saveConfig(orgId: string, departmentId: string, config: Lifecycle
         nextMeta = mergeLifecycleBuilderOwnedIntoMetadata(nextMeta, { process_id: active.id });
     }
     const supabase = createAdminClient();
-    const description =
+    const syncTileDescription =
         active && isLifecycleBuilderOwnedDepartmentMetadata(nextMeta)
             ? lifecycleWorkspaceTileDescription(active.description, active.name)
             : null;
@@ -97,7 +99,7 @@ async function saveConfig(orgId: string, departmentId: string, config: Lifecycle
         .from("departments")
         .update({
             metadata: nextMeta,
-            ...(description ? { description } : {}),
+            ...(syncTileDescription != null ? { description: syncTileDescription } : {}),
             updated_at: new Date().toISOString(),
         })
         .eq("id", departmentId)
@@ -171,12 +173,15 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
         );
     }
 
-    let body: Record<string, unknown> = {};
+        let body: Record<string, unknown> = {};
     try {
         body = (await request.json()) as Record<string, unknown>;
     } catch {
         return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
+
+    const saveStartedAt = Date.now();
+    const actionName = typeof body.action === "string" ? body.action.trim() : "";
 
     try {
         const row = await loadDepartment(ctx.orgId, departmentId);
@@ -292,6 +297,22 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
         }
 
         await saveConfig(ctx.orgId, departmentId, config);
+        if (actionName === "reorder_stage") {
+            const deptRow = await loadDepartment(ctx.orgId, departmentId);
+            if (!deptRow) {
+                return NextResponse.json(
+                    { error: lifecycleBuilderDepartmentNotFoundError(departmentId) },
+                    { status: 404 }
+                );
+            }
+            const metadata =
+                deptRow.metadata !== null && typeof deptRow.metadata === "object" && !Array.isArray(deptRow.metadata)
+                    ? (deptRow.metadata as Record<string, unknown>)
+                    : {};
+            const supabase = createAdminClient();
+            await syncWorkUnitSortOrderFromBuilderStages(supabase, ctx.orgId, departmentId, metadata);
+        }
+        logLifecycleBuilderSaveTiming("lifecycle-builder-patch", saveStartedAt, { action: actionName });
         return NextResponse.json(payloadFromConfig(config));
     } catch (e) {
         return NextResponse.json({ error: e instanceof Error ? e.message : "Save failed" }, { status: 400 });

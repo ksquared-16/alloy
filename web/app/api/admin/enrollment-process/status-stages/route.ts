@@ -7,21 +7,24 @@ import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsRe
 import { normalizeStatusDefinitionMetadata } from "@/lib/admin/normalizeStatusMetadata";
 import { logAdminAudit } from "@/lib/adminAuth";
 import { LIFECYCLE_STAGE_ORDER } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
-import { ensureOrgOpportunityStatusRow } from "@/lib/lifecycle/ensureOrgOpportunityStatus";
 import {
     ENROLLMENT_OPERATOR_STAGE_UNASSIGNED,
     mergeEnrollmentOperatorStageMetadata,
     parseEnrollmentOperatorStageFromMetadata,
 } from "@/lib/lifecycle/enrollmentOperatorStage";
+import {
+    assertValidEnrollmentStageStatusKeys,
+    persistEnrollmentStageStatusAssignments,
+} from "@/lib/lifecycle/persistEnrollmentStageStatusAssignments";
 import { buildEnrollmentStatusStagesPayload } from "@/lib/lifecycle/enrollmentProcessStatusStageConfig";
 import {
     configuredStageKeysForMetadata,
     isConfiguredStageKey,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { syncDepartmentQueueForStage } from "@/lib/lifecycle/syncDepartmentQueueForStage";
+import { syncLifecycleStageWorkUnitQueueForDepartment } from "@/lib/lifecycle/lifecycleStageWorkUnitQueueSync";
+import { logLifecycleBuilderSaveTiming } from "@/lib/lifecycle/lifecycleBuilderSaveTiming";
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
-
-const STATUS_KEY_REGEX = /^[a-z0-9_]{2,32}$/;
 
 async function loadDepartmentMetadata(orgId: string, departmentId: string) {
     const supabase = createAdminClient();
@@ -112,74 +115,32 @@ export async function PATCH(request: NextRequest) {
         return resetStageMetadata(ctx, resetStage, departmentId);
     }
 
+    const saveStartedAt = Date.now();
     const stage = typeof body.stage === "string" ? body.stage.trim() : "";
     if (!(await validateStageKey(ctx.orgId, departmentId, stage))) {
         return NextResponse.json({ error: "Invalid stage" }, { status: 400 });
     }
 
-    const statusKeys = Array.isArray(body.status_keys)
-        ? [...new Set(body.status_keys.map((k) => String(k ?? "").trim().toLowerCase()).filter(Boolean))]
-        : null;
-    if (!statusKeys) {
-        return NextResponse.json({ error: "status_keys array is required" }, { status: 400 });
-    }
-
-    for (const k of statusKeys) {
-        if (!STATUS_KEY_REGEX.test(k)) {
-            return NextResponse.json({ error: `Invalid status key: ${k}` }, { status: 400 });
+    let statusKeys: string[];
+    try {
+        if (!Array.isArray(body.status_keys)) {
+            return NextResponse.json({ error: "status_keys array is required" }, { status: 400 });
         }
+        statusKeys = assertValidEnrollmentStageStatusKeys(body.status_keys);
+    } catch (e) {
+        return NextResponse.json(
+            { error: e instanceof Error ? e.message : "Invalid status_keys" },
+            { status: 400 }
+        );
     }
 
     const supabase = createAdminClient();
-    const effective = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "opportunities", {
-        activeOnly: false,
-    });
-    const byKey = new Map(effective.map((r) => [r.status_key, r]));
-
-    const { data: orgRows } = await supabase
-        .from("status_definitions")
-        .select("id, status_key, metadata")
-        .eq("org_id", ctx.orgId)
-        .eq("entity_type", "opportunities");
-
-    const desired = new Set(statusKeys);
-    const changedIds: string[] = [];
-
-    for (const key of statusKeys) {
-        const eff = byKey.get(key);
-        if (!eff) {
-            return NextResponse.json({ error: `Unknown status: ${key}` }, { status: 404 });
-        }
-        const org = await ensureOrgOpportunityStatusRow(supabase, ctx.orgId, key, eff);
-        const merged = mergeEnrollmentOperatorStageMetadata(org.metadata, stage);
-        const { error } = await supabase
-            .from("status_definitions")
-            .update({ metadata: normalizeStatusDefinitionMetadata(merged) })
-            .eq("id", org.id)
-            .eq("org_id", ctx.orgId);
-        if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-        changedIds.push(org.id);
-    }
-
-    for (const row of orgRows ?? []) {
-        const key = String(row.status_key);
-        const meta =
-            row.metadata !== null && typeof row.metadata === "object" && !Array.isArray(row.metadata)
-                ? (row.metadata as Record<string, unknown>)
-                : {};
-        const assigned = parseEnrollmentOperatorStageFromMetadata(meta);
-        if (assigned !== stage) continue;
-        if (desired.has(key)) continue;
-
-        const nextMeta = mergeEnrollmentOperatorStageMetadata(meta, ENROLLMENT_OPERATOR_STAGE_UNASSIGNED);
-        const { error } = await supabase
-            .from("status_definitions")
-            .update({ metadata: normalizeStatusDefinitionMetadata(nextMeta) })
-            .eq("id", row.id)
-            .eq("org_id", ctx.orgId);
-        if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-        changedIds.push(String(row.id));
-    }
+    const { changedIds } = await persistEnrollmentStageStatusAssignments(
+        supabase,
+        ctx.orgId,
+        stage,
+        statusKeys
+    );
 
     logAdminAudit({
         entity: "status_definitions",
@@ -205,6 +166,21 @@ export async function PATCH(request: NextRequest) {
         }
     }
 
+    if (departmentId) {
+        try {
+            await syncLifecycleStageWorkUnitQueueForDepartment(
+                supabase,
+                ctx.orgId,
+                departmentId,
+                stage,
+                { stageKeys, statusKeys }
+            );
+        } catch {
+            /* per-stage WU sync is best-effort */
+        }
+    }
+
+    logLifecycleBuilderSaveTiming("status-stages-patch", saveStartedAt, { stage, departmentId });
     return NextResponse.json(buildEnrollmentStatusStagesPayload(mapStatusRows(rows), stageKeys));
 }
 

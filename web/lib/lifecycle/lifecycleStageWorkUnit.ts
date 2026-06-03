@@ -7,8 +7,16 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import { slugifyLifecycleKey } from "@/lib/lifecycle/lifecycleBuilderConfig";
-import { buildLifecycleStageQueueDefinitionForPresentation } from "@/lib/lifecycle/lifecycleStageQueuePresentation";
+import {
+    buildLifecycleStageQueueDefinitionForPresentation,
+    lifecycleStageQueueRowPreviewFields,
+} from "@/lib/lifecycle/lifecycleStageQueuePresentation";
+import type { QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
+import type { QueueUiConfig, QueueUiRowPreviewField } from "@/lib/ui-v2/queueUiConfig";
+import { getQueueUiConfig, mergeQueueRowPreviewFieldLabels } from "@/lib/ui-v2/queueUiConfig";
 import { ENROLLMENT_PIPELINE_WORK_UNIT_KEY } from "@/lib/lifecycle/enrollmentProcessStageQueueKeys";
+import { requireLifecycleStageQueueStatusKeys } from "@/lib/lifecycle/lifecycleStageQueueFilters";
+import { resolveLifecycleStageWorkUnitIdentityForDepartment } from "@/lib/lifecycle/lifecycleStageWorkUnitIdentity";
 import {
     queueStatusKeysForOperatorStage,
     snapshotEnrollmentPipelineWorkUnit,
@@ -88,15 +96,88 @@ export function buildLifecycleStageQueueDefinition(params: {
     return buildLifecycleStageQueueDefinitionForPresentation(params);
 }
 
-export function applyStatusKeysToLifecycleStageQueueDefinition(
+/** Merge canonical lifecycle row_preview fields into a stored queue_definition (repairs stale WUs). */
+export function mergeLifecycleStageRowPreviewIntoQueueDefinition(
     queueDefinition: unknown,
-    statusKeys: readonly string[]
+    stageKey: string
 ): Record<string, unknown> {
+    const sk = stageKey.trim();
     const raw =
         queueDefinition != null && typeof queueDefinition === "object" && !Array.isArray(queueDefinition)
             ? (structuredClone(queueDefinition) as Record<string, unknown>)
             : { version: 2, entity_type: "opportunity", queues: [] };
-    const values = statusKeys.map((k) => k.trim()).filter(Boolean);
+    const ui =
+        raw.ui != null && typeof raw.ui === "object" && !Array.isArray(raw.ui)
+            ? ({ ...(raw.ui as Record<string, unknown>) } as Record<string, unknown>)
+            : ({} as Record<string, unknown>);
+    const rowPreview =
+        ui.row_preview != null && typeof ui.row_preview === "object" && !Array.isArray(ui.row_preview)
+            ? ({ ...(ui.row_preview as Record<string, unknown>) } as Record<string, unknown>)
+            : ({} as Record<string, unknown>);
+    const fields = lifecycleStageQueueRowPreviewFields(sk) as QueueUiRowPreviewField[];
+    rowPreview.variant = "crm_compact";
+    rowPreview.fields = fields;
+    const existingLabels =
+        rowPreview.field_labels && typeof rowPreview.field_labels === "object"
+            ? (rowPreview.field_labels as Record<string, string>)
+            : rowPreview.fieldLabels && typeof rowPreview.fieldLabels === "object"
+              ? (rowPreview.fieldLabels as Record<string, string>)
+              : null;
+    rowPreview.field_labels = mergeQueueRowPreviewFieldLabels(existingLabels);
+    if (!Array.isArray(rowPreview.actions) || !rowPreview.actions.length) {
+        rowPreview.actions = ["open"];
+    }
+    ui.row_preview = rowPreview;
+    raw.ui = ui;
+    loadQueueDefinitionBundle(raw);
+    return raw;
+}
+
+/** Row list UI for queue fetch — applies lifecycle row_preview overlay on stale stored defs. */
+export function resolveWorkUnitRowListUi(
+    def: QueueDefinitionV1,
+    workUnitKey: string | null | undefined,
+    workUnitMetadata: unknown | null | undefined
+): QueueUiConfig {
+    let ui = getQueueUiConfig(def);
+    if (isLifecycleStageWorkUnitKey(workUnitKey)) {
+        ui = applyLifecycleWorkUnitQueueUiOverlay(
+            ui,
+            stageKeyFromLifecycleWorkUnitMetadata(workUnitMetadata)
+        );
+    }
+    return ui;
+}
+
+/** Runtime overlay when stored queue_definition predates row_preview field sync. */
+export function applyLifecycleWorkUnitQueueUiOverlay(
+    queueUi: QueueUiConfig,
+    lifecycleStageKey: string | null | undefined
+): QueueUiConfig {
+    const sk = lifecycleStageKey?.trim();
+    if (!sk) return queueUi;
+    const fields = lifecycleStageQueueRowPreviewFields(sk);
+    return {
+        ...queueUi,
+        row_preview: {
+            ...queueUi.row_preview,
+            variant: "crm_compact",
+            fields,
+            fieldLabels: mergeQueueRowPreviewFieldLabels(queueUi.row_preview.fieldLabels),
+        },
+    };
+}
+
+export function applyStatusKeysToLifecycleStageQueueDefinition(
+    queueDefinition: unknown,
+    statusKeys: readonly string[],
+    stageKey?: string
+): Record<string, unknown> {
+    const values = requireLifecycleStageQueueStatusKeys(stageKey?.trim() ?? "stage", statusKeys);
+    const raw =
+        queueDefinition != null && typeof queueDefinition === "object" && !Array.isArray(queueDefinition)
+            ? (structuredClone(queueDefinition) as Record<string, unknown>)
+            : { version: 2, entity_type: "opportunity", queues: [] };
     const queuesRaw = raw.queues;
     if (!Array.isArray(queuesRaw) || !queuesRaw.length) {
         throw new Error("queue_definition has no queues array");
@@ -107,8 +188,10 @@ export function applyStatusKeysToLifecycleStageQueueDefinition(
     queue.filters_compat_v1 = filterListWithValues(queue.filters_compat_v1, "status", values);
     queue.filters = filterListWithValues(queue.filters, "case_status", values);
     queuesRaw[idx] = queue;
-    loadQueueDefinitionBundle(raw);
-    return raw;
+    const sk = stageKey?.trim();
+    const merged = sk ? mergeLifecycleStageRowPreviewIntoQueueDefinition(raw, sk) : raw;
+    loadQueueDefinitionBundle(merged);
+    return merged;
 }
 
 export type LifecycleStageWorkUnitRow = {
@@ -127,18 +210,13 @@ export async function loadLifecycleStageWorkUnitForDepartment(
     departmentId: string,
     stageKey: string
 ): Promise<LifecycleStageWorkUnitRow | null> {
-    const key = lifecycleStageWorkUnitKey(stageKey);
-    const { data, error } = await supabase
-        .from("work_units")
-        .select("id, key, name, department_id, queue_definition, is_active, metadata")
-        .eq("org_id", orgId)
-        .eq("department_id", departmentId)
-        .eq("key", key)
-        .eq("is_active", true)
-        .maybeSingle();
-    if (error) throw new Error(error.message);
-    if (!data) return null;
-    return data as LifecycleStageWorkUnitRow;
+    const identity = await resolveLifecycleStageWorkUnitIdentityForDepartment(supabase, {
+        orgId,
+        departmentId,
+        stageKey,
+    });
+    if (identity.state === "conflict") return null;
+    return identity.workUnit;
 }
 
 export async function listLifecycleStageWorkUnitsForDepartment(

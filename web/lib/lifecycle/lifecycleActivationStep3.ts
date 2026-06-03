@@ -44,6 +44,24 @@ export function stageSavedStatusKeys(
     return bucket.statuses.map((s) => s.status_key);
 }
 
+/**
+ * Keys persisted for a stage — builder-owned lifecycles prefer explicit metadata assignments,
+ * but fall back to all bucket keys when the PATCH response has not yet flagged custom assignments.
+ */
+export function resolveAssignedStatusKeysForStage(
+    payload: EnrollmentStatusStagesPayload | null,
+    stageKey: string,
+    opts?: { activationOwned?: boolean }
+): string[] {
+    const sk = stageKey.trim();
+    if (!sk || !payload) return [];
+    if (opts?.activationOwned) {
+        const explicit = stageSavedStatusKeys(payload, sk, { explicitAssignmentsOnly: true });
+        if (explicit.length > 0) return explicit;
+    }
+    return stageSavedStatusKeys(payload, sk);
+}
+
 export function canContinueToWorkUnitQueue(opts: {
     statusesLoading: boolean;
     statusesSaving: boolean;
@@ -54,6 +72,22 @@ export function canContinueToWorkUnitQueue(opts: {
     if (opts.savedCount < 1) return false;
     if (opts.draftDirty) return false;
     return true;
+}
+
+/**
+ * Whether server/bootstrap payload should replace local status draft.
+ * Preserves in-progress checkbox selections when bootstrap or status-stages reload completes.
+ */
+export function shouldSyncStatusDraftFromServer(opts: {
+    statusDraftDirty: boolean;
+    stageKey?: string;
+    statusDraftDirtyByStage?: Record<string, boolean>;
+}): boolean {
+    if (opts.stageKey?.trim() && opts.statusDraftDirtyByStage) {
+        const key = opts.stageKey.trim();
+        return !opts.statusDraftDirtyByStage[key];
+    }
+    return !opts.statusDraftDirty;
 }
 
 /** Statuses step — Save & continue enabled when user has selected at least one status. */

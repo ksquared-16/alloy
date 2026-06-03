@@ -63,6 +63,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
         const payload = await loadLifecycleActionsMatrix(supabase, ctx.orgId, {
             primaryRecordLabel: activation?.primary_record_label ?? "Lead",
             builderStageKeys,
+            departmentMetadata: metadata,
         });
 
         return NextResponse.json(payload);
@@ -115,10 +116,21 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ dep
         const result = await saveLifecycleActionsMatrix(supabase, ctx.orgId, body.rows, {
             primaryRecordLabel: activation?.primary_record_label ?? "Lead",
             builderStageKeys,
+            existingMetadata: metadata,
         });
+        if (result.metadata_patch) {
+            const nextMeta = { ...metadata, ...result.metadata_patch };
+            const { error: metaErr } = await supabase
+                .from("departments")
+                .update({ metadata: nextMeta, updated_at: new Date().toISOString() })
+                .eq("id", departmentId)
+                .eq("org_id", ctx.orgId);
+            if (metaErr) throw new Error(metaErr.message);
+        }
         const payload = await loadLifecycleActionsMatrix(supabase, ctx.orgId, {
             primaryRecordLabel: activation?.primary_record_label ?? "Lead",
             builderStageKeys,
+            departmentMetadata: result.metadata_patch ? { ...metadata, ...result.metadata_patch } : metadata,
         });
 
         return NextResponse.json({ ok: true, ...result, ...payload });

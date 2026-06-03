@@ -53,6 +53,18 @@ export function isLifecycleStageWorkUnitMetadata(metadata: unknown): boolean {
     );
 }
 
+/** Merged lifecycle status keys: explicit param → work_units.metadata → queue_definition filters. */
+export function resolveLifecycleVisibilityStatusKeys(params: {
+    workUnitMetadata?: unknown | null;
+    queueDefinition?: unknown | null;
+    statusKeys?: readonly string[];
+}): string[] {
+    const fromParam = (params.statusKeys ?? []).map((k) => String(k).trim().toLowerCase()).filter(Boolean);
+    const fromMeta = statusKeysFromWorkUnitMetadata(params.workUnitMetadata);
+    const fromQueue = statusKeysFromQueueDefinition(params.queueDefinition);
+    return [...new Set([...fromParam, ...fromMeta, ...fromQueue])];
+}
+
 function statusKeysFromWorkUnitMetadata(metadata: unknown): string[] {
     if (metadata == null || typeof metadata !== "object" || Array.isArray(metadata)) return [];
     const keys = (metadata as LifecycleStageWorkUnitMetadata).status_keys;
@@ -136,10 +148,7 @@ export function resolveLifecycleVisibilityPredicate(params: {
         params.lifecycleProcessId
     );
 
-    const fromParam = (params.statusKeys ?? []).map((k) => String(k).trim().toLowerCase()).filter(Boolean);
-    const fromMeta = statusKeysFromWorkUnitMetadata(params.workUnitMetadata);
-    const fromQueue = statusKeysFromQueueDefinition(params.queueDefinition);
-    const status_keys = [...new Set([...fromParam, ...fromMeta, ...fromQueue])];
+    const status_keys = resolveLifecycleVisibilityStatusKeys(params);
 
     if (key === ENROLLMENT_PIPELINE_WORK_UNIT_KEY) {
         return {

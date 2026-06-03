@@ -63,13 +63,25 @@ export function parseLifecycleOperatorStagesFromConditionConfig(
     return [];
 }
 
+export const LIFECYCLE_ACTION_DISPLAY_ORDER_KEY = "lifecycle_action_display_order" as const;
+
+export function parseLifecycleActionDisplayOrder(
+    conditionConfig: Record<string, unknown> | null | undefined
+): number | null {
+    if (!conditionConfig || typeof conditionConfig !== "object") return null;
+    const raw = conditionConfig[LIFECYCLE_ACTION_DISPLAY_ORDER_KEY];
+    return typeof raw === "number" && Number.isFinite(raw) ? raw : null;
+}
+
 export function buildLifecycleActionConditionConfig(
     scope: LifecycleActionScope,
-    operatorStages: readonly string[]
+    operatorStages: readonly string[],
+    displayOrder?: number
 ): Record<string, unknown> {
     const base: Record<string, unknown> = {
         [LIFECYCLE_BUILDER_CONFIGURED_KEY]: true,
         lifecycle_action_scope: scope,
+        ...(displayOrder !== undefined ? { [LIFECYCLE_ACTION_DISPLAY_ORDER_KEY]: displayOrder } : {}),
     };
     if (scope === "lifecycle") return base;
     const stages = normalizeOperatorStages(operatorStages);
@@ -86,16 +98,17 @@ export function buildLifecycleActionConditionConfig(
     };
 }
 
-/** Whether a configured action appears on the given operator stage at runtime. */
-export function configuredActionVisibleOnStage(
-    scope: LifecycleActionScope,
-    operatorStages: readonly string[],
-    viewStage: string
-): boolean {
-    if (scope === "lifecycle") return true;
-    if (!operatorStages.length) return true;
-    return operatorStages.includes(viewStage);
-}
+import {
+    builderStageKeyMatchesViewStage,
+    configuredActionVisibleOnStage,
+    lifecycleBuilderPlacementVisibleOnStage,
+} from "@/lib/lifecycle/lifecycleBuilderActionVisibility";
+
+export {
+    builderStageKeyMatchesViewStage,
+    configuredActionVisibleOnStage,
+    lifecycleBuilderPlacementVisibleOnStage,
+};
 
 export function placementMatchesStageBootstrap(
     conditionConfig: Record<string, unknown> | null | undefined,
@@ -107,5 +120,5 @@ export function placementMatchesStageBootstrap(
     if (scope === "lifecycle") return true;
     const stages = parseLifecycleOperatorStagesFromConditionConfig(conditionConfig);
     if (!stages.length) return true;
-    return stages.includes(operatorStage as LifecycleOperatorStage);
+    return builderStageKeyMatchesViewStage(stages, operatorStage);
 }

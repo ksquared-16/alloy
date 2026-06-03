@@ -19,6 +19,10 @@ export type WorkUnitAboveFoldChip = {
     synthetic_attention_bucket?: boolean;
     attention_bucket_raw_key?: string | null;
     description?: string;
+    /** Builder-owned lifecycle: navigate to sibling stage work unit. */
+    lifecycle_work_unit_nav_id?: string;
+    /** Empty Needs Attention placeholder (non-interactive). */
+    attention_placeholder?: boolean;
 };
 
 export type WorkUnitAboveFoldChipSection = {

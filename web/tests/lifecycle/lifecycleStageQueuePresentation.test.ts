@@ -24,6 +24,28 @@ describe("lifecycleStageQueuePresentation", () => {
         const row = queues.find((q) => q.key === qk);
         expect(row?.grain).toBe("candidate");
         expect(row?.domain).toBe("waitlist");
+        const preview = (doc.ui as { row_preview?: { fields?: string[] } }).row_preview;
+        expect(preview?.fields).toEqual(
+            expect.arrayContaining([
+                "phone",
+                "email",
+                "primary_contact",
+                "child_name",
+                "program",
+                "desired_start_date",
+            ])
+        );
+        expect(preview?.fields).not.toContain("tour_date");
+    });
+
+    it("sets suppress_lifecycle_panel on stage queue definitions", () => {
+        const doc = buildLifecycleStageQueueDefinition({
+            stageKey: "lead",
+            label: "Lead",
+            statusKeys: ["new_inquiry"],
+        });
+        const ui = doc.ui as { suppress_lifecycle_panel?: boolean };
+        expect(ui.suppress_lifecycle_panel).toBe(true);
     });
 
     it("routes waitlist through presentation builder on stage queue definition", () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     LIFECYCLE_ACTIVATION_ACTION_PLACEMENTS,
     type LifecycleBaseActionKey,
@@ -34,13 +34,14 @@ function draftFromRow(row: LifecycleActionsMatrixRow): LifecycleActionsMatrixDra
     };
 }
 
-function draftToSaveRow(row: LifecycleActionsMatrixDraftRow) {
+function draftToSaveRow(row: LifecycleActionsMatrixDraftRow, displayOrder: number) {
     return {
         base_action_key: row.base_action_key,
         enabled: row.enabled,
         label: row.label.trim() || row.default_label,
         placement_ids: [...row.placement_ids],
         stage_restrictions: row.enabled && row.restrictStages ? [...row.stage_restrictions] : [],
+        display_order: displayOrder,
     };
 }
 
@@ -56,6 +57,7 @@ export default function LifecycleActionsMatrix({
     const [rows, setRows] = useState<LifecycleActionsMatrixDraftRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const savingRef = useRef(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
 
@@ -126,8 +128,23 @@ export default function LifecycleActionsMatrix({
         );
     }, []);
 
+    const moveRow = useCallback((baseKey: LifecycleBaseActionKey, direction: "up" | "down") => {
+        setRows((prev) => {
+            const idx = prev.findIndex((r) => r.base_action_key === baseKey);
+            if (idx < 0) return prev;
+            const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+            if (swapIdx < 0 || swapIdx >= prev.length) return prev;
+            const next = [...prev];
+            const tmp = next[idx]!;
+            next[idx] = next[swapIdx]!;
+            next[swapIdx] = tmp;
+            return next;
+        });
+    }, []);
+
     const save = useCallback(async () => {
-        if (!departmentId) return;
+        if (!departmentId || savingRef.current) return;
+        savingRef.current = true;
         setSaving(true);
         setError(null);
         setSuccess(null);
@@ -149,7 +166,9 @@ export default function LifecycleActionsMatrix({
                     ...workspaceDataFetchInit(),
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ rows: rows.map(draftToSaveRow) }),
+                    body: JSON.stringify({
+                        rows: rows.map((row, index) => draftToSaveRow(row, index)),
+                    }),
                 }
             );
             const j = (await res.json().catch(() => ({}))) as { error?: string; rows?: LifecycleActionsMatrixRow[] };
@@ -160,6 +179,7 @@ export default function LifecycleActionsMatrix({
         } catch (e) {
             setError(e instanceof Error ? e.message : "Save failed");
         } finally {
+            savingRef.current = false;
             setSaving(false);
         }
     }, [departmentId, rows, onSaved]);
@@ -186,6 +206,7 @@ export default function LifecycleActionsMatrix({
                 <table className="w-full min-w-[720px] border-collapse text-[11px]">
                     <thead>
                         <tr className="text-left text-alloy-midnight/55">
+                            <th className="px-2 py-1.5 font-medium">Order</th>
                             <th className="px-2 py-1.5 font-medium">Action</th>
                             <th className="px-2 py-1.5 font-medium">Enabled</th>
                             <th className="px-2 py-1.5 font-medium">Display label</th>
@@ -198,12 +219,36 @@ export default function LifecycleActionsMatrix({
                         </tr>
                     </thead>
                     <tbody>
-                        {rows.map((row) => (
+                        {rows.map((row, rowIndex) => (
                             <tr
                                 key={row.base_action_key}
                                 className="border-t border-alloy-forge/8"
                                 data-testid={`lifecycle-actions-matrix-row-${row.base_action_key}`}
                             >
+                                <td className="px-2 py-2 whitespace-nowrap">
+                                    <div className="flex flex-col gap-0.5">
+                                        <button
+                                            type="button"
+                                            className="rounded border border-alloy-forge/15 px-1 text-[10px] disabled:opacity-40"
+                                            disabled={rowIndex === 0}
+                                            onClick={() => moveRow(row.base_action_key, "up")}
+                                            data-testid={`lifecycle-actions-matrix-up-${row.base_action_key}`}
+                                            aria-label={`Move ${row.default_label} up`}
+                                        >
+                                            ↑
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="rounded border border-alloy-forge/15 px-1 text-[10px] disabled:opacity-40"
+                                            disabled={rowIndex >= rows.length - 1}
+                                            onClick={() => moveRow(row.base_action_key, "down")}
+                                            data-testid={`lifecycle-actions-matrix-down-${row.base_action_key}`}
+                                            aria-label={`Move ${row.default_label} down`}
+                                        >
+                                            ↓
+                                        </button>
+                                    </div>
+                                </td>
                                 <td className="px-2 py-2 font-medium text-alloy-midnight whitespace-nowrap">
                                     {row.default_label}
                                     {!row.saveable ? (

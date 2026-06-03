@@ -221,19 +221,17 @@ export default function LifecycleHubClient() {
             {
                 id: "required",
                 title: "Required Fields",
-                summary: operatorStage ? "Set required and recommended fields" : "Platform-integrated stages only",
+                summary: "Set required and recommended fields",
                 content:
-                    departmentId && operatorStage ? (
+                    departmentId && activeStageKey ? (
                         <LifecycleStageFieldRequirementsEditor
                             departmentId={departmentId}
-                            activeStage={operatorStage}
+                            activeStageKey={activeStageKey}
                             onDirtyChange={setReqDirty}
                             compact
                         />
                     ) : (
-                        <p className="text-xs text-alloy-midnight/50">
-                            Field requirements apply when this stage uses a platform-integrated key.
-                        </p>
+                        <p className="text-xs text-alloy-midnight/50">Select a stage to configure required information.</p>
                     ),
             },
             {

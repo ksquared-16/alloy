@@ -18,12 +18,14 @@ import {
     loadLifecycleStageWorkUnitForDepartment,
     type LifecycleStageWorkUnitRow,
 } from "@/lib/lifecycle/lifecycleStageWorkUnit";
-import { statusKeysForOperatorStageQueueSync } from "@/lib/lifecycle/lifecycleRuntimeBinding";
-import { asOperatorStageKey, lifecycleBuilderFromDepartmentMetadata } from "@/lib/lifecycle/lifecycleBuilderConfig";
-import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
+import { lifecycleBuilderFromDepartmentMetadata } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { statusKeysForBuilderStageQueueSync } from "@/lib/lifecycle/lifecycleStageWorkUnitQueueSync";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import { buildEnrollmentStatusStagesPayload } from "@/lib/lifecycle/enrollmentProcessStatusStageConfig";
-import { applyStatusKeysToLifecycleStageQueueDefinition } from "@/lib/lifecycle/lifecycleStageWorkUnit";
+import {
+    applyStatusKeysToLifecycleStageQueueDefinition,
+    mergeLifecycleStageRowPreviewIntoQueueDefinition,
+} from "@/lib/lifecycle/lifecycleStageWorkUnit";
 import { stageSavedStatusKeys } from "@/lib/lifecycle/lifecycleActivationStep3";
 import type { EnrollmentStatusStagesPayload } from "@/lib/lifecycle/enrollmentProcessStatusStageConfig";
 import {
@@ -31,6 +33,7 @@ import {
     type LifecycleActivationV1,
 } from "@/lib/lifecycle/lifecycleActivationConfig";
 import { defaultWorkUnitQueueNameForStageKey } from "@/lib/lifecycle/lifecycleRuntimeBinding";
+import { isEnrollmentLikeDepartmentKey } from "@/lib/workspace/enrollmentDepartmentKey";
 
 export type WorkUnitListRow = {
     id: string;
@@ -38,6 +41,7 @@ export type WorkUnitListRow = {
     key: string | null;
     metadata?: unknown;
     is_active?: boolean;
+    sort_order?: number | null;
 };
 
 export function isBuilderOwnedLifecycleDepartmentMetadata(metadata: unknown): boolean {
@@ -62,6 +66,16 @@ export function deptUsesBuilderOwnedLifecycleRuntime(
 ): boolean {
     if (isBuilderOwnedLifecycleDepartmentMetadata(departmentMetadata)) return true;
     return workUnits.some((w) => isLifecycleStageWorkUnitRow(w));
+}
+
+/** Enrollment and builder-owned lifecycle departments reserve the operational actions rail shell. */
+export function departmentReservesOperationalActionsRail(params: {
+    departmentKey?: string | null;
+    departmentMetadata?: unknown;
+    workUnits?: readonly { key?: string | null; metadata?: unknown }[];
+}): boolean {
+    if (isEnrollmentLikeDepartmentKey(params.departmentKey)) return true;
+    return deptUsesBuilderOwnedLifecycleRuntime(params.departmentMetadata, params.workUnits ?? []);
 }
 
 export function filterWorkUnitsForBuilderOwnedDeptDisplay(
@@ -299,12 +313,10 @@ export async function repairLifecycleWorkUnits(
             stage.label.trim() ||
             defaultWorkUnitQueueNameForStageKey(stageKey) ||
             stageKey.replace(/_/g, " ");
-        const statusKeys = explicitStatusKeysForStage(statusPayload, stageKey);
-        const operator = asOperatorStageKey(stageKey);
-        const filterKeys =
-            statusKeys.length && operator
-                ? statusKeysForOperatorStageQueueSync(operator, statusKeys)
-                : statusKeys;
+        const statusKeys = stageSavedStatusKeys(statusPayload, stageKey);
+        const filterKeys = statusKeys.length
+            ? statusKeysForBuilderStageQueueSync(stageKey, statusKeys)
+            : statusKeys;
 
         let row = await loadLifecycleStageWorkUnitForDepartment(supabase, orgId, departmentId, stageKey);
         if (!row) {
@@ -340,7 +352,8 @@ export async function repairLifecycleWorkUnits(
         } else if (filterKeys.length) {
             const queue_definition = applyStatusKeysToLifecycleStageQueueDefinition(
                 row.queue_definition,
-                filterKeys
+                filterKeys,
+                stageKey
             );
             await supabase
                 .from("work_units")
@@ -358,12 +371,16 @@ export async function repairLifecycleWorkUnits(
                 .eq("org_id", orgId);
             actions.push(`synced_${row.key}`);
         } else {
+            const queue_definition = mergeLifecycleStageRowPreviewIntoQueueDefinition(
+                row.queue_definition,
+                stageKey
+            );
             await supabase
                 .from("work_units")
-                .update({ name: queueName, updated_at: now })
+                .update({ name: queueName, queue_definition, updated_at: now })
                 .eq("id", row.id)
                 .eq("org_id", orgId);
-            actions.push(`named_${row.key}`);
+            actions.push(`row_preview_${row.key}`);
         }
         repaired.push({ id: row.id, key: row.key, name: queueName });
     }

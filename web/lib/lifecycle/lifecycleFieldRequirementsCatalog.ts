@@ -87,6 +87,21 @@ export const LIFECYCLE_FIELD_REQUIREMENT_CATALOG: readonly LifecycleFieldRequire
         entity: "child",
         field_label: "Desired Start Date",
         runtime_enforced: true,
+        stages: ["waitlist", "enrollment"],
+    },
+    {
+        rule_id: "child:location",
+        entity: "child",
+        field_label: "Site / Location",
+        runtime_enforced: false,
+        stages: ["waitlist"],
+    },
+    {
+        rule_id: "child:waitlist_priority",
+        entity: "child",
+        field_label: "Priority / Waitlist Criteria",
+        runtime_enforced: false,
+        stages: ["waitlist"],
     },
     {
         rule_id: "child:classroom",

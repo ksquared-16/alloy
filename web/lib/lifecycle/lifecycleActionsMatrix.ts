@@ -15,6 +15,11 @@ import {
     type LifecycleActionScope,
 } from "@/lib/lifecycle/lifecycleStageActionScope";
 import {
+    buildLifecycleActionsMatrixOrderPatch,
+    parseLifecycleActionsMatrixOrder,
+    sortBaseActionKeysByMatrixOrder,
+} from "@/lib/lifecycle/lifecycleActionsMatrixOrder";
+import {
     lifecycleActivationBaseActionByKey,
     lifecycleActivationBaseActions,
     lifecyclePlacementById,
@@ -58,6 +63,7 @@ export type LifecycleActionsMatrixSaveRow = {
     label: string;
     placement_ids: string[];
     stage_restrictions?: string[];
+    display_order?: number;
 };
 
 function baseActionKeyForDefinitionKey(
@@ -168,7 +174,11 @@ export function buildLifecycleActionsMatrixRows(params: {
 export async function loadLifecycleActionsMatrix(
     supabase: SupabaseClient,
     orgId: string,
-    opts?: { primaryRecordLabel?: string; builderStageKeys?: readonly string[] }
+    opts?: {
+        primaryRecordLabel?: string;
+        builderStageKeys?: readonly string[];
+        departmentMetadata?: Record<string, unknown> | null;
+    }
 ): Promise<LifecycleActionsMatrixPayload> {
     const primaryRecordLabel = opts?.primaryRecordLabel?.trim() || "Lead";
     const baseActionCandidates = [...lifecycleActivationBaseActions(primaryRecordLabel)];
@@ -188,13 +198,15 @@ export async function loadLifecycleActionsMatrix(
         placementSurfaceSlots.set(String(row.id), { surface: row.surface, slot: row.slot });
     }
 
-    const rows = buildLifecycleActionsMatrixRows({
+    const matrixRows = buildLifecycleActionsMatrixRows({
         baseActions: base_actions,
         configured,
         placementSurfaceSlots,
         primaryRecordLabel,
         builderStageKeys: opts?.builderStageKeys,
     });
+    const order = parseLifecycleActionsMatrixOrder(opts?.departmentMetadata ?? null);
+    const rows = sortBaseActionKeysByMatrixOrder(matrixRows, order);
 
     return { rows, configured_actions: configured };
 }
@@ -227,16 +239,26 @@ export async function saveLifecycleActionsMatrix(
     supabase: SupabaseClient,
     orgId: string,
     rows: LifecycleActionsMatrixSaveRow[],
-    opts?: { primaryRecordLabel?: string; builderStageKeys?: readonly string[] }
-): Promise<{ saved: number }> {
+    opts?: {
+        primaryRecordLabel?: string;
+        builderStageKeys?: readonly string[];
+        existingMetadata?: Record<string, unknown> | null;
+    }
+): Promise<{ saved: number; metadata_patch?: Record<string, unknown> }> {
     const primaryRecordLabel = opts?.primaryRecordLabel?.trim() || "Lead";
     const allStageKeys = opts?.builderStageKeys?.length
         ? opts?.builderStageKeys
         : [...LIFECYCLE_STAGE_ORDER];
 
     let saved = 0;
+    const orderedKeys = rows
+        .map((r) => String(r.base_action_key ?? "").trim())
+        .filter((k): k is LifecycleBaseActionKey =>
+            (LIFECYCLE_ACTIONS_MATRIX_BASE_ACTION_ORDER as readonly string[]).includes(k)
+        );
 
-    for (const row of rows) {
+    for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+        const row = rows[rowIndex]!;
         const baseActionKey = String(row.base_action_key ?? "").trim() as LifecycleBaseActionKey;
         const base = lifecycleActivationBaseActionByKey(baseActionKey, primaryRecordLabel);
         if (!base) continue;
@@ -273,7 +295,11 @@ export async function saveLifecycleActionsMatrix(
         if (!placements.length) throw new Error(`Invalid placements for ${base.label}`);
 
         const { scope, operatorStages } = resolveScopeAndStages(row.stage_restrictions ?? [], allStageKeys);
-        const conditionConfig = buildLifecycleActionConditionConfig(scope, operatorStages);
+        const displayOrder =
+            typeof row.display_order === "number" && Number.isFinite(row.display_order)
+                ? row.display_order
+                : rowIndex;
+        const conditionConfig = buildLifecycleActionConditionConfig(scope, operatorStages, displayOrder);
 
         const defId = await ensureOrgLifecycleActionDefinition(
             supabase,
@@ -292,6 +318,7 @@ export async function saveLifecycleActionsMatrix(
                 surface: placement.surface,
                 slot: placement.slot,
                 entity_type: "opportunity",
+                order_index: displayOrder,
                 condition_config: conditionConfig,
                 is_active: true,
             });
@@ -300,7 +327,11 @@ export async function saveLifecycleActionsMatrix(
         saved += 1;
     }
 
-    return { saved };
+    const metadata_patch = buildLifecycleActionsMatrixOrderPatch(
+        orderedKeys.length ? orderedKeys : LIFECYCLE_ACTIONS_MATRIX_BASE_ACTION_ORDER,
+        opts?.existingMetadata ?? null
+    );
+    return { saved, metadata_patch };
 }
 
 export function baseActionKeyFromConfiguredRow(

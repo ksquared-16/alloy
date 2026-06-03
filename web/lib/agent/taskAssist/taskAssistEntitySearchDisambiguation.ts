@@ -1,3 +1,4 @@
+import { formatOpportunityOperatorDisplayLabel } from "@/lib/admin/opportunityDisplayLabel";
 import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
 
 export type OppSearchDisambiguationRow = {
@@ -156,7 +157,11 @@ export function formatCandidateOperatorPresentation(
     c: TaskAssistEntitySearchCandidate
 ): CandidateOperatorPresentation {
     const d = c.disambiguation;
-    const primaryLabel = c.label.trim() || "Record";
+    const primaryLabel = formatOpportunityOperatorDisplayLabel(c.label, {
+        entitySingularLabel: "Lead",
+        locationName: d?.location_name?.trim() || null,
+        customerName: d?.customer_name?.trim() || null,
+    });
     const status = formatStatusLabel(d?.status_key);
     const location = d?.location_name?.trim() || null;
     const secondaryParts = ["Opportunity"];

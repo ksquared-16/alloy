@@ -1,12 +1,9 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-    applyLifecycleVisibilityKpiLabels,
-    deptKpiWorkUnitsForLifecycleVisibility,
-    lifecycleThroughputCardTitle,
-    resolveDeptRightRailWorkUnitId,
-} from "@/lib/lifecycle/lifecycleKpiPresentation";
+import { deptKpiWorkUnitsForLifecycleVisibility, resolveDeptRightRailWorkUnitId } from "@/lib/lifecycle/lifecycleKpiPresentation";
+import { departmentReservesOperationalActionsRail } from "@/lib/lifecycle/builderOwnedLifecycleRuntime";
+import { accumulateWorkspaceDeptWorkUnitTileStats } from "@/lib/workspace/viewModels/workspaceRootRollup";
 import {
     formatLifecycleActionPlacementDetail,
     lifecycleNeedsAttentionWorkUnitConfigured,
@@ -24,7 +21,7 @@ function read(rel: string): string {
 }
 
 describe("lifecycle runtime surface integration", () => {
-    it("dept KPI baseline uses lifecycle visibility labels when flagged", () => {
+    it("dept KPI baseline uses enrollment-style labels with visibility-backed totals", () => {
         const items = buildDefaultDepartmentKpis({
             deptWorkUnits: [
                 { id: "wu1", name: "New Leads", key: "lifecycle_wu_lead" },
@@ -36,32 +33,26 @@ describe("lifecycle runtime surface integration", () => {
             },
             deptQueueSummariesLoading: false,
             deptQueueSummariesError: null,
-            lifecycleVisibilityCounts: true,
         });
         const agg = items.find((i) => i.id === "baseline.ctx.dept.total_in_scope");
-        expect(agg?.label).toBe("Visible in department (lifecycle)");
+        expect(agg?.label).toBe("Total in department");
         expect(agg?.value).toBe("20");
     });
 
-    it("work unit KPI baseline uses lifecycle visibility labels when flagged", () => {
-        const items = buildDefaultWorkUnitKpis(
-            {
-                workUnitId: "wu1",
-                queueSummariesLoading: false,
-                queueSummariesError: null,
-                queueSummaries: [{ key: "lead", label: "New Leads", count: 17 }],
-                legacyOpportunityListTotal: null,
-                selectedQueueKey: "lead",
-                normalizedQueueDefinition: null,
-                queueItems: null,
-                queueItemsLoading: false,
-                queueItemsError: null,
-            },
-            { lifecycleVisibilityCounts: true }
-        );
-        expect(items.find((i) => i.id === "baseline.ctx.wu.total_in_queue")?.label).toBe(
-            "Visible in work unit (lifecycle)"
-        );
+    it("work unit KPI baseline uses enrollment-style labels", () => {
+        const items = buildDefaultWorkUnitKpis({
+            workUnitId: "wu1",
+            queueSummariesLoading: false,
+            queueSummariesError: null,
+            queueSummaries: [{ key: "lead", label: "New Leads", count: 17 }],
+            legacyOpportunityListTotal: null,
+            selectedQueueKey: "lead",
+            normalizedQueueDefinition: null,
+            queueItems: null,
+            queueItemsLoading: false,
+            queueItemsError: null,
+        });
+        expect(items.find((i) => i.id === "baseline.ctx.wu.total_in_queue")?.label).toBe("All queues total");
     });
 
     it("dept KPI facets filter to lifecycle stage work units only", () => {
@@ -76,13 +67,47 @@ describe("lifecycle runtime surface integration", () => {
         expect(filtered.map((w) => w.key)).toEqual(["lifecycle_wu_lead"]);
     });
 
-    it("applyLifecycleVisibilityKpiLabels rewrites baseline ids", () => {
-        const out = applyLifecycleVisibilityKpiLabels([
-            { id: "baseline.ctx.dept.total_in_scope", label: "Total", value: "5", lane: "business" },
-            { id: "baseline.ctx.wu.total_in_queue", label: "All", value: "5", lane: "business" },
+    it("workspace tile counts active lifecycle_wu rows only", () => {
+        const stats = accumulateWorkspaceDeptWorkUnitTileStats([
+            {
+                department_id: "d1",
+                key: "lifecycle_wu_lead",
+                name: "Lead",
+                is_active: true,
+            },
+            {
+                department_id: "d1",
+                key: "lifecycle_wu_qualification",
+                name: "Qualification",
+                is_active: true,
+            },
+            {
+                department_id: "d1",
+                key: "enrollment_pipeline",
+                name: "Enrollment Pipeline",
+                is_active: false,
+            },
         ]);
-        expect(out[0].label).toContain("Visible in department");
-        expect(out[1].label).toContain("Visible in work unit");
+        expect(stats.d1?.workUnitCount).toBe(2);
+        expect(stats.d1?.workUnitNames).toEqual(["Lead", "Qualification"]);
+    });
+
+    it("departmentReservesOperationalActionsRail includes builder-owned lifecycle", () => {
+        expect(
+            departmentReservesOperationalActionsRail({
+                departmentKey: "lead_management",
+                departmentMetadata: {
+                    lifecycle_builder_owned_v1: { source: "lifecycle_builder" },
+                },
+                workUnits: [{ key: "lifecycle_wu_lead" }],
+            })
+        ).toBe(true);
+        expect(
+            departmentReservesOperationalActionsRail({
+                departmentKey: "other",
+                workUnits: [{ key: "enrollment_pipeline" }],
+            })
+        ).toBe(false);
     });
 
     it("Needs Attention pill can be empty without failure", () => {
@@ -104,6 +129,7 @@ describe("lifecycle runtime surface integration", () => {
                 base_action_label: "Create",
                 action_scope: "lifecycle",
                 operator_stages: [],
+                display_order: 0,
                 placements: [
                     {
                         placement_id: "p1",
@@ -141,10 +167,6 @@ describe("lifecycle runtime surface integration", () => {
         expect(formatLifecycleActionPlacementDetail(summary)).toMatch(/drawer/i);
     });
 
-    it("throughput card copy references lifecycle visibility", () => {
-        expect(lifecycleThroughputCardTitle("New Leads", 17)).toContain("visible by lifecycle filter");
-    });
-
     it("dept right rail prefers lifecycle stage work unit", () => {
         const id = resolveDeptRightRailWorkUnitId(
             [
@@ -157,20 +179,22 @@ describe("lifecycle runtime surface integration", () => {
     });
 
     describe("page wiring (static)", () => {
-        it("dept page passes lifecycleVisibilityCounts and filters throughput rows", () => {
+        it("dept page reserves operational shell and filters throughput rows", () => {
             const dept = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
-            expect(dept).toContain("lifecycleVisibilityCounts: builderOwnedLifecycleRuntime");
+            expect(dept).toContain("departmentReservesOperationalActionsRail");
             expect(dept).toContain("deptKpiWorkUnitsForLifecycleVisibility");
             expect(dept).toContain("deptThroughputWuRows");
             expect(dept).toContain("isLifecycleStageWorkUnitRow");
-            expect(dept).toContain("Needs Attention is not configured for this lifecycle yet");
+            expect(dept).toContain("No needs attention rules configured");
+            expect(dept).toContain("reserveDeptActionsRail && enrollmentDepartmentRailModel");
         });
 
-        it("work-unit page passes lifecycleVisibilityCounts for lifecycle_wu keys", () => {
+        it("work-unit page reserves operational actions rail and sibling pills", () => {
             const wu = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-            expect(wu).toContain("isLifecycleStageWorkUnitKey");
-            expect(wu).toContain("lifecycleVisibilityCounts: lifecycleVisibilityKpis");
-            expect(wu).toContain("applyLifecycleVisibilityKpiLabels");
+            expect(wu).toContain("departmentReservesOperationalActionsRail");
+            expect(wu).toContain("buildLifecycleBuilderOwnedAboveFoldHeaderSections");
+            expect(wu).toContain("lifecycle_builder_owned_header_sections");
+            expect(wu).not.toContain("applyLifecycleVisibilityKpiLabels");
         });
 
         it("validate runtime includes optional NA and visibility parity", () => {

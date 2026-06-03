@@ -5,11 +5,38 @@
 
 import { loadQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
 import { RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2 } from "@/lib/config/enrollmentPipelineQueueDefinitionV2";
+import { requireLifecycleStageQueueStatusKeys } from "@/lib/lifecycle/lifecycleStageQueueFilters";
 import {
     applyStatusKeysToLifecycleStageQueueDefinition,
     primaryQueueKeyForLifecycleStage,
 } from "@/lib/lifecycle/lifecycleStageWorkUnit";
 import { asOperatorStageKey } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import type { QueueUiRowPreviewField } from "@/lib/ui-v2/queueUiConfig";
+
+/** Row preview fields for lifecycle stage work-unit queues (aligned with enrollment pipeline). */
+export function lifecycleStageQueueRowPreviewFields(stageKey: string): QueueUiRowPreviewField[] {
+    const key = stageKey.trim();
+    const mode = resolveLifecycleStageQueuePresentationMode(key);
+    const base: QueueUiRowPreviewField[] = [
+        "title",
+        "status",
+        "primary_contact",
+        "phone",
+        "email",
+        "child_name",
+        "program",
+        "desired_start_date",
+    ];
+    if (mode === "waitlist_candidate") {
+        return base;
+    }
+    const operator = asOperatorStageKey(key);
+    const isTourStage = operator === "tour" || /\btour\b/i.test(key);
+    if (isTourStage) {
+        return [...base.filter((f) => f !== "desired_start_date"), "tour_date", "desired_start_date"];
+    }
+    return [...base, "tour_date"];
+}
 
 export type LifecycleStageQueuePresentationMode =
     | "standard_opportunity"
@@ -83,11 +110,12 @@ export function buildLifecycleWaitlistStageQueueDefinition(params: {
             layout: "single_section",
             primary_total_label: label,
             primary_total_queue: queueKey,
+            suppress_lifecycle_panel: true,
             suppress_active_queue_description: false,
             sections: [{ key: "primary", label, queue_keys: [queueKey] }],
             row_preview: {
                 variant: "crm_compact",
-                fields: ["title", "status", "primary_contact", "child_name", "program"],
+                fields: lifecycleStageQueueRowPreviewFields(stageKey),
                 actions: ["open"],
             },
         },
@@ -108,7 +136,7 @@ export function buildLifecycleStageQueueDefinitionForPresentation(params: {
     }
     const queueKey = primaryQueueKeyForLifecycleStage(params.stageKey);
     const label = params.label.trim() || "Queue";
-    const values = params.statusKeys.map((k) => k.trim()).filter(Boolean);
+    const values = requireLifecycleStageQueueStatusKeys(params.stageKey, params.statusKeys);
     const statusFilters = filterListWithValues([], "status", values);
     const caseFilters = filterListWithValues([], "case_status", values);
     const doc: Record<string, unknown> = {
@@ -118,20 +146,12 @@ export function buildLifecycleStageQueueDefinitionForPresentation(params: {
             layout: "single_section",
             primary_total_label: label,
             primary_total_queue: queueKey,
+            suppress_lifecycle_panel: true,
             suppress_active_queue_description: false,
             sections: [{ key: "primary", label, queue_keys: [queueKey] }],
             row_preview: {
                 variant: "crm_compact",
-                fields: [
-                    "title",
-                    "status",
-                    "primary_contact",
-                    "phone",
-                    "email",
-                    "child_name",
-                    "program",
-                    "desired_start_date",
-                ],
+                fields: lifecycleStageQueueRowPreviewFields(params.stageKey),
                 actions: ["open"],
             },
         },

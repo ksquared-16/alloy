@@ -12,6 +12,7 @@ import { getQueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
 import { findAllRecordsQueueKey } from "@/lib/workspace/workUnitQueueDerived";
 import { appendWorkspaceSiteToPath } from "@/lib/adminV2/workspaceSiteFilterClient";
 import { workspaceDeptQueueNavHref } from "@/lib/adminV2/navigation/buildWorkspaceNavDeptChildren";
+import { parseLifecycleWorkUnitNavChipKey } from "@/lib/lifecycle/lifecycleWorkUnitShellPills";
 
 export type WorkUnitQueueSelectionSource =
     | "dept_queue"
@@ -250,6 +251,9 @@ export function resolveWorkUnitFetchQueueKeyFromPill(
     wu?: { queue_definition?: unknown }
 ): { queueKey: string; attentionBucketOverride?: string } {
     const pill = pillOrQueueKey.trim();
+    if (parseLifecycleWorkUnitNavChipKey(pill)) {
+        return { queueKey: "" };
+    }
     if (pill.startsWith(WORK_UNIT_ATTENTION_BUCKET_PILL_PREFIX)) {
         const raw = pill.slice(WORK_UNIT_ATTENTION_BUCKET_PILL_PREFIX.length);
         if (raw === "__all__") {

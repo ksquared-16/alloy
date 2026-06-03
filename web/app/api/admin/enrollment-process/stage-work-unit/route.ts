@@ -21,28 +21,60 @@ import {
     statusKeysForOperatorStageQueueSync,
 } from "@/lib/lifecycle/lifecycleRuntimeBinding";
 import { isLifecycleBuilderOwnedDepartmentMetadata } from "@/lib/lifecycle/lifecycleBuilderOwned";
-import { lifecycleBuilderFromDepartmentMetadata } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import {
-    applyStatusKeysToLifecycleStageQueueDefinition,
-    buildLifecycleStageQueueDefinition,
-    buildLifecycleStageWorkUnitMetadata,
-    lifecycleStageWorkUnitKey,
-    loadLifecycleStageWorkUnitForDepartment,
-    loadStageWorkUnitSnapshotForDepartment,
-} from "@/lib/lifecycle/lifecycleStageWorkUnit";
+    activeLifecycleProcess,
+    configuredStageKeysForMetadata,
+    isConfiguredStageKey,
+    lifecycleBuilderFromDepartmentMetadata,
+} from "@/lib/lifecycle/lifecycleBuilderConfig";
+import {
+    statusKeysForBuilderStageQueueSync,
+    stageStatusKeysForDepartmentStage,
+    syncLifecycleStageWorkUnitQueueForDepartment,
+} from "@/lib/lifecycle/lifecycleStageWorkUnitQueueSync";
+import { queueStatusKeysForLifecycleWorkUnitValidation } from "@/lib/lifecycle/lifecycleWorkUnitQueueValidation";
+import { LifecycleStageQueueFiltersEmptyError } from "@/lib/lifecycle/lifecycleStageQueueFilters";
+import { LifecycleStageStatusAssignmentHandoffError } from "@/lib/lifecycle/lifecycleStageStatusKeysHandoff";
+import {
+    LifecycleStageWorkUnitIdentityConflictError,
+    lifecycleStageWorkUnitNeedsQueueFilterSync,
+    resolveLifecycleStageAssignedStatusKeys,
+    resolveLifecycleStageWorkUnitIdentityForDepartment,
+    upsertLifecycleStageWorkUnitForDepartment,
+} from "@/lib/lifecycle/lifecycleStageWorkUnitIdentity";
+import { asOperatorStageKey } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { loadStageWorkUnitSnapshotForDepartment } from "@/lib/lifecycle/lifecycleStageWorkUnit";
 import { syncDepartmentQueueForStage } from "@/lib/lifecycle/syncDepartmentQueueForStage";
 import { deactivateBuilderOwnedWorkUnit } from "@/lib/lifecycle/lifecycleActivationOwned";
 import {
     snapshotEnrollmentPipelineWorkUnit,
     stageQueueMappingForPipeline,
 } from "@/lib/lifecycle/parseEnrollmentPipelineQueues";
-import {
-    isLifecycleStageWorkUnitKey,
-    queueStatusKeysForStageWorkUnitSnapshot,
-} from "@/lib/lifecycle/lifecycleStageWorkUnit";
+import { isLifecycleStageWorkUnitKey } from "@/lib/lifecycle/lifecycleStageWorkUnit";
 
 function isStageKey(s: string): s is LifecycleOperatorStage {
     return (LIFECYCLE_STAGE_ORDER as readonly string[]).includes(s);
+}
+
+async function isValidStageForDepartment(
+    orgId: string,
+    departmentId: string,
+    stageRaw: string
+): Promise<boolean> {
+    if (isStageKey(stageRaw)) return true;
+    const supabase = createAdminClient();
+    const { data } = await supabase
+        .from("departments")
+        .select("metadata")
+        .eq("id", departmentId)
+        .eq("org_id", orgId)
+        .maybeSingle();
+    if (!data) return false;
+    const metadata =
+        data.metadata !== null && typeof data.metadata === "object" && !Array.isArray(data.metadata)
+            ? (data.metadata as Record<string, unknown>)
+            : {};
+    return isConfiguredStageKey(metadata, stageRaw);
 }
 
 async function loadPipelineForDepartment(orgId: string, departmentId: string) {
@@ -91,7 +123,9 @@ export async function GET(request: NextRequest) {
     const departmentId = new URL(request.url).searchParams.get("department_id")?.trim() || "";
     const stageRaw = new URL(request.url).searchParams.get("stage")?.trim() || "";
     if (!departmentId) return NextResponse.json({ error: "department_id is required" }, { status: 400 });
-    if (!isStageKey(stageRaw)) return NextResponse.json({ error: "Invalid stage" }, { status: 400 });
+    if (!(await isValidStageForDepartment(ctx.orgId, departmentId, stageRaw))) {
+        return NextResponse.json({ error: "Invalid stage" }, { status: 400 });
+    }
 
     const access = await getAdminAccessContextCached();
     if (!access.ok) return adminContextFailureResponse(access);
@@ -105,17 +139,72 @@ export async function GET(request: NextRequest) {
     if (!deptOk.ok) return NextResponse.json({ error: "Department not found" }, { status: 404 });
 
     try {
-        const snapshot = await loadStageWorkUnitSnapshotForDepartment(
+        const { data: deptRow } = await supabase
+            .from("departments")
+            .select("metadata")
+            .eq("id", departmentId)
+            .eq("org_id", ctx.orgId)
+            .maybeSingle();
+        const identity = await resolveLifecycleStageWorkUnitIdentityForDepartment(supabase, {
+            orgId: ctx.orgId,
+            departmentId,
+            stageKey: stageRaw,
+        });
+        const snapshot =
+            identity.workUnit != null
+                ? snapshotEnrollmentPipelineWorkUnit(identity.workUnit)
+                : await loadStageWorkUnitSnapshotForDepartment(
+                      supabase,
+                      ctx.orgId,
+                      departmentId,
+                      stageRaw
+                  );
+        const stageStatusKeys = await resolveLifecycleStageAssignedStatusKeys(
             supabase,
             ctx.orgId,
             departmentId,
             stageRaw
         );
-        const stageStatusKeys = await stageStatusKeysForOrg(ctx.orgId, stageRaw);
-        const queueStatusKeys = queueStatusKeysForStageWorkUnitSnapshot(snapshot, stageRaw);
-        const mapping = stageQueueMappingForPipeline(stageRaw, snapshot);
+        const operatorStage = asOperatorStageKey(stageRaw);
+        const queueStatusKeys = snapshot
+            ? queueStatusKeysForLifecycleWorkUnitValidation(
+                  {
+                      id: snapshot.id,
+                      key: snapshot.key,
+                      queue_definition: snapshot.queueDefinitionRaw,
+                  },
+                  stageRaw
+              )
+            : [];
+        const mapping = operatorStage
+            ? stageQueueMappingForPipeline(operatorStage, snapshot)
+            : {
+                  pipelineExists: Boolean(snapshot),
+                  pipelineActive: snapshot?.is_active ?? false,
+                  workUnitName: snapshot?.name ?? "Work Unit Queue",
+                  lanes: [],
+              };
+        const needs_sync =
+            identity.state === "conflict"
+                ? true
+                : lifecycleStageWorkUnitNeedsQueueFilterSync({
+                      stageKey: stageRaw,
+                      assignedStatusKeys: stageStatusKeys,
+                      workUnit: identity.workUnit,
+                  }) ||
+                  (operatorStage
+                      ? stageStatusesNeedQueueSync(operatorStage, snapshot, stageStatusKeys)
+                      : false);
 
         return NextResponse.json({
+            snapshot,
+            identity: {
+                state: identity.state,
+                stage_key: identity.stageKey,
+                work_unit_key: identity.workUnitKey,
+                work_unit_id: identity.workUnit?.id ?? null,
+                conflict_count: identity.conflictingActiveRows.length,
+            },
             work_unit: snapshot
                 ? {
                       id: snapshot.id,
@@ -127,8 +216,11 @@ export async function GET(request: NextRequest) {
             stage: stageRaw,
             stage_status_keys: stageStatusKeys,
             queue_status_keys: queueStatusKeys,
-            needs_sync: stageStatusesNeedQueueSync(stageRaw, snapshot, stageStatusKeys),
+            needs_sync,
             mapping,
+            builder_owned: isLifecycleBuilderOwnedDepartmentMetadata(
+                (deptRow as { metadata?: unknown } | null)?.metadata
+            ),
         });
     } catch (e) {
         return NextResponse.json({ error: e instanceof Error ? e.message : "Failed to load" }, { status: 500 });
@@ -143,7 +235,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    let body: { department_id?: string; name?: string; stage?: string } = {};
+    let body: { department_id?: string; name?: string; stage?: string; status_keys?: string[] } = {};
     try {
         body = (await request.json()) as typeof body;
     } catch {
@@ -180,74 +272,45 @@ export async function POST(request: NextRequest) {
     const builderOwned = isLifecycleBuilderOwnedDepartmentMetadata(
         (deptRow as { metadata?: unknown }).metadata
     );
-    const usePerStageWu = builderOwned && isStageKey(stageRaw);
+    const usePerStageWu =
+        builderOwned && (isStageKey(stageRaw) || (await isValidStageForDepartment(ctx.orgId, department_id, stageRaw)));
 
     if (usePerStageWu) {
-        const wuKey = lifecycleStageWorkUnitKey(stageRaw);
-        const existingStage = await loadLifecycleStageWorkUnitForDepartment(
-            supabase,
-            ctx.orgId,
-            department_id,
-            stageRaw
-        );
-        if (existingStage) {
-            return NextResponse.json(
-                { error: `Work Unit Queue already exists for stage “${stageRaw}”.` },
-                { status: 409 }
-            );
-        }
-        const stageStatusKeys = await stageStatusKeysForOrg(ctx.orgId, stageRaw);
-        const filterKeys =
-            stageStatusKeys.length > 0
-                ? statusKeysForOperatorStageQueueSync(stageRaw, stageStatusKeys)
+        try {
+            const ownedMeta = (deptRow as { metadata?: unknown }).metadata;
+            const builder = lifecycleBuilderFromDepartmentMetadata(ownedMeta);
+            const process = builder ? activeLifecycleProcess(builder) : null;
+            const stageRecord = process?.stages.find((s) => s.key === stageRaw && s.is_active);
+            const explicitStatusKeys = Array.isArray(body.status_keys)
+                ? body.status_keys.map((k) => String(k ?? "").trim()).filter(Boolean)
                 : [];
-        const queue_definition = buildLifecycleStageQueueDefinition({
-            stageKey: stageRaw,
-            label: name,
-            statusKeys: filterKeys,
-        });
-        const ownedMeta = (deptRow as { metadata?: unknown }).metadata;
-        const processId =
-            ownedMeta != null && typeof ownedMeta === "object" && !Array.isArray(ownedMeta)
-                ? String(
-                      (
-                          ownedMeta as {
-                              lifecycle_builder_owned_v1?: { process_id?: string | null };
-                          }
-                      ).lifecycle_builder_owned_v1?.process_id ?? ""
-                  ).trim() || undefined
-                : undefined;
-
-        const { data: created, error } = await supabase
-            .from("work_units")
-            .insert({
-                org_id: ctx.orgId,
+            const { snapshot, created, identity } = await upsertLifecycleStageWorkUnitForDepartment(
+                supabase,
+                ctx.orgId,
                 department_id,
-                key: wuKey,
-                name,
-                description: `Lifecycle stage queue (${stageRaw}).`,
-                sort_order: 0,
-                is_active: true,
-                queue_definition,
-                metadata: buildLifecycleStageWorkUnitMetadata(stageRaw, {
-                    processId,
-                    statusKeys: filterKeys,
-                }),
-                updated_at: now,
-            })
-            .select("id, key, name, is_active, queue_definition")
-            .single();
+                stageRaw,
+                {
+                    name,
+                    sortOrder: stageRecord?.sort_order,
+                    statusKeys: explicitStatusKeys.length ? explicitStatusKeys : undefined,
+                }
+            );
+            const stageStatusKeys =
+                explicitStatusKeys.length > 0
+                    ? explicitStatusKeys
+                    : await resolveLifecycleStageAssignedStatusKeys(
+                          supabase,
+                          ctx.orgId,
+                          department_id,
+                          stageRaw
+                      );
+            const needs_sync = lifecycleStageWorkUnitNeedsQueueFilterSync({
+                stageKey: stageRaw,
+                assignedStatusKeys: stageStatusKeys,
+                workUnit: identity.workUnit,
+            });
 
-        if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-        const row = created as {
-            id: string;
-            key: string;
-            name: string;
-            is_active: boolean;
-            queue_definition: unknown;
-        };
-
-        const { data: legacyPipeline } = await supabase
+            const { data: legacyPipeline } = await supabase
             .from("work_units")
             .select("id")
             .eq("org_id", ctx.orgId)
@@ -270,11 +333,36 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        const snapshot = snapshotEnrollmentPipelineWorkUnit(row);
-        return NextResponse.json({
-            work_unit: { id: row.id, key: row.key, name: row.name, is_active: row.is_active },
-            snapshot,
-        });
+            return NextResponse.json({
+                work_unit: {
+                    id: snapshot.id,
+                    key: snapshot.key,
+                    name: snapshot.name,
+                    is_active: snapshot.is_active,
+                },
+                snapshot,
+                created,
+                updated: !created,
+                identity: {
+                    state: identity.state,
+                    stage_key: identity.stageKey,
+                    work_unit_key: identity.workUnitKey,
+                    work_unit_id: identity.workUnit?.id ?? null,
+                },
+                needs_sync,
+            });
+        } catch (e) {
+            if (e instanceof LifecycleStageWorkUnitIdentityConflictError) {
+                return NextResponse.json({ error: e.message, identity_state: "conflict" }, { status: 409 });
+            }
+            if (e instanceof LifecycleStageQueueFiltersEmptyError) {
+                return NextResponse.json({ error: e.message, code: e.code }, { status: 400 });
+            }
+            return NextResponse.json(
+                { error: e instanceof Error ? e.message : "Failed to save work unit queue" },
+                { status: 400 }
+            );
+        }
     }
 
     if (builderOwned) {
@@ -340,6 +428,7 @@ export async function PATCH(request: NextRequest) {
         name?: string;
         stage?: string;
         sync_statuses?: boolean;
+        status_keys?: string[];
     } = {};
     try {
         body = (await request.json()) as typeof body;
@@ -392,27 +481,53 @@ export async function PATCH(request: NextRequest) {
         updates.name = name;
     }
 
+    let syncOnly = false;
     if (body.sync_statuses) {
         const stageRaw = typeof body.stage === "string" ? body.stage.trim() : "";
-        if (!isStageKey(stageRaw)) {
+        if (!(await isValidStageForDepartment(ctx.orgId, row.department_id, stageRaw))) {
             return NextResponse.json({ error: "Valid stage is required for sync_statuses" }, { status: 400 });
         }
-        const stageStatusKeys = await stageStatusKeysForOrg(ctx.orgId, stageRaw);
-        if (!stageStatusKeys.length) {
-            return NextResponse.json(
-                { error: "Assign at least one status to this stage before syncing the queue." },
-                { status: 400 }
-            );
-        }
-        const filterKeys = statusKeysForOperatorStageQueueSync(stageRaw, stageStatusKeys);
+        const explicitStatusKeys = Array.isArray(body.status_keys)
+            ? body.status_keys.map((k) => String(k ?? "").trim()).filter(Boolean)
+            : [];
         try {
-            updates.queue_definition = isStageWu
-                ? applyStatusKeysToLifecycleStageQueueDefinition(row.queue_definition, filterKeys)
-                : applyStageStatusKeysToQueueDefinition(row.queue_definition, stageRaw, filterKeys);
-            if (!isStageWu) {
+            const synced = await syncLifecycleStageWorkUnitQueueForDepartment(
+                supabase,
+                ctx.orgId,
+                row.department_id,
+                stageRaw,
+                explicitStatusKeys.length ? { statusKeys: explicitStatusKeys } : undefined
+            );
+            syncOnly = synced.updated;
+            if (!synced.updated && isPipeline && isStageKey(stageRaw)) {
+                const stageStatusKeys = await stageStatusKeysForOrg(ctx.orgId, stageRaw);
+                const filterKeys = statusKeysForBuilderStageQueueSync(stageRaw, stageStatusKeys);
+                updates.queue_definition = applyStageStatusKeysToQueueDefinition(
+                    row.queue_definition,
+                    stageRaw,
+                    filterKeys
+                );
                 validateEnrollmentPipelineQueueDefinition(updates.queue_definition);
             }
         } catch (e) {
+            if (e instanceof LifecycleStageWorkUnitIdentityConflictError) {
+                return NextResponse.json({ error: e.message, identity_state: "conflict" }, { status: 409 });
+            }
+            if (
+                e instanceof LifecycleStageStatusAssignmentHandoffError ||
+                e instanceof LifecycleStageQueueFiltersEmptyError
+            ) {
+                return NextResponse.json(
+                    {
+                        error: e.message,
+                        code:
+                            e instanceof LifecycleStageQueueFiltersEmptyError
+                                ? e.code
+                                : "LIFECYCLE_STATUS_HANDOFF_EMPTY",
+                    },
+                    { status: 400 }
+                );
+            }
             return NextResponse.json(
                 { error: e instanceof Error ? e.message : "Failed to sync queue filters" },
                 { status: 400 }
@@ -420,21 +535,34 @@ export async function PATCH(request: NextRequest) {
         }
     }
 
-    if (Object.keys(updates).length <= 1) {
+    const hasScalarUpdates = Object.keys(updates).length > 1;
+    if (!hasScalarUpdates && !syncOnly) {
         return NextResponse.json({ error: "No fields to update" }, { status: 400 });
     }
 
-    const { data: updated, error: updateErr } = await supabase
-        .from("work_units")
-        .update(updates)
-        .eq("id", workUnitId)
-        .eq("org_id", ctx.orgId)
-        .select("id, key, name, is_active, queue_definition")
-        .single();
-
-    if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 400 });
-
-    const out = updated as { id: string; key: string; name: string; is_active: boolean; queue_definition: unknown };
+    let out: { id: string; key: string; name: string; is_active: boolean; queue_definition: unknown };
+    if (hasScalarUpdates) {
+        const { data: updated, error: updateErr } = await supabase
+            .from("work_units")
+            .update(updates)
+            .eq("id", workUnitId)
+            .eq("org_id", ctx.orgId)
+            .select("id, key, name, is_active, queue_definition")
+            .single();
+        if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 400 });
+        out = updated as typeof out;
+    } else {
+        const { data: refreshed, error: refreshErr } = await supabase
+            .from("work_units")
+            .select("id, key, name, is_active, queue_definition")
+            .eq("id", workUnitId)
+            .eq("org_id", ctx.orgId)
+            .single();
+        if (refreshErr || !refreshed) {
+            return NextResponse.json({ error: refreshErr?.message ?? "Not found" }, { status: 404 });
+        }
+        out = refreshed as typeof out;
+    }
     const snapshot = snapshotEnrollmentPipelineWorkUnit(out);
     const stageTrimmed = typeof body.stage === "string" ? body.stage.trim() : "";
     const stageAfterSync: LifecycleOperatorStage | null = isStageKey(stageTrimmed) ? stageTrimmed : null;

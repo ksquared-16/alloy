@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+    departmentReservesOperationalActionsRail,
     deptPipelineSurfaceShowsLegacyEnrollmentLanes,
     deptUsesBuilderOwnedLifecycleRuntime,
     filterWorkUnitsForBuilderOwnedDeptDisplay,
@@ -13,6 +14,23 @@ import type { LifecycleActivationCheckResult } from "@/lib/lifecycle/validateLif
 import { lifecycleWorkspaceTileDescription } from "@/lib/lifecycle/lifecycleBuilderConfig";
 
 describe("builderOwnedLifecycleRuntime", () => {
+    it("reserves operational actions rail for builder-owned lifecycle departments", () => {
+        expect(
+            departmentReservesOperationalActionsRail({
+                departmentKey: "sales",
+                departmentMetadata: {
+                    lifecycle_builder_owned_v1: {
+                        source: "lifecycle_builder",
+                        created_by: "u",
+                        created_at: "t",
+                        process_id: "p",
+                    },
+                },
+                workUnits: [{ key: "lifecycle_wu_lead" }],
+            })
+        ).toBe(true);
+    });
+
     it("detects builder-owned runtime from metadata marker", () => {
         expect(
             deptUsesBuilderOwnedLifecycleRuntime(

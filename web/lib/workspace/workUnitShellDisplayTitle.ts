@@ -46,10 +46,15 @@ export function readWorkUnitShellDisplayTitleFromSessionCache(params: {
     return fromDeptList || null;
 }
 
-/** Department KPI / oper row label — prefer configured work unit name over legacy hardcoded copy. */
+/**
+ * Operator-facing work unit label.
+ * Precedence: `work_units.name` → key slug title-case → fallback.
+ * Does not use `metadata.lifecycle_stage_label` (builder stage copy can be stale after rename).
+ */
 export function resolveDeptWorkUnitDisplayLabel(wu: {
     name?: string | null;
     key?: string | null;
+    metadata?: unknown | null;
 }): string {
     const name = wu.name?.trim();
     if (name) return name;

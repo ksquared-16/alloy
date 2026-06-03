@@ -12,6 +12,7 @@ import {
 } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
+import { getEntityLabel, useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import { appendWorkspaceSiteToPath, appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClient";
 import { adminV2CommitNavigation } from "@/lib/adminV2/shellNavigation";
@@ -32,6 +33,8 @@ import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import { CreateLeadModal } from "@/components/admin/opportunity/actions/CreateLeadModal";
+import WorkUnitScheduleTourRecordPickerModal from "@/components/admin/workspace/WorkUnitScheduleTourRecordPickerModal";
+import { openTourScheduleModalForOpportunity } from "@/lib/tours/actions/tourBookingActionClient";
 import { executeCreateLeadFromModal } from "@/lib/admin/actions/entryLifecycleActionClient";
 import {
     REGISTRY_RIGHT_RAIL_ACTION_ID_PREFIX,
@@ -95,14 +98,32 @@ import {
 import { DeptPageLoadingGate } from "@/app/adminV2/components/workspace/DeptPageLoadingGate";
 import { resolveDeptWorkUnitDisplayLabel } from "@/lib/workspace/workUnitShellDisplayTitle";
 import {
+    lifecycleDeptThroughputWorkUnits,
+    sortLifecycleDeptWorkUnits,
+    type DeptWorkUnitListRow,
+} from "@/lib/lifecycle/sortLifecycleDeptWorkUnits";
+
+function mapDeptWorkUnitRows(
+    items: Array<{ id: string; name?: string | null; key?: string | null; sort_order?: number | null; metadata?: unknown }>
+): DeptWorkUnitListRow[] {
+    return sortLifecycleDeptWorkUnits(
+        items.map((w) => ({
+            id: String(w.id),
+            name: w.name ?? null,
+            key: w.key ?? null,
+            sort_order: w.sort_order ?? null,
+            metadata: w.metadata,
+        }))
+    );
+}
+import {
+    departmentReservesOperationalActionsRail,
     deptUsesBuilderOwnedLifecycleRuntime,
     isLifecycleStageWorkUnitRow,
     type LifecycleWorkUnitDeptRuntimeDebug,
 } from "@/lib/lifecycle/builderOwnedLifecycleRuntime";
 import {
-    applyLifecycleVisibilityKpiLabels,
     deptKpiWorkUnitsForLifecycleVisibility,
-    lifecycleThroughputCardTitle,
     resolveDeptRightRailWorkUnitId,
 } from "@/lib/lifecycle/lifecycleKpiPresentation";
 import { ADMIN_V2_SETTINGS_LIFECYCLE_PATH } from "@/lib/adminV2/settings/lifecycleSettingsPaths";
@@ -316,6 +337,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
     const { orgId, principalUserId, accessScopeFingerprint } = useWorkspaceOrg();
     const siteFilter = useWorkspaceSiteFilter();
     const selectedSiteId = siteFilter?.selectedSiteId ?? null;
+    const { labels: entityLabels } = useEntityLabels();
     const departmentId = workspaceRouteParam(params.departmentId);
 
     /** True when layout applied readDepartmentPageCache for this dept (mirrors workspace root seeded shell). */
@@ -370,6 +392,21 @@ export default function AdminV2WorkspaceDepartmentPage() {
         useState<DeptThroughputPresentation | null>(null);
     const [deptOperPanelTitleLocked, setDeptOperPanelTitleLocked] = useState("Work Unit Queue");
     const [createLeadOpen, setCreateLeadOpen] = useState(false);
+    const [scheduleTourPickerOpen, setScheduleTourPickerOpen] = useState(false);
+
+    const openScheduleTourRecordPicker = useCallback(() => {
+        setScheduleTourPickerOpen(true);
+    }, []);
+
+    const openScheduleTourForOpportunity = useCallback(
+        (opportunityId: string) => {
+            const id = opportunityId.trim();
+            if (!id) return;
+            openTourScheduleModalForOpportunity(id, (opts) => openDrawer({ type: "opportunities", id: opts.id }));
+            setScheduleTourPickerOpen(false);
+        },
+        [openDrawer]
+    );
 
     const primaryWorkUnit = useMemo(() => {
         const list = deptWorkUnits ?? [];
@@ -958,11 +995,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                       metadata: (b.department as { metadata?: unknown }).metadata,
                                   }
                                 : null;
-                        const wuCommit = (b.work_units ?? []).map((w) => ({
-                            id: String(w.id),
-                            name: w.name ?? null,
-                            key: w.key ?? null,
-                        }));
+                        const wuCommit = mapDeptWorkUnitRows(b.work_units ?? []);
                         if (deptCommit) {
                             setDept(deptCommit);
                             setDeptError(null);
@@ -1032,7 +1065,13 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             enrollmentRightRailPrefetchRef.current = b.right_rail_actions;
                             setEnrollmentDeptRightRail(b.right_rail_actions);
                             setEnrollmentDeptActionsSettled(true);
-                        } else if (!isEnrollmentLikeDepartmentKey(deptCommit?.key)) {
+                        } else if (
+                            !departmentReservesOperationalActionsRail({
+                                departmentKey: deptCommit?.key,
+                                departmentMetadata: deptCommit?.metadata,
+                                workUnits: wuCommit,
+                            })
+                        ) {
                             setEnrollmentDeptActionsSettled(true);
                         }
                         if (orgId && deptCommit) {
@@ -1168,11 +1207,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     setDeptWorkUnits(null);
                     setDeptWorkUnitsError(wuJson.error ?? "Failed to load work units");
                 } else {
-                    wuCommit = (wuJson.items ?? []).map((w) => ({
-                        id: String(w.id),
-                        name: w.name ?? null,
-                        key: w.key ?? null,
-                    }));
+                    wuCommit = mapDeptWorkUnitRows(wuJson.items ?? []);
                     const pipelineCandidatesEarly = wuCommit.filter(
                         (w) => (w.key ?? "").trim().toLowerCase() !== "needs_attention"
                     );
@@ -1328,14 +1363,11 @@ export default function AdminV2WorkspaceDepartmentPage() {
     ]);
 
     const deptThroughputWuRows = useMemo(() => {
-        const list = deptWorkUnits ?? [];
+        const list = (deptWorkUnits ?? []) as DeptWorkUnitListRow[];
         if (builderOwnedLifecycleRuntime) {
-            return list.filter((w) => isLifecycleStageWorkUnitRow(w));
+            return lifecycleDeptThroughputWorkUnits(list, true);
         }
-        return list.filter((w) => {
-            const key = (w.key ?? "").trim().toLowerCase();
-            return key !== "needs_attention" && key !== "enrollment_pipeline";
-        });
+        return lifecycleDeptThroughputWorkUnits(list, false);
     }, [deptWorkUnits, builderOwnedLifecycleRuntime]);
 
     /** Throughput panel has real rows or a confirmed final empty — not an unresolved blank list (PERF-B-02 tighten). */
@@ -1440,7 +1472,11 @@ export default function AdminV2WorkspaceDepartmentPage() {
         deptWorkUnits.length === 0 &&
         !deptWorkUnitsError;
 
-    const reserveDeptActionsRail = isEnrollmentLikeDepartmentKey(deptKey);
+    const reserveDeptActionsRail = departmentReservesOperationalActionsRail({
+        departmentKey: deptKey,
+        departmentMetadata: dept?.metadata,
+        workUnits: deptWorkUnits ?? [],
+    });
 
     const deptRevealGate = useMemo(() => {
         const shell_ready = deptRevealShellReady({
@@ -1518,15 +1554,14 @@ export default function AdminV2WorkspaceDepartmentPage() {
             ? lifecycleRailWorkUnitId
             : isEnrollmentLikeDepartmentKey(deptKey)
               ? primaryWorkUnit?.id ?? null
-              : null;
-        if (!departmentId || !railWuId) {
-            setEnrollmentDeptRightRail(null);
-            setEnrollmentDeptActionsSettled(
-                !isEnrollmentLikeDepartmentKey(deptKey) && !builderOwnedLifecycleRuntime
-            );
+              : lifecycleRailWorkUnitId ?? primaryWorkUnit?.id ?? null;
+        if (!departmentId) return;
+        if (!deptWorkUnitsResolved) return;
+        if (!railWuId) {
+            setEnrollmentDeptRightRail([]);
+            setEnrollmentDeptActionsSettled(true);
             return;
         }
-        if (!deptWorkUnitsResolved) return;
 
         const prefetched = enrollmentRightRailPrefetchRef.current;
         if (prefetched) {
@@ -1543,6 +1578,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
             departmentId,
             workUnitId: railWuId,
             fetchInit: workspaceDataFetchInit() ?? {},
+            placementSurfaces: ["department"],
         })
             .then((list) => {
                 if (!cancelled) setEnrollmentDeptRightRail(Array.isArray(list) ? list : []);
@@ -1557,7 +1593,6 @@ export default function AdminV2WorkspaceDepartmentPage() {
             cancelled = true;
         };
     }, [
-        deptKey,
         departmentId,
         primaryWorkUnit?.id,
         builderOwnedLifecycleRuntime,
@@ -1565,6 +1600,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
         deptWorkUnitsResolved,
         enrollmentDeptActionsSettled,
         enrollmentDeptRightRail,
+        reserveDeptActionsRail,
+        deptKey,
     ]);
 
     useEffect(() => {
@@ -1582,14 +1619,14 @@ export default function AdminV2WorkspaceDepartmentPage() {
     }, [deptKey, departmentId, enrollmentDeptRightRail]);
 
     const enrollmentDepartmentRailModel = useMemo(() => {
-        if (!isEnrollmentLikeDepartmentKey(deptKey) && !builderOwnedLifecycleRuntime) return null;
+        if (!reserveDeptActionsRail) return null;
         return mergeEnrollmentRightRailActions(enrollmentDeptRightRail ?? [], {
             primaries: [],
             systemActions: [],
             quickOperations: [],
             overflow: [],
         });
-    }, [deptKey, builderOwnedLifecycleRuntime, enrollmentDeptRightRail]);
+    }, [reserveDeptActionsRail, enrollmentDeptRightRail]);
 
     const enrollmentRightRailByKey = useMemo(() => {
         const m = new Map<string, ResolvedActionForClient>();
@@ -1614,9 +1651,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
             deptWorkUnitSummaries,
             deptQueueSummariesLoading,
             deptQueueSummariesError,
-            lifecycleVisibilityCounts: builderOwnedLifecycleRuntime,
         }).items;
-        return builderOwnedLifecycleRuntime ? applyLifecycleVisibilityKpiLabels(items) : items;
+        return items;
     }, [
         deptPlacementRows,
         deptScopeHasPlacements,
@@ -1676,6 +1712,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     router,
                     openDrawer,
                     openCreateLead: () => setCreateLeadOpen(true),
+                    openScheduleTourRecordPicker,
                     departmentId,
                     workUnitId: lifecycleRailWorkUnitId ?? primaryWorkUnit?.id ?? null,
                     needsAttentionHref,
@@ -1694,6 +1731,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
             enrollmentRightRailByKey,
             needsAttentionHref,
             openDrawer,
+            openScheduleTourRecordPicker,
             lifecycleRailWorkUnitId,
             primaryWorkUnit?.id,
             router,
@@ -1761,10 +1799,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                         <DeptOperConsoleQueueRow
                                             href={href}
                                             departmentId={departmentId}
-                                            title={lifecycleThroughputCardTitle(
-                                                wu.name?.trim() || "Work unit",
-                                                total
-                                            )}
+                                            title={`${resolveDeptWorkUnitDisplayLabel(wu)}. Total ${total ?? "—"}.`}
                                             label={resolveDeptWorkUnitDisplayLabel(wu)}
                                             iconKey={null}
                                             total={total}
@@ -1796,9 +1831,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                 className="rounded-lg border border-admin-border bg-white/50 px-3 py-3 text-xs text-alloy-midnight/60"
                                 data-testid="dept-needs-attention-placeholder"
                             >
-                                {builderOwnedLifecycleRuntime
-                                    ? "Needs Attention is not configured for this lifecycle yet. Throughput stages use lifecycle visibility filters."
-                                    : "No Needs Attention types configured."}
+                                No needs attention rules configured
                             </div>
                         </li>
                     ) : null}
@@ -1989,11 +2022,9 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         </div>
                     }
                     railSlot={
-                        (isEnrollmentLikeDepartmentKey(deptKey) || builderOwnedLifecycleRuntime) &&
-                        (lifecycleRailWorkUnitId || primaryWorkUnit) &&
-                        (enrollmentDepartmentRailModel?.systemActions?.length ?? 0) > 0 ? (
+                        reserveDeptActionsRail && enrollmentDepartmentRailModel ? (
                             <ActionsBlock
-                                model={enrollmentDepartmentRailModel!}
+                                model={enrollmentDepartmentRailModel}
                                 onAction={onEnrollmentDeptRailAction}
                                 title="Actions"
                                 surface="department"
@@ -2016,6 +2047,13 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     openDrawer({ type: "opportunities", id: opportunityId });
                     router.refresh();
                 }}
+            />
+            <WorkUnitScheduleTourRecordPickerModal
+                open={scheduleTourPickerOpen}
+                siteId={selectedSiteId}
+                opportunityEntityLabel={getEntityLabel(entityLabels, "opportunities", "singular")}
+                onDismiss={() => setScheduleTourPickerOpen(false)}
+                onSelectOpportunityId={openScheduleTourForOpportunity}
             />
         </WorkspaceChrome>
     );

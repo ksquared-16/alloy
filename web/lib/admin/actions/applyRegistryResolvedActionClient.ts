@@ -32,6 +32,7 @@ import {
 } from "@/lib/admin/actions/addPersonActionClient";
 import { formatRequirementValidationSummary } from "@/lib/completion/requirementValidationResult";
 import type { RequirementValidationResult } from "@/lib/completion/requirementValidationTypes";
+import { isScheduleTourRegistryAction } from "@/lib/admin/actions/scheduleTourWorkUnitActions";
 
 export type RegistryActionSurfaceContext = {
     surface: string;
@@ -50,6 +51,8 @@ export type ApplyRegistryResolvedActionHost = {
     router: { push: (href: string) => void; refresh: () => void };
     openDrawer: (opts: DrawerOpenOpts) => void;
     openForm?: (opts: { form_key: string; action: ResolvedActionForClient }) => void;
+    /** Work-unit rail: no record selected — open queue record picker before tour modal. */
+    openScheduleTourRecordPicker?: () => void;
     /** Capture-first add child — same modal as shell chrome when set. */
     openAddInquiryChild?: (mode: "child" | "sibling") => void;
     /** Capture-first add person — same modal for add_family_member / add_related_person. */
@@ -75,10 +78,40 @@ export type ApplyRegistryResolvedActionHost = {
  * Client-side handling for resolver-shaped actions (same semantics as record header / queue row).
  * Navigate / external_link use payload only; mutating types POST /api/admin/actions/execute.
  */
+function applyScheduleTourWithoutSelectedRecord(
+    a: ResolvedActionForClient,
+    host: ApplyRegistryResolvedActionHost
+): ApplyRegistryResolvedActionResult | null {
+    const formKey =
+        a.key.trim() === "reschedule_tour"
+            ? "reschedule_tour"
+            : a.payload?.form_key != null && String(a.payload.form_key).trim() === "reschedule_tour"
+              ? "reschedule_tour"
+              : "schedule_tour";
+    if (host.openForm) {
+        host.openForm({ form_key: formKey, action: a });
+        return { ok: true };
+    }
+    if (host.openScheduleTourRecordPicker) {
+        host.openScheduleTourRecordPicker();
+        return { ok: true };
+    }
+    return null;
+}
+
 export async function applyRegistryResolvedActionClient(
     a: ResolvedActionForClient,
     host: ApplyRegistryResolvedActionHost
 ): Promise<ApplyRegistryResolvedActionResult> {
+    if (isScheduleTourRegistryAction(a) && !host.entityId?.trim()) {
+        const delegated = applyScheduleTourWithoutSelectedRecord(a, host);
+        if (delegated) return delegated;
+        return {
+            ok: false,
+            error: "Select a record from the work unit queue to schedule a tour.",
+        };
+    }
+
     if (a.action_type === "open_form") {
         const formKey = a.payload?.form_key != null ? String(a.payload.form_key).trim() : "";
         if (isAddInquiryChildFormKey(formKey) || isAddInquiryChildActionKey(a.key)) {
@@ -141,6 +174,24 @@ export async function applyRegistryResolvedActionClient(
             if (oid && typeof window !== "undefined") {
                 window.dispatchEvent(
                     new CustomEvent(ADMINV2_OPEN_TOUR_OUTCOME_MODAL, { detail: { opportunity_id: oid } })
+                );
+            }
+            return { ok: true };
+        }
+        if (formKey === "schedule_tour" || a.key === "schedule_tour" || a.key === "reschedule_tour") {
+            const oid = host.entityId?.trim();
+            if (!oid) {
+                const delegated = applyScheduleTourWithoutSelectedRecord(a, host);
+                if (delegated) return delegated;
+                return { ok: false, error: "Select a record from the work unit queue to schedule a tour." };
+            }
+            if (host.openForm) {
+                host.openForm({ form_key: formKey || "schedule_tour", action: a });
+                return { ok: true };
+            }
+            if (typeof window !== "undefined") {
+                window.dispatchEvent(
+                    new CustomEvent(ADMINV2_OPEN_TOUR_SCHEDULE_MODAL, { detail: { opportunity_id: oid } })
                 );
             }
             return { ok: true };

@@ -458,6 +458,8 @@ export type QueueVm = {
    * (Separate from rowsLoading skeleton when there was no prior list.)
    */
   rowsRefreshing?: boolean;
+  /** Reserved action chips while queue-row registry actions hydrate (avoids pop-in). */
+  rowActionsPending?: boolean;
 };
 
 export type WorkStepVm = {

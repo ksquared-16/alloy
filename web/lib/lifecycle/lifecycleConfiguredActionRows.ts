@@ -5,6 +5,7 @@ import type { EnrollmentProcessActionPlacement } from "@/lib/lifecycle/enrollmen
 import { lifecycleActivationBaseActions } from "@/lib/lifecycle/lifecycleStageBaseActions";
 import {
     isLifecycleBuilderConfiguredPlacement,
+    parseLifecycleActionDisplayOrder,
     parseLifecycleActionScopeFromConditionConfig,
     parseLifecycleOperatorStagesFromConditionConfig,
     type LifecycleActionScope,
@@ -19,6 +20,7 @@ export type LifecycleConfiguredActionRow = {
     /** Empty when lifecycle-wide. */
     operator_stages: LifecycleOperatorStage[];
     placements: EnrollmentProcessActionPlacement[];
+    display_order: number;
 };
 
 type PlacementRow = {
@@ -67,6 +69,7 @@ export function buildLifecycleConfiguredActionRows(
         const action_scope = parseLifecycleActionScopeFromConditionConfig(firstCc);
         const operator_stages =
             action_scope === "stage" ? parseLifecycleOperatorStagesFromConditionConfig(firstCc) : [];
+        const display_order = parseLifecycleActionDisplayOrder(firstCc) ?? 999;
 
         const placementViews: EnrollmentProcessActionPlacement[] = activePlacements.map((p) => ({
             placement_id: p.id,
@@ -93,10 +96,13 @@ export function buildLifecycleConfiguredActionRows(
             action_scope,
             operator_stages,
             placements: placementViews,
+            display_order,
         });
     }
 
-    return rows.sort((a, b) => a.label.localeCompare(b.label));
+    return rows.sort(
+        (a, b) => a.display_order - b.display_order || a.label.localeCompare(b.label)
+    );
 }
 
 export function formatConfiguredActionScopeLabel(row: LifecycleConfiguredActionRow): string {
