@@ -14,7 +14,7 @@ describe("AdminV2 speed sprint Cards 3–4", () => {
         const route = read("app/api/admin/work-units/[id]/operational-bootstrap/route.ts");
         expect(route).toContain("...(deferBundle");
         expect(route).toMatch(/deferBundle\s*\?\s*\{\}/);
-        expect(route).toContain('deferred: ["primary_lane_rows", "kpi_placements", "right_rail_actions"]');
+        expect(route).toContain('deferred: ["primary_lane_rows", "kpi_placements", "right_rail_actions", "lifecycle_siblings"]');
     });
 
     it("drawer_primary uses early path before full parallel lookups", () => {

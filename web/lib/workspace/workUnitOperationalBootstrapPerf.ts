@@ -34,6 +34,8 @@ export type WorkUnitBootstrapPerfPhases = {
     deferred_rows_source?: string;
     pipeline_ms?: number;
     lifecycle_siblings_ms?: number;
+    /** Lifecycle sibling fan-out kept off the reveal path; client hydrates after reveal (Card 2). */
+    lifecycle_siblings_deferred?: boolean;
     kpi_placements_ms?: number;
     kpi_placements_cache_hit?: boolean;
     kpi_placements_deferred?: boolean;

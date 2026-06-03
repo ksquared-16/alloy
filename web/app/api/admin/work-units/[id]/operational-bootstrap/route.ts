@@ -120,6 +120,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             summariesLimit,
             attentionResolverPasses,
             deferPrimaryLaneRows: deferBundle,
+            // Card 2 — lifecycle siblings are always hydrated off the reveal path (Queue First).
+            deferLifecycleSiblings: true,
         };
 
         const bootstrapP = loadWorkUnitOperationalBootstrapCached(
@@ -135,6 +137,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
                 focusQueue,
                 attentionBucketKey,
                 deferPrimaryLaneRows: deferBundle,
+                deferLifecycleSiblings: true,
                 viewerTimezoneIana,
             },
             async () => {
@@ -219,7 +222,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
                       source: "authoritative_work_unit_bootstrap",
                       bootstrap_total_ms: totalMs,
                       defer_bundle: true as const,
-                      deferred: ["primary_lane_rows", "kpi_placements", "right_rail_actions"],
+                      deferred: ["primary_lane_rows", "kpi_placements", "right_rail_actions", "lifecycle_siblings"],
                   }
                 : {
                       generated_at: new Date().toISOString(),
@@ -236,6 +239,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
                           "ai_capabilities",
                           "operational_tasks",
                           "unread_count",
+                          "lifecycle_siblings",
                           ...(actionsResult.deferred ? (["right_rail_actions"] as const) : []),
                       ],
                   },

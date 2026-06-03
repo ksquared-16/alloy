@@ -173,6 +173,26 @@ function communicationMessageInstant(m: MsgRow): string | null | undefined {
     return s && String(s).trim() ? s : null;
 }
 
+/**
+ * Numeric sort key for ordering messages oldest→newest. Parses each row's timestamp
+ * once (vs. inside the comparator, which re-parses O(n·log n) times); non-finite or
+ * absent values sort as 0 — identical to the prior inline comparator semantics.
+ */
+function messageSortTimestamp(m: { created_at?: string | null; sent_at?: string | null }): number {
+    const t = Date.parse(String(m.created_at ?? m.sent_at ?? 0));
+    return Number.isFinite(t) ? t : 0;
+}
+
+/** Stable oldest→newest order using a precomputed timestamp key (decorate-sort-undecorate). */
+function sortMessagesByInstantAscending<T extends { created_at?: string | null; sent_at?: string | null }>(
+    rows: T[],
+): T[] {
+    return rows
+        .map((row) => ({ row, ts: messageSortTimestamp(row) }))
+        .sort((a, b) => a.ts - b.ts)
+        .map((decorated) => decorated.row);
+}
+
 /** Compact bubble headline; keep delivery truth in a muted subline where needed. */
 function bubbleStatusLine(m: MsgRow): { headline: string; sub?: string } {
     const state = mapToDeliveryState(m);
@@ -326,8 +346,6 @@ export default function CommunicationsDrawerSection({
     const [loadingRecipients, setLoadingRecipients] = useState(false);
     const [selectedRecipientIds, setSelectedRecipientIds] = useState<Set<string>>(() => new Set());
 
-    const [composerSubject, setComposerSubject] = useState("");
-    const [composerBody, setComposerBody] = useState("");
     const [sendBusy, setSendBusy] = useState(false);
     const [sendErr, setSendErr] = useState<string | null>(null);
     const [sendOkNote, setSendOkNote] = useState<string | null>(null);
@@ -377,8 +395,6 @@ export default function CommunicationsDrawerSection({
         setRecipients([]);
         setRecipientsErr(null);
         setSelectedRecipientIds(new Set());
-        setComposerSubject("");
-        setComposerBody("");
         setSendErr(null);
         setSendOkNote(null);
         setShowOlderMessages(false);
@@ -428,23 +444,37 @@ export default function CommunicationsDrawerSection({
         });
     }, [recipients, effectiveComposer]);
 
-    const filteredThreadsByView = useMemo(() => {
-        return threads.filter((t) => {
-            const ch = (t.channel ?? "").trim().toLowerCase();
-            if (viewFilter === "all") return true;
-            return ch === viewFilter;
-        });
-    }, [threads, viewFilter]);
+    /** Active-filter view of loaded messages — client-side channel filter (no refetch on tab switch). */
+    const filteredMsgs = useMemo(() => {
+        if (viewFilter === "all") return msgs;
+        return msgs.filter((m) => (m.channel ?? "").trim().toLowerCase() === viewFilter);
+    }, [msgs, viewFilter]);
 
     const displayedMsgs = useMemo(() => {
-        if (showOlderMessages || msgs.length <= DEFAULT_VISIBLE_MESSAGE_COUNT) return msgs;
-        return msgs.slice(-DEFAULT_VISIBLE_MESSAGE_COUNT);
-    }, [msgs, showOlderMessages]);
+        if (showOlderMessages || filteredMsgs.length <= DEFAULT_VISIBLE_MESSAGE_COUNT) return filteredMsgs;
+        return filteredMsgs.slice(-DEFAULT_VISIBLE_MESSAGE_COUNT);
+    }, [filteredMsgs, showOlderMessages]);
 
     const hiddenOlderCount =
-        msgs.length > DEFAULT_VISIBLE_MESSAGE_COUNT && !showOlderMessages
-            ? msgs.length - DEFAULT_VISIBLE_MESSAGE_COUNT
+        filteredMsgs.length > DEFAULT_VISIBLE_MESSAGE_COUNT && !showOlderMessages
+            ? filteredMsgs.length - DEFAULT_VISIBLE_MESSAGE_COUNT
             : 0;
+
+    /** Inbound-unread counts per filter, computed once per msgs change (was rescanned 3×/render). */
+    const inboundUnreadCounts = useMemo(() => {
+        let all = 0;
+        let email = 0;
+        let sms = 0;
+        for (const m of msgs) {
+            if ((m.direction ?? "").toLowerCase() !== "inbound") continue;
+            if (m.viewer_has_read === true) continue;
+            all += 1;
+            const ch = (m.channel ?? "").trim().toLowerCase();
+            if (ch === "email") email += 1;
+            else if (ch === "sms") sms += 1;
+        }
+        return { all, email, sms } as Record<ViewFilter, number>;
+    }, [msgs]);
 
     const loadThreads = useCallback(async () => {
         setThrErr(null);
@@ -533,57 +563,69 @@ export default function CommunicationsDrawerSection({
         }
     }, [apiEntityType, entityId]);
 
-    const loadConversationMessages = useCallback(async () => {
-        if (!dataLayerActive) return;
-        const scopeList = filteredThreadsByView.slice(0, MAX_MERGE_THREADS);
-        if (scopeList.length === 0) {
-            setMsgs([]);
+    const loadConversationMessages = useCallback(
+        async (signal: AbortSignal, isCurrent: () => boolean) => {
+            if (!dataLayerActive) return;
+            // Load across all in-scope threads regardless of the active filter; the channel
+            // filter is applied client-side (filteredMsgs) so tab switches never refetch.
+            const scopeList = threads.slice(0, MAX_MERGE_THREADS);
+            if (scopeList.length === 0) {
+                if (!isCurrent()) return;
+                setMsgs([]);
+                setMsgErr(null);
+                setShowOlderMessages(false);
+                setExpandedBodies({});
+                setLoadingMsgs(false);
+                return;
+            }
+            setLoadingMsgs(true);
             setMsgErr(null);
-            setShowOlderMessages(false);
-            setExpandedBodies({});
-            return;
-        }
-        setLoadingMsgs(true);
-        setMsgErr(null);
-        try {
-            const batches = await Promise.all(
-                scopeList.map(async (th) => {
-                    const r = await fetch(
-                        `/api/admin/communications/threads/${encodeURIComponent(th.id)}/messages?limit=${MESSAGES_PER_THREAD_LIMIT}&include_viewer_read=1`,
-                        { credentials: "include" },
-                    );
-                    const j = await r.json().catch(() => ({}));
-                    if (!r.ok) throw new Error((j as { error?: string }).error ?? `HTTP ${r.status}`);
-                    const raw = Array.isArray((j as { messages?: MsgRow[] }).messages)
-                        ? (j as { messages: MsgRow[] }).messages
-                        : [];
-                    return raw.map((m) => ({ ...m, _thread_id: th.id }) as MsgRowWithThread);
-                }),
-            );
-            let merged = batches.flat();
-            merged.sort((a, b) => {
-                const ta = Date.parse(String(a.created_at ?? a.sent_at ?? 0));
-                const tb = Date.parse(String(b.created_at ?? b.sent_at ?? 0));
-                return (Number.isFinite(ta) ? ta : 0) - (Number.isFinite(tb) ? tb : 0);
-            });
-            const cap = 200;
-            if (merged.length > cap) merged = merged.slice(-cap);
-            setMsgs(merged);
-            setShowOlderMessages(false);
-            setExpandedBodies({});
-        } catch (e) {
-            setMsgErr(e instanceof Error ? e.message : "Failed to load messages");
-            setMsgs([]);
-            setShowOlderMessages(false);
-            setExpandedBodies({});
-        } finally {
-            setLoadingMsgs(false);
-        }
-    }, [dataLayerActive, filteredThreadsByView]);
+            try {
+                const batches = await Promise.all(
+                    scopeList.map(async (th) => {
+                        const r = await fetch(
+                            `/api/admin/communications/threads/${encodeURIComponent(th.id)}/messages?limit=${MESSAGES_PER_THREAD_LIMIT}&include_viewer_read=1`,
+                            { credentials: "include", signal },
+                        );
+                        const j = await r.json().catch(() => ({}));
+                        if (!r.ok) throw new Error((j as { error?: string }).error ?? `HTTP ${r.status}`);
+                        const raw = Array.isArray((j as { messages?: MsgRow[] }).messages)
+                            ? (j as { messages: MsgRow[] }).messages
+                            : [];
+                        return raw.map((m) => ({ ...m, _thread_id: th.id }) as MsgRowWithThread);
+                    }),
+                );
+                if (!isCurrent()) return;
+                let merged = sortMessagesByInstantAscending(batches.flat());
+                const cap = 200;
+                if (merged.length > cap) merged = merged.slice(-cap);
+                setMsgs(merged);
+                setShowOlderMessages(false);
+                setExpandedBodies({});
+            } catch (e) {
+                // A superseded load aborts its in-flight fetches; the current load owns state.
+                if (signal.aborted || (e instanceof Error && e.name === "AbortError")) return;
+                if (!isCurrent()) return;
+                setMsgErr(e instanceof Error ? e.message : "Failed to load messages");
+                setMsgs([]);
+                setShowOlderMessages(false);
+                setExpandedBodies({});
+            } finally {
+                if (isCurrent()) setLoadingMsgs(false);
+            }
+        },
+        [dataLayerActive, threads],
+    );
 
     useEffect(() => {
         if (!dataLayerActive) return;
-        void loadConversationMessages();
+        const controller = new AbortController();
+        let active = true;
+        void loadConversationMessages(controller.signal, () => active);
+        return () => {
+            active = false;
+            controller.abort();
+        };
     }, [dataLayerActive, loadConversationMessages]);
 
     useLayoutEffect(() => {
@@ -601,7 +643,8 @@ export default function CommunicationsDrawerSection({
     /** Mark inbound rows read for the current viewer after the thread is shown (per-user reads table). */
     useEffect(() => {
         if (!active || !dataLayerActive || loadingMsgs) return;
-        const inboundUnreadIds = msgs
+        // Only mark read the channel the viewer is actually looking at (the filtered view).
+        const inboundUnreadIds = filteredMsgs
             .filter((m) => (m.direction ?? "").toLowerCase() === "inbound" && m.viewer_has_read !== true)
             .map((m) => m.id)
             .filter((id) => id && !markedReadSubmittedRef.current.has(id));
@@ -616,9 +659,10 @@ export default function CommunicationsDrawerSection({
                         body: JSON.stringify({ message_ids: inboundUnreadIds }),
                     });
                     if (!res.ok) return;
+                    const markedReadIdSet = new Set(inboundUnreadIds);
                     inboundUnreadIds.forEach((id) => markedReadSubmittedRef.current.add(id));
                     setMsgs((prev) =>
-                        prev.map((m) => (inboundUnreadIds.includes(m.id) ? { ...m, viewer_has_read: true } : m)),
+                        prev.map((m) => (markedReadIdSet.has(m.id) ? { ...m, viewer_has_read: true } : m)),
                     );
                     window.dispatchEvent(new CustomEvent("alloy-comms-unread-refresh"));
                 } catch {
@@ -627,7 +671,7 @@ export default function CommunicationsDrawerSection({
             })();
         }, 550);
         return () => window.clearTimeout(t);
-    }, [dataLayerActive, loadingMsgs, msgs]);
+    }, [dataLayerActive, loadingMsgs, filteredMsgs]);
 
     useEffect(() => {
         if (!dataLayerActive) return;
@@ -859,17 +903,17 @@ export default function CommunicationsDrawerSection({
         });
     };
 
-    const sendFromComposer = async () => {
-        if (!composerEntity || selectedRecipientIds.size === 0 || !composerBody.trim()) return;
-        if (effectiveComposer === "email" && !emailOutboundReady) return;
-        if (effectiveComposer === "sms" && !smsOutboundReady) return;
+    const sendFromComposer = async (values: { subject: string; body: string }): Promise<boolean> => {
+        if (!composerEntity || selectedRecipientIds.size === 0 || !values.body.trim()) return false;
+        if (effectiveComposer === "email" && !emailOutboundReady) return false;
+        if (effectiveComposer === "sms" && !smsOutboundReady) return false;
 
         const channelSent = effectiveComposer === "sms" ? "sms" : "email";
         setSendBusy(true);
         setSendErr(null);
         setSendOkNote(null);
-        const bodyTrim = composerBody.trim();
-        const subjectTrim = composerSubject.trim();
+        const bodyTrim = values.body.trim();
+        const subjectTrim = values.subject.trim();
         try {
             let lastNote = "";
             const optimisticRows: MsgRowWithThread[] = [];
@@ -928,8 +972,6 @@ export default function CommunicationsDrawerSection({
                 }
             }
             setSendOkNote(userFriendlySendNote(lastNote, channelSent === "sms" ? "sms" : "email"));
-            setComposerSubject("");
-            setComposerBody("");
             invalidateCommunicationsDrawerPrefetch(apiEntityType, entityId);
             if (optimisticRows.length > 0) {
                 setMsgs((prev) => {
@@ -941,17 +983,14 @@ export default function CommunicationsDrawerSection({
                             byId.add(row.id);
                         }
                     }
-                    merged.sort((a, b) => {
-                        const ta = Date.parse(String(a.created_at ?? a.sent_at ?? 0));
-                        const tb = Date.parse(String(b.created_at ?? b.sent_at ?? 0));
-                        return (Number.isFinite(ta) ? ta : 0) - (Number.isFinite(tb) ? tb : 0);
-                    });
-                    return merged;
+                    return sortMessagesByInstantAscending(merged);
                 });
                 setShowOlderMessages(false);
             }
+            return true;
         } catch (e) {
             setSendErr(e instanceof Error ? e.message : "Send failed");
+            return false;
         } finally {
             setSendBusy(false);
         }
@@ -1061,7 +1100,8 @@ export default function CommunicationsDrawerSection({
     const composerReady =
         (effectiveComposer === "email" && emailOutboundReady) || (effectiveComposer === "sms" && smsOutboundReady);
 
-    const sendDisabledReason: string | null = (() => {
+    // Every disabled reason except the empty-body case; the composer appends that from its own draft.
+    const sendDisabledReasonBase: string | null = (() => {
         if (sendBusy) return null;
         if (!composerReady) {
             return effectiveComposer === "email"
@@ -1078,7 +1118,6 @@ export default function CommunicationsDrawerSection({
                   : "No linked person has a mobile number for SMS.";
         }
         if (selectedRecipientIds.size === 0) return "Select at least one recipient.";
-        if (!composerBody.trim()) return "Enter a message to send.";
         return null;
     })();
 
@@ -1095,6 +1134,7 @@ export default function CommunicationsDrawerSection({
     const drawerComposerNode =
         showDrawerComposerChrome && composerEntity && normalizedEntityType ? (
             <DrawerMessagingComposer
+                key={`${normalizedEntityType}:${entityId}`}
                 apiEntityType={normalizedEntityType}
                 entityId={entityId}
                 columnLayout
@@ -1110,31 +1150,17 @@ export default function CommunicationsDrawerSection({
                 recipients={recipients}
                 selectedRecipientIds={selectedRecipientIds}
                 onToggleRecipient={toggleRecipient}
-                subject={composerSubject}
-                onSubjectChange={setComposerSubject}
-                body={composerBody}
-                onBodyChange={setComposerBody}
                 sendBusy={sendBusy}
-                sendDisabled={sendBusy || sendDisabledReason !== null}
-                sendDisabledReason={sendDisabledReason}
+                sendDisabledReasonBase={sendDisabledReasonBase}
                 sendLabel="Send now"
-                onSend={() => void sendFromComposer()}
+                onSend={sendFromComposer}
                 sendErr={sendErr}
                 sendOkNote={sendOkNote}
             />
         ) : null;
 
-    const inboundUnreadCountForFilter = (f: ViewFilter) =>
-        msgs.filter((m) => {
-            if ((m.direction ?? "").toLowerCase() !== "inbound") return false;
-            if (m.viewer_has_read === true) return false;
-            const ch = (m.channel ?? "").trim().toLowerCase();
-            if (f === "all") return true;
-            return ch === f;
-        }).length;
-
     const unreadTabDot = (f: ViewFilter) =>
-        inboundUnreadCountForFilter(f) > 0 ? (
+        inboundUnreadCounts[f] > 0 ? (
             <span
                 className="ml-0.5 inline-block h-1.5 w-1.5 rounded-full bg-[#2563eb] align-middle opacity-90"
                 aria-hidden
@@ -1182,8 +1208,12 @@ export default function CommunicationsDrawerSection({
         </div>
     ) : msgErr ? (
         <p className="text-sm text-alloy-ember">{msgErr}</p>
-    ) : msgs.length === 0 ? (
-        <p className="py-4 text-center text-[13px] text-alloy-midnight/58">No messages in this view yet.</p>
+    ) : filteredMsgs.length === 0 ? (
+        // Card 4 P2 — occupy the same flex-1 footprint as the loading skeleton/list so the message
+        // stream does not shift height across loading → empty → list.
+        <div className="flex flex-1 flex-col items-center justify-center py-4">
+            <p className="text-center text-[13px] text-alloy-midnight/58">No messages in this view yet.</p>
+        </div>
     ) : (
         <ul className="flex flex-col gap-1 pb-0.5">
             {hiddenOlderCount > 0 ? (
@@ -1197,7 +1227,7 @@ export default function CommunicationsDrawerSection({
                     </button>
                 </li>
             ) : null}
-            {showOlderMessages && msgs.length > DEFAULT_VISIBLE_MESSAGE_COUNT ? (
+            {showOlderMessages && filteredMsgs.length > DEFAULT_VISIBLE_MESSAGE_COUNT ? (
                 <li className="flex w-full justify-center pb-0.5">
                     <button
                         type="button"
@@ -1272,7 +1302,11 @@ export default function CommunicationsDrawerSection({
                 {description}
 
                 {loadingThreads ? (
-                    <CommsQuietSkeletonLines dense={Boolean(embedded)} />
+                    // Card 4 P2 — reserve the same body footprint as the loaded split layout so the
+                    // panel does not reshape when threads arrive.
+                    <div className={COMMS_DRAWER_BODY_HEIGHT_CLASS}>
+                        <CommsQuietSkeletonLines dense={Boolean(embedded)} />
+                    </div>
                 ) : (
                     <div
                         className={`${COMMS_DRAWER_BODY_HEIGHT_CLASS} ${COMMS_DRAWER_SPLIT_LAYOUT_CLASS}`}

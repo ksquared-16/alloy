@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import CommunicationsDrawerSection from "@/components/admin/communications/CommunicationsDrawerSection";
 import type { DrawerCommunicationsEntityType } from "@/lib/adminV2/messaging/drawerCommunicationsEntity";
 
@@ -8,8 +9,12 @@ type CommunicationsDrawerBackgroundLoaderProps = {
     entityId: string;
 };
 
-/** Invisible preload — warms threads/messages/bindings while Overview is visible. */
-export default function CommunicationsDrawerBackgroundLoader({
+/**
+ * Invisible preload — warms threads/messages/bindings while Overview is visible.
+ * Memoized so sibling/parent re-renders don't re-drive the preload child; it only
+ * re-renders when the warmed entity (type/id) actually changes.
+ */
+function CommunicationsDrawerBackgroundLoader({
     apiEntityType,
     entityId,
 }: CommunicationsDrawerBackgroundLoaderProps) {
@@ -25,3 +30,5 @@ export default function CommunicationsDrawerBackgroundLoader({
         </div>
     );
 }
+
+export default memo(CommunicationsDrawerBackgroundLoader);

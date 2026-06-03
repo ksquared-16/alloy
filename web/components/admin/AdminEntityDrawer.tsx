@@ -319,6 +319,7 @@ import {
     peekDrawerEntitySnapshot,
     putDrawerEntitySnapshot,
 } from "@/lib/admin/drawerEntitySnapshotCache";
+import { drawerSnapshotReuseEligible } from "@/lib/admin/drawer/drawerPerformanceContract";
 import { openInquiryChildPersonFromOpportunitySync } from "@/lib/admin/drawer/openInquiryChildPersonFromOpportunity";
 import {
     applyPersonDrawerOpenSeed,
@@ -408,6 +409,7 @@ import {
 import {
     applyOpportunityFullHydrateDeferredPatch,
     mergeOpportunityFullHydrate,
+    mergeOpportunityFullHydrateBackground,
     mergeOpportunityFullHydrateStaged,
 } from "@/lib/admin/drawer/opportunityFullHydrateMerge";
 import { reportOpportunityDrawerHydrateLayoutStability } from "@/lib/admin/drawer/opportunityDrawerAboveFoldGeometry";
@@ -2578,6 +2580,14 @@ export default function AdminEntityDrawer() {
                 drawer.type !== "opportunities" ||
                 drawer.id === "new" ||
                 snapshotCanRenderDrawerFrame(cachedEntity as Record<string, unknown>);
+            // Card 3 — Drawer Performance Contract: a `full` snapshot whose above-fold is complete
+            // (only below-fold/member-graph pending) is reusable for instant, stable paint. Reveal it
+            // now and fill the pending background invisibly via the targeted overlay — no cacheBust
+            // full refetch (which would re-reveal/reshape and cause visible churn).
+            const opportunityCacheReuseAboveFold =
+                drawer.type === "opportunities" &&
+                drawer.id !== "new" &&
+                drawerSnapshotReuseEligible("opportunities", cachedEntity as Record<string, unknown>, drawer.id);
             if (drawer.type === "persons") {
                 logPersonDrawerFetch({
                     phase: personSeedSnapshot ? "seed_cache_hit" : "cache_hit",
@@ -2600,13 +2610,22 @@ export default function AdminEntityDrawer() {
                 setOpportunityBootstrapAppliedId(drawer.id);
                 if (opportunityCacheCanRenderFrame) {
                     opportunityDrawerFirstPaintPreloadedRef.current = drawer.id;
-                    if (String(cachedEntity._record_surface ?? "").trim() === "full" && !opportunityCacheNeedsBackgroundHydrate) {
+                    if (
+                        String(cachedEntity._record_surface ?? "").trim() === "full" &&
+                        (!opportunityCacheNeedsBackgroundHydrate || opportunityCacheReuseAboveFold)
+                    ) {
                         setOpportunityDrawerEnrichmentHeld(false);
                         setOpportunityDrawerBelowFoldRevealed(true);
                         setOpportunityDrawerSecondaryReady(true);
                     }
                 }
-                if (opportunityCacheNeedsBackgroundHydrate) {
+                if (opportunityCacheNeedsBackgroundHydrate && opportunityCacheReuseAboveFold) {
+                    // Above-fold-complete full snapshot: keep it revealed and fill ONLY the pending
+                    // below-fold member graph via its targeted overlay (re-armed below). No full
+                    // cacheBust refetch — that is what caused the visible re-open churn.
+                    setOpportunityDrawerEnrichmentHeld(false);
+                    memberPersonGraphOverlayDoneRef.current = null;
+                } else if (opportunityCacheNeedsBackgroundHydrate) {
                     setOpportunityDrawerEnrichmentHeld(false);
                     if (!opportunityCacheCanRenderFrame) {
                         setOpportunityDrawerBelowFoldRevealed(false);
@@ -2902,6 +2921,9 @@ export default function AdminEntityDrawer() {
                         fresh._record_surface = "drawer_primary";
                         return fresh;
                     }
+                    // Primary (paint) hydrate of surface=drawer_primary — applies authoritative
+                    // primary data. (Above-fold immutability is enforced on post-reveal BACKGROUND
+                    // merges — the deferred patch and the member overlay — not on this paint merge.)
                     const merged = mergeOpportunityFullHydrateLocal(prev as Record<string, unknown>, json as Record<string, unknown>);
                     merged._record_surface = "drawer_primary";
                     const changed = Object.keys(merged).filter(
@@ -3105,7 +3127,11 @@ export default function AdminEntityDrawer() {
                     if (!prev || String((prev as { id?: unknown }).id ?? "") !== String(drawer.id)) {
                         return prev;
                     }
-                    const merged = mergeOpportunityFullHydrateLocal(prev as Record<string, unknown>, json as Record<string, unknown>);
+                    // Card 3B-2 — member-graph overlay is a post-reveal BACKGROUND merge whose payload
+                    // includes above-fold `_opportunity_persons`. Use the above-fold-safe merge so it
+                    // fills below-fold/absent member data and clears the pending flag WITHOUT moving
+                    // already-painted family contacts.
+                    const merged = mergeOpportunityFullHydrateBackground(prev as Record<string, unknown>, json as Record<string, unknown>);
                     const prevSurf = String((prev as { _record_surface?: string })._record_surface ?? "full").trim();
                     merged._record_surface = prevSurf || "full";
                     return merged;
@@ -7673,6 +7699,12 @@ export default function AdminEntityDrawer() {
     const opportunityRecordChromePending =
         drawer.type === "opportunities" && !!drawer.id && drawer.id !== "new" && !recordChromeOpportunity.configResolved;
 
+    /** Card 3B-3 — person/child reveal waits for record layout + actions chrome (mirrors
+     *  opportunity/job/schedule) so status, actions, and section structure paint together rather
+     *  than reordering/popping in after first paint. Resolves immediately on a warm chrome cache hit. */
+    const personRecordChromePending =
+        drawer.type === "persons" && !!drawer.id && drawer.id !== "new" && !recordChromePerson.configResolved;
+
     /** Workflow-shaped gate for sidebar opportunities while record chrome resolves (modal uses `modalOpportunityWorkflow`). */
     const recordGateOpportunityWorkflowShape =
         drawer.type === "opportunities" &&
@@ -7681,7 +7713,7 @@ export default function AdminEntityDrawer() {
         opportunityRecordChromePending &&
         !isOpportunityRecordModalTarget;
     const recordModalV2ChromePending =
-        jobRecordChromePending || scheduleRecordChromePending || opportunityRecordChromePending;
+        jobRecordChromePending || scheduleRecordChromePending || opportunityRecordChromePending || personRecordChromePending;
     const drawerBodyGateLoading = drawerGateLoading || recordModalV2ChromePending;
 
     /** Keep Admin V2 record modal shell geometry during first-byte fetch — prevents min-height accent snap. */
@@ -9161,6 +9193,9 @@ export default function AdminEntityDrawer() {
         drawer.id !== "new" &&
         !error &&
         !!overviewData &&
+        // Card 3B-3 — do not reveal until record layout + actions chrome has resolved, so status,
+        // actions, and section structure are stable on first paint (no reorder/pop-in afterward).
+        recordChromePerson.configResolved &&
         (personChildLifecycleChrome || personParentGuardianChrome
             ? personDrawerComposedPayloadIsReady
             : (dataMatchesDrawer || personDrawerFirstPaintRecord != null) &&

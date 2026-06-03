@@ -60,6 +60,7 @@ describe("workUnitQueueScopeCacheKey", () => {
             focusQueue: "",
             attentionBucketKey: "",
             deferPrimaryLaneRows: false,
+            deferLifecycleSiblings: false,
             viewerTimezoneIana: "America/New_York",
         });
         const k2 = buildWorkUnitBootstrapLoaderCacheKey({
@@ -74,6 +75,7 @@ describe("workUnitQueueScopeCacheKey", () => {
             focusQueue: "",
             attentionBucketKey: "",
             deferPrimaryLaneRows: false,
+            deferLifecycleSiblings: false,
             viewerTimezoneIana: "America/New_York",
         });
         expect(k1).toBe(k2);
@@ -98,6 +100,7 @@ describe("workUnitQueueScopeCacheKey", () => {
             focusQueue: "",
             attentionBucketKey: "",
             deferPrimaryLaneRows: false,
+            deferLifecycleSiblings: false,
             viewerTimezoneIana: "UTC",
         });
         const withFocus = buildWorkUnitBootstrapLoaderCacheKey({
@@ -112,6 +115,7 @@ describe("workUnitQueueScopeCacheKey", () => {
             focusQueue: "pipeline",
             attentionBucketKey: "",
             deferPrimaryLaneRows: false,
+            deferLifecycleSiblings: false,
             viewerTimezoneIana: "UTC",
         });
         expect(canonical).not.toBe(withFocus);

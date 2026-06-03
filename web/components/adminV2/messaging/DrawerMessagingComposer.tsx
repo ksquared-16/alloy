@@ -28,15 +28,12 @@ type DrawerMessagingComposerProps = {
     recipients: DrawerMessagingRecipient[];
     selectedRecipientIds: Set<string>;
     onToggleRecipient: (personId: string) => void;
-    subject: string;
-    onSubjectChange: (value: string) => void;
-    body: string;
-    onBodyChange: (value: string) => void;
     sendBusy: boolean;
-    sendDisabled: boolean;
-    sendDisabledReason: string | null;
+    /** Disabled reason excluding the empty-body case, which the composer adds from its own draft state. */
+    sendDisabledReasonBase: string | null;
     sendLabel: string;
-    onSend: () => void;
+    /** Performs the send with the composer's current draft; resolves true on success so the composer clears. */
+    onSend: (values: { subject: string; body: string }) => Promise<boolean>;
     sendErr: string | null;
     sendOkNote: string | null;
     compact?: boolean;
@@ -68,13 +65,8 @@ export default function DrawerMessagingComposer({
     recipients,
     selectedRecipientIds,
     onToggleRecipient,
-    subject,
-    onSubjectChange,
-    body,
-    onBodyChange,
     sendBusy,
-    sendDisabled,
-    sendDisabledReason,
+    sendDisabledReasonBase,
     sendLabel,
     onSend,
     sendErr,
@@ -84,6 +76,28 @@ export default function DrawerMessagingComposer({
 }: DrawerMessagingComposerProps) {
     const [scheduleOpen, setScheduleOpen] = useState(false);
     const [bosOpen, setBosOpen] = useState(false);
+    // Composer draft is owned here so typing re-renders only this subtree, not the drawer tree.
+    const [subject, setSubject] = useState("");
+    const [body, setBody] = useState("");
+
+    /** Reproduce the parent's prior sendDisabledReason: base reasons first, then the body-empty case. */
+    const composedDisabledReason =
+        sendDisabledReasonBase !== null
+            ? sendDisabledReasonBase
+            : sendBusy
+              ? null
+              : body.trim()
+                ? null
+                : "Enter a message to send.";
+    const composedSendDisabled = sendBusy || composedDisabledReason !== null;
+
+    const handleSend = async () => {
+        const ok = await onSend({ subject, body });
+        if (ok) {
+            setSubject("");
+            setBody("");
+        }
+    };
 
     const recipientsForChannel =
         channel === "email" ? recipients.filter((r) => !!r.email?.trim()) : recipients.filter((r) => !!r.phone?.trim());
@@ -104,7 +118,7 @@ export default function DrawerMessagingComposer({
               ? bindingsErr
               : !emailReady && !smsReady
                 ? "No outbound email or SMS bindings are active for this org."
-                : sendDisabledReason;
+                : composedDisabledReason;
 
     return (
         <>
@@ -162,16 +176,16 @@ export default function DrawerMessagingComposer({
                     smsDisabledTitle="SMS outbound is not configured for this org yet"
                     channelHint={channelHint}
                     subject={subject}
-                    onSubjectChange={onSubjectChange}
+                    onSubjectChange={setSubject}
                     body={body}
-                    onBodyChange={onBodyChange}
+                    onBodyChange={setBody}
                     bodyDisabled={sendBusy || recipientsForChannel.length === 0}
                     bodyPlaceholder="Continue the conversation…"
                     bodyRows={compact ? 3 : 4}
-                    sendDisabled={sendDisabled}
+                    sendDisabled={composedSendDisabled}
                     sendBusy={sendBusy}
                     sendLabel={sendLabel}
-                    onSend={onSend}
+                    onSend={() => void handleSend()}
                     onSendLater={() => setScheduleOpen(true)}
                     onBosEnhance={() => setBosOpen(true)}
                     error={sendErr}
@@ -187,8 +201,8 @@ export default function DrawerMessagingComposer({
                 body={body}
                 scheduleContext={scheduleContext}
                 onScheduled={() => {
-                    onBodyChange("");
-                    onSubjectChange("");
+                    setBody("");
+                    setSubject("");
                 }}
             />
             <ComposerBosEnhanceModal open={bosOpen} onClose={() => setBosOpen(false)} draft={body} />

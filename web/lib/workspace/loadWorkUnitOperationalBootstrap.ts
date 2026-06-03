@@ -104,6 +104,13 @@ export type WorkUnitOperBootstrapContext = {
     attentionResolverPasses: { count: number };
     /** Skip blocking getWorkUnitQueueItems — return lane key + route only. */
     deferPrimaryLaneRows?: boolean;
+    /**
+     * Card 2 — skip the reveal-blocking lifecycle-sibling exact-count fan-out
+     * (siblings × queues × exact COUNT). When set, `lifecycle_siblings` is omitted
+     * from the payload and the client hydrates siblings off the critical path via
+     * its existing `/api/admin/work-units?department_id=` fallback. Preserves Queue First.
+     */
+    deferLifecycleSiblings?: boolean;
 };
 
 type AttentionBootstrapOutcome = {
@@ -239,6 +246,7 @@ export async function loadWorkUnitOperationalBootstrap(params: {
         summariesLimit,
         attentionResolverPasses,
         deferPrimaryLaneRows,
+        deferLifecycleSiblings,
     } = ctx;
 
     if (!departmentIdAllowed(accessDim, departmentId)) {
@@ -495,7 +503,13 @@ export async function loadWorkUnitOperationalBootstrap(params: {
     let lifecycle_siblings: LifecycleSiblingHydrationBlock | undefined;
     const deptWuRows = deptWuListRes.data ?? [];
     const builderOwnedRuntime = deptUsesBuilderOwnedLifecycleRuntime(departmentMetadata, deptWuRows);
-    if (builderOwnedRuntime && !deptWuListRes.error) {
+    if (deferLifecycleSiblings) {
+        // Card 2 — keep lifecycle siblings off the reveal-blocking path. Omit the block so the
+        // client's existing fallback (gated on !lifecycleSiblingsHydrationComplete) hydrates
+        // siblings + totals after reveal. Queue rows / records / actions never wait on this.
+        phases.lifecycle_siblings_ms = 0;
+        phases.lifecycle_siblings_deferred = true;
+    } else if (builderOwnedRuntime && !deptWuListRes.error) {
         const tSib0 = Date.now();
         const lifecycleRows = filterSortLifecycleSiblingWorkUnits(
             deptWuRows.map((w) => ({

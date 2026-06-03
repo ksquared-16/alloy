@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { adminPerfEnabled, adminPerfNow, logAdminPerf } from "@/lib/admin/perfTrace";
 import { parseJobDiscountSelectionInput, resolveJobDiscountSelection } from "@/lib/admin/jobDiscountSelection";
 import { initializeJobPricing } from "@/lib/pricing/initializeJobPricing";
 import { computeJobDisplayTotalCents } from "@/lib/admin/jobDisplayPrice";
@@ -17,7 +18,7 @@ import {
     scopeDimensionsFromAccess,
 } from "@/lib/admin/accessScope";
 /** GET: list jobs for current org. Admin/ops. Exclude archived by default. */
-export async function GET(request: NextRequest) {
+async function getJobsImpl(request: NextRequest) {
   const ctx = await getAdminContextCached();
   if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
@@ -350,6 +351,15 @@ export async function GET(request: NextRequest) {
   });
 
   return NextResponse.json({ jobs: withReceivables, total: count ?? withReceivables.length });
+}
+
+/** Phase 0 perf wrapper (Card 0.1): times the handler when ADMIN_PERF_TRACE=1; otherwise a passthrough. */
+export async function GET(request: NextRequest) {
+  if (!adminPerfEnabled()) return getJobsImpl(request);
+  const t0 = adminPerfNow();
+  const res = await getJobsImpl(request);
+  logAdminPerf({ route: "jobs", status: res.status, t0 });
+  return res;
 }
 
 /**
