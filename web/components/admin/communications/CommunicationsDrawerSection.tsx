@@ -1209,7 +1209,11 @@ export default function CommunicationsDrawerSection({
     ) : msgErr ? (
         <p className="text-sm text-alloy-ember">{msgErr}</p>
     ) : filteredMsgs.length === 0 ? (
-        <p className="py-4 text-center text-[13px] text-alloy-midnight/58">No messages in this view yet.</p>
+        // Card 4 P2 — occupy the same flex-1 footprint as the loading skeleton/list so the message
+        // stream does not shift height across loading → empty → list.
+        <div className="flex flex-1 flex-col items-center justify-center py-4">
+            <p className="text-center text-[13px] text-alloy-midnight/58">No messages in this view yet.</p>
+        </div>
     ) : (
         <ul className="flex flex-col gap-1 pb-0.5">
             {hiddenOlderCount > 0 ? (
@@ -1298,7 +1302,11 @@ export default function CommunicationsDrawerSection({
                 {description}
 
                 {loadingThreads ? (
-                    <CommsQuietSkeletonLines dense={Boolean(embedded)} />
+                    // Card 4 P2 — reserve the same body footprint as the loaded split layout so the
+                    // panel does not reshape when threads arrive.
+                    <div className={COMMS_DRAWER_BODY_HEIGHT_CLASS}>
+                        <CommsQuietSkeletonLines dense={Boolean(embedded)} />
+                    </div>
                 ) : (
                     <div
                         className={`${COMMS_DRAWER_BODY_HEIGHT_CLASS} ${COMMS_DRAWER_SPLIT_LAYOUT_CLASS}`}

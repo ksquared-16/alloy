@@ -18,7 +18,7 @@ export function DeptPageLoadingGate({
 
     return (
         <div
-            className={`adminv2-ws-dept-route-loading px-1 py-6 ${className}`.trim()}
+            className={`adminv2-ws-dept-route-loading px-1 py-6 min-h-[60vh] ${className}`.trim()}
             data-adminv2-dept-route-loading="true"
             data-dept-page-loading-gate
         >

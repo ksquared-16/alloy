@@ -23,7 +23,7 @@ export function WorkUnitPageLoadingGate({
 
     return (
         <div
-            className={`adminv2-ws-work-unit-route-loading px-1 py-6 ${className}`.trim()}
+            className={`adminv2-ws-work-unit-route-loading px-1 py-6 min-h-[60vh] ${className}`.trim()}
             data-adminv2-wu-route-loading="true"
             data-work-unit-page-loading-gate
         >
