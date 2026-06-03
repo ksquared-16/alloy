@@ -23,7 +23,7 @@ type Props = {
     onDismissActionPreflightBlocked?: () => void;
 };
 
-/** Title rail: guidance in the header band; actions pinned far right (single row). */
+/** Title rail: attention dominates center; BOS/Actions pinned far right (single row). */
 export function OpportunityDrawerHeaderControls({
     opportunityId,
     overviewData,
@@ -47,7 +47,7 @@ export function OpportunityDrawerHeaderControls({
                 className="flex w-full min-w-0 items-start gap-3"
                 data-opportunity-header-controls-row="composed"
             >
-                <div className="min-w-0 flex-1 self-center">
+                <div className="min-w-0 flex-1 self-center" data-opportunity-header-controls-row="attention">
                     <DrawerHeaderAttentionBlock overviewData={overviewData} />
                 </div>
                 <div

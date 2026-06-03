@@ -50,7 +50,7 @@ describe("drawerCoordinatedRevealRegression (source)", () => {
         const reserve = readSrc("components/admin/entity/PersonDrawerSectionCoordinatedReserve.tsx");
         const operating = readSrc("components/admin/entity/PersonDrawerOperatingSections.tsx");
         expect(reserve).toContain("min-h-[11rem]");
-        expect(operating).toContain('variant="household"');
+        expect(operating).toContain("data-person-drawer-layout-variant={variant.variant_key}");
         expect(reserve).not.toContain("skeleton-pulse");
     });
 });

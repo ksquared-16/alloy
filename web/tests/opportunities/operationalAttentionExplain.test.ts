@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildQueueOperationalAttentionPresentation } from "@/lib/opportunities/operationalAttentionExplain";
+import {
+    buildQueueOperationalAttentionPresentation,
+    nextStepGuidance,
+} from "@/lib/opportunities/operationalAttentionExplain";
 
 describe("buildQueueOperationalAttentionPresentation", () => {
     it("compresses multi-reason and adds wait token", () => {
@@ -42,5 +45,16 @@ describe("buildQueueOperationalAttentionPresentation", () => {
         const row = { _attention_reason_label: "Tour follow-up overdue" };
         const r = buildQueueOperationalAttentionPresentation(row);
         expect(r.summaryLine).toContain("Tour follow-up overdue");
+    });
+});
+
+describe("nextStepGuidance", () => {
+    it("returns readiness-specific copy for missing_required_info", () => {
+        const line = nextStepGuidance({
+            primaryCode: "missing_required_info",
+            waitingBucket: "none",
+            worstSlaTier: "ok",
+        });
+        expect(line).toContain("missing fields");
     });
 });

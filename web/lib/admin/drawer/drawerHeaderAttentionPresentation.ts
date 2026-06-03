@@ -3,8 +3,17 @@ import { resolveDrawerReviewAssistViewModel } from "@/lib/adminV2/bos/recommenda
 import type { ResolvedDrawerRecommendationDisplay } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceSelectors";
 import {
     shouldShowDrawerUrgencyChip,
-    shouldShowDrawerWhatChanged,
 } from "@/lib/adminV2/bos/recommendations/selectors/reviewAssistPresentation";
+import type {
+    OpportunityAttentionResult,
+    ResolvedOpportunityAttentionReason,
+} from "@/lib/opportunities/opportunityAttentionResolver";
+import { READINESS_ATTENTION_REASON_CODE } from "@/lib/opportunities/readinessAttentionProjection";
+
+/** Scroll target for the drawer Required Information panel (PR B). */
+export const DRAWER_REQUIRED_INFORMATION_PANEL_ANCHOR_ID = "opportunity-drawer-required-information";
+
+export const DRAWER_REQUIRED_INFORMATION_LINK_LABEL = "View required fields";
 
 function trimOrNull(v: unknown): string | null {
     const s = v != null ? String(v).trim() : "";
@@ -16,8 +25,128 @@ export function drawerHeaderAttentionSummaryLine(display: ResolvedDrawerRecommen
     return display.doNext?.trim() || display.operationalRead?.trim() || "";
 }
 
-/** Header attention strip is visible (chips and/or summary). */
-export function isDrawerHeaderAttentionVisible(overviewData: Record<string, unknown> | null | undefined): boolean {
+function parseOperationalAttentionFromOverview(
+    overviewData: Record<string, unknown> | null | undefined
+): OpportunityAttentionResult | null {
+    const raw = overviewData?._operational_attention;
+    if (!raw || typeof raw !== "object") return null;
+    return raw as OpportunityAttentionResult;
+}
+
+/** True when a reason was projected from readiness (consumes attach payload only). */
+export function isReadinessSourcedAttentionReason(reason: ResolvedOpportunityAttentionReason): boolean {
+    if (reason.code === READINESS_ATTENTION_REASON_CODE) return true;
+    if (reason.attention_source === "readiness") return true;
+    return Boolean(reason.readiness_gap_ids?.length);
+}
+
+export function collectReadinessAttentionReasons(
+    attention: OpportunityAttentionResult
+): ResolvedOpportunityAttentionReason[] {
+    return attention.reasons.filter(isReadinessSourcedAttentionReason);
+}
+
+export type DrawerHeaderReadinessAttentionContext = {
+    hasReadinessAttention: boolean;
+    readinessReasons: ResolvedOpportunityAttentionReason[];
+    /** Primary attention reason is readiness-sourced. */
+    primaryIsReadiness: boolean;
+    primaryReason: ResolvedOpportunityAttentionReason | null;
+    gapLabels: string[];
+    primarySummaryLine: string | null;
+    nextStepLine: string | null;
+    /** When platform/BOS is primary but readiness gaps also exist. */
+    supportingLine: string | null;
+    severityChipLabel: string | null;
+};
+
+function formatReadinessSupportingLine(gapLabels: string[]): string | null {
+    const missing = readinessHeaderMissingLine(gapLabels);
+    if (!missing) return null;
+    return `Also missing: ${missing}`;
+}
+
+/** Short missing-fields line for readiness header surfacing. */
+export function readinessHeaderMissingLine(gapLabels: string[]): string | null {
+    if (!gapLabels.length) return null;
+    if (gapLabels.length === 1) return gapLabels[0]!;
+    const head = gapLabels.slice(0, 2).join(", ");
+    const extra = gapLabels.length > 2 ? ` +${gapLabels.length - 2} more` : "";
+    return `${head}${extra}`;
+}
+
+/** Short action line — no service-window or escalation jargon. */
+export function readinessHeaderActionLine(gapLabels: string[]): string {
+    if (gapLabels.length === 1) {
+        return `Add ${gapLabels[0]!.toLowerCase()}.`;
+    }
+    return "Complete the missing fields.";
+}
+
+/** One-line why for readiness gaps. */
+export function readinessHeaderWhyLine(): string {
+    return "Needed to continue this inquiry.";
+}
+
+/** Readiness-generated attention from `_operational_attention` for drawer header surfacing. */
+export function resolveDrawerHeaderReadinessAttention(
+    overviewData: Record<string, unknown> | null | undefined
+): DrawerHeaderReadinessAttentionContext {
+    const empty: DrawerHeaderReadinessAttentionContext = {
+        hasReadinessAttention: false,
+        readinessReasons: [],
+        primaryIsReadiness: false,
+        primaryReason: null,
+        gapLabels: [],
+        primarySummaryLine: null,
+        nextStepLine: null,
+        supportingLine: null,
+        severityChipLabel: null,
+    };
+
+    const attention = parseOperationalAttentionFromOverview(overviewData);
+    if (!attention?.needs_attention) return empty;
+
+    const readinessReasons = collectReadinessAttentionReasons(attention);
+    if (!readinessReasons.length) return empty;
+
+    const primary = attention.primary_reason;
+    const primaryIsReadiness = primary != null && isReadinessSourcedAttentionReason(primary);
+
+    const gapLabels: string[] = [];
+    const seen = new Set<string>();
+    for (const reason of readinessReasons) {
+        const label = reason.label.trim();
+        if (!label || seen.has(label)) continue;
+        seen.add(label);
+        gapLabels.push(label);
+    }
+
+    const primaryLabel =
+        primaryIsReadiness && primary
+            ? primary.label.trim() || readinessHeaderMissingLine(gapLabels)
+            : null;
+    const severityChipLabel = null;
+
+    const nextStepLine = primaryIsReadiness ? readinessHeaderActionLine(gapLabels) : null;
+
+    return {
+        hasReadinessAttention: true,
+        readinessReasons,
+        primaryIsReadiness,
+        primaryReason: primaryIsReadiness ? primary : null,
+        gapLabels,
+        primarySummaryLine: primaryLabel,
+        nextStepLine,
+        supportingLine: primaryIsReadiness ? null : formatReadinessSupportingLine(gapLabels),
+        severityChipLabel,
+    };
+}
+
+/** BOS / review-assist header chrome visible (unchanged pre-readiness behavior). */
+export function isDrawerHeaderReviewAssistVisible(
+    overviewData: Record<string, unknown> | null | undefined
+): boolean {
     const reviewAssist = resolveDrawerReviewAssistViewModel(overviewData);
     if (!reviewAssist) return false;
 
@@ -28,26 +157,17 @@ export function isDrawerHeaderAttentionVisible(overviewData: Record<string, unkn
     return showChip || showEscalationChip || Boolean(summary);
 }
 
+/** Header attention strip is visible (chips and/or summary). */
+export function isDrawerHeaderAttentionVisible(overviewData: Record<string, unknown> | null | undefined): boolean {
+    if (resolveDrawerHeaderReadinessAttention(overviewData).hasReadinessAttention) return true;
+    return isDrawerHeaderReviewAssistVisible(overviewData);
+}
+
 /** Expanded header panel has non-duplicate guidance content. */
 export function hasDrawerHeaderAttentionExpandableContent(
     overviewData: Record<string, unknown> | null | undefined
 ): boolean {
-    const reviewAssist = resolveDrawerReviewAssistViewModel(overviewData);
-    if (!reviewAssist) return false;
-
-    const { display, supportingDetail, readinessChrome, priorityExplanation, urgencyChipContext } = reviewAssist;
-    const trustLines = readinessChrome?.trustLines ?? [];
-    const summary = drawerHeaderAttentionSummaryLine(display);
-    const doNext = display.doNext?.trim() ?? "";
-
-    return (
-        Boolean(trimOrNull(display.whyNow)) ||
-        shouldShowDrawerWhatChanged(display) ||
-        trustLines.length > 0 ||
-        Boolean(supportingDetail) ||
-        Boolean(priorityExplanation?.compactReason && shouldShowDrawerUrgencyChip(display, urgencyChipContext)) ||
-        Boolean(doNext && doNext !== summary)
-    );
+    return hasDrawerHeaderMoreGuidanceContent(overviewData);
 }
 
 /** @deprecated Header owns all review-assist messaging when visible. */
@@ -57,12 +177,122 @@ export function hasDrawerReviewAssistBodyGuidance(
     return hasDrawerHeaderAttentionExpandableContent(overviewData);
 }
 
+export type DrawerHeaderMoreGuidanceLine = {
+    key: string;
+    label: string;
+    body: string;
+};
+
+function humanizeGuidanceCopy(text: string): string {
+    const trimmed = text.trim();
+    if (!trimmed) return "";
+    const dedupedBreached = trimmed
+        .replace(/\bSLA breached\s*[·•|]\s*breached\b/gi, "Past due")
+        .replace(/\bbreached\s*[·•|]\s*breached\b/gi, "Past due");
+    const parts = dedupedBreached.split(/\s*[·•|]\s*/).map((p) => p.trim()).filter(Boolean);
+    const seen = new Set<string>();
+    const unique: string[] = [];
+    for (const part of parts) {
+        const key = part.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        unique.push(part);
+    }
+    return unique.join(" · ");
+}
+
+/** Readiness-only More guidance — shortest human form, no operational jargon. */
+export function buildReadinessDrawerHeaderMoreGuidance(
+    ctx: DrawerHeaderReadinessAttentionContext
+): DrawerHeaderMoreGuidanceLine[] {
+    const lines: DrawerHeaderMoreGuidanceLine[] = [];
+    const missing = readinessHeaderMissingLine(ctx.gapLabels);
+    if (missing) {
+        lines.push({ key: "missing", label: "What's missing", body: missing });
+    }
+    lines.push({ key: "why", label: "Why it matters", body: readinessHeaderWhyLine() });
+    const action = readinessHeaderActionLine(ctx.gapLabels);
+    if (action) {
+        lines.push({ key: "do", label: "What to do", body: action });
+    }
+    return lines;
+}
+
+/** Short operator-facing lines for the drawer header More guidance panel. */
+export function buildDrawerHeaderMoreGuidance(input: {
+    display: ResolvedDrawerRecommendationDisplay;
+    summary: string;
+    doNext: string;
+    readinessCtx: DrawerHeaderReadinessAttentionContext;
+    supportingDetail: import("@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceSelectors").ResolvedDrawerSupportingDetail | null;
+}): DrawerHeaderMoreGuidanceLine[] {
+    if (input.readinessCtx.primaryIsReadiness) {
+        return buildReadinessDrawerHeaderMoreGuidance(input.readinessCtx);
+    }
+
+    const lines: DrawerHeaderMoreGuidanceLine[] = [];
+
+    const why = humanizeGuidanceCopy(input.display.whyNow?.trim() ?? "");
+    if (why) {
+        lines.push({ key: "why", label: "Why this needs attention", body: why });
+    }
+
+    const next = humanizeGuidanceCopy(input.doNext);
+    if (next && next.toLowerCase() !== input.summary.trim().toLowerCase()) {
+        lines.push({ key: "next", label: "What to do next", body: next });
+    }
+
+    if (input.readinessCtx.hasReadinessAttention && input.readinessCtx.supportingLine) {
+        const missing = input.readinessCtx.supportingLine.replace(/^Also missing:\s*/i, "").trim();
+        if (missing) {
+            lines.push({ key: "missing", label: "What's missing", body: missing });
+        }
+    } else {
+        let driving: string | null = input.supportingDetail?.primaryFactorLabel?.trim() ?? null;
+        if (!driving) {
+            const read = input.display.operationalRead?.trim() ?? "";
+            if (read && read.toLowerCase() !== input.summary.trim().toLowerCase()) {
+                driving = read;
+            }
+        }
+        const drivingCopy = humanizeGuidanceCopy(driving ?? "");
+        if (drivingCopy) {
+            lines.push({ key: "driving", label: "What is driving it", body: drivingCopy });
+        }
+    }
+
+    return lines;
+}
+
+export function hasDrawerHeaderMoreGuidanceContent(
+    overviewData: Record<string, unknown> | null | undefined
+): boolean {
+    const readinessCtx = resolveDrawerHeaderReadinessAttention(overviewData);
+    if (readinessCtx.primaryIsReadiness) {
+        return buildReadinessDrawerHeaderMoreGuidance(readinessCtx).length > 0;
+    }
+
+    const reviewAssist = resolveDrawerReviewAssistViewModel(overviewData);
+    if (!reviewAssist) {
+        return false;
+    }
+    return (
+        buildDrawerHeaderMoreGuidance({
+            display: reviewAssist.display,
+            summary: drawerHeaderAttentionSummaryLine(reviewAssist.display),
+            doNext: reviewAssist.display.doNext?.trim() ?? "",
+            readinessCtx,
+            supportingDetail: reviewAssist.supportingDetail,
+        }).length > 0
+    );
+}
+
 /** Shared surface for drawer header attention (matches body intelligence band accent). */
 export const DRAWER_HEADER_ATTENTION_SURFACE =
-    "rounded-xl bg-gradient-to-br from-white via-white to-alloy-stone/25 ring-1 ring-alloy-midnight/[0.06] border-l-[3px] border-l-alloy-blue/40";
+    "w-full rounded-xl bg-gradient-to-br from-white via-white to-alloy-stone/25 ring-1 ring-alloy-midnight/[0.06] border-l-[3px] border-l-alloy-blue/40";
 
 /** Full rail width — header attention is context, not a compact control. */
-export const DRAWER_HEADER_ATTENTION_MAX_WIDTH = "w-full max-w-full";
+export const DRAWER_HEADER_ATTENTION_MAX_WIDTH = "w-full max-w-full min-w-0";
 
 const REVIEWABLE_OPERATOR_STATUSES = new Set(["needs_review", "needs_correction"]);
 

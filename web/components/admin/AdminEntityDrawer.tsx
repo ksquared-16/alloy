@@ -452,7 +452,6 @@ import {
 } from "@/lib/admin/opportunityDrawerBootstrapClient";
 import type { DrawerOperTrustPreviewV1 } from "@/lib/admin/opportunityDrawerOperationalBootstrapTypes";
 import type { OpportunityDrawerOperationalBootstrapResponse } from "@/lib/admin/opportunityDrawerOperationalBootstrapTypes";
-import { OpportunityDrawerRequiredInformationPanel } from "@/components/admin/opportunity/OpportunityDrawerRequiredInformationPanel";
 import type { ReadinessResult } from "@/lib/completion/readinessTypes";
 import { AdminV2DrawerLoadingState } from "@/components/admin/workspace/AdminV2DrawerLoadingState";
 import type { RecordLayoutRow } from "@/lib/recordChrome/types";
@@ -485,7 +484,8 @@ import {
 } from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
-import { formatActivityRelativeShort, type ActivitySignalResult } from "@/lib/admin/activitySignals";
+import { formatActivityRelativeShort, formatActivitySignalSummary, type ActivitySignalResult } from "@/lib/admin/activitySignals";
+import { OPPORTUNITY_ACTIVITY_STATUS_KEY_LABELS } from "@/lib/admin/opportunityActivityTimelineFormat";
 import { formatOpportunityActivityTimelineEvent } from "@/lib/admin/opportunityActivityTimelineFormat";
 import OpportunityQuoteIntakeSection from "@/components/admin/quoteIntake/OpportunityQuoteIntakeSection";
 import OpportunityEnrollmentPacketModal from "@/components/admin/opportunity/OpportunityEnrollmentPacketModal";
@@ -4962,6 +4962,16 @@ export default function AdminEntityDrawer() {
         if (!statusKey) return null;
         const opt = statusDefsForDrawer.find((s) => s.status_key === statusKey);
         return opt?.status_label ?? null;
+    }, [statusDefsForDrawer]);
+
+    const opportunityActivityStatusKeyLabels = useMemo(() => {
+        const labels: Record<string, string> = { ...OPPORTUNITY_ACTIVITY_STATUS_KEY_LABELS };
+        for (const def of statusDefsForDrawer) {
+            const key = def.status_key?.trim();
+            const label = def.status_label?.trim();
+            if (key && label) labels[key] = label;
+        }
+        return labels;
     }, [statusDefsForDrawer]);
 
     const defaultStatusKeyForCreate = useMemo(() => {
@@ -11750,7 +11760,8 @@ export default function AdminEntityDrawer() {
         const stale = sig?.stale_signal ?? null;
         const hasActivity = Boolean(sig?.last_activity_at && String(sig.last_activity_at).trim());
         const rel = hasActivity && sig?.last_activity_at ? formatActivityRelativeShort(sig.last_activity_at, nowMs) : null;
-        const summary = (sig?.last_activity_summary ?? "").trim();
+        const summaryRaw = formatActivitySignalSummary(sig?.last_activity_summary, opportunityActivityStatusKeyLabels);
+        const summary = summaryRaw?.trim() ?? "";
         const detail =
             summary && rel ? `${summary} · ${rel}` : summary || rel || (hasActivity ? "Activity" : null);
 
@@ -11778,7 +11789,7 @@ export default function AdminEntityDrawer() {
                 ) : null}
             </div>
         );
-    }, [drawer.type, overviewData, opportunityActivitySignal, opportunityActivitySignalLoading]);
+    }, [drawer.type, overviewData, opportunityActivitySignal, opportunityActivitySignalLoading, opportunityActivityStatusKeyLabels]);
 
     const opportunityQueuePreviewSeed = drawer.opportunityQueuePreviewSeed;
     const opportunityDrawerPreviewSubtitle = useMemo(() => {
@@ -15784,14 +15795,6 @@ export default function AdminEntityDrawer() {
                                                         }
                                                     }}
                                                     onRecordUpdated={mergePersonDrawerRecord}
-                                                />
-                                            ) : null}
-                                            {drawer.type === "opportunities" &&
-                                            drawer.id &&
-                                            drawer.id !== "new" &&
-                                            !(overviewData as { _create?: boolean })?._create ? (
-                                                <OpportunityDrawerRequiredInformationPanel
-                                                    readiness={opportunityDrawerReadiness}
                                                 />
                                             ) : null}
                                             <EntityDrawerOverview

@@ -7,7 +7,7 @@ import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceRootMetrics } from "@/components/admin/workspace/WorkspaceRootShell";
 import type { WorkspaceRootDepartmentRow, WorkspaceRootDeptTileStats } from "@/components/admin/workspace/WorkspaceRootDepartmentGrid";
 
-const SCHEMA_V = 4 as const;
+const SCHEMA_V = 5 as const;
 
 export type CachedWorkspaceRoot = {
     v: typeof SCHEMA_V;
@@ -44,7 +44,13 @@ export type CachedDepartmentPage = {
     v: typeof SCHEMA_V;
     savedAtMs: number;
     dept: { id: string; name: string | null; key: string | null };
-    workUnits: Array<{ id: string; name: string | null; key: string | null }>;
+    workUnits: Array<{
+        id: string;
+        name: string | null;
+        key: string | null;
+        sort_order?: number | null;
+        metadata?: unknown;
+    }>;
     workUnitSummaries: Record<string, { total: number; needs_attention: number | null }>;
     summariesComplete: boolean;
     /**
