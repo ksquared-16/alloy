@@ -44,13 +44,13 @@ describe("Lifecycle builder stabilization pass", () => {
         ]);
     });
 
-    it("work unit queue has no sync button and uses stabilization copy", () => {
+    it("queue view has no sync button and uses stabilization copy", () => {
         const card = read("components/adminV2/settings/enrollmentProcess/LifecycleStageWorkUnitCard.tsx");
         expect(card).not.toContain("lifecycle-sync-queue-statuses");
         expect(card).not.toContain("Update queue filters");
-        expect(card).toContain("lifecycle-work-unit-queue-copy");
-        expect(card).toContain("This queue shows records that are currently in this stage");
-        expect(card).toContain("Create Work Unit Queue");
+        expect(card).toContain("lifecycle-queue-view-copy");
+        expect(card).toContain("This queue view shows records that are currently in this stage");
+        expect(card).toContain("Publish queue view");
     });
 
     it("status save auto-syncs queue server-side", () => {
@@ -61,7 +61,7 @@ describe("Lifecycle builder stabilization pass", () => {
     it("scratch hub has no hardcoded enrollment stage order", () => {
         const hub = read("components/adminV2/settings/LifecycleHubClient.tsx");
         expect(hub).not.toContain("LIFECYCLE_STAGE_ORDER");
-        expect(hub).toContain("Work Unit Queue");
+        expect(hub).toContain("Queue view");
         expect(hub).toContain("Required Fields");
     });
 

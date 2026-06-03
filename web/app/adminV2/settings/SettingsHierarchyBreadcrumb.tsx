@@ -112,6 +112,11 @@ function crumbsForPath(path: string): Crumb[] {
         return base;
     }
 
+    if (tail === "/lifecycle" || tail.startsWith("/lifecycle/")) {
+        base.push({ label: "Lifecycle", href: null });
+        return base;
+    }
+
     const remainder = tail.replace(/^\//, "").replace(/\/$/, "") || "Page";
     return [{ label: "Settings", href: SETTINGS_ROOT }, { label: remainder, href: null }];
 }

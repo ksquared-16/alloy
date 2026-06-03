@@ -71,14 +71,14 @@ describe("Lifecycle Activation Runtime Truth UI", () => {
         const nav = read("components/adminV2/settings/lifecycle/LifecycleStageNav.tsx");
         expect(board).toContain("lifecycle-builder-board");
         expect(nav).toContain("lifecycle-stage-tabs");
-        expect(board).toContain("lifecycle-runtime-validation-section");
+        expect(board).toContain("LifecycleStageConfiguration");
     });
 
-    it("stage configuration saves without wizard step nav", () => {
+    it("stage configuration uses unified save without wizard step nav", () => {
         const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
-        const config = read("components/adminV2/settings/lifecycle/LifecycleStageConfiguration.tsx");
+        const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
         expect(board).not.toContain("LifecycleActivationWizardNav");
-        expect(config).toContain("Save statuses");
+        expect(workspace).toContain("Save stage");
         expect(board).not.toContain("Continue to Work Unit Queue");
         expect(board).not.toContain("Continue to Add action");
     });
@@ -96,15 +96,14 @@ describe("Lifecycle Activation Runtime Truth UI", () => {
         const wu = read("components/adminV2/settings/enrollmentProcess/LifecycleStageWorkUnitCard.tsx");
         expect(wu).toContain("stageStatusDisplayLabels");
         expect(wu).not.toContain("|| `${stageLabel} queue`");
-        expect(read("components/adminV2/settings/lifecycle/LifecycleStageConfiguration.tsx")).toContain(
+        expect(read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx")).toContain(
             "stageStatusDisplayLabels"
         );
     });
 
-    it("renders placement checkboxes and Create Lead base action", () => {
-        const config = read("components/adminV2/settings/lifecycle/LifecycleStageConfiguration.tsx");
-        expect(config).toContain("lifecycle-activation-action-placements");
-        expect(config).toContain("lifecycleActivationBaseActions");
+    it("actions matrix renders placement toggles and base actions", () => {
+        const matrix = read("components/adminV2/settings/lifecycle/LifecycleActionsMatrix.tsx");
+        expect(matrix).toContain("enabled");
         expect(read("lib/lifecycle/lifecycleStageBaseActions.ts")).toContain("create_record");
         expect(read("lib/lifecycle/lifecycleStageBaseActions.ts")).toContain("Create ${leadLabel}");
     });

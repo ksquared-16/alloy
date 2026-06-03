@@ -1,75 +1,104 @@
 "use client";
 
-import { type ReactNode } from "react";
-import LifecycleStageGuidedBoard from "@/components/adminV2/settings/lifecycle/LifecycleStageGuidedBoard";
+import { type ReactNode, useRef } from "react";
+import LifecycleStageWorkspace, {
+    type LifecycleStageSaveUiState,
+    type LifecycleStageWorkspaceHandle,
+} from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkspace";
 import type { EnrollmentStatusStagesPayload } from "@/lib/lifecycle/enrollmentProcessStatusStageConfig";
 import type { EnrollmentPipelineWorkUnitSnapshot } from "@/lib/lifecycle/parseEnrollmentPipelineQueues";
 import type { LifecycleStageBootstrapPayload } from "@/lib/lifecycle/lifecycleStageBootstrapTypes";
+import type { LifecycleRequirementEntityKey } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 import type { LifecycleStatusesSaveState } from "@/lib/lifecycle/lifecycleStatusesCardState";
+import type { LifecycleStageWorkUnitIdentityUiState } from "@/components/adminV2/settings/enrollmentProcess/LifecycleStageWorkUnitCard";
 
 export default function LifecycleStageConfiguration({
     departmentId,
     stageKey,
+    stageLabel,
+    lifecycleName,
     bootstrap,
     bootstrapLoading,
     statusesPayload,
-    statusesSaving,
     statusesSaveState,
     savedStatusKeys,
     statusesError,
     onToggleStatus,
-    onSaveStatuses,
-    canSaveStatuses,
-    statusesSaveDisabledReason,
     pipeline,
     workUnitIdentityState,
     workUnitNeedsSync,
     onPipelineUpdated,
     statusDisplayLabels,
+    draftStatusLabels,
+    enabledActionsCount,
+    actionsSection,
     validationSlot,
+    readyCheckRefreshKey,
+    saveState,
+    saveError,
+    onSaveStage,
+    onDirtyChange,
+    workspaceHandleRef,
 }: {
     departmentId: string;
     stageKey: string;
+    stageLabel: string;
+    lifecycleName: string;
     bootstrap: LifecycleStageBootstrapPayload | null;
     bootstrapLoading: boolean;
     statusesPayload: EnrollmentStatusStagesPayload | null;
-    statusesSaving: boolean;
     statusesSaveState: LifecycleStatusesSaveState;
     savedStatusKeys: readonly string[];
     statusesError: string | null;
     onToggleStatus: (statusKey: string, selected: boolean) => void;
-    onSaveStatuses: () => void | Promise<void>;
-    canSaveStatuses: boolean;
-    statusesSaveDisabledReason: string | null;
     pipeline: EnrollmentPipelineWorkUnitSnapshot | null;
-    workUnitIdentityState: "not_created" | "synced" | "needs_sync" | "conflict";
+    workUnitIdentityState: LifecycleStageWorkUnitIdentityUiState;
     workUnitNeedsSync: boolean;
     onPipelineUpdated: (snapshot: EnrollmentPipelineWorkUnitSnapshot | null) => void | Promise<void>;
     statusDisplayLabels: string[];
+    draftStatusLabels: string[];
+    enabledActionsCount: number;
+    actionsSection: ReactNode;
     validationSlot: ReactNode;
+    readyCheckRefreshKey?: string;
+    saveState: LifecycleStageSaveUiState;
+    saveError: string | null;
+    onSaveStage: () => void | Promise<void>;
+    onDirtyChange?: (dirty: boolean) => void;
+    workspaceHandleRef?: React.RefObject<LifecycleStageWorkspaceHandle | null>;
 }) {
+    const localRef = useRef<LifecycleStageWorkspaceHandle | null>(null);
+    const ref = workspaceHandleRef ?? localRef;
+
     return (
         <div data-testid="lifecycle-stage-configuration">
-            <LifecycleStageGuidedBoard
+            <LifecycleStageWorkspace
+                workspaceRef={ref}
                 departmentId={departmentId}
                 stageKey={stageKey}
+                stageLabel={stageLabel}
+                lifecycleName={lifecycleName}
                 bootstrap={bootstrap}
                 bootstrapLoading={bootstrapLoading}
                 statusesPayload={statusesPayload}
-                statusesSaving={statusesSaving}
                 statusesSaveState={statusesSaveState}
                 savedStatusKeys={savedStatusKeys}
                 statusesError={statusesError}
                 onToggleStatus={onToggleStatus}
-                onSaveStatuses={onSaveStatuses}
-                canSaveStatuses={canSaveStatuses}
-                statusesSaveDisabledReason={statusesSaveDisabledReason}
                 pipeline={pipeline}
                 workUnitIdentityState={workUnitIdentityState}
                 workUnitNeedsSync={workUnitNeedsSync}
                 onPipelineUpdated={onPipelineUpdated}
                 statusDisplayLabels={statusDisplayLabels}
+                draftStatusLabels={draftStatusLabels}
+                enabledActionsCount={enabledActionsCount}
+                actionsSection={actionsSection}
                 validationSlot={validationSlot}
+                readyCheckRefreshKey={readyCheckRefreshKey}
+                saveState={saveState}
+                saveError={saveError}
+                onSaveStage={onSaveStage}
+                onDirtyChange={onDirtyChange}
             />
         </div>
     );

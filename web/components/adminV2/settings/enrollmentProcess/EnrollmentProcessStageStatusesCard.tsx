@@ -185,7 +185,7 @@ export default function EnrollmentProcessStageStatusesCard({
     return (
         <div className="space-y-2" data-testid="lifecycle-statuses-editor">
             <p className="text-[11px] leading-relaxed text-alloy-midnight/60">
-                Add or remove opportunity statuses for this stage. Saved statuses drive the Work Unit Queue filter
+                Add or remove opportunity statuses for this stage. Saved statuses drive the queue view filter
                 automatically.
             </p>
 

@@ -66,13 +66,13 @@ export function buildLifecycleActivationCompactChecks(
         map.get("dept_queue")?.pass === true && lifecycleWuPass && noLegacyLanesPass;
     const workUnitsSummary = !lifecycleWuPass
         ? (map.get("dept_runtime_lifecycle_work_units")?.detail ??
-          "Create lifecycle work unit queues for each stage.")
+          "Publish a queue view for each stage.")
         : !noLegacyLanesPass
           ? (map.get("dept_no_legacy_pipeline_lanes")?.detail ??
-            "Legacy enrollment pipeline lanes would still appear on /dept.")
+            "Legacy enrollment pipeline lanes would still appear on the department page.")
           : workUnitsPass
-            ? (map.get("dept_queue")?.detail ?? "Work unit queues are listed on the department page.")
-            : (map.get("dept_queue")?.detail ?? "Create and name each stage work unit queue.");
+            ? (map.get("dept_queue")?.detail ?? "Queue views are listed on the department page.")
+            : (map.get("dept_queue")?.detail ?? "Save each stage to publish its queue view.");
 
     const queueFiltersCheck =
         map.get("work_unit_queue_filters") ?? map.get("work_unit_records");
@@ -82,10 +82,10 @@ export function buildLifecycleActivationCompactChecks(
         queueFiltersCheck?.detail?.includes("filters missing") ||
         queueFiltersCheck?.detail?.includes("Repair queue filters");
     const queueFiltersSummary = filterMismatch
-        ? "Sync queue filters to the statuses selected for this stage."
+        ? "Update the queue view so it matches the statuses selected for this stage."
         : queueFiltersPass
-          ? (queueFiltersCheck?.detail ?? "Queue filters match selected statuses.")
-          : (queueFiltersCheck?.detail ?? "Assign statuses and create the work unit queue first.");
+          ? (queueFiltersCheck?.detail ?? "Queue view filters match selected statuses.")
+          : (queueFiltersCheck?.detail ?? "Select statuses and save the stage to publish the queue view.");
 
     const recordsQueryCheck =
         map.get("work_unit_records_query") ?? map.get("work_unit_records");
@@ -120,7 +120,7 @@ export function buildLifecycleActivationCompactChecks(
         },
         {
             id: "work_units_visible",
-            label: "Work units visible",
+            label: "Queue views published",
             pass: workUnitsPass,
             summary: workUnitsSummary,
             href: map.get("dept_queue")?.href ?? null,
@@ -128,7 +128,7 @@ export function buildLifecycleActivationCompactChecks(
         },
         {
             id: "queue_filters",
-            label: "Queue filters connected",
+            label: "Queue views match statuses",
             pass: queueFiltersPass,
             summary: queueFiltersSummary,
             href: queueFiltersCheck?.href ?? null,

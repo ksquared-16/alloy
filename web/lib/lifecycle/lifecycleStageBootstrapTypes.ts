@@ -3,7 +3,10 @@ import type { EnrollmentProcessFormCoverageRow } from "@/lib/lifecycle/enrollmen
 import type { LifecycleConfiguredActionRow } from "@/lib/lifecycle/lifecycleConfiguredActionRows";
 import type { EnrollmentPipelineWorkUnitSnapshot } from "@/lib/lifecycle/parseEnrollmentPipelineQueues";
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
-import type { LifecycleStageFieldRules } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
+import type {
+    LifecycleRequirementEntityKey,
+    LifecycleStageFieldRules,
+} from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 import type { LifecycleBaseActionDefinition } from "@/lib/lifecycle/lifecycleStageBaseActions";
 
 export type LifecycleStageBootstrapFieldPaletteEntry = {
@@ -17,6 +20,11 @@ export type LifecycleStageBootstrapFieldPaletteEntry = {
 };
 
 export type LifecycleStageBootstrapFieldRequirements = {
+    platform?: {
+        field_rules: LifecycleStageFieldRules;
+        required_labels?: string[];
+        recommended_labels?: string[];
+    };
     effective: {
         field_rules: LifecycleStageFieldRules;
         field_rules_source: string;
@@ -35,6 +43,7 @@ export type LifecycleStageBootstrapPayload = {
     statuses: EnrollmentStatusStagesPayload;
     pipeline: EnrollmentPipelineWorkUnitSnapshot | null;
     field_requirements: LifecycleStageBootstrapFieldRequirements | null;
+    entity_display_labels?: Partial<Record<LifecycleRequirementEntityKey, string>>;
     actions: LifecycleConfiguredActionRow[];
     forms: EnrollmentProcessFormCoverageRow[];
     linkable_forms: { id: string; name: string }[];

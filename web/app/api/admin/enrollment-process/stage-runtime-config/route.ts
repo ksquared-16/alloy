@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
         selected_status_keys?: string[];
         status_keys?: string[];
         work_unit_name?: string | null;
+        field_rules?: { required_rule_ids?: string[]; recommended_rule_ids?: string[] } | null;
     } = {};
     try {
         body = (await request.json()) as typeof body;
@@ -90,6 +91,19 @@ export async function POST(request: NextRequest) {
     const workUnitName =
         typeof body.work_unit_name === "string" ? body.work_unit_name.trim() || null : null;
 
+    const fieldRulesRaw = body.field_rules;
+    const fieldRules =
+        fieldRulesRaw && typeof fieldRulesRaw === "object" && !Array.isArray(fieldRulesRaw)
+            ? {
+                  required_rule_ids: Array.isArray(fieldRulesRaw.required_rule_ids)
+                      ? fieldRulesRaw.required_rule_ids.filter((x): x is string => typeof x === "string")
+                      : [],
+                  recommended_rule_ids: Array.isArray(fieldRulesRaw.recommended_rule_ids)
+                      ? fieldRulesRaw.recommended_rule_ids.filter((x): x is string => typeof x === "string")
+                      : [],
+              }
+            : null;
+
     const supabase = createAdminClient();
     const deptOk = await assertRowOrg(supabase, "departments", departmentId, ctx.orgId);
     if (!deptOk.ok) return NextResponse.json({ error: "Department not found" }, { status: 404 });
@@ -106,6 +120,7 @@ export async function POST(request: NextRequest) {
             stageKey,
             selectedStatusKeys,
             workUnitName,
+            fieldRules,
         });
 
         const pipelineSnapshot =

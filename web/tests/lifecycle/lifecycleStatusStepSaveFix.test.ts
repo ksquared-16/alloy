@@ -33,18 +33,18 @@ describe("lifecycle status step save fix", () => {
         ).toBe(true);
     });
 
-    it("PATCH status-stages sends runtime department and stage", () => {
+    it("unified save sends runtime department, stage, and status keys", () => {
         const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
         expect(board).toContain("department_id: runtimeDepartmentId");
-        expect(board).toContain("stage: sk");
-        expect(board).toContain("LIFECYCLE_ACTIVATION_STATUS_STAGES_PATH");
+        expect(board).toContain("stage_key: sk");
+        expect(board).toContain("LIFECYCLE_STAGE_RUNTIME_CONFIG_PATH");
+        expect(board).toContain("selected_status_keys: selectedKeys");
     });
 
-    it("no duplicate Save button in statuses step component", () => {
-        const step = read("components/adminV2/settings/lifecycle/LifecycleActivationStatusesStep.tsx");
-        const saveButtons = (step.match(/<button/g) ?? []).length;
-        expect(saveButtons).toBe(0);
-        expect(step).not.toContain("onSave");
+    it("no duplicate Save button in statuses card", () => {
+        const card = read("components/adminV2/settings/lifecycle/LifecycleStatusesCard.tsx");
+        expect(card).not.toContain("Save statuses");
+        expect(card).not.toContain("onSaveStatuses");
     });
 
     it("work unit step receives statusDisplayLabels from board state", () => {
@@ -59,8 +59,8 @@ describe("lifecycle status step save fix", () => {
         expect(board).toContain("shouldSyncStatusDraftForStage");
         expect(board).toContain("statusDraftRef");
         expect(board).toContain("resolveLifecycleStatusesSaveState");
-        const guided = read("components/adminV2/settings/lifecycle/LifecycleStageGuidedBoard.tsx");
-        expect(guided).toContain("LifecycleStatusesCard");
+        const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
+        expect(workspace).toContain("LifecycleStatusesCard");
     });
 
     it("reloads status-stages after custom stage create before selecting stage", () => {
@@ -70,10 +70,10 @@ describe("lifecycle status step save fix", () => {
         expect(board).toContain("selectStage(stage, { statusesPayload: payload })");
     });
 
-    it("custom stage PATCH uses builder stage key from board state", () => {
+    it("custom stage save uses builder stage key from board state", () => {
         const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
-        expect(board).toContain("stage: sk");
-        expect(board).toContain("status_keys: selectedKeys");
+        expect(board).toContain("stage_key: sk");
+        expect(board).toContain("selected_status_keys: selectedKeys");
         expect(board).toContain("statusDraftRef.current.draftByStage");
     });
 

@@ -25,6 +25,11 @@ type FieldPaletteEntry = {
 };
 
 type StageConfigPayload = {
+    platform?: {
+        field_rules: LifecycleStageFieldRules;
+        required_labels?: string[];
+        recommended_labels?: string[];
+    };
     effective: {
         field_rules: LifecycleStageFieldRules;
         field_rules_source: string;
@@ -85,6 +90,10 @@ function levelsFromRules(
 
 export type LifecycleStageFieldRequirementsEditorHandle = {
     save: () => Promise<boolean>;
+    getDraftRules: () => LifecycleStageFieldRules;
+    isDirty: () => boolean;
+    applySuggestions: () => void;
+    applySavedRules: (rules: LifecycleStageFieldRules) => void;
 };
 
 export type LifecycleStageFieldRequirementsEditorProps = {
@@ -93,7 +102,10 @@ export type LifecycleStageFieldRequirementsEditorProps = {
     compact?: boolean;
     /** Guided board — single save on card footer. */
     guidedMode?: boolean;
+    /** Stage workspace — no inline save; parent orchestrates Save stage. */
+    workspaceMode?: boolean;
     prefetchedFieldRequirements?: LifecycleStageBootstrapFieldRequirements | null;
+    entityDisplayLabels?: Partial<Record<LifecycleRequirementEntityKey, string>>;
     onDirtyChange?: (dirty: boolean) => void;
     onFeedback?: (message: string | null) => void;
     onError?: (message: string | null) => void;
@@ -108,7 +120,9 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
         activeStageKey,
         compact = false,
         guidedMode = false,
+        workspaceMode = false,
         prefetchedFieldRequirements = null,
+        entityDisplayLabels: entityDisplayLabelsProp,
         onDirtyChange,
         onFeedback,
         onError,
@@ -151,6 +165,34 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
         return !stageData.has_department_override;
     }, [stageData]);
 
+    const dirtyRef = useRef(false);
+    dirtyRef.current = dirty;
+
+    const suggestionRules = useMemo(() => {
+        const platform = stageData?.platform?.field_rules;
+        if (!platform) return null;
+        const hasRules =
+            platform.required_rule_ids.length > 0 || platform.recommended_rule_ids.length > 0;
+        if (!hasRules) return null;
+        if (stageData?.has_department_override) return null;
+        return platform;
+    }, [stageData]);
+
+    const applySuggestions = useCallback(() => {
+        if (!suggestionRules || !palette.length) return;
+        setFieldLevels(levelsFromRules(palette, suggestionRules));
+        setLocalFeedback(null);
+        onFeedback?.(null);
+    }, [suggestionRules, palette, onFeedback]);
+
+    const applySavedRules = useCallback(
+        (rules: LifecycleStageFieldRules) => {
+            setSavedRules(rules);
+            setFieldLevels(levelsFromRules(palette, rules));
+        },
+        [palette]
+    );
+
     const showWaitlistHelper = isWaitlistBuilderStage(activeStageKey);
 
     useEffect(() => {
@@ -192,15 +234,24 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
     );
 
     useEffect(() => {
+        if (entityDisplayLabelsProp) {
+            setEntityDisplayLabels(entityDisplayLabelsProp);
+        }
+    }, [entityDisplayLabelsProp]);
+
+    useEffect(() => {
         if (!departmentId) return;
         if (prefetchedFieldRequirements) {
             setApiStages({
                 [activeStageKey]: prefetchedFieldRequirements,
             } as LifecycleRequirementsApiResponse["stages"]);
+            if (!entityDisplayLabelsProp) {
+                void loadConfig(departmentId);
+            }
             return;
         }
         void loadConfig(departmentId);
-    }, [departmentId, loadConfig, prefetchedFieldRequirements, activeStageKey]);
+    }, [departmentId, loadConfig, prefetchedFieldRequirements, activeStageKey, entityDisplayLabelsProp]);
 
     useEffect(() => {
         if (!stageData) return;
@@ -239,10 +290,12 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
             const j = (await res.json().catch(() => ({}))) as { error?: string };
             if (!res.ok) throw new Error(j.error ?? "Save failed");
             setSavedRules(draftRules);
-            const msg = "Saved.";
-            setLocalFeedback(msg);
-            onFeedback?.(msg);
-            if (!prefetchedFieldRequirements) {
+            if (!workspaceMode && !guidedMode) {
+                const msg = "Saved.";
+                setLocalFeedback(msg);
+                onFeedback?.(msg);
+            }
+            if (!prefetchedFieldRequirements && !workspaceMode) {
                 await loadConfig(departmentId);
             }
             return true;
@@ -264,14 +317,20 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
         onError,
         onFeedback,
         prefetchedFieldRequirements,
+        workspaceMode,
+        guidedMode,
     ]);
 
     useImperativeHandle(
         ref,
         () => ({
             save: async () => persistRequirements(),
+            getDraftRules: () => draftRules,
+            isDirty: () => dirtyRef.current,
+            applySuggestions,
+            applySavedRules,
         }),
-        [dirty, persistRequirements]
+        [persistRequirements, draftRules, applySuggestions, applySavedRules]
     );
 
     const resetStage = useCallback(async () => {
@@ -327,7 +386,7 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
                 </p>
             ) : null}
 
-            {!compact && !guidedMode ? (
+            {!compact && !guidedMode && !workspaceMode ? (
                 <div className="mb-3 flex flex-wrap items-center gap-2">
                     {!usingPlatformDefaults ? (
                         <span className="rounded-full bg-alloy-pine/10 px-2 py-0.5 text-[10px] font-medium text-alloy-pine">
@@ -335,7 +394,7 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
                         </span>
                     ) : (
                         <span className="rounded-full bg-alloy-stone/15 px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/60">
-                            Platform defaults
+                            Not configured yet
                         </span>
                     )}
                     <button
@@ -359,6 +418,27 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
                 </div>
             ) : null}
 
+            {suggestionRules && !dirty && savedRules.required_rule_ids.length === 0 && savedRules.recommended_rule_ids.length === 0 ? (
+                <div
+                    className="mb-3 rounded-md border border-alloy-forge/10 bg-alloy-stone/5 px-3 py-2"
+                    data-testid="lifecycle-field-suggestions"
+                >
+                    <p className="text-[11px] text-alloy-midnight/65">
+                        <span className="font-medium text-alloy-midnight/80">Suggested</span> — enrollment
+                        templates often require these fields. Applying suggestions does not save until you click{" "}
+                        <span className="font-medium">Save stage</span>.
+                    </p>
+                    <button
+                        type="button"
+                        className="mt-1.5 text-[11px] font-medium text-alloy-pine hover:underline"
+                        onClick={applySuggestions}
+                        data-testid="lifecycle-field-apply-suggestions"
+                    >
+                        Apply suggestions
+                    </button>
+                </div>
+            ) : null}
+
             {showWaitlistHelper ? (
                 <p
                     className="mb-3 text-xs text-alloy-midnight/55"
@@ -372,7 +452,7 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
                 <p className="text-xs text-alloy-midnight/50">Loading…</p>
             ) : (
                 <>
-                    {guidedMode || compact ? null : (
+                    {guidedMode || compact || workspaceMode ? null : (
                         <div className="mb-3">
                             <h3 className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
                                 Required Information
@@ -427,9 +507,6 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
                                 >
                                     <span className="min-w-0 truncate" data-testid={`lifecycle-field-label-${slug}`}>
                                         {field.field_label}
-                                        {field.config_only ? (
-                                            <span className="ml-1 text-[10px] text-alloy-midnight/40">(config only)</span>
-                                        ) : null}
                                     </span>
                                     <div
                                         className="flex shrink-0 gap-0.5 rounded-md border border-alloy-forge/15 p-0.5"
@@ -469,7 +546,7 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
                             data-testid="lifecycle-field-saved-summary"
                         >
                             <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/50">
-                                Saved
+                                Configured
                             </p>
                             {savedSummary.required.length > 0 ? (
                                 <p className="mt-0.5 line-clamp-2 text-[11px] text-alloy-midnight/75">

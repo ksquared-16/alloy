@@ -176,29 +176,27 @@ describe("Lifecycle Activation Step 3 UI", () => {
         expect(board).toContain("onStageCreated");
     });
 
-    it("does not use EnrollmentProcessStageStatusesCard in activation", () => {
+    it("does not use EnrollmentProcessStageStatusesCard in activation board", () => {
         const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
         expect(board).not.toContain("EnrollmentProcessStageStatusesCard");
-        expect(board).toContain("LifecycleActivationStatusesStep");
+        expect(board).toContain("LifecycleStageConfiguration");
     });
 
-    it("Statuses step uses single Save & continue without duplicate save button", () => {
+    it("stage workspace uses single Save stage without per-section save buttons", () => {
         const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
-        const step = read("components/adminV2/settings/lifecycle/LifecycleActivationStatusesStep.tsx");
-        expect(board).toContain("canConfirmStatusesStep");
-        expect(board).toContain("confirmStatusesAndContinue");
-        expect(board).toContain("lifecycle-activation-confirm-statuses");
-        expect(step).not.toMatch(/lifecycle-activation-statuses-save["']/);
-        expect(step).not.toContain("Save statuses");
-        expect(step).not.toContain("onSave");
+        const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
+        expect(board).toContain("saveStageUnified");
+        expect(workspace).toContain('data-testid="lifecycle-stage-save"');
+        expect(workspace).toContain("Save stage");
+        expect(workspace).not.toContain("Save statuses");
     });
 
-    it("confirm persists statuses then opens work unit step", () => {
+    it("unified save persists statuses and queue via stage-runtime-config", () => {
         const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
-        expect(board).toContain("saveStageStatuses");
+        expect(board).toContain("saveStageUnified");
+        expect(board).toContain("LIFECYCLE_STAGE_RUNTIME_CONFIG_PATH");
         expect(board).toContain("loadPipeline(runtimeDepartmentId)");
-        expect(board).toContain("setStep(4)");
-        expect(board).toContain("stageStatusDisplayLabels");
+        expect(board).toContain("statusDisplayLabels");
     });
 
     it("saveActivation checks PATCH response", () => {
@@ -206,16 +204,15 @@ describe("Lifecycle Activation Step 3 UI", () => {
         expect(board).toContain("Failed to save activation bundle");
     });
 
-    it("shows empty state with Create status", () => {
-        const step = read("components/adminV2/settings/lifecycle/LifecycleActivationStatusesStep.tsx");
-        expect(step).toContain("No statuses exist yet for this record type");
-        expect(step).toContain("lifecycle-activation-create-status");
+    it("statuses card shows empty state with Create status link", () => {
+        const card = read("components/adminV2/settings/lifecycle/LifecycleStatusesCard.tsx");
+        expect(card).toContain("No statuses exist yet for this record type");
+        expect(card).toContain("lifecycle-activation-create-status");
     });
 
-    it("persists status_keys before work unit queue step", () => {
+    it("persists status_keys via unified save and commitSaved", () => {
         const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
-        expect(board).toContain("saveStageStatuses");
-        expect(board).toContain("completed_steps: 3");
+        expect(board).toContain("saveStageUnified");
         expect(board).toContain("commitSaved");
         expect(board).toContain("savedStatusKeys");
     });

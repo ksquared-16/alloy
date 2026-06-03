@@ -15,43 +15,35 @@ function read(rel: string): string {
     return readFileSync(resolve(root, rel), "utf8");
 }
 
-describe("lifecycle builder guided board and prefetch", () => {
-    it("guided board renders Required, Statuses, and Queue in row 1", () => {
-        const board = read("components/adminV2/settings/lifecycle/LifecycleStageGuidedBoard.tsx");
-        expect(board).toContain('data-testid="lifecycle-guided-row-1"');
-        expect(board).toContain("md:grid-cols-3");
-        expect(board).toContain('stepId="required"');
-        expect(board).toContain('stepId="statuses"');
-        expect(board).toContain('stepId="queue"');
-        expect(board).toContain("Required Information");
-        expect(board).toContain("Work Unit Queue");
+describe("lifecycle builder stage workspace and prefetch", () => {
+    it("stage workspace orders operational sections before queue view", () => {
+        const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
+        expect(workspace).toContain('id="statuses"');
+        expect(workspace).toContain('id="required"');
+        expect(workspace).toContain('id="actions"');
+        expect(workspace).toContain('id="queue"');
+        expect(workspace).toContain('id="ready_check"');
+        expect(workspace.indexOf('id="statuses"')).toBeLessThan(workspace.indexOf('id="queue"'));
+        expect(workspace.indexOf('id="required"')).toBeLessThan(workspace.indexOf('id="queue"'));
+        expect(workspace.indexOf('id="actions"')).toBeLessThan(workspace.indexOf('id="queue"'));
+        expect(workspace).toContain("Queue view");
+        expect(workspace).toContain("Ready check");
+        expect(workspace).not.toContain("defaultOpen");
     });
 
-    it("row 2 includes Actions and Runtime Validation only", () => {
-        const board = read("components/adminV2/settings/lifecycle/LifecycleStageGuidedBoard.tsx");
-        expect(board).toContain('data-testid="lifecycle-guided-row-2"');
-        expect(board).toContain('stepId="actions"');
-        expect(board).toContain('stepId="validation"');
-        expect(board).not.toContain('stepId="forms"');
-        expect(board).not.toContain("EnrollmentProcessFormsCoverageCard");
+    it("stage workspace has sticky save bar", () => {
+        const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
+        expect(workspace).toContain("lifecycle-stage-save-sticky-bar");
+        expect(workspace).toContain("sticky top-0");
     });
 
-    it("each card exposes one primary Save action", () => {
-        const board = read("components/adminV2/settings/lifecycle/LifecycleStageGuidedBoard.tsx");
-        expect(board).toContain("Save Required Information");
-        expect(board).toContain("Save Statuses");
-        expect(board).toContain("Save Work Unit Queue");
-        expect(board).toContain('primaryLabel="Save Action"');
-        expect(board).toContain("lifecycle-guided-save-${stepId}");
-        expect(board).not.toContain("Save Actions");
-        expect(board).not.toContain("Save Form Coverage");
-    });
-
-    it("confirmStep advances to next card after save", () => {
-        const board = read("components/adminV2/settings/lifecycle/LifecycleStageGuidedBoard.tsx");
-        expect(board).toContain("nextStepAfter");
-        expect(board).toContain("scrollToStep");
-        expect(board).toContain("confirmStep");
+    it("unified save is the single stage entry point", () => {
+        const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
+        const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
+        expect(workspace).toContain('"lifecycle-stage-save"');
+        expect(workspace).toContain("Save stage");
+        expect(board).toContain("saveStageUnified");
+        expect(board).toContain("LIFECYCLE_STAGE_RUNTIME_CONFIG_PATH");
     });
 
     it("stage bootstrap API route exists", () => {
@@ -61,7 +53,7 @@ describe("lifecycle builder guided board and prefetch", () => {
         expect(read("lib/lifecycle/buildLifecycleStageBootstrap.ts")).toContain("statuses");
         expect(read("lib/lifecycle/buildLifecycleStageBootstrap.ts")).toContain("field_requirements");
         expect(read("lib/lifecycle/buildLifecycleStageBootstrap.ts")).toContain("actions");
-        expect(read("lib/lifecycle/buildLifecycleStageBootstrap.ts")).toContain("forms");
+        expect(read("lib/lifecycle/buildLifecycleStageBootstrap.ts")).toContain("entity_display_labels");
     });
 
     it("useLifecycleStageBootstrap caches by department and stage", () => {
@@ -78,17 +70,18 @@ describe("lifecycle builder guided board and prefetch", () => {
         expect(board).not.toContain("lifecycle-runtime-validation-section");
     });
 
-    it("statuses step does not show loading when bootstrap hydrated", () => {
-        const guided = read("components/adminV2/settings/lifecycle/LifecycleStageGuidedBoard.tsx");
-        expect(guided).toContain("loading={false}");
+    it("statuses card does not show loading when bootstrap hydrated in workspace", () => {
+        const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
+        expect(workspace).toContain("loading={false}");
     });
 
-    it("multiple actions list persists after save and form resets", () => {
-        const actions = read("components/adminV2/settings/lifecycle/LifecycleBuilderActionsCard.tsx");
-        expect(actions).toContain("lifecycle-actions-list");
-        const activation = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
-        expect(activation).toContain("setBaseActionKey(\"\")");
-        expect(activation).toContain("action_scope");
+    it("actions matrix persists enabled rows after save", () => {
+        const matrix = read("components/adminV2/settings/lifecycle/LifecycleActionsMatrix.tsx");
+        expect(matrix).toContain("enabled");
+        expect(matrix).toContain("display_order");
+        expect(read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx")).toContain(
+            "LifecycleActionsMatrix"
+        );
     });
 
     it("action scope and placements render in actions card", () => {

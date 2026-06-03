@@ -17,6 +17,10 @@ import { loadLifecycleBuilderConfiguredActions } from "@/lib/lifecycle/loadLifec
 import { loadStageWorkUnitSnapshotForDepartment } from "@/lib/lifecycle/lifecycleStageWorkUnit";
 import { filterSaveableLifecycleBaseActions } from "@/lib/lifecycle/filterSaveableLifecycleBaseActions";
 import { lifecycleActivationBaseActions } from "@/lib/lifecycle/lifecycleStageBaseActions";
+import { resolveEntityLabelsForOrg } from "@/lib/admin/entityLabelsResolve";
+import { entityLabelsMapFromEffective } from "@/lib/admin/entityLabelsServer";
+import { lifecycleActivationFromMetadata } from "@/lib/lifecycle/lifecycleActivationConfig";
+import { lifecycleRequirementEntityLabelsFromMap } from "@/lib/lifecycle/lifecycleRequirementEntityLabels";
 import type { LifecycleStageBootstrapPayload } from "@/lib/lifecycle/lifecycleStageBootstrapTypes";
 
 function mapStatusRows(rows: Awaited<ReturnType<typeof fetchEffectiveStatusDefinitions>>) {
@@ -81,6 +85,13 @@ export async function buildLifecycleStageBootstrap(params: {
         const orgFieldDefs = await loadOrgFieldDefinitionsForLifecycle(supabase, orgId);
         const entry = buildLifecycleRequirementsStageEntry(builderStageKey, metadata, orgFieldDefs, override);
         field_requirements = {
+            platform: entry.platform
+                ? {
+                      field_rules: entry.platform.field_rules,
+                      required_labels: entry.platform.required_labels,
+                      recommended_labels: entry.platform.recommended_labels,
+                  }
+                : undefined,
             effective: {
                 required_labels: entry.effective.required_labels,
                 recommended_labels: entry.effective.recommended_labels,
@@ -181,6 +192,14 @@ export async function buildLifecycleStageBootstrap(params: {
     const baseActionCandidates = [...lifecycleActivationBaseActions(primaryRecordLabel)];
     const base_actions = await filterSaveableLifecycleBaseActions(supabase, orgId, baseActionCandidates);
 
+    const labelsPayload = await resolveEntityLabelsForOrg(supabase, orgId);
+    const labelsMap = entityLabelsMapFromEffective(labelsPayload.effective);
+    const activation = lifecycleActivationFromMetadata(metadata);
+    const entity_display_labels = lifecycleRequirementEntityLabelsFromMap(
+        labelsMap,
+        activation?.primary_record_label ?? primaryRecordLabel
+    );
+
     return {
         department_id: departmentId,
         builder_stage_key: builderStageKey,
@@ -188,6 +207,7 @@ export async function buildLifecycleStageBootstrap(params: {
         statuses,
         pipeline,
         field_requirements,
+        entity_display_labels,
         actions,
         forms,
         linkable_forms,

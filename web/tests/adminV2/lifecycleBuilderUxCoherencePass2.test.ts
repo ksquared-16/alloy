@@ -12,19 +12,19 @@ describe("Lifecycle UX coherence pass 2", () => {
     it("statuses card references automatic queue filter", () => {
         const statuses = read("components/adminV2/settings/enrollmentProcess/EnrollmentProcessStageStatusesCard.tsx");
         const workUnit = read("components/adminV2/settings/enrollmentProcess/LifecycleStageWorkUnitCard.tsx");
-        expect(statuses).toContain("Work Unit Queue filter");
+        expect(statuses).toContain("queue view filter");
         expect(workUnit).not.toContain("Statuses in this stage");
     });
 
-    it("work unit queue copy only", () => {
+    it("queue view copy only", () => {
         const card = read("components/adminV2/settings/enrollmentProcess/LifecycleStageWorkUnitCard.tsx");
-        expect(card).toContain("lifecycle-work-unit-queue-copy");
+        expect(card).toContain("lifecycle-queue-view-copy");
         expect(card).not.toContain("lifecycle-sync-queue-helper");
     });
 
-    it("work unit queue in setup wizard", () => {
+    it("queue view in legacy setup wizard", () => {
         const hub = read("components/adminV2/settings/LifecycleHubClient.tsx");
-        expect(hub).toContain("Work Unit Queue");
+        expect(hub).toContain("Queue view");
     });
 
     it("actions card uses base action flow", () => {

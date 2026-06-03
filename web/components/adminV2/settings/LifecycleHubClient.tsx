@@ -250,8 +250,8 @@ export default function LifecycleHubClient() {
             },
             {
                 id: "queue",
-                title: "Work Unit Queue",
-                summary: pipeline ? pipeline.name : "Not created",
+                title: "Queue view",
+                summary: pipeline ? pipeline.name : "Not published yet",
                 content: departmentId ? (
                     <LifecycleStageWorkUnitCard
                         departmentId={departmentId}

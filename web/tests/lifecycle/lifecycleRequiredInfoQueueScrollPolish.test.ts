@@ -39,28 +39,20 @@ describe("lifecycle required info queue scroll polish", () => {
         );
     });
 
-    it("Work Unit Queue has single save in guided mode via card footer", () => {
+    it("queue view uses unified save in workspace mode", () => {
         const card = read("components/adminV2/settings/enrollmentProcess/LifecycleStageWorkUnitCard.tsx");
-        expect(card).toContain("guidedMode");
-        expect(card).toContain("lifecycle-work-unit-save-name");
-        expect(card).toContain("!guidedMode");
-        const guided = read("components/adminV2/settings/lifecycle/LifecycleStageGuidedBoard.tsx");
-        expect(guided).toContain("workUnitRef");
-        expect(guided).toContain('primaryLabel="Save Work Unit Queue"');
-        expect(guided).not.toContain("lifecycle-guided-queue-scroll");
+        expect(card).toContain("workspaceMode");
+        expect(card).toContain("onDraftNameDirtyChange");
+        const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
+        expect(workspace).toContain("workUnitRef");
+        expect(workspace).toContain("Save stage");
+        expect(workspace).not.toContain("lifecycle-guided-queue-scroll");
     });
 
-    it("guided card bodies use overscroll containment and fixed footer", () => {
-        const guided = read("components/adminV2/settings/lifecycle/LifecycleStageGuidedBoard.tsx");
-        expect(guided).toContain("GUIDED_CARD_BODY_CLASS");
-        expect(guided).toContain("overscroll-contain");
-        expect(guided).toContain("[overscroll-behavior:contain]");
-        expect(guided).toContain("lifecycle-guided-save-${stepId}");
-        expect(guided).toContain("shrink-0 border-t");
-    });
-
-    it("guided required card keeps minimal summary copy", () => {
-        const guided = read("components/adminV2/settings/lifecycle/LifecycleStageGuidedBoard.tsx");
-        expect(guided).toContain("Fields needed before work can move forward.");
+    it("stage workspace uses accordion sections with summary headers", () => {
+        const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
+        expect(workspace).toContain("StageSection");
+        expect(workspace).toContain("lifecycle-stage-section-");
+        expect(workspace).toContain("Fields to collect before work moves forward.");
     });
 });

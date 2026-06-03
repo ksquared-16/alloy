@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import type { LifecycleActivationCheckResult } from "@/lib/lifecycle/validateLifecycleActivationRuntime";
 import {
@@ -19,7 +19,6 @@ import {
 } from "@/lib/lifecycle/lifecycleRuntimeIdentity";
 import { evaluateWorkspaceBrowserTileTruth } from "@/lib/workspace/workspaceBrowserTileTruth";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
-import LifecycleDepartmentIdAuditTable from "@/components/adminV2/settings/lifecycle/LifecycleDepartmentIdAuditTable";
 import LifecycleRuntimeIdentityDebug from "@/components/adminV2/settings/lifecycle/LifecycleRuntimeIdentityDebug";
 
 const IDENTITY_SYNC_CHECK: LifecycleActivationCheckResult = {
@@ -36,12 +35,15 @@ export default function LifecycleActivationValidation({
     repairQueue,
     onQueueRepaired,
     onAttachRecords,
+    refreshKey = "0",
 }: {
     identity: LifecycleRuntimeIdentity | null;
     onRuntimeStatus?: (allPass: boolean) => void;
     repairQueue?: { workUnitId: string; stageKey: string } | null;
     onQueueRepaired?: () => void | Promise<void>;
     onAttachRecords?: () => void | Promise<void>;
+    /** Bump to re-run after meaningful lifecycle changes (e.g. stage save). */
+    refreshKey?: string;
 }) {
     const { orgId, userId } = useAdminAuth();
     const [checks, setChecks] = useState<LifecycleActivationCheckResult[]>([]);
@@ -55,6 +57,11 @@ export default function LifecycleActivationValidation({
     const [attachingRecords, setAttachingRecords] = useState(false);
 
     const runtimeDepartmentId = identity?.runtimeDepartmentId?.trim() ?? "";
+    const lifecycleName = identity?.lifecycleName ?? "";
+    const processId = identity?.processId ?? "";
+
+    const onRuntimeStatusRef = useRef(onRuntimeStatus);
+    onRuntimeStatusRef.current = onRuntimeStatus;
 
     const compactChecks = useMemo(() => buildLifecycleActivationCompactChecks(checks), [checks]);
     const technicalLines = useMemo(
@@ -73,8 +80,8 @@ export default function LifecycleActivationValidation({
         if (!hasRuntimeDepartmentId(identity)) {
             setChecks([]);
             setAllPass(false);
-            onRuntimeStatus?.(false);
-            setError("Select a lifecycle with a runtime department before validating.");
+            onRuntimeStatusRef.current?.(false);
+            setError("Select a lifecycle with a runtime department before running the ready check.");
             setLoading(false);
             return;
         }
@@ -88,7 +95,7 @@ export default function LifecycleActivationValidation({
             };
             setChecks([driftCheck]);
             setAllPass(false);
-            onRuntimeStatus?.(false);
+            onRuntimeStatusRef.current?.(false);
             setLoading(false);
             return;
         }
@@ -103,7 +110,7 @@ export default function LifecycleActivationValidation({
                 all_pass?: boolean;
                 error?: string;
             };
-            if (!res.ok) throw new Error(j.error ?? "Validation failed");
+            if (!res.ok) throw new Error(j.error ?? "Ready check failed");
             const serverChecks = (j.checks ?? []).map((c) =>
                 c.href?.includes("/workspace/dept/") && runtimeDepartmentId
                     ? { ...c, href: workspaceDeptHref(runtimeDepartmentId) }
@@ -121,24 +128,24 @@ export default function LifecycleActivationValidation({
             const pass = Boolean(j.all_pass) && browserTruth.check.pass;
             setChecks(merged);
             setAllPass(pass);
-            onRuntimeStatus?.(pass);
+            onRuntimeStatusRef.current?.(pass);
 
             if (isLifecycleDebugUiEnabled()) {
                 setLifecycleDebugSelection({
                     department_id: runtimeDepartmentId,
-                    lifecycle_name: identity.lifecycleName,
-                    process_id: identity.processId,
-                    expected_tile_name: identity.lifecycleName,
+                    lifecycle_name: lifecycleName,
+                    process_id: processId,
+                    expected_tile_name: lifecycleName,
                 });
             }
         } catch (e) {
-            setError(e instanceof Error ? e.message : "Validation failed");
+            setError(e instanceof Error ? e.message : "Ready check failed");
             setChecks([]);
-            onRuntimeStatus?.(false);
+            onRuntimeStatusRef.current?.(false);
         } finally {
             setLoading(false);
         }
-    }, [identity, runtimeDepartmentId, onRuntimeStatus, orgId, userId]);
+    }, [identity, runtimeDepartmentId, lifecycleName, processId, orgId, userId]);
 
     const repairQueueFilters = useCallback(async () => {
         if (!repairQueue?.workUnitId || !repairQueue.stageKey) return;
@@ -180,27 +187,27 @@ export default function LifecycleActivationValidation({
         }
     }, [onAttachRecords, load]);
 
+    const autoRunScope = `${runtimeDepartmentId}:${refreshKey}`;
+
     useEffect(() => {
         void load();
-    }, [load]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- scoped to department + explicit refresh bumps
+    }, [autoRunScope]);
 
     if (loading) {
-        return <p className="text-xs text-alloy-midnight/50">Checking runtime…</p>;
+        return <p className="text-xs text-alloy-midnight/50">Running ready check…</p>;
     }
 
     const compactPass = lifecycleActivationCompactAllPass(compactChecks) && allPass;
     return (
         <section className="space-y-3" data-testid="lifecycle-activation-validation">
             <div className="flex items-start justify-between gap-3">
-                <div>
-                    <h3 className="text-sm font-semibold text-alloy-midnight">Runtime validation</h3>
-                    <p
-                        className={`mt-0.5 text-xs font-medium ${compactPass ? "text-alloy-pine" : "text-amber-800"}`}
-                        data-testid="lifecycle-activation-summary-status"
-                    >
-                        {compactPass ? "Ready" : "Needs attention"}
-                    </p>
-                </div>
+                <p
+                    className={`text-xs font-medium ${compactPass ? "text-alloy-pine" : "text-amber-800"}`}
+                    data-testid="lifecycle-activation-summary-status"
+                >
+                    {compactPass ? "Ready for staff on the workspace" : "Not ready yet — review the items below"}
+                </p>
                 <button
                     type="button"
                     className="rounded-md border border-alloy-forge/20 px-2.5 py-1 text-[11px] font-medium text-alloy-midnight/70"
@@ -218,7 +225,6 @@ export default function LifecycleActivationValidation({
                 </p>
             ) : null}
 
-            <p className="text-[11px] font-medium uppercase tracking-wide text-alloy-midnight/45">Checks</p>
             <ul className="space-y-2" data-testid="lifecycle-activation-compact-checks">
                 {compactChecks.map((check) => (
                     <li
@@ -242,7 +248,7 @@ export default function LifecycleActivationValidation({
                                         : "text-amber-800 font-medium"
                                 }
                             >
-                                {check.pass ? (check.informational ? "Info" : "Pass") : "Fail"}
+                                {check.pass ? (check.informational ? "Info" : "Ready") : "Needs fix"}
                             </span>
                         </div>
                         <p className="mt-1 text-alloy-midnight/65">{check.summary}</p>
@@ -290,11 +296,11 @@ export default function LifecycleActivationValidation({
 
             {!compactPass ? (
                 <p className="text-xs text-alloy-midnight/55">
-                    Fix failing checks, then refresh validation.
+                    Resolve any failing items, then refresh the ready check.
                 </p>
             ) : (
                 <p className="text-xs font-medium text-alloy-pine" data-testid="lifecycle-activation-all-pass">
-                    Runtime is ready for this lifecycle.
+                    This lifecycle is ready for staff on the workspace.
                 </p>
             )}
 

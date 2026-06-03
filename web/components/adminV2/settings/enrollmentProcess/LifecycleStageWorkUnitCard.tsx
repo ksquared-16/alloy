@@ -14,6 +14,7 @@ export type LifecycleStageWorkUnitCardHandle = {
     /** Upsert stage queue (create or update) and sync filters when needed. */
     save: () => Promise<boolean>;
     canSave: () => boolean;
+    getDisplayName: () => string;
 };
 
 export type LifecycleStageWorkUnitIdentityUiState =
@@ -40,6 +41,9 @@ const LifecycleStageWorkUnitCard = forwardRef<
         onPipelineUpdated: (snapshot: EnrollmentPipelineWorkUnitSnapshot | null) => void | Promise<void>;
         /** Guided board — save only via card footer. */
         guidedMode?: boolean;
+        /** Stage workspace — display name only; save via Save stage. */
+        workspaceMode?: boolean;
+        onDraftNameDirtyChange?: (dirty: boolean) => void;
     }
 >(function LifecycleStageWorkUnitCard(
     {
@@ -55,6 +59,8 @@ const LifecycleStageWorkUnitCard = forwardRef<
         loadingPipeline,
         onPipelineUpdated,
         guidedMode = false,
+        workspaceMode = false,
+        onDraftNameDirtyChange,
     },
     ref
 ) {
@@ -91,16 +97,25 @@ const LifecycleStageWorkUnitCard = forwardRef<
         );
         setFeedback(null);
         setError(null);
-    }, [pipeline?.id, pipeline?.name, builderStageKey]);
+        onDraftNameDirtyChange?.(false);
+    }, [pipeline?.id, pipeline?.name, builderStageKey, onDraftNameDirtyChange]);
+
+    useEffect(() => {
+        if (!pipeline) {
+            onDraftNameDirtyChange?.(false);
+            return;
+        }
+        onDraftNameDirtyChange?.(draftName.trim() !== (pipeline.name ?? "").trim());
+    }, [draftName, pipeline, onDraftNameDirtyChange]);
 
     const upsertWorkUnitQueue = useCallback(async () => {
         if (!builderStageKey) {
-            setError("Select a stage before saving the work unit queue.");
+            setError("Select a stage before saving the queue view.");
             return false;
         }
         if (workUnitIdentityState === "conflict") {
             setError(
-                "Multiple active queues share this stage identity. Use Runtime validation Repair to dedupe."
+                "Multiple queues were found for this stage. Open Ready check and use Fix setup."
             );
             return false;
         }
@@ -109,9 +124,7 @@ const LifecycleStageWorkUnitCard = forwardRef<
         setFeedback(null);
         const savedKeys = stageSavedStatusKeys?.length ? [...stageSavedStatusKeys] : [];
         if (!savedKeys.length) {
-            setError(
-                `No saved status keys for stage "${builderStageKey}". Save statuses before saving the Work Unit Queue.`
-            );
+            setError(`Select at least one status for this stage before saving.`);
             return false;
         }
         try {
@@ -132,22 +145,22 @@ const LifecycleStageWorkUnitCard = forwardRef<
                 snapshot?: { synced?: boolean };
             };
             if (!res.ok) {
-                throw new Error(j.error ?? "Failed to save Work Unit Queue");
+                throw new Error(j.error ?? "Failed to save queue view");
             }
             const snapshot = j.pipeline ?? null;
             if (!snapshot?.id) {
-                throw new Error("Work unit queue was not persisted.");
+                throw new Error("Queue view was not published.");
             }
             if (j.snapshot?.synced === false) {
-                throw new Error("Queue filters are not synced to selected statuses.");
+                throw new Error("Queue view is out of date — save the stage again.");
             }
-            if (!guidedMode) {
-                setFeedback(snapshot ? "Work Unit Queue saved." : "Work Unit Queue saved.");
+            if (!guidedMode && !workspaceMode) {
+                setFeedback("Queue view saved.");
             }
             await onPipelineUpdated(snapshot);
             return true;
         } catch (e) {
-            setError(e instanceof Error ? e.message : "Failed to save Work Unit Queue");
+            setError(e instanceof Error ? e.message : "Failed to save queue view");
             return false;
         } finally {
             setSaving(false);
@@ -173,7 +186,7 @@ const LifecycleStageWorkUnitCard = forwardRef<
         ref,
         () => ({
             save: async () => {
-                if (guidedMode) return upsertWorkUnitQueue();
+                if (workspaceMode || guidedMode) return upsertWorkUnitQueue();
                 if (pipeline) {
                     if (!nameDirty) {
                         if (workUnitNeedsSync) return upsertWorkUnitQueue();
@@ -184,8 +197,9 @@ const LifecycleStageWorkUnitCard = forwardRef<
                 return upsertWorkUnitQueue();
             },
             canSave: () => canSave,
+            getDisplayName: () => draftName.trim(),
         }),
-        [guidedMode, pipeline, nameDirty, canSave, upsertWorkUnitQueue, workUnitNeedsSync]
+        [guidedMode, workspaceMode, pipeline, nameDirty, canSave, upsertWorkUnitQueue, workUnitNeedsSync, draftName]
     );
 
     if (loadingPipeline) {
@@ -194,31 +208,30 @@ const LifecycleStageWorkUnitCard = forwardRef<
 
     return (
         <div className="space-y-2" data-testid="lifecycle-stage-work-unit-editor">
-            {!guidedMode ? (
-                <p className="text-[11px] leading-relaxed text-alloy-midnight/60" data-testid="lifecycle-work-unit-queue-copy">
-                    This queue shows records that are currently in this stage.
+            {!guidedMode && !workspaceMode ? (
+                <p className="text-[11px] leading-relaxed text-alloy-midnight/60" data-testid="lifecycle-queue-view-copy">
+                    This queue view shows records that are currently in this stage.
                 </p>
             ) : null}
 
             {uiState === "not_created" ? (
-                <p className="text-[10px] text-alloy-midnight/55" data-testid="lifecycle-work-unit-state-not-created">
-                    Queue not created for stage {stageLabel || builderStageKey}. Save to create{" "}
-                    <span className="font-mono text-[9px]">{lifecycleStageWorkUnitKey(builderStageKey)}</span>.
+                <p className="text-[10px] text-alloy-midnight/55" data-testid="lifecycle-queue-view-unpublished">
+                    Queue view not published yet. Save this stage to publish it for staff.
                 </p>
             ) : null}
             {uiState === "synced" ? (
-                <p className="text-[10px] text-alloy-pine" data-testid="lifecycle-work-unit-state-synced">
-                    Queue connected — filters match statuses selected for this stage.
+                <p className="text-[10px] text-alloy-pine" data-testid="lifecycle-queue-view-current">
+                    Queue view is up to date with your status selections.
                 </p>
             ) : null}
             {uiState === "needs_sync" ? (
-                <p className="text-[10px] text-amber-800/90" data-testid="lifecycle-work-unit-state-needs-sync">
-                    Queue exists but filters are out of sync with selected statuses. Save to reconnect filters.
+                <p className="text-[10px] text-amber-800/90" data-testid="lifecycle-queue-view-out-of-date">
+                    Queue view is out of date with your status selections. Save this stage to update it.
                 </p>
             ) : null}
             {uiState === "conflict" ? (
-                <p className="text-[10px] text-red-800" data-testid="lifecycle-work-unit-state-conflict">
-                    Multiple active work unit rows share this stage key. Use Runtime validation Repair — do not create
+                <p className="text-[10px] text-red-800" data-testid="lifecycle-queue-view-conflict">
+                    Multiple queue views were found for this stage. Use Fix setup in Ready check — do not create
                     another queue by display name.
                 </p>
             ) : null}
@@ -228,10 +241,10 @@ const LifecycleStageWorkUnitCard = forwardRef<
                     {error}
                 </p>
             ) : null}
-            {feedback && !guidedMode ? <p className="text-xs text-alloy-pine">{feedback}</p> : null}
+            {feedback && !guidedMode && !workspaceMode ? <p className="text-xs text-alloy-pine">{feedback}</p> : null}
 
             <label className="block text-[11px] font-medium text-alloy-midnight/60">
-                Work Unit Queue name
+                Queue display name
                 <input
                     type="text"
                     className="mt-0.5 w-full rounded-md border border-alloy-forge/20 bg-white px-2 py-1 text-xs"
@@ -242,14 +255,16 @@ const LifecycleStageWorkUnitCard = forwardRef<
             </label>
 
             {statusLabelsForDisplay.length ? (
-                <p className="text-[10px] text-alloy-midnight/50" data-testid="lifecycle-work-unit-status-filter">
-                    Filtered by statuses: {statusLabelsForDisplay.join(", ")}
+                <p className="text-[10px] text-alloy-midnight/50" data-testid="lifecycle-queue-view-status-filter">
+                    Includes statuses: {statusLabelsForDisplay.join(", ")}
                 </p>
             ) : (
-                <p className="text-[10px] text-amber-800/80">Assign statuses in the previous step to set the queue filter.</p>
+                <p className="text-[10px] text-amber-800/80">
+                    Select statuses above to preview which records appear in this queue view.
+                </p>
             )}
 
-            {!guidedMode ? (
+            {!guidedMode && !workspaceMode ? (
                 pipeline && queueMapping && uiState !== "not_created" ? (
                     <div className="flex flex-wrap gap-2">
                         <button
@@ -270,19 +285,19 @@ const LifecycleStageWorkUnitCard = forwardRef<
                         onClick={() => void upsertWorkUnitQueue()}
                         data-testid="lifecycle-create-work-unit"
                     >
-                        {saving ? "Saving…" : "Create Work Unit Queue"}
+                        {saving ? "Saving…" : pipeline ? "Save queue view" : "Publish queue view"}
                     </button>
                 )
             ) : null}
 
-            {!guidedMode ? (
+            {!guidedMode && !workspaceMode ? (
                 <p className="text-[10px] text-alloy-midnight/45">
                     Advanced:{" "}
                     <Link
                         href={`/adminV2/settings/work-units?department_id=${encodeURIComponent(departmentId)}`}
                         className="text-alloy-pine hover:underline"
                     >
-                        Work Units &amp; Queues
+                        Queue settings
                     </Link>
                 </p>
             ) : null}

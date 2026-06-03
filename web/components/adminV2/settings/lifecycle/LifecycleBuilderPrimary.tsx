@@ -185,7 +185,7 @@ export default function LifecycleBuilderPrimary() {
     }, []);
 
     return (
-        <div className="space-y-2" data-testid="lifecycle-builder-primary">
+        <div className="space-y-1.5" data-testid="lifecycle-builder-primary">
             {isLifecycleDebugUiEnabled() ? (
                 <>
                     <AdminAccessScopeDebugPanel surface="lifecycle" />

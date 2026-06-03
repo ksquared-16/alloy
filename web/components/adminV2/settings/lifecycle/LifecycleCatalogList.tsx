@@ -87,7 +87,7 @@ export default function LifecycleCatalogList({
                                     </p>
                                     <p className="mt-0.5 text-[10px] text-alloy-midnight/50">
                                         {entry.stage_count} stage{entry.stage_count === 1 ? "" : "s"} ·{" "}
-                                        {entry.work_unit_count} Work Unit Queue
+                                        {entry.work_unit_count} queue view
                                         {entry.work_unit_count === 1 ? "" : "s"}
                                     </p>
                                 </button>

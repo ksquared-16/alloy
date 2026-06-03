@@ -36,6 +36,8 @@ import {
 } from "@/lib/lifecycle/lifecycleWorkUnitQueueValidation";
 import type { LifecycleActivationV1 } from "@/lib/lifecycle/lifecycleActivationConfig";
 import { isLifecycleDebugUiEnabled } from "@/lib/lifecycle/lifecycleDebugUi";
+import type { LifecycleStageFieldRules } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
+import { persistLifecycleStageFieldRules } from "@/lib/lifecycle/persistLifecycleStageFieldRules";
 
 export type SaveLifecycleStageRuntimeConfigInput = {
     orgId: string;
@@ -45,6 +47,8 @@ export type SaveLifecycleStageRuntimeConfigInput = {
     /** Source of truth for this transaction — never re-resolved from an empty DB bucket. */
     selectedStatusKeys: readonly string[];
     workUnitName?: string | null;
+    /** When set, persisted in the same transaction before status/queue setup. */
+    fieldRules?: LifecycleStageFieldRules | null;
 };
 
 function mapStatusRows(rows: Awaited<ReturnType<typeof fetchEffectiveStatusDefinitions>>) {
@@ -163,12 +167,22 @@ export async function saveLifecycleStageRuntimeConfig(
         .maybeSingle();
     if (deptErr) throw new Error(deptErr.message);
     if (!dept) throw new Error("Department not found");
-    const metadata =
+    let metadata =
         dept.metadata !== null && typeof dept.metadata === "object" && !Array.isArray(dept.metadata)
             ? (dept.metadata as Record<string, unknown>)
             : {};
     if (!isConfiguredStageKey(metadata, stageKey)) {
         throw new Error(`Stage "${stageKey}" is not configured on this department.`);
+    }
+
+    if (input.fieldRules) {
+        metadata = await persistLifecycleStageFieldRules(supabase, {
+            orgId: input.orgId,
+            departmentId: input.departmentId,
+            stageKey,
+            fieldRules: input.fieldRules,
+            existingMetadata: metadata,
+        });
     }
 
     await persistEnrollmentStageStatusAssignments(
@@ -197,7 +211,7 @@ export async function saveLifecycleStageRuntimeConfig(
     let metadataStatusKeys: string[] = [];
     let queueFilterKeys: string[] = [];
 
-    const workUnitNameTrimmed = input.workUnitName?.trim();
+    const workUnitNameTrimmed = input.workUnitName?.trim() ?? null;
     if (workUnitNameTrimmed) {
         const builder = lifecycleBuilderFromDepartmentMetadata(metadata);
         const process = builder ? activeLifecycleProcess(builder) : null;

@@ -76,6 +76,14 @@ export function useLifecycleStageBootstrap(
             setLoading(false);
             return;
         }
+        const key = cacheKey(departmentId.trim(), stageKey.trim());
+        const cached = cache.get(key);
+        if (cached) {
+            setData(cached);
+            setLoading(false);
+        } else {
+            setData(null);
+        }
         void load();
         // eslint-disable-next-line react-hooks/exhaustive-deps -- load when identity/stage changes only
     }, [enabled, departmentId, stageKey, options?.primaryRecordLabel]);

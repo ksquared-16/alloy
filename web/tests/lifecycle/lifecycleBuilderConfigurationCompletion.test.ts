@@ -37,9 +37,9 @@ describe("lifecycle builder configuration completion", () => {
         expect(isWaitlistBuilderStage("waitlist")).toBe(true);
     });
 
-    it("statuses guided card keeps concise helper copy", () => {
-        const board = read("components/adminV2/settings/lifecycle/LifecycleStageGuidedBoard.tsx");
-        expect(board).toContain("Statuses included in this stage.");
+    it("stage workspace keeps concise statuses helper copy", () => {
+        const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
+        expect(workspace).toContain("Which CRM statuses belong in this stage?");
     });
 
     it("enrolling stage key is distinct from enrollment and enrolled for palette", () => {
