@@ -4,6 +4,7 @@
  */
 
 import { clearAdminV2PrimarySurfacePendingFromMark } from "@/lib/perf/adminV2PrimarySurfaceGate";
+import { reportAdminV2SurfaceReady } from "@/lib/perf/adminV2NavResponsiveness";
 
 export const ALLOY_PERF_TICK_EVENT = "alloy-perf-tick";
 
@@ -48,6 +49,7 @@ export function alloyPerfSet(name: string, value: number): void {
     ensureAlloyPerf()?.set(name, value);
     if (PRIMARY_SURFACE_CLEAR_MARKS.has(name)) {
         clearAdminV2PrimarySurfacePendingFromMark(name);
+        reportAdminV2SurfaceReady(name);
     }
 }
 
