@@ -11,6 +11,9 @@ import type {
 } from "@/lib/forms/lifecycle/formsLifecycleCoverageTypes";
 import { evaluateFormsLifecycleFieldCoverage } from "@/lib/forms/lifecycle/evaluateFormsLifecycleFieldCoverage";
 import {
+    readinessResultFromFormsLifecycleCoverage,
+} from "@/lib/completion/readinessFromFormsCoverage";
+import {
     readFormLifecycleUsage,
     type FormsLifecycleUsageV1,
 } from "@/lib/forms/lifecycle/formLifecycleUsageMetadata";
@@ -27,6 +30,7 @@ export type FormLifecycleCoveragePayload = {
     contract: FormsLifecycleRequirementContract | null;
     coverage: FormsLifecycleCoverageResult | null;
     presentation: ReturnType<typeof buildFormLifecycleCoveragePresentation>;
+    readiness?: import("@/lib/completion/readinessTypes").ReadinessResult;
 };
 
 async function loadSchemaForCoverage(
@@ -138,8 +142,26 @@ export async function loadFormLifecycleCoveragePayload(
         orgFieldDefinitions,
     });
 
-    const coverage =
+    const coverageRaw =
         schemaJson != null ? evaluateFormsLifecycleFieldCoverage(schemaJson, contract) : null;
+
+    const readiness =
+        coverageRaw != null
+            ? readinessResultFromFormsLifecycleCoverage({
+                  coverage: coverageRaw,
+                  contract,
+                  trigger: "form_coverage",
+                  orgId,
+                  departmentMetadata: deptRow.metadata ?? null,
+                  formId,
+                  departmentId: usage.department_id,
+              })
+            : undefined;
+
+    const coverage =
+        coverageRaw != null
+            ? { ...coverageRaw, ...(readiness ? { readiness } : {}) }
+            : null;
 
     const presentation = buildFormLifecycleCoveragePresentation({
         usage,
@@ -147,6 +169,7 @@ export async function loadFormLifecycleCoveragePayload(
         contract,
         coverage,
         schema_source,
+        departmentMetadata: deptRow.metadata ?? null,
     });
 
     return {
@@ -157,5 +180,6 @@ export async function loadFormLifecycleCoveragePayload(
         contract,
         coverage,
         presentation,
+        ...(readiness ? { readiness } : {}),
     };
 }

@@ -38,6 +38,7 @@ import type { LifecycleActivationV1 } from "@/lib/lifecycle/lifecycleActivationC
 import { isLifecycleDebugUiEnabled } from "@/lib/lifecycle/lifecycleDebugUi";
 import type { LifecycleStageFieldRules } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 import { persistLifecycleStageFieldRules } from "@/lib/lifecycle/persistLifecycleStageFieldRules";
+import type { LifecycleStageFieldRulesStored } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
 
 export type SaveLifecycleStageRuntimeConfigInput = {
     orgId: string;
@@ -48,7 +49,7 @@ export type SaveLifecycleStageRuntimeConfigInput = {
     selectedStatusKeys: readonly string[];
     workUnitName?: string | null;
     /** When set, persisted in the same transaction before status/queue setup. */
-    fieldRules?: LifecycleStageFieldRules | null;
+    fieldRules?: LifecycleStageFieldRules | LifecycleStageFieldRulesStored | null;
 };
 
 function mapStatusRows(rows: Awaited<ReturnType<typeof fetchEffectiveStatusDefinitions>>) {

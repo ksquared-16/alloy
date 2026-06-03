@@ -7,6 +7,7 @@ import type {
     LifecycleRequirementEntityKey,
     LifecycleStageFieldRules,
 } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
+import type { LifecycleStageFieldRulesStored } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
 import type { LifecycleBaseActionDefinition } from "@/lib/lifecycle/lifecycleStageBaseActions";
 
 export type LifecycleStageBootstrapFieldPaletteEntry = {
@@ -26,7 +27,7 @@ export type LifecycleStageBootstrapFieldRequirements = {
         recommended_labels?: string[];
     };
     effective: {
-        field_rules: LifecycleStageFieldRules;
+        field_rules: LifecycleStageFieldRules | LifecycleStageFieldRulesStored;
         field_rules_source: string;
         required_labels: string[];
         recommended_labels: string[];

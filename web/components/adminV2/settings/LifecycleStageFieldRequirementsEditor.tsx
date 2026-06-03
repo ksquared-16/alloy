@@ -12,6 +12,17 @@ import {
     isWaitlistBuilderStage,
     WAITLIST_REQUIRED_INFO_HELPER,
 } from "@/lib/lifecycle/lifecycleBuilderStagePalette";
+import {
+    BUILDER_REQUIREMENT_LEVEL_COPY,
+    builderFieldRulesDirty,
+    builderStoredFieldRulesFromUiLevels,
+    builderUiLevelButtonLabel,
+    builderUiLevelFromStored,
+    builderUiLevelOptionsForField,
+    builderUiLevelsFromStored,
+    type BuilderRequirementUiLevel,
+} from "@/lib/lifecycle/lifecycleBuilderRequirementLevelsUi";
+import type { LifecycleStageFieldRulesStored } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
 type FieldPaletteEntry = {
@@ -31,7 +42,7 @@ type StageConfigPayload = {
         recommended_labels?: string[];
     };
     effective: {
-        field_rules: LifecycleStageFieldRules;
+        field_rules: LifecycleStageFieldRules | LifecycleStageFieldRulesStored;
         field_rules_source: string;
         required_labels: string[];
         recommended_labels: string[];
@@ -47,53 +58,24 @@ type LifecycleRequirementsApiResponse = {
     error?: string;
 };
 
-type FieldLevel = "off" | "recommended" | "required";
-
-function fieldLevelFromRules(ruleId: string, rules: LifecycleStageFieldRules): FieldLevel {
-    if (rules.required_rule_ids.includes(ruleId)) return "required";
-    if (rules.recommended_rule_ids.includes(ruleId)) return "recommended";
-    return "off";
-}
-
-function rulesFromFieldLevels(
-    palette: FieldPaletteEntry[],
-    levels: Record<string, FieldLevel>
-): LifecycleStageFieldRules {
-    const required_rule_ids: string[] = [];
-    const recommended_rule_ids: string[] = [];
-    for (const field of palette) {
-        const level = levels[field.rule_id] ?? "off";
-        if (level === "required") required_rule_ids.push(field.rule_id);
-        else if (level === "recommended") recommended_rule_ids.push(field.rule_id);
-    }
-    return { required_rule_ids, recommended_rule_ids };
-}
-
-function rulesEqual(a: LifecycleStageFieldRules, b: LifecycleStageFieldRules): boolean {
-    const sort = (xs: string[]) => [...xs].sort().join(",");
-    return (
-        sort(a.required_rule_ids) === sort(b.required_rule_ids) &&
-        sort(a.recommended_rule_ids) === sort(b.recommended_rule_ids)
-    );
-}
-
-function levelsFromRules(
-    palette: FieldPaletteEntry[],
-    rules: LifecycleStageFieldRules
-): Record<string, FieldLevel> {
-    const out: Record<string, FieldLevel> = {};
-    for (const field of palette) {
-        out[field.rule_id] = fieldLevelFromRules(field.rule_id, rules);
-    }
-    return out;
+function normalizeStoredRules(
+    rules: LifecycleStageFieldRules | LifecycleStageFieldRulesStored
+): LifecycleStageFieldRulesStored {
+    return {
+        required_rule_ids: rules.required_rule_ids,
+        recommended_rule_ids: rules.recommended_rule_ids,
+        ...("rule_levels_v1" in rules && rules.rule_levels_v1
+            ? { rule_levels_v1: rules.rule_levels_v1 }
+            : {}),
+    };
 }
 
 export type LifecycleStageFieldRequirementsEditorHandle = {
     save: () => Promise<boolean>;
-    getDraftRules: () => LifecycleStageFieldRules;
+    getDraftRules: () => LifecycleStageFieldRulesStored;
     isDirty: () => boolean;
     applySuggestions: () => void;
-    applySavedRules: (rules: LifecycleStageFieldRules) => void;
+    applySavedRules: (rules: LifecycleStageFieldRules | LifecycleStageFieldRulesStored) => void;
 };
 
 export type LifecycleStageFieldRequirementsEditorProps = {
@@ -135,8 +117,8 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
     >({});
     const savingRef = useRef(false);
     const [activeEntity, setActiveEntity] = useState<LifecycleRequirementEntityKey>("person");
-    const [fieldLevels, setFieldLevels] = useState<Record<string, FieldLevel>>({});
-    const [savedRules, setSavedRules] = useState<LifecycleStageFieldRules>({
+    const [fieldLevels, setFieldLevels] = useState<Record<string, BuilderRequirementUiLevel>>({});
+    const [savedRules, setSavedRules] = useState<LifecycleStageFieldRulesStored>({
         required_rule_ids: [],
         recommended_rule_ids: [],
     });
@@ -154,11 +136,14 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
     }, [palette]);
 
     const draftRules = useMemo(
-        () => rulesFromFieldLevels(palette, fieldLevels),
+        () => builderStoredFieldRulesFromUiLevels(palette, fieldLevels),
         [palette, fieldLevels]
     );
 
-    const dirty = useMemo(() => !rulesEqual(draftRules, savedRules), [draftRules, savedRules]);
+    const dirty = useMemo(
+        () => builderFieldRulesDirty(savedRules, draftRules, palette),
+        [draftRules, savedRules, palette]
+    );
 
     const usingPlatformDefaults = useMemo(() => {
         if (!stageData) return true;
@@ -180,15 +165,16 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
 
     const applySuggestions = useCallback(() => {
         if (!suggestionRules || !palette.length) return;
-        setFieldLevels(levelsFromRules(palette, suggestionRules));
+        setFieldLevels(builderUiLevelsFromStored(palette, suggestionRules));
         setLocalFeedback(null);
         onFeedback?.(null);
     }, [suggestionRules, palette, onFeedback]);
 
     const applySavedRules = useCallback(
-        (rules: LifecycleStageFieldRules) => {
-            setSavedRules(rules);
-            setFieldLevels(levelsFromRules(palette, rules));
+        (rules: LifecycleStageFieldRules | LifecycleStageFieldRulesStored) => {
+            const stored = normalizeStoredRules(rules);
+            setSavedRules(stored);
+            setFieldLevels(builderUiLevelsFromStored(palette, stored));
         },
         [palette]
     );
@@ -255,12 +241,12 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
 
     useEffect(() => {
         if (!stageData) return;
-        const rules = stageData.effective.field_rules;
-        setSavedRules(rules);
-        setFieldLevels(levelsFromRules(palette, rules));
+        const stored = normalizeStoredRules(stageData.effective.field_rules);
+        setSavedRules(stored);
+        setFieldLevels(builderUiLevelsFromStored(palette, stored));
     }, [stageData, palette]);
 
-    const setFieldLevel = useCallback((ruleId: string, level: FieldLevel) => {
+    const setFieldLevel = useCallback((ruleId: string, level: BuilderRequirementUiLevel) => {
         setFieldLevels((prev) => ({ ...prev, [ruleId]: level }));
         setLocalFeedback(null);
         onFeedback?.(null);
@@ -368,10 +354,32 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
     );
 
     const savedSummary = useMemo(() => {
-        const required = palette.filter((f) => savedRules.required_rule_ids.includes(f.rule_id));
-        const recommended = palette.filter((f) => savedRules.recommended_rule_ids.includes(f.rule_id));
-        return { required, recommended };
+        const enforced: FieldPaletteEntry[] = [];
+        const required: FieldPaletteEntry[] = [];
+        const recommended: FieldPaletteEntry[] = [];
+        for (const field of palette) {
+            const level = builderUiLevelFromStored({
+                ruleId: field.rule_id,
+                stored: savedRules,
+                runtimeEnforced: field.runtime_enforced,
+            });
+            if (level === "enforced") enforced.push(field);
+            else if (level === "required") required.push(field);
+            else if (level === "recommended") recommended.push(field);
+        }
+        return { enforced, required, recommended };
     }, [palette, savedRules]);
+
+    const formatFieldList = useCallback(
+        (fields: FieldPaletteEntry[]) =>
+            fields
+                .map(
+                    (f) =>
+                        `${entityDisplayLabels[f.entity] ?? lifecycleRequirementEntityLabel(f.entity)} · ${f.field_label}`
+                )
+                .join(", "),
+        [entityDisplayLabels]
+    );
 
     return (
         <div data-testid="lifecycle-stage-field-requirements-editor">
@@ -418,7 +426,10 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
                 </div>
             ) : null}
 
-            {suggestionRules && !dirty && savedRules.required_rule_ids.length === 0 && savedRules.recommended_rule_ids.length === 0 ? (
+            {suggestionRules &&
+            !dirty &&
+            savedRules.required_rule_ids.length === 0 &&
+            savedRules.recommended_rule_ids.length === 0 ? (
                 <div
                     className="mb-3 rounded-md border border-alloy-forge/10 bg-alloy-stone/5 px-3 py-2"
                     data-testid="lifecycle-field-suggestions"
@@ -458,7 +469,7 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
                                 Required Information
                             </h3>
                             <p className="mt-0.5 text-xs text-alloy-midnight/50">
-                                Choose an entity, then mark fields as required or recommended.
+                                Choose an entity, then set how strongly each field is required.
                             </p>
                         </div>
                     )}
@@ -495,52 +506,90 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
                         }
                         data-testid="lifecycle-field-requirements-scroll"
                     >
-                        <ul className="divide-y divide-alloy-forge/10 p-0.5" data-testid="lifecycle-field-requirements-list">
-                        {fieldsForEntity.map((field) => {
-                            const level = fieldLevels[field.rule_id] ?? "off";
-                            const slug = field.field_label.replace(/\s+/g, "-").toLowerCase();
-                            return (
-                                <li
-                                    key={field.rule_id}
-                                    className="flex items-center justify-between gap-2 py-1.5 text-xs text-alloy-midnight"
-                                    data-testid={`lifecycle-field-row-${field.entity}-${slug}`}
-                                >
-                                    <span className="min-w-0 truncate" data-testid={`lifecycle-field-label-${slug}`}>
-                                        {field.field_label}
-                                    </span>
-                                    <div
-                                        className="flex shrink-0 gap-0.5 rounded-md border border-alloy-forge/15 p-0.5"
-                                        role="group"
-                                        aria-label={`${field.field_label} requirement level`}
+                        <ul
+                            className="divide-y divide-alloy-forge/10 p-0.5"
+                            data-testid="lifecycle-field-requirements-list"
+                        >
+                            {fieldsForEntity.map((field) => {
+                                const level = fieldLevels[field.rule_id] ?? "off";
+                                const slug = field.field_label.replace(/\s+/g, "-").toLowerCase();
+                                const options = builderUiLevelOptionsForField(field.runtime_enforced);
+                                const levelCopy =
+                                    level !== "off"
+                                        ? BUILDER_REQUIREMENT_LEVEL_COPY[level]
+                                        : null;
+                                return (
+                                    <li
+                                        key={field.rule_id}
+                                        className="py-1.5 text-xs text-alloy-midnight"
+                                        data-testid={`lifecycle-field-row-${field.entity}-${slug}`}
                                     >
-                                        {(["off", "recommended", "required"] as const).map((option) => (
-                                            <button
-                                                key={option}
-                                                type="button"
-                                                className={`rounded px-1.5 py-0.5 text-[10px] font-medium capitalize ${
-                                                    level === option
-                                                        ? option === "required"
-                                                            ? "bg-alloy-pine text-white"
-                                                            : option === "recommended"
-                                                              ? "bg-alloy-stone/30 text-alloy-midnight"
-                                                              : "bg-alloy-midnight/10 text-alloy-midnight/70"
-                                                        : "text-alloy-midnight/45 hover:bg-alloy-stone/15"
-                                                }`}
-                                                aria-pressed={level === option}
-                                                onClick={() => setFieldLevel(field.rule_id, option)}
-                                                data-testid={`lifecycle-field-level-${slug}-${option}`}
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span
+                                                className="min-w-0 truncate"
+                                                data-testid={`lifecycle-field-label-${slug}`}
                                             >
-                                                {option === "off" ? "Off" : option === "required" ? "Req" : "Rec"}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </li>
-                            );
-                        })}
+                                                {field.field_label}
+                                            </span>
+                                            <div
+                                                className="flex shrink-0 gap-0.5 rounded-md border border-alloy-forge/15 p-0.5"
+                                                role="group"
+                                                aria-label={`${field.field_label} requirement level`}
+                                            >
+                                                {options.map((option) => {
+                                                    const copy =
+                                                        option !== "off"
+                                                            ? BUILDER_REQUIREMENT_LEVEL_COPY[option]
+                                                            : null;
+                                                    return (
+                                                        <button
+                                                            key={option}
+                                                            type="button"
+                                                            className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                                                level === option
+                                                                    ? option === "enforced" ||
+                                                                      option === "required"
+                                                                        ? "bg-alloy-pine text-white"
+                                                                        : option === "recommended"
+                                                                          ? "bg-alloy-stone/30 text-alloy-midnight"
+                                                                          : "bg-alloy-midnight/10 text-alloy-midnight/70"
+                                                                    : "text-alloy-midnight/45 hover:bg-alloy-stone/15"
+                                                            }`}
+                                                            aria-pressed={level === option}
+                                                            title={
+                                                                copy
+                                                                    ? `${copy.label} — ${copy.helper}`
+                                                                    : "Not configured"
+                                                            }
+                                                            onClick={() =>
+                                                                setFieldLevel(field.rule_id, option)
+                                                            }
+                                                            data-testid={`lifecycle-field-level-${slug}-${option}`}
+                                                        >
+                                                            {builderUiLevelButtonLabel(option)}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                        {levelCopy ? (
+                                            <p
+                                                className="mt-0.5 text-[10px] text-alloy-midnight/45"
+                                                data-testid={`lifecycle-field-level-helper-${slug}`}
+                                            >
+                                                {levelCopy.helper}
+                                            </p>
+                                        ) : null}
+                                    </li>
+                                );
+                            })}
                         </ul>
                     </div>
 
-                    {!compact && (savedSummary.required.length > 0 || savedSummary.recommended.length > 0) ? (
+                    {!compact &&
+                    (savedSummary.enforced.length > 0 ||
+                        savedSummary.required.length > 0 ||
+                        savedSummary.recommended.length > 0) ? (
                         <div
                             className="mt-3 rounded-md border border-alloy-forge/10 bg-alloy-stone/5 px-3 py-1.5"
                             data-testid="lifecycle-field-saved-summary"
@@ -548,26 +597,22 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
                             <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/50">
                                 Configured
                             </p>
+                            {savedSummary.enforced.length > 0 ? (
+                                <p className="mt-0.5 line-clamp-2 text-[11px] text-alloy-midnight/75">
+                                    <span className="font-medium">Enforced:</span>{" "}
+                                    {formatFieldList(savedSummary.enforced)}
+                                </p>
+                            ) : null}
                             {savedSummary.required.length > 0 ? (
                                 <p className="mt-0.5 line-clamp-2 text-[11px] text-alloy-midnight/75">
                                     <span className="font-medium">Required:</span>{" "}
-                                    {savedSummary.required
-                                        .map(
-                                            (f) =>
-                                                `${entityDisplayLabels[f.entity] ?? lifecycleRequirementEntityLabel(f.entity)} · ${f.field_label}`
-                                        )
-                                        .join(", ")}
+                                    {formatFieldList(savedSummary.required)}
                                 </p>
                             ) : null}
                             {savedSummary.recommended.length > 0 ? (
                                 <p className="mt-0.5 line-clamp-2 text-[11px] text-alloy-midnight/65">
                                     <span className="font-medium">Recommended:</span>{" "}
-                                    {savedSummary.recommended
-                                        .map(
-                                            (f) =>
-                                                `${entityDisplayLabels[f.entity] ?? lifecycleRequirementEntityLabel(f.entity)} · ${f.field_label}`
-                                        )
-                                        .join(", ")}
+                                    {formatFieldList(savedSummary.recommended)}
                                 </p>
                             ) : null}
                         </div>
@@ -577,6 +622,9 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
 
             <span data-testid="lifecycle-stage-effective-required" className="sr-only">
                 {draftRules.required_rule_ids.join(",")}
+            </span>
+            <span data-testid="lifecycle-stage-effective-rule-levels" className="sr-only">
+                {JSON.stringify(draftRules.rule_levels_v1?.by_rule_id ?? {})}
             </span>
         </div>
     );

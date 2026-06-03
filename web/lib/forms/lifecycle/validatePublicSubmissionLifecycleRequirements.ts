@@ -12,6 +12,11 @@ import {
 } from "@/lib/forms/lifecycle/formLifecycleUsageMetadata";
 import { operationalIntentRequiresLifecycleRecordCoverage } from "@/lib/forms/lifecycle/isFormLifecycleReadyForRecordCreation";
 import { resolveFormsLifecycleRequirementContract } from "@/lib/forms/lifecycle/resolveFormsLifecycleRequirementContract";
+import {
+    formsSubmitBlockedByReadiness,
+    readinessResultFromFormsLifecycleCoverage,
+} from "@/lib/completion/readinessFromFormsCoverage";
+import type { ReadinessResult } from "@/lib/completion/readinessTypes";
 import { loadOrgFieldDefinitionsForLifecycle } from "@/lib/lifecycle/loadOrgFieldDefinitionsForLifecycle";
 import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
 
@@ -26,6 +31,7 @@ export type PublicSubmissionLifecycleValidationPassed = {
     skipped: false;
     coverage: FormsLifecycleCoverageResult;
     usage: FormsLifecycleUsageV1;
+    readiness?: ReadinessResult;
 };
 
 export type PublicSubmissionLifecycleValidationBlocked = {
@@ -36,6 +42,7 @@ export type PublicSubmissionLifecycleValidationBlocked = {
     missingRequiredFieldKeys: string[];
     usage: FormsLifecycleUsageV1;
     coverage: FormsLifecycleCoverageResult;
+    readiness?: ReadinessResult;
 };
 
 export type PublicSubmissionLifecycleValidationResult =
@@ -70,20 +77,6 @@ export function buildLifecycleValidationBlockedMeta(input: {
         intake_needs_review: false,
         intake_auto_operationalized: false,
     };
-}
-
-function missingRequiredPresentation(coverage: FormsLifecycleCoverageResult): {
-    labels: string[];
-    fieldKeys: string[];
-} {
-    const labels: string[] = [];
-    const fieldKeys: string[] = [];
-    for (const item of coverage.missingRequired) {
-        if (item.status !== "missing") continue;
-        if (item.requirementLabel.trim()) labels.push(item.requirementLabel.trim());
-        fieldKeys.push(item.requirementFieldKey || item.requirementId);
-    }
-    return { labels: [...new Set(labels)], fieldKeys: [...new Set(fieldKeys)] };
 }
 
 /** Validate submitted payload against lifecycle contract before CRM intake. */
@@ -160,11 +153,29 @@ export async function validatePublicSubmissionLifecycleRequirements(
         params.submittedValues
     );
 
-    if (coverage.ready) {
-        return { ok: true, skipped: false, coverage, usage };
+    const readiness = readinessResultFromFormsLifecycleCoverage({
+        coverage,
+        contract,
+        trigger: "form_submit",
+        orgId: params.orgId,
+        departmentMetadata: deptRow?.metadata ?? null,
+        formId: params.formDefinitionId,
+        departmentId: usage.department_id,
+    });
+
+    const coverageWithReadiness: FormsLifecycleCoverageResult = { ...coverage, readiness };
+
+    if (!formsSubmitBlockedByReadiness(readiness)) {
+        return { ok: true, skipped: false, coverage: coverageWithReadiness, usage, readiness };
     }
 
-    const { labels, fieldKeys } = missingRequiredPresentation(coverage);
+    const blockingGaps = readiness.gaps.filter((g) => g.blocking);
+    const labels = [...new Set(blockingGaps.map((g) => g.label.trim()).filter(Boolean))];
+    const fieldKeys = [
+        ...new Set(
+            blockingGaps.map((g) => g.field_key?.trim() || g.requirement_id).filter(Boolean) as string[]
+        ),
+    ];
     return {
         ok: false,
         blocked: true,
@@ -172,6 +183,7 @@ export async function validatePublicSubmissionLifecycleRequirements(
         missingRequiredLabels: labels,
         missingRequiredFieldKeys: fieldKeys,
         usage,
-        coverage,
+        coverage: coverageWithReadiness,
+        readiness,
     };
 }

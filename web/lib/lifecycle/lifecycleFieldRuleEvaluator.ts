@@ -3,7 +3,9 @@
  */
 
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
-import { effectiveFieldRulesForStage } from "@/lib/completion/lifecycleProgressionRequirementsConfig";
+import {
+    effectiveFieldRulesStoredForStage,
+} from "@/lib/completion/lifecycleProgressionRequirementsConfig";
 import { OBJECT_LABEL_TO_FIELD_RULES } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 import {
     lifecycleEntityLabel,
@@ -22,6 +24,14 @@ import type {
     RequirementViolation,
 } from "@/lib/completion/requirementValidationTypes";
 import { completionValueEmpty, trimOrNull } from "@/lib/completion/valueEmpty";
+import type { BlockingLevel } from "@/lib/completion/requirementValidationTypes";
+import {
+    isLifecycleRuleEnforceable,
+    resolveAllEffectivePersistedLevels,
+    type LifecycleStageFieldRulesStored,
+    type PersistedRequirementLevel,
+    type RuleEnforceableLookup,
+} from "@/lib/lifecycle/lifecycleStageRequirementLevels";
 
 export type { PrimaryPersonSnapshot };
 
@@ -82,7 +92,8 @@ function fieldViolation(
         rule_id: string;
         label: string;
         missing_reason: string;
-        blocking_level: "hard_block" | "recommendation";
+        blocking_level: BlockingLevel;
+        requirement_level: PersistedRequirementLevel;
         field_key?: string;
         entity_type?: string;
         entity_id?: string;
@@ -101,8 +112,21 @@ function fieldViolation(
             surface: ctx.surface,
             action_key: trimOrNull(ctx.action_key) ?? undefined,
             status_to: trimOrNull(ctx.status_to) ?? undefined,
+            requirement_level: input.requirement_level,
+            rule_id: input.rule_id,
         },
     });
+}
+
+function blockingLevelForPersistedLevel(level: PersistedRequirementLevel): BlockingLevel {
+    switch (level) {
+        case "enforced":
+            return "hard_block";
+        case "required":
+            return "soft_warning";
+        case "recommended":
+            return "recommendation";
+    }
 }
 
 function personFieldPresent(person: PrimaryPersonSnapshot, field: "first_name" | "last_name" | "email" | "phone"): boolean {
@@ -130,11 +154,12 @@ function fieldLabelForPersonRule(ruleId: string): string {
 function evaluatePersonRule(
     ctx: CompletionEvaluationContext,
     ruleId: string,
-    blocking_level: "hard_block" | "recommendation"
+    level: PersistedRequirementLevel
 ): RequirementViolation[] {
     const person = extractPrimaryPersonSnapshot(ctx);
     const fieldLabel = fieldLabelForPersonRule(ruleId);
     const label = `${lifecycleEntityLabel("person")} · ${fieldLabel}`;
+    const blocking_level = blockingLevelForPersistedLevel(level);
 
     const binding = lifecycleFieldRuleBinding(ruleId);
     const field = binding?.field_key as "first_name" | "last_name" | "email" | "phone" | undefined;
@@ -148,6 +173,7 @@ function evaluatePersonRule(
             field_key: field,
             missing_reason: `${fieldLabel} is required for the primary contact.`,
             blocking_level,
+            requirement_level: level,
         }),
     ];
 }
@@ -155,12 +181,13 @@ function evaluatePersonRule(
 function evaluateChildRule(
     ctx: CompletionEvaluationContext,
     ruleId: string,
-    blocking_level: "hard_block" | "recommendation"
+    level: PersistedRequirementLevel
 ): RequirementViolation[] {
     const binding = lifecycleFieldRuleBinding(ruleId);
     if (!binding?.ocm_field) return [];
     const children = ctx.related?.inquiry_children ?? [];
     const violations: RequirementViolation[] = [];
+    const blocking_level = blockingLevelForPersistedLevel(level);
 
     const fieldLabels: Record<string, string> = {
         first_name: "First Name",
@@ -179,6 +206,7 @@ function evaluateChildRule(
                 field_key: "inquiry_children",
                 missing_reason: "Add at least one child before continuing.",
                 blocking_level,
+                requirement_level: level,
             }),
         ];
     }
@@ -200,6 +228,7 @@ function evaluateChildRule(
                 entity_id: childId,
                 missing_reason: `${fieldLabels[binding.ocm_field] ?? "Field"} is required for each child.`,
                 blocking_level,
+                requirement_level: level,
             })
         );
     }
@@ -209,10 +238,11 @@ function evaluateChildRule(
 function evaluateOpportunityRule(
     ctx: CompletionEvaluationContext,
     ruleId: string,
-    blocking_level: "hard_block" | "recommendation"
+    level: PersistedRequirementLevel
 ): RequirementViolation[] {
     const binding = lifecycleFieldRuleBinding(ruleId);
     if (!binding) return [];
+    const blocking_level = blockingLevelForPersistedLevel(level);
     const values = ctx.values;
     let present = false;
     if (binding.value_source === "opportunity_metadata" && binding.metadata_key) {
@@ -228,6 +258,7 @@ function evaluateOpportunityRule(
             field_key: binding.field_key ?? undefined,
             missing_reason: "Required opportunity information is missing.",
             blocking_level,
+            requirement_level: level,
         }),
     ];
 }
@@ -235,21 +266,21 @@ function evaluateOpportunityRule(
 function evaluateSingleFieldRule(
     ctx: CompletionEvaluationContext,
     ruleId: string,
-    blocking_level: "hard_block" | "recommendation"
+    level: PersistedRequirementLevel
 ): RequirementViolation[] {
     if (parseCustomFieldRuleId(ruleId)) return [];
 
     const binding = lifecycleFieldRuleBinding(ruleId);
-    if (!binding?.runtime_enforced) return [];
+    if (!binding) return [];
 
     switch (binding.value_source) {
         case "primary_person":
-            return evaluatePersonRule(ctx, ruleId, blocking_level);
+            return evaluatePersonRule(ctx, ruleId, level);
         case "inquiry_child":
-            return evaluateChildRule(ctx, ruleId, blocking_level);
+            return evaluateChildRule(ctx, ruleId, level);
         case "opportunity":
         case "opportunity_metadata":
-            return evaluateOpportunityRule(ctx, ruleId, blocking_level);
+            return evaluateOpportunityRule(ctx, ruleId, level);
         default:
             return [];
     }
@@ -258,14 +289,19 @@ function evaluateSingleFieldRule(
 export function evaluateFieldRulesForStage(
     ctx: CompletionEvaluationContext,
     stage: LifecycleOperatorStage,
-    rules: LifecycleStageFieldRules
+    rules: LifecycleStageFieldRulesStored,
+    options?: { isEnforceable?: RuleEnforceableLookup }
 ): RequirementViolation[] {
+    const isEnforceable = options?.isEnforceable ?? ((ruleId: string) => isLifecycleRuleEnforceable(ruleId));
+    const levels = resolveAllEffectivePersistedLevels({
+        rules,
+        rule_levels_v1: rules.rule_levels_v1,
+        isEnforceable,
+    });
+
     const violations: RequirementViolation[] = [];
-    for (const ruleId of rules.required_rule_ids) {
-        violations.push(...evaluateSingleFieldRule(ctx, ruleId, "hard_block"));
-    }
-    for (const ruleId of rules.recommended_rule_ids) {
-        violations.push(...evaluateSingleFieldRule(ctx, ruleId, "recommendation"));
+    for (const [ruleId, level] of Object.entries(levels)) {
+        violations.push(...evaluateSingleFieldRule(ctx, ruleId, level));
     }
     return violations;
 }
@@ -336,8 +372,8 @@ export function evaluateLifecycleFieldRulesForPreflight(
     const seen = new Set<string>();
 
     for (const stage of stages) {
-        const { rules } = effectiveFieldRulesForStage(stage, metadata);
-        for (const v of evaluateFieldRulesForStage(ctx, stage, rules)) {
+        const stored = effectiveFieldRulesStoredForStage(stage, metadata);
+        for (const v of evaluateFieldRulesForStage(ctx, stage, stored)) {
             const key = `${v.label}:${v.blocking_level}`;
             if (seen.has(key)) continue;
             seen.add(key);

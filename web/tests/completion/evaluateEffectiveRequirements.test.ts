@@ -106,8 +106,8 @@ describe("evaluateEffectiveRequirements — move_to_waitlist", () => {
             }),
         });
         expect(result.ok).toBe(false);
-        expect(result.blocking.some((v) => v.label === "Desired Schedule")).toBe(true);
-        expect(result.blocking.some((v) => v.label === "Desired Start Date")).toBe(true);
+        expect(result.blocking.some((v) => v.label.includes("Desired Schedule"))).toBe(true);
+        expect(result.blocking.some((v) => v.label.includes("Desired Start Date"))).toBe(true);
     });
 
     it("auto-populates waitlist_date instruction", () => {

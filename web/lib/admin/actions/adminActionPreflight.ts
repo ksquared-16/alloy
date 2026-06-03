@@ -35,9 +35,14 @@ export async function runOpportunityActionPreflight(
 export function adminActionPreflightFailure(
     correlationId: string,
     actionKey: string,
-    result: EffectiveRequirementsResult
+    result: EffectiveRequirementsResult,
+    context?: {
+        orgId?: string;
+        opportunityId?: string;
+        departmentId?: string | null;
+    }
 ): Extract<ExecuteAdminActionResult, { ok: false }> {
-    const ui = buildActionPreflightUiPayload(actionKey, result);
+    const ui = buildActionPreflightUiPayload(actionKey, result, context);
     return {
         ok: false,
         correlation_id: correlationId,
@@ -46,6 +51,7 @@ export function adminActionPreflightFailure(
         completion_requirements: ui.completion_requirements,
         effective_requirements: ui.effective_requirements,
         action_preflight: ui,
+        ...(ui.readiness ? { readiness: ui.readiness } : {}),
     };
 }
 
@@ -56,5 +62,9 @@ export async function preflightOpportunityActionOrNull(
     if (!isLifecyclePreflightActionKey(input.actionKey)) return null;
     const result = await runOpportunityActionPreflight(input);
     if (result.ok) return null;
-    return adminActionPreflightFailure(correlationId, input.actionKey, result);
+    return adminActionPreflightFailure(correlationId, input.actionKey, result, {
+        orgId: input.orgId,
+        opportunityId: input.opportunityId,
+        departmentId: input.departmentId,
+    });
 }

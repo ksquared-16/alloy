@@ -13,6 +13,7 @@ import { asOperatorStageKey } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import {
     departmentHasBuilderStageFieldOverride,
     effectiveFieldRulesForBuilderStage,
+    effectiveFieldRulesStoredForBuilderStage,
 } from "@/lib/lifecycle/lifecycleBuilderStageFieldRules";
 import { mergeLifecycleFieldPaletteForBuilderStage } from "@/lib/lifecycle/lifecycleBuilderStagePalette";
 import { platformFieldRulesForStage } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
@@ -30,6 +31,11 @@ export function buildLifecycleRequirementsStageEntry(
     const builderOwned = isLifecycleBuilderOwnedDepartmentMetadata(metadata);
     const palette = mergeLifecycleFieldPaletteForBuilderStage(builderStageKey, orgFieldDefs);
     const effectiveFields = effectiveFieldRulesForBuilderStage(builderStageKey, metadata, operatorStage);
+    const effectiveStored = effectiveFieldRulesStoredForBuilderStage(
+        builderStageKey,
+        metadata,
+        operatorStage
+    );
     const blankRules = { required_rule_ids: [] as string[], recommended_rule_ids: [] as string[] };
 
     if (operatorStage) {
@@ -53,7 +59,7 @@ export function buildLifecycleRequirementsStageEntry(
                 field_rules:
                     builderOwned && !hasOverride && !hasBuilderOverride
                         ? blankRules
-                        : effectiveFields.rules,
+                        : effectiveStored,
                 field_rules_source:
                     builderOwned && !hasOverride && !hasBuilderOverride
                         ? "none"
@@ -83,7 +89,7 @@ export function buildLifecycleRequirementsStageEntry(
             required_labels: [] as string[],
             recommended_labels: [] as string[],
             source: hasBuilderOverride ? "builder_stage" : "none",
-            field_rules: effectiveFields.rules,
+            field_rules: hasBuilderOverride ? effectiveStored : blankRules,
             field_rules_source: effectiveFields.source,
         },
         has_department_override: hasBuilderOverride,

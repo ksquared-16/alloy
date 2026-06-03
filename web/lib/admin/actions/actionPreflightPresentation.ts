@@ -1,6 +1,8 @@
 import type { EffectiveRequirementsResult } from "@/lib/completion/effectiveRequirementsTypes";
 import type { RequirementValidationResult } from "@/lib/completion/requirementValidationTypes";
+import type { ReadinessResult } from "@/lib/completion/readinessTypes";
 import { effectiveRequirementsToValidationResult } from "@/lib/completion/evaluateEffectiveRequirements";
+import { readinessResultFromEffectiveRequirements } from "@/lib/completion/evaluateOperationalReadiness";
 import { formatRequirementValidationSummary } from "@/lib/completion/requirementValidationResult";
 
 export type ActionPreflightUiPayload = {
@@ -11,6 +13,7 @@ export type ActionPreflightUiPayload = {
     recommended: Array<{ field_key: string; label: string; reason: string }>;
     completion_requirements: RequirementValidationResult;
     effective_requirements: EffectiveRequirementsResult;
+    readiness?: ReadinessResult;
 };
 
 const ACTION_PREFLIGHT_TITLES: Record<string, string> = {
@@ -26,11 +29,30 @@ export function actionPreflightTitle(actionKey: string): string {
 
 export function buildActionPreflightUiPayload(
     actionKey: string,
-    effective: EffectiveRequirementsResult
+    effective: EffectiveRequirementsResult,
+    context?: {
+        orgId?: string;
+        opportunityId?: string;
+        departmentId?: string | null;
+    }
 ): ActionPreflightUiPayload {
     const validation = effectiveRequirementsToValidationResult(effective);
+    const trimmedKey = actionKey.trim();
+    const readiness =
+        context?.orgId && context?.opportunityId
+            ? readinessResultFromEffectiveRequirements(effective, {
+                  trigger: "action_execute",
+                  subject: { entity_type: "opportunity", entity_id: context.opportunityId },
+                  context: {
+                      org_id: context.orgId,
+                      department_id: context.departmentId ?? undefined,
+                      action_key: trimmedKey,
+                  },
+              })
+            : undefined;
+
     return {
-        action_key: actionKey.trim(),
+        action_key: trimmedKey,
         title: actionPreflightTitle(actionKey),
         summary: formatRequirementValidationSummary(validation) || "Complete required information before continuing.",
         blocking: effective.blocking.map((v) => ({
@@ -46,5 +68,6 @@ export function buildActionPreflightUiPayload(
         })),
         completion_requirements: validation,
         effective_requirements: effective,
+        ...(readiness ? { readiness } : {}),
     };
 }

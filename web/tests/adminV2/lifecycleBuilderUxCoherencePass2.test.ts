@@ -46,7 +46,7 @@ describe("Lifecycle UX coherence pass 2", () => {
 
     it("field requirements use compact rows", () => {
         const editor = read("components/adminV2/settings/LifecycleStageFieldRequirementsEditor.tsx");
-        expect(editor).toContain('Req"');
+        expect(editor).toContain("builderUiLevelButtonLabel");
         expect(editor).toContain("divide-y");
     });
 

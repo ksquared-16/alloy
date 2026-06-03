@@ -1,3 +1,4 @@
+import type { ReadinessResult } from "@/lib/completion/readinessTypes";
 import type { QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
 import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import type { RecordLayoutConfigJson } from "@/lib/recordChrome/types";
@@ -30,6 +31,8 @@ export type OpportunityDrawerOperationalBootstrapResponse = {
         work_unit_id: string | null;
     };
     oper_trust_preview: DrawerOperTrustPreviewV1 | null;
+    /** Optional display-only readiness (Phase 1 — not required for drawer reveal). */
+    readiness?: ReadinessResult | null;
     timing: {
         route_gate_ms: number;
         phases_ms: Record<string, number>;

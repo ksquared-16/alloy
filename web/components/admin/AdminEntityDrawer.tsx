@@ -452,6 +452,8 @@ import {
 } from "@/lib/admin/opportunityDrawerBootstrapClient";
 import type { DrawerOperTrustPreviewV1 } from "@/lib/admin/opportunityDrawerOperationalBootstrapTypes";
 import type { OpportunityDrawerOperationalBootstrapResponse } from "@/lib/admin/opportunityDrawerOperationalBootstrapTypes";
+import { OpportunityDrawerRequiredInformationPanel } from "@/components/admin/opportunity/OpportunityDrawerRequiredInformationPanel";
+import type { ReadinessResult } from "@/lib/completion/readinessTypes";
 import { AdminV2DrawerLoadingState } from "@/components/admin/workspace/AdminV2DrawerLoadingState";
 import type { RecordLayoutRow } from "@/lib/recordChrome/types";
 import { getSectionOrderFromScheduleLayoutBlocks } from "@/lib/recordChrome/scheduleLayoutConfig";
@@ -1849,6 +1851,7 @@ export default function AdminEntityDrawer() {
     const [opportunityOperTrustPreview, setOpportunityOperTrustPreview] = useState<DrawerOperTrustPreviewV1 | null>(
         null
     );
+    const [opportunityDrawerReadiness, setOpportunityDrawerReadiness] = useState<ReadinessResult | null>(null);
     const drawerLoadStartRef = useRef<{ key: string; at: number } | null>(null);
     const drawerReadyLoggedKeyRef = useRef<string | null>(null);
     /** Current drawer.type:id — guards async hydrates from overwriting after stack navigation. */
@@ -2414,6 +2417,7 @@ export default function AdminEntityDrawer() {
         setOpportunityBootstrapAppliedId(drawer.id);
         setOpportunityBootstrapLayoutRow(mapBootstrapLayoutToRecordLayoutRow(boot));
         setOpportunityOperTrustPreview(boot.oper_trust_preview);
+        setOpportunityDrawerReadiness(boot.readiness ?? null);
         let merged = mergeOpportunityFullHydrateLocal(
             boot.entity as Record<string, unknown>,
             preload.primaryEntity
@@ -2521,6 +2525,7 @@ export default function AdminEntityDrawer() {
             setOpportunityBootstrapAppliedId(null);
             setOpportunityBootstrapLayoutRow(null);
             setOpportunityOperTrustPreview(null);
+            setOpportunityDrawerReadiness(null);
             setOpportunityDrawerBootstrapLegacy(false);
             return;
         }
@@ -2694,6 +2699,7 @@ export default function AdminEntityDrawer() {
                 boot.entity as Record<string, unknown>
             );
             setOpportunityOperTrustPreview(boot.oper_trust_preview);
+            setOpportunityDrawerReadiness(boot.readiness ?? null);
             setData(boot.entity);
             putDrawerEntitySnapshot(drawer.type, drawer.id, boot.entity as Record<string, unknown>);
             if (boot.record_header_actions) {
@@ -15778,6 +15784,14 @@ export default function AdminEntityDrawer() {
                                                         }
                                                     }}
                                                     onRecordUpdated={mergePersonDrawerRecord}
+                                                />
+                                            ) : null}
+                                            {drawer.type === "opportunities" &&
+                                            drawer.id &&
+                                            drawer.id !== "new" &&
+                                            !(overviewData as { _create?: boolean })?._create ? (
+                                                <OpportunityDrawerRequiredInformationPanel
+                                                    readiness={opportunityDrawerReadiness}
                                                 />
                                             ) : null}
                                             <EntityDrawerOverview

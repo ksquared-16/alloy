@@ -359,6 +359,8 @@ export function FormLifecycleUsagePanel({
                                                                     "text-red-800/85"
                                                                 :   "text-alloy-midnight/50"
                                                             )}
+                                                            data-lifecycle-coverage-row-status={row.status_label}
+                                                            data-lifecycle-coverage-row-level={row.tier_label}
                                                         >
                                                             {row.status_label}
                                                             {row.detail ? ` — ${row.detail}` : ""}
