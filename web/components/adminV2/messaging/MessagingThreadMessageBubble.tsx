@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { formatMessagingDateTimeLocal } from "@/lib/adminV2/messaging/messagingLocalDateTime";
 import {
     messagingMessageBubbleBodyClass,
@@ -13,7 +14,29 @@ type MessagingThreadMessageBubbleProps = {
     compact?: boolean;
 };
 
-export default function MessagingThreadMessageBubble({ message, compact = false }: MessagingThreadMessageBubbleProps) {
+/**
+ * Field-level equality so the memo is effective even when callers pass a freshly
+ * built `message` object each render (e.g. the drawer constructs it inline in `.map`).
+ * Covers the full {@link InboxThreadMessageRow} surface + `compact`, so no output-affecting
+ * prop change is ever skipped.
+ */
+function messageBubblePropsAreEqual(
+    prev: MessagingThreadMessageBubbleProps,
+    next: MessagingThreadMessageBubbleProps,
+): boolean {
+    if (prev.compact !== next.compact) return false;
+    const a = prev.message;
+    const b = next.message;
+    return (
+        a.id === b.id &&
+        a.direction === b.direction &&
+        a.channel === b.channel &&
+        a.body === b.body &&
+        a.created_at === b.created_at
+    );
+}
+
+function MessagingThreadMessageBubble({ message, compact = false }: MessagingThreadMessageBubbleProps) {
     const inbound = (message.direction ?? "").toLowerCase() === "inbound";
     const when = message.created_at ? formatMessagingDateTimeLocal(message.created_at) : "";
     const ch = (message.channel ?? "").toUpperCase();
@@ -42,3 +65,5 @@ export default function MessagingThreadMessageBubble({ message, compact = false 
         </div>
     );
 }
+
+export default memo(MessagingThreadMessageBubble, messageBubblePropsAreEqual);
