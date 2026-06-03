@@ -29,10 +29,10 @@ async function main() {
         queueKey: "lifecycle_waitlist",
         limit: 3,
         offset: 0,
-        includePreviews: true,
+        rowEnrichment: "queue_list",
     });
 
-    const items = result.items ?? [];
+    const items = result.result.items ?? [];
     console.log("\n=== lifecycle waitlist row trace ===\n");
     console.log("work_unit_id:", wu.id);
     console.log("rows_returned:", items.length);
