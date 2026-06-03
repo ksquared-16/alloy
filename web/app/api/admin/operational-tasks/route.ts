@@ -38,7 +38,10 @@ export async function GET(request: NextRequest) {
             if (!counts.ok) {
                 return NextResponse.json({ ok: false, error: counts.error, message: counts.message }, { status: 500 });
             }
-            return NextResponse.json({ ok: true, counts });
+            return NextResponse.json({
+                ok: true,
+                counts: { open: counts.open, due_soon: counts.due_soon, overdue: counts.overdue },
+            });
         }
         const filterRaw = (url.searchParams.get("filter") ?? "open").trim().toLowerCase();
         const allowed: OperationalWorkWorkspaceFilter[] = [

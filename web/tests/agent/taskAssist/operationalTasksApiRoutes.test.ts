@@ -99,8 +99,11 @@ describe("operational-tasks admin routes", () => {
         const req = new NextRequest("http://localhost/api/admin/operational-tasks?scope=workspace&summary=true");
         const res = await getTasks(req);
         expect(res.status).toBe(200);
-        const j = (await res.json()) as { ok?: boolean; counts?: { open: number } };
+        const j = (await res.json()) as { ok?: boolean; counts?: { open: number; due_soon?: number; overdue?: number; ok?: boolean } };
         expect(j.counts?.open).toBe(3);
+        expect(j.counts?.due_soon).toBe(1);
+        expect(j.counts?.overdue).toBe(2);
+        expect(j.counts?.ok).toBeUndefined();
         expect(mockSummarize).toHaveBeenCalledOnce();
     });
 
