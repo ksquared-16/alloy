@@ -8,8 +8,8 @@ import type { OpportunityWorkspaceContext } from "@/contexts/AdminDrawerContext"
 import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
 import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { opportunityDrawerPrimaryContractReady } from "@/lib/admin/drawer/opportunityDrawerFirstPaintContract";
-import { snapshotNeedsFullRevalidate } from "@/lib/admin/drawer/opportunityDrawerRecordNeedsRevalidate";
 import { peekDrawerEntitySnapshot, putDrawerEntitySnapshot } from "@/lib/admin/drawerEntitySnapshotCache";
+import { drawerSnapshotReuseEligible } from "@/lib/admin/drawer/drawerPerformanceContract";
 import { opportunityDrawerComposedAboveFoldReady } from "@/lib/admin/drawer/drawerAboveFoldCoordinatedReveal";
 import { markOpportunityDrawerHydrateDone } from "@/lib/admin/opportunityDrawerHydrateGuards";
 import { fetchOpportunityDrawerFullEntity, isOpportunityDrawerFullWarm } from "@/lib/admin/opportunityDrawerFullPrefetch";
@@ -132,16 +132,15 @@ export async function loadOpportunityDrawerComposedOpen(
     const fullWarm = isOpportunityDrawerFullWarm(id);
     const prefetchHit = bootstrapWarm && primaryWarm;
 
-    // Card 1 — drawer open reuse: if a fresh, complete `surface=full` snapshot is already
-    // cached (≤120s — the same entry the back-nav restore path already reuses), reuse it for
-    // this open instead of refetching `full`/`primary`. Keeping the cached snapshot at
-    // surface=`full` (i.e. not downgrading it to `drawer_primary` below) also lets
-    // AdminEntityDrawer's existing restore logic skip its background cache-bust hydrate.
+    // Card 1 + Card 3 — drawer open reuse via the Drawer Performance Contract. Reuse a cached
+    // `full` snapshot whose ABOVE-FOLD is complete, even if below-fold/background (e.g. member
+    // graph) is still pending — that pending work fills invisibly post-paint and must not block
+    // reuse. Reusing it (and not downgrading it to `drawer_primary` below) lets AdminEntityDrawer's
+    // restore logic skip the background cache-bust hydrate.
     const warmFullSnapshot: Record<string, unknown> | null = (() => {
         const snap = peekDrawerEntitySnapshot("opportunities", id) as Record<string, unknown> | null;
         if (!snap) return null;
-        if (snapshotNeedsFullRevalidate(snap)) return null;
-        if (!opportunityDrawerPrimaryContractReady(snap, id)) return null;
+        if (!drawerSnapshotReuseEligible("opportunities", snap, id)) return null;
         return snap;
     })();
 

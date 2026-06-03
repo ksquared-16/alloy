@@ -1,5 +1,7 @@
 /** Short-lived drawer entity snapshot cache — restores stack back navigation without a loading shell. */
 
+import { drawerSurfaceRank } from "@/lib/admin/drawer/drawerSurfaceRank";
+
 const TTL_MS = 120_000;
 
 type CacheEntry = {
@@ -30,10 +32,26 @@ export function peekDrawerEntitySnapshot(
 export function putDrawerEntitySnapshot(
     type: string | null | undefined,
     id: string | null | undefined,
-    data: Record<string, unknown> | null | undefined
+    data: Record<string, unknown> | null | undefined,
+    opts?: { replace?: boolean }
 ): void {
     if (!type?.trim() || !id?.trim() || id === "new" || data == null) return;
-    cache.set(drawerEntitySnapshotKey(type, id), { data, fetchedAt: Date.now() });
+    const key = drawerEntitySnapshotKey(type, id);
+    // Card 3 — monotonic snapshots: never downgrade a higher paint-completeness surface (e.g. `full`)
+    // to a lower one (e.g. `drawer_primary`) within the TTL window. Unranked surfaces (person seeds,
+    // generic records without `_record_surface`) are unaffected — their writes always apply.
+    // `{ replace: true }` forces a write (authoritative refresh / post-mutation rewrite).
+    if (!opts?.replace) {
+        const existing = cache.get(key);
+        if (existing && Date.now() - existing.fetchedAt <= TTL_MS) {
+            const existingRank = drawerSurfaceRank(existing.data);
+            const incomingRank = drawerSurfaceRank(data);
+            if (existingRank != null && incomingRank != null && incomingRank < existingRank) {
+                return;
+            }
+        }
+    }
+    cache.set(key, { data, fetchedAt: Date.now() });
 }
 
 export function clearDrawerEntitySnapshot(type: string, id: string): void {

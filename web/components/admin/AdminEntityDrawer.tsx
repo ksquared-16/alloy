@@ -315,6 +315,7 @@ import {
     peekDrawerEntitySnapshot,
     putDrawerEntitySnapshot,
 } from "@/lib/admin/drawerEntitySnapshotCache";
+import { drawerSnapshotReuseEligible } from "@/lib/admin/drawer/drawerPerformanceContract";
 import { openInquiryChildPersonFromOpportunitySync } from "@/lib/admin/drawer/openInquiryChildPersonFromOpportunity";
 import {
     applyPersonDrawerOpenSeed,
@@ -2549,6 +2550,14 @@ export default function AdminEntityDrawer() {
                 drawer.type !== "opportunities" ||
                 drawer.id === "new" ||
                 snapshotCanRenderDrawerFrame(cachedEntity as Record<string, unknown>);
+            // Card 3 — Drawer Performance Contract: a `full` snapshot whose above-fold is complete
+            // (only below-fold/member-graph pending) is reusable for instant, stable paint. Reveal it
+            // now and fill the pending background invisibly via the targeted overlay — no cacheBust
+            // full refetch (which would re-reveal/reshape and cause visible churn).
+            const opportunityCacheReuseAboveFold =
+                drawer.type === "opportunities" &&
+                drawer.id !== "new" &&
+                drawerSnapshotReuseEligible("opportunities", cachedEntity as Record<string, unknown>, drawer.id);
             if (drawer.type === "persons") {
                 logPersonDrawerFetch({
                     phase: personSeedSnapshot ? "seed_cache_hit" : "cache_hit",
@@ -2571,13 +2580,22 @@ export default function AdminEntityDrawer() {
                 setOpportunityBootstrapAppliedId(drawer.id);
                 if (opportunityCacheCanRenderFrame) {
                     opportunityDrawerFirstPaintPreloadedRef.current = drawer.id;
-                    if (String(cachedEntity._record_surface ?? "").trim() === "full" && !opportunityCacheNeedsBackgroundHydrate) {
+                    if (
+                        String(cachedEntity._record_surface ?? "").trim() === "full" &&
+                        (!opportunityCacheNeedsBackgroundHydrate || opportunityCacheReuseAboveFold)
+                    ) {
                         setOpportunityDrawerEnrichmentHeld(false);
                         setOpportunityDrawerBelowFoldRevealed(true);
                         setOpportunityDrawerSecondaryReady(true);
                     }
                 }
-                if (opportunityCacheNeedsBackgroundHydrate) {
+                if (opportunityCacheNeedsBackgroundHydrate && opportunityCacheReuseAboveFold) {
+                    // Above-fold-complete full snapshot: keep it revealed and fill ONLY the pending
+                    // below-fold member graph via its targeted overlay (re-armed below). No full
+                    // cacheBust refetch — that is what caused the visible re-open churn.
+                    setOpportunityDrawerEnrichmentHeld(false);
+                    memberPersonGraphOverlayDoneRef.current = null;
+                } else if (opportunityCacheNeedsBackgroundHydrate) {
                     setOpportunityDrawerEnrichmentHeld(false);
                     if (!opportunityCacheCanRenderFrame) {
                         setOpportunityDrawerBelowFoldRevealed(false);
