@@ -23,6 +23,7 @@ export function buildWorkUnitBootstrapLoaderCacheKey(params: {
     focusQueue: string;
     attentionBucketKey: string;
     deferPrimaryLaneRows: boolean;
+    deferLifecycleSiblings: boolean;
     viewerTimezoneIana: string;
     /** e.g. priority:6 — must match loader summaryMode. */
     summariesModeKey: string;
@@ -39,6 +40,7 @@ export function buildWorkUnitBootstrapLoaderCacheKey(params: {
         `fq:${params.focusQueue.trim() || "_"}`,
         `ab:${params.attentionBucketKey.trim() || "_"}`,
         params.deferPrimaryLaneRows ? "defer1" : "defer0",
+        params.deferLifecycleSiblings ? "lsib_defer1" : "lsib_defer0",
         `tz:${params.viewerTimezoneIana.trim() || "UTC"}`,
     ];
     return parts.join("\u0001");
