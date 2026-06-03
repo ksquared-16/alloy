@@ -8,7 +8,8 @@ import type { OpportunityWorkspaceContext } from "@/contexts/AdminDrawerContext"
 import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
 import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { opportunityDrawerPrimaryContractReady } from "@/lib/admin/drawer/opportunityDrawerFirstPaintContract";
-import { putDrawerEntitySnapshot } from "@/lib/admin/drawerEntitySnapshotCache";
+import { snapshotNeedsFullRevalidate } from "@/lib/admin/drawer/opportunityDrawerRecordNeedsRevalidate";
+import { peekDrawerEntitySnapshot, putDrawerEntitySnapshot } from "@/lib/admin/drawerEntitySnapshotCache";
 import { opportunityDrawerComposedAboveFoldReady } from "@/lib/admin/drawer/drawerAboveFoldCoordinatedReveal";
 import { markOpportunityDrawerHydrateDone } from "@/lib/admin/opportunityDrawerHydrateGuards";
 import { fetchOpportunityDrawerFullEntity, isOpportunityDrawerFullWarm } from "@/lib/admin/opportunityDrawerFullPrefetch";
@@ -131,6 +132,19 @@ export async function loadOpportunityDrawerComposedOpen(
     const fullWarm = isOpportunityDrawerFullWarm(id);
     const prefetchHit = bootstrapWarm && primaryWarm;
 
+    // Card 1 — drawer open reuse: if a fresh, complete `surface=full` snapshot is already
+    // cached (≤120s — the same entry the back-nav restore path already reuses), reuse it for
+    // this open instead of refetching `full`/`primary`. Keeping the cached snapshot at
+    // surface=`full` (i.e. not downgrading it to `drawer_primary` below) also lets
+    // AdminEntityDrawer's existing restore logic skip its background cache-bust hydrate.
+    const warmFullSnapshot: Record<string, unknown> | null = (() => {
+        const snap = peekDrawerEntitySnapshot("opportunities", id) as Record<string, unknown> | null;
+        if (!snap) return null;
+        if (snapshotNeedsFullRevalidate(snap)) return null;
+        if (!opportunityDrawerPrimaryContractReady(snap, id)) return null;
+        return snap;
+    })();
+
     const composedStart = typeof performance !== "undefined" ? performance.now() : 0;
     let bootstrapMs = 0;
     let primaryMs = 0;
@@ -138,15 +152,17 @@ export async function loadOpportunityDrawerComposedOpen(
     let headerActionsMs = 0;
 
     const fullStart = typeof performance !== "undefined" ? performance.now() : 0;
-    const fullP = fetchOpportunityDrawerFullEntity(id, init)
-        .then((entity) => {
-            fullMs = Math.round((typeof performance !== "undefined" ? performance.now() : 0) - fullStart);
-            return entity;
-        })
-        .catch(() => {
-            fullMs = Math.round((typeof performance !== "undefined" ? performance.now() : 0) - fullStart);
-            return null;
-        });
+    const fullP: Promise<Record<string, unknown> | null> = warmFullSnapshot
+        ? Promise.resolve(warmFullSnapshot)
+        : fetchOpportunityDrawerFullEntity(id, init)
+              .then((entity) => {
+                  fullMs = Math.round((typeof performance !== "undefined" ? performance.now() : 0) - fullStart);
+                  return entity;
+              })
+              .catch(() => {
+                  fullMs = Math.round((typeof performance !== "undefined" ? performance.now() : 0) - fullStart);
+                  return null;
+              });
 
     const bootstrapP = (async () => {
         const t0 = typeof performance !== "undefined" ? performance.now() : 0;
@@ -157,6 +173,13 @@ export async function loadOpportunityDrawerComposedOpen(
 
     const primaryP = (async () => {
         const t0 = typeof performance !== "undefined" ? performance.now() : 0;
+        if (warmFullSnapshot) {
+            // Reuse the fresh `full` snapshot as the primary entity — no refetch, and crucially
+            // do NOT write a `drawer_primary` snapshot below (which would downgrade the cached
+            // `full` and re-trigger the background hydrate on mount).
+            primaryMs = Math.round((typeof performance !== "undefined" ? performance.now() : 0) - t0);
+            return warmFullSnapshot;
+        }
         const boot = await bootstrapP;
         const bootEntity = boot.entity as Record<string, unknown> | null | undefined;
         if (
