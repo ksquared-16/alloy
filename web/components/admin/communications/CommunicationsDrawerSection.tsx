@@ -448,22 +448,20 @@ export default function CommunicationsDrawerSection({
         });
     }, [recipients, effectiveComposer]);
 
-    const filteredThreadsByView = useMemo(() => {
-        return threads.filter((t) => {
-            const ch = (t.channel ?? "").trim().toLowerCase();
-            if (viewFilter === "all") return true;
-            return ch === viewFilter;
-        });
-    }, [threads, viewFilter]);
+    /** Active-filter view of loaded messages — client-side channel filter (no refetch on tab switch). */
+    const filteredMsgs = useMemo(() => {
+        if (viewFilter === "all") return msgs;
+        return msgs.filter((m) => (m.channel ?? "").trim().toLowerCase() === viewFilter);
+    }, [msgs, viewFilter]);
 
     const displayedMsgs = useMemo(() => {
-        if (showOlderMessages || msgs.length <= DEFAULT_VISIBLE_MESSAGE_COUNT) return msgs;
-        return msgs.slice(-DEFAULT_VISIBLE_MESSAGE_COUNT);
-    }, [msgs, showOlderMessages]);
+        if (showOlderMessages || filteredMsgs.length <= DEFAULT_VISIBLE_MESSAGE_COUNT) return filteredMsgs;
+        return filteredMsgs.slice(-DEFAULT_VISIBLE_MESSAGE_COUNT);
+    }, [filteredMsgs, showOlderMessages]);
 
     const hiddenOlderCount =
-        msgs.length > DEFAULT_VISIBLE_MESSAGE_COUNT && !showOlderMessages
-            ? msgs.length - DEFAULT_VISIBLE_MESSAGE_COUNT
+        filteredMsgs.length > DEFAULT_VISIBLE_MESSAGE_COUNT && !showOlderMessages
+            ? filteredMsgs.length - DEFAULT_VISIBLE_MESSAGE_COUNT
             : 0;
 
     /** Inbound-unread counts per filter, computed once per msgs change (was rescanned 3×/render). */
@@ -572,7 +570,9 @@ export default function CommunicationsDrawerSection({
     const loadConversationMessages = useCallback(
         async (signal: AbortSignal, isCurrent: () => boolean) => {
             if (!dataLayerActive) return;
-            const scopeList = filteredThreadsByView.slice(0, MAX_MERGE_THREADS);
+            // Load across all in-scope threads regardless of the active filter; the channel
+            // filter is applied client-side (filteredMsgs) so tab switches never refetch.
+            const scopeList = threads.slice(0, MAX_MERGE_THREADS);
             if (scopeList.length === 0) {
                 if (!isCurrent()) return;
                 setMsgs([]);
@@ -618,7 +618,7 @@ export default function CommunicationsDrawerSection({
                 if (isCurrent()) setLoadingMsgs(false);
             }
         },
-        [dataLayerActive, filteredThreadsByView],
+        [dataLayerActive, threads],
     );
 
     useEffect(() => {
@@ -647,7 +647,8 @@ export default function CommunicationsDrawerSection({
     /** Mark inbound rows read for the current viewer after the thread is shown (per-user reads table). */
     useEffect(() => {
         if (!active || !dataLayerActive || loadingMsgs) return;
-        const inboundUnreadIds = msgs
+        // Only mark read the channel the viewer is actually looking at (the filtered view).
+        const inboundUnreadIds = filteredMsgs
             .filter((m) => (m.direction ?? "").toLowerCase() === "inbound" && m.viewer_has_read !== true)
             .map((m) => m.id)
             .filter((id) => id && !markedReadSubmittedRef.current.has(id));
@@ -674,7 +675,7 @@ export default function CommunicationsDrawerSection({
             })();
         }, 550);
         return () => window.clearTimeout(t);
-    }, [dataLayerActive, loadingMsgs, msgs]);
+    }, [dataLayerActive, loadingMsgs, filteredMsgs]);
 
     useEffect(() => {
         if (!dataLayerActive) return;
@@ -1215,7 +1216,7 @@ export default function CommunicationsDrawerSection({
         </div>
     ) : msgErr ? (
         <p className="text-sm text-alloy-ember">{msgErr}</p>
-    ) : msgs.length === 0 ? (
+    ) : filteredMsgs.length === 0 ? (
         <p className="py-4 text-center text-[13px] text-alloy-midnight/58">No messages in this view yet.</p>
     ) : (
         <ul className="flex flex-col gap-1 pb-0.5">
@@ -1230,7 +1231,7 @@ export default function CommunicationsDrawerSection({
                     </button>
                 </li>
             ) : null}
-            {showOlderMessages && msgs.length > DEFAULT_VISIBLE_MESSAGE_COUNT ? (
+            {showOlderMessages && filteredMsgs.length > DEFAULT_VISIBLE_MESSAGE_COUNT ? (
                 <li className="flex w-full justify-center pb-0.5">
                     <button
                         type="button"
