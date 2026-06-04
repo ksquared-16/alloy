@@ -175,7 +175,8 @@ function InquiryChildDrawerIconButton({
     if (!cmId) return null;
     const resolvedPersonId = resolveInquiryChildOpenPersonId(opportunityRecord, row) ?? personId?.trim() ?? "";
     const iconTargetId = resolvedPersonId || cmId;
-    const isPending = pendingKey != null && (linkPending?.isPending(pendingKey) ?? false);
+    const isPending =
+        pendingKey != null && (linkPending?.isPending?.(pendingKey) ?? false);
 
     const warmChildVm = () => {
         if (!resolvedPersonId) return;
