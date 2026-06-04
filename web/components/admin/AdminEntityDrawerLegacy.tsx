@@ -13733,31 +13733,19 @@ export function AdminEntityDrawerLegacy() {
         locationRecordChromeBodyShell;
 
     const drawerPresentation = useAdminV2RecordModalPresentation ? "modal" : "sidebar";
-    const drawerRuntimeDebug = useMemo(
-        () =>
-            drawer.type && drawer.id ?
-                {
-                    route: "legacy" as const,
-                    surface: drawerDebugSurfaceFromPresentation(drawerPresentation),
-                    source: drawerDebugSourceFromPathname(pathname),
-                    path: pathname ?? "",
-                    entityType: drawer.type,
-                    entityId: String(drawer.id),
-                    statusComponent: resolveLegacyDrawerStatusDebugComponent({
-                        drawerType: drawer.type,
-                        opportunityInquiryWorkflow:
-                            drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer,
-                    }),
-                }
-            :   null,
-        [
-            drawer.type,
-            drawer.id,
-            drawerPresentation,
-            pathname,
-            opportunityInquiryWorkflowDrawer,
-        ]
-    );
+    const drawerRuntimeDebug = {
+        route: "legacy" as const,
+        surface: drawerDebugSurfaceFromPresentation(drawerPresentation),
+        source: drawerDebugSourceFromPathname(pathname),
+        path: pathname ?? "",
+        entityType: drawer.type,
+        entityId: String(drawer.id),
+        statusComponent: resolveLegacyDrawerStatusDebugComponent({
+            drawerType: drawer.type,
+            opportunityInquiryWorkflow:
+                drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer,
+        }),
+    };
 
     return (
         <Drawer
