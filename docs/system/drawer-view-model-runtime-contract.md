@@ -8,15 +8,16 @@ Server-composed **Drawer View Models (VMs)** make first paint self-contained: th
 
 This doc defines the **reusable runtime contract**. Entity-specific first-viewport dependency lists live in per-drawer contract modules (e.g. `opportunityDrawerFirstViewportContract.ts`).
 
-## Feature flags (build-time, per entity)
+## Feature flags (per entity)
 
-| Entity | Flag | When true |
-|--------|------|-----------|
-| Opportunity | `NEXT_PUBLIC_ADMINV2_DRAWER_VM` | VM open + hard cutover |
-| Person (parent/generic) | `NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM` | VM open + hard cutover |
-| Child (person child chrome) | `NEXT_PUBLIC_ADMINV2_CHILD_DRAWER_VM` | VM open + hard cutover |
+| Entity | Control | When VM runs |
+|--------|---------|--------------|
+| Opportunity | **Default on** in code (`opportunityDrawerHardCutoverGate.ts`) | AdminV2 opportunity drawer uses VM unless kill switch |
+| Opportunity rollback | `NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH=1` or `FORCE_LEGACY_OPPORTUNITY_DRAWER = true` | Legacy opportunity drawer |
+| Person (parent/generic) | `NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM` | VM open + hard cutover (default off) |
+| Child (person child chrome) | `NEXT_PUBLIC_ADMINV2_CHILD_DRAWER_VM` | VM open + hard cutover (default off) |
 
-Flags default off. Legacy paths remain authoritative when disabled.
+`NEXT_PUBLIC_ADMINV2_DRAWER_VM` is **not** used for opportunity routing (deprecated for that path). Person/child flags default off.
 
 ## Hard cutover behavior
 

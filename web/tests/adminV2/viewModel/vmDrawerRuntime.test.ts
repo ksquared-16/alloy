@@ -1,16 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
-
-vi.mock("@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerHardCutoverGate", () => ({
-    opportunityDrawerHardCutoverEnabled: () => true,
-}));
-
-vi.mock("@/lib/adminV2/viewModel/drawer/person/personDrawerHardCutoverGate", () => ({
-    personDrawerHardCutoverEnabled: () => true,
-}));
-
-vi.mock("@/lib/adminV2/viewModel/drawer/child/childDrawerHardCutoverGate", () => ({
-    childDrawerHardCutoverEnabled: () => true,
-}));
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { resolveVmDrawerRuntimeRoute } from "@/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerRuntimeRoute";
 import {
@@ -19,16 +7,48 @@ import {
 } from "@/lib/adminV2/viewModel/drawer/drawerRuntimePhase";
 
 describe("vmDrawerRuntimeRoute", () => {
-    it("routes adminV2 opportunities with VM cutover to opportunity runtime", () => {
+    const prevKill = process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH;
+    const prevVm = process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM;
+    const prevPerson = process.env.NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM;
+    const prevChild = process.env.NEXT_PUBLIC_ADMINV2_CHILD_DRAWER_VM;
+
+    afterEach(() => {
+        process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH = prevKill;
+        process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM = prevVm;
+        process.env.NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM = prevPerson;
+        process.env.NEXT_PUBLIC_ADMINV2_CHILD_DRAWER_VM = prevChild;
+        vi.unstubAllEnvs();
+    });
+
+    const adminV2Wu =
+        "/adminV2/workspace/dept/3933ac47-077a-4de8-aaac-8aed48d80413/work-unit/a428520f-b6a1-4913-8209-2d45a9affcd9";
+
+    it("routes adminV2 opportunities to opportunity runtime by default", () => {
+        delete process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM;
+        delete process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH;
         expect(
-            resolveVmDrawerRuntimeRoute(
-                { type: "opportunities", id: "opp-1" },
-                "/adminV2/workspace/dept/d1/work-unit/w1"
-            )
+            resolveVmDrawerRuntimeRoute({ type: "opportunities", id: "opp-1" }, adminV2Wu)
         ).toBe("opportunity");
     });
 
+    it("does not require NEXT_PUBLIC_ADMINV2_DRAWER_VM for opportunity VM route", () => {
+        process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM = "0";
+        delete process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH;
+        expect(
+            resolveVmDrawerRuntimeRoute({ type: "opportunities", id: "opp-1" }, adminV2Wu)
+        ).toBe("opportunity");
+    });
+
+    it("routes opportunity to legacy when kill switch is active", () => {
+        delete process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM;
+        process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH = "1";
+        expect(
+            resolveVmDrawerRuntimeRoute({ type: "opportunities", id: "opp-1" }, adminV2Wu)
+        ).toBe("legacy");
+    });
+
     it("keeps legacy for non-adminV2 surfaces", () => {
+        delete process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH;
         expect(
             resolveVmDrawerRuntimeRoute({ type: "opportunities", id: "opp-1" }, "/admin/legacy")
         ).toBe("legacy");
@@ -40,16 +60,29 @@ describe("vmDrawerRuntimeRoute", () => {
         ).toBe("legacy");
     });
 
-    it("routes adminV2 persons with VM cutover to person runtime", () => {
+    it("keeps persons on legacy unless person VM flag is enabled", () => {
+        delete process.env.NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM;
+        delete process.env.NEXT_PUBLIC_ADMINV2_CHILD_DRAWER_VM;
         expect(
             resolveVmDrawerRuntimeRoute(
                 { type: "persons", id: "person-1", openSource: "opportunity_primary_contact" },
-                "/adminV2/workspace/dept/d1/work-unit/w1"
+                adminV2Wu
+            )
+        ).toBe("legacy");
+    });
+
+    it("routes adminV2 persons to person runtime when person VM flag is on", () => {
+        vi.stubEnv("NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM", "true");
+        expect(
+            resolveVmDrawerRuntimeRoute(
+                { type: "persons", id: "person-1", openSource: "opportunity_primary_contact" },
+                adminV2Wu
             )
         ).toBe("person");
     });
 
-    it("routes adminV2 child inquiry opens to child runtime", () => {
+    it("routes adminV2 child inquiry to child runtime when child VM flag is on", () => {
+        vi.stubEnv("NEXT_PUBLIC_ADMINV2_CHILD_DRAWER_VM", "true");
         expect(
             resolveVmDrawerRuntimeRoute(
                 {
@@ -57,7 +90,7 @@ describe("vmDrawerRuntimeRoute", () => {
                     id: "child-1",
                     openSource: "opportunity_inquiry_child",
                 },
-                "/adminV2/workspace/dept/d1/work-unit/w1"
+                adminV2Wu
             )
         ).toBe("child");
     });

@@ -21,8 +21,11 @@ export function resolveVmDrawerRuntimeRoute(
     if (!isVmBackedDrawerEntityType(drawer.type)) return "legacy";
     if (!isAdminV2DrawerSurface(pathname)) return "legacy";
 
-    if (drawer.type === "opportunities" && opportunityDrawerHardCutoverEnabled()) {
-        return "opportunity";
+    if (drawer.type === "opportunities") {
+        if (opportunityDrawerHardCutoverEnabled()) {
+            return "opportunity";
+        }
+        return "legacy";
     }
 
     if (drawer.type === "persons") {

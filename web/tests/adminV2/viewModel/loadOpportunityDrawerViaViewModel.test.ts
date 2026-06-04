@@ -26,25 +26,32 @@ function settledVm() {
 }
 
 describe("loadOpportunityDrawerViaViewModel", () => {
-    const prevVm = process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM;
+    const prevKill = process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH;
 
     beforeEach(() => {
         vi.mocked(fetchOpportunityDrawerViewModelClient).mockReset();
+        delete process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH;
     });
 
     afterEach(() => {
-        process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM = prevVm;
+        process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH = prevKill;
     });
 
-    it("returns cutover_disabled when flag off", async () => {
-        delete process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM;
+    it("returns cutover_disabled when kill switch is active", async () => {
+        process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH = "1";
         const result = await loadOpportunityDrawerViaViewModel("opp-1", null);
         expect(result).toEqual({ ok: false, reason: "cutover_disabled" });
         expect(fetchOpportunityDrawerViewModelClient).not.toHaveBeenCalled();
     });
 
+    it("loads VM without NEXT_PUBLIC_ADMINV2_DRAWER_VM", async () => {
+        const vm = settledVm();
+        vi.mocked(fetchOpportunityDrawerViewModelClient).mockResolvedValue({ ok: true, viewModel: vm });
+        const result = await loadOpportunityDrawerViaViewModel("opp-1", null);
+        expect(result.ok).toBe(true);
+    });
+
     it("returns skipped on classic 422", async () => {
-        process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM = "true";
         vi.mocked(fetchOpportunityDrawerViewModelClient).mockResolvedValue({
             ok: false,
             skipped: {
@@ -59,7 +66,6 @@ describe("loadOpportunityDrawerViaViewModel", () => {
     });
 
     it("returns fetch_failed on network error status", async () => {
-        process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM = "true";
         vi.mocked(fetchOpportunityDrawerViewModelClient).mockResolvedValue({
             ok: false,
             error: "drawer_vm_fetch_500",
@@ -70,7 +76,6 @@ describe("loadOpportunityDrawerViaViewModel", () => {
     });
 
     it("returns settled preload when VM succeeds", async () => {
-        process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM = "true";
         const vm = settledVm();
         vi.mocked(fetchOpportunityDrawerViewModelClient).mockResolvedValue({ ok: true, viewModel: vm });
         const result = await loadOpportunityDrawerViaViewModel("opp-1", {

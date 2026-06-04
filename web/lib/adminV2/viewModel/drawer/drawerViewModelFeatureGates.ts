@@ -1,4 +1,6 @@
-/** Per-entity drawer VM cutover flags — build-time env, default off. */
+/** Per-entity drawer VM cutover — person/child env-gated; opportunity default-on in code. */
+
+import { opportunityDrawerHardCutoverEnabled } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerHardCutoverGate";
 
 function envFlagTrue(name: string): boolean {
     if (typeof process === "undefined") return false;
@@ -7,7 +9,7 @@ function envFlagTrue(name: string): boolean {
 }
 
 export function adminV2OpportunityDrawerVmCutoverEnabled(): boolean {
-    return envFlagTrue("NEXT_PUBLIC_ADMINV2_DRAWER_VM");
+    return opportunityDrawerHardCutoverEnabled();
 }
 
 export function adminV2PersonDrawerVmCutoverEnabled(): boolean {
