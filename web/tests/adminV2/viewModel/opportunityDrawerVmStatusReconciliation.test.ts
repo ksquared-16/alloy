@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
     detectOpportunityStatusDoubleCommit,
     logDrawerVmStatusDiagnostic,
+    opportunityDrawerVmStatusAuthoritative,
     opportunityDrawerVmStatusContractComplete,
     pinOpportunityDrawerVmStatusFromViewModel,
     reconcileStatusDefsWithVmPin,
@@ -95,6 +96,42 @@ describe("opportunityDrawerVmStatusReconciliation", () => {
         expect(info).toHaveBeenCalledWith("[drawer_vm_status_vm_seed]", expect.objectContaining({ opportunity_id: "opp-1" }));
         info.mockRestore();
     });
+
+    it("treats VM status as authoritative when first paint settled or pin complete", () => {
+        const pin = pinOpportunityDrawerVmStatusFromViewModel("opp-1", {
+            renderAs: "dropdown",
+            status_key: "new",
+            label: "New",
+            options: [{ status_key: "new", label: "New", sort_order: 0 }],
+        });
+        expect(
+            opportunityDrawerVmStatusAuthoritative({
+                hardCutover: true,
+                pin,
+                opportunityId: "opp-1",
+                vmFirstPaintSettled: true,
+                vmOpenRefMatches: false,
+            })
+        ).toBe(true);
+        expect(
+            opportunityDrawerVmStatusAuthoritative({
+                hardCutover: true,
+                pin,
+                opportunityId: "opp-1",
+                vmFirstPaintSettled: false,
+                vmOpenRefMatches: true,
+            })
+        ).toBe(true);
+        expect(
+            opportunityDrawerVmStatusAuthoritative({
+                hardCutover: false,
+                pin,
+                opportunityId: "opp-1",
+                vmFirstPaintSettled: true,
+                vmOpenRefMatches: true,
+            })
+        ).toBe(false);
+    });
 });
 
 describe("AdminEntityDrawer opportunity VM status wiring", () => {
@@ -105,9 +142,10 @@ describe("AdminEntityDrawer opportunity VM status wiring", () => {
         const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
         const drawer = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
         expect(drawer).toContain("opportunityDrawerVmStatusPinRef");
-        expect(drawer).toContain("pinOpportunityDrawerVmStatusFromViewModel");
-        expect(drawer).toContain("shouldBlockNonVmStatusWrite");
-        expect(drawer).toContain("data-opportunity-drawer-vm-status-control");
-        expect(drawer).toContain("hardCutoverOpportunity");
+        expect(drawer).toContain("opportunityDrawerVmStatusPin");
+        expect(drawer).toContain("commitOpportunityVmStatusPin");
+        expect(drawer).toContain("opportunityDrawerVmStatusAuthoritative");
+        expect(drawer).toContain("drawerShellPinnedVmSwapActive");
+        expect(drawer).toContain("opportunityDrawerRightColumnFromVm");
     });
 });

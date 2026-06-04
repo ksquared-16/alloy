@@ -44,8 +44,21 @@ export function logDrawerVmStatusDiagnostic(
     logDrawerVmRuntimeDiagnostic(LEGACY_DIAG_TO_RUNTIME[tag], payload);
 }
 
-export function logDrawerVmStatusWrite(payload: Record<string, unknown>): void {
-    logDrawerVmRuntimeDiagnostic("drawer_vm_status_write", payload);
+export type DrawerVmStatusWritePayload = Record<string, unknown> & {
+    source: string;
+    action: "pin" | "set_defs" | "fetch" | "clear" | "defer_until_vm";
+    entity?: string;
+    opportunity_id?: string;
+    generation?: number;
+    drawer_model_swap_generation?: number;
+};
+
+export function logDrawerVmStatusWrite(payload: DrawerVmStatusWritePayload): void {
+    logDrawerVmRuntimeDiagnostic("drawer_vm_status_write", {
+        ts: new Date().toISOString(),
+        entity: payload.entity ?? "opportunities",
+        ...payload,
+    });
 }
 
 export function opportunityDrawerVmStatusKeyFromControl(status: StatusControlVm): string {
@@ -162,11 +175,29 @@ export function detectOpportunityStatusDoubleCommit(params: {
     hadMountedControl: boolean;
     showingSkeleton: boolean;
     statusKey: string;
+    generation?: number;
+    source?: string;
 }): boolean {
     if (!params.vmContractComplete || !params.hadMountedControl || !params.showingSkeleton) return false;
     logDrawerVmStatusDiagnostic("double_commit_detected", {
         opportunity_id: params.opportunityId,
         status_key: params.statusKey,
+        generation: params.generation,
+        source: params.source ?? "status_control_effect",
     });
     return true;
+}
+
+/** VM status is authoritative — block legacy fetch/seed paths after first pin. */
+export function opportunityDrawerVmStatusAuthoritative(params: {
+    hardCutover: boolean;
+    pin: PinnedOpportunityDrawerVmStatus | null | undefined;
+    opportunityId: string;
+    vmFirstPaintSettled: boolean;
+    vmOpenRefMatches: boolean;
+}): boolean {
+    if (!params.hardCutover || !params.opportunityId.trim()) return false;
+    if (params.vmFirstPaintSettled || params.vmOpenRefMatches) return true;
+    if (!params.pin || params.pin.opportunityId !== params.opportunityId.trim()) return false;
+    return opportunityDrawerVmStatusContractComplete(params.pin);
 }
