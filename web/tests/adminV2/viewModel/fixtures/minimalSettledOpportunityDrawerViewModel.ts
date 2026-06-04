@@ -56,6 +56,7 @@ export function minimalSettledOpportunityDrawerViewModel(
             department_id: "dept-1",
             work_unit_id: "wu-1",
             queue_definition: null,
+            lifecycle_rail: null,
         },
         first_paint: {
             settled: true,
@@ -105,10 +106,24 @@ export function minimalSettledOpportunityDrawerViewModel(
                 label: "New",
                 options: [{ status_key: "new", label: "New", sort_order: 0 }],
             },
+            status_can_mutate: true,
             oper_trust_preview: null,
         },
         actions: {
             header: [
+                {
+                    key: "schedule_tour",
+                    label: "Schedule tour",
+                    description: null,
+                    action_type: "workflow",
+                    icon: null,
+                    style: null,
+                    display_style: "button",
+                    payload: {},
+                    workflow_id: null,
+                },
+            ],
+            header_menu: [
                 {
                     key: "schedule_tour",
                     label: "Schedule tour",
@@ -218,6 +233,7 @@ export function minimalSettledOpportunityDrawerViewModel(
             },
         },
         summaries: {
+            active_tour_bookings: [],
             tasks: {
                 state: "loaded",
                 open_count: 1,

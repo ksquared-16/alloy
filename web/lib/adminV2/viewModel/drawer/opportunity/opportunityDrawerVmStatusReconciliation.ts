@@ -63,7 +63,9 @@ export function logDrawerVmStatusWrite(payload: DrawerVmStatusWritePayload): voi
 
 export function opportunityDrawerVmStatusKeyFromControl(status: StatusControlVm): string {
     if (status.renderAs === "dropdown") return status.status_key.trim();
-    if (status.renderAs === "readonly_pill") return status.label.trim();
+    if (status.renderAs === "readonly_pill") {
+        return (status.status_key ?? "").trim();
+    }
     return "";
 }
 

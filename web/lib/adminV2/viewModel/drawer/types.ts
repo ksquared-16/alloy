@@ -1,7 +1,7 @@
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
+import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import type { InquirySummaryTaskPreviewPayload } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
 import type { OperationalSummaryRiskHint } from "@/lib/ai/enrichmentContracts";
-import type { QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import type {
     DrawerAboveFoldRenderModel,
@@ -64,7 +64,13 @@ export type StatusControlVm =
           label: string;
           options: StatusOptionVm[];
       }
-    | { renderAs: "readonly_pill"; label: string }
+    | {
+          renderAs: "readonly_pill";
+          label: string;
+          status_key?: string;
+          /** Deferred until progressive status interaction — not shown as dropdown on first paint. */
+          options?: StatusOptionVm[];
+      }
     | { renderAs: "hidden" };
 
 export type OperTrustPreviewVm = {
@@ -105,17 +111,31 @@ export type OpportunityDrawerViewModel = {
     workspace: {
         department_id: string | null;
         work_unit_id: string | null;
-        queue_definition: QueueDefinitionV1 | null;
+        /** Raw `work_units.queue_definition` JSON (v1 or v2); coerced at read time for lifecycle rail. */
+        queue_definition: unknown;
+        /**
+         * Builder-owned lifecycle stage order when queue_definition is single-lane (per-stage work unit).
+         * Matches /settings/lifecycle and dept work-unit pill deck order.
+         */
+        lifecycle_rail: {
+            stages: Array<{ key: string; label: string }>;
+            current_stage_key: string | null;
+        } | null;
     };
     first_paint: OpportunityDrawerFirstPaintContract;
     header: {
         title: string;
         subtitle: string | null;
         status: StatusControlVm;
+        /** Server-resolved mutate bar (portal admin) — same source legacy uses via AdminAuthProvider. */
+        status_can_mutate: boolean;
         oper_trust_preview: OperTrustPreviewVm | null;
     };
     actions: {
+        /** Raw `record_header` slot from resolver (generation / parity). */
         header: ResolvedActionForClient[];
+        /** Flattened primary + secondary + overflow + header — Actions dropdown menu. */
+        header_menu: ResolvedActionForClient[];
     };
     layout: {
         mode: "workflow_v1";
@@ -130,6 +150,8 @@ export type OpportunityDrawerViewModel = {
     };
     summaries: {
         tasks: InquirySummaryTaskPreviewPayload;
+        /** Active tour_bookings rows from first-paint compose (tour block + lifecycle bar). */
+        active_tour_bookings: TourBookingRow[];
         reminders: RemindersSummaryVm;
         bos: BosSummaryVm | null;
         attention: AttentionSummaryVm | null;

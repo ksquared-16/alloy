@@ -100,6 +100,27 @@ describe("Opportunity VM drawer body — production parity sections", () => {
         expect(hook).not.toContain("runLegacyEntityFetch");
     });
 
+    it("OpportunityDrawerVmRuntime restores modal-attention header center column", () => {
+        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
+        expect(runtime).toContain("headerTitleCenter={headerAttentionCenter}");
+        expect(runtime).toContain('layout="modal-attention"');
+        expect(runtime).toContain("isDrawerHeaderAttentionVisible");
+    });
+
+    it("OpportunityDrawerVmRuntime does not pass pipeline subtitle to Drawer headerSubtitle", () => {
+        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
+        expect(runtime).not.toContain("displayVm?.header.subtitle");
+    });
+
+    it("OpportunityDrawerVmRuntime wires header actions via useOpportunityDrawerVmHeaderActions", () => {
+        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
+        expect(runtime).toContain("useOpportunityDrawerVmHeaderActions");
+        expect(runtime).toContain('layout="modal-actions"');
+        const hook = read("lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmHeaderActions.ts");
+        expect(hook).toContain("applyRegistryResolvedActionClient");
+        expect(runtime).not.toContain("onActionSelect={() => {}}");
+    });
+
     it("overview pairs runtime marker with production inquiry summary shell", () => {
         const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
         const overview = read("components/admin/vmDrawer/OpportunityDrawerInquiryWorkflowOverview.tsx");

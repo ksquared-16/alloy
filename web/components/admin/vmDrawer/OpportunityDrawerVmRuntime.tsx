@@ -17,7 +17,11 @@ import Drawer, {
     ADMINV2_DRAWER_PANEL_Z,
 } from "@/components/admin/Drawer";
 import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
+import { inspectWorkUnitQueueDefinitionShape } from "@/lib/admin/drawer/inspectWorkUnitQueueDefinitionShape";
+import { isDrawerHeaderAttentionVisible } from "@/lib/admin/drawer/drawerHeaderAttentionPresentation";
 import { buildOpportunityVmLifecycleRailModel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/buildOpportunityVmLifecycleRailModel";
+import { resolveOpportunityVmStatusCanMutate } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusCanMutate";
+import { useOpportunityDrawerVmHeaderActions } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmHeaderActions";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP } from "@/lib/adminV2/shellContracts/opportunityInquiryWorkflowTabs";
 import { useOpportunityDrawerVmPayload } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmPayload";
@@ -28,6 +32,7 @@ import { resolveOpportunityQueueNavigatorPosition } from "@/lib/admin/opportunit
 import {
     drawerDebugSourceFromPathname,
     drawerDebugSurfaceFromPresentation,
+    drawerRuntimeDebugEnabled,
     type DrawerDebugStatusComponent,
 } from "@/lib/adminV2/drawer/drawerRuntimeDebug";
 
@@ -43,7 +48,7 @@ const OPPORTUNITY_TAB_LABELS: Partial<Record<DrawerTabKey, string>> = {
 
 export default function OpportunityDrawerVmRuntime() {
     const pathname = usePathname();
-    const { canMutate } = useAdminAuth();
+    const { canMutate: authCanMutate } = useAdminAuth();
     const { labels } = useEntityLabels();
     const opportunitySingular = labels.opportunities?.singular ?? "Opportunity";
     const {
@@ -57,6 +62,17 @@ export default function OpportunityDrawerVmRuntime() {
     const [drawerTab, setDrawerTab] = useState<DrawerTabKey>("overview");
     const [statusDebugComponent, setStatusDebugComponent] =
         useState<DrawerDebugStatusComponent>("vm-readonly-pill");
+
+    const statusCanMutate = useMemo(
+        () => resolveOpportunityVmStatusCanMutate(displayVm, authCanMutate),
+        [displayVm, authCanMutate]
+    );
+
+    const { onActionSelect, actionLoadingKey } = useOpportunityDrawerVmHeaderActions({
+        opportunityId: drawer.id,
+        departmentId: displayVm?.workspace.department_id,
+        workUnitId: displayVm?.workspace.work_unit_id,
+    });
 
     useEffect(() => {
         setDrawerTab("overview");
@@ -98,48 +114,87 @@ export default function OpportunityDrawerVmRuntime() {
         [record]
     );
 
-    /** Title rail: status pill always in this cluster so Drawer does not hide it when actions mount. */
-    const headerTitleRight = useMemo(() => {
-        if (!drawer.id) return undefined;
+    const headerAttentionCenter = useMemo(() => {
+        if (!drawer.id || !record || !isDrawerHeaderAttentionVisible(record)) return null;
         return (
-            <div
-                className="flex shrink-0 items-start gap-3"
-                data-opportunity-drawer-header-title-right="true"
-                data-drawer-vm-status-rail="true"
-            >
-                {statusLabel ?
+            <OpportunityDrawerHeaderControls
+                layout="modal-attention"
+                opportunityId={drawer.id}
+                overviewData={record}
+                opportunitySingular={opportunitySingular}
+                queuePreviewSeed={drawer.opportunityQueuePreviewSeed}
+                inquiryWorkflow
+                menuActions={displayVm?.actions.header ?? []}
+                showRegistryActions={false}
+                canMutate={statusCanMutate}
+                onActionSelect={onActionSelect}
+            />
+        );
+    }, [
+        drawer.id,
+        drawer.opportunityQueuePreviewSeed,
+        displayVm?.actions.header,
+        onActionSelect,
+        opportunitySingular,
+        record,
+        statusCanMutate,
+    ]);
+
+    /** Status below title (left) — matches legacy inquiry modal subtitle rail. */
+    const headerSubtitleBelowTitle = useMemo(() => {
+        if (!drawer.id || !statusLabel) return undefined;
+        return (
+            <div className="mt-0.5" data-opportunity-drawer-header-status-below-title="true">
+                <div className="shrink-0" data-drawer-vm-status-rail="true">
                     <VmProgressiveStatusDropdown
                         opportunityId={drawer.id}
                         firstPaintLabel={statusLabel}
                         currentStatusKey={currentStatusKey}
                         statusControl={displayVm?.header.status}
-                        canMutate={!!canMutate}
+                        canMutate={statusCanMutate}
                         onDebugModeChange={setStatusDebugComponent}
                     />
-                :   null}
-                {displayVm && record ?
-                    <OpportunityDrawerHeaderControls
-                        opportunityId={drawer.id}
-                        overviewData={record}
-                        queuePreviewSeed={drawer.opportunityQueuePreviewSeed}
-                        inquiryWorkflow
-                        menuActions={displayVm.actions.header}
-                        showRegistryActions
-                        canMutate={!!canMutate}
-                        onActionSelect={() => {}}
-                        layout="modal-actions"
-                    />
-                :   null}
+                </div>
             </div>
         );
     }, [
-        canMutate,
+        currentStatusKey,
+        displayVm?.header.status,
+        drawer.id,
+        statusCanMutate,
+        statusLabel,
+    ]);
+
+    /** Top-right: Work with BOS + Actions menu + close (Drawer appends close). */
+    const headerTitleRight = useMemo(() => {
+        if (!drawer.id || !displayVm || !record) return undefined;
+        return (
+            <div
+                className="flex shrink-0 items-start"
+                data-opportunity-drawer-header-title-right="true"
+            >
+                <OpportunityDrawerHeaderControls
+                    opportunityId={drawer.id}
+                    overviewData={record}
+                    queuePreviewSeed={drawer.opportunityQueuePreviewSeed}
+                    inquiryWorkflow
+                    menuActions={displayVm.actions.header_menu}
+                    showRegistryActions
+                    canMutate={statusCanMutate}
+                    actionLoadingKey={actionLoadingKey}
+                    onActionSelect={onActionSelect}
+                    layout="modal-actions"
+                />
+            </div>
+        );
+    }, [
+        actionLoadingKey,
         displayVm,
         drawer.id,
         drawer.opportunityQueuePreviewSeed,
+        onActionSelect,
         record,
-        statusLabel,
-        currentStatusKey,
+        statusCanMutate,
     ]);
 
     const tabs = useMemo((): DrawerTabKey[] => {
@@ -162,20 +217,47 @@ export default function OpportunityDrawerVmRuntime() {
                 />
             );
         }
-        if (
-            process.env.NODE_ENV === "development" &&
-            displayVm &&
-            drawer.id &&
-            drawer.id !== "new" &&
-            !displayVm.workspace.queue_definition
-        ) {
-            console.warn(
-                "[opportunity-vm] lifecycle rail unavailable: workspace.queue_definition missing",
-                { opportunityId: drawer.id, workUnitId: displayVm.workspace.work_unit_id }
-            );
-        }
         return null;
     }, [displayVm, drawer.id]);
+
+    const lifecycleRailDevDebug = useMemo(() => {
+        if (!drawerRuntimeDebugEnabled() || !displayVm || lifecycleRail) return null;
+        const model = buildOpportunityVmLifecycleRailModel({
+            displayVm,
+            drawerId: drawer.id,
+        });
+        const probe = inspectWorkUnitQueueDefinitionShape(displayVm.workspace.queue_definition);
+        const qdPresent = Boolean(displayVm.workspace.queue_definition);
+        const builderStages = displayVm.workspace.lifecycle_rail?.stages?.length ?? 0;
+        const steps = model?.steps.length ?? 0;
+        const keys = probe?.top_level_keys.join(", ") || "—";
+        const shapeFlags = probe
+            ? [
+                  probe.has_ui ? "ui" : null,
+                  probe.has_sections ? "sections" : null,
+                  probe.has_queues_array ? `queues(${probe.queues_array_length})` : null,
+                  probe.has_definition ? "definition" : null,
+                  probe.bundle_load_ok ? `bundle(v${probe.bundle_is_v2 ? 2 : 1})` : "bundle_fail",
+                  probe.ui_layout_after_coerce ? `layout=${probe.ui_layout_after_coerce}` : null,
+                  probe.pipeline_lane_count > 0 ? `lanes=${probe.pipeline_lane_count}` : "lanes=0",
+                  builderStages > 0 ? `builder_stages=${builderStages}` : null,
+              ]
+                  .filter(Boolean)
+                  .join(", ")
+            : "—";
+        return (
+            <div
+                className="mb-2 rounded-md border border-amber-300/80 bg-amber-50 px-2 py-1 text-[11px] text-amber-950"
+                data-opportunity-vm-lifecycle-debug="true"
+                role="status"
+            >
+                Lifecycle rail unavailable (debug): queue_definition={qdPresent ? "present" : "missing"},
+                parsed_steps={steps}, keys=[{keys}], shape=[{shapeFlags}], work_unit_id=
+                {displayVm.workspace.work_unit_id ?? "—"}, department_id=
+                {displayVm.workspace.department_id ?? "—"}
+            </div>
+        );
+    }, [displayVm, drawer.id, lifecycleRail]);
 
     const showColdShell = coldLoading && !displayVm && !suppressFullDrawerLoading;
 
@@ -183,7 +265,7 @@ export default function OpportunityDrawerVmRuntime() {
 
     const runtimeDebug = useMemo(
         () =>
-            drawer.type && drawer.id ?
+            drawerRuntimeDebugEnabled() && drawer.type && drawer.id ?
                 {
                     route: "opportunity-vm" as const,
                     surface: drawerDebugSurfaceFromPresentation("modal"),
@@ -202,7 +284,8 @@ export default function OpportunityDrawerVmRuntime() {
             isOpen={Boolean(drawer.type && drawer.id) && !isOpportunityDrawerOpening}
             onClose={closeDrawer}
             title={drawerTitle}
-            headerSubtitle={displayVm?.header.subtitle ?? undefined}
+            headerSubtitle={headerSubtitleBelowTitle}
+            headerTitleCenter={headerAttentionCenter}
             headerTitleRight={headerTitleRight}
             variant="adminV2"
             presentation="modal"
@@ -270,7 +353,7 @@ export default function OpportunityDrawerVmRuntime() {
                             >
                                 {lifecycleRail}
                             </div>
-                        :   null}
+                        :   lifecycleRailDevDebug}
                         {drawer.id ?
                             <CommunicationsDrawerBackgroundLoader
                                 apiEntityType="opportunities"

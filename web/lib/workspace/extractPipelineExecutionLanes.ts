@@ -57,6 +57,56 @@ export function extractPipelineExecutionLanes(def: QueueDefinitionV1): PipelineE
     return out;
 }
 
+function laneDescriptorsFromSectionKeys(
+    def: QueueDefinitionV1,
+    sectionKeysList: string[][]
+): PipelineExecutionLaneDescriptor[] {
+    const byKey = new Map(def.queues.map((q) => [q.key, q]));
+    const out: PipelineExecutionLaneDescriptor[] = [];
+    const seen = new Set<string>();
+    for (const sectionKeys of sectionKeysList) {
+        for (const key of sectionKeys) {
+            if (!key || seen.has(key) || INTERNAL_LANE_KEYS.has(key) || isNeedsAttentionSectionKey(key)) {
+                continue;
+            }
+            const q = byKey.get(key);
+            if (!q) continue;
+            seen.add(key);
+            const rawIcon = q.icon;
+            const icon = typeof rawIcon === "string" && rawIcon.trim() ? rawIcon.trim() : null;
+            out.push({ key, label: q.label, icon });
+        }
+    }
+    return out;
+}
+
+/**
+ * Drawer / record lifecycle lanes — pipeline_with_attention first, then throughput sections, then queue order.
+ */
+export function extractDrawerLifecycleExecutionLanes(def: QueueDefinitionV1): PipelineExecutionLaneDescriptor[] {
+    const primary = extractPipelineExecutionLanes(def);
+    if (primary.length > 0) return primary;
+
+    const ui = getQueueUiConfig(def);
+    if (ui.layout === "pipeline_with_attention" || ui.layout === "single_section") {
+        const { throughput } = partitionQueueUiSections(ui);
+        const sections = throughput.length > 0 ? throughput : ui.sections;
+        const fromSections = laneDescriptorsFromSectionKeys(
+            def,
+            sections.map((s) => s.queue_keys)
+        );
+        if (fromSections.length > 0) return fromSections;
+    }
+
+    return def.queues
+        .filter((q) => q.key && !INTERNAL_LANE_KEYS.has(q.key) && !isNeedsAttentionSectionKey(q.key))
+        .map((q) => {
+            const rawIcon = q.icon;
+            const icon = typeof rawIcon === "string" && rawIcon.trim() ? rawIcon.trim() : null;
+            return { key: q.key, label: q.label, icon };
+        });
+}
+
 /** Panel title for dept pipeline throughput region — from config, not hardcoded. */
 export function resolvePipelineExecPanelTitle(def: QueueDefinitionV1): string {
     const ui = getQueueUiConfig(def);

@@ -23,6 +23,7 @@ import { opportunityStatusDisplayLabelSafe } from "@/lib/admin/drawer/opportunit
 import { isOperationalWorkV1Enabled } from "@/lib/admin/operationalWork/operationalWorkV1UiGate";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
 import { loadOpportunityDrawerViaViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityDrawerViaViewModel";
+import { opportunityDrawerVmFirstPaintDependencySettled } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerViewModelFirstPaint";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import { opportunityDisplayLocationFromRecord } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
 
@@ -55,7 +56,13 @@ export default function OpportunityDrawerInquiryWorkflowOverview({
     const showTourFromPrimaryOnly = inqModel?.what_matters?.tour_from_metadata === true;
     const showTourFromBookings = inqModel?.what_matters?.show_tour_bookings_enrichment === true;
     const showWhatMattersTourSlot = showTourFromPrimaryOnly || showTourFromBookings;
-    const fullHydrateApplied = String(record._record_surface ?? "").trim() === "full";
+    const tourBookingsFirstPaintReady = opportunityDrawerVmFirstPaintDependencySettled(
+        displayVm,
+        "tour_bookings"
+    );
+    const vmActiveTourBookings = displayVm.summaries.active_tour_bookings ?? [];
+    /** VM first paint is authoritative — do not wait on legacy background full hydrate. */
+    const vmFamilyContactsReady = displayVm.structureSettled && displayVm.first_paint.settled;
 
     const stageLabel =
         opportunityStatusDisplayLabelSafe(
@@ -126,8 +133,8 @@ export default function OpportunityDrawerInquiryWorkflowOverview({
                                 router={router}
                                 openDrawer={openDrawer}
                                 recordHydrationPending={false}
-                                opportunityFullHydratePending={!fullHydrateApplied}
-                                opportunityFullHydrateApplied={fullHydrateApplied}
+                                opportunityFullHydratePending={!vmFamilyContactsReady}
+                                opportunityFullHydrateApplied={vmFamilyContactsReady}
                                 opportunityRelationshipsFullHydrateFailed={
                                     fcSlot?.relationships_full_hydrate_failed === true
                                 }
@@ -146,7 +153,7 @@ export default function OpportunityDrawerInquiryWorkflowOverview({
                                 onPrimaryPersonUpdated={() => refreshVm()}
                                 onLinkedPersonUpdated={() => refreshVm()}
                                 openForm={() => {}}
-                                actionsFetchEnabled={fullHydrateApplied}
+                                actionsFetchEnabled={vmFamilyContactsReady}
                                 refreshKey={relatedPeopleRefreshKey}
                                 onRegistryApplied={refreshVm}
                             />
@@ -167,7 +174,14 @@ export default function OpportunityDrawerInquiryWorkflowOverview({
                                     onRefresh={refreshVm}
                                     labelClassName={oppInqEyebrow}
                                     readonlyFieldClassName={oppInqReadonlyField}
-                                    fetchEnabled={showTourFromBookings && !showTourFromPrimaryOnly}
+                                    sharedActiveBookings={
+                                        tourBookingsFirstPaintReady ? vmActiveTourBookings : undefined
+                                    }
+                                    fetchEnabled={
+                                        showTourFromBookings &&
+                                        !showTourFromPrimaryOnly &&
+                                        !tourBookingsFirstPaintReady
+                                    }
                                 />
                             :   null}
                         </div>

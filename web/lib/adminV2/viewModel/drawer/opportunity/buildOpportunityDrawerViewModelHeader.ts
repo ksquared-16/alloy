@@ -38,24 +38,25 @@ export function buildOpportunityStatusControlVm(params: {
             pipelineStageName,
         }) ?? statusKey ?? "—";
 
-    if (activeDefs.length >= 2) {
-        return {
-            renderAs: "dropdown",
-            status_key: statusKey ?? "",
-            label,
-            options: activeDefs
-                .map((d) => ({
-                    status_key: d.status_key,
-                    label: trimOrNull(d.status_label) ?? d.status_key,
-                    sort_order: d.sort_order ?? 0,
-                }))
-                .sort((a, b) =>
-                    a.sort_order !== b.sort_order ? a.sort_order - b.sort_order : a.label.localeCompare(b.label)
-                ),
-        };
-    }
+    const options =
+        activeDefs.length >= 2
+            ? activeDefs
+                  .map((d) => ({
+                      status_key: d.status_key,
+                      label: trimOrNull(d.status_label) ?? d.status_key,
+                      sort_order: d.sort_order ?? 0,
+                  }))
+                  .sort((a, b) =>
+                      a.sort_order !== b.sort_order ? a.sort_order - b.sort_order : a.label.localeCompare(b.label)
+                  )
+            : undefined;
 
-    return { renderAs: "readonly_pill", label };
+    return {
+        renderAs: "readonly_pill",
+        label,
+        status_key: statusKey ?? undefined,
+        options,
+    };
 }
 
 export function buildOpportunityDrawerHeaderTitle(record: Record<string, unknown>): string {

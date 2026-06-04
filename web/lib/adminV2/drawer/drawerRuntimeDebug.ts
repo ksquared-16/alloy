@@ -24,7 +24,6 @@ export type DrawerRuntimeDebugInfo = {
 
 export function drawerRuntimeDebugEnabled(): boolean {
     if (typeof process === "undefined") return false;
-    if (process.env.NODE_ENV === "development") return true;
     const v = process.env.NEXT_PUBLIC_ADMINV2_DRAWER_RUNTIME_DEBUG?.trim().toLowerCase();
     return v === "1" || v === "true";
 }

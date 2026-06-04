@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import VmReadonlyStatusPill from "@/components/admin/vmDrawer/VmReadonlyStatusPill";
 import type { StatusControlVm, StatusOptionVm } from "@/lib/adminV2/viewModel/drawer/types";
+
 type StatusDefRow = {
     value?: string;
     status_key?: string;
@@ -12,6 +13,10 @@ type StatusDefRow = {
     sort_order?: number;
     is_active?: boolean;
 };
+
+type VmStatusActive = "readonly" | "loading" | "dropdown" | "error";
+type VmStatusOptionsSource = "vm" | "fetch" | "none";
+type VmStatusLastInteraction = "none" | "click" | "focus";
 
 type Props = {
     opportunityId: string;
@@ -23,9 +28,11 @@ type Props = {
     onDebugModeChange?: (mode: "vm-readonly-pill" | "vm-dropdown") => void;
 };
 
-function optionsFromStatusControl(status: StatusControlVm): StatusOptionVm[] | null {
-    if (status.renderAs !== "dropdown" || !status.options?.length) return null;
-    return status.options;
+function optionsFromVmStatus(status: StatusControlVm | null | undefined): StatusOptionVm[] | null {
+    if (!status || status.renderAs === "hidden") return null;
+    if (status.renderAs === "dropdown" && status.options?.length) return status.options;
+    if (status.renderAs === "readonly_pill" && status.options?.length) return status.options;
+    return null;
 }
 
 function mapFetchedOptions(rows: StatusDefRow[]): StatusOptionVm[] {
@@ -46,6 +53,11 @@ function mapFetchedOptions(rows: StatusDefRow[]): StatusOptionVm[] {
         );
 }
 
+function resolveCanMutateReason(canMutate: boolean): string | null {
+    if (canMutate) return null;
+    return "admin-auth-canMutate-false";
+}
+
 /**
  * Progressive opportunity status — readonly pill on first paint; dropdown after explicit interaction.
  */
@@ -57,13 +69,19 @@ export default function VmProgressiveStatusDropdown({
     canMutate,
     onDebugModeChange,
 }: Props) {
-    const [mode, setMode] = useState<"pill" | "loading" | "dropdown">("pill");
+    const [active, setActive] = useState<VmStatusActive>("readonly");
     const [options, setOptions] = useState<StatusOptionVm[] | null>(null);
+    const [optionsSource, setOptionsSource] = useState<VmStatusOptionsSource>("none");
+    const [lastInteraction, setLastInteraction] = useState<VmStatusLastInteraction>("none");
     const [statusKey, setStatusKey] = useState(currentStatusKey);
     const [fetchError, setFetchError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const firstPaintLabelRef = useRef(firstPaintLabel);
     const selectRef = useRef<HTMLSelectElement | null>(null);
+
+    const canMutateReason = resolveCanMutateReason(canMutate);
+    const embeddedOptions = optionsFromVmStatus(statusControl);
+    const hasVmOptions = (embeddedOptions?.length ?? 0) >= 2;
 
     useEffect(() => {
         firstPaintLabelRef.current = firstPaintLabel;
@@ -74,48 +92,72 @@ export default function VmProgressiveStatusDropdown({
     }, [currentStatusKey, opportunityId]);
 
     useEffect(() => {
-        onDebugModeChange?.(mode === "dropdown" ? "vm-dropdown" : "vm-readonly-pill");
-    }, [mode, onDebugModeChange]);
+        onDebugModeChange?.(active === "dropdown" ? "vm-dropdown" : "vm-readonly-pill");
+    }, [active, onDebugModeChange]);
 
-    const activateDropdown = useCallback(async () => {
-        if (!canMutate || mode === "dropdown" || mode === "loading") return;
+    const statusDebugAttrs = {
+        "data-vm-status-progressive-mounted": "true",
+        "data-vm-status-can-mutate": canMutate ? "true" : "false",
+        ...(canMutateReason ? { "data-vm-status-can-mutate-reason": canMutateReason } : {}),
+        "data-vm-status-options-source": optionsSource,
+        "data-vm-status-active": active,
+        "data-vm-status-last-interaction": lastInteraction,
+    } as const;
 
-        const embedded = statusControl ? optionsFromStatusControl(statusControl) : null;
-        if (embedded?.length) {
-            setOptions(embedded);
-            setMode("dropdown");
-            return;
-        }
+    const activateDropdown = useCallback(
+        async (interaction: VmStatusLastInteraction) => {
+            setLastInteraction(interaction);
 
-        setMode("loading");
-        setFetchError(null);
-        try {
-            const res = await fetch("/api/admin/status-options?entity_type=opportunities");
-            const json = (await res.json().catch(() => ({}))) as {
-                options?: StatusDefRow[];
-                error?: string;
-            };
-            if (!res.ok) {
-                throw new Error(json.error ?? "Failed to load status options");
-            }
-            const mapped = mapFetchedOptions(json.options ?? []);
-            if (mapped.length < 2) {
-                setMode("pill");
+            if (!canMutate) {
+                setActive("readonly");
+                setOptionsSource(hasVmOptions ? "vm" : "none");
                 return;
             }
-            setOptions(mapped);
-            setMode("dropdown");
-        } catch (e) {
-            setFetchError(e instanceof Error ? e.message : "Failed to load status options");
-            setMode("pill");
-        }
-    }, [canMutate, mode, statusControl]);
+
+            if (active === "dropdown" || active === "loading") return;
+
+            if (embeddedOptions && embeddedOptions.length >= 2) {
+                setOptions(embeddedOptions);
+                setOptionsSource("vm");
+                setActive("dropdown");
+                return;
+            }
+
+            setActive("loading");
+            setOptionsSource("fetch");
+            setFetchError(null);
+            try {
+                const res = await fetch("/api/admin/status-options?entity_type=opportunities");
+                const json = (await res.json().catch(() => ({}))) as {
+                    options?: StatusDefRow[];
+                    error?: string;
+                };
+                if (!res.ok) {
+                    throw new Error(json.error ?? "Failed to load status options");
+                }
+                const mapped = mapFetchedOptions(json.options ?? []);
+                if (mapped.length < 2) {
+                    setOptionsSource(mapped.length > 0 ? "fetch" : "none");
+                    setActive("readonly");
+                    return;
+                }
+                setOptions(mapped);
+                setOptionsSource("fetch");
+                setActive("dropdown");
+            } catch (e) {
+                setFetchError(e instanceof Error ? e.message : "Failed to load status options");
+                setOptionsSource("none");
+                setActive("error");
+            }
+        },
+        [active, canMutate, embeddedOptions, hasVmOptions]
+    );
 
     useEffect(() => {
-        if (mode === "dropdown") {
+        if (active === "dropdown") {
             selectRef.current?.focus();
         }
-    }, [mode]);
+    }, [active]);
 
     const onStatusChange = useCallback(
         async (nextKey: string) => {
@@ -138,6 +180,7 @@ export default function VmProgressiveStatusDropdown({
                 );
             } catch (e) {
                 setFetchError(e instanceof Error ? e.message : "Save failed");
+                setActive("error");
             } finally {
                 setSaving(false);
             }
@@ -146,14 +189,14 @@ export default function VmProgressiveStatusDropdown({
     );
 
     const displayLabel =
-        mode === "dropdown" && options?.length ?
+        active === "dropdown" && options?.length ?
             (options.find((o) => o.status_key === statusKey)?.label ?? firstPaintLabelRef.current)
         :   firstPaintLabelRef.current;
 
     const shellClass =
         "flex min-w-0 max-w-[11rem] shrink-0 flex-col gap-0.5 sm:max-w-[15rem]";
 
-    if (mode === "dropdown" && options && options.length >= 2) {
+    if (active === "dropdown" && options && options.length >= 2) {
         const key = statusKey.trim();
         return (
             <div
@@ -161,6 +204,7 @@ export default function VmProgressiveStatusDropdown({
                 data-opportunity-drawer-vm-status-control="true"
                 data-vm-progressive-status="dropdown"
                 data-status-debug-owner="vm-dropdown"
+                {...statusDebugAttrs}
             >
                 <span className="sr-only">Opportunity status</span>
                 <select
@@ -190,8 +234,27 @@ export default function VmProgressiveStatusDropdown({
         );
     }
 
-    const pending = mode === "loading";
+    const pending = active === "loading";
     const interactive = canMutate;
+
+    if (!interactive) {
+        return (
+            <div
+                className={shellClass}
+                data-opportunity-drawer-vm-status-control="true"
+                data-vm-progressive-status="pill"
+                data-status-debug-owner="vm-readonly-pill"
+                {...statusDebugAttrs}
+            >
+                <VmReadonlyStatusPill label={displayLabel} entityLabel="Opportunity status" />
+                {fetchError ?
+                    <span className="text-[10px] text-alloy-ember" role="status">
+                        {fetchError}
+                    </span>
+                :   null}
+            </div>
+        );
+    }
 
     return (
         <div
@@ -199,25 +262,24 @@ export default function VmProgressiveStatusDropdown({
             data-opportunity-drawer-vm-status-control="true"
             data-vm-progressive-status="pill"
             data-status-debug-owner="vm-readonly-pill"
+            {...statusDebugAttrs}
         >
-            {interactive ?
-                <button
-                    type="button"
-                    onClick={() => void activateDropdown()}
-                    onFocus={() => void activateDropdown()}
-                    disabled={pending || saving}
-                    className={clsx(
-                        "inline-flex rounded-full border border-alloy-stone/30 bg-white px-3 py-2 text-[12px] font-semibold text-alloy-midnight/90",
-                        "shadow-md shadow-alloy-stone/10 ring-1 ring-alloy-stone/10",
-                        "hover:border-alloy-blue/35 focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20",
-                        pending && "opacity-80"
-                    )}
-                    aria-label={`Opportunity status: ${displayLabel}. Activate to change.`}
-                    aria-busy={pending}
-                >
-                    {displayLabel || "—"}
-                </button>
-            :   <VmReadonlyStatusPill label={displayLabel} entityLabel="Opportunity status" />}
+            <button
+                type="button"
+                onClick={() => void activateDropdown("click")}
+                onFocus={() => void activateDropdown("focus")}
+                disabled={pending || saving}
+                className={clsx(
+                    "inline-flex rounded-full border border-alloy-stone/30 bg-white px-3 py-2 text-[12px] font-semibold text-alloy-midnight/90",
+                    "shadow-md shadow-alloy-stone/10 ring-1 ring-alloy-stone/10",
+                    "hover:border-alloy-blue/35 focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20",
+                    pending && "opacity-80"
+                )}
+                aria-label={`Opportunity status: ${displayLabel}. Activate to change.`}
+                aria-busy={pending}
+            >
+                {displayLabel || "—"}
+            </button>
             {fetchError ?
                 <span className="text-[10px] text-alloy-ember" role="status">
                     {fetchError}

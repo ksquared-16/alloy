@@ -1,5 +1,4 @@
 import type { ReadinessResult } from "@/lib/completion/readinessTypes";
-import type { QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
 import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import type { RecordLayoutConfigJson } from "@/lib/recordChrome/types";
 import type { OperationalSummaryRiskHint } from "@/lib/ai/enrichmentContracts";
@@ -24,7 +23,7 @@ export type OpportunityDrawerOperationalBootstrapResponse = {
     work_unit: {
         id: string;
         department_id: string;
-        queue_definition: QueueDefinitionV1 | null;
+        queue_definition: unknown;
     } | null;
     workspace_scope: {
         department_id: string | null;
