@@ -372,6 +372,17 @@ export default function Drawer({
                         </div>
                         {closeButton}
                     </div>
+                ) : headerActions != null && headerActions !== false ? (
+                    // Regression fix (#8/#7): when a three-column `headerTitleRight` is present but the
+                    // rail did NOT carry the record actions, still render `headerActions` in their own
+                    // row so the opportunity actions dropdown does not disappear (on warm return or for
+                    // non-inquiry/non-queue opportunities). Inert when callers route actions into the
+                    // rail (they pass `headerActions={undefined}`), so this does not duplicate.
+                    <div
+                        className={`px-6 flex items-center min-w-0 ${cleaningRecordModalTone ? "py-1 pb-2 gap-2" : "pb-4 gap-3"}`}
+                    >
+                        {headerActions}
+                    </div>
                 ) : null}
                 {headerSignals != null && headerSignals !== false && (
                     <div
