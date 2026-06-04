@@ -1,18 +1,16 @@
 import type { LoadOpportunityDrawerViaViewModelResult } from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityDrawerViaViewModel";
 import {
+    DrawerViewModelHardCutoverError,
+} from "@/lib/adminV2/viewModel/drawer/drawerViewModelHardCutover";
+import {
     drawerViewModelCutoverFlagSnapshot,
     safeLogDrawerViewModelCutover,
 } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelCutover";
 
-export class OpportunityDrawerViewModelHardCutoverError extends Error {
-    readonly code: string;
-    readonly skipReason: string | null;
-
+export class OpportunityDrawerViewModelHardCutoverError extends DrawerViewModelHardCutoverError {
     constructor(message: string, code: string, skipReason: string | null = null) {
-        super(message);
+        super("opportunity", message, code, skipReason);
         this.name = "OpportunityDrawerViewModelHardCutoverError";
-        this.code = code;
-        this.skipReason = skipReason;
     }
 }
 
@@ -57,9 +55,12 @@ export function throwOpportunityDrawerViewModelHardCutoverFailure(
     result: Extract<LoadOpportunityDrawerViaViewModelResult, { ok: false }>
 ): never {
     const code = opportunityDrawerViewModelHardCutoverFailureCode(result);
+    const skipReason = result.reason === "skipped" ? (result.skip_reason ?? null) : null;
     safeLogDrawerViewModelCutover("hard_cutover_failure", {
+        entity_type: "opportunity",
+        entity_id: opportunityId,
         opportunity_id: opportunityId,
-        ...drawerViewModelCutoverFlagSnapshot(),
+        ...drawerViewModelCutoverFlagSnapshot("opportunity"),
         drawer_vm_open_committed: false,
         drawer_vm_fallback_reason: code,
         open_path: null,
@@ -67,6 +68,6 @@ export function throwOpportunityDrawerViewModelHardCutoverFailure(
     throw new OpportunityDrawerViewModelHardCutoverError(
         opportunityDrawerViewModelHardCutoverFailureMessage(result),
         code,
-        result.reason === "skipped" ? (result.skip_reason ?? null) : null
+        skipReason
     );
 }

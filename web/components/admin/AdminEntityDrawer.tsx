@@ -441,6 +441,17 @@ import {
     statusDefsFromViewModelStatusControl,
 } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerViewModelFirstPaint";
 import { tourBookingsFromOpportunityDrawerVm } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerFirstPaintClient";
+import { isChildDrawerVmOpen } from "@/lib/adminV2/viewModel/drawer/child/childDrawerFirstViewportContract";
+import { childDrawerHardCutoverEnabled } from "@/lib/adminV2/viewModel/drawer/child/childDrawerHardCutoverGate";
+import { loadChildDrawerViaViewModel } from "@/lib/adminV2/viewModel/drawer/child/loadChildDrawerViaViewModel";
+import { personDrawerHardCutoverEnabled } from "@/lib/adminV2/viewModel/drawer/person/personDrawerHardCutoverGate";
+import { loadPersonDrawerViaViewModel } from "@/lib/adminV2/viewModel/drawer/person/loadPersonDrawerViaViewModel";
+import {
+    childDrawerViewModelHardCutoverFailureMessage,
+} from "@/lib/adminV2/viewModel/drawer/child/childDrawerViewModelHardCutover";
+import {
+    personDrawerViewModelHardCutoverFailureMessage,
+} from "@/lib/adminV2/viewModel/drawer/person/personDrawerViewModelHardCutover";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import {
     drawerViewModelCutoverFlagSnapshot,
@@ -1645,6 +1656,8 @@ export default function AdminEntityDrawer() {
     const [inquiryTourFetchArmed, setInquiryTourFetchArmed] = useState(false);
     const [inquirySummaryFetchArmed, setInquirySummaryFetchArmed] = useState(false);
     const [opportunityDrawerVmFirstPaintSettled, setOpportunityDrawerVmFirstPaintSettled] = useState(false);
+    const [personDrawerVmFirstPaintSettled, setPersonDrawerVmFirstPaintSettled] = useState(false);
+    const [personDrawerVmLoadError, setPersonDrawerVmLoadError] = useState<string | null>(null);
     const [opportunityVmActiveTourBookings, setOpportunityVmActiveTourBookings] = useState<TourBookingRow[] | null>(
         null
     );
@@ -1919,6 +1932,7 @@ export default function AdminEntityDrawer() {
     const opportunityDrawerFirstPaintPreloadedRef = useRef<string | null>(null);
     /** Settled VM cutover — pins above-fold pipeline from server VM (no client structural recompute). */
     const opportunityDrawerViewModelOpenRef = useRef<string | null>(null);
+    const personDrawerViewModelOpenRef = useRef<string | null>(null);
     const opportunityDrawerViewModelRef = useRef<OpportunityDrawerViewModel | null>(null);
     const opportunityDrawerViewModelApplyLoggedRef = useRef<string | null>(null);
     const opportunityDrawerViewModelPrimaryHydrateSkipLoggedRef = useRef<string | null>(null);
@@ -2982,10 +2996,110 @@ export default function AdminEntityDrawer() {
             return;
         }
 
+        if (
+            drawer.type === "persons" &&
+            drawer.id !== "new" &&
+            (personDrawerViewModelOpenRef.current === drawer.id ||
+                (isChildDrawerVmOpen({
+                    openSource: drawer.openSource,
+                    presentationEmphasis: drawer.personDrawerOpenSeed?.presentation_emphasis ?? null,
+                }) ?
+                    childDrawerHardCutoverEnabled()
+                :   personDrawerHardCutoverEnabled()))
+        ) {
+            if (personDrawerViewModelOpenRef.current === drawer.id) {
+                setLoading(false);
+            }
+            return;
+        }
+
         runLegacyEntityFetch();
         // pathname read only when entity identity changes (see entityDrawerTabInitKeyRef); omit from deps so tab is not reset on SPA navigation.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [drawer.type, drawer.id, drawer.jobRecordSurface]);
+
+    useEffect(() => {
+        if (drawer.type !== "persons" || !drawer.id || drawer.id === "new") {
+            personDrawerViewModelOpenRef.current = null;
+            setPersonDrawerVmFirstPaintSettled(false);
+            setPersonDrawerVmLoadError(null);
+            return;
+        }
+
+        const childOpen = isChildDrawerVmOpen({
+            openSource: drawer.openSource,
+            presentationEmphasis: drawer.personDrawerOpenSeed?.presentation_emphasis ?? null,
+        });
+        const vmCutoverActive =
+            (childOpen && childDrawerHardCutoverEnabled()) ||
+            (!childOpen && personDrawerHardCutoverEnabled());
+        if (!vmCutoverActive) {
+            personDrawerViewModelOpenRef.current = null;
+            setPersonDrawerVmFirstPaintSettled(false);
+            setPersonDrawerVmLoadError(null);
+            return;
+        }
+
+        const personId = String(drawer.id);
+        const entityOpenKey = `persons:${personId}`;
+        const ac = new AbortController();
+        setPersonDrawerVmLoadError(null);
+        setLoading(true);
+
+        const run = async () => {
+            const result =
+                childOpen ?
+                    await loadChildDrawerViaViewModel(personId, {
+                        ...workspaceDataFetchInit(),
+                        signal: ac.signal,
+                    })
+                :   await loadPersonDrawerViaViewModel(personId, {
+                        openSource: drawer.openSource,
+                        presentationEmphasis: drawer.personDrawerOpenSeed?.presentation_emphasis ?? null,
+                        init: { ...workspaceDataFetchInit(), signal: ac.signal },
+                    });
+
+            if (drawerEntityTargetKeyRef.current !== entityOpenKey) return;
+
+            if (!result.ok) {
+                const message =
+                    childOpen ?
+                        childDrawerViewModelHardCutoverFailureMessage(result)
+                    :   personDrawerViewModelHardCutoverFailureMessage(result);
+                setPersonDrawerVmLoadError(message);
+                setError(message);
+                setLoading(false);
+                personDrawerViewModelOpenRef.current = null;
+                setPersonDrawerVmFirstPaintSettled(false);
+                return;
+            }
+
+            personDrawerViewModelOpenRef.current = personId;
+            setPersonDrawerVmFirstPaintSettled(result.preload.first_paint_settled);
+            setData(result.preload.primaryEntity);
+            putDrawerEntitySnapshot("persons", personId, result.preload.primaryEntity);
+            setError(null);
+            setLoading(false);
+        };
+
+        void run().catch((e) => {
+            if (ac.signal.aborted) return;
+            const message = e instanceof Error ? e.message : "Person drawer View Model failed.";
+            setPersonDrawerVmLoadError(message);
+            setError(message);
+            setLoading(false);
+        });
+
+        return () => {
+            ac.abort();
+        };
+    }, [
+        drawer.type,
+        drawer.id,
+        drawer.openSource,
+        drawer.personDrawerOpenSeed?.presentation_emphasis,
+        drawer.personDrawerOpenSeed?.personId,
+    ]);
 
     const runOpportunityPrimaryHydrate = useCallback(() => {
         const hydrateId = resolveOpportunityHydrateId(drawer.type, drawer.id);
@@ -9540,6 +9654,7 @@ export default function AdminEntityDrawer() {
         !!drawer.id &&
         drawer.id !== "new" &&
         !error &&
+        !personDrawerVmFirstPaintSettled &&
         (personChildLifecycleChrome || personParentGuardianChrome) &&
         personDrawerComposedPayloadContext != null &&
         !personDrawerComposedPayloadIsReady;
@@ -9580,6 +9695,7 @@ export default function AdminEntityDrawer() {
 
     useEffect(() => {
         if (drawer.type !== "persons" || !drawer.id || drawer.id === "new") return;
+        if (personDrawerVmFirstPaintSettled) return;
         if (!personDrawerComposedPreparing) return;
         if (loading) return;
         const contextKey = personDrawerComposedContextKey;

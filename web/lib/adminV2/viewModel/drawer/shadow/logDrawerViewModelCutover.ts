@@ -1,7 +1,14 @@
-import { adminV2DrawerViewModelCutoverEnabled } from "@/lib/adminV2/viewModel/drawer/drawerViewModelCutoverGate";
+import {
+    adminV2OpportunityDrawerVmCutoverEnabled,
+    adminV2PersonDrawerVmCutoverEnabled,
+    adminV2ChildDrawerVmCutoverEnabled,
+} from "@/lib/adminV2/viewModel/drawer/drawerViewModelFeatureGates";
 
 export type DrawerViewModelCutoverLogPayload = {
+    entity_type?: string;
+    entity_id?: string;
     opportunity_id?: string;
+    person_id?: string;
     drawer_vm_cutover_flag_enabled: boolean;
     /** Raw build-time env echo (undefined when not set at build). */
     drawer_vm_cutover_flag_value?: string | null;
@@ -13,13 +20,23 @@ export type DrawerViewModelCutoverLogPayload = {
     pipeline_pinned?: boolean;
 };
 
-export function drawerViewModelCutoverFlagSnapshot(): {
+export function drawerViewModelCutoverFlagSnapshot(entityType?: string): {
     drawer_vm_cutover_flag_enabled: boolean;
     drawer_vm_cutover_flag_value: string | null;
 } {
-    const raw = process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM;
+    const envByEntity: Record<string, string> = {
+        opportunity: "NEXT_PUBLIC_ADMINV2_DRAWER_VM",
+        person: "NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM",
+        child: "NEXT_PUBLIC_ADMINV2_CHILD_DRAWER_VM",
+    };
+    const key = entityType ? envByEntity[entityType] : "NEXT_PUBLIC_ADMINV2_DRAWER_VM";
+    const raw = key ? process.env[key] : process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM;
+    const enabled =
+        entityType === "person" ? adminV2PersonDrawerVmCutoverEnabled()
+        : entityType === "child" ? adminV2ChildDrawerVmCutoverEnabled()
+        : adminV2OpportunityDrawerVmCutoverEnabled();
     return {
-        drawer_vm_cutover_flag_enabled: adminV2DrawerViewModelCutoverEnabled(),
+        drawer_vm_cutover_flag_enabled: enabled,
         drawer_vm_cutover_flag_value: raw == null ? null : String(raw),
     };
 }
