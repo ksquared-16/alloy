@@ -235,3 +235,35 @@ Sibling priority · Desired start approaching
 ```
 
 **Preserved:** icon-left drawer affordances, subtle frame, dense row height, no runtime/data/loading changes.
+
+---
+
+## V3.3 — Unified header container (implemented)
+
+**Problem:** Line 2 felt detached from line 1; secondary text and parent contact meta were too small.
+
+### Changes
+
+1. **Single header container** — both lines inside `header-zone` with no internal divider; subtle shared background; one border below the block.
+2. **Typography bump** — line 2 at 10.5px (was 9px); attention inline 10.5px; status 10px; parent contact meta 10.5px.
+3. **Parent contact block** — phone/email nested under parent name in `parent-identity`, aligned with name not icon indent.
+4. **Density** — removed double border between header and people band; tightened people-band padding.
+
+---
+
+## V3.4 — Visual hierarchy & grouping (implemented)
+
+**Problem:** Layout was correct but the row felt like one flat white rectangle.
+
+### Zone model (background tints, no cards/shadows/extra borders)
+
+1. **Summary zone** (`data-queue-zone="summary"`) — light Alloy stone tint; operational header lines 1–2 unified.
+2. **People zone** (`data-queue-zone="people"`) — clean white; parent name + contact connected; children below with spacing only.
+3. **Facts zone** (`data-queue-zone="facts"`) — subtle muted tint for tour/timing/supporting detail.
+
+### Typography
+
+- Household **13px / 700** — strongest in row
+- Parent name **11.5px**; contact **10.5px** (one step down, not footnote-sized)
+- Line 2 **10.5px / 78–80%** — readable, not disabled-looking
+- Removed internal dividers, dashed parent/child rule, colored attention panels

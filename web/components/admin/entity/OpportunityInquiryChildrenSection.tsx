@@ -50,7 +50,7 @@ import {
     resolveInquiryChildDesiredStartDisplay,
     type InquiryChildFieldDefLike,
 } from "@/lib/fields/inquiryChildFieldRegistry";
-import { User } from "lucide-react";
+import ViewPersonDrawerIconButton from "@/components/admin/drawer/ViewPersonDrawerIconButton";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 
 /** Literal Tailwind classes (must not be composed at runtime). DOB column compact; Desired Start wider. */
@@ -139,23 +139,28 @@ function inquiryChildRowAttention(args: {
     return waitlisted || missingDob || missingProgram || missingSchedule || noFitOrBlocked;
 }
 
-function ViewPersonIconButton({
+function InquiryChildDrawerIconButton({
     personId,
+    customerMemberId,
     displayName,
     onOpenChild,
     row,
 }: {
     personId: string | null;
+    customerMemberId: string;
     displayName: string;
     onOpenChild?: (row: Pick<InquiryChildRow, "person_id" | "customer_member_id" | "display_name">) => void;
     row: InquiryChildRow;
 }) {
     if (!onOpenChild) return null;
+    const targetId = (personId ?? customerMemberId).trim();
+    if (!targetId) return null;
+
     return (
-        <button
-            type="button"
-            title={personId ? "View person" : "View child"}
-            aria-label={personId ? `View person for ${displayName}` : `View child ${displayName}`}
+        <ViewPersonDrawerIconButton
+            personId={targetId}
+            displayName={displayName}
+            recordKind="child"
             onMouseEnter={() => {
                 if (personId) prefetchPersonDrawerSnapshot(personId);
             }}
@@ -169,10 +174,7 @@ function ViewPersonIconButton({
                     display_name: row.display_name,
                 })
             }
-            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-alloy-stone/25 text-alloy-blue hover:border-alloy-blue/35 hover:bg-alloy-blue/5"
-        >
-            <User className="h-3 w-3" aria-hidden />
-        </button>
+        />
     );
 }
 
@@ -975,8 +977,9 @@ export default function OpportunityInquiryChildrenSection({
                                 <div className={INQUIRY_CHILD_CELL}>
                                     <div className={INQUIRY_CHILD_MOBILE_LABEL}>Child</div>
                                     <div className="flex min-w-0 items-center gap-1">
-                                        <ViewPersonIconButton
+                                        <InquiryChildDrawerIconButton
                                             personId={r.person_id}
+                                            customerMemberId={r.customer_member_id}
                                             displayName={displayName}
                                             onOpenChild={onOpenChild && !isMetadataOnly ? onOpenChild : undefined}
                                             row={r}

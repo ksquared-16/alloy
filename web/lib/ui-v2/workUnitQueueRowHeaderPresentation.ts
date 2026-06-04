@@ -56,7 +56,9 @@ export function deriveConciseAttentionSummary(raw: string): string {
     s = s.replace(/^finish the\s+/i, "");
     s = s.replace(/^follow up on (?:the\s+)?/i, "follow-up on ");
     s = s.replace(/^schedule (?:the\s+)?/i, "schedule ");
-    s = s.replace(/\s+and log the next step\.?$/i, "");
+    s = s.replace(/\s+and log the next step(?:\s+on the record)?\.?$/i, "");
+    s = s.replace(/\s+and record the next step(?:\s+on the record)?\.?$/i, "");
+    s = s.replace(/\s+on the record\.?$/i, "");
     s = s.replace(/\s+and record (?:the\s+)?(?:outcome|result)\.?$/i, "");
     s = s.replace(/\s+in (?:the|your) (?:crm|system)\.?$/i, "");
 
@@ -99,7 +101,7 @@ export function buildEnrollmentHeaderAttentionInline(
         const why = whyRaw ? sanitizeOperatorReasonDetail(whyRaw) : null;
         const fullText = why ? `${inlineBase} · ${why}` : inlineBase;
         return {
-            inline: truncateInline(inlineBase, QUEUE_ROW_HEADER_INLINE_ATTENTION_MAX),
+            inline: inlineBase,
             urgencyLabel: urgency,
             headlineSummary: summary,
             fullText,
@@ -110,7 +112,7 @@ export function buildEnrollmentHeaderAttentionInline(
     if (reason) {
         const inline = reason.replace(/^needs attention:\s*/i, "").trim() || reason;
         return {
-            inline: truncateInline(inline, QUEUE_ROW_HEADER_INLINE_ATTENTION_MAX),
+            inline,
             urgencyLabel: null,
             headlineSummary: inline,
             fullText: inline,

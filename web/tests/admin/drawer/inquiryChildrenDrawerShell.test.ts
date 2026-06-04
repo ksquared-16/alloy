@@ -42,7 +42,7 @@ describe("inquiry children drawer shell runtime", () => {
         expect(src).toContain("data-inquiry-children-placeholder-row");
         expect(src).toContain("shellReservedRowCount");
         expect(src).not.toContain("Loading inquiry children");
-        expect(src).toContain("ViewPersonIconButton");
+        expect(src).toContain("InquiryChildDrawerIconButton");
         expect(src).not.toMatch(/INQUIRY_CHILD_COL_HDR}>Notes</);
         expect(src).not.toContain("min-w-[1100px]");
     });

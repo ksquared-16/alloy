@@ -80,7 +80,7 @@ describe("workUnitQueueRowHeaderPresentation", () => {
         expect(built.headlineSummary).toBe("overdue follow-up");
     });
 
-    it("truncates inline attention beyond max chars", () => {
+    it("preserves full inline attention text for wrapped header display", () => {
         const long = "x".repeat(QUEUE_ROW_HEADER_INLINE_ATTENTION_MAX + 10);
         const built = buildEnrollmentHeaderAttentionInline(
             baseSlots({
@@ -97,7 +97,15 @@ describe("workUnitQueueRowHeaderPresentation", () => {
                 },
             })
         );
-        expect(built.inline!.length).toBeLessThanOrEqual(QUEUE_ROW_HEADER_INLINE_ATTENTION_MAX);
+        expect(built.inline).toBe(long);
+    });
+
+    it("strips on-the-record suffix from concise attention summary", () => {
+        expect(
+            deriveConciseAttentionSummary(
+                "Complete the overdue follow-up and log the next step on the record"
+            )
+        ).toBe("overdue follow-up");
     });
 
     it("builds header subline with reason and next step without repeating headline", () => {

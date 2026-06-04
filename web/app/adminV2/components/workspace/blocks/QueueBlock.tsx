@@ -48,7 +48,7 @@ import {
 } from "@/app/adminV2/components/workspace/blocks/QueueRowPlacementCandidatePanel";import { QueueRowPlacementManualOrderControls } from "@/app/adminV2/components/workspace/blocks/QueueRowPlacementManualOrderControls";
 import { QueueRowPlacementPriorityV2Panel } from "@/app/adminV2/components/workspace/blocks/QueueRowPlacementPriorityV2Panel";
 import { WorkUnitQueueLaneRowSkeleton } from "@/components/admin/workspace/WorkUnitQueueCompactRowSkeleton";
-import ViewPersonDrawerIconButton from "@/components/admin/drawer/ViewPersonDrawerIconButton";
+import RelatedRecordDrawerIconButton from "@/components/admin/drawer/RelatedRecordDrawerIconButton";
 import { ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT } from "@/lib/ui-v2/adminV2LoadingGeometry";
 import {
     formatPlacementGroupHeaderTitle,
@@ -248,7 +248,7 @@ function queueRowRelatedRecordIcon(
   handlers: CrmCompactDrawerRecordIconHandlers
 ) {
   return (
-    <ViewPersonDrawerIconButton
+    <RelatedRecordDrawerIconButton
       personId={personId}
       displayName={displayName}
       recordKind={recordKind}
@@ -1124,7 +1124,11 @@ function CrmCompactOperationalRecord({
         />
       ) : null}
       {peopleBandVisible ? (
-        <div className="adminv2-ws-queue-operational-record__people-band" data-queue-row-band="people">
+        <div
+          className="adminv2-ws-queue-operational-record__people-band"
+          data-queue-row-band="people"
+          data-queue-zone="people"
+        >
           {showChildrenFirst ?
             <>
               {childrenBand}
@@ -1138,7 +1142,11 @@ function CrmCompactOperationalRecord({
         </div>
       ) : null}
       {factGroups.length > 0 ? (
-        <div className="adminv2-ws-queue-operational-record__facts-band" data-queue-row-band="facts">
+        <div
+          className="adminv2-ws-queue-operational-record__facts-band"
+          data-queue-row-band="facts"
+          data-queue-zone="facts"
+        >
           {factGroups.map((g, i) => (
             <CrmWorkUnitFactGroup
               key={`fact-${g.kind}-${i}`}

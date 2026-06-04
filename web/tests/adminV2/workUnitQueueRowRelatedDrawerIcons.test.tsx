@@ -161,6 +161,61 @@ describe("CrmCompactQueuePreview inline drawer icons", () => {
         expect(html).toContain("Toddler");
         expect(html).toContain("Preschool");
         expect(html).toMatch(/data-queue-row-child-icon="true"[\s\S]*<span class="adminv2-ws-queue-related-record-name">Alex \(5y\)<\/span>/);
+        expect(html).toContain('data-related-record-drawer-icon-kind="child"');
+    });
+
+    it("renders distinct person icon kind on contact rows", () => {
+        const html = renderToStaticMarkup(
+            <CrmCompactQueuePreview
+                scanMode
+                workUnitKey="enrollment_pipeline"
+                drawerRecordIconHandlers={handlers}
+                slots={crmTestSlots({
+                    primaryIdentity: "Smith Family",
+                    contactPersonId: "person-ada",
+                    contactDisplayName: "Ada Lovelace",
+                    crmFactGroups: [
+                        {
+                            kind: "contact",
+                            label: "",
+                            columnGrid: {
+                                headers: ["Contact"],
+                                rows: [["Ada Lovelace"]],
+                                columnKeys: ["primary_contact"],
+                            },
+                        },
+                    ],
+                })}
+            />
+        );
+        expect(html).toContain('data-queue-row-person-icon="true"');
+        expect(html).toContain('data-related-record-drawer-icon-kind="person"');
+    });
+
+    it("renders distinct child icon kind on child rows", () => {
+        const html = renderToStaticMarkup(
+            <CrmCompactQueuePreview
+                scanMode
+                workUnitKey="enrollment_pipeline"
+                drawerRecordIconHandlers={handlers}
+                slots={crmTestSlots({
+                    primaryIdentity: "Smith Family",
+                    childrenLines: [{ primary: "Alex (5y)", personId: "child-alex", programInline: "Toddler" }],
+                    crmFactGroups: [
+                        {
+                            kind: "children_programs",
+                            label: "",
+                            columnGrid: {
+                                headers: ["Child", "Program"],
+                                rows: [["Alex (5y)", "Toddler"]],
+                                columnKeys: ["child_name", "program"],
+                            },
+                        },
+                    ],
+                })}
+            />
+        );
+        expect(html).toContain('data-related-record-drawer-icon-kind="child"');
     });
 
     it("renders waitlist child icon when child person id is present", () => {
@@ -188,6 +243,7 @@ describe("CrmCompactQueuePreview inline drawer icons", () => {
             />
         );
         expect(html).toContain('data-queue-row-child-icon="true"');
+        expect(html).toContain('data-related-record-drawer-icon-kind="child"');
         expect(html).toMatch(/data-queue-row-child-icon="true"[\s\S]*Sam \(3y\)/);
     });
 
@@ -219,7 +275,7 @@ describe("CrmCompactQueuePreview inline drawer icons", () => {
 });
 
 describe("QueueBlock row/icon propagation wiring", () => {
-    it("uses shared ViewPersonDrawerIconButton inline and removes generic row-level P/C actions", async () => {
+    it("uses shared related-record drawer icon button inline and removes generic row-level P/C actions", async () => {
         const { readFileSync } = await import("node:fs");
         const { join, dirname } = await import("node:path");
         const { fileURLToPath } = await import("node:url");
@@ -232,7 +288,8 @@ describe("QueueBlock row/icon propagation wiring", () => {
         expect(queueBlock).toContain('actionId: "open_person_drawer"');
         expect(queueBlock).toContain('actionId: "open_child_drawer"');
         expect(queueBlock).toContain("e.stopPropagation()");
-        expect(queueBlock).toContain("ViewPersonDrawerIconButton");
+        expect(queueBlock).toContain("RelatedRecordDrawerIconButton");
+        expect(queueBlock).not.toContain("ViewPersonDrawerIconButton");
         expect(queueBlock).toContain("CrmCompactOperationalRecord");
         expect(queueBlock).toContain("QueueRowCompactOperationalHeader");
         expect(queueBlock).toContain("QueueRowAttentionSupplementBand");

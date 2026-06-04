@@ -117,7 +117,7 @@ function HeaderInlineSep() {
     );
 }
 
-/** V3.2 — compact two-line header zone: household | status | attention/ranking | location */
+/** V3.5 — header grid: household | attention column (2 rows) | location */
 export function QueueRowCompactOperationalHeader({
     slots,
     plan,
@@ -140,17 +140,19 @@ export function QueueRowCompactOperationalHeader({
             ? waitlistInline?.reasonShort?.trim() || null
             : null;
     const headerSubline = enrollmentSubline || waitlistSubline;
+    const attentionPrimaryVisible = Boolean(
+        statusLabel || enrollmentInline?.inline || waitlistInline?.rankingChip
+    );
 
     return (
         <div
             className="adminv2-ws-queue-operational-record__header-zone"
             data-queue-row-band="header"
-            data-queue-header-layout="two-line"
+            data-queue-header-layout="attention-column"
+            data-queue-header-container="true"
+            data-queue-zone="summary"
         >
-            <div
-                className="adminv2-ws-queue-operational-record__header-band adminv2-ws-queue-operational-record__header-band--inline"
-                data-queue-header-row="primary"
-            >
+            <div className="adminv2-ws-queue-operational-record__header-grid">
                 <span
                     className="adminv2-ws-queue-operational-record__household"
                     title={slots.primaryIdentity}
@@ -159,83 +161,97 @@ export function QueueRowCompactOperationalHeader({
                 >
                     {slots.primaryIdentity}
                 </span>
-                {statusLabel ? (
-                    <>
-                        <HeaderInlineSep />
-                        <span
-                            className={`adminv2-ws-crm-queue-preview__status-pill adminv2-ws-crm-queue-preview__status-pill--header-inline adminv2-ws-crm-queue-preview__status-pill--secondary adminv2-ws-crm-queue-preview__status-pill--urgency-${urgencyTier}${
-                                operationalAttentionBadge
-                                    ? " adminv2-ws-crm-queue-preview__status-pill--operational-attention"
-                                    : ""
-                            }`}
-                            data-queue-preview-slot="header_status"
-                            data-testid="queue-header-status"
-                        >
-                            {statusLabel}
-                        </span>
-                    </>
-                ) : null}
-                {enrollmentInline?.inline ? (
-                    <>
-                        <HeaderInlineSep />
-                        <span
-                            className={`adminv2-ws-queue-operational-record__header-attention${
-                                enrollmentInline.urgencyLabel
-                                    ? " adminv2-ws-queue-operational-record__header-attention--urgent"
-                                    : ""
-                            }`}
-                            data-queue-preview-slot="header_attention_inline"
-                            data-testid="queue-header-attention-inline"
-                            title={enrollmentInline.fullText ?? enrollmentInline.inline}
-                        >
-                            {enrollmentInline.inline}
-                        </span>
-                    </>
-                ) : null}
-                {waitlistInline?.rankingChip ? (
-                    <>
-                        <HeaderInlineSep />
-                        <span
-                            className="adminv2-ws-queue-operational-record__header-ranking-chip"
-                            data-queue-preview-slot="header_waitlist_ranking"
-                            data-testid="queue-header-waitlist-ranking"
-                            title={waitlistInline.fullRankingTitle ?? waitlistInline.rankingChip}
-                        >
-                            {waitlistInline.rankingChip}
-                        </span>
-                    </>
-                ) : null}
-                {slots.locationContext?.trim() ? (
-                    <>
-                        <HeaderInlineSep />
-                        <span
-                            className="adminv2-ws-queue-operational-record__location"
-                            data-queue-preview-slot="location"
-                        >
-                            {slots.locationContext.trim()}
-                        </span>
-                    </>
-                ) : null}
-            </div>
-            {headerSubline ? (
+
                 <div
-                    className={`adminv2-ws-queue-operational-record__header-subline${
-                        enrollmentSubline
-                            ? " adminv2-ws-queue-operational-record__header-subline--enrollment"
-                            : " adminv2-ws-queue-operational-record__header-subline--waitlist"
-                    }`}
-                    data-queue-header-row="secondary"
-                    data-queue-preview-slot={
-                        enrollmentSubline ? "header_enrollment_subline" : "header_waitlist_reason"
-                    }
-                    data-testid={
-                        enrollmentSubline ? "queue-header-enrollment-subline" : "queue-header-waitlist-reason"
-                    }
-                    title={headerSubline}
+                    className="adminv2-ws-queue-operational-record__header-attention-column"
+                    data-queue-preview-slot="header_attention_column"
+                    data-testid="queue-header-attention-column"
                 >
-                    {headerSubline}
+                    {attentionPrimaryVisible ? (
+                        <div
+                            className="adminv2-ws-queue-operational-record__header-attention-primary"
+                            data-queue-header-row="primary"
+                        >
+                            {statusLabel ? (
+                                <>
+                                    <span
+                                        className={`adminv2-ws-crm-queue-preview__status-pill adminv2-ws-crm-queue-preview__status-pill--header-inline adminv2-ws-crm-queue-preview__status-pill--secondary adminv2-ws-crm-queue-preview__status-pill--urgency-${urgencyTier}${
+                                            operationalAttentionBadge
+                                                ? " adminv2-ws-crm-queue-preview__status-pill--operational-attention"
+                                                : ""
+                                        }`}
+                                        data-queue-preview-slot="header_status"
+                                        data-testid="queue-header-status"
+                                    >
+                                        {statusLabel}
+                                    </span>
+                                </>
+                            ) : null}
+                            {enrollmentInline?.inline ? (
+                                <>
+                                    {statusLabel ? <HeaderInlineSep /> : null}
+                                    <span
+                                        className={`adminv2-ws-queue-operational-record__header-attention${
+                                            enrollmentInline.urgencyLabel
+                                                ? " adminv2-ws-queue-operational-record__header-attention--urgent"
+                                                : ""
+                                        }`}
+                                        data-queue-preview-slot="header_attention_inline"
+                                        data-testid="queue-header-attention-inline"
+                                        title={enrollmentInline.fullText ?? enrollmentInline.inline}
+                                    >
+                                        {enrollmentInline.inline}
+                                    </span>
+                                </>
+                            ) : null}
+                            {waitlistInline?.rankingChip ? (
+                                <>
+                                    {statusLabel || enrollmentInline?.inline ? <HeaderInlineSep /> : null}
+                                    <span
+                                        className="adminv2-ws-queue-operational-record__header-ranking-chip"
+                                        data-queue-preview-slot="header_waitlist_ranking"
+                                        data-testid="queue-header-waitlist-ranking"
+                                        title={waitlistInline.fullRankingTitle ?? waitlistInline.rankingChip}
+                                    >
+                                        {waitlistInline.rankingChip}
+                                    </span>
+                                </>
+                            ) : null}
+                        </div>
+                    ) : null}
+                    {headerSubline ? (
+                        <div
+                            className={`adminv2-ws-queue-operational-record__header-subline adminv2-ws-queue-operational-record__header-subline--connected adminv2-ws-queue-operational-record__header-subline--in-attention${
+                                enrollmentSubline
+                                    ? " adminv2-ws-queue-operational-record__header-subline--enrollment"
+                                    : " adminv2-ws-queue-operational-record__header-subline--waitlist"
+                            }`}
+                            data-queue-header-row="secondary"
+                            data-queue-header-subline-readable="true"
+                            data-queue-preview-slot={
+                                enrollmentSubline ? "header_enrollment_subline" : "header_waitlist_reason"
+                            }
+                            data-testid={
+                                enrollmentSubline ? "queue-header-enrollment-subline" : "queue-header-waitlist-reason"
+                            }
+                            title={headerSubline}
+                        >
+                            {headerSubline}
+                        </div>
+                    ) : null}
                 </div>
-            ) : null}
+
+                {slots.locationContext?.trim() ? (
+                    <span
+                        className="adminv2-ws-queue-operational-record__location"
+                        data-queue-preview-slot="location"
+                    >
+                        {slots.locationContext.trim()}
+                    </span>
+                ) : (
+                    <span className="adminv2-ws-queue-operational-record__location adminv2-ws-queue-operational-record__location--empty" aria-hidden="true" />
+                )}
+            </div>
         </div>
     );
 }
@@ -397,17 +413,35 @@ export function QueueRowCompactParentContact({
     const personId = slots.contactPersonId?.trim() || "";
     if (!name && !phone && !email) return null;
 
-    const contactMeta = [phone, email].filter(Boolean).join(" · ");
-
     return (
         <div className="adminv2-ws-queue-operational-record__parent-block" data-queue-people-role="parent">
             <div className="adminv2-ws-queue-operational-record__parent-primary">
                 {personId && name ? renderIcon(personId, name, "person", handlers) : null}
-                <span className="adminv2-ws-queue-operational-record__parent-name">{name || "—"}</span>
+                <div className="adminv2-ws-queue-operational-record__parent-identity adminv2-ws-queue-operational-record__parent-identity--inline">
+                    <span className="adminv2-ws-queue-operational-record__parent-name">{name || "—"}</span>
+                    {phone ? (
+                        <>
+                            <span className="adminv2-ws-queue-operational-record__parent-sep" aria-hidden="true">
+                                ·
+                            </span>
+                            <span className="adminv2-ws-queue-operational-record__parent-meta">{phone}</span>
+                        </>
+                    ) : null}
+                    {email ? (
+                        <>
+                            <span className="adminv2-ws-queue-operational-record__parent-sep" aria-hidden="true">
+                                ·
+                            </span>
+                            <span
+                                className="adminv2-ws-queue-operational-record__parent-meta"
+                                data-testid="queue-parent-contact-meta"
+                            >
+                                {email}
+                            </span>
+                        </>
+                    ) : null}
+                </div>
             </div>
-            {contactMeta ? (
-                <div className="adminv2-ws-queue-operational-record__parent-meta">{contactMeta}</div>
-            ) : null}
         </div>
     );
 }
