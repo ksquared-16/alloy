@@ -2,6 +2,7 @@ import {
     adminV2DrawerBootstrapEnabled,
     fetchOpportunityDrawerOperationalBootstrap,
 } from "@/lib/admin/opportunityDrawerBootstrapClient";
+import { opportunityDrawerHardCutoverEnabled } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerHardCutoverGate";
 import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
 import { prefetchOpportunityDrawerFull } from "@/lib/admin/opportunityDrawerFullPrefetch";
 import { prefetchOpportunityDrawerPrimary } from "@/lib/admin/opportunityDrawerPrimaryPrefetch";
@@ -34,6 +35,7 @@ export function prefetchOpportunityDrawerPrimaryLaneOnRowIntent(
 ): void {
     const id = opportunityId.trim();
     if (!id || typeof window === "undefined") return;
+    if (opportunityDrawerHardCutoverEnabled()) return;
 
     logPrefetchAdminV2("drawer_primary", "start", {
         record_id: id,
@@ -64,6 +66,7 @@ export function prefetchOpportunityDrawerFullOnRowIntent(
 ): void {
     const id = opportunityId.trim();
     if (!id || typeof window === "undefined") return;
+    if (opportunityDrawerHardCutoverEnabled()) return;
     prefetchOpportunityDrawerFull(id, init ?? workspaceDataFetchInit());
 }
 

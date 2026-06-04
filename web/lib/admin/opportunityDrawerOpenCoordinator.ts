@@ -34,6 +34,8 @@ import {
 import { markAdminV2DrawerOpenBudgetStart } from "@/lib/perf/adminV2JankBudget";
 import { scheduleOpportunityDrawerViewModelShadow } from "@/lib/adminV2/viewModel/drawer/shadow/runOpportunityDrawerViewModelShadow";
 import { loadOpportunityDrawerViaViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityDrawerViaViewModel";
+import { opportunityDrawerHardCutoverEnabled } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerHardCutoverGate";
+import { throwOpportunityDrawerViewModelHardCutoverFailure } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerViewModelHardCutover";
 import {
     drawerViewModelCutoverFlagSnapshot,
     safeLogDrawerViewModelCutover,
@@ -179,6 +181,11 @@ export async function loadOpportunityDrawerComposedOpen(
                 full_attached_at_open: true,
             },
         };
+    }
+
+    if (opportunityDrawerHardCutoverEnabled()) {
+        setAdminV2DrawerOpenPending(false, "drawer_vm_hard_cutover_failed");
+        throwOpportunityDrawerViewModelHardCutoverFailure(id, vmOpen);
     }
 
     safeLogDrawerViewModelCutover("fallback", {

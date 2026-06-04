@@ -434,6 +434,7 @@ import {
     isOpportunityDrawerViewModelPreload,
     opportunityDrawerViewModelRecordShell,
 } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerOpenPreloadFromViewModel";
+import { opportunityDrawerHardCutoverEnabled } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerHardCutoverGate";
 import {
     drawerViewModelCutoverFlagSnapshot,
     safeLogDrawerViewModelCutover,
@@ -2901,6 +2902,12 @@ export default function AdminEntityDrawer() {
             drawerShellVariant === "adminV2" &&
             adminV2DrawerBootstrapEnabled()
         ) {
+            if (opportunityDrawerHardCutoverEnabled()) {
+                if (opportunityDrawerBootstrapAppliedRef.current === drawer.id) {
+                    setLoading(false);
+                }
+                return;
+            }
             if (opportunityDrawerViewModelOpenRef.current === drawer.id) {
                 setLoading(false);
                 return;
@@ -2949,6 +2956,9 @@ export default function AdminEntityDrawer() {
     const runOpportunityPrimaryHydrate = useCallback(() => {
         const hydrateId = resolveOpportunityHydrateId(drawer.type, drawer.id);
         if (!hydrateId) return;
+        if (opportunityDrawerHardCutoverEnabled() || opportunityDrawerViewModelOpenRef.current === hydrateId) {
+            return;
+        }
         if (!opportunityRecordHydrationPending && opportunityDrawerBootstrapAppliedRef.current !== hydrateId) return;
         if (!tryBeginOpportunityDrawerHydrate(hydrateId, "primary")) return;
         const url = buildAdminEntityFetchUrl(drawer.type, hydrateId, drawer.jobRecordSurface, "drawer_primary");
@@ -3028,6 +3038,9 @@ export default function AdminEntityDrawer() {
     const runOpportunityBackgroundFullHydrate = useCallback((opts?: { cacheBust?: boolean }): Promise<void> => {
         const hydrateId = resolveOpportunityHydrateId(drawer.type, drawer.id);
         if (!hydrateId) return Promise.resolve();
+        if (opportunityDrawerHardCutoverEnabled() || opportunityDrawerViewModelOpenRef.current === hydrateId) {
+            return Promise.resolve();
+        }
         if (!tryBeginOpportunityDrawerHydrate(hydrateId, "full")) return Promise.resolve();
         const baseUrl = buildAdminEntityFetchUrl(drawer.type, hydrateId, drawer.jobRecordSurface, "full");
         if (!baseUrl) {
@@ -3122,6 +3135,20 @@ export default function AdminEntityDrawer() {
         if (drawerShellVariant !== "adminV2" || !adminV2DrawerBootstrapEnabled()) return;
         if (opportunityDrawerBootstrapLegacy) return;
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        if (opportunityDrawerHardCutoverEnabled()) {
+            if (opportunityDrawerViewModelOpenRef.current === drawer.id) {
+                if (opportunityDrawerViewModelPrimaryHydrateSkipLoggedRef.current !== drawer.id) {
+                    opportunityDrawerViewModelPrimaryHydrateSkipLoggedRef.current = drawer.id;
+                    safeLogDrawerViewModelCutover("primary_hydrate_skipped", {
+                        opportunity_id: drawer.id,
+                        ...drawerViewModelCutoverFlagSnapshot(),
+                        primary_hydrate_skipped: true,
+                        open_path: "view_model",
+                    });
+                }
+            }
+            return;
+        }
         if (opportunityDrawerViewModelOpenRef.current === drawer.id) {
             if (opportunityDrawerViewModelPrimaryHydrateSkipLoggedRef.current !== drawer.id) {
                 opportunityDrawerViewModelPrimaryHydrateSkipLoggedRef.current = drawer.id;
@@ -4402,6 +4429,14 @@ export default function AdminEntityDrawer() {
             setOpportunityResolvedHeaderActions(null);
             setOpportunityResolvedHeaderLoading(false);
             opportunityHeaderResolvedSigRef.current = null;
+            return;
+        }
+        if (opportunityDrawerHardCutoverEnabled()) {
+            if (opportunityDrawerViewModelOpenRef.current === drawer.id) {
+                setOpportunityResolvedHeaderLoading(false);
+                return;
+            }
+            setOpportunityResolvedHeaderLoading(false);
             return;
         }
         if (opportunityDrawerFirstPaintPreloadedRef.current === drawer.id && opportunityResolvedHeaderActions != null) {
@@ -9002,7 +9037,7 @@ export default function AdminEntityDrawer() {
     useEffect(() => {
         if (!opportunityDrawerBootstrapEnrichmentPath) return;
         if (!drawer.id || drawer.id === "new") return;
-        if (opportunityDrawerViewModelOpenRef.current === drawer.id) return;
+        if (opportunityDrawerHardCutoverEnabled() || opportunityDrawerViewModelOpenRef.current === drawer.id) return;
         if (opportunityDrawerFirstPaintPreloadedRef.current === drawer.id && opportunityFullRecordHydrateApplied) return;
         if (!opportunityDrawerOverviewRevealReady) return;
         if (opportunityFullRecordHydrateApplied) return;

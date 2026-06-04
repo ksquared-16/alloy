@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import OpportunityDrawerOpeningOverlay from "@/components/admin/OpportunityDrawerOpeningOverlay";
+import { OpportunityDrawerViewModelHardCutoverError } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerViewModelHardCutover";
 import { loadOpportunityDrawerComposedOpen } from "@/lib/admin/opportunityDrawerOpenCoordinator";
 import {
     markDrawerOpenOverlayShown,
@@ -48,6 +49,10 @@ export default function OpportunityDrawerOpenCoordinator() {
             } catch (e) {
                 if (gen !== runGenRef.current) return;
                 if (e instanceof Error && e.name === "AbortError") return;
+                if (e instanceof OpportunityDrawerViewModelHardCutoverError) {
+                    setErrorMessage(e.message);
+                    return;
+                }
                 setErrorMessage(
                     e instanceof Error && e.message === "Not found"
                         ? "Record not found."
