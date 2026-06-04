@@ -41,10 +41,18 @@ export function isShellPinnedModelSwapOpenSource(openSource: string | null | und
 export function buildPrepareParamsFromOpenDrawer(
     params: OpenDrawerParams & { context?: DrawerViewModelCacheContext | null }
 ): PrepareDrawerViewModelParams {
+    const context =
+        params.context ??
+        (params.opportunityWorkspaceContext ?
+            {
+                departmentId: params.opportunityWorkspaceContext.department_id,
+                workUnitId: params.opportunityWorkspaceContext.work_unit_id,
+            }
+        :   null);
     return {
         entityType: params.type,
         entityId: params.id,
-        context: params.context ?? null,
+        context,
         openSource: params.source ?? null,
         presentationEmphasis: params.personDrawerOpenSeed?.presentation_emphasis ?? null,
         opportunityWorkspaceContext: params.opportunityWorkspaceContext ?? null,

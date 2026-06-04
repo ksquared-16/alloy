@@ -154,6 +154,24 @@ export function markWorkUnitVmActionsReady(extra?: Record<string, unknown>): voi
     });
 }
 
+export function markWorkUnitVmActionsFirstPaintReady(extra?: Record<string, unknown>): void {
+    const t = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (alloyPerfGet("wu_vm_actions_first_paint_ready") == null)
+        alloyPerfSet("wu_vm_actions_first_paint_ready", t);
+    logWorkUnitVmRuntimeDiagnostic("wu_vm_actions_first_paint_ready", {
+        since_navigation_ms: rel("wu_vm_actions_first_paint_ready"),
+        ...extra,
+    });
+}
+
+export function markWorkUnitVmActionsLateRenderBlocked(extra?: Record<string, unknown>): void {
+    logWorkUnitVmRuntimeDiagnostic("wu_vm_actions_late_render_blocked", extra ?? {});
+}
+
+export function markWorkUnitVmPillSwitchActionsReady(extra?: Record<string, unknown>): void {
+    logWorkUnitVmRuntimeDiagnostic("wu_vm_pill_switch_actions_ready", extra ?? {});
+}
+
 export function markWorkUnitVmPillSwitchStart(extra?: Record<string, unknown>): void {
     const t = typeof performance !== "undefined" ? performance.now() : Date.now();
     alloyPerfSet("wu_vm_pill_switch_start", t);

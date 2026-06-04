@@ -1,7 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { isChildDrawerVmOpen } from "@/lib/adminV2/viewModel/drawer/child/childDrawerFirstViewportContract";
+import { isChildDrawerViewModelPreload } from "@/lib/adminV2/viewModel/drawer/child/buildChildDrawerOpenPreloadFromViewModel";
+import { loadChildDrawerViaViewModel } from "@/lib/adminV2/viewModel/drawer/child/loadChildDrawerViaViewModel";
+import type { ChildDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/child/types";
 import {
     buildPrepareParamsFromOpenDrawer,
     peekDrawerViewModelPreloadSync,
@@ -16,16 +20,19 @@ import type { PersonDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/perso
 import { warmRelatedDrawerTargetsAfterVmApply } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmPayloadWarmRelated";
 import { logDrawerVmRuntime } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
 
-export type PersonDrawerVmPayloadState = {
-    activeVm: PersonDrawerViewModel | null;
-    displayVm: PersonDrawerViewModel | null;
+export type PersonsDrawerDisplayVm = PersonDrawerViewModel | ChildDrawerViewModel;
+
+export type PersonsDrawerVmPayloadState = {
+    activeVm: PersonsDrawerDisplayVm | null;
+    displayVm: PersonsDrawerDisplayVm | null;
+    isChildSurface: boolean;
     coldLoading: boolean;
     error: string | null;
     suppressFullDrawerLoading: boolean;
     holdPriorPayload: boolean;
 };
 
-export function usePersonDrawerVmPayload(): PersonDrawerVmPayloadState {
+export function usePersonsDrawerVmPayload(): PersonsDrawerVmPayloadState {
     const {
         drawer,
         consumePersonDrawerPreload,
@@ -35,15 +42,24 @@ export function usePersonDrawerVmPayload(): PersonDrawerVmPayloadState {
         consumeDrawerSwapFallbackFetch,
     } = useAdminDrawer();
 
-    const [displayVm, setDisplayVm] = useState<PersonDrawerViewModel | null>(null);
-    const [activeVm, setActiveVm] = useState<PersonDrawerViewModel | null>(null);
+    const isChildSurface = useMemo(
+        () =>
+            isChildDrawerVmOpen({
+                openSource: drawer.openSource ?? null,
+                presentationEmphasis: drawer.personDrawerOpenSeed?.presentation_emphasis ?? null,
+            }),
+        [drawer.openSource, drawer.personDrawerOpenSeed?.presentation_emphasis]
+    );
+
+    const [displayVm, setDisplayVm] = useState<PersonsDrawerDisplayVm | null>(null);
+    const [activeVm, setActiveVm] = useState<PersonsDrawerDisplayVm | null>(null);
     const [coldLoading, setColdLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const fetchGenRef = useRef(0);
     const mountedRef = useRef(false);
 
     const applyVm = useCallback(
-        (vm: PersonDrawerViewModel, reason: string) => {
+        (vm: PersonsDrawerDisplayVm, reason: string) => {
             const applyStarted =
                 typeof performance !== "undefined" ? performance.now() : Date.now();
             setActiveVm(vm);
@@ -55,7 +71,7 @@ export function usePersonDrawerVmPayload(): PersonDrawerVmPayloadState {
                 drawer,
                 entityType: "persons",
                 record: vm.record,
-                runtime: "person",
+                runtime: vm.surface === "child" ? "child" : "person",
             });
             const payloadApplyMs =
                 typeof performance !== "undefined" ?
@@ -66,11 +82,13 @@ export function usePersonDrawerVmPayload(): PersonDrawerVmPayloadState {
                 reason,
                 generation: vm.generation,
                 payload_apply_ms: payloadApplyMs,
+                runtime: vm.surface === "child" ? "child" : "person",
             });
             logDrawerVmRuntime("swap_committed", {
                 person_id: vm.entity.id,
                 drawer_id: drawer.id,
                 swap_commit_ms: payloadApplyMs,
+                runtime: vm.surface === "child" ? "child" : "person",
             });
         },
         [completeDrawerRuntimeTransition, drawer]
@@ -81,16 +99,22 @@ export function usePersonDrawerVmPayload(): PersonDrawerVmPayloadState {
             mountedRef.current = true;
             logDrawerVmRuntime("mounted", {
                 person_id: drawer.id,
-                runtime: "person",
+                runtime: isChildSurface ? "child" : "person",
                 phase: drawerRuntimePhase.phase,
             });
         }
-    }, [drawer.id, drawerRuntimePhase.phase]);
+    }, [drawer.id, drawerRuntimePhase.phase, isChildSurface]);
 
     useLayoutEffect(() => {
         if (drawer.type !== "persons" || !drawer.id || drawer.id === "new") return;
-        const preload = consumePersonDrawerPreload(drawer.id, { expectedSurface: "person" });
-        if (preload && isPersonDrawerViewModelPreload(preload)) {
+        const preload = consumePersonDrawerPreload(drawer.id, {
+            expectedSurface: isChildSurface ? "child" : "person",
+        });
+        if (preload && isChildSurface && isChildDrawerViewModelPreload(preload)) {
+            applyVm(preload.viewModel, "preload_consume");
+            return;
+        }
+        if (preload && !isChildSurface && isPersonDrawerViewModelPreload(preload)) {
             applyVm(preload.viewModel, "preload_consume");
             return;
         }
@@ -103,9 +127,22 @@ export function usePersonDrawerVmPayload(): PersonDrawerVmPayloadState {
                 personDrawerOpenSeed: drawer.personDrawerOpenSeed ?? null,
             })
         );
-        if (sync?.entityType === "persons" && isPersonDrawerViewModelPreload(sync.preload)) {
-            logDrawerVmRuntime("swap_cache_hit", { person_id: drawer.id, runtime: "person" });
-            applyVm(sync.preload.viewModel, "sync_cache");
+        if (sync?.entityType === "persons") {
+            if (isChildSurface && isChildDrawerViewModelPreload(sync.preload)) {
+                logDrawerVmRuntime("swap_cache_hit", {
+                    person_id: drawer.id,
+                    runtime: "child",
+                });
+                applyVm(sync.preload.viewModel, "sync_cache");
+                return;
+            }
+            if (!isChildSurface && isPersonDrawerViewModelPreload(sync.preload)) {
+                logDrawerVmRuntime("swap_cache_hit", {
+                    person_id: drawer.id,
+                    runtime: "person",
+                });
+                applyVm(sync.preload.viewModel, "sync_cache");
+            }
         }
     }, [
         drawer.type,
@@ -117,11 +154,16 @@ export function usePersonDrawerVmPayload(): PersonDrawerVmPayloadState {
         drawerTransitionId,
         drawerRuntimePhase.phase,
         applyVm,
+        isChildSurface,
     ]);
 
     useEffect(() => {
         if (drawer.type !== "persons" || !drawer.id || drawer.id === "new") return;
-        if (activeVm && String(activeVm.entity.id) === String(drawer.id)) return;
+        if (activeVm && String(activeVm.entity.id) === String(drawer.id)) {
+            const surfaceMatches =
+                isChildSurface ? activeVm.surface === "child" : activeVm.surface !== "child";
+            if (surfaceMatches) return;
+        }
 
         const needsFallback = consumeDrawerSwapFallbackFetch();
         const holdPrior = shouldHoldPriorDrawerContent(drawerRuntimePhase.phase);
@@ -130,7 +172,7 @@ export function usePersonDrawerVmPayload(): PersonDrawerVmPayloadState {
             logDrawerVmRuntime("swap_hold_current", {
                 from_id: displayVm.entity.id,
                 to_id: drawer.id,
-                runtime: "person",
+                runtime: isChildSurface ? "child" : "person",
             });
         }
 
@@ -144,13 +186,18 @@ export function usePersonDrawerVmPayload(): PersonDrawerVmPayloadState {
         logDrawerVmRuntime(needsFallback ? "swap_fetch_start" : "cold_fetch_start", {
             person_id: drawer.id,
             hold_prior: Boolean(displayVm),
-            runtime: "person",
+            runtime: isChildSurface ? "child" : "person",
         });
 
-        void loadPersonDrawerViaViewModel(drawer.id, {
-            openSource: drawer.openSource ?? null,
-            presentationEmphasis: drawer.personDrawerOpenSeed?.presentation_emphasis ?? null,
-        }).then((result) => {
+        const loadPromise =
+            isChildSurface ?
+                loadChildDrawerViaViewModel(drawer.id)
+            :   loadPersonDrawerViaViewModel(drawer.id, {
+                    openSource: drawer.openSource ?? null,
+                    presentationEmphasis: drawer.personDrawerOpenSeed?.presentation_emphasis ?? null,
+                });
+
+        void loadPromise.then((result) => {
             if (gen !== fetchGenRef.current) return;
             const fetchMs =
                 typeof performance !== "undefined" ?
@@ -161,17 +208,22 @@ export function usePersonDrawerVmPayload(): PersonDrawerVmPayloadState {
                 setError(result.reason);
                 return;
             }
-            if (!isPersonDrawerViewModelPreload(result.preload)) {
+            const preload = result.preload;
+            const validPreload =
+                isChildSurface ?
+                    isChildDrawerViewModelPreload(preload)
+                :   isPersonDrawerViewModelPreload(preload);
+            if (!validPreload || !preload.viewModel) {
                 setColdLoading(false);
                 setError("vm_preload_missing");
                 return;
             }
             logDrawerVmRuntime("cold_fetch_ready", {
                 person_id: drawer.id,
-                runtime: "person",
+                runtime: isChildSurface ? "child" : "person",
                 cold_fetch_ms: fetchMs,
             });
-            applyVm(result.preload.viewModel, needsFallback ? "swap_fetch" : "cold_fetch");
+            applyVm(preload.viewModel, needsFallback ? "swap_fetch" : "cold_fetch");
         });
     }, [
         drawer.type,
@@ -183,6 +235,7 @@ export function usePersonDrawerVmPayload(): PersonDrawerVmPayloadState {
         displayVm,
         consumeDrawerSwapFallbackFetch,
         applyVm,
+        isChildSurface,
     ]);
 
     const holdPriorPayload =
@@ -193,6 +246,7 @@ export function usePersonDrawerVmPayload(): PersonDrawerVmPayloadState {
     return {
         activeVm,
         displayVm: holdPriorPayload ? displayVm : activeVm ?? displayVm,
+        isChildSurface,
         coldLoading: coldLoading && !displayVm && !shouldSuppressFullDrawerLoading(drawerRuntimePhase.phase),
         error,
         suppressFullDrawerLoading: shouldSuppressFullDrawerLoading(drawerRuntimePhase.phase),

@@ -62,18 +62,43 @@ describe("workUnitRevealGate", () => {
             workUnitRevealActionsReady({
                 reserve_actions_rail: false,
                 enrollment_actions_settled: false,
+                queue_rows_need_actions: false,
+                queue_row_actions_ready: false,
             })
         ).toBe(true);
         expect(
             workUnitRevealActionsReady({
                 reserve_actions_rail: true,
                 enrollment_actions_settled: false,
+                queue_rows_need_actions: false,
+                queue_row_actions_ready: true,
             })
         ).toBe(false);
         expect(
             workUnitRevealActionsReady({
                 reserve_actions_rail: true,
                 enrollment_actions_settled: true,
+                queue_rows_need_actions: false,
+                queue_row_actions_ready: false,
+            })
+        ).toBe(true);
+    });
+
+    it("actions_ready requires row action registry when lane will paint rows", () => {
+        expect(
+            workUnitRevealActionsReady({
+                reserve_actions_rail: false,
+                enrollment_actions_settled: true,
+                queue_rows_need_actions: true,
+                queue_row_actions_ready: false,
+            })
+        ).toBe(false);
+        expect(
+            workUnitRevealActionsReady({
+                reserve_actions_rail: false,
+                enrollment_actions_settled: true,
+                queue_rows_need_actions: true,
+                queue_row_actions_ready: true,
             })
         ).toBe(true);
     });

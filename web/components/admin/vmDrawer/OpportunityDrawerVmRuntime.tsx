@@ -30,7 +30,8 @@ export default function OpportunityDrawerVmRuntime() {
         isOpportunityQueueNavPending,
         navigateOpportunityInQueue,
     } = useAdminDrawer();
-    const { displayVm, coldLoading, error, suppressFullDrawerLoading } = useOpportunityDrawerVmPayload();
+    const { displayVm, coldLoading, error, suppressFullDrawerLoading, holdPriorPayload } =
+        useOpportunityDrawerVmPayload();
     const [drawerTab, setDrawerTab] = useState<DrawerTabKey>("overview");
 
     useEffect(() => {
@@ -73,14 +74,35 @@ export default function OpportunityDrawerVmRuntime() {
     }, [canMutate, displayVm, drawer.id, drawer.opportunityQueuePreviewSeed, record]);
 
     const statusSlot = useMemo(() => {
-        if (!displayVm) return null;
-        return (
-            <VmOpportunityStatusControl
-                status={displayVm.header.status}
-                canMutate={!!canMutate}
-            />
-        );
-    }, [canMutate, displayVm]);
+        const seedLabel = drawer.opportunityQueuePreviewSeed?.statusLabel?.trim();
+        const showTargetSeed =
+            holdPriorPayload && String(displayVm?.entity.id) !== String(drawer.id);
+        if (showTargetSeed && seedLabel) {
+            return (
+                <VmOpportunityStatusControl
+                    status={{ renderAs: "readonly_pill", label: seedLabel }}
+                    canMutate={false}
+                />
+            );
+        }
+        if (displayVm && !showTargetSeed) {
+            return (
+                <VmOpportunityStatusControl
+                    status={displayVm.header.status}
+                    canMutate={!!canMutate}
+                />
+            );
+        }
+        if (seedLabel) {
+            return (
+                <VmOpportunityStatusControl
+                    status={{ renderAs: "readonly_pill", label: seedLabel }}
+                    canMutate={false}
+                />
+            );
+        }
+        return undefined;
+    }, [canMutate, displayVm, drawer.id, drawer.opportunityQueuePreviewSeed?.statusLabel, holdPriorPayload]);
 
     const tabs = displayVm?.layout.tabs ?? (["overview", "communications"] as DrawerTabKey[]);
 

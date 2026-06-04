@@ -89,7 +89,7 @@ export function useChildDrawerVmPayload(): ChildDrawerVmPayloadState {
 
     useLayoutEffect(() => {
         if (drawer.type !== "persons" || !drawer.id || drawer.id === "new") return;
-        const preload = consumePersonDrawerPreload(drawer.id);
+        const preload = consumePersonDrawerPreload(drawer.id, { expectedSurface: "child" });
         if (preload && isChildDrawerViewModelPreload(preload)) {
             applyVm(preload.viewModel, "preload_consume");
             return;

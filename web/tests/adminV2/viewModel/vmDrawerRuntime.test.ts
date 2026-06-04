@@ -71,40 +71,27 @@ describe("VM drawer runtime wiring", () => {
         const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
         const router = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
         expect(router).toContain("OpportunityDrawerVmRuntime");
-        expect(router).toContain("PersonDrawerVmRuntime");
-        expect(router).toContain("ChildDrawerVmRuntime");
+        expect(router).toContain("PersonsDrawerVmRuntime");
+        expect(router).not.toContain("PersonDrawerVmRuntime");
+        expect(router).not.toContain("ChildDrawerVmRuntime");
         expect(router).toContain("AdminEntityDrawerLegacy");
         expect(router).not.toContain("opportunityInquiryWorkflowHeaderStatus");
     });
 
-    it("PersonDrawerVmRuntime does not use legacy fetch or skeleton paths", async () => {
+    it("PersonsDrawerVmRuntime does not use legacy fetch or skeleton paths", async () => {
         const { readFileSync } = await import("node:fs");
         const { join, dirname } = await import("node:path");
         const { fileURLToPath } = await import("node:url");
         const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
         const vm = readFileSync(
-            join(webRoot, "components/admin/vmDrawer/PersonDrawerVmRuntime.tsx"),
+            join(webRoot, "components/admin/vmDrawer/PersonsDrawerVmRuntime.tsx"),
             "utf8"
         );
         expect(vm).toContain("VmPersonStatusControl");
-        expect(vm).toContain("usePersonDrawerVmPayload");
+        expect(vm).toContain("usePersonsDrawerVmPayload");
         expect(vm).not.toContain("drawer-operational-bootstrap");
         expect(vm).not.toContain("skeleton");
         expect(vm).not.toContain("status-options");
-    });
-
-    it("ChildDrawerVmRuntime does not use legacy fetch or skeleton paths", async () => {
-        const { readFileSync } = await import("node:fs");
-        const { join, dirname } = await import("node:path");
-        const { fileURLToPath } = await import("node:url");
-        const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
-        const vm = readFileSync(
-            join(webRoot, "components/admin/vmDrawer/ChildDrawerVmRuntime.tsx"),
-            "utf8"
-        );
-        expect(vm).toContain("useChildDrawerVmPayload");
-        expect(vm).not.toContain("drawer-operational-bootstrap");
-        expect(vm).not.toContain("skeleton");
     });
 
     it("VM payload hooks hold prior drawer during swap and suppress cold shell", async () => {
@@ -114,8 +101,7 @@ describe("VM drawer runtime wiring", () => {
         const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
         for (const file of [
             "useOpportunityDrawerVmPayload.ts",
-            "usePersonDrawerVmPayload.ts",
-            "useChildDrawerVmPayload.ts",
+            "usePersonsDrawerVmPayload.ts",
         ]) {
             const src = readFileSync(
                 join(webRoot, "lib/adminV2/viewModel/drawer/vmRuntime", file),
@@ -158,6 +144,21 @@ describe("VM drawer runtime wiring", () => {
         expect(status).not.toContain("fetchEnabled");
         expect(status).toContain("data-vm-runtime-status");
         expect(status).toContain('renderAs === "hidden"');
+        expect(status).toContain("!dropdownOpen");
+        expect(status).toContain('data-vm-runtime-status="readonly"');
+    });
+
+    it("OpportunityDrawerVmRuntime renders queue seed status before VM apply", async () => {
+        const { readFileSync } = await import("node:fs");
+        const { join, dirname } = await import("node:path");
+        const { fileURLToPath } = await import("node:url");
+        const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
+        const vm = readFileSync(
+            join(webRoot, "components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx"),
+            "utf8"
+        );
+        expect(vm).toContain("opportunityQueuePreviewSeed?.statusLabel");
+        expect(vm).toContain("holdPriorPayload");
     });
 
     it("VmInquiryRightColumn renders tasks without fetchEnabled", async () => {

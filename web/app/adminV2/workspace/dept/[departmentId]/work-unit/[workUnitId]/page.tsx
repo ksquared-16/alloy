@@ -314,6 +314,7 @@ import { alloyPerfGet, alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import {
     markWorkUnitVmBootstrapApply,
     markWorkUnitVmActionsReady,
+    markWorkUnitVmActionsFirstPaintReady,
     markWorkUnitVmFirstPaintReady,
     markWorkUnitVmKpiReady,
     markWorkUnitVmNavigationStart,
@@ -1597,14 +1598,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 const rowInline = aj.actions?.row_inline ?? [];
                 const overflow = aj.actions?.overflow ?? [];
                 setOpportunityQueueRowResolved([...rowInline, ...overflow]);
-                queueRowActionsHydratedRef.current = true;
-                setQueueRowActionsReady(true);
-                return true;
+            } else {
+                setOpportunityQueueRowResolved([]);
             }
+            queueRowActionsHydratedRef.current = true;
+            setQueueRowActionsReady(true);
+            return true;
         } catch {
-            /* non-fatal — deferred supplement may retry */
+            setOpportunityQueueRowResolved([]);
+            queueRowActionsHydratedRef.current = true;
+            setQueueRowActionsReady(true);
+            return true;
         }
-        return queueRowActionsHydratedRef.current;
     }, [departmentId, workUnitId]);
 
     const loadWorkUnitDeferredSupplement = useCallback(async () => {
@@ -3316,6 +3321,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 !primaryRowsDeferred &&
                                 Array.isArray(pl.items)
                             ) {
+                                await hydrateWorkUnitQueueRowActions();
                                 bootstrapPrimaryRowFetchScheduledRef.current = true;
                                 const summaryForLane =
                                     findQueueSummaryForSelection(qs, wu, authoritativePrimary) ??
@@ -4672,7 +4678,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 rowsLoading: queueItemsLoading,
                 rowsHeld: !laneMayPaint && !lifecycleRetainPaint,
                 rowsRefreshing,
-                rowActionsPending: displayItems.length > 0 && !queueRowActionsReady,
+                rowActionsPending:
+                    displayItems.length > 0 && !queueRowActionsReady && !lifecycleRetainPaint,
                 ...(workUnitGroupHeaders ? { workUnitGroupHeaders } : {}),
             },
             workSummary: null,
@@ -5845,6 +5852,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
         const actions_ready = workUnitRevealActionsReady({
             reserve_actions_rail: reserveWorkUnitActionsRail,
             enrollment_actions_settled: enrollmentActionsSettled,
+            queue_rows_need_actions:
+                workUnitLaneReveal.mayPaintRows &&
+                (queueItems?.items?.length ?? 0) > 0,
+            queue_row_actions_ready: queueRowActionsReady,
         });
         const rows_ready = workUnitRevealRowsReady({
             lane_authority_ready: wuQueueLaneAuthorityReady,
@@ -5869,6 +5880,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
         enrollmentActionsSettled,
         wuQueueLaneAuthorityReady,
         workUnitLaneReveal.settled,
+        workUnitLaneReveal.mayPaintRows,
+        queueItems?.items?.length,
+        queueRowActionsReady,
     ]);
 
     const workUnitAboveFoldPageReady = workUnitRevealGate.above_fold_ready;
@@ -5943,6 +5957,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
         markWorkUnitAboveFoldCoordinated({ departmentId, workUnitId });
         markRouteFirstAboveFoldStable("work_unit", { departmentId, workUnitId });
         markWorkUnitVmFirstPaintReady({
+            department_id: departmentId,
+            work_unit_id: workUnitId,
+            queue_key: selectedQueueKey,
+        });
+        markWorkUnitVmActionsFirstPaintReady({
             department_id: departmentId,
             work_unit_id: workUnitId,
             queue_key: selectedQueueKey,

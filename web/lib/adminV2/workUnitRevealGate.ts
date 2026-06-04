@@ -35,6 +35,9 @@ export type WorkUnitRevealSummariesReadyInput = {
 export type WorkUnitRevealActionsReadyInput = {
     reserve_actions_rail: boolean;
     enrollment_actions_settled: boolean;
+    /** When the active lane will paint rows, row action registry must be settled (ready or empty). */
+    queue_rows_need_actions: boolean;
+    queue_row_actions_ready: boolean;
 };
 
 export type WorkUnitRevealRowsReadyInput = {
@@ -131,8 +134,9 @@ export function workUnitRevealSummariesReady(input: WorkUnitRevealSummariesReady
 }
 
 export function workUnitRevealActionsReady(input: WorkUnitRevealActionsReadyInput): boolean {
-    if (!input.reserve_actions_rail) return true;
-    return input.enrollment_actions_settled;
+    const railOk = !input.reserve_actions_rail || input.enrollment_actions_settled;
+    const rowOk = !input.queue_rows_need_actions || input.queue_row_actions_ready;
+    return railOk && rowOk;
 }
 
 export function workUnitRevealRowsReady(input: WorkUnitRevealRowsReadyInput): boolean {

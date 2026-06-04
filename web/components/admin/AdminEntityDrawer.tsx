@@ -4,8 +4,7 @@ import { usePathname } from "next/navigation";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { AdminEntityDrawerLegacy } from "@/components/admin/AdminEntityDrawerLegacy";
 import OpportunityDrawerVmRuntime from "@/components/admin/vmDrawer/OpportunityDrawerVmRuntime";
-import PersonDrawerVmRuntime from "@/components/admin/vmDrawer/PersonDrawerVmRuntime";
-import ChildDrawerVmRuntime from "@/components/admin/vmDrawer/ChildDrawerVmRuntime";
+import PersonsDrawerVmRuntime from "@/components/admin/vmDrawer/PersonsDrawerVmRuntime";
 import { resolveVmDrawerRuntimeRoute } from "@/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerRuntimeRoute";
 
 /**
@@ -20,11 +19,8 @@ export default function AdminEntityDrawer() {
     if (route === "opportunity") {
         return <OpportunityDrawerVmRuntime />;
     }
-    if (route === "person") {
-        return <PersonDrawerVmRuntime />;
-    }
-    if (route === "child") {
-        return <ChildDrawerVmRuntime />;
+    if (route === "person" || route === "child") {
+        return <PersonsDrawerVmRuntime />;
     }
 
     return <AdminEntityDrawerLegacy />;

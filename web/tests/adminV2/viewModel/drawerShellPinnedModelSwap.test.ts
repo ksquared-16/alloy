@@ -11,6 +11,7 @@ vi.mock("@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerHardCutover
 }));
 
 import {
+    buildPrepareParamsFromOpenDrawer,
     isShellPinnedModelSwapOpenSource,
     isVmBackedDrawerEntityType,
     peekDrawerViewModelPreloadSync,
@@ -26,6 +27,15 @@ describe("drawerShellPinnedModelSwap", () => {
         expect(isShellPinnedModelSwapOpenSource("opportunity_primary_contact")).toBe(true);
         expect(isShellPinnedModelSwapOpenSource("drawer_model_swap")).toBe(true);
         expect(isShellPinnedModelSwapOpenSource("global_search")).toBe(false);
+    });
+
+    it("derives VM cache context from opportunity workspace when explicit context omitted", () => {
+        const params = buildPrepareParamsFromOpenDrawer({
+            type: "opportunities",
+            id: "opp-1",
+            opportunityWorkspaceContext: { department_id: "dept-1", work_unit_id: "wu-1" },
+        });
+        expect(params.context).toEqual({ departmentId: "dept-1", workUnitId: "wu-1" });
     });
 
     it("peeks VM preload synchronously from session cache", () => {
@@ -100,12 +110,10 @@ describe("AdminDrawerContext shell-pinned swap wiring", () => {
         const { fileURLToPath } = await import("node:url");
         const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
         const router = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(router).toContain("PersonDrawerVmRuntime");
-        expect(router).toContain("ChildDrawerVmRuntime");
+        expect(router).toContain("PersonsDrawerVmRuntime");
         for (const file of [
             "useOpportunityDrawerVmPayload.ts",
-            "usePersonDrawerVmPayload.ts",
-            "useChildDrawerVmPayload.ts",
+            "usePersonsDrawerVmPayload.ts",
         ]) {
             const hook = readFileSync(
                 join(webRoot, "lib/adminV2/viewModel/drawer/vmRuntime", file),

@@ -37,6 +37,7 @@ import {
 } from "@/lib/adminV2/viewModel/drawer/drawerRuntimePhase";
 import type { PersonDrawerOpenPreload } from "@/lib/adminV2/viewModel/drawer/person/buildPersonDrawerOpenPreloadFromViewModel";
 import type { ChildDrawerOpenPreload } from "@/lib/adminV2/viewModel/drawer/child/buildChildDrawerOpenPreloadFromViewModel";
+import { opportunityDrawerHardCutoverEnabled } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerHardCutoverGate";
 import {
     previewSeedForQueueNavigatorRecord,
     resolveOpportunityQueueNavigateTargetId,
@@ -211,7 +212,10 @@ interface AdminDrawerContextValue {
     /** One-shot: entity layer must hydrate after swap missed VM cache. */
     consumeDrawerSwapFallbackFetch: () => boolean;
     /** One-shot person/child VM preload for model-swap opens. */
-    consumePersonDrawerPreload: (personId: string) => PersonDrawerOpenPreload | ChildDrawerOpenPreload | null;
+    consumePersonDrawerPreload: (
+        personId: string,
+        options?: { expectedSurface?: "person" | "child" }
+    ) => PersonDrawerOpenPreload | ChildDrawerOpenPreload | null;
     /** Warm VM cache for drawer-to-drawer navigation. */
     prepareDrawerViewModel: (
         params: OpenDrawerParams & { context?: { orgId?: string | null; departmentId?: string | null; workUnitId?: string | null } }
@@ -434,13 +438,48 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                 });
             };
 
+            if (opportunityDrawerHardCutoverEnabled()) {
+                if (preloadReady) {
+                    logNav("preload_hit", false);
+                    return;
+                }
+                const vmPrepareParams = buildPrepareParamsFromOpenDrawer({
+                    type: "opportunities",
+                    id: targetId,
+                    opportunityWorkspaceContext: workspace,
+                    source: DRAWER_MODEL_SWAP_OPEN_SOURCE,
+                });
+                const vmSync = peekDrawerViewModelPreloadSync(vmPrepareParams);
+                if (vmSync?.entityType === "opportunities") {
+                    opportunityDrawerPreloadRef.current = vmSync.preload;
+                    markOpportunityPreloadReady();
+                    logNav("preload_hit", false);
+                    return;
+                }
+                logNav("warm_composed", false);
+                void prepareDrawerViewModel(vmPrepareParams)
+                    .then((preload) => {
+                        if (run !== queueNavRunRef.current) return;
+                        if (preload?.entityType === "opportunities") {
+                            opportunityDrawerPreloadRef.current = preload.preload;
+                            markOpportunityPreloadReady();
+                        }
+                    })
+                    .catch(() => {
+                        /* drawer holds current VM until refetch */
+                    });
+                return;
+            }
+
+            const logNavLegacy = logNav;
+
             if (preloadReady || snapshotWarm) {
-                logNav(preloadReady ? "preload_hit" : "snapshot_hit", false);
+                logNavLegacy(preloadReady ? "preload_hit" : "snapshot_hit", false);
                 return;
             }
 
             if (primaryWarm && bootstrapWarm) {
-                logNav("warm_composed", false);
+                logNavLegacy("warm_composed", false);
                 void loadOpportunityDrawerComposedOpen(targetId, workspace, workspaceDataFetchInit(), {
                     queuePreviewSeed: seed,
                 })
@@ -456,7 +495,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
             }
 
             setOpportunityQueueNavTargetId(targetId);
-            logNav("cold_composed", true);
+            logNavLegacy("cold_composed", true);
             void loadOpportunityDrawerComposedOpen(targetId, workspace, workspaceDataFetchInit(), {
                 queuePreviewSeed: seed,
             })
@@ -493,9 +532,15 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const consumePersonDrawerPreload = useCallback(
-        (personId: string): PersonDrawerOpenPreload | ChildDrawerOpenPreload | null => {
+        (
+            personId: string,
+            options?: { expectedSurface?: "person" | "child" }
+        ): PersonDrawerOpenPreload | ChildDrawerOpenPreload | null => {
             const p = personDrawerPreloadRef.current;
             if (!p || p.personId !== personId.trim()) return null;
+            const isChildPreload = p.viewModel?.surface === "child";
+            if (options?.expectedSurface === "child" && !isChildPreload) return null;
+            if (options?.expectedSurface === "person" && isChildPreload) return null;
             personDrawerPreloadRef.current = null;
             return p;
         },
