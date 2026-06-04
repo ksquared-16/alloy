@@ -4991,6 +4991,30 @@ export default function AdminEntityDrawer() {
                 return;
             }
         }
+        // 1b — seed the status select with the record's current status so it renders as a DROPDOWN
+        // from first paint (instead of a text badge that swaps to a dropdown) for locations and any
+        // entity using this general status fetch. The fetch below reconciles the full option list.
+        // Seed-only-when-empty so a re-run never clobbers an already-loaded list (no element-type
+        // change after reveal). This is a render seed, not a reveal gate — it cannot deadlock.
+        {
+            const statusSeedRecord = data as { status_key?: string; _status_display?: string } | null;
+            const statusSeedKey = String(statusSeedRecord?.status_key ?? "").trim();
+            if (statusSeedKey) {
+                setStatusDefsForDrawer((prev) =>
+                    prev.length > 0
+                        ? prev
+                        : [
+                              {
+                                  status_key: statusSeedKey,
+                                  status_label:
+                                      String(statusSeedRecord?._status_display ?? "").trim() || statusSeedKey,
+                                  sort_order: 0,
+                                  is_active: true,
+                              },
+                          ]
+                );
+            }
+        }
         setStatusDefsLoading(true);
         /** Effective defs (org + industry merge) — matches resolveStatusLabel / list badges; avoids org-only legacy gaps. */
         const init = workspaceDataFetchInit();
@@ -12624,9 +12648,6 @@ export default function AdminEntityDrawer() {
             </div>
         ) : undefined;
 
-    const opportunityWorkflowHeaderUsesQueuePreview =
-        opportunityDrawerQueueBootstrap && Boolean(opportunityQueuePreviewSeed?.title?.trim());
-
     const opportunityHeaderTitleRailStable =
         opportunityDrawerTypedSnapshotFirstPaint ||
         opportunityDrawerOverviewRevealReady ||
@@ -12659,14 +12680,13 @@ export default function AdminEntityDrawer() {
         )
     );
 
-    /** Inquiry workflow anchors primary actions beside the title row — omit empty headerActions row entirely. */
-    const workflowOpportunityUsesTitleRailActions =
-        drawer.type === "opportunities" && opportunityInquiryWorkflowDrawerShell;
-
-    const opportunityTitleRailActive =
-        (workflowOpportunityUsesTitleRailActions || opportunityWorkflowHeaderUsesQueuePreview) &&
-        isOpportunityExistingView &&
-        !!drawer.id;
+    // 1a — route the record actions into the title rail for ALL existing opportunity modals (not just
+    // inquiry/queue-preview shells). The rail carries `opportunityHeaderQuickActionsNode`
+    // (OpportunityDrawerHeaderControls — the actions dropdown), styled like the "Work with BOS" button,
+    // and stabilizes in lockstep with `opportunityHeaderTitleRailStable` (≈ overview reveal), so the
+    // actions persist on initial load AND warm return instead of disappearing into a suppressed bottom
+    // row (the bottom-row copy is suppressed via `headerActionsForDrawer` keyed on this same flag).
+    const opportunityTitleRailActive = isOpportunityExistingView && !!drawer.id;
 
     const opportunityHeaderTitleRailRight =
         opportunityQueueNavControls || opportunityHeaderQuickActionsNode || opportunityHeaderSaveNode ? (
@@ -12781,7 +12801,12 @@ export default function AdminEntityDrawer() {
         opportunityResolvedHeaderLoading &&
         !opportunityResolvedHeaderActions;
 
-    const headerActionsForDrawer = workflowOpportunityUsesTitleRailActions
+    // 1a — when the title-rail is active it already carries the actions; suppress the bottom-row
+    // copy so they are not duplicated. (Keyed on `opportunityTitleRailActive`, not just the inquiry
+    // flag, so queue-opened non-inquiry opportunities don't render two action rows.) When the rail
+    // is NOT active, the actions render in the bottom row (Drawer.tsx) for all existing opportunity
+    // modals — restoring them on initial load and warm return, styled like "Work with BOS".
+    const headerActionsForDrawer = opportunityTitleRailActive
         ? undefined
         : drawerGateLoading || opportunityHeaderActionsPending
             ? (
