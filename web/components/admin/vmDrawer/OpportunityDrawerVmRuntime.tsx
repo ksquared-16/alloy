@@ -414,13 +414,13 @@ export default function OpportunityDrawerVmRuntime() {
                             >
                                 <OpportunityDrawerInquiryWorkflowOverview
                                     displayVm={displayVm}
-                                    drawerId={drawer.id}
+                                    drawerId={String(displayVm.entity.id)}
                                     opportunitySingular={opportunitySingular}
                                     onSelectTab={onTabSelect}
                                 />
                             </div>
                         :   <OpportunityDrawerVmTabPanes
-                                drawerId={drawer.id}
+                                drawerId={String(displayVm.entity.id)}
                                 drawerTab={drawerTab}
                                 record={record}
                                 onSelectTab={onTabSelect}
