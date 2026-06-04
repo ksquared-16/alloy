@@ -429,6 +429,12 @@ import {
     overviewSectionsFromAboveFoldModel,
 } from "@/lib/adminV2/drawerPipeline";
 import DrawerAboveFoldRenderer from "@/components/admin/drawer/DrawerAboveFoldRenderer";
+import { buildOpportunityDrawerPipelineStateFromViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerPipelineStateFromViewModel";
+import {
+    isOpportunityDrawerViewModelPreload,
+    opportunityDrawerViewModelRecordShell,
+} from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerOpenPreloadFromViewModel";
+import type { DrawerPipelineState } from "@/lib/adminV2/drawerPipeline/types";
 import {
     opportunityDrawerBelowFoldEnrichmentReady as computeBelowFoldEnrichmentReady,
     opportunityDrawerFullBoundEnrichmentReady as computeFullBoundEnrichmentReady,
@@ -1892,6 +1898,10 @@ export default function AdminEntityDrawer() {
     const opportunityDrawerRevealCoordStartedAtRef = useRef<number | null>(null);
     /** Pre-open coordinator applied bootstrap + drawer_primary before modal mount. */
     const opportunityDrawerFirstPaintPreloadedRef = useRef<string | null>(null);
+    /** Settled VM cutover — pins above-fold pipeline from server VM (no client structural recompute). */
+    const opportunityDrawerViewModelOpenRef = useRef<string | null>(null);
+    const [opportunityDrawerViewModelPipeline, setOpportunityDrawerViewModelPipeline] =
+        useState<DrawerPipelineState | null>(null);
     const [addInquiryChildState, setAddInquiryChildState] = useState<{ mode: "child" | "sibling" } | null>(null);
     const openAddInquiryChildModal = useCallback((mode: "child" | "sibling") => {
         setAddInquiryChildState({ mode });
@@ -2440,10 +2450,27 @@ export default function AdminEntityDrawer() {
         const boot = preload.bootstrap;
         if (String((boot.entity as { id?: unknown }).id ?? "") !== String(drawer.id)) return;
         opportunityDrawerFirstPaintPreloadedRef.current = drawer.id;
-        freezeOpportunityDrawerShellContract(
-            boot.record_layout?.config_json ?? null,
-            boot.entity as Record<string, unknown>
-        );
+        const viewModelOpen = isOpportunityDrawerViewModelPreload(preload);
+        if (viewModelOpen) {
+            opportunityDrawerViewModelOpenRef.current = drawer.id;
+            setOpportunityDrawerViewModelPipeline(
+                buildOpportunityDrawerPipelineStateFromViewModel(preload.viewModel)
+            );
+            const recordShell = opportunityDrawerViewModelRecordShell(preload.viewModel);
+            if (recordShell) {
+                opportunityDrawerShellContractRef.current = recordShell;
+                setOpportunityDrawerShellContract(recordShell);
+                setOpportunityDrawerLayoutFrozen(true);
+                setOpportunityDrawerBelowFoldRevealed(false);
+            }
+        } else {
+            opportunityDrawerViewModelOpenRef.current = null;
+            setOpportunityDrawerViewModelPipeline(null);
+            freezeOpportunityDrawerShellContract(
+                boot.record_layout?.config_json ?? null,
+                boot.entity as Record<string, unknown>
+            );
+        }
         opportunityDrawerBootstrapAppliedRef.current = drawer.id;
         opportunityDrawerBootstrapEntityKeyRef.current = `${drawer.type}:${drawer.id}`;
         setOpportunityBootstrapAppliedId(drawer.id);
@@ -2494,6 +2521,8 @@ export default function AdminEntityDrawer() {
         if (!drawer.type || !drawer.id) {
             entityDrawerTabInitKeyRef.current = "";
             opportunityDrawerFirstPaintPreloadedRef.current = null;
+            opportunityDrawerViewModelOpenRef.current = null;
+            setOpportunityDrawerViewModelPipeline(null);
             postRevealEnrichEndReportedRef.current = null;
             opportunityDrawerVisitedTabsRef.current = createOpportunityDrawerTabVisitSet();
             opportunityActivityTabLoadedIdRef.current = null;
@@ -3067,6 +3096,7 @@ export default function AdminEntityDrawer() {
         if (drawerShellVariant !== "adminV2" || !adminV2DrawerBootstrapEnabled()) return;
         if (opportunityDrawerBootstrapLegacy) return;
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        if (opportunityDrawerViewModelOpenRef.current === drawer.id) return;
         if (opportunityBootstrapAppliedId !== drawer.id) return;
         if (!opportunityRecordHydrationPending) return;
         runOpportunityPrimaryHydrate();
@@ -8758,6 +8788,7 @@ export default function AdminEntityDrawer() {
 
     /** Generic drawer pipeline — opportunity adapter; renderer consumes above_fold model only. */
     const opportunityDrawerPipeline = useMemo(() => {
+        if (opportunityDrawerViewModelPipeline) return opportunityDrawerViewModelPipeline;
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return null;
         if (!opportunityDrawerShellContract || !overviewData) return null;
         const shell = opportunityShellToDrawerShellContract(opportunityDrawerShellContract);
@@ -8781,6 +8812,7 @@ export default function AdminEntityDrawer() {
                 recordOpportunityDrawerLayoutIncludesSection(layoutCfg, "family_contacts"),
         });
     }, [
+        opportunityDrawerViewModelPipeline,
         drawer.type,
         drawer.id,
         opportunityDrawerShellContract,

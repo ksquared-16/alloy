@@ -33,6 +33,8 @@ import {
 } from "@/lib/perf/adminV2PrimarySurfaceGate";
 import { markAdminV2DrawerOpenBudgetStart } from "@/lib/perf/adminV2JankBudget";
 import { scheduleOpportunityDrawerViewModelShadow } from "@/lib/adminV2/viewModel/drawer/shadow/runOpportunityDrawerViewModelShadow";
+import { loadOpportunityDrawerViaViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityDrawerViaViewModel";
+import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 
 /** Max overlay floor when cold — avoids sub-frame flash; skipped when intent prefetch is warm. */
 export const OPPORTUNITY_DRAWER_OPEN_ANTI_FLICKER_MS = 200;
@@ -46,6 +48,9 @@ export type OpportunityDrawerOpenPreload = {
     headerActions: ResolvedActionsBySlot;
     /** When true, enrichment overview sections stay unmounted until user edit/expand or background full merges. */
     enrichmentHeldUntilInteraction: boolean;
+    /** `view_model` when opened from settled VM cutover; omitted on legacy composed-open path. */
+    openPath?: "legacy" | "view_model";
+    viewModel?: OpportunityDrawerViewModel;
 };
 
 export type OpportunityDrawerOpenMetrics = {
@@ -128,6 +133,36 @@ export async function loadOpportunityDrawerComposedOpen(
     setAdminV2DrawerOpenPending(true, "drawer_composed_open");
     markAdminV2DrawerOpenBudgetStart();
 
+    const composedStart = typeof performance !== "undefined" ? performance.now() : 0;
+
+    const vmOpen = await loadOpportunityDrawerViaViewModel(id, workspaceContext ?? null, init);
+    if (vmOpen.ok) {
+        putDrawerEntitySnapshot("opportunities", id, vmOpen.preload.primaryEntity);
+        const waitForComposedMs = Math.round((typeof performance !== "undefined" ? performance.now() : 0) - composedStart);
+        reportDrawerComposedRevealReady(id, waitForComposedMs);
+        setAdminV2DrawerOpenPending(false, "composed_reveal");
+        markOpportunityDrawerHydrateDone(id, "primary");
+        markOpportunityDrawerHydrateDone(id, "full");
+
+        return {
+            preload: vmOpen.preload,
+            metrics: {
+                prefetch_hit: false,
+                bootstrap_warm: false,
+                primary_warm: false,
+                full_warm: false,
+                bootstrap_ms: 0,
+                primary_ms: vmOpen.compose_ms,
+                full_ms: null,
+                header_actions_ms: 0,
+                wait_for_composed_ms: waitForComposedMs,
+                anti_flicker_ms: 0,
+                enrichment_held: false,
+                full_attached_at_open: true,
+            },
+        };
+    }
+
     const bootstrapWarm = isOpportunityDrawerBootstrapWarm(id);
     const primaryWarm = isOpportunityDrawerPrimaryWarm(id);
     const fullWarm = isOpportunityDrawerFullWarm(id);
@@ -145,7 +180,7 @@ export async function loadOpportunityDrawerComposedOpen(
         return snap;
     })();
 
-    const composedStart = typeof performance !== "undefined" ? performance.now() : 0;
+    const composedStartLegacy = typeof performance !== "undefined" ? performance.now() : composedStart;
     let bootstrapMs = 0;
     let primaryMs = 0;
     let fullMs: number | null = null;
@@ -265,7 +300,7 @@ export async function loadOpportunityDrawerComposedOpen(
         throw new Error("drawer_composed_contract_not_ready");
     }
 
-    const waitForComposedMs = Math.round((typeof performance !== "undefined" ? performance.now() : 0) - composedStart);
+    const waitForComposedMs = Math.round((typeof performance !== "undefined" ? performance.now() : 0) - composedStartLegacy);
     reportDrawerComposedRevealReady(id, waitForComposedMs);
     setAdminV2DrawerOpenPending(false, "composed_reveal");
 

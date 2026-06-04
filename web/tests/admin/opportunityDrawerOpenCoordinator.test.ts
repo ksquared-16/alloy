@@ -133,4 +133,21 @@ describe("opportunity drawer primary-gated composed open", () => {
         expect(lib).not.toMatch(/await scheduleOpportunityDrawerViewModelShadow/);
         expect(lib).not.toMatch(/await runOpportunityDrawerViewModelShadow/);
     });
+
+    it("tries settled VM open before legacy composed fetches when cutover flag is on", () => {
+        const lib = read("lib/admin/opportunityDrawerOpenCoordinator.ts");
+        expect(lib).toContain("loadOpportunityDrawerViaViewModel");
+        expect(lib).toMatch(/const vmOpen = await loadOpportunityDrawerViaViewModel/);
+        expect(lib).toMatch(/if \(vmOpen\.ok\) \{[\s\S]*?return \{/);
+        expect(lib).toContain('openPath?: "legacy" | "view_model"');
+    });
+
+    it("AdminEntityDrawer pins VM pipeline and skips primary hydrate on view_model open", () => {
+        const drawer = read("components/admin/AdminEntityDrawer.tsx");
+        expect(drawer).toContain("isOpportunityDrawerViewModelPreload");
+        expect(drawer).toContain("buildOpportunityDrawerPipelineStateFromViewModel");
+        expect(drawer).toContain("opportunityDrawerViewModelOpenRef");
+        expect(drawer).toContain("opportunityDrawerViewModelPipeline");
+        expect(drawer).toMatch(/if \(opportunityDrawerViewModelOpenRef\.current === drawer\.id\) return;/);
+    });
 });
