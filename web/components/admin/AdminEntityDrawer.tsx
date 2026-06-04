@@ -463,10 +463,13 @@ import {
 import {
     personDrawerViewModelHardCutoverFailureMessage,
 } from "@/lib/adminV2/viewModel/drawer/person/personDrawerViewModelHardCutover";
+import { isVmBackedDrawerEntityType } from "@/lib/adminV2/viewModel/drawer/drawerShellPinnedModelSwap";
 import {
-    isShellPinnedModelSwapOpenSource,
-    isVmBackedDrawerEntityType,
-} from "@/lib/adminV2/viewModel/drawer/drawerShellPinnedModelSwap";
+    shouldAllowColdOpenLoading,
+    shouldHoldPriorDrawerContent,
+    shouldRenderHeldDrawerBody,
+    shouldSuppressFullDrawerLoading,
+} from "@/lib/adminV2/viewModel/drawer/drawerRuntimePhase";
 import { warmRelatedDrawerViewModels } from "@/lib/adminV2/viewModel/drawer/drawerModelSwapNavigation";
 import {
     logDrawerVmDomRenderTrace,
@@ -1529,7 +1532,10 @@ export default function AdminEntityDrawer() {
         consumeOpportunityDrawerPreload,
         consumePersonDrawerPreload,
         opportunityPreloadGeneration,
-        drawerModelSwapGeneration,
+        drawerTransitionId,
+        drawerRuntimePhase,
+        completeDrawerRuntimeTransition,
+        consumeDrawerSwapFallbackFetch,
         isOpportunityDrawerOpening,
         navigateOpportunityInQueue,
         isOpportunityQueueNavPending,
@@ -1770,49 +1776,52 @@ export default function AdminEntityDrawer() {
         return installPersonDrawerDevDirectOpen(openDrawer);
     }, [openDrawer]);
 
-    const drawerShellPinnedVmSwapActive = useMemo(
+    const drawerRuntimePhaseName = drawerRuntimePhase.phase;
+    const holdPriorDrawerContent = shouldHoldPriorDrawerContent(drawerRuntimePhaseName);
+    const suppressFullDrawerLoading = shouldSuppressFullDrawerLoading(drawerRuntimePhaseName);
+
+    const drawerBodyDataMatches = useMemo(
         () =>
-            isShellPinnedModelSwapOpenSource(drawer.openSource) || drawerModelSwapGeneration > 0,
-        [drawer.openSource, drawerModelSwapGeneration]
+            entityDataMatchesDrawer(data, drawer.id, drawer.type) ||
+            shouldRenderHeldDrawerBody({
+                phase: drawerRuntimePhaseName,
+                dataMatchesDrawer: entityDataMatchesDrawer(data, drawer.id, drawer.type),
+                hasData: data != null,
+            }),
+        [data, drawer.id, drawer.type, drawerRuntimePhaseName]
     );
 
     const drawerGateLoading = useMemo(() => {
-        if (drawerShellPinnedVmSwapActive) return false;
+        if (suppressFullDrawerLoading) return false;
         const dm = entityDataMatchesDrawer(data, drawer.id, drawer.type);
         const overview = dm ? data : null;
         const existingEntityDrawerTarget =
             !!drawer.id &&
             drawer.id !== "new" &&
             !(overview && (overview as { _create?: boolean })._create);
-        const entityKeyMismatch =
-            existingEntityDrawerTarget &&
-            data != null &&
-            !dm &&
-            isVmBackedDrawerEntityType(drawer.type);
-        const shellPinnedVmSwap =
-            entityKeyMismatch && drawerShellPinnedVmSwapActive;
-        if (shellPinnedVmSwap) {
-            if (drawer.type === "opportunities" && opportunityDrawerVmFirstPaintSettled) return false;
-            if (drawer.type === "persons" && personDrawerVmFirstPaintSettled) return false;
-            return false;
+        const hasVisibleContent = data != null && entityDataMatchesDrawer(data, drawer.id, drawer.type);
+        if (
+            shouldAllowColdOpenLoading({
+                phase: drawerRuntimePhaseName,
+                hasVisibleDrawerContent: hasVisibleContent,
+            })
+        ) {
+            return existingEntityDrawerTarget && !error && !drawerReady;
         }
         return existingEntityDrawerTarget && !error && !drawerReady;
     }, [
         data,
         drawer.id,
         drawer.type,
-        drawer.openSource,
-        drawerModelSwapGeneration,
-        drawerShellPinnedVmSwapActive,
+        drawerRuntimePhaseName,
+        suppressFullDrawerLoading,
         drawerReady,
         error,
-        opportunityDrawerVmFirstPaintSettled,
-        personDrawerVmFirstPaintSettled,
     ]);
 
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
-        if (drawerShellPinnedVmSwapActive) return;
+        if (holdPriorDrawerContent) return;
         setPostDrawerVisibleKey(null);
         postRevealEnrichEndReportedRef.current = null;
         opportunityDrawerVisitedTabsRef.current = createOpportunityDrawerTabVisitSet();
@@ -2210,12 +2219,12 @@ export default function AdminEntityDrawer() {
                 action,
                 entity: "opportunities",
                 generation,
-                drawer_model_swap_generation: drawerModelSwapGeneration,
+                drawer_transition_id: drawerTransitionId,
                 status_key: pin?.statusKey,
                 def_count: pin?.statusDefs.length,
             });
         },
-        [drawer.id, drawerModelSwapGeneration]
+        [drawer.id, drawerTransitionId]
     );
     /**
      * Drawer fix pass — records which `${id}::${profile}` the current person statusDefs were
@@ -2588,6 +2597,7 @@ export default function AdminEntityDrawer() {
         const preload = consumeOpportunityDrawerPreload(drawer.id);
         if (preload) {
             applyOpportunityDrawerPreload(preload);
+            completeDrawerRuntimeTransition();
             return;
         }
         const pinnedVm = opportunityDrawerViewModelRef.current;
@@ -2603,8 +2613,18 @@ export default function AdminEntityDrawer() {
             if (vmStatusPin) {
                 commitOpportunityVmStatusPin(vmStatusPin, "view_model_ref_repin", "pin");
             }
+            completeDrawerRuntimeTransition();
         }
-    }, [drawer.type, drawer.id, consumeOpportunityDrawerPreload, opportunityPreloadGeneration, drawerModelSwapGeneration, commitOpportunityVmStatusPin]);
+    }, [
+        drawer.type,
+        drawer.id,
+        consumeOpportunityDrawerPreload,
+        opportunityPreloadGeneration,
+        drawerTransitionId,
+        drawerRuntimePhaseName,
+        commitOpportunityVmStatusPin,
+        completeDrawerRuntimeTransition,
+    ]);
 
     function applyPersonDrawerPreload(
         preload: import("@/lib/adminV2/viewModel/drawer/person/buildPersonDrawerOpenPreloadFromViewModel").PersonDrawerOpenPreload | import("@/lib/adminV2/viewModel/drawer/child/buildChildDrawerOpenPreloadFromViewModel").ChildDrawerOpenPreload
@@ -2652,7 +2672,15 @@ export default function AdminEntityDrawer() {
         if (!preload || preload.personId !== drawer.id) return;
         if (!preload.first_paint_settled) return;
         applyPersonDrawerPreload(preload);
-    }, [drawer.type, drawer.id, consumePersonDrawerPreload, drawerModelSwapGeneration]);
+        completeDrawerRuntimeTransition();
+    }, [
+        drawer.type,
+        drawer.id,
+        consumePersonDrawerPreload,
+        drawerTransitionId,
+        drawerRuntimePhaseName,
+        completeDrawerRuntimeTransition,
+    ]);
 
     function applyOpportunityDrawerPreload(preload: import("@/lib/admin/opportunityDrawerOpenCoordinator").OpportunityDrawerOpenPreload) {
         const opportunityId = drawer.id;
@@ -2686,7 +2714,7 @@ export default function AdminEntityDrawer() {
                         action: "set_defs",
                         entity: "opportunities",
                         generation: opportunityStatusWriteGenRef.current,
-                        drawer_model_swap_generation: drawerModelSwapGeneration,
+                        drawer_transition_id: drawerTransitionId,
                         def_count: statusDefsFromVm.length,
                     });
                     setStatusDefsForDrawer(statusDefsFromVm);
@@ -2988,24 +3016,7 @@ export default function AdminEntityDrawer() {
             setLoading(false);
             return;
         }
-        if (
-            drawerShellPinnedVmSwapActive &&
-            drawer.id &&
-            drawer.id !== "new" &&
-            isVmBackedDrawerEntityType(drawer.type) &&
-            ((drawer.type === "opportunities" &&
-                opportunityDrawerViewModelOpenRef.current === drawer.id) ||
-                (drawer.type === "persons" && personDrawerViewModelOpenRef.current === drawer.id))
-        ) {
-            setLoading(false);
-            return;
-        }
-        if (
-            drawerShellPinnedVmSwapActive &&
-            drawer.id &&
-            drawer.id !== "new" &&
-            isVmBackedDrawerEntityType(drawer.type)
-        ) {
+        if (consumeDrawerSwapFallbackFetch()) {
             if (entityDrawerTabInitKeyRef.current !== entityOpenKey) {
                 entityDrawerTabInitKeyRef.current = entityOpenKey;
                 opportunityDrawerVisitedTabsRef.current = createOpportunityDrawerTabVisitSet();
@@ -3013,6 +3024,17 @@ export default function AdminEntityDrawer() {
                 setOpportunityDrawerTabVisitTick((n) => n + 1);
                 setDrawerTab("overview");
             }
+            setLoading(true);
+            setError(null);
+        } else if (holdPriorDrawerContent && drawer.id && drawer.id !== "new") {
+            if (entityDrawerTabInitKeyRef.current !== entityOpenKey) {
+                entityDrawerTabInitKeyRef.current = entityOpenKey;
+                opportunityDrawerVisitedTabsRef.current = createOpportunityDrawerTabVisitSet();
+                opportunityActivityTabLoadedIdRef.current = null;
+                setOpportunityDrawerTabVisitTick((n) => n + 1);
+                setDrawerTab("overview");
+            }
+            setLoading(false);
             return;
         }
         if (entityDrawerTabInitKeyRef.current !== entityOpenKey) {
@@ -3035,6 +3057,7 @@ export default function AdminEntityDrawer() {
             if (!prev) return null;
             const loadedId = String((prev as { id?: unknown }).id ?? "").trim();
             if (loadedId && loadedId === String(drawer.id ?? "").trim()) return prev;
+            if (holdPriorDrawerContent) return prev;
             return null;
         });
         if (drawer.type === "persons") {
@@ -3270,7 +3293,14 @@ export default function AdminEntityDrawer() {
         runLegacyEntityFetch();
         // pathname read only when entity identity changes (see entityDrawerTabInitKeyRef); omit from deps so tab is not reset on SPA navigation.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [drawer.type, drawer.id, drawer.jobRecordSurface]);
+    }, [
+        drawer.type,
+        drawer.id,
+        drawer.jobRecordSurface,
+        drawerTransitionId,
+        drawerRuntimePhaseName,
+        consumeDrawerSwapFallbackFetch,
+    ]);
 
     useEffect(() => {
         if (drawer.type !== "persons" || !drawer.id || drawer.id === "new") {
@@ -5498,7 +5528,7 @@ export default function AdminEntityDrawer() {
                     action: "set_defs",
                     entity: "opportunities",
                     generation: opportunityStatusWriteGenRef.current,
-                    drawer_model_swap_generation: drawerModelSwapGeneration,
+                    drawer_transition_id: drawerTransitionId,
                     def_count: vmStatusPin.statusDefs.length,
                 });
                 setStatusDefsForDrawer(vmStatusPin.statusDefs);
@@ -5514,7 +5544,7 @@ export default function AdminEntityDrawer() {
                 action: "defer_until_vm",
                 entity: "opportunities",
                 generation: opportunityStatusWriteGenRef.current,
-                drawer_model_swap_generation: drawerModelSwapGeneration,
+                drawer_transition_id: drawerTransitionId,
                 hard_cutover: true,
                 vm_settled: opportunityDrawerVmFirstPaintSettled,
                 vm_open_ref: opportunityDrawerViewModelOpenRef.current === drawer.id,
@@ -5551,7 +5581,7 @@ export default function AdminEntityDrawer() {
                         action: "set_defs",
                         entity: "opportunities",
                         generation: opportunityStatusWriteGenRef.current,
-                        drawer_model_swap_generation: drawerModelSwapGeneration,
+                        drawer_transition_id: drawerTransitionId,
                         def_count: 1,
                         status_key: sk,
                     });
@@ -5617,7 +5647,8 @@ export default function AdminEntityDrawer() {
             action: "fetch",
             entity: drawer.type ?? undefined,
             generation: opportunityStatusWriteGenRef.current,
-            drawer_model_swap_generation: drawerModelSwapGeneration,
+            drawer_transition_id: drawerTransitionId,
+            drawer_runtime_phase: drawerRuntimePhaseName,
             fetch_gen: fetchGen,
             hard_cutover: hardCutoverOpportunity,
         });
@@ -5654,7 +5685,7 @@ export default function AdminEntityDrawer() {
                         action: "set_defs",
                         entity: "opportunities",
                         generation: opportunityStatusWriteGenRef.current,
-                        drawer_model_swap_generation: drawerModelSwapGeneration,
+                        drawer_transition_id: drawerTransitionId,
                         def_count: reconciled.defs.length,
                         blocked: reconciled.blocked,
                         replaced: reconciled.replaced,
@@ -5699,8 +5730,8 @@ export default function AdminEntityDrawer() {
         opportunityPrimaryHydrateApplied,
         isEditing,
         data,
-        drawerModelSwapGeneration,
-        drawerShellPinnedVmSwapActive,
+        drawerTransitionId,
+        holdPriorDrawerContent,
     ]);
 
     const getStatusLabel = useCallback((statusKey: string | null | undefined) => {
@@ -8390,7 +8421,7 @@ export default function AdminEntityDrawer() {
         !!drawer.id &&
         drawer.id !== "new" &&
         !recordChromeOpportunity.configResolved &&
-        !(drawerShellPinnedVmSwapActive && opportunityDrawerVmFirstPaintSettled);
+        !(suppressFullDrawerLoading && opportunityDrawerVmFirstPaintSettled);
 
     /** Card 3B-3 — person/child reveal waits for record layout + actions chrome (mirrors
      *  opportunity/job/schedule) so status, actions, and section structure paint together rather
@@ -8400,7 +8431,7 @@ export default function AdminEntityDrawer() {
         !!drawer.id &&
         drawer.id !== "new" &&
         !recordChromePerson.configResolved &&
-        !(drawerShellPinnedVmSwapActive && personDrawerVmFirstPaintSettled);
+        !(suppressFullDrawerLoading && personDrawerVmFirstPaintSettled);
 
     /** Drawer fix pass — keep the person loading shell up until the header status control is ready
      *  (only when this person has a status profile). Resolves immediately on a warm TTL cache hit. */
@@ -8410,7 +8441,7 @@ export default function AdminEntityDrawer() {
         drawer.id !== "new" &&
         !!personDrawerStatusProfile &&
         personStatusDefsKey !== `${drawer.id}::${personDrawerStatusProfile}` &&
-        !(drawerShellPinnedVmSwapActive && personDrawerVmFirstPaintSettled);
+        !(suppressFullDrawerLoading && personDrawerVmFirstPaintSettled);
 
     /** Workflow-shaped gate for sidebar opportunities while record chrome resolves (modal uses `modalOpportunityWorkflow`). */
     const recordGateOpportunityWorkflowShape =
@@ -8874,7 +8905,7 @@ export default function AdminEntityDrawer() {
         opportunityDrawerVmFirstPaintSettled || opportunityComposedPayloadEval?.ready === true;
 
     const opportunityComposedPreparing =
-        !drawerShellPinnedVmSwapActive &&
+        !suppressFullDrawerLoading &&
         drawer.type === "opportunities" &&
         opportunityInquiryWorkflowDrawer &&
         !!drawer.id &&
@@ -8885,7 +8916,7 @@ export default function AdminEntityDrawer() {
 
     const opportunityDrawerOverviewRevealReady = opportunityInquiryWorkflowDrawer
         ? opportunityDrawerVmFirstPaintSettled
-            ? opportunityPrimaryHydrateApplied && opportunityRegistryHeaderReady
+            ? true
             : opportunityComposedPayloadReady &&
               opportunityDrawerAboveFoldPresentationReady &&
               (opportunityDrawerRuntimePlan?.canRevealHeaderActions ?? false)
@@ -9688,7 +9719,7 @@ export default function AdminEntityDrawer() {
         opportunityDrawerFirstPaintPreloadedRef.current === drawer.id;
 
     const opportunityDrawerPrimaryLoadingVisible =
-        !drawerShellPinnedVmSwapActive &&
+        !suppressFullDrawerLoading &&
         !opportunityDrawerTypedSnapshotFirstPaint &&
         !opportunityDrawerFirstPaintPreloaded &&
         opportunityDrawerRevealCoordActive &&
@@ -9701,7 +9732,7 @@ export default function AdminEntityDrawer() {
 
     /** Inquiry drawer: branded loading shell until one coordinated overview reveal. */
     const opportunityDrawerPreOverviewShell =
-        !drawerShellPinnedVmSwapActive &&
+        !suppressFullDrawerLoading &&
         (opportunityDrawerPrimaryLoadingVisible ||
         (!opportunityDrawerRevealCoordActive &&
             drawer.type === "opportunities" &&
@@ -9738,7 +9769,8 @@ export default function AdminEntityDrawer() {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
         logDrawerVmDomRenderTrace("layout_commit", {
             opportunityId: drawer.id,
-            drawerModelSwapGeneration,
+            drawerTransitionId,
+            drawerRuntimePhase: drawerRuntimePhaseName,
         });
     });
 
@@ -10101,7 +10133,7 @@ export default function AdminEntityDrawer() {
     const personDrawerComposedFetchedRef = useRef<string | null>(null);
 
     const personDrawerComposedPreparing =
-        !drawerShellPinnedVmSwapActive &&
+        !suppressFullDrawerLoading &&
         drawer.type === "persons" &&
         !!drawer.id &&
         drawer.id !== "new" &&
@@ -10121,7 +10153,7 @@ export default function AdminEntityDrawer() {
         Boolean(drawer.personDrawerOpenSeed?.personId === drawer.id);
 
     const personDrawerShowLoadingShell =
-        !drawerShellPinnedVmSwapActive &&
+        !suppressFullDrawerLoading &&
         drawer.type === "persons" &&
         !!drawer.id &&
         drawer.id !== "new" &&
@@ -12289,18 +12321,37 @@ export default function AdminEntityDrawer() {
                 (opportunityDrawerVmFirstPaintSettled && vmStatusPin != null));
         const blockStatusSkeletonAfterVmSettle =
             opportunityDrawerHardCutoverEnabled() && opportunityDrawerVmFirstPaintSettled;
-        const currentStatus = vmStatusReady
+        let currentStatus = vmStatusReady
             ? vmStatusPin!.statusKey
             : String(formData.status_key ?? d.status_key ?? "").trim();
-        const statusDisplayLabel = vmStatusReady
+        let statusDisplayLabel = vmStatusReady
             ? vmStatusPin!.statusLabel
             : opportunityStatusDisplayLabelSafe(
                   d,
                   drawer.opportunityQueuePreviewSeed?.statusLabel ?? drawer.opportunityQueuePreviewSeed?.stageLabel
               );
-        if (!currentStatus && !(blockStatusSkeletonAfterVmSettle && latchedPin?.statusKey)) {
-            if (vmStatusReady || opportunityDrawerVmFirstPaintSettled) {
-                return null;
+        if (!currentStatus && blockStatusSkeletonAfterVmSettle && latchedPin?.statusKey) {
+            currentStatus = latchedPin.statusKey;
+            if (!statusDisplayLabel) statusDisplayLabel = latchedPin.statusLabel;
+        }
+        if (!currentStatus) {
+            if (blockStatusSkeletonAfterVmSettle || opportunityDrawerVmFirstPaintSettled) {
+                return (
+                    <div
+                        className="flex min-w-0 max-w-[11rem] shrink flex-col gap-0.5 sm:max-w-[15rem]"
+                        data-opportunity-drawer-vm-status-control="true"
+                    >
+                        <span className="sr-only">Opportunity status</span>
+                        <select
+                            value=""
+                            disabled
+                            className="w-full min-w-0 rounded-full border border-alloy-stone/30 bg-white px-3 py-2 text-[12px] font-semibold text-alloy-midnight/90 opacity-60"
+                            aria-label="Opportunity status"
+                        >
+                            <option value="">Updating…</option>
+                        </select>
+                    </div>
+                );
             }
             return (
                 <div className="flex min-w-0 max-w-[11rem] shrink flex-col gap-0.5 sm:max-w-[15rem]">
@@ -12335,7 +12386,27 @@ export default function AdminEntityDrawer() {
         const renderStatusLabel =
             statusDisplayLabel ||
             (blockStatusSkeletonAfterVmSettle ? latchedPin?.statusLabel ?? renderStatusKey : "");
-        if (!renderStatusKey) return null;
+        if (!renderStatusKey) {
+            if (blockStatusSkeletonAfterVmSettle) {
+                return (
+                    <div
+                        className="flex min-w-0 max-w-[11rem] shrink flex-col gap-0.5 sm:max-w-[15rem]"
+                        data-opportunity-drawer-vm-status-control="true"
+                    >
+                        <span className="sr-only">Opportunity status</span>
+                        <select
+                            value=""
+                            disabled
+                            className="w-full min-w-0 rounded-full border border-alloy-stone/30 bg-white px-3 py-2 text-[12px] font-semibold text-alloy-midnight/90 opacity-60"
+                            aria-label="Opportunity status"
+                        >
+                            <option value="">Updating…</option>
+                        </select>
+                    </div>
+                );
+            }
+            return null;
+        }
         let statusOptions =
             (vmStatusReady ? vmStatusPin!.statusDefs : statusDefsForDrawer)
                 ?.filter((s) => s.is_active !== false)
@@ -13813,7 +13884,7 @@ export default function AdminEntityDrawer() {
                     </div>
                 ) : (drawerReady || (drawer.type === "persons" && personDrawerComposedPayloadIsReady)) &&
                     data &&
-                    dataMatchesDrawer ? (
+                    drawerBodyDataMatches ? (
                     <div
                         className={drawerRecordBodyRootClassName}
                         data-adminv2-job-drawer-body={isJobDrawerV2 && drawer.type === "jobs" ? "true" : undefined}
@@ -16607,23 +16678,42 @@ export default function AdminEntityDrawer() {
                                                                                         isTaskAssistV1UiEnabled() ? (
                                                                                         <OpportunityInquirySummaryRightColumn
                                                                                             model={
-                                                                                                rightColumnModel ?? {
-                                                                                                    tasks: {
-                                                                                                        visible: true,
-                                                                                                        state: "skeleton",
-                                                                                                        open_count: 0,
-                                                                                                        open_tasks: [],
-                                                                                                    },
-                                                                                                    reminders: {
-                                                                                                        visible: true,
-                                                                                                        state: "pending",
-                                                                                                        next_follow_up_iso: null,
-                                                                                                    },
-                                                                                                    orchestrator_handoff: {
-                                                                                                        visible: false,
-                                                                                                        state: "hidden",
-                                                                                                    },
-                                                                                                }
+                                                                                                rightColumnModel ??
+                                                                                                (opportunityDrawerVmFirstPaintSettled
+                                                                                                    ? {
+                                                                                                          tasks: {
+                                                                                                              visible: true,
+                                                                                                              state: "empty",
+                                                                                                              open_count: 0,
+                                                                                                              open_tasks: [],
+                                                                                                          },
+                                                                                                          reminders: {
+                                                                                                              visible: true,
+                                                                                                              state: "empty",
+                                                                                                              next_follow_up_iso: null,
+                                                                                                          },
+                                                                                                          orchestrator_handoff: {
+                                                                                                              visible: false,
+                                                                                                              state: "hidden",
+                                                                                                          },
+                                                                                                      }
+                                                                                                    : {
+                                                                                                          tasks: {
+                                                                                                              visible: true,
+                                                                                                              state: "skeleton",
+                                                                                                              open_count: 0,
+                                                                                                              open_tasks: [],
+                                                                                                          },
+                                                                                                          reminders: {
+                                                                                                              visible: true,
+                                                                                                              state: "pending",
+                                                                                                              next_follow_up_iso: null,
+                                                                                                          },
+                                                                                                          orchestrator_handoff: {
+                                                                                                              visible: false,
+                                                                                                              state: "hidden",
+                                                                                                          },
+                                                                                                      })
                                                                                             }
                                                                                             opportunityId={drawer.id}
                                                                                             entityLabel={String(d.name ?? "").trim() || null}

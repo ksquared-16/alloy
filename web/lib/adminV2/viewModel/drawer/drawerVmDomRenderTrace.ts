@@ -3,8 +3,13 @@
  * Search console for `[drawer_vm_dom_render_trace]`.
  */
 
+import type { DrawerRuntimePhase } from "@/lib/adminV2/viewModel/drawer/drawerRuntimePhase";
+
 export type DrawerVmDomRenderSnapshot = {
     opportunity_id: string | null;
+    drawer_transition_id: number;
+    drawer_runtime_phase: DrawerRuntimePhase;
+    /** @deprecated Use drawer_transition_id — kept for log continuity. */
     drawer_model_swap_generation: number;
     /** Header opportunity status control */
     status_control: "missing" | "skeleton" | "select" | "readonly";
@@ -31,13 +36,16 @@ function queryDrawerRoot(): HTMLElement | null {
 
 export function captureDrawerVmDomRenderSnapshot(params: {
     opportunityId: string | null;
-    drawerModelSwapGeneration: number;
+    drawerTransitionId: number;
+    drawerRuntimePhase: DrawerRuntimePhase;
 }): DrawerVmDomRenderSnapshot {
     const root = queryDrawerRoot();
     if (!root) {
         return {
             opportunity_id: params.opportunityId,
-            drawer_model_swap_generation: params.drawerModelSwapGeneration,
+            drawer_transition_id: params.drawerTransitionId,
+            drawer_runtime_phase: params.drawerRuntimePhase,
+            drawer_model_swap_generation: params.drawerTransitionId,
             status_control: "missing",
             status_vm_attr: false,
             operational_loading: false,
@@ -78,7 +86,9 @@ export function captureDrawerVmDomRenderSnapshot(params: {
 
     return {
         opportunity_id: params.opportunityId,
-        drawer_model_swap_generation: params.drawerModelSwapGeneration,
+        drawer_transition_id: params.drawerTransitionId,
+        drawer_runtime_phase: params.drawerRuntimePhase,
+        drawer_model_swap_generation: params.drawerTransitionId,
         status_control,
         status_vm_attr: statusVmAttr,
         operational_loading: root.querySelector('[data-opportunity-drawer-operational-loading="true"]') != null,
@@ -100,7 +110,8 @@ export function captureDrawerVmDomRenderSnapshot(params: {
 function snapshotSignature(s: DrawerVmDomRenderSnapshot): string {
     return [
         s.opportunity_id,
-        s.drawer_model_swap_generation,
+        s.drawer_transition_id,
+        s.drawer_runtime_phase,
         s.status_control,
         s.status_vm_attr ? "1" : "0",
         s.operational_loading ? "1" : "0",
@@ -121,7 +132,11 @@ let lastSignature: string | null = null;
 
 export function logDrawerVmDomRenderTrace(
     reason: string,
-    params: { opportunityId: string | null; drawerModelSwapGeneration: number }
+    params: {
+        opportunityId: string | null;
+        drawerTransitionId: number;
+        drawerRuntimePhase: DrawerRuntimePhase;
+    }
 ): void {
     const snapshot = captureDrawerVmDomRenderSnapshot(params);
     const sig = snapshotSignature(snapshot);

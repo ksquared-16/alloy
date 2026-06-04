@@ -147,7 +147,8 @@ describe("AdminEntityDrawer opportunity VM status wiring", () => {
         expect(drawer).toContain("commitOpportunityVmStatusPin");
         expect(drawer).toContain("blockStatusSkeletonAfterVmSettle");
         expect(drawer).toContain("opportunityDrawerVmStatusAuthoritative");
-        expect(drawer).toContain("drawerShellPinnedVmSwapActive");
+        expect(drawer).toContain("suppressFullDrawerLoading");
+        expect(drawer).toContain("Updating…");
         expect(drawer).toContain("opportunityInquirySummaryRightColumnResolved");
         expect(drawer).toContain("logDrawerVmDomRenderTrace");
     });

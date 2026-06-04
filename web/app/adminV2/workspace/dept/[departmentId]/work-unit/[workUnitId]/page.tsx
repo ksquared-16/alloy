@@ -308,6 +308,22 @@ import {
 import { WorkUnitPageLoadingGate } from "@/app/adminV2/components/workspace/WorkUnitPageLoadingGate";
 import { logAdminV2LegacyFanOut } from "@/lib/adminV2/runtime/adminV2LegacyFanOutDiagnostics";
 import { alloyPerfGet, alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
+import {
+    markWorkUnitVmBootstrapApply,
+    markWorkUnitVmFirstPaintReady,
+    markWorkUnitVmKpiReady,
+    markWorkUnitVmNavigationStart,
+    markWorkUnitVmOpenCold,
+    markWorkUnitVmOpenWarm,
+    markWorkUnitVmPillSwitchApply,
+    markWorkUnitVmPillSwitchCacheHit,
+    markWorkUnitVmPillSwitchStart,
+    markWorkUnitVmQueueReady,
+    markWorkUnitVmShellReady,
+    markWorkUnitVmSummariesReady,
+} from "@/lib/perf/workUnitVmRuntimeTrace";
+import "@/lib/perf/workUnitVmRuntimeTrace";
+import { scheduleWorkUnitViewModelShadow } from "@/lib/adminV2/viewModel/workUnit/shadow/runWorkUnitViewModelShadow";
 import type { NeedsAttentionBucketWithCount } from "@/lib/opportunities/needsAttentionBuckets";
 import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions/UpdateStatusAddNoteModal";
 import { ContactAttemptedModal } from "@/components/admin/opportunity/actions/ContactAttemptedModal";
@@ -722,6 +738,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const queueRowsBufferWorkUnitIdRef = useRef<string | null>(null);
     /** Queue-tab interaction: emit `queue_tab_rows_ready` once when row fetch finishes. */
     const pendingQueueTabPerfRef = useRef(false);
+    const workUnitVmShadowSigRef = useRef<string | null>(null);
     /** Last settled preview rows — keeps list visible while `queueItems` is briefly null during lane changes. */
     const queueRowsBufferRef = useRef<QueuePreviewItemVm[]>([]);
     /** Queue key that owns `queueRowsBufferRef` — never show buffer for a different lane. */
@@ -1226,6 +1243,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
     useLayoutEffect(() => {
         if (!departmentId || !workUnitId) return;
 
+        markWorkUnitVmNavigationStart({ department_id: departmentId, work_unit_id: workUnitId });
+
         if (hasLifecycleInPageWorkUnitSwitchFlag()) {
             skipNextQueueFetchEffectRef.current = true;
             userLaneTouchedRef.current = false;
@@ -1316,10 +1335,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
         if (!pageCacheHitEarly || pageCacheHitEarly.departmentId !== departmentId || pageCacheHitEarly.workUnit.id !== workUnitId) {
             seededWorkUnitShellRef.current = false;
             setWorkUnitPageSeededFromCache(false);
+            markWorkUnitVmOpenCold({ department_id: departmentId, work_unit_id: workUnitId });
             return;
         }
         seededWorkUnitShellRef.current = true;
         setWorkUnitPageSeededFromCache(true);
+        markWorkUnitVmOpenWarm({ department_id: departmentId, work_unit_id: workUnitId });
         setDept(pageCacheHitEarly.dept);
         setWorkUnit(pageCacheHitEarly.workUnit as WorkUnitRow);
         setError(null);
@@ -1772,7 +1793,19 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     if (pendingQueueTabPerfRef.current && typeof window !== "undefined" && typeof performance !== "undefined") {
                         pendingQueueTabPerfRef.current = false;
                         alloyPerfSet("queue_tab_rows_ready", performance.now());
+                        markWorkUnitVmPillSwitchApply({
+                            department_id: departmentId,
+                            work_unit_id: workUnitId,
+                            queue_key: apiQueueKey,
+                            source: "lease_cache",
+                        });
                     }
+                    markWorkUnitVmQueueReady({
+                        department_id: departmentId,
+                        work_unit_id: workUnitId,
+                        queue_key: apiQueueKey,
+                        source: "lease_cache",
+                    });
                     markFirstUsefulPaintOnce();
                     primaryLaneRowsSettledOnceRef.current = true;
                     if (shouldStaleBackgroundRefresh(ent.fetchedAt)) {
@@ -1942,7 +1975,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     if (pendingQueueTabPerfRef.current && typeof window !== "undefined" && typeof performance !== "undefined") {
                         pendingQueueTabPerfRef.current = false;
                         requestAnimationFrame(() => {
-                            requestAnimationFrame(() => alloyPerfSet("queue_tab_rows_ready", performance.now()));
+                            requestAnimationFrame(() => {
+                                alloyPerfSet("queue_tab_rows_ready", performance.now());
+                                markWorkUnitVmPillSwitchApply({
+                                    department_id: departmentId,
+                                    work_unit_id: workUnitId,
+                                    queue_key: apiQueueKey,
+                                    source: "network",
+                                });
+                            });
                         });
                     }
                     if (typeof window !== "undefined") {
@@ -2034,7 +2075,17 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     if (pendingQueueTabPerfRef.current && typeof window !== "undefined" && typeof performance !== "undefined") {
                         pendingQueueTabPerfRef.current = false;
                         alloyPerfSet("queue_tab_rows_ready", performance.now());
+                        markWorkUnitVmPillSwitchApply({
+                            department_id: departmentId,
+                            work_unit_id: workUnitId,
+                            source: "row_cache",
+                        });
                     }
+                    markWorkUnitVmQueueReady({
+                        department_id: departmentId,
+                        work_unit_id: workUnitId,
+                        source: "row_cache",
+                    });
                     return;
                 }
                 // No cache entry (expired or evicted) even though sig matches.
@@ -2408,6 +2459,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
             if (typeof window !== "undefined" && typeof performance !== "undefined") {
                 pendingQueueTabPerfRef.current = true;
                 alloyPerfSet("queue_tab_change_start", performance.now());
+                markWorkUnitVmPillSwitchStart({
+                    department_id: departmentId,
+                    work_unit_id: workUnitId,
+                    from_pill: prevKey,
+                    to_pill: nextKey,
+                });
             }
             if (!sameQueue) {
                 const clearedFilters = clearLaneScopedWorkUnitRecordFilters(recordFiltersRef.current);
@@ -2468,6 +2525,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     setQueueItems(cachedLane);
                     setQueueItemsError(null);
                     setQueueItemsLoading(false);
+                    markWorkUnitVmPillSwitchCacheHit({
+                        department_id: departmentId,
+                        work_unit_id: workUnitId,
+                        pill_key: nextKey,
+                    });
                 }
                 suppressQueueFetchEffectOnceRef.current = true;
                 void fetchQueueItems(workUnitId, nextKey, null, {
@@ -3018,6 +3080,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         setQueueSummaries(qs);
                         setQueueSummariesError(null);
                         setQueueSummariesRoute(buildWorkUnitQueuesListRoute(workUnitId, selectedSiteId));
+                        markWorkUnitVmBootstrapApply({ department_id: departmentId, work_unit_id: workUnitId });
+                        markWorkUnitVmShellReady({ department_id: departmentId, work_unit_id: workUnitId });
+                        markWorkUnitVmSummariesReady({
+                            department_id: departmentId,
+                            work_unit_id: workUnitId,
+                            pill_count: qs.length,
+                        });
                         setWuQueueLaneAuthorityReady(true);
 
                         const lifecycleSiblingsMerged = mergeLifecycleSiblingHydrationBlock(
@@ -5763,6 +5832,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
         markWorkUnitLaneHeaderChipsReal({ departmentId, workUnitId });
         markWorkUnitAboveFoldCoordinated({ departmentId, workUnitId });
         markRouteFirstAboveFoldStable("work_unit", { departmentId, workUnitId });
+        markWorkUnitVmFirstPaintReady({
+            department_id: departmentId,
+            work_unit_id: workUnitId,
+            queue_key: selectedQueueKey,
+        });
         if (typeof performance !== "undefined" && typeof window !== "undefined") {
             const navStart = alloyPerfGet("work_unit_navigation_start") ?? alloyPerfGet("work_unit_start");
             perfWorkUnitLoad({
@@ -5775,6 +5849,52 @@ export default function AdminV2OpportunityWorkUnitPage() {
             });
         }
     }, [workUnitAboveFoldPageReady, departmentId, workUnitId, selectedQueueKey]);
+
+    useEffect(() => {
+        if (!workUnitAboveFoldPageReady || !workUnit || !dept) return;
+        const sig = `${workUnitId}:${selectedQueueKey ?? ""}:${workUnitAboveFoldPageReady}`;
+        if (workUnitVmShadowSigRef.current === sig) return;
+        workUnitVmShadowSigRef.current = sig;
+        scheduleWorkUnitViewModelShadow({
+            departmentId,
+            workUnitId,
+            workUnitKey: workUnit.key ?? "",
+            selectedQueueKey,
+            queueSummaries:
+                queueSummaries?.map((q) => ({ key: q.key, count: q.count })) ?? null,
+            queueSummariesError,
+            queueItems: queueItems as { items?: unknown[] } | null,
+            queueItemsLoading,
+            queueLaneRevealState: workUnitLaneReveal.state,
+            workUnitAboveFold,
+            queueModel,
+            kpiMetrics: mergedWorkspaceModel?.kpis ?? [],
+            kpiMetricsPending: workUnitKpiMetricsPending,
+            kpiStripVisible: !suppressWorkUnitKpiStrip,
+            shellReady: workUnitShellReady,
+            enrollmentActionsSettled: enrollmentActionsSettled,
+            firstPaintSettled: workUnitAboveFoldPageReady,
+        });
+    }, [
+        workUnitAboveFoldPageReady,
+        departmentId,
+        workUnitId,
+        workUnit,
+        dept,
+        selectedQueueKey,
+        queueSummaries,
+        queueSummariesError,
+        queueItems,
+        queueItemsLoading,
+        workUnitLaneReveal.state,
+        workUnitAboveFold,
+        queueModel,
+        mergedWorkspaceModel?.kpis,
+        workUnitKpiMetricsPending,
+        suppressWorkUnitKpiStrip,
+        workUnitShellReady,
+        enrollmentActionsSettled,
+    ]);
 
     useEffect(() => {
         if (!workUnitAboveFoldPageReady || !workUnitId) return;
@@ -5882,6 +6002,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
             markWorkUnitLaneKpiPlaceholder();
         } else if (wuPlacementRows !== undefined) {
             markWorkUnitLaneKpiReal({ departmentId, workUnitId });
+            markWorkUnitVmKpiReady({
+                department_id: departmentId,
+                work_unit_id: workUnitId,
+                placement_count: wuPlacementRows.length,
+            });
         }
     }, [wuPlacementRows, workUnitKpiMetricsPending, departmentId, workUnitId]);
 

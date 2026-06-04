@@ -81,29 +81,31 @@ describe("drawerShellPinnedModelSwap", () => {
 });
 
 describe("AdminDrawerContext shell-pinned swap wiring", () => {
-    it("exports drawerModelSwapGeneration and sync cache peek path", async () => {
+    it("exports drawer runtime phase machine and sync cache peek path", async () => {
         const { readFileSync } = await import("node:fs");
         const { join, dirname } = await import("node:path");
         const { fileURLToPath } = await import("node:url");
         const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
         const ctx = readFileSync(join(webRoot, "contexts/AdminDrawerContext.tsx"), "utf8");
-        expect(ctx).toContain("drawerModelSwapGeneration");
+        expect(ctx).toContain("drawerRuntimePhase");
+        expect(ctx).toContain("completeDrawerRuntimeTransition");
         expect(ctx).toContain("peekDrawerViewModelPreloadSync");
         expect(ctx).toContain("drawer_vm_model_swap_apply");
+        expect(ctx).toContain("attachDrawerSwapPreload");
     });
 
-    it("AdminEntityDrawer suppresses gate loading during shell-pinned VM swap", async () => {
+    it("AdminEntityDrawer suppresses gate loading during swap transition phases", async () => {
         const { readFileSync } = await import("node:fs");
         const { join, dirname } = await import("node:path");
         const { fileURLToPath } = await import("node:url");
         const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
         const drawer = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(drawer).toContain("drawerModelSwapGeneration");
-        expect(drawer).toContain("drawerShellPinnedVmSwapActive");
-        expect(drawer).toMatch(/drawerGateLoading[\s\S]*drawerShellPinnedVmSwapActive[\s\S]*return false/);
+        expect(drawer).toContain("suppressFullDrawerLoading");
+        expect(drawer).toMatch(/suppressFullDrawerLoading[\s\S]*return false/);
         expect(drawer).toContain("opportunityDrawerPrimaryLoadingVisible");
         expect(drawer).toContain("opportunityDrawerViewModelOpenRef.current === drawer.id");
         expect(drawer).toContain("warmRelatedDrawerViewModels");
         expect(drawer).toContain("applyPersonDrawerPreload");
+        expect(drawer).toContain("completeDrawerRuntimeTransition");
     });
 });
