@@ -28,7 +28,7 @@ export type WorkUnitVmRuntimeDiagnosticEvent =
 
 export function logWorkUnitVmRuntimeDiagnostic(
     event: WorkUnitVmRuntimeDiagnosticEvent,
-    payload: Record<string, unknown>
+    payload: Record<string, unknown> = {}
 ): void {
     if (typeof console === "undefined" || typeof console.info !== "function") return;
     console.info(`[${event}]`, {

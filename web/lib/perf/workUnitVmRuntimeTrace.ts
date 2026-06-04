@@ -191,11 +191,11 @@ export function markWorkUnitVmPillSwitchCommitted(extra?: Record<string, unknown
 }
 
 export function markWorkUnitVmPillPrefetchStart(extra?: Record<string, unknown>): void {
-    logWorkUnitVmRuntimeDiagnostic("wu_vm_pill_prefetch_start", extra);
+    logWorkUnitVmRuntimeDiagnostic("wu_vm_pill_prefetch_start", extra ?? {});
 }
 
 export function markWorkUnitVmPillPrefetchReady(extra?: Record<string, unknown>): void {
-    logWorkUnitVmRuntimeDiagnostic("wu_vm_pill_prefetch_ready", extra);
+    logWorkUnitVmRuntimeDiagnostic("wu_vm_pill_prefetch_ready", extra ?? {});
 }
 
 export function markWorkUnitVmPillSwitchApply(extra?: Record<string, unknown>): void {
