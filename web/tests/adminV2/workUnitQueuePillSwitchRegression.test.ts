@@ -17,6 +17,20 @@ describe("workUnitQueuePillSwitchRegression", () => {
         );
     });
 
+    it("holds current lane visible on pill cache miss", () => {
+        const src = readFileSync(PAGE, "utf8");
+        expect(src).toContain("markWorkUnitVmPillSwitchCacheMissHoldCurrent");
+        expect(src).toContain("lifecyclePillSwitchRetainRowsRef.current = true");
+        expect(src).toContain("if (options?.userInitiated) return prev");
+    });
+
+    it("prefetches valid lanes after first paint", () => {
+        const src = readFileSync(PAGE, "utf8");
+        expect(src).toContain("workUnitLanePrefetchTargets");
+        expect(src).toContain("markWorkUnitVmPillPrefetchStart");
+        expect(src).toContain("workUnitRowOverride");
+    });
+
     it("fetch finally clears loading when no leases remain (anti-freeze)", () => {
         const src = readFileSync(PAGE, "utf8");
         expect(src).toContain("queueRowLeaseSigsRef.current.size === 0");

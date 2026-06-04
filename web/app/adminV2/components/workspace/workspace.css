@@ -552,18 +552,21 @@
   position: sticky;
   top: 0;
   z-index: 4;
+  border-color: color-mix(in srgb, var(--d-pine) 8%, var(--d-border));
   border-left-width: 3px;
-  border-left-color: color-mix(in srgb, var(--d-brand) 24%, color-mix(in srgb, var(--d-pine) 52%, var(--d-border)));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.92),
-    0 1px 5px rgba(39, 63, 82, 0.042);
+  border-left-color: color-mix(in srgb, var(--d-pine) 30%, var(--d-border));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  background: linear-gradient(92deg,
+      color-mix(in srgb, var(--d-pine) 3.5%, #ffffff) 0%,
+      color-mix(in srgb, var(--d-pine) 1.2%, #ffffff) 24%,
+      var(--ws-dept-surface-solid, #ffffff) 48%);
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack:not(:last-child) {
-  border-bottom-color: color-mix(in srgb, var(--d-brand) 11%, color-mix(in srgb, var(--d-pine) 12%, var(--d-border)));
-  background: linear-gradient(180deg,
-      color-mix(in srgb, #ffffff 98%, var(--d-brand)) 0%,
-      transparent 74%);
+  border-bottom-color: color-mix(in srgb, var(--d-border) 72%, transparent);
+  background: linear-gradient(92deg,
+      color-mix(in srgb, var(--d-pine) 2.5%, #ffffff) 0%,
+      transparent 38%);
 }
 
 .adminv2-ws-root-departments-zone {
@@ -7147,11 +7150,12 @@
   gap: 0;
   width: 100%;
   min-width: 0;
-  border: 1px solid color-mix(in srgb, var(--d-border, #d4d0c8) 55%, transparent);
+  border: 1px solid color-mix(in srgb, var(--alloy-teal, #0d9488) 10%, var(--d-border, #d4d0c8) 90%);
+  border-left: 2px solid color-mix(in srgb, var(--alloy-teal, #0d9488) 30%, transparent);
   border-radius: 4px;
   padding: 0;
   overflow: visible;
-  background: var(--d-surface, #fff);
+  background: color-mix(in srgb, var(--alloy-teal, #0d9488) 1%, var(--d-surface, #fff) 99%);
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__header-zone,
@@ -7162,7 +7166,7 @@
   min-width: 0;
   padding: 4px 6px 6px;
   border-bottom: 1px solid color-mix(in srgb, var(--d-border, #d4d0c8) 68%, transparent);
-  background: color-mix(in srgb, var(--d-border, #d4d0c8) 9%, var(--d-surface, #fff) 91%);
+  background: color-mix(in srgb, var(--alloy-teal, #0d9488) 2%, var(--d-surface, #fff) 98%);
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__header-grid,
@@ -7291,6 +7295,43 @@
   padding: 0 4px;
 }
 
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__header-waitlist-ops,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-queue-operational-record__header-waitlist-ops {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0;
+  min-width: 0;
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--d-fg, #1a1a2e) 76%, transparent);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2
+  .adminv2-ws-queue-operational-record__header-waitlist-ops
+  .adminv2-ws-queue-waitlist-left-meta__position,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit
+  .adminv2-ws-queue-operational-record__header-waitlist-ops
+  .adminv2-ws-queue-waitlist-left-meta__position {
+  font-weight: 600;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2
+  .adminv2-ws-queue-operational-record__header-waitlist-ops
+  .adminv2-ws-queue-waitlist-left-meta__adjust,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit
+  .adminv2-ws-queue-operational-record__header-waitlist-ops
+  .adminv2-ws-queue-waitlist-left-meta__adjust,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2
+  .adminv2-ws-queue-operational-record__header-waitlist-ops
+  .adminv2-ws-queue-waitlist-left-meta__reset,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit
+  .adminv2-ws-queue-operational-record__header-waitlist-ops
+  .adminv2-ws-queue-waitlist-left-meta__reset {
+  font-size: inherit;
+  line-height: inherit;
+}
+
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__header-subline,
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-queue-operational-record__header-subline {
   padding: 0;
@@ -7353,8 +7394,31 @@
   box-shadow: none;
 }
 
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__household-cell,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-queue-operational-record__household-cell {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__household-icon,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-queue-operational-record__household-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--d-pine, #0d9488) 14%, var(--d-surface, #fff));
+  color: color-mix(in srgb, var(--d-pine, #0d9488) 72%, var(--d-fg));
+  border: 1px solid color-mix(in srgb, var(--d-pine, #0d9488) 22%, transparent);
+}
+
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__household,
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-queue-operational-record__household {
+  flex: 1 1 auto;
   min-width: 0;
   font-size: 13px;
   font-weight: 700;
@@ -7597,8 +7661,31 @@
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-queue-operational-record__facts-band {
   padding: 3px 6px 4px;
   border-top: none;
-  background: color-mix(in srgb, var(--d-muted, #6b7280) 3.5%, var(--d-surface, #fff) 96.5%);
+  background: color-mix(in srgb, var(--d-muted, #6b7280) 2%, var(--d-surface, #fff) 98%);
   min-width: 0;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__lifecycle-band,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-queue-operational-record__lifecycle-band {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 3px 6px 4px;
+  border-top: 1px solid color-mix(in srgb, var(--d-border, #d4d0c8) 55%, transparent);
+  background: color-mix(in srgb, var(--d-muted, #6b7280) 2%, var(--d-surface, #fff) 98%);
+  min-width: 0;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2
+  .adminv2-ws-queue-operational-record__lifecycle-band
+  .adminv2-ws-queue-waitlist-left-meta,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit
+  .adminv2-ws-queue-operational-record__lifecycle-band
+  .adminv2-ws-queue-waitlist-left-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record .adminv2-ws-queue-fact-group,
@@ -7846,6 +7933,29 @@
   min-width: 0;
   max-width: 100%;
   overflow-wrap: anywhere;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2
+  .adminv2-ws-crm-queue-preview
+  .adminv2-ws-queue-fact-group[data-fact-kind="children_programs"]
+  .adminv2-ws-queue-fact-field-col[data-fact-col-key="program"]
+  .adminv2-ws-queue-fact-value,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2
+  .adminv2-ws-crm-queue-preview
+  .adminv2-ws-queue-fact-group[data-fact-kind="children_programs"]
+  .adminv2-ws-queue-fact-field-col[data-fact-col-key="program"]
+  .adminv2-ws-queue-fact-line,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit
+  .adminv2-ws-crm-queue-preview
+  .adminv2-ws-queue-fact-group[data-fact-kind="children_programs"]
+  .adminv2-ws-queue-fact-field-col[data-fact-col-key="program"]
+  .adminv2-ws-queue-fact-value,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit
+  .adminv2-ws-crm-queue-preview
+  .adminv2-ws-queue-fact-group[data-fact-kind="children_programs"]
+  .adminv2-ws-queue-fact-field-col[data-fact-col-key="program"]
+  .adminv2-ws-queue-fact-line {
+  color: color-mix(in srgb, var(--d-pine) 18%, var(--d-text-primary, #273f52));
 }
 
 /* After general fact-line defaults: contact email stays one visual line in the row (override overflow-wrap). */

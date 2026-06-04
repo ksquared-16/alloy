@@ -117,6 +117,20 @@ function HeaderInlineSep() {
     );
 }
 
+function QueueRowHouseholdIcon() {
+    return (
+        <span
+            className="adminv2-ws-queue-operational-record__household-icon"
+            aria-hidden="true"
+            data-testid="queue-header-household-icon"
+        >
+            <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor" focusable="false">
+                <path d="M8 1.5 1.5 6.5v8h4v-4.5h5V14.5h4v-8L8 1.5z" />
+            </svg>
+        </span>
+    );
+}
+
 /** V3.5 — header grid: household | attention column (2 rows) | location */
 export function QueueRowCompactOperationalHeader({
     slots,
@@ -124,12 +138,14 @@ export function QueueRowCompactOperationalHeader({
     statusDisplay,
     urgencyTier = "standard",
     operationalAttentionBadge = false,
+    waitlistCandidateRow,
 }: {
     slots: CrmCompactRowSemanticSlots;
     plan: WorkUnitQueueRowPresentationPlan;
     statusDisplay: string | null;
     urgencyTier?: QueueItemVm["urgencyTier"];
     operationalAttentionBadge?: boolean;
+    waitlistCandidateRow?: QueueRowPlacementWaitlistCandidateVm | null;
 }) {
     const statusLabel = statusDisplay?.trim() || null;
     const enrollmentInline = plan.headerInline.enrollmentAttention;
@@ -150,14 +166,17 @@ export function QueueRowCompactOperationalHeader({
             data-queue-zone="summary"
         >
             <div className="adminv2-ws-queue-operational-record__header-grid">
-                <span
-                    className="adminv2-ws-queue-operational-record__household"
-                    title={slots.primaryIdentity}
-                    data-testid="queue-header-household"
-                    data-queue-preview-slot="header_household"
-                >
-                    {slots.primaryIdentity}
-                </span>
+                <div className="adminv2-ws-queue-operational-record__household-cell">
+                    <QueueRowHouseholdIcon />
+                    <span
+                        className="adminv2-ws-queue-operational-record__household"
+                        title={slots.primaryIdentity}
+                        data-testid="queue-header-household"
+                        data-queue-preview-slot="header_household"
+                    >
+                        {slots.primaryIdentity}
+                    </span>
+                </div>
 
                 <div
                     className="adminv2-ws-queue-operational-record__header-attention-column"
@@ -215,6 +234,12 @@ export function QueueRowCompactOperationalHeader({
                                 </>
                             ) : null}
                         </div>
+                    ) : null}
+                    {waitlistCandidateRow ? (
+                        <QueueRowPlacementManualOrderControls
+                            row={waitlistCandidateRow}
+                            layout="header-inline"
+                        />
                     ) : null}
                     {headerSubline ? (
                         <div
@@ -335,6 +360,7 @@ export function QueueRowLifecycleOperationalBand({
     waitlistPlacementV2,
     waitlistCandidateRow,
     waitlistStatusLabel,
+    suppressCandidateContext = false,
 }: {
     slots: CrmCompactRowSemanticSlots;
     section: WorkUnitQueueRowLifecycleSection;
@@ -343,6 +369,8 @@ export function QueueRowLifecycleOperationalBand({
     waitlistPlacementV2?: QueueRowPlacementPriorityV2Vm;
     waitlistCandidateRow?: QueueRowPlacementWaitlistCandidateVm;
     waitlistStatusLabel?: string;
+    /** Skip sibling context when already shown in header subline. */
+    suppressCandidateContext?: boolean;
 }) {
     if (!section.waitlistPlacement && !section.waitlistCandidate && !section.waitlistHouseholdContext) {
         return null;
@@ -366,7 +394,9 @@ export function QueueRowLifecycleOperationalBand({
             {section.waitlistCandidate && waitlistCandidateRow ? (
                 <>
                     <QueueRowPlacementManualOrderControls row={waitlistCandidateRow} layout="inline" />
-                    <QueueRowPlacementCandidateContext row={waitlistCandidateRow} />
+                    {!suppressCandidateContext ? (
+                        <QueueRowPlacementCandidateContext row={waitlistCandidateRow} />
+                    ) : null}
                     <QueueRowPlacementCandidateMetaChips row={waitlistCandidateRow} siteLabel={slots.locationContext} />
                 </>
             ) : null}

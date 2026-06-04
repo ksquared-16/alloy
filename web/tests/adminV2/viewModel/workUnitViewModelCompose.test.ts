@@ -12,7 +12,9 @@ import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import {
     buildWorkUnitViewModelCacheKey,
     clearWorkUnitViewModelSessionCacheForTests,
+    peekWorkUnitLaneCacheEntry,
     peekWorkUnitViewModelCacheEntry,
+    putWorkUnitLaneCacheEntry,
     putWorkUnitViewModelCacheEntry,
 } from "@/lib/adminV2/viewModel/workUnit/workUnitViewModelSessionCache";
 
@@ -230,6 +232,28 @@ describe("workUnitViewModelSessionCache", () => {
                 expectedGeneration: "stale-generation",
             })
         ).toBeNull();
+        clearWorkUnitViewModelSessionCacheForTests();
+    });
+
+    it("lane cache stores queue payload under lane key", () => {
+        clearWorkUnitViewModelSessionCacheForTests();
+        const context = { orgId: "org-1", departmentId: "dept-1", workUnitId: "wu-1" };
+        const lane = {
+            selectedQueueKey: "follow_up",
+            attentionBucketKey: null,
+            laneUnmappedOnly: false,
+            recordFilterFingerprint: "_",
+        };
+        putWorkUnitLaneCacheEntry(
+            {
+                queuePayload: { items: [{ id: "1" }], queue: { key: "follow_up" } },
+                generation: "wu-1:follow_up",
+                lane,
+            },
+            context
+        );
+        const hit = peekWorkUnitLaneCacheEntry({ context, lane });
+        expect(hit?.queuePayload.items).toHaveLength(1);
         clearWorkUnitViewModelSessionCacheForTests();
     });
 });

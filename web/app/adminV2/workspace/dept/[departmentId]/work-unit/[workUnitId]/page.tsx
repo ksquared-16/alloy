@@ -284,8 +284,11 @@ import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackg
 import {
     flattenWorkUnitVisibleQueuePillKeys,
     WORK_UNIT_QUEUE_PILL_PREFETCH_CONCURRENCY,
-    workUnitQueuePillPrefetchTargets,
+    workUnitLanePrefetchTargets,
 } from "@/lib/adminV2/workUnitQueuePillPrefetch";
+import {
+    putWorkUnitLaneCacheEntry,
+} from "@/lib/adminV2/viewModel/workUnit/workUnitViewModelSessionCache";
 import { queueRowHasOperationalAttention } from "@/lib/adminV2/workUnitQueueRowAttention";
 import {
     clearWorkUnitBootstrapSessionForEntity,
@@ -318,6 +321,10 @@ import {
     markWorkUnitVmOpenWarm,
     markWorkUnitVmPillSwitchApply,
     markWorkUnitVmPillSwitchCacheHit,
+    markWorkUnitVmPillSwitchCacheMissHoldCurrent,
+    markWorkUnitVmPillSwitchCommitted,
+    markWorkUnitVmPillPrefetchReady,
+    markWorkUnitVmPillPrefetchStart,
     markWorkUnitVmPillSwitchStart,
     markWorkUnitVmQueueReady,
     markWorkUnitVmRightRailActionsReady,
@@ -963,6 +970,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
     >(null);
     const [lifecycleSiblingsHydrationComplete, setLifecycleSiblingsHydrationComplete] = useState(false);
     const [lifecycleSiblingTotalsById, setLifecycleSiblingTotalsById] = useState<Record<string, number>>({});
+    const lifecycleSiblingWorkUnitsRef = useRef<LifecycleSiblingWorkUnitNavRow[] | null>(null);
+    lifecycleSiblingWorkUnitsRef.current = lifecycleSiblingWorkUnits;
 
     useEffect(() => {
         if (consumeLifecycleWorkUnitSwitchPreserveSiblingsFlag() && orgId && departmentId) {
@@ -1696,18 +1705,32 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 /** User pill click — bypass in-flight lease and always fetch/apply for target lane. */
                 userInitiated?: boolean;
                 fromQueueKey?: string | null;
+                /** Prefetch/sibling fetch — use this work unit row for queue_definition guard. */
+                workUnitRowOverride?: {
+                    queue_definition?: unknown;
+                    metadata?: unknown;
+                } | null;
             }
         ) => {
+            const workUnitRowForGuard =
+                options?.workUnitRowOverride ??
+                (workUnitRef.current ?
+                    {
+                        queue_definition: workUnitRef.current.queue_definition,
+                        metadata: workUnitRef.current.metadata,
+                    }
+                :   null);
             const guarded = guardLifecycleQueueFetchBeforeApi({
                 workUnitId,
                 attemptedQueueKey: queueKey,
-                workUnit: workUnitRef.current
-                    ? {
-                          id: workUnitRef.current.id,
-                          queue_definition: workUnitRef.current.queue_definition,
-                          metadata: workUnitRef.current.metadata,
-                      }
-                    : null,
+                workUnit:
+                    workUnitRowForGuard ?
+                        {
+                            id: workUnitId,
+                            queue_definition: workUnitRowForGuard.queue_definition,
+                            metadata: workUnitRowForGuard.metadata,
+                        }
+                    :   null,
                 attentionBucketKey:
                     options?.attentionBucketOverride !== undefined
                         ? String(options.attentionBucketOverride ?? "").trim()
@@ -1802,6 +1825,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             queue_key: apiQueueKey,
                             source: "lease_cache",
                         });
+                        markWorkUnitVmPillSwitchCommitted({
+                            department_id: departmentId,
+                            work_unit_id: workUnitId,
+                            queue_key: apiQueueKey,
+                            source: "lease_cache",
+                        });
                     }
                     markWorkUnitVmQueueReady({
                         department_id: departmentId,
@@ -1881,6 +1910,24 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     attentionBucketMatches;
                 if (options?.prefetchOnly) {
                     putQueueRowCache(cache, viewScopeFingerprint, workUnitId, apiQueueKey, payload, abSnap);
+                    putWorkUnitLaneCacheEntry(
+                        {
+                            queuePayload: payload,
+                            generation: `${workUnitId}:${apiQueueKey}`,
+                            lane: {
+                                selectedQueueKey: queueKeyForLane,
+                                attentionBucketKey: abSnap || null,
+                                laneUnmappedOnly: logicalUm,
+                                recordFilterFingerprint: "_",
+                            },
+                        },
+                        {
+                            orgId,
+                            departmentId,
+                            workUnitId,
+                            scopeFingerprint: viewScopeFingerprint,
+                        }
+                    );
                     return;
                 }
                 if (options?.quietStaleRefresh) {
@@ -1950,6 +1997,24 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         await hydrateWorkUnitQueueRowActions();
                     }
                     putQueueRowCache(cache, viewScopeFingerprint, workUnitId, apiQueueKey, payload, abSnap);
+                    putWorkUnitLaneCacheEntry(
+                        {
+                            queuePayload: payload,
+                            generation: `${workUnitId}:${apiQueueKey}`,
+                            lane: {
+                                selectedQueueKey: queueKeyForLane,
+                                attentionBucketKey: abSnap || null,
+                                laneUnmappedOnly: logicalUm,
+                                recordFilterFingerprint: "_",
+                            },
+                        },
+                        {
+                            orgId,
+                            departmentId,
+                            workUnitId,
+                            scopeFingerprint: viewScopeFingerprint,
+                        }
+                    );
                     setQueueItems(payload);
                     lifecyclePillSwitchRetainRowsRef.current = false;
                     setLifecyclePillRetainRows(false);
@@ -1973,6 +2038,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             record_count: items.length,
                             total: typeof payload.total === "number" ? payload.total : null,
                             api_path: route,
+                        });
+                        markWorkUnitVmPillSwitchCommitted({
+                            department_id: departmentId,
+                            work_unit_id: workUnitId,
+                            queue_key: apiQueueKey,
+                            pill_key: queueKeyForLane,
+                            source: "network",
                         });
                     }
                     if (pendingQueueTabPerfRef.current && typeof window !== "undefined" && typeof performance !== "undefined") {
@@ -2083,6 +2155,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             work_unit_id: workUnitId,
                             source: "row_cache",
                         });
+                        markWorkUnitVmPillSwitchCommitted({
+                            department_id: departmentId,
+                            work_unit_id: workUnitId,
+                            source: "row_cache",
+                        });
                     }
                     markWorkUnitVmQueueReady({
                         department_id: departmentId,
@@ -2114,6 +2191,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             setQueueItemsRoute(route);
             setQueueItems((prev) => {
                 if (lifecyclePillSwitchRetainRowsRef.current) return prev;
+                if (options?.userInitiated) return prev;
                 const pk =
                     prev?.queue && typeof (prev.queue as { key?: string }).key === "string"
                         ? (prev.queue as { key: string }).key
@@ -2532,6 +2610,21 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         department_id: departmentId,
                         work_unit_id: workUnitId,
                         pill_key: nextKey,
+                    });
+                    markWorkUnitVmPillSwitchCommitted({
+                        department_id: departmentId,
+                        work_unit_id: workUnitId,
+                        pill_key: nextKey,
+                        source: "lane_cache",
+                    });
+                } else {
+                    lifecyclePillSwitchRetainRowsRef.current = true;
+                    setLifecyclePillRetainRows(true);
+                    markWorkUnitVmPillSwitchCacheMissHoldCurrent({
+                        department_id: departmentId,
+                        work_unit_id: workUnitId,
+                        from_pill: prevKey,
+                        to_pill: nextKey,
                     });
                 }
                 suppressQueueFetchEffectOnceRef.current = true;
@@ -4419,13 +4512,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     )
             );
         const laneMayPaint = workUnitLaneReveal.mayPaintRows;
-        const rowsRefreshing = resolveWorkUnitQueueRowsRefreshing({
-            lane_reveal_settled: laneMayPaint,
-            queue_items_loading: queueItemsLoading,
-            bootstrap_loading: loading,
-        });
         const lifecycleRetainPaint =
             lifecyclePillRetainRows && queueItemsLoading && liveVmItems.length > 0;
+        const rowsRefreshing =
+            lifecycleRetainPaint ?
+                false
+            :   resolveWorkUnitQueueRowsRefreshing({
+                    lane_reveal_settled: laneMayPaint,
+                    queue_items_loading: queueItemsLoading,
+                    bootstrap_loading: loading,
+                });
         const displayItems = laneMayPaint
             ? liveVmItems
             : lifecycleRetainPaint
@@ -5988,42 +6084,82 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
     const queuePillPrefetchSigRef = useRef("");
     useEffect(() => {
-        if (!workUnitAboveFoldPageReady || !workUnitId || !visibleQueuePillKeys.length) return;
-        const pillKeys = workUnitQueuePillPrefetchTargets(visibleQueuePillKeys, selectedQueueKey, 6);
-        if (!pillKeys.length) return;
-        const sig = `${workUnitId}|${viewScopeFingerprint}|${selectedQueueKey ?? ""}|${pillKeys.join(",")}`;
+        if (!workUnitAboveFoldPageReady || !workUnitId || !workUnit || !visibleQueuePillKeys.length) return;
+        const targets = workUnitLanePrefetchTargets({
+            visiblePillKeys: visibleQueuePillKeys,
+            selectedPillKey: selectedQueueKey,
+            workUnit: {
+                id: workUnit.id,
+                queue_definition: workUnit.queue_definition,
+                metadata: workUnit.metadata,
+            },
+            lifecycleSiblings: lifecycleSiblingWorkUnits,
+            cap: 6,
+        });
+        if (!targets.length) return;
+        const sig = `${workUnitId}|${viewScopeFingerprint}|${selectedQueueKey ?? ""}|${targets.map((t) => `${t.workUnitId}:${t.pillKey}`).join(",")}`;
         if (queuePillPrefetchSigRef.current === sig) return;
         queuePillPrefetchSigRef.current = sig;
 
         const cancel = scheduleAdminV2BackgroundWork(
             () => {
+                markWorkUnitVmPillPrefetchStart({
+                    department_id: departmentId,
+                    work_unit_id: workUnitId,
+                    lane_count: targets.length,
+                });
                 let cursor = 0;
+                let readyCount = 0;
                 const workers = Array.from(
-                    { length: Math.min(WORK_UNIT_QUEUE_PILL_PREFETCH_CONCURRENCY, pillKeys.length) },
+                    { length: Math.min(WORK_UNIT_QUEUE_PILL_PREFETCH_CONCURRENCY, targets.length) },
                     async () => {
-                        while (cursor < pillKeys.length) {
-                            const pillKey = pillKeys[cursor++]!;
-                            const resolved = resolveWorkUnitFetchQueueKeyFromPill(pillKey, "");
-                            await fetchQueueItemsRef.current(workUnitId, pillKey, null, {
+                        while (cursor < targets.length) {
+                            const target = targets[cursor++]!;
+                            const rowOverride =
+                                target.workUnitId === workUnitId ?
+                                    {
+                                        queue_definition: workUnit.queue_definition,
+                                        metadata: workUnit.metadata,
+                                    }
+                                :   lifecycleSiblingWorkUnitsRef.current?.find((s) => s.id === target.workUnitId);
+                            const resolved = resolveWorkUnitFetchQueueKeyFromPill(
+                                target.pillKey,
+                                "",
+                                rowOverride?.queue_definition != null ?
+                                    { queue_definition: rowOverride.queue_definition }
+                                :   undefined
+                            );
+                            await fetchQueueItemsRef.current(target.workUnitId, target.pillKey, null, {
                                 prefetchOnly: true,
+                                workUnitRowOverride: rowOverride ?? null,
                                 ...(resolved.attentionBucketOverride !== undefined
                                     ? { attentionBucketOverride: resolved.attentionBucketOverride }
                                     : {}),
                             });
+                            readyCount += 1;
                         }
                     }
                 );
-                void Promise.all(workers);
+                void Promise.all(workers).then(() => {
+                    markWorkUnitVmPillPrefetchReady({
+                        department_id: departmentId,
+                        work_unit_id: workUnitId,
+                        lanes_ready: readyCount,
+                    });
+                });
             },
-            { idleTimeoutMs: 1800, fallbackMs: 450 }
+            { idleTimeoutMs: 1200, fallbackMs: 350 }
         );
         return cancel;
     }, [
         workUnitAboveFoldPageReady,
         workUnitId,
+        workUnit,
+        departmentId,
         visibleQueuePillKeys,
         selectedQueueKey,
         viewScopeFingerprint,
+        lifecycleSiblingWorkUnits,
     ]);
 
     useEffect(() => {

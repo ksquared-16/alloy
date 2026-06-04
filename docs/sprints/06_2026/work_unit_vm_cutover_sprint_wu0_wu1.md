@@ -154,6 +154,35 @@ Single authoritative `WorkUnitViewModel` payload drives above-fold first paint. 
 
 ---
 
+## Phase 4 — Implemented (lane prefetch + pill hold-current)
+
+### Before
+
+- First pill click cleared queue rows (`setQueueItems(null)`) while ~1.8s fetch ran
+- Prefetch could hit invalid keys (`lifecycle_tour`, `lifecycle_wu_nav:*`) → 404
+- Returning to a cached pill was instant; first click was not
+
+### After
+
+- Post-first-paint idle prefetch via `workUnitLanePrefetchTargets` (neighbors + lifecycle sibling primaries)
+- Valid-key guard: `isPrefetchableWorkUnitQueuePillKey` + `listExecutableQueueKeysForWorkUnit`
+- Pill cache hit → instant swap + `wu_vm_pill_switch_committed`
+- Pill cache miss → hold current rows (`lifecyclePillSwitchRetainRows`) + `wu_vm_pill_switch_cache_miss_hold_current`; no shimmer while rows visible
+- Lane payloads stored in `putWorkUnitLaneCacheEntry` (VM session cache) + existing row client cache
+- Row visual warmth: subtle Alloy teal left accent + header tint (no shadows)
+
+### Instrumentation
+
+| Event | When |
+|-------|------|
+| `wu_vm_pill_prefetch_start` | Background lane warm begins |
+| `wu_vm_pill_prefetch_ready` | Prefetch batch finished |
+| `wu_vm_pill_switch_cache_hit` | Pill click served from cache |
+| `wu_vm_pill_switch_cache_miss_hold_current` | Miss — prior lane held |
+| `wu_vm_pill_switch_committed` | Target lane rows committed |
+
+---
+
 ## Track B — Queue UX (header consolidation)
 
 ### This pass

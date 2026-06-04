@@ -1105,6 +1105,7 @@ function CrmCompactOperationalRecord({
         }
         urgencyTier={urgencyTier}
         operationalAttentionBadge={operationalAttentionBadge}
+        waitlistCandidateRow={waitlistCandidateRow ?? null}
       />
       {plan.headerInline.attentionExpanded && plan.bands.includes("attention") ? (
         <QueueRowAttentionSupplementBand
@@ -1112,7 +1113,7 @@ function CrmCompactOperationalRecord({
           lifecycle={plan.lifecycle}
         />
       ) : null}
-      {plan.headerInline.lifecycleExpanded && plan.bands.includes("lifecycle") ? (
+      {plan.bands.includes("lifecycle") ? (
         <QueueRowLifecycleOperationalBand
           slots={slots}
           section={plan.lifecycleSections}
@@ -1121,6 +1122,7 @@ function CrmCompactOperationalRecord({
           waitlistPlacementV2={waitlistPlacementV2}
           waitlistCandidateRow={waitlistCandidateRow}
           waitlistStatusLabel={waitlistStatusLabel}
+          suppressCandidateContext={Boolean(plan.headerInline.waitlistSubline?.trim())}
         />
       ) : null}
       {peopleBandVisible ? (

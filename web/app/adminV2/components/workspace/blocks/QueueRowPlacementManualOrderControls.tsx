@@ -7,7 +7,7 @@ import type { QueueRowPlacementWaitlistCandidateVm } from "@/lib/ui-v2/workspace
 
 type Props = {
     row: QueueRowPlacementWaitlistCandidateVm;
-    layout?: "inline" | "gutter";
+    layout?: "inline" | "gutter" | "header-inline";
 };
 
 type PendingAction = "adjust" | "reset";
@@ -258,6 +258,80 @@ export function QueueRowPlacementManualOrderControls({ row, layout = "inline" }:
                   document.body
               )
             : null;
+
+    if (layout === "header-inline") {
+        return (
+            <>
+                <div
+                    className="adminv2-ws-queue-operational-record__header-waitlist-ops"
+                    data-queue-header-row="waitlist-ops"
+                    data-testid="queue-header-waitlist-ops"
+                    data-queue-placement="waitlist-header-ops"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    {row.runtimePositionLabel ? (
+                        <span
+                            className="adminv2-ws-queue-waitlist-left-meta__position"
+                            data-testid="queue-header-waitlist-position"
+                            title={row.runtimePositionHelp ?? undefined}
+                        >
+                            {row.runtimePositionLabel}
+                        </span>
+                    ) : null}
+                    {row.runtimePositionLabel ? (
+                        <span className="adminv2-ws-queue-operational-record__header-sep" aria-hidden="true">
+                            ·
+                        </span>
+                    ) : null}
+                    <button
+                        type="button"
+                        className="adminv2-ws-queue-waitlist-left-meta__adjust"
+                        title="Adjust waitlist position"
+                        onClick={openAdjust}
+                    >
+                        Adjust position
+                    </button>
+                    {row.hasManualPositionAdjustment ? (
+                        <>
+                            <span className="adminv2-ws-queue-operational-record__header-sep" aria-hidden="true">
+                                ·
+                            </span>
+                            <button
+                                type="button"
+                                className="adminv2-ws-queue-waitlist-left-meta__reset"
+                                title="Clear adjustment"
+                                onClick={openReset}
+                            >
+                                Clear adjustment
+                            </button>
+                        </>
+                    ) : null}
+                    {row.waitSinceLabel ? (
+                        <>
+                            <span className="adminv2-ws-queue-operational-record__header-sep" aria-hidden="true">
+                                ·
+                            </span>
+                            <span
+                                className="adminv2-ws-queue-operational-record__header-waitlist-since"
+                                data-testid="queue-header-waitlist-since"
+                            >
+                                Waitlisted since {row.waitSinceLabel}
+                            </span>
+                        </>
+                    ) : null}
+                    {row.hasManualPositionAdjustment ? (
+                        <span
+                            className="adminv2-ws-queue-placement-v2__override-tag adminv2-ws-queue-placement-v2__manual-adjust-tag"
+                            title={row.manualAdjustmentReason ?? "Manual waitlist position adjustment"}
+                        >
+                            Manually adjusted
+                        </span>
+                    ) : null}
+                </div>
+                {modal}
+            </>
+        );
+    }
 
     if (layout === "gutter") {
         return (

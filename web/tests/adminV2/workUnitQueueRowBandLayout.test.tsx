@@ -180,6 +180,7 @@ describe("operational record V3.2 compact header", () => {
         expect(householdIdx).toBeGreaterThan(-1);
         expect(statusIdx).toBeGreaterThan(householdIdx);
         expect(html).toContain('data-queue-header-layout="attention-column"');
+        expect(html).toContain('data-testid="queue-header-household-icon"');
         expect(html).toContain("Mitchell household");
     });
 
@@ -275,6 +276,81 @@ describe("operational record V3.2 compact header", () => {
         );
         expect(html).toContain("Sibling priority");
         expect(html).not.toContain('data-queue-row-band="lifecycle"');
+    });
+
+    it("renders waitlist candidate adjustment controls in lifecycle band with header subline", () => {
+        const waitlistCandidate: import("@/lib/ui-v2/workspace-types").QueueRowPlacementWaitlistCandidateVm = {
+            placementCandidateId: "pc-wl-1",
+            opportunityId: "opp-wl-1",
+            childDisplayName: "Sam (3y)",
+            familyDisplayName: "Williams Family",
+            parentDisplayName: "Riley Williams",
+            cohortKey: "toddler",
+            cohortLabel: "Toddler",
+            cohortSectionTitle: "Toddler Waitlist",
+            bucketLabel: "Standard family",
+            waitSinceLabel: "06/15/2024",
+            linkModeLabel: null,
+            isSyntheticFallback: false,
+            hasActiveOverride: false,
+            activeOverrideKinds: [],
+            activeOverrides: [],
+            hasManualPositionAdjustment: false,
+            manualAdjustmentReason: null,
+            pinOverrideId: null,
+            shadowMode: false,
+            runtimePosition: 1,
+            runtimePositionTotal: 8,
+            runtimePositionLabel: "Preview position 1/8",
+            forecastHints: [],
+            siblingLabel: "1 sibling also waitlisted",
+            siblingCohorts: [],
+            siblingContextLines: ["Sibling also waitlisted: Riley Williams — Toddler"],
+            siblingContextDiagnostics: null,
+        };
+        const html = renderToStaticMarkup(
+            <CrmCompactQueuePreview
+                scanMode
+                workUnitKey="waitlist"
+                drawerRecordIconHandlers={handlers}
+                waitlistCandidateRow={waitlistCandidate}
+                slots={crmTestSlots({
+                    primaryIdentity: "Williams Family",
+                    statusLabel: "Waitlisted",
+                    locationContext: "North Campus",
+                    contactDisplayName: "Riley Williams",
+                    contactPersonId: "parent-wl",
+                    childrenLines: [{ primary: "Sam (3y)", personId: "child-wl", programInline: "Toddler" }],
+                    crmFactGroups: [
+                        {
+                            kind: "children_programs",
+                            label: "",
+                            columnGrid: {
+                                headers: ["Child", "Program"],
+                                rows: [["Sam (3y)", "Toddler"]],
+                                columnKeys: ["child_name", "program"],
+                            },
+                        },
+                        {
+                            kind: "timing",
+                            label: "Timing",
+                            lines: ["Desired start: Apr 2026"],
+                        },
+                    ],
+                })}
+            />
+        );
+        expect(html).toContain("#1 Standard family");
+        expect(html).toContain("Sibling also waitlisted: Riley Williams — Toddler");
+        expect(html).toContain('data-testid="queue-header-waitlist-reason"');
+        expect(html).toContain('data-testid="queue-header-waitlist-ops"');
+        expect(html).toContain("Adjust position");
+        expect(html).toContain('data-testid="queue-header-waitlist-since"');
+        expect(html).toContain("Waitlisted since 06/15/2024");
+        expect(html).toContain("Desired start: Apr 2026");
+        expect(html).not.toContain('data-queue-row-band="lifecycle"');
+        expect(html).not.toContain('data-queue-placement="candidate-meta"');
+        expect(html).not.toContain('data-queue-placement="candidate-context"');
     });
 
     it("renders waitlist child drawer icon when child person id exists", () => {

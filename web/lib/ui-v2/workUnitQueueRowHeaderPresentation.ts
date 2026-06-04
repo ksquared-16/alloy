@@ -296,11 +296,7 @@ export function buildWaitlistHeaderInlineFromCandidate(
     if (pos != null && bucket) rankingChip = `#${pos} ${bucket}`;
     else if (pos != null) rankingChip = `#${pos}`;
     else if (bucket) rankingChip = bucket;
-    const reasonShort =
-        row.siblingContextLines?.[0]?.trim() ||
-        row.linkModeLabel?.trim() ||
-        row.forecastHints[0]?.trim() ||
-        null;
+    const reasonShort = row.linkModeLabel?.trim() || row.forecastHints[0]?.trim() || null;
     return {
         rankingChip,
         reasonShort,

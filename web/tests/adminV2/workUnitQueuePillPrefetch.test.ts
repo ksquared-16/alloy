@@ -1,56 +1,32 @@
 import { describe, expect, it } from "vitest";
 
 import {
-    adjacentWorkUnitQueuePillKeys,
-    flattenWorkUnitVisibleQueuePillKeys,
+    filterPrefetchableWorkUnitQueuePillKeys,
+    isPrefetchableWorkUnitQueuePillKey,
+    workUnitLanePrefetchTargets,
     workUnitQueuePillPrefetchTargets,
 } from "@/lib/adminV2/workUnitQueuePillPrefetch";
-import { queueRowLogicalCacheKey } from "@/lib/workspace/queueRowClientCache";
+import { loadQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
+import { buildLifecycleWaitlistStageQueueDefinition } from "@/lib/lifecycle/lifecycleStageQueuePresentation";
+import { lifecycleWorkUnitNavChipKey } from "@/lib/lifecycle/lifecycleWorkUnitShellPills";
 
-describe("adjacentWorkUnitQueuePillKeys", () => {
-    const summaries = [
-        { key: "needs_attention" },
-        { key: "pipeline" },
-        { key: "stalled" },
-        { key: "all_records" },
-    ];
+const enrollmentRaw = {
+    version: 2,
+    entity_type: "opportunity",
+    queues: [
+        { key: "new_inquiry", label: "New inquiry", priority: 1 },
+        { key: "follow_up", label: "Follow up", priority: 2 },
+        { key: "all_records", label: "All records", priority: 99 },
+    ],
+};
+const waitlistRaw = buildLifecycleWaitlistStageQueueDefinition({
+    stageKey: "waitlist",
+    label: "Waitlist",
+    statusKeys: ["waitlisted"],
+});
+const waitlistPrimaryKey = loadQueueDefinitionBundle(waitlistRaw).normalized.queues[0]!.key;
 
-    it("prefers neighbors of the selected pill", () => {
-        expect(adjacentWorkUnitQueuePillKeys(summaries, "pipeline", 3)).toEqual([
-            "needs_attention",
-            "stalled",
-            "all_records",
-        ]);
-    });
-
-    it("caps breadth", () => {
-        expect(adjacentWorkUnitQueuePillKeys(summaries, "pipeline", 1)).toEqual(["needs_attention"]);
-    });
-
-    it("falls back to first keys when selection is unknown", () => {
-        expect(adjacentWorkUnitQueuePillKeys(summaries, "missing", 2)).toEqual([
-            "needs_attention",
-            "pipeline",
-        ]);
-    });
-
-    it("flattenWorkUnitVisibleQueuePillKeys preserves expanded NA bucket pills", () => {
-        const keys = flattenWorkUnitVisibleQueuePillKeys([
-            {
-                queues: [
-                    { key: "enrolled" },
-                    { key: "__attention_bucket:follow_up_due" },
-                    { key: "__attention_bucket:stale_quote" },
-                ],
-            },
-        ]);
-        expect(keys).toEqual([
-            "enrolled",
-            "__attention_bucket:follow_up_due",
-            "__attention_bucket:stale_quote",
-        ]);
-    });
-
+describe("workUnitQueuePillPrefetch", () => {
     it("workUnitQueuePillPrefetchTargets warms neighbors including NA buckets", () => {
         const visible = [
             "enrolled",
@@ -65,13 +41,60 @@ describe("adjacentWorkUnitQueuePillKeys", () => {
         ]);
     });
 
-    it("cache key includes queue and attention bucket for needs_attention", () => {
-        const fp = "scope:test";
-        expect(queueRowLogicalCacheKey(fp, "wu-1", "needs_attention", false, "follow_up_due")).toBe(
-            `${fp}:wu-1:needs_attention:all:attn:follow_up_due`
+    it("rejects lifecycle work-unit nav chip keys", () => {
+        const nav = lifecycleWorkUnitNavChipKey("wu-sibling");
+        expect(isPrefetchableWorkUnitQueuePillKey(nav, { queue_definition: enrollmentRaw })).toBe(
+            false
         );
-        expect(queueRowLogicalCacheKey(fp, "wu-1", "enrolled", false, "follow_up_due")).toBe(
-            `${fp}:wu-1:enrolled:all`
+    });
+
+    it("rejects stage-primary keys not in queue_definition", () => {
+        expect(
+            isPrefetchableWorkUnitQueuePillKey("lifecycle_tour", { queue_definition: enrollmentRaw })
+        ).toBe(false);
+        expect(
+            isPrefetchableWorkUnitQueuePillKey("lifecycle_qualification", {
+                queue_definition: enrollmentRaw,
+            })
+        ).toBe(false);
+    });
+
+    it("allows executable queue keys from definition", () => {
+        expect(
+            isPrefetchableWorkUnitQueuePillKey("new_inquiry", { queue_definition: enrollmentRaw })
+        ).toBe(true);
+    });
+
+    it("filterPrefetchableWorkUnitQueuePillKeys drops invalid lanes", () => {
+        const visible = [
+            "new_inquiry",
+            lifecycleWorkUnitNavChipKey("wu-2"),
+            "lifecycle_tour",
+            "follow_up",
+        ];
+        expect(filterPrefetchableWorkUnitQueuePillKeys(visible, { queue_definition: enrollmentRaw })).toEqual(
+            ["new_inquiry", "follow_up"]
         );
+    });
+
+    it("workUnitLanePrefetchTargets includes sibling primary lanes when valid", () => {
+        const targets = workUnitLanePrefetchTargets({
+            visiblePillKeys: ["new_inquiry", "follow_up"],
+            selectedPillKey: "new_inquiry",
+            workUnit: { id: "wu-1", queue_definition: enrollmentRaw },
+            lifecycleSiblings: [
+                {
+                    id: "wu-2",
+                    queue_definition: waitlistRaw,
+                    metadata: { lifecycle_stage_key: "waitlist" },
+                },
+            ],
+            cap: 4,
+        });
+        expect(targets.some((t) => t.workUnitId === "wu-1" && t.pillKey === "follow_up")).toBe(true);
+        expect(targets.some((t) => t.workUnitId === "wu-2" && t.pillKey === waitlistPrimaryKey)).toBe(
+            true
+        );
+        expect(targets.some((t) => t.pillKey.startsWith("lifecycle_wu_nav:"))).toBe(false);
     });
 });

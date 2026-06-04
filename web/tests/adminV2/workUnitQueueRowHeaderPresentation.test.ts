@@ -311,4 +311,63 @@ describe("resolveWorkUnitQueueRowPresentationPlan V3.2", () => {
         expect(plan.headerInline.lifecycleExpanded).toBe(false);
         expect(plan.bands).not.toContain("lifecycle");
     });
+
+    it("includes lifecycle band for waitlist candidate body controls", () => {
+        const plan = resolveWorkUnitQueueRowPresentationPlan({
+            slots: baseSlots({
+                primaryIdentity: "Williams Family",
+                statusLabel: "Waitlisted",
+                locationContext: "North Campus",
+                contactDisplayName: "Riley Williams",
+                crmFactGroups: [
+                    {
+                        kind: "children_programs",
+                        label: "",
+                        columnGrid: {
+                            headers: ["Child", "Program"],
+                            rows: [["Sam (3y)", "Toddler"]],
+                            columnKeys: ["child_name", "program"],
+                        },
+                    },
+                ],
+            }),
+            scanMode: true,
+            drawerRecordIconHandlers: {},
+            workUnitKey: "waitlist",
+            waitlistCandidateRow: {
+                placementCandidateId: "pc-1",
+                opportunityId: "opp-1",
+                childDisplayName: "Sam (3y)",
+                familyDisplayName: "Williams Family",
+                parentDisplayName: "Riley Williams",
+                cohortKey: "toddler",
+                cohortLabel: "Toddler",
+                cohortSectionTitle: "Toddler Waitlist",
+                bucketLabel: "Standard family",
+                waitSinceLabel: "Jan 1, 2024",
+                linkModeLabel: null,
+                isSyntheticFallback: false,
+                hasActiveOverride: false,
+                activeOverrideKinds: [],
+                activeOverrides: [],
+                hasManualPositionAdjustment: false,
+                manualAdjustmentReason: null,
+                pinOverrideId: null,
+                shadowMode: false,
+                runtimePosition: 1,
+                runtimePositionTotal: 8,
+                runtimePositionLabel: "Preview position 1/8",
+                forecastHints: [],
+                siblingLabel: null,
+                siblingCohorts: [],
+                siblingContextLines: ["Sibling also waitlisted: Riley Williams — Toddler"],
+                siblingContextDiagnostics: null,
+            },
+        });
+        expect(plan.headerInline.waitlist?.rankingChip).toBe("#1 Standard family");
+        expect(plan.headerInline.waitlistSubline).toContain("Sibling also waitlisted");
+        expect(plan.headerInline.lifecycleExpanded).toBe(false);
+        expect(plan.bands).not.toContain("lifecycle");
+        expect(plan.lifecycleSections.waitlistCandidate).toBe(true);
+    });
 });

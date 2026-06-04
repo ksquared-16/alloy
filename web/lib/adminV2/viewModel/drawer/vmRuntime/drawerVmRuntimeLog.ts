@@ -5,14 +5,20 @@
 
 export type DrawerVmRuntimeLogEvent =
     | "mounted"
-    | "cold_fetch"
+    | "cold_fetch_start"
+    | "cold_fetch_ready"
     | "payload_ready"
     | "swap_cache_hit"
     | "swap_fetch_start"
     | "swap_committed"
-    | "legacy_path_blocked"
+    | "swap_hold_current"
+    | "legacy_fetch_blocked"
+    | "related_prefetch_start"
+    | "related_prefetch_ready"
     | "render"
-    | "swap_hold";
+    | "swap_hold"
+    /** @deprecated use cold_fetch_start */
+    | "cold_fetch";
 
 export function logDrawerVmRuntime(
     event: DrawerVmRuntimeLogEvent,

@@ -170,6 +170,34 @@ export function markWorkUnitVmPillSwitchCacheHit(extra?: Record<string, unknown>
     });
 }
 
+export function markWorkUnitVmPillSwitchCacheMissHoldCurrent(extra?: Record<string, unknown>): void {
+    logWorkUnitVmRuntimeDiagnostic("wu_vm_pill_switch_cache_miss_hold_current", {
+        since_pill_switch_ms:
+            alloyPerfGet("wu_vm_pill_switch_start") != null ?
+                Math.round(tNow() - Number(alloyPerfGet("wu_vm_pill_switch_start")))
+            :   null,
+        ...extra,
+    });
+}
+
+export function markWorkUnitVmPillSwitchCommitted(extra?: Record<string, unknown>): void {
+    const t = tNow();
+    alloyPerfSet("wu_vm_pill_switch_committed", t);
+    const start = alloyPerfGet("wu_vm_pill_switch_start");
+    logWorkUnitVmRuntimeDiagnostic("wu_vm_pill_switch_committed", {
+        pill_switch_ms: start != null ? Math.round(t - Number(start)) : null,
+        ...extra,
+    });
+}
+
+export function markWorkUnitVmPillPrefetchStart(extra?: Record<string, unknown>): void {
+    logWorkUnitVmRuntimeDiagnostic("wu_vm_pill_prefetch_start", extra);
+}
+
+export function markWorkUnitVmPillPrefetchReady(extra?: Record<string, unknown>): void {
+    logWorkUnitVmRuntimeDiagnostic("wu_vm_pill_prefetch_ready", extra);
+}
+
 export function markWorkUnitVmPillSwitchApply(extra?: Record<string, unknown>): void {
     const t = tNow();
     alloyPerfSet("wu_vm_pill_switch_apply", t);

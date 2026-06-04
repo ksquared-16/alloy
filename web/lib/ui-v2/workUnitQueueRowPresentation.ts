@@ -223,7 +223,10 @@ export function resolveWorkUnitQueueRowPresentationPlan(
     const lifecycleExpanded =
         lifecycleBandVisible(lifecycleSections) &&
         lifecycle === "waitlist" &&
-        Boolean(input.waitlistCandidateRow && waitlistCandidateNeedsExpandedBand(input.waitlistCandidateRow)) &&
+        Boolean(
+            input.waitlistCandidateRow &&
+                waitlistCandidateNeedsExpandedBand(input.waitlistCandidateRow)
+        ) &&
         !waitlistSubline;
 
     const bands: WorkUnitQueueRowBandKey[] = ["header"];

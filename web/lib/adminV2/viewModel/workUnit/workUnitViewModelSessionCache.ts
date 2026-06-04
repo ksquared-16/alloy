@@ -1,4 +1,5 @@
 import type { WorkUnitViewModel } from "@/lib/adminV2/viewModel/workUnit/types";
+import type { WorkUnitQueueItemsPayload } from "@/lib/workspace/workUnitQueueLaneDisplay";
 
 export type WorkUnitViewModelCacheContext = {
     orgId?: string | null;
@@ -24,7 +25,15 @@ export type WorkUnitViewModelCacheEntry = {
 
 const DEFAULT_TTL_MS = 5 * 60 * 1000;
 
+export type WorkUnitLaneCacheEntry = {
+    queuePayload: WorkUnitQueueItemsPayload;
+    lane: WorkUnitViewModelCacheLaneState;
+    generation: string;
+    cachedAt: number;
+};
+
 const cache = new Map<string, WorkUnitViewModelCacheEntry>();
+const laneCache = new Map<string, WorkUnitLaneCacheEntry>();
 
 function trim(value: string | null | undefined): string {
     return typeof value === "string" ? value.trim() : "";
@@ -87,6 +96,35 @@ export function invalidateWorkUnitViewModelCacheForWorkUnit(params: {
     }
 }
 
+export function putWorkUnitLaneCacheEntry(
+    entry: Omit<WorkUnitLaneCacheEntry, "cachedAt"> & { cachedAt?: number },
+    context?: WorkUnitViewModelCacheContext | null
+): void {
+    const key = buildWorkUnitViewModelCacheKey({ context, lane: entry.lane });
+    laneCache.set(key, { ...entry, cachedAt: entry.cachedAt ?? Date.now() });
+}
+
+export function peekWorkUnitLaneCacheEntry(params: {
+    context?: WorkUnitViewModelCacheContext | null;
+    lane: WorkUnitViewModelCacheLaneState;
+    expectedGeneration?: string | null;
+    maxAgeMs?: number;
+}): WorkUnitLaneCacheEntry | null {
+    const key = buildWorkUnitViewModelCacheKey(params);
+    const hit = laneCache.get(key);
+    if (!hit) return null;
+    const maxAge = params.maxAgeMs ?? DEFAULT_TTL_MS;
+    if (Date.now() - hit.cachedAt > maxAge) {
+        laneCache.delete(key);
+        return null;
+    }
+    if (params.expectedGeneration && hit.generation !== params.expectedGeneration) {
+        return null;
+    }
+    return hit;
+}
+
 export function clearWorkUnitViewModelSessionCacheForTests(): void {
     cache.clear();
+    laneCache.clear();
 }

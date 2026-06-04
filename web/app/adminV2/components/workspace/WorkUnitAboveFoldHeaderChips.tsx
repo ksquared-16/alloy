@@ -15,6 +15,10 @@ export type WorkUnitAboveFoldHeaderHandlers = {
 const PILL_BASE =
     "adminv2-ws-queue-pill-chip inline-flex min-w-0 items-center justify-between gap-1.5 rounded-lg border px-2.5 py-1.5 text-left text-[11px] font-semibold leading-snug transition-colors";
 
+const PILL_SELECTED_BRAND =
+    "border-alloy-pine/55 bg-alloy-pine/18 text-alloy-forge shadow-none";
+const PILL_INACTIVE = "border-admin-border bg-white/85 text-alloy-forge/80";
+
 function tierRing(tier: WorkUnitAboveFoldChip["priority"], selected: boolean): string {
     if (tier === "critical") {
         return selected
@@ -26,9 +30,7 @@ function tierRing(tier: WorkUnitAboveFoldChip["priority"], selected: boolean): s
             ? "border-alloy-honey bg-alloy-honey/12 text-alloy-forge"
             : "border-alloy-honey/40 bg-white/60 text-alloy-forge/85";
     }
-    return selected
-        ? "border-alloy-blue bg-alloy-blue/[0.07] text-alloy-forge shadow-[inset_0_0_0_1px_rgba(0,69,140,0.12)]"
-        : "border-admin-border bg-white/70 text-alloy-forge/80";
+    return selected ? PILL_SELECTED_BRAND : PILL_INACTIVE;
 }
 
 function CountBadge({
@@ -156,9 +158,7 @@ export function WorkUnitAboveFoldHeaderChips({
                                         })
                                     }
                                     className={`${PILL_BASE} ${
-                                        slot.other_pill.selected
-                                            ? "border-alloy-blue bg-alloy-blue/[0.07] text-alloy-forge shadow-[inset_0_0_0_1px_rgba(0,69,140,0.12)]"
-                                            : "border-admin-border bg-white/70 text-alloy-forge/80"
+                                        slot.other_pill.selected ? PILL_SELECTED_BRAND : PILL_INACTIVE
                                     }`}
                                     aria-pressed={slot.other_pill.selected}
                                 >

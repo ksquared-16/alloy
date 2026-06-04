@@ -1,7 +1,26 @@
 /**
- * Pick adjacent work-unit queue filter pill keys for background row prefetch.
- * Caps breadth so we do not warm entire queue catalogs.
+ * Work-unit queue pill lane prefetch — valid keys only, neighbors + lifecycle siblings.
  */
+import { resolveWorkUnitFetchQueueKeyFromPill } from "@/lib/adminV2/workUnitQueueSelection";
+import { listExecutableQueueKeysForWorkUnit } from "@/lib/lifecycle/lifecycleActiveWorkUnitSelection";
+import {
+    isLifecycleWorkUnitNavChipKey,
+    LIFECYCLE_NEEDS_ATTENTION_PLACEHOLDER_CHIP_KEY,
+    resolveLifecycleWorkUnitPrimaryQueueKey,
+} from "@/lib/lifecycle/lifecycleWorkUnitShellPills";
+
+export type WorkUnitLanePrefetchTarget = {
+    workUnitId: string;
+    pillKey: string;
+};
+
+export type WorkUnitRowForPrefetch = {
+    id: string;
+    queue_definition?: unknown;
+    metadata?: unknown;
+};
+
+/** Pick adjacent work-unit queue filter pill keys for background row prefetch. */
 export function adjacentWorkUnitQueuePillKeys(
     summaries: ReadonlyArray<{ key: string }>,
     selectedKey: string | null,
@@ -62,6 +81,86 @@ export function workUnitQueuePillPrefetchTargets(
         selectedPillKey,
         cap
     );
+}
+
+/** True when a pill key resolves to an executable queue lane for the given work unit. */
+export function isPrefetchableWorkUnitQueuePillKey(
+    pillKey: string,
+    workUnit: { queue_definition?: unknown } | null | undefined
+): boolean {
+    const key = pillKey.trim();
+    if (!key) return false;
+    if (isLifecycleWorkUnitNavChipKey(key)) return false;
+    if (key === LIFECYCLE_NEEDS_ATTENTION_PLACEHOLDER_CHIP_KEY) return false;
+
+    const resolved = resolveWorkUnitFetchQueueKeyFromPill(
+        key,
+        "",
+        workUnit?.queue_definition != null ? { queue_definition: workUnit.queue_definition } : undefined
+    );
+    const apiKey = resolved.queueKey.trim();
+    if (!apiKey) return false;
+
+    const validKeys = workUnit ? listExecutableQueueKeysForWorkUnit(workUnit) : [];
+    if (workUnit?.queue_definition != null && validKeys.length === 0) return false;
+    if (validKeys.length === 0) return Boolean(apiKey);
+    return validKeys.includes(apiKey);
+}
+
+/** Filter visible pill keys to executable lanes only — prevents 404 prefetches. */
+export function filterPrefetchableWorkUnitQueuePillKeys(
+    pillKeys: readonly string[],
+    workUnit: { queue_definition?: unknown } | null | undefined,
+    selectedPillKey?: string | null
+): string[] {
+    const selected = selectedPillKey?.trim() || "";
+    return pillKeys.filter(
+        (pillKey) =>
+            pillKey.trim() !== selected && isPrefetchableWorkUnitQueuePillKey(pillKey, workUnit)
+    );
+}
+
+/** Background warm targets: same-WU neighbors + lifecycle sibling primary lanes. */
+export function workUnitLanePrefetchTargets(params: {
+    visiblePillKeys: readonly string[];
+    selectedPillKey: string | null;
+    workUnit: WorkUnitRowForPrefetch | null;
+    lifecycleSiblings?: ReadonlyArray<WorkUnitRowForPrefetch> | null;
+    cap?: number;
+}): WorkUnitLanePrefetchTarget[] {
+    const cap = params.cap ?? 6;
+    const wu = params.workUnit;
+    if (!wu?.id?.trim()) return [];
+
+    const out: WorkUnitLanePrefetchTarget[] = [];
+    const seen = new Set<string>();
+    const add = (workUnitId: string, pillKey: string, row: WorkUnitRowForPrefetch | null) => {
+        const sig = `${workUnitId}|${pillKey}`;
+        if (seen.has(sig)) return;
+        if (!isPrefetchableWorkUnitQueuePillKey(pillKey, row)) return;
+        seen.add(sig);
+        out.push({ workUnitId, pillKey });
+    };
+
+    const neighborPills = workUnitQueuePillPrefetchTargets(
+        filterPrefetchableWorkUnitQueuePillKeys(params.visiblePillKeys, wu, params.selectedPillKey),
+        params.selectedPillKey,
+        cap
+    );
+    for (const pillKey of neighborPills) {
+        add(wu.id, pillKey, wu);
+        if (out.length >= cap) return out;
+    }
+
+    for (const sibling of params.lifecycleSiblings ?? []) {
+        if (!sibling.id?.trim() || sibling.id === wu.id) continue;
+        const primary = resolveLifecycleWorkUnitPrimaryQueueKey(sibling);
+        if (!primary) continue;
+        add(sibling.id, primary, sibling);
+        if (out.length >= cap) return out;
+    }
+
+    return out.slice(0, cap);
 }
 
 /** Max concurrent background row prefetches per scheduling tick. */

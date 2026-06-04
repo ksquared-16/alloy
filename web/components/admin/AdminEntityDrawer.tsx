@@ -4,10 +4,12 @@ import { usePathname } from "next/navigation";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { AdminEntityDrawerLegacy } from "@/components/admin/AdminEntityDrawerLegacy";
 import OpportunityDrawerVmRuntime from "@/components/admin/vmDrawer/OpportunityDrawerVmRuntime";
+import PersonDrawerVmRuntime from "@/components/admin/vmDrawer/PersonDrawerVmRuntime";
+import ChildDrawerVmRuntime from "@/components/admin/vmDrawer/ChildDrawerVmRuntime";
 import { resolveVmDrawerRuntimeRoute } from "@/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerRuntimeRoute";
 
 /**
- * Drawer entry router — VM cutover opportunities use an isolated runtime;
+ * Drawer entry router — VM cutover entities use isolated runtimes;
  * all other entity types / flags use the legacy drawer implementation.
  */
 export default function AdminEntityDrawer() {
@@ -17,6 +19,12 @@ export default function AdminEntityDrawer() {
 
     if (route === "opportunity") {
         return <OpportunityDrawerVmRuntime />;
+    }
+    if (route === "person") {
+        return <PersonDrawerVmRuntime />;
+    }
+    if (route === "child") {
+        return <ChildDrawerVmRuntime />;
     }
 
     return <AdminEntityDrawerLegacy />;

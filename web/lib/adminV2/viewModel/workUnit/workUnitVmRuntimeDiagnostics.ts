@@ -17,7 +17,11 @@ export type WorkUnitVmRuntimeDiagnosticEvent =
     | "wu_vm_row_actions_ready"
     | "wu_vm_right_rail_actions_ready"
     | "wu_vm_pill_switch_start"
+    | "wu_vm_pill_prefetch_start"
+    | "wu_vm_pill_prefetch_ready"
     | "wu_vm_pill_switch_cache_hit"
+    | "wu_vm_pill_switch_cache_miss_hold_current"
+    | "wu_vm_pill_switch_committed"
     | "wu_vm_pill_switch_apply"
     | "wu_vm_shadow_compose"
     | "wu_vm_shadow_diff";

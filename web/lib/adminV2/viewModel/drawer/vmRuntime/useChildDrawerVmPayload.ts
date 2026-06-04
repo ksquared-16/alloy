@@ -2,8 +2,6 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
-import { isOpportunityDrawerViewModelPreload } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerOpenPreloadFromViewModel";
-import { loadOpportunityDrawerViaViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityDrawerViaViewModel";
 import {
     buildPrepareParamsFromOpenDrawer,
     peekDrawerViewModelPreloadSync,
@@ -12,38 +10,40 @@ import {
     shouldHoldPriorDrawerContent,
     shouldSuppressFullDrawerLoading,
 } from "@/lib/adminV2/viewModel/drawer/drawerRuntimePhase";
-import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
+import { isChildDrawerViewModelPreload } from "@/lib/adminV2/viewModel/drawer/child/buildChildDrawerOpenPreloadFromViewModel";
+import { loadChildDrawerViaViewModel } from "@/lib/adminV2/viewModel/drawer/child/loadChildDrawerViaViewModel";
+import type { ChildDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/child/types";
 import { warmRelatedDrawerTargetsAfterVmApply } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmPayloadWarmRelated";
 import { logDrawerVmRuntime } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
 
-export type OpportunityDrawerVmPayloadState = {
-    activeVm: OpportunityDrawerViewModel | null;
-    displayVm: OpportunityDrawerViewModel | null;
+export type ChildDrawerVmPayloadState = {
+    activeVm: ChildDrawerViewModel | null;
+    displayVm: ChildDrawerViewModel | null;
     coldLoading: boolean;
     error: string | null;
     suppressFullDrawerLoading: boolean;
     holdPriorPayload: boolean;
 };
 
-export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState {
+export function useChildDrawerVmPayload(): ChildDrawerVmPayloadState {
     const {
         drawer,
-        consumeOpportunityDrawerPreload,
-        opportunityPreloadGeneration,
+        consumePersonDrawerPreload,
         drawerRuntimePhase,
+        drawerTransitionId,
         completeDrawerRuntimeTransition,
         consumeDrawerSwapFallbackFetch,
     } = useAdminDrawer();
 
-    const [displayVm, setDisplayVm] = useState<OpportunityDrawerViewModel | null>(null);
-    const [activeVm, setActiveVm] = useState<OpportunityDrawerViewModel | null>(null);
+    const [displayVm, setDisplayVm] = useState<ChildDrawerViewModel | null>(null);
+    const [activeVm, setActiveVm] = useState<ChildDrawerViewModel | null>(null);
     const [coldLoading, setColdLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const fetchGenRef = useRef(0);
     const mountedRef = useRef(false);
 
     const applyVm = useCallback(
-        (vm: OpportunityDrawerViewModel, reason: string) => {
+        (vm: ChildDrawerViewModel, reason: string) => {
             const applyStarted =
                 typeof performance !== "undefined" ? performance.now() : Date.now();
             setActiveVm(vm);
@@ -53,22 +53,22 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
             completeDrawerRuntimeTransition();
             warmRelatedDrawerTargetsAfterVmApply({
                 drawer,
-                entityType: "opportunities",
-                record: vm.above_fold.record,
-                runtime: "opportunity",
+                entityType: "persons",
+                record: vm.record,
+                runtime: "child",
             });
             const payloadApplyMs =
                 typeof performance !== "undefined" ?
                     Math.round(performance.now() - applyStarted)
                 :   0;
             logDrawerVmRuntime("payload_ready", {
-                opportunity_id: vm.entity.id,
+                child_person_id: vm.entity.id,
                 reason,
                 generation: vm.generation,
                 payload_apply_ms: payloadApplyMs,
             });
             logDrawerVmRuntime("swap_committed", {
-                opportunity_id: vm.entity.id,
+                child_person_id: vm.entity.id,
                 drawer_id: drawer.id,
                 swap_commit_ms: payloadApplyMs,
             });
@@ -80,29 +80,31 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
         if (!mountedRef.current) {
             mountedRef.current = true;
             logDrawerVmRuntime("mounted", {
-                opportunity_id: drawer.id,
+                child_person_id: drawer.id,
+                runtime: "child",
                 phase: drawerRuntimePhase.phase,
             });
         }
     }, [drawer.id, drawerRuntimePhase.phase]);
 
     useLayoutEffect(() => {
-        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
-        const preload = consumeOpportunityDrawerPreload(drawer.id);
-        if (preload && isOpportunityDrawerViewModelPreload(preload)) {
+        if (drawer.type !== "persons" || !drawer.id || drawer.id === "new") return;
+        const preload = consumePersonDrawerPreload(drawer.id);
+        if (preload && isChildDrawerViewModelPreload(preload)) {
             applyVm(preload.viewModel, "preload_consume");
             return;
         }
         const sync = peekDrawerViewModelPreloadSync(
             buildPrepareParamsFromOpenDrawer({
-                type: "opportunities",
+                type: "persons",
                 id: drawer.id,
                 opportunityWorkspaceContext: drawer.opportunityWorkspaceContext ?? null,
                 source: drawer.openSource ?? undefined,
+                personDrawerOpenSeed: drawer.personDrawerOpenSeed ?? null,
             })
         );
-        if (sync?.entityType === "opportunities" && isOpportunityDrawerViewModelPreload(sync.preload)) {
-            logDrawerVmRuntime("swap_cache_hit", { opportunity_id: drawer.id });
+        if (sync?.entityType === "persons" && isChildDrawerViewModelPreload(sync.preload)) {
+            logDrawerVmRuntime("swap_cache_hit", { child_person_id: drawer.id, runtime: "child" });
             applyVm(sync.preload.viewModel, "sync_cache");
         }
     }, [
@@ -110,14 +112,15 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
         drawer.id,
         drawer.openSource,
         drawer.opportunityWorkspaceContext,
-        consumeOpportunityDrawerPreload,
-        opportunityPreloadGeneration,
+        drawer.personDrawerOpenSeed,
+        consumePersonDrawerPreload,
+        drawerTransitionId,
         drawerRuntimePhase.phase,
         applyVm,
     ]);
 
     useEffect(() => {
-        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        if (drawer.type !== "persons" || !drawer.id || drawer.id === "new") return;
         if (activeVm && String(activeVm.entity.id) === String(drawer.id)) return;
 
         const needsFallback = consumeDrawerSwapFallbackFetch();
@@ -127,7 +130,7 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
             logDrawerVmRuntime("swap_hold_current", {
                 from_id: displayVm.entity.id,
                 to_id: drawer.id,
-                runtime: "opportunity",
+                runtime: "child",
             });
         }
 
@@ -139,12 +142,12 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
         const fetchStarted =
             typeof performance !== "undefined" ? performance.now() : Date.now();
         logDrawerVmRuntime(needsFallback ? "swap_fetch_start" : "cold_fetch_start", {
-            opportunity_id: drawer.id,
+            child_person_id: drawer.id,
             hold_prior: Boolean(displayVm),
-            runtime: "opportunity",
+            runtime: "child",
         });
 
-        void loadOpportunityDrawerViaViewModel(drawer.id, drawer.opportunityWorkspaceContext).then((result) => {
+        void loadChildDrawerViaViewModel(drawer.id).then((result) => {
             if (gen !== fetchGenRef.current) return;
             const fetchMs =
                 typeof performance !== "undefined" ?
@@ -155,14 +158,14 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
                 setError(result.reason);
                 return;
             }
-            if (!isOpportunityDrawerViewModelPreload(result.preload)) {
+            if (!isChildDrawerViewModelPreload(result.preload)) {
                 setColdLoading(false);
                 setError("vm_preload_missing");
                 return;
             }
             logDrawerVmRuntime("cold_fetch_ready", {
-                opportunity_id: drawer.id,
-                runtime: "opportunity",
+                child_person_id: drawer.id,
+                runtime: "child",
                 cold_fetch_ms: fetchMs,
             });
             applyVm(result.preload.viewModel, needsFallback ? "swap_fetch" : "cold_fetch");
@@ -170,7 +173,6 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
     }, [
         drawer.type,
         drawer.id,
-        drawer.opportunityWorkspaceContext,
         drawerRuntimePhase.phase,
         activeVm,
         displayVm,

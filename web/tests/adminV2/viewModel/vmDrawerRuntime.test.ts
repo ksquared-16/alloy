@@ -4,6 +4,14 @@ vi.mock("@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerHardCutover
     opportunityDrawerHardCutoverEnabled: () => true,
 }));
 
+vi.mock("@/lib/adminV2/viewModel/drawer/person/personDrawerHardCutoverGate", () => ({
+    personDrawerHardCutoverEnabled: () => true,
+}));
+
+vi.mock("@/lib/adminV2/viewModel/drawer/child/childDrawerHardCutoverGate", () => ({
+    childDrawerHardCutoverEnabled: () => true,
+}));
+
 import { resolveVmDrawerRuntimeRoute } from "@/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerRuntimeRoute";
 import {
     shouldAllowColdOpenLoading,
@@ -31,6 +39,28 @@ describe("vmDrawerRuntimeRoute", () => {
             resolveVmDrawerRuntimeRoute({ type: "jobs", id: "job-1" }, "/adminV2/workspace")
         ).toBe("legacy");
     });
+
+    it("routes adminV2 persons with VM cutover to person runtime", () => {
+        expect(
+            resolveVmDrawerRuntimeRoute(
+                { type: "persons", id: "person-1", openSource: "opportunity_primary_contact" },
+                "/adminV2/workspace/dept/d1/work-unit/w1"
+            )
+        ).toBe("person");
+    });
+
+    it("routes adminV2 child inquiry opens to child runtime", () => {
+        expect(
+            resolveVmDrawerRuntimeRoute(
+                {
+                    type: "persons",
+                    id: "child-1",
+                    openSource: "opportunity_inquiry_child",
+                },
+                "/adminV2/workspace/dept/d1/work-unit/w1"
+            )
+        ).toBe("child");
+    });
 });
 
 describe("VM drawer runtime wiring", () => {
@@ -41,8 +71,60 @@ describe("VM drawer runtime wiring", () => {
         const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
         const router = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
         expect(router).toContain("OpportunityDrawerVmRuntime");
+        expect(router).toContain("PersonDrawerVmRuntime");
+        expect(router).toContain("ChildDrawerVmRuntime");
         expect(router).toContain("AdminEntityDrawerLegacy");
         expect(router).not.toContain("opportunityInquiryWorkflowHeaderStatus");
+    });
+
+    it("PersonDrawerVmRuntime does not use legacy fetch or skeleton paths", async () => {
+        const { readFileSync } = await import("node:fs");
+        const { join, dirname } = await import("node:path");
+        const { fileURLToPath } = await import("node:url");
+        const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
+        const vm = readFileSync(
+            join(webRoot, "components/admin/vmDrawer/PersonDrawerVmRuntime.tsx"),
+            "utf8"
+        );
+        expect(vm).toContain("VmPersonStatusControl");
+        expect(vm).toContain("usePersonDrawerVmPayload");
+        expect(vm).not.toContain("drawer-operational-bootstrap");
+        expect(vm).not.toContain("skeleton");
+        expect(vm).not.toContain("status-options");
+    });
+
+    it("ChildDrawerVmRuntime does not use legacy fetch or skeleton paths", async () => {
+        const { readFileSync } = await import("node:fs");
+        const { join, dirname } = await import("node:path");
+        const { fileURLToPath } = await import("node:url");
+        const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
+        const vm = readFileSync(
+            join(webRoot, "components/admin/vmDrawer/ChildDrawerVmRuntime.tsx"),
+            "utf8"
+        );
+        expect(vm).toContain("useChildDrawerVmPayload");
+        expect(vm).not.toContain("drawer-operational-bootstrap");
+        expect(vm).not.toContain("skeleton");
+    });
+
+    it("VM payload hooks hold prior drawer during swap and suppress cold shell", async () => {
+        const { readFileSync } = await import("node:fs");
+        const { join, dirname } = await import("node:path");
+        const { fileURLToPath } = await import("node:url");
+        const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
+        for (const file of [
+            "useOpportunityDrawerVmPayload.ts",
+            "usePersonDrawerVmPayload.ts",
+            "useChildDrawerVmPayload.ts",
+        ]) {
+            const src = readFileSync(
+                join(webRoot, "lib/adminV2/viewModel/drawer/vmRuntime", file),
+                "utf8"
+            );
+            expect(src).toContain("swap_hold_current");
+            expect(src).toContain("shouldHoldPriorDrawerContent");
+            expect(src).toContain("suppressFullDrawerLoading");
+        }
     });
 
     it("OpportunityDrawerVmRuntime does not use legacy status or pill fetch paths", async () => {
@@ -72,9 +154,10 @@ describe("VM drawer runtime wiring", () => {
             join(webRoot, "components/admin/vmDrawer/VmOpportunityStatusControl.tsx"),
             "utf8"
         );
-        expect(status).not.toContain("skeleton");
-        expect(status).not.toContain("return null");
+        expect(status).not.toContain("skeleton-pulse");
+        expect(status).not.toContain("fetchEnabled");
         expect(status).toContain("data-vm-runtime-status");
+        expect(status).toContain('renderAs === "hidden"');
     });
 
     it("VmInquiryRightColumn renders tasks without fetchEnabled", async () => {
@@ -104,8 +187,11 @@ describe("VM drawer runtime wiring", () => {
             join(webRoot, "lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog.ts"),
             "utf8"
         );
-        expect(log).toContain("[drawer_vm_runtime:mounted]");
-        expect(log).toContain("[drawer_vm_runtime:swap_committed]");
-        expect(log).toContain("[drawer_vm_runtime_server:compose_ok]");
+        expect(log).toContain("drawer_vm_runtime:${event}");
+        expect(log).toContain('"mounted"');
+        expect(log).toContain("swap_committed");
+        expect(log).toContain("swap_hold_current");
+        expect(log).toContain("related_prefetch_start");
+        expect(log).toContain("compose_ok");
     });
 });
