@@ -18,7 +18,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import SectionCard from "@/components/admin/SectionCard";
-import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import LayoutPreviewRenderer from "@/components/layout/LayoutPreviewRenderer";
 import { isLayoutV2PreviewEnabledClient } from "@/lib/layout/featureFlag";
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
@@ -64,8 +63,14 @@ function statusPill(status: string) {
 }
 
 export default function LayoutConfigClient() {
-    const { canMutate } = useAdminAuth();
     const enabled = isLayoutV2PreviewEnabledClient();
+
+    // Auth is enforced server-side by /api/admin/entity-layouts (admin for
+    // writes, ops+ for reads). This page lives in an isolated AdminV2 route
+    // group with no AdminAuthProvider, so it does not gate on a client context:
+    // it starts optimistic and flips to read-only if the API returns 401/403.
+    const [forbidden, setForbidden] = useState(false);
+    const canMutate = !forbidden;
 
     const [list, setList] = useState<ListResponse | null>(null);
     const [labelMap, setLabelMap] = useState<EntityLabelMap>({});
@@ -88,6 +93,11 @@ export default function LayoutConfigClient() {
     const fetchList = useCallback(async () => {
         try {
             const res = await fetch("/api/admin/entity-layouts");
+            if (res.status === 401 || res.status === 403) {
+                setForbidden(true);
+                setError("You don't have access to layout configuration. Sign in with an admin account.");
+                return;
+            }
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Failed to load layouts");
             const data = json as ListResponse;
@@ -163,6 +173,10 @@ export default function LayoutConfigClient() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ entity_type: newEntity, surface: newSurface, from_registry: true }),
             });
+            if (res.status === 401 || res.status === 403) {
+                setForbidden(true);
+                throw new Error("Admin access is required to create layouts.");
+            }
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Create failed");
             await fetchList();
@@ -184,6 +198,10 @@ export default function LayoutConfigClient() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ name: workingName, doc: workingDoc }),
             });
+            if (res.status === 401 || res.status === 403) {
+                setForbidden(true);
+                throw new Error("Admin access is required to save layouts.");
+            }
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Save failed");
             setDirty(false);
@@ -201,6 +219,10 @@ export default function LayoutConfigClient() {
         try {
             if (dirty) await saveDraft();
             const res = await fetch(`/api/admin/entity-layouts/${selectedId}/publish`, { method: "POST" });
+            if (res.status === 401 || res.status === 403) {
+                setForbidden(true);
+                throw new Error("Admin access is required to publish layouts.");
+            }
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Publish failed");
             setSelectedStatus("published");
@@ -218,6 +240,10 @@ export default function LayoutConfigClient() {
         setBusy("delete");
         try {
             const res = await fetch(`/api/admin/entity-layouts/${selectedId}`, { method: "DELETE" });
+            if (res.status === 401 || res.status === 403) {
+                setForbidden(true);
+                throw new Error("Admin access is required to delete layouts.");
+            }
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Delete failed");
             setSelectedId(null);
@@ -291,7 +317,9 @@ export default function LayoutConfigClient() {
                 <div className="flex flex-col gap-4">
                     <SectionCard title="New layout">
                         {!canMutate ? (
-                            <p className="text-sm text-[#59678b]">Only admins can create layouts.</p>
+                            <p className="text-sm text-[#59678b]">
+                                You have read-only access. Admin access is required to create or edit layouts.
+                            </p>
                         ) : (
                             <div className="flex flex-col gap-2">
                                 <label className="text-xs font-medium text-[#59678b]">Entity type</label>

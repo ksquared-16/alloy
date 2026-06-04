@@ -9,6 +9,8 @@
  * Read-only. Not used by any live runtime renderer.
  */
 
+import { fieldEntityKey } from "./entityKeys";
+
 export type EntityLabel = { singular: string; plural: string };
 export type EntityLabelMap = Record<string, EntityLabel>;
 
@@ -21,9 +23,15 @@ export function humanizeEntityType(entityType: string): string {
         .join(" ");
 }
 
-/** Prefer the configured label; fall back to a humanized key. */
+/**
+ * Prefer the configured label; fall back to a humanized key.
+ *
+ * Looks up by the canonical (plural) key first, then by the singular
+ * field-entity alias (in case labels for this entity are keyed singular), then
+ * humanizes — so a configured label resolves regardless of key form.
+ */
 export function entityTypeLabel(map: EntityLabelMap, entityType: string, form: "singular" | "plural" = "plural"): string {
-    const row = map[entityType];
+    const row = map[entityType] ?? map[fieldEntityKey(entityType)];
     const configured = row ? (form === "plural" ? row.plural : row.singular) : undefined;
     return (configured && configured.trim()) || humanizeEntityType(entityType);
 }
