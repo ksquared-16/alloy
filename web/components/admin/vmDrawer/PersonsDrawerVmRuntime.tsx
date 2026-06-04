@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo } from "react";
+import { usePathname } from "next/navigation";
 import PersonDrawerChildLifecycleRail from "@/components/admin/entity/PersonDrawerChildLifecycleRail";
 import PersonDrawerOperatingSections from "@/components/admin/entity/PersonDrawerOperatingSections";
 import VmPersonStatusControl from "@/components/admin/vmDrawer/VmPersonStatusControl";
@@ -19,11 +20,16 @@ import {
 } from "@/lib/adminV2/viewModel/drawer/vmRuntime/personDrawerVmLayout";
 import { usePersonsDrawerVmPayload } from "@/lib/adminV2/viewModel/drawer/vmRuntime/usePersonsDrawerVmPayload";
 import { logDrawerVmRuntime } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
+import {
+    drawerDebugSourceFromPathname,
+    drawerDebugSurfaceFromPresentation,
+} from "@/lib/adminV2/drawer/drawerRuntimeDebug";
 
 const DRAWER_ACCENT_PERSON = "#0d9488";
 const DRAWER_ACCENT_CHILD = "#2563eb";
 
 export default function PersonsDrawerVmRuntime() {
+    const pathname = usePathname();
     const { canMutate } = useAdminAuth();
     const { drawer, closeDrawer, openDrawer } = useAdminDrawer();
     const { displayVm, isChildSurface, coldLoading, error, suppressFullDrawerLoading } =
@@ -87,6 +93,22 @@ export default function PersonsDrawerVmRuntime() {
     const accentColor = isChildSurface ? DRAWER_ACCENT_CHILD : DRAWER_ACCENT_PERSON;
     const defaultTitle = isChildSurface ? "Child" : "Person";
 
+    const runtimeDebug = useMemo(
+        () =>
+            drawer.type && drawer.id ?
+                {
+                    route: isChildSurface ? ("child-vm" as const) : ("person-vm" as const),
+                    surface: drawerDebugSurfaceFromPresentation("modal"),
+                    source: drawerDebugSourceFromPathname(pathname),
+                    path: pathname ?? "",
+                    entityType: drawer.type,
+                    entityId: String(drawer.id),
+                    statusComponent: "unknown" as const,
+                }
+            :   null,
+        [drawer.type, drawer.id, isChildSurface, pathname]
+    );
+
     return (
         <Drawer
             isOpen={Boolean(drawer.type && drawer.id) && drawer.type === "persons"}
@@ -100,6 +122,7 @@ export default function PersonsDrawerVmRuntime() {
             zIndexPanel={ADMINV2_DRAWER_PANEL_Z}
             accentColor={accentColor}
             recordModalTone="cleaning-v2"
+            runtimeDebug={runtimeDebug}
             statusBadge={
                 displayVm ?
                     <VmPersonStatusControl statusLabel={displayVm.header.status_label} />

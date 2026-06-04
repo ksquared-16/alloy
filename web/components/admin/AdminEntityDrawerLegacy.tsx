@@ -470,6 +470,11 @@ import {
     shouldRenderHeldDrawerBody,
     shouldSuppressFullDrawerLoading,
 } from "@/lib/adminV2/viewModel/drawer/drawerRuntimePhase";
+import {
+    drawerDebugSourceFromPathname,
+    drawerDebugSurfaceFromPresentation,
+    resolveLegacyDrawerStatusDebugComponent,
+} from "@/lib/adminV2/drawer/drawerRuntimeDebug";
 import { warmRelatedDrawerViewModels } from "@/lib/adminV2/viewModel/drawer/drawerModelSwapNavigation";
 import {
     logDrawerVmDomRenderTrace,
@@ -12426,9 +12431,11 @@ export function AdminEntityDrawerLegacy() {
             <div
                 className="flex min-w-0 max-w-[11rem] shrink flex-col gap-0.5 sm:max-w-[15rem]"
                 data-opportunity-drawer-vm-status-control={vmStatusReady || blockStatusSkeletonAfterVmSettle ? "true" : undefined}
+                data-status-debug-owner="legacy-dropdown"
             >
                 <span className="sr-only">Opportunity status</span>
                 <select
+                    data-status-debug-owner="legacy-dropdown"
                     value={renderStatusKey}
                     onChange={(e) =>
                         setFormData((prev) => ({
@@ -13725,6 +13732,33 @@ export function AdminEntityDrawerLegacy() {
         personRecordChromeBodyShell ||
         locationRecordChromeBodyShell;
 
+    const drawerPresentation = useAdminV2RecordModalPresentation ? "modal" : "sidebar";
+    const drawerRuntimeDebug = useMemo(
+        () =>
+            drawer.type && drawer.id ?
+                {
+                    route: "legacy" as const,
+                    surface: drawerDebugSurfaceFromPresentation(drawerPresentation),
+                    source: drawerDebugSourceFromPathname(pathname),
+                    path: pathname ?? "",
+                    entityType: drawer.type,
+                    entityId: String(drawer.id),
+                    statusComponent: resolveLegacyDrawerStatusDebugComponent({
+                        drawerType: drawer.type,
+                        opportunityInquiryWorkflow:
+                            drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer,
+                    }),
+                }
+            :   null,
+        [
+            drawer.type,
+            drawer.id,
+            drawerPresentation,
+            pathname,
+            opportunityInquiryWorkflowDrawer,
+        ]
+    );
+
     return (
         <Drawer
             isOpen={Boolean(drawer.type && drawer.id) && !isOpportunityDrawerOpening}
@@ -13749,7 +13783,7 @@ export function AdminEntityDrawerLegacy() {
             zIndexPanel={ADMINV2_DRAWER_PANEL_Z}
             accentColor={drawer.type ? DRAWER_ACCENT_COLORS[drawer.type] : undefined}
             variant={drawerShellVariant}
-            presentation={useAdminV2RecordModalPresentation ? "modal" : "sidebar"}
+            presentation={drawerPresentation}
             panelClassName={useAdminV2RecordModalPresentation ? "max-w-7xl" : undefined}
             recordModalTone={recordCleaningV2Eligible ? "cleaning-v2" : undefined}
             recordModalContextStyle={
@@ -13759,6 +13793,7 @@ export function AdminEntityDrawerLegacy() {
                     })
                     : undefined
             }
+            runtimeDebug={drawerRuntimeDebug}
         >
             <div
                 className="relative"

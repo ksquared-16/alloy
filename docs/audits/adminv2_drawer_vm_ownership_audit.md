@@ -401,4 +401,16 @@ export default function AdminEntityDrawer() {
 
 **Post–Phase A:** Overview is `OpportunityDrawerInquiryWorkflowOverview` (not `VmInquiryRightColumn` placeholder). Status is `VmReadonlyStatusPill` in `headerTitleRight` title rail.
 
+### Temporary drawer runtime debug badge (instrumentation)
+
+Visible amber badge in drawer header when `NODE_ENV=development` **or** `NEXT_PUBLIC_ADMINV2_DRAWER_RUNTIME_DEBUG=1`.
+
+Shows: `route`, `surface` (`center-modal` | `right-side`), `source` (`work-unit` when path contains `/work-unit/`), `path`, `entity`, `statusComponent`.
+
+DOM on modal/sidebar panel: `data-drawer-debug-route`, `data-drawer-debug-surface`, `data-drawer-debug-source`, `data-drawer-debug-status-component`.
+
+Status markers: `data-status-debug-owner="legacy-dropdown" | "vm-readonly-pill" | "vm-dropdown"`.
+
+**Remove after debugging:** delete `drawerRuntimeDebug.ts`, `DrawerRuntimeDebugBadge.tsx`, `runtimeDebug` prop wiring in `Drawer.tsx` + three runtimes, and status `data-status-debug-owner` attributes.
+
 **Suggested commit message (doc only):** `docs: add AdminV2 drawer VM ownership audit (d6c7e05e baseline vs a68c7ef2 regression)`

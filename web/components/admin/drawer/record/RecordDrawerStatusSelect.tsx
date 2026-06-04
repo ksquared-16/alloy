@@ -47,7 +47,11 @@ export function RecordDrawerStatusSelect({
     }
 
     return (
-        <label className="inline-flex min-w-0 items-center gap-1.5" data-record-drawer-header-status="select">
+        <label
+            className="inline-flex min-w-0 items-center gap-1.5"
+            data-record-drawer-header-status="select"
+            data-status-debug-owner="legacy-dropdown"
+        >
             <span className="sr-only">{entityLabel} status</span>
             <select
                 value={current}

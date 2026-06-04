@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import clsx from "clsx";
 import RecordLifecycleRail from "@/components/admin/drawer/RecordLifecycleRail";
 import RecordLifecycleRailSkeleton from "@/components/admin/drawer/RecordLifecycleRailSkeleton";
@@ -26,6 +27,10 @@ import { resolveOpportunityVmStatusLabel } from "@/lib/adminV2/viewModel/drawer/
 import { logDrawerVmRuntime } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import { resolveOpportunityQueueNavigatorPosition } from "@/lib/admin/opportunityDrawerQueueNavigator";
+import {
+    drawerDebugSourceFromPathname,
+    drawerDebugSurfaceFromPresentation,
+} from "@/lib/adminV2/drawer/drawerRuntimeDebug";
 
 const DRAWER_ACCENT_OPPORTUNITY = "#2d6a9f";
 
@@ -38,6 +43,7 @@ const OPPORTUNITY_TAB_LABELS: Partial<Record<DrawerTabKey, string>> = {
 };
 
 export default function OpportunityDrawerVmRuntime() {
+    const pathname = usePathname();
     const { canMutate } = useAdminAuth();
     const { labels } = useEntityLabels();
     const opportunitySingular = labels.opportunities?.singular ?? "Opportunity";
@@ -158,6 +164,22 @@ export default function OpportunityDrawerVmRuntime() {
 
     const onTabSelect = useCallback((tab: DrawerTabKey) => setDrawerTab(tab), []);
 
+    const runtimeDebug = useMemo(
+        () =>
+            drawer.type && drawer.id ?
+                {
+                    route: "opportunity-vm" as const,
+                    surface: drawerDebugSurfaceFromPresentation("modal"),
+                    source: drawerDebugSourceFromPathname(pathname),
+                    path: pathname ?? "",
+                    entityType: drawer.type,
+                    entityId: String(drawer.id),
+                    statusComponent: "vm-readonly-pill" as const,
+                }
+            :   null,
+        [drawer.type, drawer.id, pathname]
+    );
+
     return (
         <Drawer
             isOpen={Boolean(drawer.type && drawer.id) && !isOpportunityDrawerOpening}
@@ -173,6 +195,7 @@ export default function OpportunityDrawerVmRuntime() {
             zIndexPanel={ADMINV2_DRAWER_PANEL_Z}
             accentColor={DRAWER_ACCENT_OPPORTUNITY}
             recordModalTone="cleaning-v2"
+            runtimeDebug={runtimeDebug}
         >
             <div className="relative" data-adminv2-drawer="true" data-drawer-vm-runtime="opportunity">
                 {isOpportunityQueueNavPending ?

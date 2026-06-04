@@ -16,6 +16,7 @@ function ReadonlyStatusPill({ label }: { label: string }) {
             className="flex min-w-0 max-w-[11rem] shrink flex-col gap-0.5 sm:max-w-[15rem]"
             data-opportunity-drawer-vm-status-control="true"
             data-vm-runtime-status="readonly"
+            data-status-debug-owner="vm-readonly-pill"
         >
             <span className="sr-only">Opportunity status</span>
             <span className="inline-flex rounded-full border border-alloy-stone/30 bg-white px-3 py-2 text-[12px] font-semibold text-alloy-midnight/90">
@@ -42,6 +43,7 @@ export default function VmOpportunityStatusControl({ status, canMutate, onStatus
                 className="flex min-w-0 max-w-[11rem] shrink flex-col gap-0.5 sm:max-w-[15rem]"
                 data-opportunity-drawer-vm-status-control="true"
                 data-vm-runtime-status="readonly"
+                data-status-debug-owner={interactive ? "vm-dropdown" : "vm-readonly-pill"}
             >
                 <span className="sr-only">Opportunity status</span>
                 {interactive ?
@@ -77,6 +79,7 @@ export default function VmOpportunityStatusControl({ status, canMutate, onStatus
             className="flex min-w-0 max-w-[11rem] shrink flex-col gap-0.5 sm:max-w-[15rem]"
             data-opportunity-drawer-vm-status-control="true"
             data-vm-runtime-status="dropdown"
+            data-status-debug-owner="vm-dropdown"
         >
             <span className="sr-only">Opportunity status</span>
             <select
