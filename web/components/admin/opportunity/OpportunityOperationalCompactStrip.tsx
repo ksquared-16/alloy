@@ -22,6 +22,7 @@ import {
     patchOperationalTaskStatus,
     readJson,
 } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
+import { parseInquirySummaryTaskPreview } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
 import OperationalTaskDetailPopover, {
     type OperationalTaskDetail,
 } from "@/components/admin/opportunity/OperationalTaskDetailPopover";
@@ -260,7 +261,18 @@ export default function OpportunityOperationalCompactStrip({
     const [tasksExpanded, setTasksExpanded] = useState(false);
     const adminDrawer = useAdminDrawerOptional();
     const globalAssistant = useGlobalAssistantOptional();
-    const [tasks, setTasks] = useState<OperationalTaskRow[]>([]);
+    // P3a — seed open tasks from the bootstrap's `_inquiry_summary_tasks` (already on overviewData)
+    // so the strip's task chips are present at first paint instead of popping in. The live load()
+    // below reconciles invisibly. Empty when no seed (non-builder/older payloads) → prior behavior.
+    const [tasks, setTasks] = useState<OperationalTaskRow[]>(() =>
+        (parseInquirySummaryTaskPreview(overviewData)?.open_tasks ?? []).map((t) => ({
+            id: t.id,
+            title: t.title,
+            due_at: t.due_at,
+            status: t.status,
+            source: t.source,
+        })),
+    );
     const [scheduledSends, setScheduledSends] = useState<ScheduledSendRow[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
