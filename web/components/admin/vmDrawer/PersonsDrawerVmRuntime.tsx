@@ -1,9 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { DrawerTabKey } from "@/lib/entityPresentation";
 import { usePathname } from "next/navigation";
-import PersonDrawerChildLifecycleRail from "@/components/admin/entity/PersonDrawerChildLifecycleRail";
-import PersonDrawerOperatingSections from "@/components/admin/entity/PersonDrawerOperatingSections";
+import PersonDrawerChildTitleRow from "@/components/admin/entity/PersonDrawerChildTitleRow";
+import PersonDrawerHeaderMetadata, {
+    formatPersonDrawerRecordNumber,
+} from "@/components/admin/entity/PersonDrawerHeaderMetadata";
+import PersonDrawerParentTitleRow from "@/components/admin/entity/PersonDrawerParentTitleRow";
+import PersonsDrawerVmBody, { PersonsDrawerVmTabStrip } from "@/components/admin/vmDrawer/PersonsDrawerVmBody";
 import VmPersonStatusControl from "@/components/admin/vmDrawer/VmPersonStatusControl";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
@@ -12,8 +17,8 @@ import Drawer, {
     ADMINV2_DRAWER_BACKDROP_Z,
     ADMINV2_DRAWER_PANEL_Z,
 } from "@/components/admin/Drawer";
-import { PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS } from "@/lib/admin/person/personDrawerChildChrome";
-import { PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS } from "@/lib/admin/person/personDrawerParentChrome";
+import { resolvePersonDrawerOperatingBackLink } from "@/lib/admin/person/personDrawerBackLink";
+import type { PersonDrawerVmChrome } from "@/lib/admin/person/resolvePersonDrawerVmOverviewSections";
 import {
     layoutVariantFromChildVm,
     layoutVariantFromPersonVm,
@@ -28,10 +33,21 @@ import {
 const DRAWER_ACCENT_PERSON = "#0d9488";
 const DRAWER_ACCENT_CHILD = "#2563eb";
 
+function resolvePersonDrawerVmChrome(
+    displayVm: { surface: string } | null,
+    isChildSurface: boolean
+): PersonDrawerVmChrome {
+    if (!displayVm) return "generic";
+    if (isChildSurface || displayVm.surface === "child") return "child";
+    if (displayVm.surface === "parent") return "parent";
+    return "generic";
+}
+
 export default function PersonsDrawerVmRuntime() {
     const pathname = usePathname();
     const { canMutate } = useAdminAuth();
-    const { drawer, closeDrawer, openDrawer } = useAdminDrawer();
+    const { drawer, closeDrawer, openDrawer, canGoBack, previousDrawer, goBack } = useAdminDrawer();
+    const [drawerTab, setDrawerTab] = useState<DrawerTabKey>("overview");
     const { displayVm, isChildSurface, coldLoading, error, suppressFullDrawerLoading } =
         usePersonsDrawerVmPayload();
 
@@ -44,6 +60,11 @@ export default function PersonsDrawerVmRuntime() {
         });
     }, [displayVm, drawer.id, isChildSurface]);
 
+    const chrome = useMemo(
+        () => resolvePersonDrawerVmChrome(displayVm, isChildSurface),
+        [displayVm, isChildSurface]
+    );
+
     const record = displayVm?.record ?? null;
     const layoutVariant = useMemo(() => {
         if (!displayVm) return null;
@@ -55,16 +76,6 @@ export default function PersonsDrawerVmRuntime() {
         }
         return null;
     }, [displayVm, isChildSurface]);
-
-    const childChromeHint = useMemo(
-        () => ({ presentation_emphasis: PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS }),
-        []
-    );
-
-    const parentChromeHint = useMemo(() => {
-        if (displayVm?.surface !== "parent") return null;
-        return { presentation_emphasis: PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS };
-    }, [displayVm?.surface]);
 
     const onOpenLinkedPerson = useCallback(
         (personId: string) => {
@@ -93,6 +104,71 @@ export default function PersonsDrawerVmRuntime() {
     const accentColor = isChildSurface ? DRAWER_ACCENT_CHILD : DRAWER_ACCENT_PERSON;
     const defaultTitle = isChildSurface ? "Child" : "Person";
 
+    const statusControl = useMemo(() => {
+        if (!displayVm?.header.status_label) return null;
+        return <VmPersonStatusControl statusLabel={displayVm.header.status_label} />;
+    }, [displayVm?.header.status_label]);
+
+    useEffect(() => {
+        setDrawerTab("overview");
+    }, [drawer.id, chrome]);
+
+    const backLink = useMemo(
+        () => resolvePersonDrawerOperatingBackLink(canGoBack, previousDrawer, drawer.openSource),
+        [canGoBack, previousDrawer, drawer.openSource]
+    );
+
+    const drawerTitle = useMemo(() => {
+        if (!record) return displayVm?.header.title ?? defaultTitle;
+        if (chrome === "child") return <PersonDrawerChildTitleRow record={record} />;
+        if (chrome === "parent") return <PersonDrawerParentTitleRow record={record} />;
+        return displayVm?.header.title ?? defaultTitle;
+    }, [record, chrome, displayVm?.header.title, defaultTitle]);
+
+    const headerSubtitle = useMemo(() => {
+        if (!record) return undefined;
+        if (chrome === "child" || chrome === "parent") {
+            const recordNum = formatPersonDrawerRecordNumber(record);
+            return (
+                <div
+                    className="mt-0.5"
+                    data-person-drawer-header-subtitle={chrome}
+                >
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] leading-snug text-alloy-midnight/75">
+                        {statusControl ?
+                            <span className="shrink-0">{statusControl}</span>
+                        :   null}
+                        {recordNum ?
+                            <span className="font-medium text-alloy-midnight/80">{recordNum}</span>
+                        :   null}
+                        {backLink ?
+                            <>
+                                {recordNum ?
+                                    <span className="text-alloy-midnight/30">·</span>
+                                :   null}
+                                <button
+                                    type="button"
+                                    onClick={() => goBack()}
+                                    className="text-[12px] font-medium text-alloy-blue hover:underline"
+                                    data-record-drawer-back-link="true"
+                                >
+                                    {backLink.label}
+                                </button>
+                            </>
+                        :   null}
+                    </div>
+                </div>
+            );
+        }
+        return (
+            <PersonDrawerHeaderMetadata
+                record={record}
+                backLink={backLink ? { label: backLink.label, onClick: () => goBack() } : null}
+                statusSlot={statusControl}
+            />
+        );
+    }, [record, chrome, statusControl, backLink, goBack]);
+
     const runtimeDebug = useMemo(
         () =>
             drawer.type && drawer.id ?
@@ -109,12 +185,17 @@ export default function PersonsDrawerVmRuntime() {
         [drawer.type, drawer.id, isChildSurface, pathname]
     );
 
+    const headerExtra =
+        chrome === "parent" || chrome === "child" ?
+            <PersonsDrawerVmTabStrip active={drawerTab} onSelect={setDrawerTab} />
+        :   undefined;
+
     return (
         <Drawer
             isOpen={Boolean(drawer.type && drawer.id) && drawer.type === "persons"}
             onClose={closeDrawer}
-            title={displayVm?.header.title ?? defaultTitle}
-            headerSubtitle={displayVm?.header.subtitle ?? undefined}
+            title={drawerTitle}
+            headerSubtitle={headerSubtitle}
             variant="adminV2"
             presentation="modal"
             panelClassName="max-w-5xl"
@@ -123,16 +204,14 @@ export default function PersonsDrawerVmRuntime() {
             accentColor={accentColor}
             recordModalTone="cleaning-v2"
             runtimeDebug={runtimeDebug}
-            statusBadge={
-                displayVm ?
-                    <VmPersonStatusControl statusLabel={displayVm.header.status_label} />
-                :   undefined
-            }
+            statusBadge={chrome === "generic" ? statusControl ?? undefined : undefined}
+            headerExtra={headerExtra}
         >
             <div
                 className="relative"
                 data-adminv2-drawer="true"
                 data-drawer-vm-runtime={isChildSurface ? "child" : "person"}
+                data-person-drawer-vm-chrome={chrome}
             >
                 {error ?
                     <p className="text-sm text-alloy-ember">{error}</p>
@@ -144,32 +223,18 @@ export default function PersonsDrawerVmRuntime() {
                         </p>
                     </div>
                 :   displayVm && record && layoutVariant ?
-                    <div
-                        className="space-y-4"
-                        data-adminv2-person-drawer-body="true"
-                        data-drawer-vm-runtime-overview="true"
-                    >
-                        {isChildSurface ?
-                            <PersonDrawerChildLifecycleRail
-                                record={record}
-                                chromeHint={childChromeHint}
-                                onSelectTab={() => {}}
-                            />
-                        :   null}
-                        <PersonDrawerOperatingSections
-                            variant={layoutVariant}
-                            record={record}
-                            personId={displayVm.entity.id}
-                            canMutate={!!canMutate}
-                            bodyHydrated
-                            childChromeHint={isChildSurface ? childChromeHint : null}
-                            parentChromeHint={parentChromeHint}
-                            onOpenDrawer={onOpenDrawer}
-                            onOpenLinkedPerson={onOpenLinkedPerson}
-                            onPersonUpdated={() => {}}
-                            onRecordUpdated={() => {}}
-                        />
-                    </div>
+                    <PersonsDrawerVmBody
+                        displayVm={displayVm}
+                        chrome={chrome}
+                        layoutVariant={layoutVariant}
+                        isChildSurface={isChildSurface}
+                        personId={displayVm.entity.id}
+                        canMutate={!!canMutate}
+                        drawerTab={drawerTab}
+                        onSelectTab={setDrawerTab}
+                        onOpenDrawer={onOpenDrawer}
+                        onOpenLinkedPerson={onOpenLinkedPerson}
+                    />
                 :   null}
             </div>
         </Drawer>
