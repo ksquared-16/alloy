@@ -4,6 +4,7 @@ import type {
     WorkUnitFirstPaintDependencyState,
     WorkUnitViewModel,
 } from "@/lib/adminV2/viewModel/workUnit/types";
+import { buildWorkUnitViewModelActions } from "@/lib/adminV2/viewModel/workUnit/extractWorkUnitViewModelActions";
 
 function dep(
     key: WorkUnitFirstPaintDependencyState["key"],
@@ -20,6 +21,7 @@ function buildFirstPaintContract(input: ComposeWorkUnitViewModelInput): WorkUnit
         input.queueLaneRevealState === "ready_empty" ||
         input.queueLaneRevealState === "ready_with_cache";
     const kpiReady = !input.kpiMetricsPending;
+    const rowsNeedActions = input.queueRecordIds.length > 0;
 
     const dependencies: WorkUnitFirstPaintDependencyState[] = [
         dep(
@@ -40,7 +42,17 @@ function buildFirstPaintContract(input: ComposeWorkUnitViewModelInput): WorkUnit
         dep(
             "enrollment_actions",
             "first_paint_required",
-            input.enrollmentActionsSettled ? "ready" : "deferred"
+            input.enrollmentActionsSettled ? "ready" : "pending"
+        ),
+        dep(
+            "right_rail_actions",
+            "first_paint_required",
+            input.enrollmentActionsSettled ? "ready" : "pending"
+        ),
+        dep(
+            "row_queue_actions",
+            "first_paint_required",
+            !rowsNeedActions ? "empty" : input.queueRowActionsReady ? "ready" : "pending"
         ),
         dep(
             "active_lane_rows",
@@ -73,6 +85,14 @@ export function composeWorkUnitViewModel(input: ComposeWorkUnitViewModelInput): 
         input.queueModel?.primaryQueue?.items?.length ??
         (Array.isArray(input.queueItems?.items) ? input.queueItems!.items!.length : 0);
 
+    const actions = buildWorkUnitViewModelActions({
+        opportunityQueueRowResolved: input.opportunityQueueRowResolved,
+        enrollmentRightRailResolved: input.enrollmentRightRailResolved,
+        queueRowActionsReady: input.queueRowActionsReady,
+        enrollmentActionsSettled: input.enrollmentActionsSettled,
+        queueRecordIds: input.queueRecordIds,
+    });
+
     const vm: WorkUnitViewModel = {
         generation: `${input.workUnitId}:${input.selectedQueueKey ?? "default"}:${first_paint.settled ? "settled" : "pending"}`,
         entity: {
@@ -98,6 +118,7 @@ export function composeWorkUnitViewModel(input: ComposeWorkUnitViewModelInput): 
             metrics_pending: input.kpiMetricsPending,
             strip_visible: input.kpiStripVisible,
         },
+        actions,
         timing: {
             compose_ms: Math.round((typeof performance !== "undefined" ? performance.now() : 0) - t0),
         },

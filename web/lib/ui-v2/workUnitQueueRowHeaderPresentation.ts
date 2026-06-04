@@ -182,19 +182,22 @@ export function buildAttentionExpandedDetail(
     };
 }
 
-/** Exceptional expand — multiple warnings or subline too long for header line 2. */
+/** Header line-2 parts — operational context consolidated before exceptional expand. */
+export function buildEnrollmentHeaderSublineParts(detail: AttentionExpandedDetail): string[] {
+    return [
+        detail.reasonDetail,
+        detail.nextStepLine,
+        detail.hintLine,
+        detail.childLifecycleSummary,
+        detail.operationalSummary,
+    ].filter(Boolean) as string[];
+}
+
+/** Exceptional expand — subline too long for header line 2. */
 export function shouldExpandAttentionBandFromDetail(detail: AttentionExpandedDetail): boolean {
     if (!detail.hasContent) return false;
-
-    const hasExtraLines = Boolean(
-        detail.hintLine || detail.childLifecycleSummary || detail.operationalSummary
-    );
-    const sublineParts = [detail.reasonDetail, detail.nextStepLine].filter(Boolean);
-    const sublineLen = sublineParts.join(" · ").length;
-
-    if (hasExtraLines) return true;
-    if (sublineLen > QUEUE_ROW_HEADER_SUBLINE_MAX) return true;
-    return false;
+    const sublineLen = buildEnrollmentHeaderSublineParts(detail).join(" · ").length;
+    return sublineLen > QUEUE_ROW_HEADER_SUBLINE_MAX;
 }
 
 export function shouldExpandAttentionBand(
@@ -204,14 +207,43 @@ export function shouldExpandAttentionBand(
     return shouldExpandAttentionBandFromDetail(buildAttentionExpandedDetail(slots, headerInline));
 }
 
-/** Compact header line 2 — reason + next step when not exceptionally expanded. */
+/** Compact header line 2 — reason, next step, and supporting context when not exceptionally expanded. */
 export function buildEnrollmentHeaderSubline(
     detail: AttentionExpandedDetail,
     expandAttentionBand: boolean
 ): string | null {
     if (expandAttentionBand || !detail.hasContent) return null;
-    const parts = [detail.reasonDetail, detail.nextStepLine].filter(Boolean);
+    const parts = buildEnrollmentHeaderSublineParts(detail);
     return parts.length ? parts.join(" · ") : null;
+}
+
+/** Waitlist header line 2 — priority explanation, sibling context, placement guidance. */
+export function buildWaitlistHeaderSubline(
+    inline: WaitlistHeaderInline,
+    candidate?: QueueRowPlacementWaitlistCandidateVm | null
+): string | null {
+    const parts: string[] = [];
+    if (inline.reasonShort?.trim()) parts.push(inline.reasonShort.trim());
+    if (candidate) {
+        for (const line of candidate.siblingContextLines ?? []) {
+            const trimmed = line?.trim();
+            if (!trimmed) continue;
+            if (parts.some((p) => p.includes(trimmed) || trimmed.includes(p))) continue;
+            parts.push(trimmed);
+        }
+        const forecast = candidate.forecastHints?.[0]?.trim();
+        if (forecast && !parts.some((p) => p.includes(forecast))) {
+            parts.push(forecast);
+        }
+        const linkLabel = candidate.linkModeLabel?.trim();
+        if (linkLabel && !parts.some((p) => p.includes(linkLabel))) {
+            parts.push(linkLabel);
+        }
+    }
+    if (!parts.length) return null;
+    const joined = parts.join(" · ");
+    if (joined.length <= QUEUE_ROW_HEADER_SUBLINE_MAX) return joined;
+    return parts.slice(0, 2).join(" · ") || null;
 }
 
 export function buildWaitlistHeaderInlineFromPlacement(

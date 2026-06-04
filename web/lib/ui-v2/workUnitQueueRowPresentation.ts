@@ -15,6 +15,7 @@ import {
     buildWaitlistHeaderInlineFromCandidate,
     buildWaitlistHeaderInlineFromPlacement,
     buildWaitlistHeaderInlineFromV2,
+    buildWaitlistHeaderSubline,
     shouldExpandAttentionBandFromDetail,
     waitlistCandidateNeedsExpandedBand,
 } from "@/lib/ui-v2/workUnitQueueRowHeaderPresentation";
@@ -73,6 +74,8 @@ export type WorkUnitQueueRowPresentationPlan = {
         waitlist: WaitlistHeaderInline | null;
         /** Line 2 — reason + next step when not exceptionally expanded. */
         enrollmentSubline: string | null;
+        /** Line 2 — waitlist priority / sibling / placement context. */
+        waitlistSubline: string | null;
         attentionExpanded: boolean;
         lifecycleExpanded: boolean;
     };
@@ -209,10 +212,19 @@ export function resolveWorkUnitQueueRowPresentationPlan(
             ? buildEnrollmentHeaderSubline(attentionDetail, attentionExpanded)
             : null;
 
+    let waitlistSubline: string | null = null;
+    if (lifecycle === "waitlist" && waitlistInline) {
+        waitlistSubline = buildWaitlistHeaderSubline(
+            waitlistInline,
+            input.waitlistCandidateRow ?? null
+        );
+    }
+
     const lifecycleExpanded =
         lifecycleBandVisible(lifecycleSections) &&
         lifecycle === "waitlist" &&
-        Boolean(input.waitlistCandidateRow && waitlistCandidateNeedsExpandedBand(input.waitlistCandidateRow));
+        Boolean(input.waitlistCandidateRow && waitlistCandidateNeedsExpandedBand(input.waitlistCandidateRow)) &&
+        !waitlistSubline;
 
     const bands: WorkUnitQueueRowBandKey[] = ["header"];
     if (attentionExpanded) bands.push("attention");
@@ -230,6 +242,7 @@ export function resolveWorkUnitQueueRowPresentationPlan(
             enrollmentAttention,
             waitlist: waitlistInline,
             enrollmentSubline,
+            waitlistSubline,
             attentionExpanded,
             lifecycleExpanded,
         },

@@ -135,10 +135,7 @@ export function QueueRowCompactOperationalHeader({
     const enrollmentInline = plan.headerInline.enrollmentAttention;
     const waitlistInline = plan.headerInline.waitlist;
     const enrollmentSubline = plan.headerInline.enrollmentSubline?.trim() || null;
-    const waitlistSubline =
-        plan.lifecycle === "waitlist" && !enrollmentSubline
-            ? waitlistInline?.reasonShort?.trim() || null
-            : null;
+    const waitlistSubline = plan.headerInline.waitlistSubline?.trim() || null;
     const headerSubline = enrollmentSubline || waitlistSubline;
     const attentionPrimaryVisible = Boolean(
         statusLabel || enrollmentInline?.inline || waitlistInline?.rankingChip

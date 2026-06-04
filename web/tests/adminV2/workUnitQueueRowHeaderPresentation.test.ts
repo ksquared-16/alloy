@@ -153,7 +153,7 @@ describe("workUnitQueueRowHeaderPresentation", () => {
         );
     });
 
-    it("expands attention band only for exceptional multi-warning rows", () => {
+    it("keeps supplemental context in header subline when it fits", () => {
         const detail = buildAttentionExpandedDetail(
             baseSlots({
                 operationalReadPreview: {
@@ -168,6 +168,30 @@ describe("workUnitQueueRowHeaderPresentation", () => {
                     previewBoundary: "Preview",
                 },
                 nextStep: "Call family.",
+            }),
+            null
+        );
+        expect(shouldExpandAttentionBandFromDetail(detail)).toBe(false);
+        expect(buildEnrollmentHeaderSubline(detail, false)).toContain("Escalation");
+        expect(buildEnrollmentHeaderSubline(detail, false)).toContain("Next step:");
+    });
+
+    it("expands attention band only when header subline exceeds max length", () => {
+        const longReason = "x".repeat(120);
+        const detail = buildAttentionExpandedDetail(
+            baseSlots({
+                operationalReadPreview: {
+                    operationalRead: "overdue follow-up",
+                    whyNow: longReason,
+                    urgencyChipLabel: "Urgent",
+                    urgencyBand: "p0_urgent",
+                    typeCue: null,
+                    staleCue: null,
+                    source: "legacy_why_line",
+                    priorityExplanation: null,
+                    previewBoundary: "Preview",
+                },
+                nextStep: "Call family with extended operational guidance.",
             }),
             null
         );

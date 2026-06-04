@@ -1,12 +1,16 @@
 import type { WorkUnitAboveFoldRenderModel } from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/aboveFoldTypes";
 import type { WorkUnitQueueLaneRevealState } from "@/lib/workspace/workUnitQueueLaneRevealState";
 import type { KPIVm, WorkUnitWorkspaceModel } from "@/lib/ui-v2/workspace-types";
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
+import type { WorkUnitViewModelActions } from "@/lib/adminV2/viewModel/workUnit/extractWorkUnitViewModelActions";
 
 export type WorkUnitFirstPaintDependencyKey =
     | "work_unit_identity"
     | "department_identity"
     | "queue_summaries"
     | "enrollment_actions"
+    | "row_queue_actions"
+    | "right_rail_actions"
     | "active_lane_rows"
     | "kpi_placements";
 
@@ -51,6 +55,7 @@ export type WorkUnitViewModel = {
         metrics_pending: boolean;
         strip_visible: boolean;
     };
+    actions: WorkUnitViewModelActions;
     timing: { compose_ms: number };
 };
 
@@ -72,4 +77,8 @@ export type ComposeWorkUnitViewModelInput = {
     kpiStripVisible: boolean;
     shellReady: boolean;
     enrollmentActionsSettled: boolean;
+    opportunityQueueRowResolved: ResolvedActionForClient[] | null;
+    enrollmentRightRailResolved: ResolvedActionForClient[] | null;
+    queueRowActionsReady: boolean;
+    queueRecordIds: string[];
 };

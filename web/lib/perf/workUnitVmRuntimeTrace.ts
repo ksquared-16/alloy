@@ -19,6 +19,9 @@ export type WorkUnitVmRuntimeBaseline = {
     queue_ready_ms: number | null;
     kpi_ready_ms: number | null;
     first_paint_ready_ms: number | null;
+    actions_ready_ms: number | null;
+    row_actions_ready_ms: number | null;
+    right_rail_actions_ready_ms: number | null;
     pill_switch_ms: number | null;
     marks: Record<string, number>;
 };
@@ -123,6 +126,34 @@ export function markWorkUnitVmFirstPaintReady(extra?: Record<string, unknown>): 
     });
 }
 
+export function markWorkUnitVmRowActionsReady(extra?: Record<string, unknown>): void {
+    const t = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (alloyPerfGet("wu_vm_row_actions_ready") == null) alloyPerfSet("wu_vm_row_actions_ready", t);
+    logWorkUnitVmRuntimeDiagnostic("wu_vm_row_actions_ready", {
+        since_navigation_ms: rel("wu_vm_row_actions_ready"),
+        ...extra,
+    });
+}
+
+export function markWorkUnitVmRightRailActionsReady(extra?: Record<string, unknown>): void {
+    const t = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (alloyPerfGet("wu_vm_right_rail_actions_ready") == null)
+        alloyPerfSet("wu_vm_right_rail_actions_ready", t);
+    logWorkUnitVmRuntimeDiagnostic("wu_vm_right_rail_actions_ready", {
+        since_navigation_ms: rel("wu_vm_right_rail_actions_ready"),
+        ...extra,
+    });
+}
+
+export function markWorkUnitVmActionsReady(extra?: Record<string, unknown>): void {
+    const t = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (alloyPerfGet("wu_vm_actions_ready") == null) alloyPerfSet("wu_vm_actions_ready", t);
+    logWorkUnitVmRuntimeDiagnostic("wu_vm_actions_ready", {
+        since_navigation_ms: rel("wu_vm_actions_ready"),
+        ...extra,
+    });
+}
+
 export function markWorkUnitVmPillSwitchStart(extra?: Record<string, unknown>): void {
     const t = typeof performance !== "undefined" ? performance.now() : Date.now();
     alloyPerfSet("wu_vm_pill_switch_start", t);
@@ -169,6 +200,9 @@ export function reportWorkUnitVmRuntimeBaseline(): WorkUnitVmRuntimeBaseline {
         queue_ready_ms: rel("wu_vm_queue_ready") ?? rel("queue_tab_rows_ready"),
         kpi_ready_ms: rel("wu_vm_kpi_ready") ?? rel("wu_lane_kpi_or_summary_real"),
         first_paint_ready_ms: rel("wu_vm_first_paint_ready") ?? rel("wu_lane_above_fold_coordinated"),
+        actions_ready_ms: rel("wu_vm_actions_ready"),
+        row_actions_ready_ms: rel("wu_vm_row_actions_ready"),
+        right_rail_actions_ready_ms: rel("wu_vm_right_rail_actions_ready"),
         pill_switch_ms:
             marks.wu_vm_pill_switch_start != null && marks.wu_vm_pill_switch_apply != null ?
                 Math.round(Number(marks.wu_vm_pill_switch_apply) - Number(marks.wu_vm_pill_switch_start))

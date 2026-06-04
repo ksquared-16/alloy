@@ -1,5 +1,6 @@
 import type { WorkUnitAboveFoldRenderModel } from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/aboveFoldTypes";
-import type { WorkUnitWorkspaceModel } from "@/lib/ui-v2/workspace-types";
+import type { WorkUnitViewModelActions } from "@/lib/adminV2/viewModel/workUnit/extractWorkUnitViewModelActions";
+import { collectWorkUnitViewModelActionKeys } from "@/lib/adminV2/viewModel/workUnit/extractWorkUnitViewModelActions";
 
 /** Flat snapshot extracted from live page presentation models for shadow diff. */
 export type LiveWorkUnitShadowSnapshot = {
@@ -15,6 +16,11 @@ export type LiveWorkUnitShadowSnapshot = {
     kpi_metrics_pending: boolean;
     actions_rail_state: string;
     queue_lane_state: string;
+    row_action_count: number;
+    right_rail_action_count: number;
+    action_availability_state: string;
+    row_action_keys: string;
+    right_rail_action_keys: string;
 };
 
 export function assembleLiveWorkUnitShadowSnapshot(params: {
@@ -22,17 +28,19 @@ export function assembleLiveWorkUnitShadowSnapshot(params: {
     workUnitId: string;
     selectedQueueKey: string | null;
     workUnitAboveFold: WorkUnitAboveFoldRenderModel;
-    queueModel: WorkUnitWorkspaceModel | null;
+    queueModel: import("@/lib/ui-v2/workspace-types").WorkUnitWorkspaceModel | null;
     kpiMetricCount: number;
     kpiMetricsPending: boolean;
     firstPaintSettled: boolean;
     laneRevealState: string;
     queueRowsLoading: boolean;
+    actions: WorkUnitViewModelActions;
 }): LiveWorkUnitShadowSnapshot {
     const pillCount = params.workUnitAboveFold.header.sections.reduce(
         (n, sec) => n + sec.chips.length,
         0
     );
+    const actionKeys = collectWorkUnitViewModelActionKeys(params.actions);
     return {
         work_unit_id: params.workUnitId,
         department_id: params.departmentId,
@@ -46,6 +54,11 @@ export function assembleLiveWorkUnitShadowSnapshot(params: {
         kpi_metrics_pending: params.kpiMetricsPending,
         actions_rail_state: params.workUnitAboveFold.actions_rail.state,
         queue_lane_state: params.workUnitAboveFold.queue_lane.state,
+        row_action_count: actionKeys.row_action_keys.length,
+        right_rail_action_count: actionKeys.right_rail_action_keys.length,
+        action_availability_state: params.actions.action_availability_state,
+        row_action_keys: actionKeys.row_action_keys.join(","),
+        right_rail_action_keys: actionKeys.right_rail_action_keys.join(","),
     };
 }
 
@@ -56,6 +69,7 @@ export function extractWorkUnitViewModelShadowSnapshot(
         (n, sec) => n + sec.chips.length,
         0
     );
+    const actionKeys = collectWorkUnitViewModelActionKeys(vm.actions);
     return {
         work_unit_id: vm.entity.work_unit_id,
         department_id: vm.entity.department_id,
@@ -69,5 +83,10 @@ export function extractWorkUnitViewModelShadowSnapshot(
         kpi_metrics_pending: vm.kpi.metrics_pending,
         actions_rail_state: vm.above_fold.actions_rail.state,
         queue_lane_state: vm.above_fold.queue_lane.state,
+        row_action_count: actionKeys.row_action_keys.length,
+        right_rail_action_count: actionKeys.right_rail_action_keys.length,
+        action_availability_state: vm.actions.action_availability_state,
+        row_action_keys: actionKeys.row_action_keys.join(","),
+        right_rail_action_keys: actionKeys.right_rail_action_keys.join(","),
     };
 }

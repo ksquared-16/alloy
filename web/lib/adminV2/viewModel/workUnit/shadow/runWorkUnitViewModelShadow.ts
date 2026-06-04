@@ -1,5 +1,6 @@
 import { composeWorkUnitViewModel } from "@/lib/adminV2/viewModel/workUnit/composeWorkUnitViewModel";
 import type { ComposeWorkUnitViewModelInput } from "@/lib/adminV2/viewModel/workUnit/types";
+import { buildWorkUnitViewModelActions } from "@/lib/adminV2/viewModel/workUnit/extractWorkUnitViewModelActions";
 import { logWorkUnitVmRuntimeDiagnostic } from "@/lib/adminV2/viewModel/workUnit/workUnitVmRuntimeDiagnostics";
 import { adminV2WorkUnitViewModelShadowEnabled } from "@/lib/adminV2/viewModel/workUnit/workUnitVmShadowGate";
 import {
@@ -25,6 +26,13 @@ export async function runWorkUnitViewModelShadow(
 
     try {
         const composeStart = typeof performance !== "undefined" ? performance.now() : 0;
+        const liveActions = buildWorkUnitViewModelActions({
+            opportunityQueueRowResolved: params.opportunityQueueRowResolved,
+            enrollmentRightRailResolved: params.enrollmentRightRailResolved,
+            queueRowActionsReady: params.queueRowActionsReady,
+            enrollmentActionsSettled: params.enrollmentActionsSettled,
+            queueRecordIds: params.queueRecordIds,
+        });
         const vm = composeWorkUnitViewModel(params);
         const compose_ms = Math.round((typeof performance !== "undefined" ? performance.now() : 0) - composeStart);
 
@@ -47,6 +55,7 @@ export async function runWorkUnitViewModelShadow(
             firstPaintSettled: params.firstPaintSettled,
             laneRevealState: params.queueLaneRevealState,
             queueRowsLoading: params.queueItemsLoading,
+            actions: liveActions,
         });
         const vmSnap = extractWorkUnitViewModelShadowSnapshot(vm);
         const diff = diffWorkUnitViewModelShadow(live, vmSnap);
