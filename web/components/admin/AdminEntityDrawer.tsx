@@ -5577,10 +5577,10 @@ export default function AdminEntityDrawer() {
         }
         const fetchGen = ++opportunityStatusDefsFetchGenRef.current;
         logDrawerVmStatusWrite({
-            opportunity_id: drawer.id,
+            opportunity_id: drawer.id ?? undefined,
             source: "status_options_api_start",
             action: "fetch",
-            entity: drawer.type,
+            entity: drawer.type ?? undefined,
             generation: opportunityStatusWriteGenRef.current,
             drawer_model_swap_generation: drawerModelSwapGeneration,
             fetch_gen: fetchGen,
@@ -5614,7 +5614,7 @@ export default function AdminEntityDrawer() {
                 ) {
                     const reconciled = reconcileStatusDefsWithVmPin(vmStatusPin!, incoming, "status_options_api");
                     logDrawerVmStatusWrite({
-                        opportunity_id: drawer.id,
+                        opportunity_id: drawer.id ?? undefined,
                         source: "status_options_api_apply",
                         action: "set_defs",
                         entity: "opportunities",
@@ -5628,10 +5628,10 @@ export default function AdminEntityDrawer() {
                     return;
                 }
                 logDrawerVmStatusWrite({
-                    opportunity_id: drawer.id,
+                    opportunity_id: drawer.id ?? undefined,
                     source: "status_options_api_apply",
                     action: "set_defs",
-                    entity: drawer.type,
+                    entity: drawer.type ?? undefined,
                     generation: opportunityStatusWriteGenRef.current,
                     def_count: incoming.length,
                 });
