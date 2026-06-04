@@ -142,6 +142,9 @@ import { queueBosHandoffPreviewFromOperationalRead } from "@/lib/adminV2/bos/bos
 import { resolveQueueOperationalReadSlot } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceViewModels";
 import { resolveQueueRowPreviewActionsForWorkUnit } from "@/lib/ui-v2/enrollmentQueueRowPreviewPolicy";
 import { mergeQueueRowQuickActions } from "@/lib/workspace/viewModels/mergeQueueRowQuickActions";
+import { extractQueueRowRelatedDrawerTargets } from "@/lib/workspace/viewModels/queueRowRelatedDrawerTargets";
+import { prepareDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/drawerModelSwapNavigation";
+import { PERSON_DRAWER_CHILD_OPEN_SOURCE } from "@/lib/admin/drawer/personDrawerOpenSeed";
 import { buildRealOpportunityWorkUnitWorkspaceModel } from "@/lib/ui-v2/adapters/realWorkUnitFromOpportunities";
 import {
     buildWorkUnitQueueCrmCompactRowSlice,
@@ -4187,10 +4190,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 const rowPrimaryIdentity = familyTitle;
                 const rowTitle = familyTitle;
                 const grainCtx = parseQueueRowGrainContext(r as Record<string, unknown>);
+                const relatedDrawerTargets = extractQueueRowRelatedDrawerTargets(
+                    r as Record<string, unknown>,
+                    rid
+                );
 
                 return {
                     id: listRowId,
                     opportunityId: rid,
+                    relatedPersonId: relatedDrawerTargets.personId,
+                    relatedChildPersonId: relatedDrawerTargets.childPersonId,
                     rowGrain: grainCtx.rowGrain,
                     placementCandidateId:
                         grainCtx.placementCandidateId ?? waitlistCandidate?.placementCandidateId,
@@ -4953,6 +4962,57 @@ export default function AdminV2OpportunityWorkUnitPage() {
         [buildOpportunityDrawerOpenParams, openDrawer, opportunityWorkspaceContext]
     );
 
+    const openWorkUnitQueuePersonDrawer = useCallback(
+        (personId: string, opportunityId: string) => {
+            const pid = personId.trim();
+            if (!pid) return;
+            void prepareDrawerViewModel({
+                entityType: "persons",
+                entityId: pid,
+                openSource: "queue_row_person",
+                context: {
+                    departmentId,
+                    workUnitId: workUnit?.id ?? null,
+                },
+            });
+            openDrawer({
+                type: "persons",
+                id: pid,
+                source: "queue_row_person",
+                personDrawerOpenSeed: { personId: pid, opportunity_id: opportunityId.trim() || undefined },
+            });
+        },
+        [departmentId, openDrawer, workUnit?.id]
+    );
+
+    const openWorkUnitQueueChildDrawer = useCallback(
+        (childPersonId: string, opportunityId: string) => {
+            const cid = childPersonId.trim();
+            if (!cid) return;
+            void prepareDrawerViewModel({
+                entityType: "persons",
+                entityId: cid,
+                openSource: PERSON_DRAWER_CHILD_OPEN_SOURCE,
+                presentationEmphasis: "child_lifecycle",
+                context: {
+                    departmentId,
+                    workUnitId: workUnit?.id ?? null,
+                },
+            });
+            openDrawer({
+                type: "persons",
+                id: cid,
+                source: PERSON_DRAWER_CHILD_OPEN_SOURCE,
+                personDrawerOpenSeed: {
+                    personId: cid,
+                    presentation_emphasis: "child_lifecycle",
+                    opportunity_id: opportunityId.trim() || undefined,
+                },
+            });
+        },
+        [departmentId, openDrawer, workUnit?.id]
+    );
+
     const onAction = useCallback(
         async (action: WorkspaceAction) => {
             if (action.type === "queue.item.action") {
@@ -5037,6 +5097,29 @@ export default function AdminV2OpportunityWorkUnitPage() {
                           ? queueEt
                           : "opportunity";
                 openWorkUnitQueueRecord(action.itemId, entityType, "open_record_branch");
+                return;
+            }
+            if (action.type === "queue.item.action" && action.actionId === "open_person_drawer" && action.itemId) {
+                const payload =
+                    action.payload && typeof action.payload === "object"
+                        ? (action.payload as Record<string, unknown>)
+                        : {};
+                const personId = typeof payload.person_id === "string" ? payload.person_id.trim() : "";
+                if (personId) {
+                    openWorkUnitQueuePersonDrawer(personId, action.itemId);
+                }
+                return;
+            }
+            if (action.type === "queue.item.action" && action.actionId === "open_child_drawer" && action.itemId) {
+                const payload =
+                    action.payload && typeof action.payload === "object"
+                        ? (action.payload as Record<string, unknown>)
+                        : {};
+                const childPersonId =
+                    typeof payload.child_person_id === "string" ? payload.child_person_id.trim() : "";
+                if (childPersonId) {
+                    openWorkUnitQueueChildDrawer(childPersonId, action.itemId);
+                }
                 return;
             }
             if (
@@ -5346,6 +5429,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
             openScheduleTourForOpportunity,
             openScheduleTourRecordPicker,
             openWorkUnitQueueRecord,
+            openWorkUnitQueuePersonDrawer,
+            openWorkUnitQueueChildDrawer,
             buildOpportunityDrawerOpenParams,
             oppDrawerExtra,
             opportunityWorkspaceContext,

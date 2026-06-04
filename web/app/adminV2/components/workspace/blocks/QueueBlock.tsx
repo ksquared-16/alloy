@@ -23,6 +23,8 @@ import {
   type OpportunityDrawerIntentContext,
 } from "@/lib/admin/opportunityDrawerIntentPrefetch";
 import { queueRowGrainActionPayload, queueRowGrainContextFromPreviewItem } from "@/lib/queues/queueRowGrainContext";
+import { prepareDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/drawerModelSwapNavigation";
+import { PERSON_DRAWER_CHILD_OPEN_SOURCE } from "@/lib/admin/drawer/personDrawerOpenSeed";
 import { DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS } from "@/lib/ui-v2/queueUiConfig";
 import { normalizePreviewLooseDateTokens } from "@/lib/adminFormatters";
 import { CRM_COMPACT_VALUE_DOT_SEP } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
@@ -96,6 +98,93 @@ function fireQueueRowOpenRecord(
     itemId: actionEntityId,
     actionId: "open_record",
     payload: mergeQueueActionPayload(queue, queueRowGrainActionPayload(queueRowGrainContextFromPreviewItem(item))),
+  });
+}
+
+function prefetchQueueRowPersonDrawerIntent(
+  personId: string,
+  workspaceContext?: OpportunityDrawerIntentContext | null
+): void {
+  void prepareDrawerViewModel({
+    entityType: "persons",
+    entityId: personId,
+    openSource: "queue_row_person",
+    context: {
+      departmentId: workspaceContext?.department_id ?? null,
+      workUnitId: workspaceContext?.work_unit_id ?? null,
+    },
+  });
+}
+
+function prefetchQueueRowChildDrawerIntent(
+  childPersonId: string,
+  workspaceContext?: OpportunityDrawerIntentContext | null
+): void {
+  void prepareDrawerViewModel({
+    entityType: "persons",
+    entityId: childPersonId,
+    openSource: PERSON_DRAWER_CHILD_OPEN_SOURCE,
+    presentationEmphasis: "child_lifecycle",
+    context: {
+      departmentId: workspaceContext?.department_id ?? null,
+      workUnitId: workspaceContext?.work_unit_id ?? null,
+    },
+  });
+}
+
+function fireQueueRowOpenPersonDrawer(
+  queue: QueueVm,
+  item: QueueItemVm,
+  personId: string,
+  onAction: WorkspaceActionHandler
+): void {
+  const actionEntityId = queueItemOpportunityId(item);
+  logAdminV2QueueRowClick({
+    phase: "queue_row_click",
+    itemId: actionEntityId,
+    actionId: "open_person_drawer",
+    queueId: queue.id,
+    entityType: queue.queueEntityType ?? null,
+    handlerReached: "QueueBlock_person_icon",
+  });
+  onAction({
+    type: "queue.item.action",
+    queueId: queue.id,
+    itemId: actionEntityId,
+    actionId: "open_person_drawer",
+    payload: {
+      person_id: personId,
+      opportunity_id: actionEntityId,
+      source: "queue_row_person_icon",
+    },
+  });
+}
+
+function fireQueueRowOpenChildDrawer(
+  queue: QueueVm,
+  item: QueueItemVm,
+  childPersonId: string,
+  onAction: WorkspaceActionHandler
+): void {
+  const actionEntityId = queueItemOpportunityId(item);
+  logAdminV2QueueRowClick({
+    phase: "queue_row_click",
+    itemId: actionEntityId,
+    actionId: "open_child_drawer",
+    queueId: queue.id,
+    entityType: queue.queueEntityType ?? null,
+    handlerReached: "QueueBlock_child_icon",
+  });
+  onAction({
+    type: "queue.item.action",
+    queueId: queue.id,
+    itemId: actionEntityId,
+    actionId: "open_child_drawer",
+    payload: {
+      child_person_id: childPersonId,
+      opportunity_id: actionEntityId,
+      source: "queue_row_child_icon",
+    },
   });
 }
 
@@ -1222,6 +1311,10 @@ function WorkUnitQueueLane({
             ? []
             : orderedQueueQuickActions(item.quickActions);
           const rowActionsPending = Boolean(queue.rowActionsPending);
+          const relatedPersonId = item.relatedPersonId?.trim() ?? "";
+          const relatedChildPersonId = item.relatedChildPersonId?.trim() ?? "";
+          const showRelatedDrawerIcons =
+            queue.queueEntityType === "opportunity" && Boolean(relatedPersonId || relatedChildPersonId);
           const crm = item.semanticCrmCompact;
           const valueShown = (crm?.commercialValue ?? item.valueLabel)?.trim() ?? "";
           const hasValue = Boolean(valueShown);
@@ -1354,8 +1447,83 @@ function WorkUnitQueueLane({
                         <span className="inline-block h-7 w-[4.5rem] rounded-md skeleton-pulse bg-alloy-stone/12" />
                         <span className="ml-1.5 inline-block h-7 w-[4.5rem] rounded-md skeleton-pulse bg-alloy-stone/12" />
                       </div>
-                    ) : rowQuickActions.length ? (
+                    ) : rowQuickActions.length || showRelatedDrawerIcons ? (
                       <div className="adminv2-ws-enrollment-crm-row__actions" role="group" aria-label="Actions">
+                        {showRelatedDrawerIcons ? (
+                          <div
+                            className="adminv2-ws-wu-queue-related-record-icons mr-1.5 flex items-center gap-1 opacity-70 transition-opacity hover:opacity-100 focus-within:opacity-100"
+                            data-queue-related-record-icons="true"
+                          >
+                            {relatedPersonId ? (
+                              <button
+                                type="button"
+                                title="Open person record"
+                                aria-label="Open person record"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-alloy-stone/25 bg-white/80 text-[11px] font-semibold text-alloy-midnight/70 shadow-sm hover:border-alloy-blue/40 hover:text-alloy-blue"
+                                data-queue-row-person-icon="true"
+                                onMouseEnter={() =>
+                                  prefetchQueueRowPersonDrawerIntent(
+                                    relatedPersonId,
+                                    opportunityDrawerWorkspaceContext
+                                  )
+                                }
+                                onFocus={() =>
+                                  prefetchQueueRowPersonDrawerIntent(
+                                    relatedPersonId,
+                                    opportunityDrawerWorkspaceContext
+                                  )
+                                }
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  prefetchQueueRowPersonDrawerIntent(
+                                    relatedPersonId,
+                                    opportunityDrawerWorkspaceContext
+                                  );
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  fireQueueRowOpenPersonDrawer(queue, item, relatedPersonId, onAction);
+                                }}
+                              >
+                                <span aria-hidden>P</span>
+                              </button>
+                            ) : null}
+                            {relatedChildPersonId ? (
+                              <button
+                                type="button"
+                                title="Open child record"
+                                aria-label="Open child record"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-alloy-stone/25 bg-white/80 text-[11px] font-semibold text-alloy-midnight/70 shadow-sm hover:border-alloy-blue/40 hover:text-alloy-blue"
+                                data-queue-row-child-icon="true"
+                                onMouseEnter={() =>
+                                  prefetchQueueRowChildDrawerIntent(
+                                    relatedChildPersonId,
+                                    opportunityDrawerWorkspaceContext
+                                  )
+                                }
+                                onFocus={() =>
+                                  prefetchQueueRowChildDrawerIntent(
+                                    relatedChildPersonId,
+                                    opportunityDrawerWorkspaceContext
+                                  )
+                                }
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  prefetchQueueRowChildDrawerIntent(
+                                    relatedChildPersonId,
+                                    opportunityDrawerWorkspaceContext
+                                  );
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  fireQueueRowOpenChildDrawer(queue, item, relatedChildPersonId, onAction);
+                                }}
+                              >
+                                <span aria-hidden>C</span>
+                              </button>
+                            ) : null}
+                          </div>
+                        ) : null}
                         <div className="adminv2-ws-enrollment-crm-row__action-stack">
                           {rowQuickActions.map((qa) => {
                             const dispatchId = queueQuickActionDispatchId(qa);

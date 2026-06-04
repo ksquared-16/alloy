@@ -286,6 +286,10 @@ export type QueueItemVm = {
     placementWaitlistCandidate?: QueueRowPlacementWaitlistCandidateVm;
     /** Lifecycle entity for drawer/actions when `id` is a candidate-row composite key. */
     opportunityId?: string;
+    /** Primary contact person id when enriched on queue runtime rows — secondary drawer icon target. */
+    relatedPersonId?: string | null;
+    /** First inquiry/OCM child person id when available — secondary drawer icon target. */
+    relatedChildPersonId?: string | null;
     /** Card 9 — grain context for drawer/action intent. */
     rowGrain?: "case" | "child" | "candidate";
     placementCandidateId?: string;
