@@ -7,7 +7,7 @@ import type { QueueRowPlacementWaitlistCandidateVm } from "@/lib/ui-v2/workspace
 
 type Props = {
     row: QueueRowPlacementWaitlistCandidateVm;
-    layout?: "inline" | "gutter" | "header-inline";
+    layout?: "inline" | "gutter" | "header-inline" | "header-adjust";
 };
 
 type PendingAction = "adjust" | "reset";
@@ -258,6 +258,44 @@ export function QueueRowPlacementManualOrderControls({ row, layout = "inline" }:
                   document.body
               )
             : null;
+
+    if (layout === "header-adjust") {
+        return (
+            <>
+                <span
+                    className="adminv2-ws-queue-operational-record__header-waitlist-adjust"
+                    data-queue-placement="waitlist-header-adjust"
+                    data-testid="queue-header-waitlist-adjust"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <button
+                        type="button"
+                        className="adminv2-ws-queue-waitlist-left-meta__adjust"
+                        title="Adjust waitlist position"
+                        onClick={openAdjust}
+                    >
+                        Adjust position
+                    </button>
+                    {row.hasManualPositionAdjustment ? (
+                        <>
+                            <span className="adminv2-ws-queue-operational-record__header-sep" aria-hidden="true">
+                                ·
+                            </span>
+                            <button
+                                type="button"
+                                className="adminv2-ws-queue-waitlist-left-meta__reset"
+                                title="Clear adjustment"
+                                onClick={openReset}
+                            >
+                                Clear adjustment
+                            </button>
+                        </>
+                    ) : null}
+                </span>
+                {modal}
+            </>
+        );
+    }
 
     if (layout === "header-inline") {
         return (

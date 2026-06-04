@@ -364,7 +364,7 @@ describe("resolveWorkUnitQueueRowPresentationPlan V3.2", () => {
                 siblingContextDiagnostics: null,
             },
         });
-        expect(plan.headerInline.waitlist?.rankingChip).toBe("#1 Standard family");
+        expect(plan.headerInline.waitlist?.rankingChip).toBe("#1 of 8 Standard Families");
         expect(plan.headerInline.waitlistSubline).toContain("Sibling also waitlisted");
         expect(plan.headerInline.lifecycleExpanded).toBe(false);
         expect(plan.bands).not.toContain("lifecycle");

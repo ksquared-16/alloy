@@ -4413,11 +4413,22 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                   return {
                                       primaryIdentity: rowPrimaryIdentity,
                                       waitlistHouseholdContext,
-                                      childrenLines: waitlistCandidate ? null : childrenLinesForVm,
+                                      childrenLines:
+                                          waitlistCandidate && relatedDrawerTargets.childPersonId
+                                              ? [
+                                                    {
+                                                        primary: waitlistCandidate.childDisplayName,
+                                                        personId: relatedDrawerTargets.childPersonId,
+                                                        programInline: waitlistCandidate.cohortLabel,
+                                                    },
+                                                ]
+                                              : waitlistCandidate
+                                                ? null
+                                                : childrenLinesForVm,
                                       contactPersonId:
                                           crmPresentation.contactPersonId ?? relatedDrawerTargets.personId,
                                       childPersonId: waitlistCandidate
-                                          ? null
+                                          ? relatedDrawerTargets.childPersonId ?? null
                                           : multiChildren
                                             ? null
                                             : childrenLinesForVm?.length === 1

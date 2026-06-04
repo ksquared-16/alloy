@@ -7295,6 +7295,15 @@
   padding: 0 4px;
 }
 
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__header-waitlist-adjust,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-queue-operational-record__header-waitlist-adjust {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0;
+  min-width: 0;
+}
+
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__header-waitlist-ops,
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-queue-operational-record__header-waitlist-ops {
   display: flex;

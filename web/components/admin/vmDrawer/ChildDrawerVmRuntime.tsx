@@ -6,6 +6,7 @@ import PersonDrawerOperatingSections from "@/components/admin/entity/PersonDrawe
 import VmPersonStatusControl from "@/components/admin/vmDrawer/VmPersonStatusControl";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
 import Drawer, {
     ADMINV2_DRAWER_BACKDROP_Z,
     ADMINV2_DRAWER_PANEL_Z,
@@ -48,6 +49,17 @@ export default function ChildDrawerVmRuntime() {
                 type: "persons",
                 id: personId,
                 source: "person_household_link",
+                opportunityWorkspaceContext: drawer.opportunityWorkspaceContext ?? undefined,
+            });
+        },
+        [drawer.opportunityWorkspaceContext, openDrawer]
+    );
+
+    const onOpenDrawer = useCallback(
+        (type: AdminDrawerEntityType, id: string) => {
+            openDrawer({
+                type,
+                id,
                 opportunityWorkspaceContext: drawer.opportunityWorkspaceContext ?? undefined,
             });
         },
@@ -104,7 +116,7 @@ export default function ChildDrawerVmRuntime() {
                             canMutate={!!canMutate}
                             bodyHydrated
                             childChromeHint={childChromeHint}
-                            onOpenDrawer={openDrawer}
+                            onOpenDrawer={onOpenDrawer}
                             onOpenLinkedPerson={onOpenLinkedPerson}
                             onPersonUpdated={() => {}}
                             onRecordUpdated={() => {}}

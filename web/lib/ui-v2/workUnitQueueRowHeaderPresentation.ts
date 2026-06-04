@@ -217,12 +217,40 @@ export function buildEnrollmentHeaderSubline(
     return parts.length ? parts.join(" · ") : null;
 }
 
-/** Waitlist header line 2 — priority explanation, sibling context, placement guidance. */
+/** Human-readable waitlist rank — e.g. "#1 of 3 Standard Families". */
+export function formatWaitlistRankingStatement(
+    position: number | null | undefined,
+    total: number | null | undefined,
+    categoryLabel: string | null | undefined
+): string | null {
+    const bucket = categoryLabel?.trim() || "";
+    const pos = position != null && position >= 1 ? position : null;
+    const tot = total != null && total >= 1 ? total : null;
+    const categoryPlural =
+        bucket ?
+            /family$/i.test(bucket) ?
+                bucket.replace(/family$/i, "Families")
+            :   bucket
+        :   "";
+    if (pos != null && tot != null && categoryPlural) {
+        return `#${pos} of ${tot} ${categoryPlural}`;
+    }
+    if (pos != null && bucket) return `#${pos} ${bucket}`;
+    if (pos != null && tot != null) return `#${pos} of ${tot}`;
+    if (pos != null) return `#${pos}`;
+    if (bucket) return bucket;
+    return null;
+}
+
+/** Waitlist header line 2 — wait duration, priority explanation, sibling context. */
 export function buildWaitlistHeaderSubline(
     inline: WaitlistHeaderInline,
     candidate?: QueueRowPlacementWaitlistCandidateVm | null
 ): string | null {
     const parts: string[] = [];
+    if (candidate?.waitSinceLabel?.trim()) {
+        parts.push(`Waitlisted since ${candidate.waitSinceLabel.trim()}`);
+    }
     if (inline.reasonShort?.trim()) parts.push(inline.reasonShort.trim());
     if (candidate) {
         for (const line of candidate.siblingContextLines ?? []) {
@@ -249,21 +277,8 @@ export function buildWaitlistHeaderSubline(
 export function buildWaitlistHeaderInlineFromPlacement(
     preview: QueueRowPlacementPriorityVm
 ): WaitlistHeaderInline {
-    const pos =
-        !preview.shadowMode &&
-        preview.scopedWaitlistPosition != null &&
-        preview.scopedWaitlistPosition >= 1
-            ? preview.scopedWaitlistPosition
-            : null;
     const rule = preview.priorityRuleLabel?.trim() || "";
-    let rankingChip: string | null = null;
-    if (pos != null && rule) {
-        rankingChip = `#${pos} ${rule}`;
-    } else if (pos != null) {
-        rankingChip = `#${pos}`;
-    } else if (rule) {
-        rankingChip = rule;
-    }
+    const rankingChip = formatWaitlistRankingStatement(preview.scopedWaitlistPosition, null, rule);
     const reasonShort = preview.priorityReasonShort?.trim() || null;
     return {
         rankingChip,
@@ -290,17 +305,16 @@ export function buildWaitlistHeaderInlineFromV2(preview: QueueRowPlacementPriori
 export function buildWaitlistHeaderInlineFromCandidate(
     row: QueueRowPlacementWaitlistCandidateVm
 ): WaitlistHeaderInline {
-    const pos = row.runtimePosition != null && row.runtimePosition >= 1 ? row.runtimePosition : null;
-    const bucket = row.bucketLabel?.trim() || "";
-    let rankingChip: string | null = null;
-    if (pos != null && bucket) rankingChip = `#${pos} ${bucket}`;
-    else if (pos != null) rankingChip = `#${pos}`;
-    else if (bucket) rankingChip = bucket;
+    const rankingChip = formatWaitlistRankingStatement(
+        row.runtimePosition,
+        row.runtimePositionTotal,
+        row.bucketLabel
+    );
     const reasonShort = row.linkModeLabel?.trim() || row.forecastHints[0]?.trim() || null;
     return {
         rankingChip,
         reasonShort,
-        fullRankingTitle: row.runtimePositionLabel?.trim() || rankingChip,
+        fullRankingTitle: rankingChip,
     };
 }
 

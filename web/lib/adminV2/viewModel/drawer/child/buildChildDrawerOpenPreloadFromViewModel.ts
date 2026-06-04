@@ -1,4 +1,4 @@
-import { isDrawerViewModelPreload } from "@/lib/adminV2/viewModel/drawer/drawerViewModelPreloadTypes";
+import type { PersonOrChildDrawerOpenPreload } from "@/lib/adminV2/viewModel/drawer/drawerPersonOpenPreloadUnion";
 import type { ChildDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/child/types";
 
 export type ChildDrawerOpenPreload = {
@@ -10,9 +10,10 @@ export type ChildDrawerOpenPreload = {
 };
 
 export function isChildDrawerViewModelPreload(
-    preload: ChildDrawerOpenPreload | null | undefined
+    preload: PersonOrChildDrawerOpenPreload | null | undefined
 ): preload is ChildDrawerOpenPreload & { openPath: "view_model"; viewModel: ChildDrawerViewModel } {
-    return isDrawerViewModelPreload(preload) && preload.openPath === "view_model";
+    if (!preload || preload.openPath !== "view_model" || !preload.viewModel) return false;
+    return preload.viewModel.surface === "child";
 }
 
 export function buildChildDrawerOpenPreloadFromViewModel(

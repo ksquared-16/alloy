@@ -141,6 +141,7 @@ describe("operational record V3.4 visual hierarchy", () => {
         expect(html).toMatch(
             /data-testid="queue-header-attention-column"[\s\S]*data-testid="queue-header-waitlist-reason"/
         );
+        expect(html).toContain('data-queue-row-child-icon="true"');
         expect(html).toContain('data-queue-zone="people"');
         expect(html).toContain('data-queue-row-child-icon="true"');
         const parentIdx = html.indexOf("Riley Williams");
@@ -340,17 +341,19 @@ describe("operational record V3.2 compact header", () => {
                 })}
             />
         );
-        expect(html).toContain("#1 Standard family");
+        expect(html).toContain("#1 of 8 Standard Families");
         expect(html).toContain("Sibling also waitlisted: Riley Williams — Toddler");
         expect(html).toContain('data-testid="queue-header-waitlist-reason"');
-        expect(html).toContain('data-testid="queue-header-waitlist-ops"');
+        expect(html).toContain('data-testid="queue-header-waitlist-adjust"');
         expect(html).toContain("Adjust position");
-        expect(html).toContain('data-testid="queue-header-waitlist-since"');
         expect(html).toContain("Waitlisted since 06/15/2024");
+        expect(html).toContain("#1 of 8 Standard Families");
+        expect(html).not.toContain("Preview position");
         expect(html).toContain("Desired start: Apr 2026");
         expect(html).not.toContain('data-queue-row-band="lifecycle"');
         expect(html).not.toContain('data-queue-placement="candidate-meta"');
         expect(html).not.toContain('data-queue-placement="candidate-context"');
+        expect(html).toContain('data-queue-row-child-icon="true"');
     });
 
     it("renders waitlist child drawer icon when child person id exists", () => {

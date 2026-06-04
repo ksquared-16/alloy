@@ -233,13 +233,18 @@ export function QueueRowCompactOperationalHeader({
                                     </span>
                                 </>
                             ) : null}
+                            {waitlistCandidateRow ? (
+                                <>
+                                    {waitlistInline?.rankingChip || statusLabel || enrollmentInline?.inline ?
+                                        <HeaderInlineSep />
+                                    :   null}
+                                    <QueueRowPlacementManualOrderControls
+                                        row={waitlistCandidateRow}
+                                        layout="header-adjust"
+                                    />
+                                </>
+                            ) : null}
                         </div>
-                    ) : null}
-                    {waitlistCandidateRow ? (
-                        <QueueRowPlacementManualOrderControls
-                            row={waitlistCandidateRow}
-                            layout="header-inline"
-                        />
                     ) : null}
                     {headerSubline ? (
                         <div
