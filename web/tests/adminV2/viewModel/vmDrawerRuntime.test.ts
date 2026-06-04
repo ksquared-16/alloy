@@ -122,7 +122,9 @@ describe("VM drawer runtime wiring", () => {
             join(webRoot, "components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx"),
             "utf8"
         );
-        expect(vm).toContain("VmOpportunityStatusControl");
+        expect(vm).toContain("VmReadonlyStatusPill");
+        expect(vm).not.toContain("VmOpportunityStatusControl");
+        expect(vm).not.toContain("statusBadge");
         expect(vm).toContain("OpportunityDrawerInquiryWorkflowOverview");
         expect(vm).not.toContain("VmInquiryRightColumn");
         expect(vm).not.toContain("opportunityInquiryWorkflowHeaderStatus");
@@ -132,24 +134,22 @@ describe("VM drawer runtime wiring", () => {
         expect(vm).not.toContain("opportunityDrawerPipeline");
     });
 
-    it("VmOpportunityStatusControl has no skeleton or null return for settled VM", async () => {
+    it("VmReadonlyStatusPill has no skeleton, select, or hooks", async () => {
         const { readFileSync } = await import("node:fs");
         const { join, dirname } = await import("node:path");
         const { fileURLToPath } = await import("node:url");
         const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
-        const status = readFileSync(
-            join(webRoot, "components/admin/vmDrawer/VmOpportunityStatusControl.tsx"),
+        const pill = readFileSync(
+            join(webRoot, "components/admin/vmDrawer/VmReadonlyStatusPill.tsx"),
             "utf8"
         );
-        expect(status).not.toContain("skeleton-pulse");
-        expect(status).not.toContain("fetchEnabled");
-        expect(status).toContain("data-vm-runtime-status");
-        expect(status).toContain('renderAs === "hidden"');
-        expect(status).toContain("!dropdownOpen");
-        expect(status).toContain('data-vm-runtime-status="readonly"');
+        expect(pill).not.toContain("skeleton");
+        expect(pill).not.toContain("<select");
+        expect(pill).not.toContain("useState");
+        expect(pill).toContain("data-vm-readonly-status-pill");
     });
 
-    it("OpportunityDrawerVmRuntime renders queue seed status before VM apply", async () => {
+    it("OpportunityDrawerVmRuntime resolves status in title rail before actions mount", async () => {
         const { readFileSync } = await import("node:fs");
         const { join, dirname } = await import("node:path");
         const { fileURLToPath } = await import("node:url");
@@ -158,8 +158,9 @@ describe("VM drawer runtime wiring", () => {
             join(webRoot, "components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx"),
             "utf8"
         );
-        expect(vm).toContain("opportunityQueuePreviewSeed?.statusLabel");
-        expect(vm).toContain("holdPriorPayload");
+        expect(vm).toContain("resolveOpportunityVmStatusLabel");
+        expect(vm).toContain("data-drawer-vm-status-rail");
+        expect(vm).not.toContain("statusBadge");
     });
 
     it("OpportunityDrawerInquiryWorkflowOverview uses production right column not VmInquiryRightColumn", async () => {

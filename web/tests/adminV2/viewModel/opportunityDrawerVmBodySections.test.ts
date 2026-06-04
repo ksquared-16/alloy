@@ -81,9 +81,11 @@ describe("Opportunity VM drawer body — production parity sections", () => {
         expect(runtime).toContain("data-opportunity-drawer-tab={tab}");
     });
 
-    it("Phase A status is readonly from VM — no status-options fetch in VM runtime", () => {
+    it("Phase A status is readonly pill in title rail — no status-options fetch", () => {
         const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("statusControlReadonlyForFirstPaint");
+        expect(runtime).toContain("VmReadonlyStatusPill");
+        expect(runtime).not.toContain("VmOpportunityStatusControl");
+        expect(runtime).not.toContain("statusBadge");
         expect(runtime).not.toContain("status-options");
         expect(runtime).not.toContain("statusDefsForDrawer");
     });

@@ -9,7 +9,7 @@ import OpportunityDrawerInquiryWorkflowOverview from "@/components/admin/vmDrawe
 import OpportunityDrawerVmTabPanes from "@/components/admin/vmDrawer/OpportunityDrawerVmTabPanes";
 import { OpportunityDrawerHeaderControls } from "@/components/admin/opportunity/OpportunityDrawerHeaderControls";
 import OpportunityDrawerQueueNavigatorControls from "@/components/admin/OpportunityDrawerQueueNavigatorControls";
-import VmOpportunityStatusControl from "@/components/admin/vmDrawer/VmOpportunityStatusControl";
+import VmReadonlyStatusPill from "@/components/admin/vmDrawer/VmReadonlyStatusPill";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import Drawer, {
@@ -21,10 +21,9 @@ import { resolveOpportunityDrawerQueueDefinition } from "@/lib/admin/drawer/reso
 import { resolveRecordLifecycleRailModel } from "@/lib/admin/drawer/resolveRecordLifecycleRailModel";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP } from "@/lib/adminV2/shellContracts/opportunityInquiryWorkflowTabs";
-import { opportunityDrawerVmStatusLabelFromControl } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerVmStatusReconciliation";
 import { useOpportunityDrawerVmPayload } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmPayload";
+import { resolveOpportunityVmStatusLabel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusLabel";
 import { logDrawerVmRuntime } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
-import type { StatusControlVm } from "@/lib/adminV2/viewModel/drawer/types";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import { resolveOpportunityQueueNavigatorPosition } from "@/lib/admin/opportunityDrawerQueueNavigator";
 
@@ -38,13 +37,6 @@ const OPPORTUNITY_TAB_LABELS: Partial<Record<DrawerTabKey, string>> = {
     activity: "Activity",
 };
 
-/** Phase A — stable readonly status from VM; no dropdown on first paint. */
-function statusControlReadonlyForFirstPaint(status: StatusControlVm): StatusControlVm {
-    if (status.renderAs === "hidden") return status;
-    const label = opportunityDrawerVmStatusLabelFromControl(status);
-    return { renderAs: "readonly_pill", label };
-}
-
 export default function OpportunityDrawerVmRuntime() {
     const { canMutate } = useAdminAuth();
     const { labels } = useEntityLabels();
@@ -56,8 +48,7 @@ export default function OpportunityDrawerVmRuntime() {
         isOpportunityQueueNavPending,
         navigateOpportunityInQueue,
     } = useAdminDrawer();
-    const { displayVm, coldLoading, error, suppressFullDrawerLoading, holdPriorPayload } =
-        useOpportunityDrawerVmPayload();
+    const { displayVm, coldLoading, error, suppressFullDrawerLoading } = useOpportunityDrawerVmPayload();
     const [drawerTab, setDrawerTab] = useState<DrawerTabKey>("overview");
 
     useEffect(() => {
@@ -85,53 +76,51 @@ export default function OpportunityDrawerVmRuntime() {
         return formatOpportunityInquiryDrawerTitle(record, opportunitySingular) || opportunitySingular;
     }, [record, opportunitySingular]);
 
-    const headerActions = useMemo(() => {
-        if (!displayVm || !drawer.id) return null;
-        return (
-            <OpportunityDrawerHeaderControls
-                opportunityId={drawer.id}
-                overviewData={record ?? {}}
-                queuePreviewSeed={drawer.opportunityQueuePreviewSeed}
-                inquiryWorkflow
-                menuActions={displayVm.actions.header}
-                showRegistryActions
-                canMutate={!!canMutate}
-                onActionSelect={() => {}}
-                layout="modal-actions"
-            />
-        );
-    }, [canMutate, displayVm, drawer.id, drawer.opportunityQueuePreviewSeed, record]);
+    const statusLabel = useMemo(
+        () =>
+            resolveOpportunityVmStatusLabel({
+                drawerId: drawer.id,
+                displayVm,
+                queueSeedStatusLabel: drawer.opportunityQueuePreviewSeed?.statusLabel,
+            }),
+        [drawer.id, displayVm, drawer.opportunityQueuePreviewSeed?.statusLabel]
+    );
 
-    const statusSlot = useMemo(() => {
-        const seedLabel = drawer.opportunityQueuePreviewSeed?.statusLabel?.trim();
-        const showTargetSeed =
-            holdPriorPayload && String(displayVm?.entity.id) !== String(drawer.id);
-        if (showTargetSeed && seedLabel) {
-            return (
-                <VmOpportunityStatusControl
-                    status={{ renderAs: "readonly_pill", label: seedLabel }}
-                    canMutate={false}
-                />
-            );
-        }
-        if (displayVm && !showTargetSeed) {
-            return (
-                <VmOpportunityStatusControl
-                    status={statusControlReadonlyForFirstPaint(displayVm.header.status)}
-                    canMutate={false}
-                />
-            );
-        }
-        if (seedLabel) {
-            return (
-                <VmOpportunityStatusControl
-                    status={{ renderAs: "readonly_pill", label: seedLabel }}
-                    canMutate={false}
-                />
-            );
-        }
-        return undefined;
-    }, [displayVm, drawer.id, drawer.opportunityQueuePreviewSeed?.statusLabel, holdPriorPayload]);
+    /** Title rail: status pill always in this cluster so Drawer does not hide it when actions mount. */
+    const headerTitleRight = useMemo(() => {
+        if (!drawer.id) return undefined;
+        return (
+            <div
+                className="flex shrink-0 items-start gap-3"
+                data-opportunity-drawer-header-title-right="true"
+                data-drawer-vm-status-rail="true"
+            >
+                {statusLabel ?
+                    <VmReadonlyStatusPill label={statusLabel} entityLabel="Opportunity status" />
+                :   null}
+                {displayVm && record ?
+                    <OpportunityDrawerHeaderControls
+                        opportunityId={drawer.id}
+                        overviewData={record}
+                        queuePreviewSeed={drawer.opportunityQueuePreviewSeed}
+                        inquiryWorkflow
+                        menuActions={displayVm.actions.header}
+                        showRegistryActions
+                        canMutate={!!canMutate}
+                        onActionSelect={() => {}}
+                        layout="modal-actions"
+                    />
+                :   null}
+            </div>
+        );
+    }, [
+        canMutate,
+        displayVm,
+        drawer.id,
+        drawer.opportunityQueuePreviewSeed,
+        record,
+        statusLabel,
+    ]);
 
     const tabs = useMemo((): DrawerTabKey[] => {
         const fromVm = displayVm?.layout.tabs;
@@ -175,8 +164,7 @@ export default function OpportunityDrawerVmRuntime() {
             onClose={closeDrawer}
             title={drawerTitle}
             headerSubtitle={displayVm?.header.subtitle ?? undefined}
-            headerTitleRight={headerActions ?? undefined}
-            statusBadge={statusSlot ?? undefined}
+            headerTitleRight={headerTitleRight}
             postTabStrip={displayVm ? lifecycleRail : undefined}
             variant="adminV2"
             presentation="modal"

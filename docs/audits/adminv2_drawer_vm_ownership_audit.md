@@ -214,7 +214,7 @@ Legend: **VM** = VM runtime component/field; **Legacy** = `AdminEntityDrawerLega
 3. **No default-on gate flip** until parity suite green; keep per-entity env flags until Phase D.
 4. **Do not mount legacy + VM** for the same entity; single router fork with legacy fetch paths **blocked** when VM route active (already partially true).
 
-### Phase A — VM data ownership only
+### Phase A — VM data ownership only ✅ (Opportunity, shipped)
 
 - Keep `AdminEntityDrawer` router as d6c7e05e (per-entity runtimes) or thin shell **without** header moves.
 - VM provides full `OpportunityDrawerViewModel` / person / child VM via existing compose paths.
@@ -223,11 +223,50 @@ Legend: **VM** = VM runtime component/field; **Legacy** = `AdminEntityDrawerLega
 - Block `fetchOpportunityDrawerOperationalBootstrap`, legacy `drawer_primary` first paint, and person legacy GET when VM route active (verify no double fetch).
 - **Presentation unchanged** — user sees legacy UI components.
 
-### Phase B — Header/status stabilization
+**Implemented:** `OpportunityDrawerInquiryWorkflowOverview`, `OpportunityDrawerVmTabPanes`, parity tests in `opportunityDrawerVmBodySections.test.ts`.
 
-- Keep legacy header components; feed status from `displayVm.header.status` / VM status defs pin.
-- No `/api/admin/status-options` before first paint when VM authoritative (extend existing `opportunityDrawerVmStatusReconciliation` patterns).
-- Person: restore `PersonDrawerHeaderMetadata` / child/parent title rows driven by VM record + openSource.
+### Phase A.1 — Opportunity static status (no flicker) ✅
+
+**Root cause of status flicker (VM route):**
+
+`Drawer.tsx` only renders `statusBadge` on the **bottom actions row** when `headerTitleRight` is **null**. The VM runtime initially had no `headerTitleRight` (actions wait for `displayVm`), so the status pill appeared in the bottom row. When `displayVm` arrived, `OpportunityDrawerHeaderControls` set `headerTitleRight`, which **hid the bottom row entirely** — status disappeared. A second label pass (queue seed → VM status) could make it look like load → vanish → load.
+
+**Fix:**
+
+- Do **not** use `statusBadge` or `VmOpportunityStatusControl` on the Opportunity VM route.
+- Render `VmReadonlyStatusPill` inside a **stable** `headerTitleRight` cluster (`data-drawer-vm-status-rail`) before actions mount.
+- Label from `resolveOpportunityVmStatusLabel` only (VM when ids match, else queue seed; no status-options fetch, no dropdown, no `holdPriorPayload` branch).
+
+**Tests:** `opportunityDrawerVmStatusFirstPaint.test.ts`
+
+### Phase B — Person/Child parity + warm related-drawer loading
+
+**Warm-load principle (drawer-to-drawer should feel like Overview → Communications tabs):**
+
+- The drawer **shell stays mounted**; only the active VM payload swaps (same UX target as in-drawer tab changes).
+- **Opportunity → Person → Child** should use **warmed VM payloads** where possible.
+- After current drawer first paint: **preload related** drawer VMs (existing `warmRelatedDrawerTargetsAfterVmApply`).
+- Also preload on **hover / focus / mousedown** on related-record controls (queue icons, family links, inquiry child rows).
+- **Cached target** → immediate swap (hold prior content + `suppressFullDrawerLoading`).
+- **Uncached target** → keep current drawer visible until target VM `structureSettled` + composed ready; no full loading shell between VM-backed drawers.
+
+**Person/Child body + header parity (still TODO):**
+
+- Restore `PersonDrawerHeaderMetadata` / `PersonDrawerChildTitleRow` / `PersonDrawerParentTitleRow`.
+- Reuse `PersonDrawerOperatingSections` with child surface enforcement (no generic employee fallback).
+- Opportunity: optional editable status **after** explicit user intent (not Phase B blocker).
+
+**Do not implement shell-pinned `AdminEntityDrawerVmShell` until B parity tests pass.**
+
+### Phase order (locked)
+
+| Phase | Scope |
+|-------|--------|
+| **A** | Opportunity VM body parity + production overview |
+| **A.1** | Opportunity static status (no flicker) |
+| **B** | Person/Child header/body parity + related VM preload |
+| **C** | Shell-pinned movement after parity proven |
+| **D** | Default-on VM / legacy removal |
 
 ### Phase C — Shell-pinned movement (optional)
 
@@ -360,19 +399,6 @@ export default function AdminEntityDrawer() {
     return "legacy";
 ```
 
-```181:210:web/components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx
-                        {drawerTab === "overview" ?
-                            <div ... data-drawer-vm-runtime-overview="true">
-                                <div className={clsx("grid gap-3", ...)}>
-                                    <div className="...">
-                                        <h3>...</h3>  {/* placeholder — not FamilyContactsPanel */}
-                                    </div>
-                                    {rightColumn ?
-                                        <VmInquiryRightColumn ... />
-                                    :   null}
-                                </div>
-                            </div>
-                        :   null}
-```
+**Post–Phase A:** Overview is `OpportunityDrawerInquiryWorkflowOverview` (not `VmInquiryRightColumn` placeholder). Status is `VmReadonlyStatusPill` in `headerTitleRight` title rail.
 
 **Suggested commit message (doc only):** `docs: add AdminV2 drawer VM ownership audit (d6c7e05e baseline vs a68c7ef2 regression)`
