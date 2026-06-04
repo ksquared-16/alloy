@@ -137,7 +137,14 @@ export function sortOpportunityFamilyContactRows<T extends OpportunityFamilyCont
     primaryPersonId: string | null
 ): T[] {
     const primaryId = primaryPersonId?.trim() ?? "";
-    const filtered = primaryId ? rows.filter((r) => String(r.person_id).trim() !== primaryId) : rows;
+    // When a primary is resolved (rendered separately as the primary card), exclude it from the
+    // additional list both by id AND by primary role — so a second person carrying a primary role
+    // (e.g. a household guardian arriving via `_customer_persons` while shell `_opportunity_persons`
+    // is frozen) can never render a duplicate "Primary" badge. No effect on normal data (only the
+    // resolved primary has a primary role) or when no primary is resolved.
+    const filtered = primaryId
+        ? rows.filter((r) => String(r.person_id).trim() !== primaryId && !isPrimaryContactRoleType(r.role_type))
+        : rows;
     return [...filtered].sort((a, b) => {
         const rankA = rankOpportunityFamilyContactRole(a.role_type);
         const rankB = rankOpportunityFamilyContactRole(b.role_type);
