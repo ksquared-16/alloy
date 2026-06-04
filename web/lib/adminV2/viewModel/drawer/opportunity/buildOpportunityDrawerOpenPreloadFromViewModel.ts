@@ -3,7 +3,7 @@ import type { OpportunityDrawerOpenPreload } from "@/lib/admin/opportunityDrawer
 import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { emptyResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { drawerShellToOpportunityRecordContract } from "@/lib/adminV2/drawerPipeline/adapters/opportunity/compileShell";
-import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
+import type { OpportunityDrawerViewModel, RemindersSummaryVm } from "@/lib/adminV2/viewModel/drawer/types";
 import type { RecordLayoutConfigJson } from "@/lib/recordChrome/types";
 
 export type OpportunityDrawerViewModelPreload = OpportunityDrawerOpenPreload & {
@@ -18,11 +18,19 @@ export function isOpportunityDrawerViewModelPreload(
 }
 
 function paintRecordFromViewModel(vm: OpportunityDrawerViewModel): Record<string, unknown> {
-    return {
+    const paint: Record<string, unknown> = {
         ...vm.above_fold.record,
         id: vm.entity.id,
         _record_surface: "full",
+        _inquiry_summary_tasks: vm.summaries.tasks,
     };
+    if (vm.summaries.reminders.next_follow_up_iso) {
+        paint.next_follow_up_at = vm.summaries.reminders.next_follow_up_iso;
+    }
+    if (vm.summaries.reminders.scheduled_sends.length > 0) {
+        paint._inquiry_summary_scheduled_sends = vm.summaries.reminders.scheduled_sends;
+    }
+    return paint;
 }
 
 function headerActionsFromViewModel(header: OpportunityDrawerViewModel["actions"]["header"]): ResolvedActionsBySlot {
@@ -51,7 +59,7 @@ function bootstrapFromViewModel(
                 {
                     id: wuId,
                     department_id: deptId,
-                    queue_definition: null,
+                    queue_definition: vm.workspace.queue_definition,
                 }
             :   null,
         workspace_scope: {
@@ -65,6 +73,23 @@ function bootstrapFromViewModel(
             attention_resolver_passes: 0,
         },
     };
+}
+
+/** Map VM reminder scheduled sends to operational strip seed rows. */
+export function scheduledSendRowsFromRemindersSummary(
+    reminders: RemindersSummaryVm
+): Array<{
+    id: string;
+    status: string;
+    scheduled_for: string;
+    channel?: string;
+}> {
+    return reminders.scheduled_sends.map((s) => ({
+        id: s.id,
+        status: s.status,
+        scheduled_for: s.scheduled_for,
+        channel: s.channel,
+    }));
 }
 
 export function buildOpportunityDrawerOpenPreloadFromViewModel(

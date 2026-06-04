@@ -231,6 +231,10 @@ export type OpportunityOperationalCompactStripProps = {
     hideTasksSection?: boolean;
     /** Pipeline-owned right-column structure (reminders + handoff slots). */
     rightColumnModel?: DrawerInquirySummaryRightColumnRenderModel;
+    /** VM first paint — keep seeded tasks/reminders; skip mount refetch until background refresh. */
+    vmFirstPaintCommit?: boolean;
+    /** Scheduled sends seeded from VM summaries.reminders. */
+    initialScheduledSends?: ScheduledSendRow[];
 };
 
 function ReminderRowSkeleton() {
@@ -252,6 +256,8 @@ export default function OpportunityOperationalCompactStrip({
     tasksLoadMode = "auto",
     hideTasksSection = false,
     rightColumnModel,
+    vmFirstPaintCommit = false,
+    initialScheduledSends,
 }: OpportunityOperationalCompactStripProps) {
     const workEnabled = isOperationalWorkV1Enabled();
     const taskAssistEnabled = isTaskAssistV1UiEnabled();
@@ -273,7 +279,7 @@ export default function OpportunityOperationalCompactStrip({
             source: t.source,
         })),
     );
-    const [scheduledSends, setScheduledSends] = useState<ScheduledSendRow[]>([]);
+    const [scheduledSends, setScheduledSends] = useState<ScheduledSendRow[]>(() => initialScheduledSends ?? []);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [popoverTaskId, setPopoverTaskId] = useState<string | null>(null);
@@ -389,6 +395,11 @@ export default function OpportunityOperationalCompactStrip({
 
     useEffect(() => {
         if (!fetchEnabled) {
+            if (vmFirstPaintCommit) {
+                setLoading(false);
+                setError(null);
+                return;
+            }
             setTasks([]);
             setScheduledSends([]);
             setLoading(false);
@@ -396,7 +407,7 @@ export default function OpportunityOperationalCompactStrip({
             return;
         }
         void load();
-    }, [fetchEnabled, load]);
+    }, [fetchEnabled, load, vmFirstPaintCommit]);
 
     useEffect(() => {
         const onRefresh = (ev: Event) => {

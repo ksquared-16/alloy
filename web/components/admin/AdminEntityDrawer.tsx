@@ -433,8 +433,15 @@ import { buildOpportunityDrawerPipelineStateFromViewModel } from "@/lib/adminV2/
 import {
     isOpportunityDrawerViewModelPreload,
     opportunityDrawerViewModelRecordShell,
+    scheduledSendRowsFromRemindersSummary,
 } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerOpenPreloadFromViewModel";
 import { opportunityDrawerHardCutoverEnabled } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerHardCutoverGate";
+import {
+    opportunityDrawerViewModelFirstPaintSettled,
+    statusDefsFromViewModelStatusControl,
+} from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerViewModelFirstPaint";
+import { tourBookingsFromOpportunityDrawerVm } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerFirstPaintClient";
+import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import {
     drawerViewModelCutoverFlagSnapshot,
     safeLogDrawerViewModelCutover,
@@ -1637,17 +1644,24 @@ export default function AdminEntityDrawer() {
     const [opportunityTourBookingsId, setOpportunityTourBookingsId] = useState<string | null>(null);
     const [inquiryTourFetchArmed, setInquiryTourFetchArmed] = useState(false);
     const [inquirySummaryFetchArmed, setInquirySummaryFetchArmed] = useState(false);
+    const [opportunityDrawerVmFirstPaintSettled, setOpportunityDrawerVmFirstPaintSettled] = useState(false);
+    const [opportunityVmActiveTourBookings, setOpportunityVmActiveTourBookings] = useState<TourBookingRow[] | null>(
+        null
+    );
     const { activeBookings: opportunityRecordHeaderActiveTours, fetchSettled: opportunityTourBookingsFetchSettled } =
         useOpportunityActiveTourBookings(opportunityTourBookingsId, inquiryTourFetchArmed);
     const opportunityInquiryTourBookingsForDisplay = useMemo((): TourBookingRow[] => {
         const optimistic = readOptimisticTourBookingFromOverview(
             data && typeof data === "object" ? (data as Record<string, unknown>) : null
         );
-        return mergeOptimisticTourBookings(
-            opportunityRecordHeaderActiveTours,
-            optimistic as TourBookingRow | null
-        );
-    }, [data, opportunityRecordHeaderActiveTours]);
+        const baseBookings =
+            opportunityVmActiveTourBookings != null ?
+                opportunityVmActiveTourBookings
+            :   opportunityRecordHeaderActiveTours;
+        return mergeOptimisticTourBookings(baseBookings, optimistic as TourBookingRow | null);
+    }, [data, opportunityRecordHeaderActiveTours, opportunityVmActiveTourBookings]);
+    const opportunityTourBookingsFetchSettledEffective =
+        opportunityDrawerVmFirstPaintSettled || opportunityTourBookingsFetchSettled;
     const opportunityRecordHeaderMenuActions = useMemo(() => {
         const base = opportunityResolvedHeaderActions;
         if (!base) return [];
@@ -1905,6 +1919,7 @@ export default function AdminEntityDrawer() {
     const opportunityDrawerFirstPaintPreloadedRef = useRef<string | null>(null);
     /** Settled VM cutover — pins above-fold pipeline from server VM (no client structural recompute). */
     const opportunityDrawerViewModelOpenRef = useRef<string | null>(null);
+    const opportunityDrawerViewModelRef = useRef<OpportunityDrawerViewModel | null>(null);
     const opportunityDrawerViewModelApplyLoggedRef = useRef<string | null>(null);
     const opportunityDrawerViewModelPrimaryHydrateSkipLoggedRef = useRef<string | null>(null);
     const [opportunityDrawerViewModelPipeline, setOpportunityDrawerViewModelPipeline] =
@@ -2460,9 +2475,22 @@ export default function AdminEntityDrawer() {
         const viewModelOpen = isOpportunityDrawerViewModelPreload(preload);
         if (viewModelOpen) {
             opportunityDrawerViewModelOpenRef.current = drawer.id;
+            opportunityDrawerViewModelRef.current = preload.viewModel;
+            setOpportunityDrawerVmFirstPaintSettled(
+                opportunityDrawerViewModelFirstPaintSettled(preload.viewModel)
+            );
+            setOpportunityVmActiveTourBookings(tourBookingsFromOpportunityDrawerVm(preload.viewModel));
             setOpportunityDrawerViewModelPipeline(
                 buildOpportunityDrawerPipelineStateFromViewModel(preload.viewModel)
             );
+            const statusDefsFromVm = statusDefsFromViewModelStatusControl(preload.viewModel.header.status);
+            if (statusDefsFromVm.length > 0) {
+                setStatusDefsForDrawer(statusDefsFromVm);
+                setStatusDefsLoading(false);
+            }
+            if (preload.viewModel.first_paint.settled) {
+                setOpportunityDrawerBelowFoldRevealed(true);
+            }
             const recordShell = opportunityDrawerViewModelRecordShell(preload.viewModel);
             if (recordShell) {
                 opportunityDrawerShellContractRef.current = recordShell;
@@ -2472,6 +2500,9 @@ export default function AdminEntityDrawer() {
             }
         } else {
             opportunityDrawerViewModelOpenRef.current = null;
+            opportunityDrawerViewModelRef.current = null;
+            setOpportunityDrawerVmFirstPaintSettled(false);
+            setOpportunityVmActiveTourBookings(null);
             setOpportunityDrawerViewModelPipeline(null);
             freezeOpportunityDrawerShellContract(
                 boot.record_layout?.config_json ?? null,
@@ -2543,6 +2574,9 @@ export default function AdminEntityDrawer() {
             entityDrawerTabInitKeyRef.current = "";
             opportunityDrawerFirstPaintPreloadedRef.current = null;
             opportunityDrawerViewModelOpenRef.current = null;
+            opportunityDrawerViewModelRef.current = null;
+            setOpportunityDrawerVmFirstPaintSettled(false);
+            setOpportunityVmActiveTourBookings(null);
             opportunityDrawerViewModelApplyLoggedRef.current = null;
             opportunityDrawerViewModelPrimaryHydrateSkipLoggedRef.current = null;
             setOpportunityDrawerViewModelPipeline(null);
@@ -5074,6 +5108,10 @@ export default function AdminEntityDrawer() {
             drawer.id &&
             drawer.id !== "new"
         ) {
+            if (opportunityDrawerVmFirstPaintSettled && !isEditing) {
+                setStatusDefsLoading(false);
+                return;
+            }
             if (!isEditing) {
                 const d = data as { status_key?: string; _status_display?: string } | null;
                 const sk = String(d?.status_key ?? "").trim();
@@ -5148,6 +5186,7 @@ export default function AdminEntityDrawer() {
         drawer.id,
         drawerShellVariant,
         opportunityDrawerBootstrapLegacy,
+        opportunityDrawerVmFirstPaintSettled,
         opportunityPrimaryHydrateApplied,
         isEditing,
         data,
@@ -8177,6 +8216,9 @@ export default function AdminEntityDrawer() {
         if (!opportunityInquiryWorkflowDrawer || !drawer.id || drawer.id === "new") {
             return { ready: true, missing: [], skeleton_sections: [], raw_value_suppressed: [] };
         }
+        if (opportunityDrawerVmFirstPaintSettled) {
+            return { ready: true, missing: [], skeleton_sections: [], raw_value_suppressed: [] };
+        }
         const seed = drawer.opportunityQueuePreviewSeed;
         const layoutCfg = (recordChromeOpportunity.layout?.config_json ?? null) as RecordLayoutConfigJson | null;
         return assessOpportunityAboveFoldPresentationReady(
@@ -8195,7 +8237,7 @@ export default function AdminEntityDrawer() {
                     opportunityDrawerShellContract?.section_slots.some((s) => s.section_key === "inquiry_children") ===
                     true || recordOpportunityDrawerLayoutIncludesSection(layoutCfg, "inquiry_children"),
                 tour_bookings_fetch_armed: inquiryTourFetchArmed,
-                tour_bookings_fetch_settled: opportunityTourBookingsFetchSettled,
+                tour_bookings_fetch_settled: opportunityTourBookingsFetchSettledEffective,
             },
             {
                 statusLabel: seed?.statusLabel ?? seed?.stageLabel ?? null,
@@ -8212,11 +8254,14 @@ export default function AdminEntityDrawer() {
         opportunityDrawerShellContract,
         recordChromeOpportunity.layout?.config_json,
         inquiryTourFetchArmed,
-        opportunityTourBookingsFetchSettled,
+        opportunityTourBookingsFetchSettledEffective,
+        opportunityDrawerVmFirstPaintSettled,
     ]);
 
     const opportunityDrawerAboveFoldPresentationReady =
-        opportunityDrawerAboveFoldPresentationReport.ready || opportunityDrawerPresentationGateTimedOut;
+        opportunityDrawerVmFirstPaintSettled ||
+        opportunityDrawerAboveFoldPresentationReport.ready ||
+        opportunityDrawerPresentationGateTimedOut;
 
     const opportunityDrawerRuntimePlan = useMemo(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new" || !overviewData) {
@@ -8232,8 +8277,10 @@ export default function AdminEntityDrawer() {
             error,
             typedSnapshot: opportunityDrawerTypedSnapshotFirstPaint,
             bodyHydrated:
-                opportunityPrimaryHydrateApplied || opportunityFullRecordHydrateApplied,
-            fullHydrateReady: opportunityFullRecordHydrateApplied,
+                opportunityPrimaryHydrateApplied ||
+                opportunityFullRecordHydrateApplied ||
+                opportunityDrawerVmFirstPaintSettled,
+            fullHydrateReady: opportunityFullRecordHydrateApplied || opportunityDrawerVmFirstPaintSettled,
             frameReady: snapshotCanRenderDrawerFrame(record),
             headerActionsResolved: opportunityRegistryHeaderReady,
             headerActionsLoading: opportunityResolvedHeaderLoading,
@@ -8260,6 +8307,7 @@ export default function AdminEntityDrawer() {
         opportunityDrawerBelowFoldRevealed,
         opportunityDrawerAboveFoldPresentationReady,
         opportunityDrawerPrimaryContractSatisfied,
+        opportunityDrawerVmFirstPaintSettled,
     ]);
 
     const opportunityInquiryChildrenSectionVisible = useMemo(() => {
@@ -8283,10 +8331,11 @@ export default function AdminEntityDrawer() {
         return evaluateComposedOpportunityDrawerPayload({
             drawerId: drawer.id,
             record: overviewData as Record<string, unknown>,
-            bodyHydrated: opportunityPrimaryHydrateApplied || opportunityFullRecordHydrateApplied,
-            // fullHydrateReady is strictly the full-surface sentinel — BOS/right-panel sections
-            // must wait for this before revealing to avoid visible late-paint of tasks/guidance.
-            fullHydrateReady: opportunityFullRecordHydrateApplied,
+            bodyHydrated:
+                opportunityPrimaryHydrateApplied ||
+                opportunityFullRecordHydrateApplied ||
+                opportunityDrawerVmFirstPaintSettled,
+            fullHydrateReady: opportunityFullRecordHydrateApplied || opportunityDrawerVmFirstPaintSettled,
             headerActionsReady: opportunityRegistryHeaderReady,
             inquiryChildrenSectionVisible: opportunityInquiryChildrenSectionVisible,
         });
@@ -8296,11 +8345,13 @@ export default function AdminEntityDrawer() {
         overviewData,
         opportunityPrimaryHydrateApplied,
         opportunityFullRecordHydrateApplied,
+        opportunityDrawerVmFirstPaintSettled,
         opportunityRegistryHeaderReady,
         opportunityInquiryChildrenSectionVisible,
     ]);
 
-    const opportunityComposedPayloadReady = opportunityComposedPayloadEval?.ready === true;
+    const opportunityComposedPayloadReady =
+        opportunityDrawerVmFirstPaintSettled || opportunityComposedPayloadEval?.ready === true;
 
     const opportunityComposedPreparing =
         drawer.type === "opportunities" &&
@@ -8308,12 +8359,15 @@ export default function AdminEntityDrawer() {
         !!drawer.id &&
         drawer.id !== "new" &&
         !error &&
+        !opportunityDrawerVmFirstPaintSettled &&
         !opportunityComposedPayloadReady;
 
     const opportunityDrawerOverviewRevealReady = opportunityInquiryWorkflowDrawer
-        ? opportunityComposedPayloadReady &&
-          opportunityDrawerAboveFoldPresentationReady &&
-          (opportunityDrawerRuntimePlan?.canRevealHeaderActions ?? false)
+        ? opportunityDrawerVmFirstPaintSettled
+            ? opportunityPrimaryHydrateApplied && opportunityRegistryHeaderReady
+            : opportunityComposedPayloadReady &&
+              opportunityDrawerAboveFoldPresentationReady &&
+              (opportunityDrawerRuntimePlan?.canRevealHeaderActions ?? false)
         : opportunityDrawerTypedSnapshotFirstPaint ||
           (opportunityDrawerCoordinatedRevealReady &&
               opportunityDrawerInquiryStructuralReady &&
@@ -8326,6 +8380,7 @@ export default function AdminEntityDrawer() {
     /** Release above-fold layout lock when primary surface is coordinated — BOS/right column paints with summary. */
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        if (opportunityDrawerVmFirstPaintSettled) return;
         if (opportunityDrawerOverviewRevealReady && opportunityDrawerPrimaryContractSatisfied) {
             setOpportunityDrawerBelowFoldRevealed(true);
         }
@@ -8334,6 +8389,7 @@ export default function AdminEntityDrawer() {
         drawer.id,
         opportunityDrawerOverviewRevealReady,
         opportunityDrawerPrimaryContractSatisfied,
+        opportunityDrawerVmFirstPaintSettled,
     ]);
 
     useEffect(() => {
@@ -8904,6 +8960,7 @@ export default function AdminEntityDrawer() {
     ]);
 
     const opportunityInquiryFullBoundReady = useMemo(() => {
+        if (opportunityDrawerVmFirstPaintSettled) return true;
         if (opportunityDrawerPipeline) {
             return drawerFullBoundValuesReady(
                 opportunityDrawerBelowFoldEnrichmentReady,
@@ -8912,10 +8969,17 @@ export default function AdminEntityDrawer() {
         }
         return opportunityDrawerFullBoundEnrichmentReady;
     }, [
+        opportunityDrawerVmFirstPaintSettled,
         opportunityDrawerPipeline,
         opportunityDrawerBelowFoldEnrichmentReady,
         opportunityDrawerFullBoundEnrichmentReady,
     ]);
+
+    const opportunityVmScheduledSendSeed = useMemo(() => {
+        const vm = opportunityDrawerViewModelRef.current;
+        if (!opportunityDrawerVmFirstPaintSettled || !vm) return undefined;
+        return scheduledSendRowsFromRemindersSummary(vm.summaries.reminders);
+    }, [opportunityDrawerVmFirstPaintSettled, opportunityDrawerViewModelPipeline, drawer.id]);
 
     /** Below-fold reveal: scroll unlocks immediately; idle unlock waits for full hydrate settle. */
     useEffect(() => {
@@ -9158,9 +9222,12 @@ export default function AdminEntityDrawer() {
         "80px"
     );
     const tourBookingsFetchEnabled =
-        opportunityDrawerPrimaryContractSatisfied && opportunityInquiryWorkflowDrawer;
+        !opportunityDrawerVmFirstPaintSettled &&
+        opportunityDrawerPrimaryContractSatisfied &&
+        opportunityInquiryWorkflowDrawer;
     /** Lead Summary right column is above the fold — arm when primary contract is ready (no scroll intersection). */
     const inquirySummaryFetchEnabled =
+        !opportunityDrawerVmFirstPaintSettled &&
         opportunityInquiryWorkflowDrawer &&
         (opportunityDrawerTypedSnapshotFirstPaint || opportunityDrawerPrimaryContractSatisfied) &&
         Boolean(drawer.id) &&
@@ -15621,11 +15688,12 @@ export default function AdminEntityDrawer() {
                                                                 const showWhatMattersTourSlot =
                                                                     showTourFromPrimaryOnly || showTourFromBookings;
                                                                 const tourDisplayReady =
+                                                                    opportunityDrawerVmFirstPaintSettled ||
                                                                     !showWhatMattersTourSlot ||
                                                                     showTourFromPrimaryOnly ||
                                                                     (showTourFromBookings &&
                                                                         inquiryTourFetchArmed &&
-                                                                        opportunityTourBookingsFetchSettled);
+                                                                        opportunityTourBookingsFetchSettledEffective);
                                                                 const taskPreview = inqModel?.task_preview;
 
                                                                 return (
@@ -15910,8 +15978,11 @@ export default function AdminEntityDrawer() {
                                                                                             entityLabel={String(d.name ?? "").trim() || null}
                                                                                             overviewData={d}
                                                                                             fetchEnabled={inquirySummaryFetchEnabled}
+                                                                                            vmFirstPaintCommit={opportunityDrawerVmFirstPaintSettled}
+                                                                                            initialScheduledSends={opportunityVmScheduledSendSeed}
                                                                                             opportunitySingular={opportunitySingular}
                                                                                             reviewAssistLoading={
+                                                                                                !opportunityDrawerVmFirstPaintSettled &&
                                                                                                 !opportunityDrawerTypedSnapshotFirstPaint &&
                                                                                                 !opportunityPrimaryHydrateApplied &&
                                                                                                 !(d as Record<string, unknown>)

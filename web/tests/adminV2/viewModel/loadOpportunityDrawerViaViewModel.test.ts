@@ -10,66 +10,19 @@ vi.mock("@/lib/adminV2/viewModel/drawer/shadow/fetchOpportunityDrawerViewModelCl
 
 import { fetchOpportunityDrawerViewModelClient } from "@/lib/adminV2/viewModel/drawer/shadow/fetchOpportunityDrawerViewModelClient";
 
-function settledVm(): OpportunityDrawerViewModel {
-    return {
+import { minimalSettledOpportunityDrawerViewModel } from "./fixtures/minimalSettledOpportunityDrawerViewModel";
+
+function settledVm() {
+    return minimalSettledOpportunityDrawerViewModel({
         generation: "gen-1",
-        structureSettled: true,
-        compose_version: "1.0.0",
-        entity: { type: "opportunity", id: "opp-1" },
-        workspace: { department_id: "dept-1", work_unit_id: "wu-1" },
+        actions: { header: [] },
         header: {
             title: "Opp",
             subtitle: null,
             status: { renderAs: "readonly_pill", label: "New" },
             oper_trust_preview: null,
         },
-        actions: { header: [] },
-        layout: {
-            mode: "workflow_v1",
-            tabs: ["overview"],
-            default_tab: "overview",
-            shell: {
-                entity_type: "opportunity",
-                layout_version: "default",
-                tabs: ["overview"],
-                overview_sections: [],
-                section_slots: [],
-                geometry: {},
-                layout_config_snapshot: { inquiry_drawer_mode: "workflow_v1", overview_section_order: [] },
-            },
-        },
-        above_fold: {
-            render_model: {
-                sections: [
-                    {
-                        section_key: "inquiry_summary",
-                        lifecycle: "immediate",
-                        default_expanded: true,
-                        collapsible: false,
-                        value_phase: "value",
-                    },
-                ],
-            },
-            record: {
-                id: "opp-1",
-                status_key: "new",
-                _identity: {
-                    household: { label: "Test Household" },
-                    primary_person: { label: "Parent" },
-                    primary_contact: { label: "Parent" },
-                },
-                _inquiry_children: [],
-            },
-        },
-        summaries: {
-            tasks: { state: "loaded", open_count: 0, open_tasks: [] },
-            reminders: { state: "empty", next_follow_up_iso: null, scheduled_send_count: 0, scheduled_sends: [] },
-            bos: null,
-            attention: null,
-        },
-        background_refresh: { allowed: [] },
-        timing: { compose_ms: 22, phases_ms: {} },
-    };
+    });
 }
 
 describe("loadOpportunityDrawerViaViewModel", () => {
@@ -127,7 +80,7 @@ describe("loadOpportunityDrawerViaViewModel", () => {
         expect(result.ok).toBe(true);
         if (result.ok) {
             expect(result.preload.openPath).toBe("view_model");
-            expect(result.compose_ms).toBe(22);
+            expect(result.compose_ms).toBe(40);
             expect(opportunityDrawerComposedRevealReady(result.preload)).toBe(true);
         }
     });

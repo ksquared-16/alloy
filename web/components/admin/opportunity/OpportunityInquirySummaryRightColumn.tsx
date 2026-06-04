@@ -167,6 +167,13 @@ export type OpportunityInquirySummaryRightColumnProps = {
     /** Reserve assist skeleton until primary payload includes BOS fields. */
     reviewAssistLoading?: boolean;
     opportunitySingular?: string;
+    vmFirstPaintCommit?: boolean;
+    initialScheduledSends?: Array<{
+        id: string;
+        status: string;
+        scheduled_for: string;
+        channel?: string;
+    }>;
 };
 
 function rightColumnModelEqual(
@@ -205,6 +212,8 @@ function OpportunityInquirySummaryRightColumnInner({
     fetchEnabled = true,
     reviewAssistLoading = false,
     opportunitySingular = "Inquiry",
+    vmFirstPaintCommit = false,
+    initialScheduledSends,
 }: OpportunityInquirySummaryRightColumnProps) {
     const record = useMemo(() => overviewData, [overviewData]);
 
@@ -234,6 +243,8 @@ function OpportunityInquirySummaryRightColumnInner({
                 overviewData={record}
                 entityLabel={entityLabel}
                 fetchEnabled={fetchEnabled}
+                vmFirstPaintCommit={vmFirstPaintCommit}
+                initialScheduledSends={initialScheduledSends}
                 tasksLoadMode="auto"
                 hideTasksSection
                 rightColumnModel={model}
@@ -258,6 +269,7 @@ export const OpportunityInquirySummaryRightColumn = memo(
     (prev, next) =>
         prev.opportunityId === next.opportunityId &&
         prev.fetchEnabled === next.fetchEnabled &&
+        prev.vmFirstPaintCommit === next.vmFirstPaintCommit &&
         prev.reviewAssistLoading === next.reviewAssistLoading &&
         prev.entityLabel === next.entityLabel &&
         reviewAssistPayloadEqual(prev.overviewData, next.overviewData) &&

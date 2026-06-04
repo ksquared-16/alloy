@@ -1,15 +1,17 @@
 import type { DrawerSectionRenderModel } from "@/lib/adminV2/drawerPipeline/types";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
+import { opportunityDrawerFirstPaintContractValid } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerViewModelFirstPaint";
 
 /** Bump when compose semantics change (shadow diff tooling). */
-export const OPPORTUNITY_DRAWER_VM_COMPOSE_VERSION = "1.0.0";
+export const OPPORTUNITY_DRAWER_VM_COMPOSE_VERSION = "1.2.0";
 
 const FORBIDDEN_ABOVE_FOLD_VALUE_PHASES = new Set(["skeleton", "pending"]);
 
 export function opportunityDrawerViewModelStructureSettled(
-    vm: Pick<OpportunityDrawerViewModel, "structureSettled" | "above_fold">
+    vm: Pick<OpportunityDrawerViewModel, "structureSettled" | "above_fold" | "first_paint" | "layout">
 ): boolean {
     if (!vm.structureSettled) return false;
+    if (!opportunityDrawerFirstPaintContractValid(vm)) return false;
     return aboveFoldSectionsStructureSettled(vm.above_fold.render_model.sections);
 }
 

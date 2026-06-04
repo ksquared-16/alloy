@@ -35,9 +35,48 @@ describe("opportunityDrawerViewModelContract", () => {
         ).toBe(true);
     });
 
-    it("structureSettled requires above-fold sections to be settled", () => {
+    it("structureSettled requires above-fold sections and first_paint contract to be settled", () => {
         const vm = {
             structureSettled: true as const,
+            layout: {
+                mode: "workflow_v1" as const,
+                tabs: ["overview"] as const,
+                default_tab: "overview" as const,
+                shell: {
+                    entity_type: "opportunity" as const,
+                    layout_version: "default",
+                    tabs: ["overview"] as const,
+                    overview_sections: [],
+                    section_slots: [],
+                    geometry: { summary_right_column_reserved: true },
+                    layout_config_snapshot: { inquiry_drawer_mode: "workflow_v1", overview_section_order: [] },
+                },
+            },
+            first_paint: {
+                settled: true as const,
+                viewport_slots: [
+                    "header",
+                    "status",
+                    "location",
+                    "actions",
+                    "tabs",
+                    "lead_summary",
+                    "tour_slot",
+                    "tasks_summary",
+                    "reminders_summary",
+                ] as const,
+                dependencies: [
+                    {
+                        key: "tour_bookings",
+                        disposition: "first_paint_required",
+                        status: "empty",
+                        satisfied_by: "server_fetch",
+                    },
+                ],
+                data: { tour_bookings: [] },
+                deferred: [],
+                background: [],
+            },
             above_fold: {
                 render_model: {
                     sections: [
@@ -52,7 +91,7 @@ describe("opportunityDrawerViewModelContract", () => {
                 },
                 record: { id: "opp-1" },
             },
-        } satisfies Pick<OpportunityDrawerViewModel, "structureSettled" | "above_fold">;
+        } satisfies Pick<OpportunityDrawerViewModel, "structureSettled" | "above_fold" | "first_paint" | "layout">;
         expect(opportunityDrawerViewModelStructureSettled(vm)).toBe(true);
     });
 

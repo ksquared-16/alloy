@@ -1,10 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { AdminRouteGateSuccess } from "@/lib/admin/adminRouteGate";
-import { resolveActionsForContext } from "@/lib/admin/actions/resolveActionsForContext";
 import { fetchEffectiveRecordDrawerLayout } from "@/lib/admin/effectiveRecordDrawerLayout";
 import { fetchDepartmentMetadataForActivity } from "@/lib/admin/loadOpportunityActivitySignal";
-import { attachOpportunityAttentionSuggestionBundle } from "@/lib/admin/opportunityAttentionSuggestionAttachment";
 import { buildOpportunityDrawerVisiblePayload } from "@/lib/admin/opportunityEntityRecord";
 import { sanitizeDrawerOperTrustPreviewFromHints } from "@/lib/admin/sanitizeDrawerOperTrustPreview";
 import { fetchEffectiveStatusDefinitionsTagged } from "@/lib/admin/statusDefinitionsResolve";
@@ -27,17 +25,33 @@ import {
     parseInquirySummaryTasksFromRecord,
 } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerViewModelSummaries";
 import {
+    buildOpportunityFirstViewportPlan,
+    resolveTourSlotDisplaySource,
+} from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerFirstViewportContract";
+import {
     aboveFoldSectionsStructureSettled,
     OPPORTUNITY_DRAWER_VM_COMPOSE_VERSION,
     stripOpportunityDrawerRecordStaging,
 } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerViewModelContract";
 import { computeOpportunityDrawerViewModelGeneration } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerViewModelGeneration";
-import { loadOpportunityScheduledSendsPreview } from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityScheduledSendsPreview";
+import {
+    buildOpportunityDrawerFirstPaintContract,
+    opportunityDrawerFirstPaintContractValid,
+} from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerViewModelFirstPaint";
+import {
+    headerActionsFromFirstPaintData,
+    remindersFromFirstPaintData,
+    resolveOpportunityDrawerFirstPaintDependencies,
+    tourBookingsFromFirstPaintData,
+} from "@/lib/adminV2/viewModel/drawer/opportunity/resolveOpportunityDrawerFirstPaintDependencies";
+import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
 import { logOpportunityDrawerViewModelComposeShadowSummary } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelShadowServer";
 import type {
     OpportunityDrawerViewModel,
     OpportunityDrawerViewModelResult,
+    RemindersSummaryVm,
 } from "@/lib/adminV2/viewModel/drawer/types";
+import type { QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
 
 function trimOrNull(v: unknown): string | null {
     if (v == null) return null;
@@ -66,6 +80,21 @@ function taskAssistEnabledOnServer(): boolean {
     const v = process.env.NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED?.trim().toLowerCase();
     return v === "true" || v === "1";
 }
+
+function queueDefinitionFromWorkUnit(
+    wu: { queue_definition?: unknown } | null | undefined
+): QueueDefinitionV1 | null {
+    const qd = wu?.queue_definition;
+    if (!qd || typeof qd !== "object") return null;
+    return qd as QueueDefinitionV1;
+}
+
+const EMPTY_REMINDERS: RemindersSummaryVm = {
+    state: "empty",
+    next_follow_up_iso: null,
+    scheduled_send_count: 0,
+    scheduled_sends: [],
+};
 
 export type ComposeOpportunityDrawerViewModelParams = {
     supabase: SupabaseClient;
@@ -157,31 +186,28 @@ export async function composeOpportunityDrawerViewModel(
     );
     phases.visible_entity_ms = Date.now() - tVisible0;
 
-    const wuData = wuRes.data as { id?: string; department_id?: string | null; metadata?: unknown } | null;
+    const wuData = wuRes.data as {
+        id?: string;
+        department_id?: string | null;
+        metadata?: unknown;
+        queue_definition?: unknown;
+    } | null;
     const departmentId =
         ctxDept ||
         trimOrNull(wuData?.department_id) ||
         trimOrNull(record._work_unit_department_id as string | null);
+    const queueDefinition = queueDefinitionFromWorkUnit(wuData);
 
-    const deptMetaP =
+    const tPrep0 = Date.now();
+    const [deptMetadata, statusDefsPack] = await Promise.all([
         departmentId ?
             fetchDepartmentMetadataForActivity(supabase, orgId, departmentId)
-        :   Promise.resolve(null);
-
-    const statusDefsP = fetchEffectiveStatusDefinitionsTagged(supabase, orgId, "opportunities", {
-        activeOnly: true,
-    });
-
-    const [deptMetadata, statusDefsPack, reminders] = await Promise.all([
-        deptMetaP,
-        statusDefsP,
-        loadOpportunityScheduledSendsPreview({
-            supabase,
-            orgId,
-            opportunityId,
-            record,
+        :   Promise.resolve(null),
+        fetchEffectiveStatusDefinitionsTagged(supabase, orgId, "opportunities", {
+            activeOnly: true,
         }),
     ]);
+    phases.status_and_dept_ms = Date.now() - tPrep0;
 
     const statusDefs = statusDefsPack.rows;
     const statusKey =
@@ -197,43 +223,6 @@ export async function composeOpportunityDrawerViewModel(
         departmentMetadata: deptMetadata as Record<string, unknown> | null,
         memoScope: readinessMemo,
     });
-
-    const tAttention0 = Date.now();
-    const attentionBundle = await attachOpportunityAttentionSuggestionBundle({
-        supabase,
-        orgId,
-        opportunityRow: record,
-        defs: statusDefs,
-        attentionConfigMetadata: wuData?.metadata ?? null,
-        departmentMetadata: deptMetadata,
-        departmentId,
-        workUnitId: workUnitId || null,
-        statusKey,
-        preloadedActivityOrgMetadata: {
-            workUnitMetadata: wuData?.metadata ?? null,
-            departmentMetadata: deptMetadata,
-        },
-        readiness: readiness ?? null,
-        readinessMemoScope: readinessMemo,
-    });
-    Object.assign(record, attentionBundle);
-    phases.attention_bundle_ms = Date.now() - tAttention0;
-
-    const tActions0 = Date.now();
-    const resolvedActions = await resolveActionsForContext(supabase, {
-        orgId,
-        surface: "record_header",
-        entityType: "opportunity",
-        entityId: opportunityId,
-        departmentId,
-        workUnitId: workUnitId || null,
-        hintOpportunityStatusKey: statusKey,
-        hintOpportunityMetadata:
-            record.metadata && typeof record.metadata === "object" ?
-                (record.metadata as Record<string, unknown>)
-            :   null,
-    });
-    phases.header_actions_ms = Date.now() - tActions0;
 
     record._record_surface = "full";
 
@@ -253,18 +242,64 @@ export async function composeOpportunityDrawerViewModel(
     }
 
     const task_assist_enabled = taskAssistEnabledOnServer();
+    const firstViewportPlan = buildOpportunityFirstViewportPlan({
+        shell,
+        task_assist_enabled,
+        queue_definition_present: queueDefinition != null,
+    });
+
+    const tDeps0 = Date.now();
+    const resolved = await resolveOpportunityDrawerFirstPaintDependencies({
+        supabase,
+        gate,
+        opportunityId,
+        departmentId,
+        workUnitId: workUnitId || null,
+        statusKey,
+        record,
+        dependencies: firstViewportPlan.dependencies,
+        queueDefinition,
+        statusDefs,
+        wuMetadata: wuData?.metadata ?? null,
+        departmentMetadata: deptMetadata as Record<string, unknown> | null,
+        readiness: readiness ?? null,
+    });
+    Object.assign(record, resolved.record_patches);
+    Object.assign(phases, resolved.phases_ms);
+    phases.first_paint_resolve_ms = Date.now() - tDeps0;
+
+    const reminders = remindersFromFirstPaintData(resolved.data) ?? EMPTY_REMINDERS;
+    const resolvedActions = headerActionsFromFirstPaintData(resolved.data);
+    const tourDisplaySource = resolveTourSlotDisplaySource(
+        record,
+        tourBookingsFromFirstPaintData(resolved.data)
+    );
+
     const aboveFoldRenderModel = buildOpportunityDrawerViewModelAboveFold({
         shell,
         record,
         reminders,
         task_assist_enabled,
+        tour_display_source: tourDisplaySource,
     });
 
     if (!aboveFoldSectionsStructureSettled(aboveFoldRenderModel.sections)) {
         throw new Error("drawer_vm_above_fold_not_structure_settled");
     }
 
-    const headerActions = resolvedActions.header ?? [];
+    const first_paint = buildOpportunityDrawerFirstPaintContract({
+        viewport_slots: firstViewportPlan.viewport_slots,
+        dependencies: resolved.dependencies,
+        data: resolved.data,
+        deferred: [],
+        background: [],
+    });
+
+    if (!first_paint.settled) {
+        throw new Error("drawer_vm_first_paint_not_settled");
+    }
+
+    const headerActions = resolvedActions?.header ?? [];
     const tabs = shell.tabs;
     const default_tab: DrawerTabKey = tabs.includes("overview") ? "overview" : (tabs[0] ?? "overview");
 
@@ -272,6 +307,19 @@ export async function composeOpportunityDrawerViewModel(
         hintHeadline: params.hintOperTrustHeadline,
         hintUrgency: params.hintOperTrustUrgency,
     });
+
+    const layout = {
+        mode: "workflow_v1" as const,
+        tabs,
+        default_tab,
+        shell,
+    };
+
+    if (!opportunityDrawerFirstPaintContractValid({ layout, first_paint })) {
+        throw new Error("drawer_vm_first_paint_contract_invalid");
+    }
+
+    const attentionRaw = record._operational_attention as OpportunityAttentionResult | null | undefined;
 
     const viewModel: OpportunityDrawerViewModel = {
         generation: computeOpportunityDrawerViewModelGeneration({
@@ -290,7 +338,9 @@ export async function composeOpportunityDrawerViewModel(
         workspace: {
             department_id: departmentId,
             work_unit_id: workUnitId || null,
+            queue_definition: queueDefinition,
         },
+        first_paint,
         header: {
             title: buildOpportunityDrawerHeaderTitle(record),
             subtitle: buildOpportunityDrawerHeaderSubtitle(record),
@@ -304,12 +354,7 @@ export async function composeOpportunityDrawerViewModel(
         actions: {
             header: headerActions,
         },
-        layout: {
-            mode: "workflow_v1",
-            tabs,
-            default_tab,
-            shell,
-        },
+        layout,
         above_fold: {
             render_model: aboveFoldRenderModel,
             record: stripOpportunityDrawerRecordStaging(record),
@@ -318,7 +363,7 @@ export async function composeOpportunityDrawerViewModel(
             tasks: parseInquirySummaryTasksFromRecord(record),
             reminders,
             bos: buildOpportunityDrawerBosSummary(record),
-            attention: buildOpportunityDrawerAttentionSummary(attentionBundle._operational_attention),
+            attention: buildOpportunityDrawerAttentionSummary(attentionRaw),
         },
         background_refresh: {
             allowed: ["task_status", "scheduled_send_status", "readiness_values"],

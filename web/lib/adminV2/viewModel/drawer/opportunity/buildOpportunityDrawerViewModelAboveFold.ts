@@ -75,6 +75,7 @@ export function buildOpportunityDrawerViewModelAboveFold(params: {
     record: Record<string, unknown>;
     reminders: RemindersSummaryVm;
     task_assist_enabled: boolean;
+    tour_display_source: "metadata" | "bookings" | "none";
 }): DrawerAboveFoldRenderModel {
     const enrichment = settledDrawerEnrichmentState(params.record);
     const geometry = readOpportunityDrawerGeometry(params.shell);
@@ -88,7 +89,7 @@ export function buildOpportunityDrawerViewModelAboveFold(params: {
         record: params.record,
         enrichment,
         workflow_v1: true,
-        above_fold_locked: true,
+        above_fold_locked: false,
         first_paint_gates_active: false,
         enrichment_layout_ready: true,
         below_fold_enrichment_ready: true,
@@ -106,6 +107,9 @@ export function buildOpportunityDrawerViewModelAboveFold(params: {
         return base;
     }
 
+    const tourFromMetadata = params.tour_display_source === "metadata";
+    const tourFromBookings = params.tour_display_source === "bookings";
+
     return {
         ...base,
         inquiry_summary: {
@@ -119,6 +123,11 @@ export function buildOpportunityDrawerViewModelAboveFold(params: {
                 open_tasks: right_column.tasks.open_tasks,
                 show_reminders_placeholder: false,
                 show_operational_strip: false,
+            },
+            what_matters: {
+                reserved: true,
+                tour_from_metadata: tourFromMetadata,
+                show_tour_bookings_enrichment: tourFromBookings,
             },
         },
     };

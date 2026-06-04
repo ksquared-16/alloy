@@ -31,6 +31,10 @@ vi.mock("@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityScheduledSend
     loadOpportunityScheduledSendsPreview: vi.fn(),
 }));
 
+vi.mock("@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityActiveTourBookingsForViewModel", () => ({
+    loadOpportunityActiveTourBookingsForViewModel: vi.fn(),
+}));
+
 vi.mock("@/lib/completion/readinessDrawerBootstrap", () => ({
     tryEvaluateDrawerRecordReadiness: vi.fn(() => undefined),
 }));
@@ -41,6 +45,7 @@ import { buildOpportunityDrawerVisiblePayload } from "@/lib/admin/opportunityEnt
 import { attachOpportunityAttentionSuggestionBundle } from "@/lib/admin/opportunityAttentionSuggestionAttachment";
 import { fetchEffectiveStatusDefinitionsTagged } from "@/lib/admin/statusDefinitionsResolve";
 import { loadOpportunityScheduledSendsPreview } from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityScheduledSendsPreview";
+import { loadOpportunityActiveTourBookingsForViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityActiveTourBookingsForViewModel";
 import { compileOpportunityRecordDrawerShellFromEntity } from "@/lib/adminV2/shellContracts/compileOpportunityRecordDrawerShell";
 
 const gate = {
@@ -180,6 +185,7 @@ describe("composeOpportunityDrawerViewModel", () => {
             scheduled_send_count: 0,
             scheduled_sends: [],
         });
+        vi.mocked(loadOpportunityActiveTourBookingsForViewModel).mockResolvedValue([]);
         vi.mocked(attachOpportunityAttentionSuggestionBundle).mockResolvedValue({
             _operational_attention: null,
             _operational_attention_error: null,
@@ -261,6 +267,10 @@ describe("composeOpportunityDrawerViewModel", () => {
             expect(result.viewModel.header.status.renderAs).toBe("dropdown");
             expect(result.viewModel.summaries.tasks.state).toBe("loaded");
             expect(result.viewModel.summaries.reminders.state).toBe("empty");
+            expect(result.viewModel.first_paint.settled).toBe(true);
+            expect(result.viewModel.first_paint.data.tour_bookings).toEqual([]);
+            expect(result.viewModel.first_paint.dependencies.some((d) => d.key === "tour_bookings")).toBe(true);
+            expect(result.viewModel.workspace.queue_definition).toBeNull();
             expect(result.viewModel.above_fold.record._record_surface).toBeUndefined();
             expect(compileOpportunityRecordDrawerShellFromEntity).toBeDefined();
         }

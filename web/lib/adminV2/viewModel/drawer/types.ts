@@ -1,11 +1,49 @@
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { InquirySummaryTaskPreviewPayload } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
 import type { OperationalSummaryRiskHint } from "@/lib/ai/enrichmentContracts";
+import type { QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import type {
     DrawerAboveFoldRenderModel,
     DrawerShellContract,
 } from "@/lib/adminV2/drawerPipeline/types";
+import type {
+    DrawerFirstPaintContract,
+    DrawerFirstPaintDependencyState,
+} from "@/lib/adminV2/viewModel/drawer/firstPaintTypes";
+
+export type OpportunityDrawerFirstPaintViewportSlot =
+    | "header"
+    | "status"
+    | "location"
+    | "actions"
+    | "tabs"
+    | "lifecycle_rail"
+    | "lead_summary"
+    | "tour_slot"
+    | "tasks_summary"
+    | "reminders_summary"
+    | "inquiry_children";
+
+/** First-viewport data keys for the current Opportunity drawer VM contract. */
+export type OpportunityDrawerFirstPaintDependencyKey =
+    | "record_visible"
+    | "status_definitions"
+    | "header_actions"
+    | "queue_definition"
+    | "tour_bookings"
+    | "tasks_preview"
+    | "scheduled_sends"
+    | "inquiry_children"
+    | "attention_bundle";
+
+export type OpportunityDrawerFirstPaintDependencyState =
+    DrawerFirstPaintDependencyState<OpportunityDrawerFirstPaintDependencyKey>;
+
+export type OpportunityDrawerFirstPaintContract = DrawerFirstPaintContract<
+    OpportunityDrawerFirstPaintDependencyKey,
+    OpportunityDrawerFirstPaintViewportSlot
+>;
 
 /** Scalar refresh channels allowed after first paint — never layout/structure. */
 export type DrawerViewModelBackgroundRefreshKind =
@@ -64,7 +102,12 @@ export type OpportunityDrawerViewModel = {
     structureSettled: true;
     compose_version: string;
     entity: { type: "opportunity"; id: string };
-    workspace: { department_id: string | null; work_unit_id: string | null };
+    workspace: {
+        department_id: string | null;
+        work_unit_id: string | null;
+        queue_definition: QueueDefinitionV1 | null;
+    };
+    first_paint: OpportunityDrawerFirstPaintContract;
     header: {
         title: string;
         subtitle: string | null;
