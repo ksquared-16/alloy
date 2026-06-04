@@ -270,15 +270,27 @@ export default function OpportunityOperationalCompactStrip({
     // P3a — seed open tasks from the bootstrap's `_inquiry_summary_tasks` (already on overviewData)
     // so the strip's task chips are present at first paint instead of popping in. The live load()
     // below reconciles invisibly. Empty when no seed (non-builder/older payloads) → prior behavior.
-    const [tasks, setTasks] = useState<OperationalTaskRow[]>(() =>
-        (parseInquirySummaryTaskPreview(overviewData)?.open_tasks ?? []).map((t) => ({
+    const seedTasksFromModel = useCallback((): OperationalTaskRow[] => {
+        const fromVm = rightColumnModel?.tasks.open_tasks;
+        if (fromVm && fromVm.length > 0) {
+            return fromVm.map((t) => ({
+                id: t.id,
+                title: t.title,
+                due_at: t.due_at,
+                status: t.status,
+                source: t.source,
+            }));
+        }
+        return (parseInquirySummaryTaskPreview(overviewData)?.open_tasks ?? []).map((t) => ({
             id: t.id,
             title: t.title,
             due_at: t.due_at,
             status: t.status,
             source: t.source,
-        })),
-    );
+        }));
+    }, [overviewData, rightColumnModel?.tasks.open_tasks]);
+
+    const [tasks, setTasks] = useState<OperationalTaskRow[]>(seedTasksFromModel);
     const [scheduledSends, setScheduledSends] = useState<ScheduledSendRow[]>(() => initialScheduledSends ?? []);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -394,6 +406,26 @@ export default function OpportunityOperationalCompactStrip({
     }, [popoverTask, opportunityId, entityLabel]);
 
     useEffect(() => {
+        if (vmFirstPaintCommit && rightColumnModel) {
+            const vmTasks = rightColumnModel.tasks.open_tasks;
+            if (vmTasks.length > 0) {
+                setTasks(
+                    vmTasks.map((t) => ({
+                        id: t.id,
+                        title: t.title,
+                        due_at: t.due_at,
+                        status: t.status,
+                        source: t.source,
+                    }))
+                );
+            }
+            if (initialScheduledSends && initialScheduledSends.length > 0) {
+                setScheduledSends(initialScheduledSends);
+            }
+        }
+    }, [vmFirstPaintCommit, rightColumnModel, initialScheduledSends, opportunityId]);
+
+    useEffect(() => {
         if (!fetchEnabled) {
             if (vmFirstPaintCommit) {
                 setLoading(false);
@@ -406,8 +438,16 @@ export default function OpportunityOperationalCompactStrip({
             setError(null);
             return;
         }
+        if (
+            vmFirstPaintCommit &&
+            rightColumnModel &&
+            (rightColumnModel.tasks.state === "ready" || rightColumnModel.tasks.state === "empty")
+        ) {
+            setLoading(false);
+            return;
+        }
         void load();
-    }, [fetchEnabled, load, vmFirstPaintCommit]);
+    }, [fetchEnabled, load, vmFirstPaintCommit, rightColumnModel]);
 
     useEffect(() => {
         const onRefresh = (ev: Event) => {

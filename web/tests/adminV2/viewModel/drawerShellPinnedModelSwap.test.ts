@@ -100,6 +100,8 @@ describe("AdminDrawerContext shell-pinned swap wiring", () => {
         const drawer = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
         expect(drawer).toContain("drawerModelSwapGeneration");
         expect(drawer).toContain("drawerShellPinnedVmSwapActive");
+        expect(drawer).toMatch(/drawerGateLoading[\s\S]*drawerShellPinnedVmSwapActive[\s\S]*return false/);
+        expect(drawer).toContain("opportunityDrawerPrimaryLoadingVisible");
         expect(drawer).toContain("opportunityDrawerViewModelOpenRef.current === drawer.id");
         expect(drawer).toContain("warmRelatedDrawerViewModels");
         expect(drawer).toContain("applyPersonDrawerPreload");

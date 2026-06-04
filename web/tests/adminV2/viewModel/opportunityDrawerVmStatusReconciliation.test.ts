@@ -142,10 +142,13 @@ describe("AdminEntityDrawer opportunity VM status wiring", () => {
         const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
         const drawer = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
         expect(drawer).toContain("opportunityDrawerVmStatusPinRef");
+        expect(drawer).toContain("opportunityDrawerVmStatusRenderLatchRef");
         expect(drawer).toContain("opportunityDrawerVmStatusPin");
         expect(drawer).toContain("commitOpportunityVmStatusPin");
+        expect(drawer).toContain("blockStatusSkeletonAfterVmSettle");
         expect(drawer).toContain("opportunityDrawerVmStatusAuthoritative");
         expect(drawer).toContain("drawerShellPinnedVmSwapActive");
-        expect(drawer).toContain("opportunityDrawerRightColumnFromVm");
+        expect(drawer).toContain("opportunityInquirySummaryRightColumnResolved");
+        expect(drawer).toContain("logDrawerVmDomRenderTrace");
     });
 });
