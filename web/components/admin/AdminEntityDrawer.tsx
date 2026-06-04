@@ -1766,6 +1766,12 @@ export default function AdminEntityDrawer() {
         return installPersonDrawerDevDirectOpen(openDrawer);
     }, [openDrawer]);
 
+    const drawerShellPinnedVmSwapActive = useMemo(
+        () =>
+            isShellPinnedModelSwapOpenSource(drawer.openSource) || drawerModelSwapGeneration > 0,
+        [drawer.openSource, drawerModelSwapGeneration]
+    );
+
     const drawerGateLoading = useMemo(() => {
         const dm = entityDataMatchesDrawer(data, drawer.id, drawer.type);
         const overview = dm ? data : null;
@@ -1798,12 +1804,6 @@ export default function AdminEntityDrawer() {
         opportunityDrawerVmFirstPaintSettled,
         personDrawerVmFirstPaintSettled,
     ]);
-
-    const drawerShellPinnedVmSwapActive = useMemo(
-        () =>
-            isShellPinnedModelSwapOpenSource(drawer.openSource) || drawerModelSwapGeneration > 0,
-        [drawer.openSource, drawerModelSwapGeneration]
-    );
 
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
