@@ -98,8 +98,10 @@ import {
 import { DeptPageLoadingGate } from "@/app/adminV2/components/workspace/DeptPageLoadingGate";
 import { resolveDeptWorkUnitDisplayLabel } from "@/lib/workspace/workUnitShellDisplayTitle";
 import {
+    buildLifecycleStageOrderIndex,
     lifecycleDeptThroughputWorkUnits,
     mapBootstrapWorkUnits,
+    sortByLifecycleStageOrder,
     sortLifecycleDeptWorkUnits,
     type DeptWorkUnitListRow,
 } from "@/lib/lifecycle/sortLifecycleDeptWorkUnits";
@@ -1365,11 +1367,10 @@ export default function AdminV2WorkspaceDepartmentPage() {
 
     const deptThroughputWuRows = useMemo(() => {
         const list = (deptWorkUnits ?? []) as DeptWorkUnitListRow[];
-        if (builderOwnedLifecycleRuntime) {
-            return lifecycleDeptThroughputWorkUnits(list, true);
-        }
-        return lifecycleDeptThroughputWorkUnits(list, false);
-    }, [deptWorkUnits, builderOwnedLifecycleRuntime]);
+        const sorted = lifecycleDeptThroughputWorkUnits(list, builderOwnedLifecycleRuntime);
+        // P1 — re-sort by canonical /settings/lifecycle stage order (sync-independent of work_units.sort_order).
+        return sortByLifecycleStageOrder(sorted, buildLifecycleStageOrderIndex(dept?.metadata));
+    }, [deptWorkUnits, builderOwnedLifecycleRuntime, dept?.metadata]);
 
     /** Throughput panel has real rows or a confirmed final empty — not an unresolved blank list (PERF-B-02 tighten). */
     const deptThroughputBodyReady = useMemo(() => {

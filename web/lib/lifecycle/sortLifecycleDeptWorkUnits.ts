@@ -3,6 +3,12 @@ import {
     isLifecycleStageWorkUnitRow,
     type WorkUnitListRow,
 } from "@/lib/lifecycle/builderOwnedLifecycleRuntime";
+import {
+    activeLifecycleProcess,
+    activeStagesForProcess,
+    lifecycleBuilderFromDepartmentMetadata,
+} from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { stageKeyFromLifecycleWorkUnitMetadata } from "@/lib/lifecycle/lifecycleStageWorkUnit";
 
 export type DeptWorkUnitListRow = {
     id: string;
@@ -34,6 +40,42 @@ export function lifecycleDeptThroughputWorkUnits(
               return key !== "needs_attention" && key !== "enrollment_pipeline";
           });
     return sortLifecycleDeptWorkUnits(list);
+}
+
+/**
+ * Canonical lifecycle stage order from /settings/lifecycle (builder stages in `lifecycle_builder_v1`),
+ * as `stage_key -> index`. This is the authoritative order the user edits in settings, independent of
+ * whether `work_units.sort_order` was synced.
+ */
+export function buildLifecycleStageOrderIndex(departmentMetadata: unknown): ReadonlyMap<string, number> {
+    const index = new Map<string, number>();
+    const process = activeLifecycleProcess(lifecycleBuilderFromDepartmentMetadata(departmentMetadata));
+    if (!process) return index;
+    activeStagesForProcess(process).forEach((stage, i) => {
+        const key = (stage.key ?? "").trim();
+        if (key) index.set(key, i);
+    });
+    return index;
+}
+
+/**
+ * Stable re-sort by canonical lifecycle stage order (from {@link buildLifecycleStageOrderIndex}).
+ * Sync-independent — does NOT rely on `work_units.sort_order` being populated. Stages absent from the
+ * index keep their prior relative order (stable sort) and sort after known stages. No-op when the
+ * index is empty (e.g. non-builder-owned depts or missing metadata) → preserves existing behavior.
+ */
+export function sortByLifecycleStageOrder<T extends { metadata?: unknown }>(
+    rows: T[],
+    stageOrderIndex: ReadonlyMap<string, number>
+): T[] {
+    if (stageOrderIndex.size === 0) return rows;
+    return [...rows].sort((a, b) => {
+        const aKey = stageKeyFromLifecycleWorkUnitMetadata(a.metadata) ?? "";
+        const bKey = stageKeyFromLifecycleWorkUnitMetadata(b.metadata) ?? "";
+        const ai = stageOrderIndex.get(aKey) ?? 9999;
+        const bi = stageOrderIndex.get(bKey) ?? 9999;
+        return ai - bi;
+    });
 }
 
 export function mapBootstrapWorkUnits(

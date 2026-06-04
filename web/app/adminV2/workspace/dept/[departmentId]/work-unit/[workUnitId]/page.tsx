@@ -173,6 +173,10 @@ import {
     type LifecycleSiblingWorkUnitNavRow,
 } from "@/lib/lifecycle/lifecycleWorkUnitShellPills";
 import {
+    buildLifecycleStageOrderIndex,
+    sortByLifecycleStageOrder,
+} from "@/lib/lifecycle/sortLifecycleDeptWorkUnits";
+import {
     lifecycleSiblingHeaderPaintReady,
     lifecycleSiblingTotalsFromDeptSummaries,
     logLifecycleSiblingHydrationDev,
@@ -1061,7 +1065,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
             scopeTotal != null && Number.isFinite(scopeTotal) && scopeTotal > 0
                 ? scopeTotal
                 : null;
-        return attachSiblingWorkUnitTotals(orderedSiblings, totals, workUnitId, currentTotal);
+        // P1 — re-sort the lifecycle pills by canonical /settings/lifecycle stage order
+        // (sync-independent of work_units.sort_order), so /work-units matches /dept and settings.
+        const stageOrderedSiblings = sortByLifecycleStageOrder(
+            orderedSiblings,
+            buildLifecycleStageOrderIndex(dept?.metadata)
+        );
+        return attachSiblingWorkUnitTotals(stageOrderedSiblings, totals, workUnitId, currentTotal);
     }, [
         lifecycleSiblingWorkUnits,
         lifecycleSiblingTotalsById,
@@ -1071,6 +1081,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         accessScopeFingerprint,
         workUnitId,
         queueSummaries,
+        dept?.metadata,
     ]);
 
     const lifecycleSiblingHeaderReady = lifecycleSiblingHeaderPaintReady({
