@@ -34,6 +34,10 @@ import {
 import { markAdminV2DrawerOpenBudgetStart } from "@/lib/perf/adminV2JankBudget";
 import { scheduleOpportunityDrawerViewModelShadow } from "@/lib/adminV2/viewModel/drawer/shadow/runOpportunityDrawerViewModelShadow";
 import { loadOpportunityDrawerViaViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityDrawerViaViewModel";
+import {
+    drawerViewModelCutoverFlagSnapshot,
+    safeLogDrawerViewModelCutover,
+} from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelCutover";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 
 /** Max overlay floor when cold — avoids sub-frame flash; skipped when intent prefetch is warm. */
@@ -134,9 +138,23 @@ export async function loadOpportunityDrawerComposedOpen(
     markAdminV2DrawerOpenBudgetStart();
 
     const composedStart = typeof performance !== "undefined" ? performance.now() : 0;
+    const cutoverFlags = drawerViewModelCutoverFlagSnapshot();
+
+    safeLogDrawerViewModelCutover("open_attempt", {
+        opportunity_id: id,
+        ...cutoverFlags,
+        drawer_vm_open_attempted: cutoverFlags.drawer_vm_cutover_flag_enabled,
+    });
 
     const vmOpen = await loadOpportunityDrawerViaViewModel(id, workspaceContext ?? null, init);
     if (vmOpen.ok) {
+        safeLogDrawerViewModelCutover("open_committed", {
+            opportunity_id: id,
+            ...cutoverFlags,
+            drawer_vm_open_committed: true,
+            open_path: "view_model",
+            pipeline_pinned: true,
+        });
         putDrawerEntitySnapshot("opportunities", id, vmOpen.preload.primaryEntity);
         const waitForComposedMs = Math.round((typeof performance !== "undefined" ? performance.now() : 0) - composedStart);
         reportDrawerComposedRevealReady(id, waitForComposedMs);
@@ -162,6 +180,17 @@ export async function loadOpportunityDrawerComposedOpen(
             },
         };
     }
+
+    safeLogDrawerViewModelCutover("fallback", {
+        opportunity_id: id,
+        ...cutoverFlags,
+        drawer_vm_open_committed: false,
+        drawer_vm_fallback_reason:
+            vmOpen.reason === "skipped" && vmOpen.skip_reason ?
+                `${vmOpen.reason}:${vmOpen.skip_reason}`
+            :   vmOpen.reason,
+        open_path: "legacy",
+    });
 
     const bootstrapWarm = isOpportunityDrawerBootstrapWarm(id);
     const primaryWarm = isOpportunityDrawerPrimaryWarm(id);
@@ -289,6 +318,7 @@ export async function loadOpportunityDrawerComposedOpen(
     const enrichmentHeldUntilInteraction = fullEntity == null;
     const preload: OpportunityDrawerOpenPreload = {
         opportunityId: id,
+        openPath: "legacy",
         bootstrap,
         primaryEntity,
         fullEntity,

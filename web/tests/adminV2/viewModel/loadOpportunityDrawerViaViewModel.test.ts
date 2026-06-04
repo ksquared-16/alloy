@@ -102,7 +102,7 @@ describe("loadOpportunityDrawerViaViewModel", () => {
             status: 422,
         });
         const result = await loadOpportunityDrawerViaViewModel("opp-1", null);
-        expect(result).toEqual({ ok: false, reason: "skipped" });
+        expect(result).toEqual({ ok: false, reason: "skipped", skip_reason: "classic_layout_deferred" });
     });
 
     it("returns fetch_failed on network error status", async () => {

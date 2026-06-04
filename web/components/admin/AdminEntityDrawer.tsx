@@ -434,6 +434,10 @@ import {
     isOpportunityDrawerViewModelPreload,
     opportunityDrawerViewModelRecordShell,
 } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerOpenPreloadFromViewModel";
+import {
+    drawerViewModelCutoverFlagSnapshot,
+    safeLogDrawerViewModelCutover,
+} from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelCutover";
 import type { DrawerPipelineState } from "@/lib/adminV2/drawerPipeline/types";
 import {
     opportunityDrawerBelowFoldEnrichmentReady as computeBelowFoldEnrichmentReady,
@@ -1900,6 +1904,8 @@ export default function AdminEntityDrawer() {
     const opportunityDrawerFirstPaintPreloadedRef = useRef<string | null>(null);
     /** Settled VM cutover — pins above-fold pipeline from server VM (no client structural recompute). */
     const opportunityDrawerViewModelOpenRef = useRef<string | null>(null);
+    const opportunityDrawerViewModelApplyLoggedRef = useRef<string | null>(null);
+    const opportunityDrawerViewModelPrimaryHydrateSkipLoggedRef = useRef<string | null>(null);
     const [opportunityDrawerViewModelPipeline, setOpportunityDrawerViewModelPipeline] =
         useState<DrawerPipelineState | null>(null);
     const [addInquiryChildState, setAddInquiryChildState] = useState<{ mode: "child" | "sibling" } | null>(null);
@@ -2471,6 +2477,15 @@ export default function AdminEntityDrawer() {
                 boot.entity as Record<string, unknown>
             );
         }
+        if (opportunityDrawerViewModelApplyLoggedRef.current !== drawer.id) {
+            opportunityDrawerViewModelApplyLoggedRef.current = drawer.id;
+            safeLogDrawerViewModelCutover("drawer_apply", {
+                opportunity_id: drawer.id,
+                ...drawerViewModelCutoverFlagSnapshot(),
+                open_path: viewModelOpen ? "view_model" : (preload.openPath ?? "legacy"),
+                pipeline_pinned: viewModelOpen,
+            });
+        }
         opportunityDrawerBootstrapAppliedRef.current = drawer.id;
         opportunityDrawerBootstrapEntityKeyRef.current = `${drawer.type}:${drawer.id}`;
         setOpportunityBootstrapAppliedId(drawer.id);
@@ -2481,7 +2496,12 @@ export default function AdminEntityDrawer() {
             boot.entity as Record<string, unknown>,
             preload.primaryEntity
         );
-        if (preload.fullEntity) {
+        if (viewModelOpen) {
+            merged = { ...merged, _record_surface: "full" };
+            markOpportunityDrawerHydrateDone(drawer.id, "full");
+            opportunityBackgroundFullDoneRef.current = drawer.id;
+            setOpportunityBackgroundFullHydrateFailed(false);
+        } else if (preload.fullEntity) {
             merged = runOpportunityStagedFullHydrateMerge(merged, preload.fullEntity, {
                 opportunityId: drawer.id,
                 phase: "composed_open_full_merge",
@@ -2522,6 +2542,8 @@ export default function AdminEntityDrawer() {
             entityDrawerTabInitKeyRef.current = "";
             opportunityDrawerFirstPaintPreloadedRef.current = null;
             opportunityDrawerViewModelOpenRef.current = null;
+            opportunityDrawerViewModelApplyLoggedRef.current = null;
+            opportunityDrawerViewModelPrimaryHydrateSkipLoggedRef.current = null;
             setOpportunityDrawerViewModelPipeline(null);
             postRevealEnrichEndReportedRef.current = null;
             opportunityDrawerVisitedTabsRef.current = createOpportunityDrawerTabVisitSet();
@@ -2879,6 +2901,10 @@ export default function AdminEntityDrawer() {
             drawerShellVariant === "adminV2" &&
             adminV2DrawerBootstrapEnabled()
         ) {
+            if (opportunityDrawerViewModelOpenRef.current === drawer.id) {
+                setLoading(false);
+                return;
+            }
             if (opportunityDrawerBootstrapAppliedRef.current === drawer.id) {
                 const holdForIncompleteSnapshot =
                     data != null &&
@@ -3096,7 +3122,18 @@ export default function AdminEntityDrawer() {
         if (drawerShellVariant !== "adminV2" || !adminV2DrawerBootstrapEnabled()) return;
         if (opportunityDrawerBootstrapLegacy) return;
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
-        if (opportunityDrawerViewModelOpenRef.current === drawer.id) return;
+        if (opportunityDrawerViewModelOpenRef.current === drawer.id) {
+            if (opportunityDrawerViewModelPrimaryHydrateSkipLoggedRef.current !== drawer.id) {
+                opportunityDrawerViewModelPrimaryHydrateSkipLoggedRef.current = drawer.id;
+                safeLogDrawerViewModelCutover("primary_hydrate_skipped", {
+                    opportunity_id: drawer.id,
+                    ...drawerViewModelCutoverFlagSnapshot(),
+                    primary_hydrate_skipped: true,
+                    open_path: "view_model",
+                });
+            }
+            return;
+        }
         if (opportunityBootstrapAppliedId !== drawer.id) return;
         if (!opportunityRecordHydrationPending) return;
         runOpportunityPrimaryHydrate();
@@ -4368,6 +4405,10 @@ export default function AdminEntityDrawer() {
             return;
         }
         if (opportunityDrawerFirstPaintPreloadedRef.current === drawer.id && opportunityResolvedHeaderActions != null) {
+            setOpportunityResolvedHeaderLoading(false);
+            return;
+        }
+        if (opportunityDrawerViewModelOpenRef.current === drawer.id && opportunityResolvedHeaderActions != null) {
             setOpportunityResolvedHeaderLoading(false);
             return;
         }
@@ -8961,6 +9002,7 @@ export default function AdminEntityDrawer() {
     useEffect(() => {
         if (!opportunityDrawerBootstrapEnrichmentPath) return;
         if (!drawer.id || drawer.id === "new") return;
+        if (opportunityDrawerViewModelOpenRef.current === drawer.id) return;
         if (opportunityDrawerFirstPaintPreloadedRef.current === drawer.id && opportunityFullRecordHydrateApplied) return;
         if (!opportunityDrawerOverviewRevealReady) return;
         if (opportunityFullRecordHydrateApplied) return;

@@ -4,6 +4,7 @@ import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
 import { composeOpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel";
 import { logOpportunityDrawerViewModelComposeFailureShadowSummary } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelShadowServer";
+import { logDrawerViewModelRuntimeFlagsServerSummary } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelRuntimeFlagsServer";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
 /**
@@ -27,6 +28,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     }
 
     const sp = request.nextUrl.searchParams;
+    logDrawerViewModelRuntimeFlagsServerSummary();
     try {
         const result = await composeOpportunityDrawerViewModel({
             supabase,

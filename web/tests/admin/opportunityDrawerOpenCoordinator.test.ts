@@ -149,5 +149,16 @@ describe("opportunity drawer primary-gated composed open", () => {
         expect(drawer).toContain("opportunityDrawerViewModelOpenRef");
         expect(drawer).toContain("opportunityDrawerViewModelPipeline");
         expect(drawer).toMatch(/if \(opportunityDrawerViewModelOpenRef\.current === drawer\.id\) return;/);
+        expect(drawer).toContain('safeLogDrawerViewModelCutover("drawer_apply"');
+        expect(drawer).toContain('safeLogDrawerViewModelCutover("primary_hydrate_skipped"');
+        expect(drawer).toContain('viewModelOpen) {');
+        expect(drawer).toContain('_record_surface: "full"');
+    });
+
+    it("logs cutover attempt, commit, and fallback from coordinator", () => {
+        const lib = read("lib/admin/opportunityDrawerOpenCoordinator.ts");
+        expect(lib).toContain('safeLogDrawerViewModelCutover("open_attempt"');
+        expect(lib).toContain('safeLogDrawerViewModelCutover("open_committed"');
+        expect(lib).toContain('safeLogDrawerViewModelCutover("fallback"');
     });
 });

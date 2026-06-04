@@ -9,7 +9,11 @@ import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
 export type LoadOpportunityDrawerViaViewModelResult =
     | { ok: true; preload: OpportunityDrawerOpenPreload; compose_ms: number }
-    | { ok: false; reason: "cutover_disabled" | "fetch_failed" | "skipped" | "not_structure_settled" | "composed_not_ready" };
+    | {
+          ok: false;
+          reason: "cutover_disabled" | "fetch_failed" | "skipped" | "not_structure_settled" | "composed_not_ready";
+          skip_reason?: string;
+      };
 
 export async function loadOpportunityDrawerViaViewModel(
     opportunityId: string,
@@ -27,7 +31,10 @@ export async function loadOpportunityDrawerViaViewModel(
     );
 
     if (!fetchResult.ok) {
-        return { ok: false, reason: "skipped" in fetchResult && fetchResult.skipped ? "skipped" : "fetch_failed" };
+        if ("skipped" in fetchResult && fetchResult.skipped) {
+            return { ok: false, reason: "skipped", skip_reason: fetchResult.skipped.reason };
+        }
+        return { ok: false, reason: "fetch_failed" };
     }
 
     const { viewModel } = fetchResult;
