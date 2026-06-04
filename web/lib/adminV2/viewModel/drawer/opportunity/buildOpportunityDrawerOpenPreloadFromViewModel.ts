@@ -1,6 +1,7 @@
 import type { OpportunityDrawerOperationalBootstrapResponse } from "@/lib/admin/opportunityDrawerOperationalBootstrapTypes";
 import type { OpportunityDrawerOpenPreload } from "@/lib/admin/opportunityDrawerOpenCoordinator";
 import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
+import { emptyResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { drawerShellToOpportunityRecordContract } from "@/lib/adminV2/drawerPipeline/adapters/opportunity/compileShell";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import type { RecordLayoutConfigJson } from "@/lib/recordChrome/types";
@@ -24,6 +25,10 @@ function paintRecordFromViewModel(vm: OpportunityDrawerViewModel): Record<string
     };
 }
 
+function headerActionsFromViewModel(header: OpportunityDrawerViewModel["actions"]["header"]): ResolvedActionsBySlot {
+    return { ...emptyResolvedActionsBySlot(), header };
+}
+
 function bootstrapFromViewModel(
     vm: OpportunityDrawerViewModel,
     paintRecord: Record<string, unknown>
@@ -40,7 +45,7 @@ function bootstrapFromViewModel(
             config_json: layoutConfig,
             inquiry_drawer_mode: "workflow_v1",
         },
-        record_header_actions: { header: vm.actions.header },
+        record_header_actions: headerActionsFromViewModel(vm.actions.header),
         work_unit:
             wuId && deptId ?
                 {
@@ -66,7 +71,7 @@ export function buildOpportunityDrawerOpenPreloadFromViewModel(
     viewModel: OpportunityDrawerViewModel
 ): OpportunityDrawerViewModelPreload {
     const paintRecord = paintRecordFromViewModel(viewModel);
-    const headerActions: ResolvedActionsBySlot = { header: viewModel.actions.header };
+    const headerActions = headerActionsFromViewModel(viewModel.actions.header);
     const bootstrap = bootstrapFromViewModel(viewModel, paintRecord);
 
     return {

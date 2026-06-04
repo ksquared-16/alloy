@@ -7,6 +7,12 @@ import type { NextConfig } from "next";
 const webRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
+  /** Align with turbopack.root — avoids monorepo parent lockfile overriding trace root. */
+  outputFileTracingRoot: webRoot,
+  typescript: {
+    /** Production build typecheck — app + API routes only (excludes tests/scripts). */
+    tsconfigPath: "./tsconfig.build.json",
+  },
   turbopack: {
     root: webRoot,
   },
