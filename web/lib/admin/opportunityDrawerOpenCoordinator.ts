@@ -32,6 +32,7 @@ import {
     setAdminV2DrawerOpenPending,
 } from "@/lib/perf/adminV2PrimarySurfaceGate";
 import { markAdminV2DrawerOpenBudgetStart } from "@/lib/perf/adminV2JankBudget";
+import { scheduleOpportunityDrawerViewModelShadow } from "@/lib/adminV2/viewModel/drawer/shadow/runOpportunityDrawerViewModelShadow";
 
 /** Max overlay floor when cold — avoids sub-frame flash; skipped when intent prefetch is warm. */
 export const OPPORTUNITY_DRAWER_OPEN_ANTI_FLICKER_MS = 200;
@@ -284,6 +285,12 @@ export async function loadOpportunityDrawerComposedOpen(
             });
         }
     }
+
+    scheduleOpportunityDrawerViewModelShadow({
+        preload,
+        workspaceContext: workspaceContext ?? null,
+        init,
+    });
 
     return {
         preload,
