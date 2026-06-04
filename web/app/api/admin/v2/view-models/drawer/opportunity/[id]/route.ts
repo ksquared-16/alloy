@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
 import { composeOpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel";
+import { logDrawerVmRuntimeServer } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
 import { logOpportunityDrawerViewModelComposeFailureShadowSummary } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelShadowServer";
 import { logDrawerViewModelRuntimeFlagsServerSummary } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelRuntimeFlagsServer";
 import { createAdminClient } from "@/lib/supabaseAdmin";
@@ -29,6 +30,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     const sp = request.nextUrl.searchParams;
     logDrawerViewModelRuntimeFlagsServerSummary();
+    logDrawerVmRuntimeServer("compose_start", {
+        opportunity_id: opportunityId.trim(),
+        department_id: (sp.get("department_id") ?? "").trim() || null,
+        work_unit_id: (sp.get("work_unit_id") ?? "").trim() || null,
+    });
     try {
         const result = await composeOpportunityDrawerViewModel({
             supabase,
@@ -41,6 +47,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         });
 
         if (!result.ok) {
+            logDrawerVmRuntimeServer("compose_skip", {
+                opportunity_id: opportunityId.trim(),
+                reason: result.skipped.reason,
+            });
             return NextResponse.json(result.skipped, {
                 status: 422,
                 headers: {
@@ -50,6 +60,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             });
         }
 
+        logDrawerVmRuntimeServer("compose_ok", {
+            opportunity_id: opportunityId.trim(),
+            generation: result.viewModel.generation,
+            compose_ms: result.viewModel.timing.compose_ms,
+        });
         return NextResponse.json(result.viewModel, {
             headers: {
                 "X-Alloy-Drawer-VM-Structure-Settled": "true",
@@ -59,6 +74,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             },
         });
     } catch (e) {
+        logDrawerVmRuntimeServer("compose_error", {
+            opportunity_id: opportunityId.trim(),
+            message: e instanceof Error ? e.message : "unknown",
+        });
         logOpportunityDrawerViewModelComposeFailureShadowSummary(opportunityId.trim(), Date.now() - routeT0);
         const msg = e instanceof Error ? e.message : "Drawer view model compose failed";
         const status = /not found/i.test(msg) ? 404 : 500;
