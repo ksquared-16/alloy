@@ -8,8 +8,7 @@ import { assembleLegacyDrawerOpenShadowSnapshot } from "@/lib/adminV2/viewModel/
 import { adminV2DrawerViewModelShadowEnabled } from "@/lib/adminV2/viewModel/drawer/shadow/drawerViewModelShadowGate";
 import { diffOpportunityDrawerViewModelShadow } from "@/lib/adminV2/viewModel/drawer/shadow/diffOpportunityDrawerViewModelShadow";
 import { extractOpportunityDrawerViewModelShadowSnapshot } from "@/lib/adminV2/viewModel/drawer/shadow/extractOpportunityDrawerViewModelShadowSnapshot";
-import { logDrawerViewModelShadow } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelShadow";
-import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
+import { safeLogDrawerViewModelShadow } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelShadow";
 import {
     runOpportunityDrawerViewModelShadow,
     scheduleOpportunityDrawerViewModelShadow,
@@ -20,10 +19,14 @@ vi.mock("@/lib/adminV2/viewModel/drawer/shadow/fetchOpportunityDrawerViewModelCl
 }));
 
 vi.mock("@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelShadow", () => ({
+    safeLogDrawerViewModelShadow: vi.fn(),
     logDrawerViewModelShadow: vi.fn(),
+    buildDrawerViewModelShadowSummary: vi.fn(),
+    drawerViewModelShadowMismatchKeys: vi.fn(),
 }));
 
 import { fetchOpportunityDrawerViewModelClient } from "@/lib/adminV2/viewModel/drawer/shadow/fetchOpportunityDrawerViewModelClient";
+import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 
 const preload = {
     opportunityId: "opp-1",
@@ -217,7 +220,7 @@ describe("scheduleOpportunityDrawerViewModelShadow", () => {
         });
         await Promise.resolve();
         expect(fetchOpportunityDrawerViewModelClient).not.toHaveBeenCalled();
-        expect(logDrawerViewModelShadow).not.toHaveBeenCalled();
+        expect(safeLogDrawerViewModelShadow).not.toHaveBeenCalled();
     });
 
     it("fetches VM and logs diff when shadow flag is on", async () => {
@@ -237,11 +240,119 @@ describe("scheduleOpportunityDrawerViewModelShadow", () => {
             { department_id: "dept-1", work_unit_id: "wu-1" },
             expect.anything()
         );
-        expect(logDrawerViewModelShadow).toHaveBeenCalledWith(
+        expect(safeLogDrawerViewModelShadow).toHaveBeenCalledWith(
             expect.objectContaining({
                 opportunity_id: "opp-1",
                 vm_structure_settled: true,
                 legacy_path: "composed_open",
+            })
+        );
+    });
+
+    it("logs endpoint failure without throwing", async () => {
+        process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_SHADOW = "true";
+        vi.mocked(fetchOpportunityDrawerViewModelClient).mockResolvedValue({
+            ok: false,
+            error: "drawer_vm_fetch_500",
+            status: 500,
+        });
+
+        await expect(
+            runOpportunityDrawerViewModelShadow({
+                preload,
+                workspaceContext: { department_id: "dept-1", work_unit_id: "wu-1" },
+            })
+        ).resolves.toBeUndefined();
+
+        expect(safeLogDrawerViewModelShadow).toHaveBeenCalledWith(
+            expect.objectContaining({
+                opportunity_id: "opp-1",
+                vm_structure_settled: false,
+                error: "drawer_vm_fetch_500",
+            })
+        );
+    });
+
+    it("logs 422 classic layout skip with skip_reason", async () => {
+        process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_SHADOW = "true";
+        const classicPreload = {
+            ...preload,
+            bootstrap: {
+                ...preload.bootstrap,
+                record_layout: {
+                    inquiry_drawer_mode: "classic" as const,
+                    key: "default",
+                    source: "global_template" as const,
+                    config_json: {},
+                },
+            },
+        };
+        vi.mocked(fetchOpportunityDrawerViewModelClient).mockResolvedValue({
+            ok: false,
+            skipped: {
+                structureSettled: false,
+                reason: "classic_layout_deferred",
+                compose_version: "1.0.0",
+            },
+            status: 422,
+        });
+
+        await runOpportunityDrawerViewModelShadow({
+            preload: classicPreload,
+            workspaceContext: { department_id: "dept-1", work_unit_id: "wu-1" },
+        });
+
+        expect(safeLogDrawerViewModelShadow).toHaveBeenCalledWith(
+            expect.objectContaining({
+                vm_structure_settled: false,
+                skip_reason: "classic_layout_deferred",
+            })
+        );
+    });
+
+    it("logs structural mismatch keys when header actions diverge", async () => {
+        process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_SHADOW = "true";
+        vi.mocked(fetchOpportunityDrawerViewModelClient).mockResolvedValue({
+            ok: true,
+            viewModel: {
+                ...minimalViewModel(),
+                actions: { header: [] },
+            },
+        });
+
+        await runOpportunityDrawerViewModelShadow({
+            preload,
+            workspaceContext: { department_id: "dept-1", work_unit_id: "wu-1" },
+        });
+
+        expect(safeLogDrawerViewModelShadow).toHaveBeenCalledWith(
+            expect.objectContaining({
+                diff: expect.objectContaining({
+                    mismatch_count: expect.any(Number),
+                    structural_mismatches: expect.arrayContaining([
+                        expect.objectContaining({ field: "header_action_keys" }),
+                    ]),
+                }),
+            })
+        );
+    });
+
+    it("schedule swallows internal shadow errors without throwing", async () => {
+        process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_SHADOW = "true";
+        vi.mocked(fetchOpportunityDrawerViewModelClient).mockRejectedValue(new Error("network_down"));
+
+        expect(() =>
+            scheduleOpportunityDrawerViewModelShadow({
+                preload,
+                workspaceContext: null,
+            })
+        ).not.toThrow();
+
+        await new Promise((r) => setTimeout(r, 0));
+        expect(safeLogDrawerViewModelShadow).toHaveBeenCalledWith(
+            expect.objectContaining({
+                error: "network_down",
+                vm_structure_settled: false,
             })
         );
     });
@@ -269,11 +380,12 @@ describe("scheduleOpportunityDrawerViewModelShadow", () => {
 });
 
 describe("logDrawerViewModelShadow", () => {
-    it("logs with [drawer-vm-shadow] prefix", () => {
+    it("emits summary and detail logs with [drawer-vm-shadow] prefixes", () => {
         const src = readFileSync(
             join(dirname(fileURLToPath(import.meta.url)), "../../../lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelShadow.ts"),
             "utf8"
         );
+        expect(src).toContain('console.info("[drawer-vm-shadow:summary]"');
         expect(src).toContain('console.info("[drawer-vm-shadow]"');
     });
 });
