@@ -2,11 +2,32 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { CrmCompactQueuePreview } from "@/app/adminV2/components/workspace/blocks/QueueBlock";
+import type { CrmCompactRowSemanticSlots } from "@/lib/ui-v2/workspace-types";
 import {
     buildCrmQueueRowPreviewPresentation,
     parseQueueRowCrmChildrenStructured,
 } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 import { extractQueueRowRelatedDrawerTargets, resolveQueueRowRelatedDrawerPersonIds } from "@/lib/workspace/viewModels/queueRowRelatedDrawerTargets";
+
+function crmTestSlots(
+    partial: Partial<CrmCompactRowSemanticSlots> & Pick<CrmCompactRowSemanticSlots, "primaryIdentity">
+): CrmCompactRowSemanticSlots {
+    return {
+        childName: null,
+        stageLabel: null,
+        statusLabel: null,
+        nextStep: null,
+        lastActivity: null,
+        commercialValue: null,
+        contactSnippet: null,
+        programContext: null,
+        roomContext: null,
+        ageContext: null,
+        attentionReason: null,
+        familyNote: null,
+        ...partial,
+    };
+}
 
 describe("queueRowRelatedDrawerTargets", () => {
     it("extracts primary person and first inquiry child person ids", () => {
@@ -76,7 +97,7 @@ describe("CrmCompactQueuePreview inline drawer icons", () => {
             <CrmCompactQueuePreview
                 scanMode
                 drawerRecordIconHandlers={handlers}
-                slots={{
+                slots={crmTestSlots({
                     primaryIdentity: "Smith Family",
                     crmFactGroups: [
                         {
@@ -91,23 +112,27 @@ describe("CrmCompactQueuePreview inline drawer icons", () => {
                     ],
                     contactPersonId: "person-ada",
                     contactDisplayName: "Ada Lovelace",
-                }}
+                    contactPhoneDisplay: "555-0100",
+                    contactEmail: "ada@example.com",
+                })}
             />
         );
-        expect(html).toContain('data-queue-related-record-layout="row_band"');
-        expect(html).toContain('data-queue-related-record-row="person"');
+        expect(html).toContain('data-queue-preview="crm_compact_operational_record"');
+        expect(html).toContain('data-queue-preview="operational_record"');
+        expect(html).toContain('data-queue-people-role="parent"');
         expect(html).toContain('data-queue-row-person-icon="true"');
         expect(html).toContain("Ada Lovelace");
         expect(html).toContain("555-0100");
-        expect(html).toMatch(/data-queue-row-person-icon="true"[\s\S]*<span class="adminv2-ws-queue-related-record-name">Ada Lovelace<\/span>/);
+        expect(html).toMatch(/data-queue-row-person-icon="true"[\s\S]*Ada Lovelace/);
     });
 
     it("renders child rows as horizontal bands with icon left of name and program field", () => {
         const html = renderToStaticMarkup(
             <CrmCompactQueuePreview
                 scanMode
+                workUnitKey="enrollment_pipeline"
                 drawerRecordIconHandlers={handlers}
-                slots={{
+                slots={crmTestSlots({
                     primaryIdentity: "Smith Family",
                     crmFactGroups: [
                         {
@@ -127,7 +152,7 @@ describe("CrmCompactQueuePreview inline drawer icons", () => {
                         { primary: "Alex (5y)", personId: "child-alex", programInline: "Toddler" },
                         { primary: "Jordan", personId: "child-jordan", programInline: "Preschool" },
                     ],
-                }}
+                })}
             />
         );
         expect(html).toContain('data-queue-related-record-layout="row_band"');
@@ -138,12 +163,40 @@ describe("CrmCompactQueuePreview inline drawer icons", () => {
         expect(html).toMatch(/data-queue-row-child-icon="true"[\s\S]*<span class="adminv2-ws-queue-related-record-name">Alex \(5y\)<\/span>/);
     });
 
+    it("renders waitlist child icon when child person id is present", () => {
+        const html = renderToStaticMarkup(
+            <CrmCompactQueuePreview
+                scanMode
+                workUnitKey="waitlist"
+                drawerRecordIconHandlers={handlers}
+                slots={crmTestSlots({
+                    primaryIdentity: "Williams Family",
+                    childPersonId: "child-wl-1",
+                    childrenLines: [{ primary: "Sam (3y)", personId: "child-wl-1", programInline: "Toddler" }],
+                    crmFactGroups: [
+                        {
+                            kind: "children_programs",
+                            label: "",
+                            columnGrid: {
+                                headers: ["Child", "Program"],
+                                rows: [["Sam (3y)", "Toddler"]],
+                                columnKeys: ["child_name", "program"],
+                            },
+                        },
+                    ],
+                })}
+            />
+        );
+        expect(html).toContain('data-queue-row-child-icon="true"');
+        expect(html).toMatch(/data-queue-row-child-icon="true"[\s\S]*Sam \(3y\)/);
+    });
+
     it("does not render icons without person ids", () => {
         const html = renderToStaticMarkup(
             <CrmCompactQueuePreview
                 scanMode
                 drawerRecordIconHandlers={handlers}
-                slots={{
+                slots={crmTestSlots({
                     primaryIdentity: "Smith Family",
                     crmFactGroups: [
                         {
@@ -157,7 +210,7 @@ describe("CrmCompactQueuePreview inline drawer icons", () => {
                         },
                     ],
                     contactDisplayName: "Ada Lovelace",
-                }}
+                })}
             />
         );
         expect(html).not.toContain('data-queue-row-person-icon="true"');
@@ -180,7 +233,10 @@ describe("QueueBlock row/icon propagation wiring", () => {
         expect(queueBlock).toContain('actionId: "open_child_drawer"');
         expect(queueBlock).toContain("e.stopPropagation()");
         expect(queueBlock).toContain("ViewPersonDrawerIconButton");
-        expect(queueBlock).toContain("CrmFactRelatedRecordRows");
+        expect(queueBlock).toContain("CrmCompactOperationalRecord");
+        expect(queueBlock).toContain("QueueRowCompactOperationalHeader");
+        expect(queueBlock).toContain("QueueRowAttentionSupplementBand");
+        expect(queueBlock).toContain("workUnitQueueRowPresentation");
         expect(queueBlock).toContain("adminv2-ws-queue-related-record-row");
         expect(queueBlock).not.toContain('data-queue-related-record-icons="true"');
     });

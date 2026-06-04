@@ -28,7 +28,19 @@ import { PERSON_DRAWER_CHILD_OPEN_SOURCE } from "@/lib/admin/drawer/personDrawer
 import { DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS } from "@/lib/ui-v2/queueUiConfig";
 import { normalizePreviewLooseDateTokens } from "@/lib/adminFormatters";
 import { CRM_COMPACT_VALUE_DOT_SEP } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
-import { QUEUE_PREVIEW_BOUNDARY_LABEL } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceViewModels";
+import {
+  resolveWorkUnitQueueRowPresentationPlan,
+  shouldUseOperationalRecordFrame,
+  workUnitQueueRowBandDataAttribute,
+} from "@/lib/ui-v2/workUnitQueueRowPresentation";
+import { buildAttentionExpandedDetail } from "@/lib/ui-v2/workUnitQueueRowHeaderPresentation";
+import {
+  QueueRowAttentionSupplementBand,
+  QueueRowCompactOperationalHeader,
+  QueueRowCompactParentContact,
+  QueueRowLifecycleOperationalBand,
+  QueueRowOperationalReadPreview,
+} from "@/app/adminV2/components/workspace/blocks/QueueRowOperationalBands";
 import { QueueRowPlacementPriorityStrip } from "@/app/adminV2/components/workspace/blocks/QueueRowPlacementPriorityStrip";
 import {
     QueueRowPlacementCandidateContext,
@@ -326,10 +338,13 @@ function CrmFactRelatedRecordRows({
   grid,
   slots,
   drawerRecordIconHandlers,
+  compactPeopleBand = false,
 }: {
   grid: WorkUnitQueueCrmFactColumnGridVm;
   slots?: CrmCompactRowSemanticSlots;
   drawerRecordIconHandlers: CrmCompactDrawerRecordIconHandlers;
+  /** Hide column header row — denser people band inside operational record frame. */
+  compactPeopleBand?: boolean;
 }) {
   const { headers, rows, columnKeys } = grid;
   if (!headers.length || !rows.length) return null;
@@ -342,8 +357,11 @@ function CrmFactRelatedRecordRows({
     .filter((col) => col.colIdx !== nameColIdx);
 
   return (
-    <div className="adminv2-ws-queue-related-record-rows" data-queue-related-record-layout="row_band">
-      {trailingCols.length > 0 ? (
+    <div
+      className={`adminv2-ws-queue-related-record-rows${compactPeopleBand ? " adminv2-ws-queue-related-record-rows--compact" : ""}`}
+      data-queue-related-record-layout="row_band"
+    >
+      {!compactPeopleBand && trailingCols.length > 0 ? (
         <div className="adminv2-ws-queue-related-record-labels" aria-hidden="true">
           <span className="adminv2-ws-queue-related-record-label-lead">
             {displayCrmFactGroupLabel(headers[nameColIdx] ?? "")}
@@ -644,10 +662,12 @@ function CrmFactColumnGrid({
   grid,
   slots,
   drawerRecordIconHandlers,
+  compactPeopleBand = false,
 }: {
   grid: WorkUnitQueueCrmFactColumnGridVm;
   slots?: CrmCompactRowSemanticSlots;
   drawerRecordIconHandlers?: CrmCompactDrawerRecordIconHandlers;
+  compactPeopleBand?: boolean;
 }) {
   if (crmFactGridUsesRelatedRecordRows(grid, drawerRecordIconHandlers)) {
     return (
@@ -655,6 +675,7 @@ function CrmFactColumnGrid({
         grid={grid}
         slots={slots}
         drawerRecordIconHandlers={drawerRecordIconHandlers!}
+        compactPeopleBand={compactPeopleBand}
       />
     );
   }
@@ -696,10 +717,12 @@ function CrmWorkUnitFactGroup({
   group,
   slots,
   drawerRecordIconHandlers,
+  compactPeopleBand = false,
 }: {
   group: WorkUnitQueueCrmFactGroupVm;
   slots?: CrmCompactRowSemanticSlots;
   drawerRecordIconHandlers?: CrmCompactDrawerRecordIconHandlers;
+  compactPeopleBand?: boolean;
 }) {
   const hasGrid = Boolean(group.columnGrid?.headers.length && group.columnGrid?.rows.length);
   const showGroupLabel = Boolean(group.label?.trim());
@@ -714,6 +737,7 @@ function CrmWorkUnitFactGroup({
           grid={group.columnGrid}
           slots={slots}
           drawerRecordIconHandlers={drawerRecordIconHandlers}
+          compactPeopleBand={compactPeopleBand}
         />
       </div>
     );
@@ -978,21 +1002,159 @@ function LegacyCrmCompactQueueMiddle({
   return <>{nodes}</>;
 }
 
-function queueUrgencyChipClass(band: string | null | undefined): string {
-  if (band === "p0_urgent") return "border-alloy-ember/30 bg-alloy-ember/10 text-alloy-ember";
-  if (band === "p1_today") return "border-alloy-blue/30 bg-alloy-blue/10 text-alloy-blue";
-  return "border-admin-border bg-alloy-stone/30 text-alloy-midnight/70";
+/**
+ * Compact operational record — lifecycle-aware band stack (work-unit scan rows).
+ * Presentation only; does not alter drawer or queue runtime.
+ */
+function CrmCompactOperationalRecord({
+  slots,
+  urgencyTier = "standard",
+  operationalAttentionBadge = false,
+  drawerRecordIconHandlers,
+  waitlistPlacementPreview,
+  waitlistPlacementV2,
+  waitlistCandidateRow,
+  waitlistStatusLabel,
+  workUnitKey,
+}: {
+  slots: CrmCompactRowSemanticSlots;
+  urgencyTier?: QueueItemVm["urgencyTier"];
+  operationalAttentionBadge?: boolean;
+  drawerRecordIconHandlers: CrmCompactDrawerRecordIconHandlers;
+  waitlistPlacementPreview?: QueueRowPlacementPriorityVm;
+  waitlistPlacementV2?: QueueRowPlacementPriorityV2Vm;
+  waitlistCandidateRow?: import("@/lib/ui-v2/workspace-types").QueueRowPlacementWaitlistCandidateVm;
+  waitlistStatusLabel?: string;
+  workUnitKey?: string | null;
+}) {
+  const plan = resolveWorkUnitQueueRowPresentationPlan({
+    slots,
+    scanMode: true,
+    drawerRecordIconHandlers,
+    waitlistPlacementPreview,
+    waitlistPlacementV2,
+    waitlistCandidateRow,
+    waitlistStatusLabel,
+    workUnitKey,
+  });
+  const stageStatus =
+    slots.stageLabel && slots.statusLabel && slots.stageLabel !== slots.statusLabel
+      ? `${slots.stageLabel} · ${slots.statusLabel}`
+      : slots.stageLabel || slots.statusLabel || null;
+  const childrenGroup = slots.crmFactGroups?.find((g) => g.kind === "children_programs");
+  const contactGroup = slots.crmFactGroups?.find((g) => g.kind === "contact");
+  const factGroups =
+    slots.crmFactGroups?.filter((g) => g.kind === "timing" || g.kind === "meta") ?? [];
+  const useCompactParent =
+    plan.people.parentCompact &&
+    Boolean(
+      slots.contactDisplayName?.trim() ||
+        slots.contactPhoneDisplay?.trim() ||
+        slots.contactEmail?.trim()
+    );
+  const showChildrenFirst = plan.people.childrenFirst;
+
+  const childrenBand =
+    childrenGroup ?
+      <div
+        className={`adminv2-ws-queue-operational-record__children-block${
+          plan.people.childPrimary ? " adminv2-ws-queue-operational-record__children-block--primary" : ""
+        }`}
+        data-queue-people-role="children"
+      >
+        <CrmWorkUnitFactGroup
+          group={childrenGroup}
+          slots={slots}
+          drawerRecordIconHandlers={drawerRecordIconHandlers}
+          compactPeopleBand
+        />
+      </div>
+    : null;
+
+  const parentBand =
+    useCompactParent ?
+      <QueueRowCompactParentContact
+        slots={slots}
+        handlers={drawerRecordIconHandlers}
+        renderIcon={queueRowRelatedRecordIcon}
+      />
+    : contactGroup ?
+      <CrmWorkUnitFactGroup
+        group={contactGroup}
+        slots={slots}
+        drawerRecordIconHandlers={drawerRecordIconHandlers}
+        compactPeopleBand
+      />
+    : null;
+
+  const peopleBandVisible = Boolean(childrenBand || parentBand);
+
+  return (
+    <div
+      className="adminv2-ws-queue-operational-record"
+      data-queue-preview="operational_record"
+      data-queue-lifecycle={plan.lifecycle}
+      data-queue-operational-record-bands={workUnitQueueRowBandDataAttribute(plan)}
+    >
+      <QueueRowCompactOperationalHeader
+        slots={slots}
+        plan={plan}
+        statusDisplay={
+          waitlistStatusLabel?.trim() ||
+          (stageStatus ? formatWorkUnitQueueStatusPill(stageStatus) : null)
+        }
+        urgencyTier={urgencyTier}
+        operationalAttentionBadge={operationalAttentionBadge}
+      />
+      {plan.headerInline.attentionExpanded && plan.bands.includes("attention") ? (
+        <QueueRowAttentionSupplementBand
+          detail={buildAttentionExpandedDetail(slots, plan.headerInline.enrollmentAttention)}
+          lifecycle={plan.lifecycle}
+        />
+      ) : null}
+      {plan.headerInline.lifecycleExpanded && plan.bands.includes("lifecycle") ? (
+        <QueueRowLifecycleOperationalBand
+          slots={slots}
+          section={plan.lifecycleSections}
+          lifecycle={plan.lifecycle}
+          waitlistPlacementPreview={waitlistPlacementPreview}
+          waitlistPlacementV2={waitlistPlacementV2}
+          waitlistCandidateRow={waitlistCandidateRow}
+          waitlistStatusLabel={waitlistStatusLabel}
+        />
+      ) : null}
+      {peopleBandVisible ? (
+        <div className="adminv2-ws-queue-operational-record__people-band" data-queue-row-band="people">
+          {showChildrenFirst ?
+            <>
+              {childrenBand}
+              {parentBand}
+            </>
+          : <>
+              {parentBand}
+              {childrenBand}
+            </>
+          }
+        </div>
+      ) : null}
+      {factGroups.length > 0 ? (
+        <div className="adminv2-ws-queue-operational-record__facts-band" data-queue-row-band="facts">
+          {factGroups.map((g, i) => (
+            <CrmWorkUnitFactGroup
+              key={`fact-${g.kind}-${i}`}
+              group={g}
+              slots={slots}
+              drawerRecordIconHandlers={drawerRecordIconHandlers}
+              compactPeopleBand
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
-function queueTypeCueChipClass(): string {
-  return "border-alloy-stone/22 bg-alloy-stone/12 text-alloy-midnight/62";
-}
-
-function queueStaleCueChipClass(): string {
-  return "border-alloy-stone/28 bg-alloy-stone/10 text-alloy-midnight/58";
-}
-
-/** L0 queue operational read — do-next + why lines; scan layout matches drawer read order. */
+/** @deprecated Use QueueRowOperationalReadPreview from QueueRowOperationalBands */
 function CrmCompactOperationalReadPreview({
   preview,
   layout = "scan",
@@ -1000,67 +1162,7 @@ function CrmCompactOperationalReadPreview({
   preview: NonNullable<CrmCompactRowSemanticSlots["operationalReadPreview"]>;
   layout?: "scan" | "full";
 }) {
-  const scan = layout === "scan";
-  const hasMetaChips = Boolean(preview.urgencyChipLabel || preview.typeCue || preview.staleCue);
-
-  return (
-    <div
-      className={`adminv2-ws-crm-queue-preview__operational-read adminv2-ws-crm-queue-preview__operational-read--${layout}`}
-      data-queue-preview-slot="operational_read"
-      data-queue-operational-read-layout={layout}
-      title="Preview — open the record for full operational read."
-    >
-      {hasMetaChips ? (
-        <div className="adminv2-ws-crm-queue-preview__operational-read-meta">
-          {preview.urgencyChipLabel ? (
-            <span
-              className={`adminv2-ws-crm-queue-preview__urgency-chip inline-flex shrink-0 items-center rounded-md border px-1 py-0.5 text-[9px] font-medium leading-tight ${queueUrgencyChipClass(preview.urgencyBand)}`}
-              data-testid="queue-operational-read-urgency-chip"
-              title={preview.priorityExplanation?.ariaLabel ?? preview.urgencyChipLabel}
-              aria-label={preview.priorityExplanation?.ariaLabel ?? preview.urgencyChipLabel}
-            >
-              {preview.urgencyChipLabel}
-            </span>
-          ) : null}
-          {preview.typeCue ? (
-            <span
-              className={`adminv2-ws-crm-queue-preview__type-cue inline-flex shrink-0 items-center rounded-md border px-1 py-0.5 text-[9px] font-medium leading-tight ${queueTypeCueChipClass()}`}
-              data-testid="queue-operational-read-type-cue"
-            >
-              {preview.typeCue}
-            </span>
-          ) : null}
-          {preview.staleCue ? (
-            <span
-              className={`adminv2-ws-crm-queue-preview__stale-cue inline-flex shrink-0 items-center rounded-md border px-1 py-0.5 text-[9px] font-medium leading-tight ${queueStaleCueChipClass()}`}
-              data-testid="queue-operational-read-stale-cue"
-            >
-              {preview.staleCue}
-            </span>
-          ) : null}
-        </div>
-      ) : null}
-      <div className="adminv2-ws-crm-queue-preview__operational-read-lines min-w-0 w-full">
-        <div className="adminv2-ws-crm-queue-preview__operational-read-primary">
-          {!scan ? (
-            <span className="adminv2-ws-crm-queue-preview__operational-read-label">Operational read:</span>
-          ) : null}
-          <span className="adminv2-ws-crm-queue-preview__operational-read-text">{preview.operationalRead}</span>
-        </div>
-        {preview.whyNow?.trim() ? (
-          <div
-            className="adminv2-ws-crm-queue-preview__operational-read-why"
-            data-queue-preview-slot="operational_read_why"
-          >
-            {preview.whyNow.trim()}
-          </div>
-        ) : null}
-      </div>
-      <span className="adminv2-ws-crm-queue-preview__operational-read-boundary">
-        {preview.previewBoundary ?? QUEUE_PREVIEW_BOUNDARY_LABEL}
-      </span>
-    </div>
-  );
+  return <QueueRowOperationalReadPreview preview={preview} layout={layout} />;
 }
 
 /**
@@ -1078,6 +1180,7 @@ export function CrmCompactQueuePreview({
   waitlistCandidateRow,
   waitlistStatusLabel,
   drawerRecordIconHandlers,
+  workUnitKey,
 }: {
   slots: CrmCompactRowSemanticSlots;
   urgencyTier?: QueueItemVm["urgencyTier"];
@@ -1091,6 +1194,8 @@ export function CrmCompactQueuePreview({
   waitlistStatusLabel?: string;
   /** Inline person/child drawer icons beside displayed names (work-unit opportunity rows). */
   drawerRecordIconHandlers?: CrmCompactDrawerRecordIconHandlers;
+  /** Lifecycle hint for band resolution — presentation only. */
+  workUnitKey?: string | null;
 }) {
   const stageStatus =
     slots.stageLabel && slots.statusLabel && slots.stageLabel !== slots.statusLabel
@@ -1132,6 +1237,38 @@ export function CrmCompactQueuePreview({
     : Boolean(showNoteFooter || slots.lastActivity?.trim());
 
   const commercial = slots.commercialValue?.trim() ?? "";
+
+  const useOperationalRecord = shouldUseOperationalRecordFrame({
+    slots,
+    scanMode,
+    drawerRecordIconHandlers,
+    waitlistPlacementPreview,
+    waitlistPlacementV2,
+    waitlistCandidateRow,
+    waitlistStatusLabel,
+    workUnitKey,
+  });
+
+  if (useOperationalRecord) {
+    return (
+      <div
+        className="adminv2-ws-crm-queue-preview adminv2-ws-enrollment-crm-preview adminv2-ws-crm-queue-preview--scan adminv2-ws-crm-queue-preview--operational-record"
+        data-queue-preview="crm_compact_operational_record"
+      >
+        <CrmCompactOperationalRecord
+          slots={slots}
+          urgencyTier={urgencyTier}
+          operationalAttentionBadge={operationalAttentionBadge}
+          drawerRecordIconHandlers={drawerRecordIconHandlers!}
+          waitlistPlacementPreview={waitlistPlacementPreview}
+          waitlistPlacementV2={waitlistPlacementV2}
+          waitlistCandidateRow={waitlistCandidateRow}
+          waitlistStatusLabel={waitlistStatusLabel}
+          workUnitKey={workUnitKey}
+        />
+      </div>
+    );
+  }
 
   if (scanMode) {
     return (
@@ -1752,6 +1889,7 @@ function WorkUnitQueueLane({
                             : undefined
                         }
                         waitlistStatusLabel={crm.statusLabel?.trim() || undefined}
+                        workUnitKey={queue.drillWorkUnitKey ?? null}
                       />
                     </div>
                     {rowActionsPending ? (

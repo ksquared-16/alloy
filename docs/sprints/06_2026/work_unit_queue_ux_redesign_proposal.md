@@ -1,8 +1,8 @@
 # Work Unit Queue UX Redesign Proposal
 
 **Path:** `docs/sprints/06_2026/work_unit_queue_ux_redesign_proposal.md`  
-**Status:** Proposal — **do not implement until approved**  
-**Date:** 2026-06-03  
+**Status:** WU-UX V2 shipped (June 2026) — lifecycle-aware band framework  
+**Prior:** Proposal approved; WU-UX-1/2 compact operational record baseline shipped  
 **Related:** `docs/audits/work_unit_runtime_cutover_audit.md`, Phase D-A row bands in `QueueBlock.tsx`
 
 ---
@@ -53,6 +53,62 @@ Each row is a **single bordered band** with internal horizontal sections separat
 - Inner dividers: `border-t border-alloy-stone/10` — not full card shadow stacks
 - Row hover: `hover:border-alloy-stone/25 hover:bg-alloy-stone/[0.03]`
 - Vertical padding: **6–8px** per band (not 16px+ card padding)
+
+---
+
+## WU-UX V2 — Lifecycle-aware band framework (shipped)
+
+### Problem addressed
+
+V1 compact operational record improved household/people scan but **dropped needs-attention operational context** and **waitlist placement chips** when rows used the operational-record path.
+
+### Band contract
+
+Presentation resolver: `web/lib/ui-v2/workUnitQueueRowPresentation.ts`
+
+| Band | Purpose |
+|------|---------|
+| **header** | Status + household + location |
+| **attention** | Why this record — urgency, operational read, priority explanation, next step |
+| **lifecycle** | Work-unit-specific context (waitlist placement, enrollment hints) |
+| **people** | Child-primary hierarchy + compact parent contact |
+| **facts** | Configurable scalar fields (timing, meta) |
+| **actions** | Host-rendered row actions (unchanged) |
+
+Lifecycle keys: `enrollment` | `waitlist` | `tour_scheduling` | `enrolled` | `generic`
+
+Band components: `web/app/adminV2/components/workspace/blocks/QueueRowOperationalBands.tsx`
+
+### Enrollment vs waitlist
+
+- **Enrollment:** attention band + children-first people band + compact parent block below children
+- **Waitlist:** lifecycle band restores position `#N`, priority rule chip, reason line, candidate meta chips
+
+Future work units plug lifecycle content into the **lifecycle band** without rewriting `QueueBlock`.
+
+### Visual QA (capture on staging)
+
+- Enrollment pipeline (needs-attention row with operational read)
+- Waitlist lane (position + priority chips)
+- 1 / 3 / 5 child households
+
+Reference: `web/public/dev/work-unit-queue-operational-record-compact.png` (V1 baseline)
+
+---
+
+## WU-UX V3 — Dense inline header (shipped)
+
+### Change
+
+Moved operational context into the **header row** to cut row height ~25–30%.
+
+**Enrollment header:** `Household | Status | Urgent: summary | Location`  
+**Waitlist header:** `Family | Waitlisted | #3 Infant Priority | Location` + one-line priority reason subline
+
+Attention/lifecycle **bands expand only** when content exceeds inline limits or manual waitlist controls require it.
+
+Presentation: `web/lib/ui-v2/workUnitQueueRowHeaderPresentation.ts`  
+Header component: `QueueRowCompactOperationalHeader`
 
 ---
 
@@ -145,3 +201,37 @@ Defer facts band until Settings exposes configurable queue row fields.
 - `workUnitQueueRowRelatedDrawerIcons.test.tsx` — icons still left of names
 - New: `workUnitQueueRowBandLayout.test.tsx` — band order, 1 vs 3 child rows, actions band present
 - Visual: enrollment pipeline screenshot compare against mockup
+
+---
+
+## V3.2 — Final compact operational row hierarchy (implemented)
+
+**Problem:** V3.1 still used a separate supplement band for normal attention rows; operational wording was redundant; children rendered before parent.
+
+### Presentation rules
+
+1. **Two-line header zone** — no separate attention panel for normal rows.
+   - Line 1: `Household | Status | Attention/ranking | Location`
+   - Line 2: `Reason detail · Next step: …` (when supplemental content exists)
+2. **Concise operator wording** — `Urgent: overdue follow-up` not full catalog headline; strip internal fragments (`breached vs goal`, Preview labels).
+3. **Parent above children** — contact row first, then child rows, then facts.
+4. **Exceptional expand only** — separate supplement band when multiple warnings or subline exceeds max length.
+5. **Waitlist** — same family-first header; child drawer icons when `personId` present.
+
+### Target rows
+
+**Enrollment**
+
+```
+Mitchell household | Contact Attempted | Urgent: overdue follow-up | South Campus
+Commitment date missed · Next step: Call family within one business day to confirm interest.
+```
+
+**Waitlist**
+
+```
+Williams Family | Waitlisted | #1 Standard Family | North Campus
+Sibling priority · Desired start approaching
+```
+
+**Preserved:** icon-left drawer affordances, subtle frame, dense row height, no runtime/data/loading changes.
