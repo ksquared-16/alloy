@@ -35,7 +35,14 @@ function ValueCell({ record, item }: { record: Rec; item: LayoutItem }) {
         <div className="rounded border border-[#eef0f4] bg-white px-2.5 py-1.5">
             <div className="flex items-center gap-1 text-[11px] font-medium" style={{ color: MUTED }}>
                 {item.label || item.refKey}
-                {item.locked ? <span className="text-[10px] text-[#9aa4bf]">·locked</span> : null}
+                {item.locked ? (
+                    <span
+                        className="text-[10px] text-[#9aa4bf]"
+                        title="System field — part of the data model. Placement is editable."
+                    >
+                        · system field
+                    </span>
+                ) : null}
             </div>
             <div className="mt-0.5 text-sm" style={{ color: r.isPlaceholder ? "#9aa4bf" : TEXT }}>
                 {r.isPlaceholder ? (

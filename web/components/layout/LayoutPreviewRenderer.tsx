@@ -36,11 +36,19 @@ function HintChip({ hint }: { hint?: string }) {
     );
 }
 
-function LockedChip({ locked }: { locked?: boolean }) {
+/**
+ * A `locked` item is a SYSTEM FIELD (part of the data model) — it cannot be
+ * deleted from the field registry, but its layout placement is fully editable.
+ * The badge communicates that, not that the layout is locked.
+ */
+function SystemFieldChip({ locked }: { locked?: boolean }) {
     if (!locked) return null;
     return (
-        <span className="ml-2 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-            locked
+        <span
+            className="ml-2 rounded border border-[#e6e8ec] bg-[#f4f6f9] px-1.5 py-0.5 text-[10px] font-medium text-[#59678b]"
+            title="System field — part of the data model. Placement is editable; it just can't be deleted from the field registry."
+        >
+            system field
         </span>
     );
 }
@@ -54,7 +62,7 @@ function FieldPreview({ item }: { item: LayoutItem }) {
                 {item.editable ? (
                     <span className="ml-2 text-[10px] text-[#9aa4bf]">editable</span>
                 ) : null}
-                <LockedChip locked={item.locked} />
+                <SystemFieldChip locked={item.locked} />
             </div>
             <div className="mt-0.5 text-sm text-[#31394d]">
                 {item.renderHint === "status" ? (
@@ -189,7 +197,7 @@ function QueuePreview({ doc }: { doc: LayoutDoc }) {
                                     {it.metadata && (it.metadata as { sortable?: boolean }).sortable ? (
                                         <span className="ml-1 text-[10px] text-[#9aa4bf]">↕</span>
                                     ) : null}
-                                    <LockedChip locked={it.locked} />
+                                    <SystemFieldChip locked={it.locked} />
                                 </span>
                             </th>
                         ))}

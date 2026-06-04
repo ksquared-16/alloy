@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { LayoutDoc, LayoutItem, LayoutResolutionSource } from "@/lib/layout/layoutV2";
 import { resolveItemValue } from "@/lib/layout/resolveItemValue";
 import { isLayoutV2PreviewEnabledClient } from "@/lib/layout/featureFlag";
+import { entityTypeLabel, fetchEntityLabelMap, type EntityLabelMap } from "@/lib/layout/entityLabels";
 import LayoutRecordView from "@/components/layout/LayoutRecordView";
 
 const ENTITY_TYPE = "opportunities";
@@ -81,6 +82,7 @@ export default function LayoutProofClient() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [flagDisabled, setFlagDisabled] = useState(false);
+    const [labelMap, setLabelMap] = useState<EntityLabelMap>({});
 
     const loadLayouts = useCallback(async () => {
         const fetchResolve = async (surface: "queue" | "drawer"): Promise<ResolveResp | null> => {
@@ -115,6 +117,11 @@ export default function LayoutProofClient() {
             setLoading(true);
             setError(null);
             try {
+                fetchEntityLabelMap()
+                    .then((m) => {
+                        if (!cancelled) setLabelMap(m);
+                    })
+                    .catch(() => {});
                 await loadLayouts();
                 if (!cancelled) await loadRecords(stage);
             } catch (e) {
@@ -173,7 +180,7 @@ export default function LayoutProofClient() {
                     <DebugField label="Feature flag">
                         <span className="text-green-700">enabled</span>
                     </DebugField>
-                    <DebugField label="Entity type">{ENTITY_TYPE}</DebugField>
+                    <DebugField label="Entity type">{entityTypeLabel(labelMap, ENTITY_TYPE, "singular")}</DebugField>
                     <DebugField label="Queue source">
                         <SourceBadge source={queue?.source ?? null} />
                     </DebugField>
@@ -305,8 +312,8 @@ export default function LayoutProofClient() {
 
             <p className="mt-4 text-[11px]" style={{ color: MUTED }}>
                 Adoption path: open{" "}
-                <a className="text-[#2f6df6] underline" href="/admin/system/layouts">
-                    /admin/system/layouts
+                <a className="text-[#2f6df6] underline" href="/adminV2/layouts">
+                    /adminV2/layouts
                 </a>
                 , create a draft for <code className="font-mono">opportunities</code> (queue + drawer) from the registry,
                 edit, publish — then reload this page and the source badge flips to <strong>org layout</strong> and your

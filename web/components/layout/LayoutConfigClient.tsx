@@ -17,12 +17,12 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import LayoutPreviewRenderer from "@/components/layout/LayoutPreviewRenderer";
 import { isLayoutV2PreviewEnabledClient } from "@/lib/layout/featureFlag";
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
+import { entityTypeLabel, fetchEntityLabelMap, type EntityLabelMap } from "@/lib/layout/entityLabels";
 import type { EntityLayoutRecord, LayoutDoc, LayoutSection } from "@/lib/layout/layoutV2";
 
 type ListResponse = {
@@ -30,6 +30,21 @@ type ListResponse = {
     entityTypes: string[];
     surfaces: ("drawer" | "queue")[];
 };
+
+/** AdminV2-styled page header (no legacy admin chrome). */
+function ConfigHeader() {
+    return (
+        <header className="mb-5">
+            <h1 className="text-2xl font-bold tracking-tight" style={{ color: "#1d2433" }}>
+                Layout configuration
+            </h1>
+            <p className="mt-1 text-sm text-[#59678b]">
+                Configure how records are presented in drawers and queues. Changes are saved as drafts and published per
+                version — they do not affect live drawers or queues yet.
+            </p>
+        </header>
+    );
+}
 
 function clone<T>(v: T): T {
     return JSON.parse(JSON.stringify(v)) as T;
@@ -48,11 +63,12 @@ function statusPill(status: string) {
     );
 }
 
-export default function LayoutsClient() {
+export default function LayoutConfigClient() {
     const { canMutate } = useAdminAuth();
     const enabled = isLayoutV2PreviewEnabledClient();
 
     const [list, setList] = useState<ListResponse | null>(null);
+    const [labelMap, setLabelMap] = useState<EntityLabelMap>({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -87,6 +103,9 @@ export default function LayoutsClient() {
     useEffect(() => {
         setLoading(true);
         fetchList();
+        fetchEntityLabelMap()
+            .then(setLabelMap)
+            .catch(() => {});
     }, [fetchList]);
 
     const selectRecord = useCallback(async (id: string) => {
@@ -241,22 +260,21 @@ export default function LayoutsClient() {
     if (!enabled) {
         return (
             <>
-                <AdminPageHeader title="Layouts (V2)" subtitle="Configurable presentation layer." />
-                <p className="text-sm text-[#59678b]">Layout V2 preview is disabled for this environment.</p>
+                <ConfigHeader />
+                <p className="text-sm text-[#59678b]">Layout configuration is disabled for this environment.</p>
             </>
         );
     }
 
     return (
         <>
-            <AdminPageHeader
-                title="Layouts (V2)"
-                subtitle="Configure drawer and queue presentation. Foundation preview — publishing has no effect on live drawers or queues yet."
-            />
+            <ConfigHeader />
 
-            <div className="mb-4 rounded-md border border-[#dbe7ff] bg-[#f5f8ff] px-4 py-2 text-sm text-[#4063b0]">
-                Foundation sprint: layouts here are <strong>preview only</strong>. Production drawers/queues still render from the
-                built-in defaults (<code className="font-mono text-xs">entityPresentation.ts</code>) until a later adoption sprint.
+            <div className="mb-4 rounded-md border border-[#e6e8ec] bg-[#fbfcfe] px-4 py-2.5 text-sm text-[#59678b]">
+                Reorder sections, rename them, choose what&rsquo;s expanded, and fine-tune rows, columns, and fields. Fields
+                marked <span className="rounded bg-[#eef1f6] px-1.5 py-0.5 text-[11px] font-medium text-[#59678b]">system field</span>{" "}
+                are part of the data model and can&rsquo;t be deleted from the field registry, but you can still place and order
+                them anywhere in the layout. Publishing affects this configuration only — live drawers and queues are unchanged.
             </div>
 
             {error && (
@@ -284,7 +302,7 @@ export default function LayoutsClient() {
                                 >
                                     {(list?.entityTypes ?? []).map((t) => (
                                         <option key={t} value={t}>
-                                            {t}
+                                            {entityTypeLabel(labelMap, t)}
                                         </option>
                                     ))}
                                 </select>
@@ -329,7 +347,7 @@ export default function LayoutsClient() {
                                             }`}
                                         >
                                             <span className="min-w-0 truncate">
-                                                <span className="font-medium text-[#31394d]">{r.entityType}</span>
+                                                <span className="font-medium text-[#31394d]">{entityTypeLabel(labelMap, r.entityType)}</span>
                                                 <span className="ml-1 text-xs text-[#59678b]">
                                                     {r.surface} · v{r.version}
                                                     {r.orgId === null ? " · default" : ""}
