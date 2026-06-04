@@ -101,7 +101,7 @@ export type OpportunityWorkspaceContext = { work_unit_id: string; department_id:
 /** Dev/diagnostic — model-swap navigation between VM-backed drawer entities (shell stays mounted). */
 export const DRAWER_MODEL_SWAP_OPEN_SOURCE = "drawer_model_swap";
 
-interface AdminDrawerState {
+export interface AdminDrawerState {
     type: AdminDrawerEntityType | null;
     id: string | null;
     /** When opening a job from V2 workspace, use "drawer" so `_rrs` matches triage; default entity behavior uses "full". */
