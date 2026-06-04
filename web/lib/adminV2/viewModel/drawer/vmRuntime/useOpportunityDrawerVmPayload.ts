@@ -83,7 +83,7 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
                 type: "opportunities",
                 id: drawer.id,
                 opportunityWorkspaceContext: drawer.opportunityWorkspaceContext ?? null,
-                source: drawer.openSource,
+                source: drawer.openSource ?? undefined,
             })
         );
         if (sync?.entityType === "opportunities" && isOpportunityDrawerViewModelPreload(sync.preload)) {
