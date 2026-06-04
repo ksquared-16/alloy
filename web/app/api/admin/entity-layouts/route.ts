@@ -96,6 +96,12 @@ export async function POST(request: NextRequest) {
 
     const entityType = typeof body.entity_type === "string" ? body.entity_type.trim() : "";
     if (!entityType) return NextResponse.json({ error: "entity_type required" }, { status: 400 });
+    // Only entity types known to the registry may have layouts. Prevents
+    // creating rows for typos/bogus entities (and a registry-seed for an
+    // unknown type would silently yield a near-empty doc).
+    if (!(ALL_ENTITY_PRESENTATION_TYPES as readonly string[]).includes(entityType)) {
+        return NextResponse.json({ error: "Unknown entity_type" }, { status: 400 });
+    }
 
     const surfaceRaw = typeof body.surface === "string" ? body.surface.trim() : "";
     if (!isLayoutSurface(surfaceRaw)) {

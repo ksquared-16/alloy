@@ -210,6 +210,82 @@ describe("validator enforces constraints", () => {
         expect(res.errors.join(" ")).toMatch(/duplicate id/);
     });
 
+    it("drops lifecycle/status/workflow/business-rule fields (presentation only)", () => {
+        const res = parseLayoutDoc(
+            baseDoc([
+                {
+                    id: "s1",
+                    key: "k",
+                    title: "T",
+                    rows: [
+                        {
+                            id: "r1",
+                            columns: [
+                                {
+                                    id: "c1",
+                                    width: 12,
+                                    items: [
+                                        {
+                                            id: "i1",
+                                            kind: "field",
+                                            refKey: "amount",
+                                            // None of these may survive into the doc.
+                                            required: true,
+                                            status: "active",
+                                            workflowId: "wf_1",
+                                            onClick: "doThing()",
+                                            permission: "admin",
+                                            color: "#ff0000",
+                                            className: "danger",
+                                        },
+                                    ],
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ]),
+        );
+        expect(res.ok).toBe(true);
+        const item = res.doc!.sections[0].rows[0].columns[0].items[0] as unknown as Record<string, unknown>;
+        for (const banned of ["required", "status", "workflowId", "onClick", "permission", "color", "className"]) {
+            expect(item[banned], `"${banned}" must not be accepted`).toBeUndefined();
+        }
+        expect(item.refKey).toBe("amount");
+    });
+
+    it("ignores arbitrary nesting injected on a column (fixed hierarchy)", () => {
+        const res = parseLayoutDoc(
+            baseDoc([
+                {
+                    id: "s1",
+                    key: "k",
+                    title: "T",
+                    rows: [
+                        {
+                            id: "r1",
+                            columns: [
+                                {
+                                    id: "c1",
+                                    width: 12,
+                                    items: [],
+                                    // A column may not contain rows/columns — must be dropped.
+                                    rows: [{ id: "evil", columns: [] }],
+                                    columns: [{ id: "evil2", width: 1, items: [] }],
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ]),
+        );
+        expect(res.ok).toBe(true);
+        const col = res.doc!.sections[0].rows[0].columns[0] as unknown as Record<string, unknown>;
+        expect(col.rows).toBeUndefined();
+        expect(col.columns).toBeUndefined();
+        expect(Array.isArray(col.items)).toBe(true);
+    });
+
     it("warns (but accepts) when column widths exceed the 12-grid", () => {
         const res = parseLayoutDoc(
             baseDoc([

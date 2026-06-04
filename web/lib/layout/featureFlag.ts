@@ -9,9 +9,11 @@
  * Server: LAYOUT_V2_PREVIEW_ENABLED.
  * Client: NEXT_PUBLIC_LAYOUT_V2_PREVIEW_ENABLED (for the admin UI gate).
  *
- * Default: ENABLED for the preview/config surface (it is inert — preview only —
- * and reads from its own isolated tables). Set the env var to "0"/"false" to
- * hide it entirely.
+ * Default: DISABLED. This is an un-adopted foundation; the preview/config
+ * surface stays inert until explicitly enabled (and the entity_layouts
+ * migration has been applied). When off, the API routes return 404 and the
+ * admin page shows a disabled notice — so an un-migrated or isolated deploy is
+ * inert by default. Set the env var to "1"/"true" to turn it on.
  */
 
 function readFlag(raw: string | undefined, defaultValue: boolean): boolean {
@@ -22,12 +24,12 @@ function readFlag(raw: string | undefined, defaultValue: boolean): boolean {
     return defaultValue;
 }
 
-/** Server-side gate for Layout V2 preview/config APIs. */
+/** Server-side gate for Layout V2 preview/config APIs. Default: off. */
 export function isLayoutV2PreviewEnabledServer(): boolean {
-    return readFlag(process.env.LAYOUT_V2_PREVIEW_ENABLED, true);
+    return readFlag(process.env.LAYOUT_V2_PREVIEW_ENABLED, false);
 }
 
-/** Client-side gate for the Layout V2 admin UI. */
+/** Client-side gate for the Layout V2 admin UI. Default: off. */
 export function isLayoutV2PreviewEnabledClient(): boolean {
-    return readFlag(process.env.NEXT_PUBLIC_LAYOUT_V2_PREVIEW_ENABLED, true);
+    return readFlag(process.env.NEXT_PUBLIC_LAYOUT_V2_PREVIEW_ENABLED, false);
 }

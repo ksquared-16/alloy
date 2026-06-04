@@ -155,7 +155,10 @@ write for owner/admin). The app reads/writes via the service role
 
 All under `web/app/api/admin/entity-layouts`, guarded by `getAdminContext()`,
 org-scoped, admin-only writes, `logAdminAudit()` on mutation, and gated by the
-feature flag (404 when off):
+feature flag (404 when off). The flag (`LAYOUT_V2_PREVIEW_ENABLED` /
+`NEXT_PUBLIC_LAYOUT_V2_PREVIEW_ENABLED`) **defaults to off** — the surface is
+inert until explicitly enabled (and the `entity_layouts` migration applied), so
+an un-migrated or isolated deploy does nothing. Routes:
 
 | Method · Route | Purpose |
 |---|---|
