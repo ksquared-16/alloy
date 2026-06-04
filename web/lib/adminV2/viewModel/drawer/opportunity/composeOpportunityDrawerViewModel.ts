@@ -33,6 +33,7 @@ import {
 } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerViewModelContract";
 import { computeOpportunityDrawerViewModelGeneration } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerViewModelGeneration";
 import { loadOpportunityScheduledSendsPreview } from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityScheduledSendsPreview";
+import { logOpportunityDrawerViewModelComposeShadowSummary } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelShadowServer";
 import type {
     OpportunityDrawerViewModel,
     OpportunityDrawerViewModelResult,
@@ -84,6 +85,11 @@ export async function composeOpportunityDrawerViewModel(
     const { supabase, gate, opportunityId } = params;
     const orgId = gate.orgId;
 
+    const finishCompose = (result: OpportunityDrawerViewModelResult): OpportunityDrawerViewModelResult => {
+        logOpportunityDrawerViewModelComposeShadowSummary(opportunityId, result, Date.now() - composeStart);
+        return result;
+    };
+
     const tOpp0 = Date.now();
     const { data: oppRow, error: oppErr } = await supabase
         .from("opportunities")
@@ -94,14 +100,14 @@ export async function composeOpportunityDrawerViewModel(
     phases.opportunity_select_ms = Date.now() - tOpp0;
 
     if (oppErr || !oppRow) {
-        return {
+        return finishCompose({
             ok: false,
             skipped: {
                 structureSettled: false,
                 reason: "opportunity_not_found",
                 compose_version: OPPORTUNITY_DRAWER_VM_COMPOSE_VERSION,
             },
-        };
+        });
     }
 
     const ctxDept = trimOrNull(params.departmentId);
@@ -132,14 +138,14 @@ export async function composeOpportunityDrawerViewModel(
 
     const layoutParsed = layoutFromEffective(layoutRes);
     if (!layoutParsed || layoutParsed.inquiry_drawer_mode !== "workflow_v1") {
-        return {
+        return finishCompose({
             ok: false,
             skipped: {
                 structureSettled: false,
                 reason: layoutParsed ? "classic_layout_deferred" : "layout_unavailable",
                 compose_version: OPPORTUNITY_DRAWER_VM_COMPOSE_VERSION,
             },
-        };
+        });
     }
 
     const tVisible0 = Date.now();
@@ -236,14 +242,14 @@ export async function composeOpportunityDrawerViewModel(
         record,
     });
     if (!shell) {
-        return {
+        return finishCompose({
             ok: false,
             skipped: {
                 structureSettled: false,
                 reason: "layout_unavailable",
                 compose_version: OPPORTUNITY_DRAWER_VM_COMPOSE_VERSION,
             },
-        };
+        });
     }
 
     const task_assist_enabled = taskAssistEnabledOnServer();
@@ -323,5 +329,5 @@ export async function composeOpportunityDrawerViewModel(
         },
     };
 
-    return { ok: true, viewModel };
+    return finishCompose({ ok: true, viewModel });
 }

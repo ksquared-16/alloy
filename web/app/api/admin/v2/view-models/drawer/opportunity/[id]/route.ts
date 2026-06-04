@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
 import { composeOpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel";
+import { logOpportunityDrawerViewModelComposeFailureShadowSummary } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelShadowServer";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
 /**
@@ -56,6 +57,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             },
         });
     } catch (e) {
+        logOpportunityDrawerViewModelComposeFailureShadowSummary(opportunityId.trim(), Date.now() - routeT0);
         const msg = e instanceof Error ? e.message : "Drawer view model compose failed";
         const status = /not found/i.test(msg) ? 404 : 500;
         return NextResponse.json({ error: msg }, { status });
