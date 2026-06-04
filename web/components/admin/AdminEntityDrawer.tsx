@@ -8187,13 +8187,11 @@ export default function AdminEntityDrawer() {
         : opportunityDrawerTypedSnapshotFirstPaint ||
           (opportunityDrawerCoordinatedRevealReady &&
               opportunityDrawerInquiryStructuralReady &&
-              (!opportunityInquiryWorkflowDrawer || opportunityDrawerAboveFoldPresentationReady) &&
-              // C2 — classic (non-inquiry) opportunities also wait for header actions to SETTLE before
-              // reveal, so header/record actions don't pop in after the drawer is exposed. Settle-based
-              // via the loading flag (cleared on every terminal path → deadlock-free, no timeout), and
-              // gated by expectRegistry so opportunities without registry header actions are unaffected.
-              // The warm `typedSnapshotFirstPaint` reopen path is intentionally NOT gated (stays instant).
-              (!opportunityHeaderActionsExpectRegistry || !opportunityResolvedHeaderLoading));
+              (!opportunityInquiryWorkflowDrawer || opportunityDrawerAboveFoldPresentationReady));
+              // NOTE: the C2 classic header-action reveal gate was REVERTED — it could deadlock the
+              // reveal (infinite spinner) because `opportunityResolvedHeaderLoading` stays true when the
+              // header-actions effect bails without wu/department context. Header actions now reconcile
+              // after reveal again; the placement regression is fixed in Drawer.tsx instead.
 
     /** Release above-fold layout lock when primary surface is coordinated — BOS/right column paints with summary. */
     useEffect(() => {
