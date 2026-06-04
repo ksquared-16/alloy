@@ -13,10 +13,10 @@ export type DrawerViewModelCutoverLogPayload = {
     pipeline_pinned?: boolean;
 };
 
-export function drawerViewModelCutoverFlagSnapshot(): Pick<
-    DrawerViewModelCutoverLogPayload,
-    "drawer_vm_cutover_flag_enabled" | "drawer_vm_cutover_flag_value"
-> {
+export function drawerViewModelCutoverFlagSnapshot(): {
+    drawer_vm_cutover_flag_enabled: boolean;
+    drawer_vm_cutover_flag_value: string | null;
+} {
     const raw = process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM;
     return {
         drawer_vm_cutover_flag_enabled: adminV2DrawerViewModelCutoverEnabled(),
