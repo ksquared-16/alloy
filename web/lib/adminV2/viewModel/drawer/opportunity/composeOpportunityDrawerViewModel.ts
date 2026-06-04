@@ -143,17 +143,10 @@ export async function composeOpportunityDrawerViewModel(
     const ctxWu = trimOrNull(params.workUnitId);
     const rowWu = trimOrNull((oppRow as { work_unit_id?: unknown }).work_unit_id);
     const workUnitId = ctxWu || rowWu;
-    const skipWorkUnitDbLookup = !!(ctxDept && ctxWu);
-
     const tLayout0 = Date.now();
     const layoutP = fetchEffectiveRecordDrawerLayout(supabase, orgId, "opportunity");
     const wuP =
-        skipWorkUnitDbLookup ?
-            Promise.resolve({
-                data: { id: ctxWu, department_id: ctxDept, metadata: null, queue_definition: null },
-                error: null,
-            })
-        : workUnitId ?
+        workUnitId ?
             supabase
                 .from("work_units")
                 .select("id, department_id, metadata, queue_definition")

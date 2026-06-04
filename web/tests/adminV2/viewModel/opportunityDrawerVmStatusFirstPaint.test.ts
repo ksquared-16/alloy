@@ -67,22 +67,21 @@ describe("Opportunity VM status — no flicker contract", () => {
         expect(pill).toContain("data-vm-readonly-status-pill");
     });
 
-    it("OpportunityDrawerVmRuntime does not use VmOpportunityStatusControl or statusBadge", () => {
+    it("OpportunityDrawerVmRuntime uses progressive status without statusBadge or prefetch fetch", () => {
         const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("VmReadonlyStatusPill");
+        expect(runtime).toContain("VmProgressiveStatusDropdown");
         expect(runtime).toContain("resolveOpportunityVmStatusLabel");
         expect(runtime).toContain("data-drawer-vm-status-rail");
         expect(runtime).not.toContain("VmOpportunityStatusControl");
         expect(runtime).not.toContain("statusBadge");
         expect(runtime).not.toContain("holdPriorPayload");
         expect(runtime).not.toContain("status-options");
-        expect(runtime).not.toContain("<select");
     });
 
     it("status and actions share headerTitleRight cluster", () => {
         const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
         expect(runtime).toContain("data-opportunity-drawer-header-title-right");
-        expect(runtime).toMatch(/VmReadonlyStatusPill[\s\S]*OpportunityDrawerHeaderControls/);
+        expect(runtime).toMatch(/VmProgressiveStatusDropdown[\s\S]*OpportunityDrawerHeaderControls/);
     });
 
     it("VmOpportunityStatusControl is not imported by VM opportunity runtime", () => {

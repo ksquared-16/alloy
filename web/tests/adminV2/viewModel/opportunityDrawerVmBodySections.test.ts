@@ -59,12 +59,14 @@ describe("Opportunity VM drawer body — production parity sections", () => {
         expect(overview).not.toContain("VmInquiryRightColumn");
     });
 
-    it("OpportunityDrawerVmRuntime renders lifecycle rail from VM queue definition", () => {
+    it("OpportunityDrawerVmRuntime renders lifecycle rail from VM queue definition below tabs", () => {
         const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("postTabStrip={displayVm ? lifecycleRail : undefined}");
+        expect(runtime).toContain("buildOpportunityVmLifecycleRailModel");
         expect(runtime).toContain("RecordLifecycleRail");
+        expect(runtime).toContain("data-opportunity-drawer-lifecycle-rail-wrap");
         expect(runtime).toContain('data-testid="opportunity-lifecycle-rail"');
-        expect(runtime).toContain("resolveRecordLifecycleRailModel");
+        expect(runtime).not.toContain("postTabStrip=");
+        expect(runtime).not.toContain("allowEnrollmentFallback");
     });
 
     it("OpportunityDrawerVmTabPanes covers full workflow tab strip", () => {
@@ -81,9 +83,9 @@ describe("Opportunity VM drawer body — production parity sections", () => {
         expect(runtime).toContain("data-opportunity-drawer-tab={tab}");
     });
 
-    it("Phase A status is readonly pill in title rail — no status-options fetch", () => {
+    it("Phase A.2 status is progressive dropdown in title rail — no prefetch status-options in runtime", () => {
         const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("VmReadonlyStatusPill");
+        expect(runtime).toContain("VmProgressiveStatusDropdown");
         expect(runtime).not.toContain("VmOpportunityStatusControl");
         expect(runtime).not.toContain("statusBadge");
         expect(runtime).not.toContain("status-options");

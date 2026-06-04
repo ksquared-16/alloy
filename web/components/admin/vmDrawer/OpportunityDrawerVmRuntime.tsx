@@ -4,13 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
 import RecordLifecycleRail from "@/components/admin/drawer/RecordLifecycleRail";
-import RecordLifecycleRailSkeleton from "@/components/admin/drawer/RecordLifecycleRailSkeleton";
 import CommunicationsDrawerBackgroundLoader from "@/components/admin/communications/CommunicationsDrawerBackgroundLoader";
 import OpportunityDrawerInquiryWorkflowOverview from "@/components/admin/vmDrawer/OpportunityDrawerInquiryWorkflowOverview";
 import OpportunityDrawerVmTabPanes from "@/components/admin/vmDrawer/OpportunityDrawerVmTabPanes";
 import { OpportunityDrawerHeaderControls } from "@/components/admin/opportunity/OpportunityDrawerHeaderControls";
 import OpportunityDrawerQueueNavigatorControls from "@/components/admin/OpportunityDrawerQueueNavigatorControls";
-import VmReadonlyStatusPill from "@/components/admin/vmDrawer/VmReadonlyStatusPill";
+import VmProgressiveStatusDropdown from "@/components/admin/vmDrawer/VmProgressiveStatusDropdown";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import Drawer, {
@@ -18,8 +17,7 @@ import Drawer, {
     ADMINV2_DRAWER_PANEL_Z,
 } from "@/components/admin/Drawer";
 import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
-import { resolveOpportunityDrawerQueueDefinition } from "@/lib/admin/drawer/resolveOpportunityDrawerQueueDefinition";
-import { resolveRecordLifecycleRailModel } from "@/lib/admin/drawer/resolveRecordLifecycleRailModel";
+import { buildOpportunityVmLifecycleRailModel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/buildOpportunityVmLifecycleRailModel";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP } from "@/lib/adminV2/shellContracts/opportunityInquiryWorkflowTabs";
 import { useOpportunityDrawerVmPayload } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmPayload";
@@ -30,6 +28,7 @@ import { resolveOpportunityQueueNavigatorPosition } from "@/lib/admin/opportunit
 import {
     drawerDebugSourceFromPathname,
     drawerDebugSurfaceFromPresentation,
+    type DrawerDebugStatusComponent,
 } from "@/lib/adminV2/drawer/drawerRuntimeDebug";
 
 const DRAWER_ACCENT_OPPORTUNITY = "#2d6a9f";
@@ -56,6 +55,8 @@ export default function OpportunityDrawerVmRuntime() {
     } = useAdminDrawer();
     const { displayVm, coldLoading, error, suppressFullDrawerLoading } = useOpportunityDrawerVmPayload();
     const [drawerTab, setDrawerTab] = useState<DrawerTabKey>("overview");
+    const [statusDebugComponent, setStatusDebugComponent] =
+        useState<DrawerDebugStatusComponent>("vm-readonly-pill");
 
     useEffect(() => {
         setDrawerTab("overview");
@@ -92,6 +93,11 @@ export default function OpportunityDrawerVmRuntime() {
         [drawer.id, displayVm, drawer.opportunityQueuePreviewSeed?.statusLabel]
     );
 
+    const currentStatusKey = useMemo(
+        () => String(record?.status_key ?? "").trim(),
+        [record]
+    );
+
     /** Title rail: status pill always in this cluster so Drawer does not hide it when actions mount. */
     const headerTitleRight = useMemo(() => {
         if (!drawer.id) return undefined;
@@ -102,7 +108,14 @@ export default function OpportunityDrawerVmRuntime() {
                 data-drawer-vm-status-rail="true"
             >
                 {statusLabel ?
-                    <VmReadonlyStatusPill label={statusLabel} entityLabel="Opportunity status" />
+                    <VmProgressiveStatusDropdown
+                        opportunityId={drawer.id}
+                        firstPaintLabel={statusLabel}
+                        currentStatusKey={currentStatusKey}
+                        statusControl={displayVm?.header.status}
+                        canMutate={!!canMutate}
+                        onDebugModeChange={setStatusDebugComponent}
+                    />
                 :   null}
                 {displayVm && record ?
                     <OpportunityDrawerHeaderControls
@@ -126,6 +139,7 @@ export default function OpportunityDrawerVmRuntime() {
         drawer.opportunityQueuePreviewSeed,
         record,
         statusLabel,
+        currentStatusKey,
     ]);
 
     const tabs = useMemo((): DrawerTabKey[] => {
@@ -135,15 +149,9 @@ export default function OpportunityDrawerVmRuntime() {
     }, [displayVm?.layout.tabs]);
 
     const lifecycleRail = useMemo(() => {
-        if (!displayVm || !drawer.id || drawer.id === "new") return null;
-        const rec = displayVm.above_fold.record ?? {};
-        const currentStatus = String(rec.status_key ?? "").trim() || null;
-        const qd = resolveOpportunityDrawerQueueDefinition(displayVm.workspace.queue_definition, {
-            allowEnrollmentFallback: true,
-        });
-        const model = resolveRecordLifecycleRailModel({
-            queueDefinition: qd,
-            currentStatusKey: currentStatus,
+        const model = buildOpportunityVmLifecycleRailModel({
+            displayVm,
+            drawerId: drawer.id,
         });
         if (model && model.steps.length > 0) {
             return (
@@ -154,8 +162,17 @@ export default function OpportunityDrawerVmRuntime() {
                 />
             );
         }
-        if (!qd) {
-            return <RecordLifecycleRailSkeleton stepCount={6} />;
+        if (
+            process.env.NODE_ENV === "development" &&
+            displayVm &&
+            drawer.id &&
+            drawer.id !== "new" &&
+            !displayVm.workspace.queue_definition
+        ) {
+            console.warn(
+                "[opportunity-vm] lifecycle rail unavailable: workspace.queue_definition missing",
+                { opportunityId: drawer.id, workUnitId: displayVm.workspace.work_unit_id }
+            );
         }
         return null;
     }, [displayVm, drawer.id]);
@@ -174,10 +191,10 @@ export default function OpportunityDrawerVmRuntime() {
                     path: pathname ?? "",
                     entityType: drawer.type,
                     entityId: String(drawer.id),
-                    statusComponent: "vm-readonly-pill" as const,
+                    statusComponent: statusDebugComponent,
                 }
             :   null,
-        [drawer.type, drawer.id, pathname]
+        [drawer.type, drawer.id, pathname, statusDebugComponent]
     );
 
     return (
@@ -187,7 +204,6 @@ export default function OpportunityDrawerVmRuntime() {
             title={drawerTitle}
             headerSubtitle={displayVm?.header.subtitle ?? undefined}
             headerTitleRight={headerTitleRight}
-            postTabStrip={displayVm ? lifecycleRail : undefined}
             variant="adminV2"
             presentation="modal"
             panelClassName="max-w-7xl"
@@ -247,6 +263,14 @@ export default function OpportunityDrawerVmRuntime() {
                                 </button>
                             ))}
                         </div>
+                        {lifecycleRail ?
+                            <div
+                                className="mb-3"
+                                data-opportunity-drawer-lifecycle-rail-wrap="true"
+                            >
+                                {lifecycleRail}
+                            </div>
+                        :   null}
                         {drawer.id ?
                             <CommunicationsDrawerBackgroundLoader
                                 apiEntityType="opportunities"

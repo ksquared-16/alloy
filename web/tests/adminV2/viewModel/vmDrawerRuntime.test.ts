@@ -155,9 +155,10 @@ describe("VM drawer runtime wiring", () => {
             join(webRoot, "components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx"),
             "utf8"
         );
-        expect(vm).toContain("VmReadonlyStatusPill");
+        expect(vm).toContain("VmProgressiveStatusDropdown");
         expect(vm).not.toContain("VmOpportunityStatusControl");
         expect(vm).not.toContain("statusBadge");
+        expect(vm).not.toContain("postTabStrip=");
         expect(vm).toContain("OpportunityDrawerInquiryWorkflowOverview");
         expect(vm).not.toContain("VmInquiryRightColumn");
         expect(vm).not.toContain("opportunityInquiryWorkflowHeaderStatus");
